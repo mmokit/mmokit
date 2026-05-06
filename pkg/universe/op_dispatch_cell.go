@@ -1,0 +1,143 @@
+package universe
+
+import (
+	"context"
+	"fmt"
+	"reflect"
+
+	"github.com/zenion/mmoserver/pkg/ops"
+)
+
+// DispatchCellRoutedOp resolves the player's authoritative cell on this
+// process and schedules the handler on that cell's engine via
+// engine.RunOnLoop. The handler runs synchronously on the loop goroutine
+// (so it has safe ECS access); the response frame is encoded and sent via
+// the cell engine's connection manager after the handler returns.
+//
+// In single-process modes (`all`, `coord+gateway+host`, etc.) the cell
+// engine's ConnMgr is the same WebSocket-serving ConnManager the gateway
+// uses, so the response reaches the client over its existing socket. In
+// remote-host mode the cell engine's ConnMgr is the VirtualConnManager
+// which wraps the response in a MeshFrame.ClientFrame and forwards it to
+// the originating gateway over MeshData.
+//
+// Returns nil on successful scheduling (response is sent asynchronously).
+// Returns a non-nil OperationError frame synchronously when:
+//   - The OpContext has no username (caller is unauthenticated)
+//   - No active session exists for that username on this process
+//     (player is offline, on a remote host's cell, or hasn't completed
+//     auth yet)
+//   - The named cell isn't owned by this process (transient — split /
+//     merge / migrate may have moved it; the client should retry)
+//
+// Implements universe.CellOpRouter for *Process. Wired into
+// DispatchTypedOpInbound by Process.installTypedOpDispatch when the
+// router goroutine starts.
+func (p *Process) DispatchCellRoutedOp(
+	reqType reflect.Type,
+	resTypeID uint32,
+	requestID uint64,
+	body []byte,
+	handler any,
+	ctx *ops.OpContext,
+) []byte {
+	if ctx.Username == "" {
+		return encodeOpErrorViaHooks(requestID, opErrorHandlerFailed,
+			fmt.Sprintf("op %s: unauthenticated session", reqType.String()))
+	}
+
+	cellID, ok := p.findActiveUserCell(ctx.Username)
+	if !ok {
+		return encodeOpErrorViaHooks(requestID, opErrorHandlerFailed,
+			fmt.Sprintf("op %s: no active cell for user %q on this process",
+				reqType.String(), ctx.Username))
+	}
+	cell, ok := p.getCell(cellID)
+	if !ok {
+		return encodeOpErrorViaHooks(requestID, opErrorHandlerFailed,
+			fmt.Sprintf("op %s: cell %s not owned by this process",
+				reqType.String(), cellID))
+	}
+	if cell.Stage == nil || cell.Stage.eng == nil {
+		return encodeOpErrorViaHooks(requestID, opErrorHandlerFailed,
+			fmt.Sprintf("op %s: cell %s has no engine",
+				reqType.String(), cellID))
+	}
+
+	eng := cell.Stage.eng
+	connID := ctx.ConnID
+
+	// Schedule the handler on the cell engine loop. SubmitLoopJob is
+	// fire-and-forget — the typed-op poll goroutine returns immediately
+	// and the response frame is sent inside the closure once the handler
+	// runs on the loop goroutine. RunOnLoop's blocking variant would
+	// stall the poll goroutine for ~50ms (one tick) which would back up
+	// every other op for that connection.
+	queued := eng.SubmitLoopJob(func() error {
+		// Decode the request on the loop goroutine. We could decode
+		// off-loop and capture the *Req pointer, but reflection-based
+		// decode is the same cost either way and keeping it on-loop
+		// means no allocations escape across goroutines.
+		reqPtr := reflect.New(reqType)
+		ReflectUnmarshalOnStage(cell.Stage, body, reqPtr.Interface())
+
+		handlerVal := reflect.ValueOf(handler)
+		results := handlerVal.Call([]reflect.Value{reflect.ValueOf(ctx), reqPtr})
+
+		resPtr := results[0]
+		errVal := results[1]
+
+		var respFrame []byte
+		if !errVal.IsNil() {
+			respFrame = encodeOpErrorViaHooks(requestID, opErrorHandlerFailed,
+				errVal.Interface().(error).Error())
+		} else if resPtr.IsNil() {
+			respFrame = EncodeTypedOpFrame(resTypeID, requestID, nil)
+		} else {
+			resBody := ReflectMarshal(resPtr.Interface())
+			respFrame = EncodeTypedOpFrame(resTypeID, requestID, resBody)
+		}
+
+		if respFrame == nil {
+			// MakeOperationErrorBody unwired — universe-only test path.
+			// Drop silently; tests with real wiring will hit the success
+			// branch above.
+			return nil
+		}
+		if eng.ConnMgr != nil {
+			eng.ConnMgr.SendReliable(connID, respFrame)
+		}
+		return nil
+	})
+
+	if !queued {
+		// Loop queue full — handler did not run. Surface as
+		// OperationError so the client doesn't hang on its pending
+		// promise indefinitely.
+		return encodeOpErrorViaHooks(requestID, opErrorHandlerFailed,
+			fmt.Sprintf("op %s: cell %s loop queue full",
+				reqType.String(), cellID))
+	}
+
+	// Successful async dispatch — the cell engine will send the response
+	// frame once the handler runs.
+	_ = context.Background // placeholder for ctx-aware future variant
+	return nil
+}
+
+// findActiveUserCell looks up the active session's cell for username on
+// this process. Returns ("", false) when the user has no active session
+// here (either offline globally, or routed to a remote host in
+// distributed mode).
+func (p *Process) findActiveUserCell(username string) (MeshCellID, bool) {
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+	loc := p.players[username]
+	if loc == nil || !loc.Active {
+		return "", false
+	}
+	if loc.CellID == "" {
+		return "", false
+	}
+	return loc.CellID, true
+}

@@ -11,20 +11,27 @@ import (
 // stripped), decodes the request, dispatches to the registered handler,
 // and returns the encoded response frame.
 //
-// Always returns a frame on success or framework-level failure (unknown
-// typeID, handler error, or decode failure produce OperationError-typed
-// responses). Returns nil only for structurally invalid frames (truncated
-// header / body) — those are dropped silently because there is no
-// request_id to correlate the error with.
+// Returns a non-nil frame synchronously for:
+//   - RouteGatewayLocal handlers (handler runs inline on the caller goroutine)
+//   - Framework-level failures (unknown typeID, decode error, handler error)
 //
-// Phase 1 of Plan 2 handles RouteGatewayLocal only. RoutePlayerCell ops
-// return an OperationError with code OpErrorHandlerFailed; the cell
-// routing path lands in Phase 3 via engine.RunOnLoop.
+// Returns nil for:
+//   - Structurally invalid frames (truncated header / body) — dropped silently
+//     because there is no request_id to correlate the error with
+//   - Successful RoutePlayerCell dispatches — the response frame is sent
+//     asynchronously via the cell engine's connection manager once the
+//     handler completes on the cell loop. The caller MUST treat nil as
+//     "response will arrive later, do not send" rather than "dispatch
+//     failed silently"
+//
+// router is the cell-routing path used for RoutePlayerCell entries; pass
+// nil from tests / stage-only paths and RoutePlayerCell ops will produce
+// an OperationError synchronously.
 //
 // Universe cannot import pkg/mmokit (circular dep) — the typed-op
 // registry, RouteKind enum, and OperationError encoder are reached via
 // the TypedOpHooks indirection populated by mmokit's init().
-func DispatchTypedOpInbound(payload []byte, ctx *ops.OpContext) []byte {
+func DispatchTypedOpInbound(payload []byte, ctx *ops.OpContext, router CellOpRouter) []byte {
 	typeID, requestID, body, err := DecodeTypedOpFrame(payload)
 	if err != nil {
 		return nil
@@ -45,8 +52,20 @@ func DispatchTypedOpInbound(payload []byte, ctx *ops.OpContext) []byte {
 	}
 
 	if kind != TypedOpHooks.RouteGatewayLocal {
-		return encodeOpErrorViaHooks(requestID, opErrorHandlerFailed,
-			fmt.Sprintf("op %s requires cell routing; not yet supported in Plan 2 Phase 1", reqType.String()))
+		// RoutePlayerCell: defer to the process-level router. router
+		// returns nil for successful async dispatch (response sent later
+		// via cell engine connMgr) or a synchronous OperationError frame
+		// when the cell isn't reachable on this process.
+		if router == nil {
+			return encodeOpErrorViaHooks(requestID, opErrorHandlerFailed,
+				fmt.Sprintf("op %s requires cell routing; no router wired", reqType.String()))
+		}
+		// Copy body — the underlying buffer is owned by the caller
+		// (router poll loop) and may be reused once we return. The cell-
+		// routed dispatch runs asynchronously on the engine loop and
+		// must not alias the inbound buffer.
+		bodyCopy := append([]byte(nil), body...)
+		return router.DispatchCellRoutedOp(reqType, resTypeID, requestID, bodyCopy, handler, ctx)
 	}
 
 	reqPtr := reflect.New(reqType)
