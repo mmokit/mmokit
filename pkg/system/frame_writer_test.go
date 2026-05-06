@@ -22,9 +22,8 @@ func (c *captureConn) SendReliable(connID uint32, data []byte) {
 	c.sent[connID] = append([]byte(nil), data...)
 }
 func (c *captureConn) InjectInput(connID uint32, data []byte) {}
-func (c *captureConn) DrainInput(connID uint32) [][]byte       { return nil }
-func (c *captureConn) DrainOpInput(connID uint32) [][]byte     { return nil }
-func (c *captureConn) DrainClientInput(connID uint32) [][]byte { return nil }
+func (c *captureConn) DrainInput(connID uint32) [][]byte      { return nil }
+func (c *captureConn) DrainOpInput(connID uint32) [][]byte    { return nil }
 
 var _ net.ConnSender = (*captureConn)(nil)
 

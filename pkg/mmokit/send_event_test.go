@@ -24,10 +24,9 @@ func (c *sendEventCaptureConn) Send(connID uint32, data []byte) {
 func (c *sendEventCaptureConn) SendReliable(connID uint32, data []byte) {
 	c.sent[connID] = append([]byte(nil), data...)
 }
-func (c *sendEventCaptureConn) InjectInput(connID uint32, data []byte)   {}
-func (c *sendEventCaptureConn) DrainInput(connID uint32) [][]byte         { return nil }
-func (c *sendEventCaptureConn) DrainOpInput(connID uint32) [][]byte       { return nil }
-func (c *sendEventCaptureConn) DrainClientInput(connID uint32) [][]byte   { return nil }
+func (c *sendEventCaptureConn) InjectInput(connID uint32, data []byte) {}
+func (c *sendEventCaptureConn) DrainInput(connID uint32) [][]byte      { return nil }
+func (c *sendEventCaptureConn) DrainOpInput(connID uint32) [][]byte    { return nil }
 
 var _ pkgnet.ConnSender = (*sendEventCaptureConn)(nil)
 

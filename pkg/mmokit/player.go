@@ -2,7 +2,6 @@ package mmokit
 
 import (
 	"github.com/mlange-42/ark/ecs"
-	"google.golang.org/protobuf/proto"
 
 	"github.com/zenion/mmoserver/pkg/component"
 	"github.com/zenion/mmoserver/pkg/engine"
@@ -52,20 +51,6 @@ func (p *Player) NetID() uint32 {
 		return 0
 	}
 	return netMap.Get(p.sess.Entity).ID
-}
-
-// Send dispatches a server event to this player only. The payload is
-// proto-marshaled before send. Marshal errors are logged at category
-// "input" by MakeEvent and the send is silently dropped.
-func (p *Player) Send(code uint32, msg proto.Message) {
-	if p.eng == nil {
-		return
-	}
-	frame := MakeEvent(code, msg)
-	if frame == nil {
-		return
-	}
-	p.eng.ConnMgr.SendReliable(p.sess.ConnID, frame)
 }
 
 // TransitionState requests an engine-validated state machine transition.

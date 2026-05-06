@@ -10,7 +10,6 @@ import (
 	"google.golang.org/protobuf/proto"
 
 	enginepb "github.com/zenion/mmoserver/gen/go/enginepb"
-	gamepb "github.com/zenion/mmoserver/gen/go/gamepb"
 	"github.com/zenion/mmoserver/internal/game"
 	"github.com/zenion/mmoserver/pkg/auth"
 	gamecommands "github.com/zenion/mmoserver/internal/game/commands"
@@ -45,44 +44,21 @@ func main() {
 			mmokit.RegisterClientEvent[enginepb.LoginMsg](e, enginepb.ClientEventCode_CE_LOGIN)
 		}).
 		ServerEvents(func(e *mmokit.ServerEvents) {
-			// SE_PLAYER_SPAWNED: override engine default (enginepb.SpawnedMsg) with
-			// game-specific payload that includes inventory + equipment.
-			mmokit.RegisterServerEvent[gamepb.PlayerSpawnedMsg](e,
-				enginepb.ServerEventCode_SE_PLAYER_SPAWNED, mmokit.WithEventName("playerSpawned"))
+			// All game-specific server events ride the typed
+			// reflection-codec channel after Plan 1 Phase 7. SE_PLAYER_SPAWNED
+			// keeps an engine-default proto registration (enginepb.SpawnedMsg)
+			// for SDK schema visibility; the typed PlayerSpawned below is the
+			// payload the space client actually consumes.
+			_ = e
 			mmokit.RegisterEvent[game.PlayerSpawned]()
-			mmokit.RegisterServerEvent[gamepb.WorldUpdateMsg](e,
-				enginepb.ServerEventCode_SE_WORLD_UPDATE, mmokit.WithEventName("worldUpdate"))
-			mmokit.RegisterServerEvent[gamepb.PlayerDiedMsg](e,
-				gamepb.GameServerEventCode_GSE_PLAYER_DIED)
 			mmokit.RegisterEvent[game.PlayerDied]()
-			// SE_PLAYER_OWN_STATE: engine code, game-specific payload (no engine default).
-			mmokit.RegisterServerEvent[gamepb.PlayerOwnStateMsg](e,
-				enginepb.ServerEventCode_SE_PLAYER_OWN_STATE)
 			mmokit.RegisterEvent[game.PlayerOwnState]()
-			// SE_PONG, SE_LOGIN_REJECTED, SE_CELL_CHANGE, SE_DEBUG_INFO
-			// are auto-registered by NewProtocol.
-
-			// Game-only events (no engine counterpart).
-			mmokit.RegisterServerEvent[gamepb.BankContentsMsg](e,
-				gamepb.GameServerEventCode_GSE_BANK_CONTENTS)
 			mmokit.RegisterEvent[game.BankContents]()
-			mmokit.RegisterServerEvent[gamepb.TransferResultMsg](e,
-				gamepb.GameServerEventCode_GSE_TRANSFER_RESULT)
 			mmokit.RegisterEvent[game.TransferResult]()
-			mmokit.RegisterServerEvent[gamepb.EquipResultMsg](e,
-				gamepb.GameServerEventCode_GSE_EQUIP_RESULT)
 			mmokit.RegisterEvent[game.EquipResult]()
-			mmokit.RegisterServerEvent[gamepb.DockingStateMsg](e,
-				gamepb.GameServerEventCode_GSE_DOCKING_STATE)
 			mmokit.RegisterEvent[game.DockingState]()
-			mmokit.RegisterServerEvent[gamepb.DockedMsg](e,
-				gamepb.GameServerEventCode_GSE_DOCKED)
 			mmokit.RegisterEvent[game.Docked]()
-			mmokit.RegisterServerEvent[gamepb.MapDataMsg](e,
-				gamepb.GameServerEventCode_GSE_MAP_DATA)
 			mmokit.RegisterEvent[game.MapData]()
-			mmokit.RegisterServerEvent[gamepb.CurrencyUpdateMsg](e,
-				gamepb.GameServerEventCode_GSE_CURRENCY_UPDATE)
 			mmokit.RegisterEvent[game.CurrencyUpdate]()
 		})
 	coordCfg.BindFlags()

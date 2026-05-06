@@ -62,11 +62,17 @@ func (s *debugBroadcaster) Update(dt float32) {
 	pm.ForEach(StateActive, func(sess *PlayerSession) {
 		activeNow[sess.ConnID] = struct{}{}
 		if sess.DebugFlags == 0 {
-			// Forget what we sent so a future re-grant fires a fresh
-			// send. Without this, revoke→grant of the same flag set
-			// produces an identical hash and the broadcaster would
-			// silently skip the resend.
-			delete(s.sentHash, sess.ConnID)
+			// Revoke-to-zero transition: send one empty DebugInfo so the
+			// client clears its overlay state. Detected by the presence of
+			// a prior hash entry — first-tick zero-flag players get nothing.
+			// Forget what we sent so a future re-grant fires a fresh send;
+			// without this, revoke→grant of the same flag set produces an
+			// identical hash and the broadcaster would silently skip.
+			if _, hadFlags := s.sentHash[sess.ConnID]; hadFlags {
+				var empty DebugInfo
+				s.World().Engine().ConnMgr.SendReliable(sess.ConnID, BuildTypedEventFrame(&empty))
+				delete(s.sentHash, sess.ConnID)
+			}
 			return
 		}
 		hash := hashDebugPayload(cells, radius, sess.DebugFlags)

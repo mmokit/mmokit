@@ -1301,34 +1301,6 @@ func autoDiscoverReplicators(gw any, cfg *ReplicationConfig) {
 	}
 }
 
-// MakeEvent builds a channel-0x00 frame: [0x00] + ServerEvent{code, data}.
-// The payload is protobuf-marshaled before being placed in the ServerEvent.
-// Returns nil on marshal error.
-func MakeEvent(code uint32, payload proto.Message) []byte {
-	var inner []byte
-	if payload != nil {
-		var err error
-		inner, err = proto.Marshal(payload)
-		if err != nil {
-			log.Printf("MakeEvent: marshal payload: %v", err)
-			return nil
-		}
-	}
-	evt := &enginepb.ServerEvent{
-		Code: code,
-		Data: inner,
-	}
-	evtData, err := proto.Marshal(evt)
-	if err != nil {
-		log.Printf("MakeEvent: marshal event: %v", err)
-		return nil
-	}
-	frame := make([]byte, 1+len(evtData))
-	frame[0] = ChannelEvent
-	copy(frame[1:], evtData)
-	return frame
-}
-
 // makeWorldDeltaFrame wraps the encoded delta body bytes as a typed-event
 // frame for WorldDelta. Used by BinaryFrameWriter (per-tick replication)
 // to publish entity-state deltas on the typed channel-0x00 path. The body
@@ -1452,24 +1424,6 @@ func CountRealEntities(w *ecs.World) int {
 		count++
 	}
 	return count
-}
-
-func init() {
-	universe.SetWorldBaseSendEvent(func(b *universe.Stage, connID uint32, code uint32, msg interface{ Reset() }) {
-		p := ProtocolOf(b.Process())
-		if p == nil {
-			return
-		}
-		events := p.ServerEventsRegistry()
-		if events == nil {
-			return
-		}
-		pmsg, ok := msg.(proto.Message)
-		if !ok {
-			panic("Stage.SendEvent: msg must implement proto.Message")
-		}
-		events.Send(b.Engine().ConnMgr, connID, code, pmsg)
-	})
 }
 
 // WireSystem wires a system as the coordinator does — SetDeps, BindQueries,

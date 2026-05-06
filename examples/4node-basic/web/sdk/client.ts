@@ -109,19 +109,19 @@ export class BasicClient {
     this.sendEvent(1, data);
   }
 
-  /** Subscribe to playerSpawned (code 1). */
-  onPlayerSpawned(handler: (msg: SpawnedMsg) => void): () => void {
+  /** Subscribe to playerEntityAssigned (code 1). */
+  onPlayerEntityAssigned(handler: (msg: SpawnedMsg) => void): () => void {
     return this.on(1, (data) => handler(fromBinary(SpawnedMsgSchema, data)));
   }
 
-  /** Subscribe to cellChange (code 12). */
+  /** Subscribe to cellChange (code 2). */
   onCellChange(handler: (msg: CellChangeMsg) => void): () => void {
-    return this.on(12, (data) => handler(fromBinary(CellChangeMsgSchema, data)));
+    return this.on(2, (data) => handler(fromBinary(CellChangeMsgSchema, data)));
   }
 
-  /** Subscribe to serverConfig (code 15). */
+  /** Subscribe to serverConfig (code 3). */
   onServerConfig(handler: (msg: ServerConfigMsg) => void): () => void {
-    return this.on(15, (data) => handler(fromBinary(ServerConfigMsgSchema, data)));
+    return this.on(3, (data) => handler(fromBinary(ServerConfigMsgSchema, data)));
   }
 
   /** Subscribe to typed server event mmokit.DebugInfo (typeID 0x83f2dca1). */

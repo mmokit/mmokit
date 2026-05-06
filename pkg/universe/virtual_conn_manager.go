@@ -49,9 +49,6 @@ type virtualSession struct {
 	inputMu sync.Mutex
 	input   [][]byte // channel 0x00 (event + typed client-input post Phase 5) queue
 	opInput [][]byte // channel 0x01 (ops) queue
-	// clientInput is retained as dead state until Phase 7 retires the
-	// ChannelClientInput constant; nothing writes to it in Phase 5+.
-	clientInput [][]byte
 }
 
 // NewVirtualConnManager creates a VirtualConnManager backed by hn for
@@ -185,8 +182,7 @@ func (v *VirtualConnManager) InjectInput(localID uint32, data []byte) {
 
 // InjectChannelInputWithEpoch is the gateway → host inbound path. The
 // gateway tags every forwarded frame with its source wire channel
-// (pkgnet.ChannelEvent / ChannelOperation; ChannelClientInput is retired
-// in Plan 1 Phase 5 and panics if encountered). The host routes into the
+// (pkgnet.ChannelEvent / ChannelOperation). The host routes into the
 // matching per-session queue. Frames whose epoch is older than the
 // session's current epoch are dropped as stale (arrived during a handoff
 // window).
@@ -217,15 +213,10 @@ func (v *VirtualConnManager) appendChannel(localID uint32, data []byte, channel 
 	switch channel {
 	case pkgnet.ChannelOperation:
 		sess.opInput = append(sess.opInput, data)
-	case pkgnet.ChannelClientInput:
-		// Plan 1 Phase 5 retired the 0x02 typed-input channel — typed
-		// inputs now flow on ChannelEvent (0x00) and dispatch through
-		// the typeID registry alongside legacy envelope frames. A
-		// straggler producer reaching this path is a bug; fail loudly
-		// so it surfaces instead of silently routing into a dead queue.
-		sess.inputMu.Unlock()
-		panic("ChannelClientInput retired in Plan 1 Phase 5; sender must use ChannelEvent")
 	default:
+		// ChannelEvent (0x00) plus typed client-input frames after
+		// Plan 1 Phase 5 unified them onto the same channel. The
+		// typeID registry disambiguates downstream.
 		sess.input = append(sess.input, data)
 	}
 	sess.inputMu.Unlock()
@@ -263,24 +254,6 @@ func (v *VirtualConnManager) DrainOpInput(localID uint32) [][]byte {
 	sess.inputMu.Lock()
 	out := sess.opInput
 	sess.opInput = nil
-	sess.inputMu.Unlock()
-	return out
-}
-
-// DrainClientInput returns and clears the accumulated client-input
-// channel (0x02) input for the given local connID. Returns nil if the
-// session is unknown or no data is queued.
-func (v *VirtualConnManager) DrainClientInput(localID uint32) [][]byte {
-	v.mu.RLock()
-	sess, ok := v.byLocal[localID]
-	v.mu.RUnlock()
-	if !ok {
-		return nil
-	}
-
-	sess.inputMu.Lock()
-	out := sess.clientInput
-	sess.clientInput = nil
 	sess.inputMu.Unlock()
 	return out
 }

@@ -648,39 +648,13 @@ func (b *Stage) MarkForRemoval(e ecs.Entity)                          { b.eng.Ma
 func (b *Stage) Hooks() engine.Hooks                                  { return engine.Hooks{} }
 func (b *Stage) Shutdown()                                            {}
 
-// SendEvent encodes a server→client event using the Process's typed
-// ServerEvents registry and dispatches it on the engine ConnMgr. Replaces
-// the gw.ServerEvents().Send(gw.Engine().ConnMgr, connID, code, msg) chain.
-// Panics if the code is not registered or msg type does not match — the
-// registry's existing safety checks bubble up unchanged.
-func (b *Stage) SendEvent(connID uint32, code uint32, msg interface{ Reset() }) {
-	if worldBaseSendEvent == nil {
-		return
-	}
-	worldBaseSendEvent(b, connID, code, msg)
-}
-
-// worldBaseSendEvent is set by pkg/mmokit's init() so Stage can dispatch
-// without importing mmokit. The same function-variable indirection pattern
-// the codebase uses to expose Process.cfg.Protocol as an `any` field.
-var worldBaseSendEvent func(b *Stage, connID uint32, code uint32, msg interface{ Reset() })
-
-// SetWorldBaseSendEvent wires the mmokit-side dispatcher. Called from
-// pkg/mmokit's init().
-func SetWorldBaseSendEvent(fn func(*Stage, uint32, uint32, interface{ Reset() })) {
-	worldBaseSendEvent = fn
-}
-
 // SendEventTyped writes a single-event 0x00 frame for msg to connID.
 // msg must be a pointer to a Go struct registered via mmokit.RegisterEvent[T].
 // The reflection codec serializes the body; the typeID is derived from T.
 //
 // Free function rather than a method on *Stage because Go does not allow
-// generic methods on non-generic types.
-//
-// SendEventTyped is the typed replacement for the proto-based
-// Stage.SendEvent; proto-based SendEvent will be deleted in the cleanup
-// phase once all callers migrate.
+// generic methods on non-generic types. This is the canonical send path
+// after Plan 1 Phase 7 retired the proto-envelope Stage.SendEvent.
 func SendEventTyped[T any](stage *Stage, connID uint32, msg *T) {
 	stage.eng.ConnMgr.SendReliable(connID, BuildTypedEventFrameRaw(msg))
 }

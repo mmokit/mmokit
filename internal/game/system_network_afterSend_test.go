@@ -33,11 +33,10 @@ func (t *captureTransport) SendUnreliable(data []byte) {
 	t.unreliable = append(t.unreliable, cp)
 }
 
-func (t *captureTransport) DrainInput() [][]byte       { return nil }
-func (t *captureTransport) DrainOpInput() [][]byte     { return nil }
-func (t *captureTransport) DrainClientInput() [][]byte { return nil }
-func (t *captureTransport) InjectInput(_ []byte)       {}
-func (t *captureTransport) Close()                     {}
+func (t *captureTransport) DrainInput() [][]byte   { return nil }
+func (t *captureTransport) DrainOpInput() [][]byte { return nil }
+func (t *captureTransport) InjectInput(_ []byte)   {}
+func (t *captureTransport) Close()                 {}
 
 // LastSent returns the most recent unreliable frame, or nil if none.
 func (t *captureTransport) LastSent() []byte {

@@ -13,7 +13,6 @@ import (
 	gamepb "github.com/zenion/mmoserver/gen/go/gamepb"
 	"github.com/zenion/mmoserver/internal/game"
 	"github.com/zenion/mmoserver/pkg/net/udpclient"
-	"google.golang.org/protobuf/proto"
 )
 
 const (
@@ -49,7 +48,6 @@ type Bot struct {
 	name       string
 	conn       *udpclient.Client
 	myEntityID uint32
-	itemDefs   map[uint32]*gamepb.ItemDefMsg
 
 	mu       sync.RWMutex
 	state    WorldState
@@ -86,7 +84,6 @@ func New(username string, opts ...Option) *Bot {
 	b := &Bot{
 		name:      username,
 		inputRate: defaultInputRate,
-		itemDefs:  make(map[uint32]*gamepb.ItemDefMsg),
 		baselines: make(map[uint32]*baselineEntry),
 		decoders:  newDeltaDecoders(),
 		spawnCh:   make(chan struct{}, 1),
@@ -172,88 +169,19 @@ func (b *Bot) recvLoop() {
 			continue
 		}
 
-		// TODO(events-channel-redesign Phase 7+): The Phase 3 server-event
-		// migrations moved PlayerSpawned, PlayerDied, PlayerOwnState, and
-		// LoginRejected (and others) from the legacy ServerEvent envelope on
-		// channel 0x00 to typed reflection-codec frames on the same channel.
-		// Typed frames have a non-0x08 first byte (typeID, not protobuf
-		// field-tag); this proto.Unmarshal silently fails on them and the bot
-		// misses the events. Disambiguate the same way web-pixi/sdk/client.ts
-		// does (peek payload[0] === 0x08 → legacy, else typed) and decode
-		// migrated event types via the typed registry. Until that lands, this
-		// bot's event-reading loop is stale for migrated event types.
-		var evt enginepb.ServerEvent
-		if err := proto.Unmarshal(payload, &evt); err != nil {
-			continue
-		}
-
-		switch evt.Code {
-		case uint32(enginepb.ServerEventCode_SE_PLAYER_SPAWNED):
-			var spawned gamepb.PlayerSpawnedMsg
-			if err := proto.Unmarshal(evt.Data, &spawned); err != nil {
-				continue
-			}
-			b.mu.Lock()
-			b.myEntityID = spawned.YourEntityId
-			b.alive = true
-			for _, def := range spawned.ItemDefs {
-				b.itemDefs[def.Id] = def
-			}
-			b.mu.Unlock()
-
-			select {
-			case b.spawnCh <- struct{}{}:
-			default:
-			}
-			if b.onSpawn != nil {
-				b.onSpawn()
-			}
-
-		case uint32(enginepb.ServerEventCode_SE_DELTA_WORLD_UPDATE):
-			ws, ok := decodeBinaryFrame(evt.Data, b.baselines, b.decoders)
-			if !ok {
-				continue
-			}
-			b.mu.Lock()
-			b.state = ws
-			b.mu.Unlock()
-			if b.onUpdate != nil {
-				b.onUpdate(&ws)
-			}
-
-		case uint32(gamepb.GameServerEventCode_GSE_PLAYER_DIED):
-			var died gamepb.PlayerDiedMsg
-			if err := proto.Unmarshal(evt.Data, &died); err != nil {
-				continue
-			}
-			b.mu.Lock()
-			b.alive = false
-			b.mu.Unlock()
-
-			select {
-			case b.deathCh <- died.KillerId:
-			default:
-			}
-			if b.onDeath != nil {
-				b.onDeath(died.KillerId)
-			}
-
-		case uint32(enginepb.ServerEventCode_SE_PLAYER_OWN_STATE):
-			var own gamepb.PlayerOwnStateMsg
-			if err := proto.Unmarshal(evt.Data, &own); err != nil {
-				continue
-			}
-			b.mu.Lock()
-			b.ownState = ownStateFromMsg(&own)
-			b.mu.Unlock()
-
-		case uint32(enginepb.ServerEventCode_SE_LOGIN_REJECTED):
-			var rejected enginepb.LoginRejectedMsg
-			if err := proto.Unmarshal(evt.Data, &rejected); err != nil {
-				continue
-			}
-			log.Printf("[bot:%s] login rejected: %s", b.name, rejected.Reason)
-		}
+		// TODO(events-channel-redesign Phase 7+): the Phase 3-7 server-event
+		// migrations moved PlayerSpawned, PlayerDied, PlayerOwnState,
+		// LoginRejected, DeltaWorldUpdate (and others) from the legacy
+		// ServerEvent envelope on channel 0x00 to typed reflection-codec
+		// frames on the same channel. Typed frames have a non-0x08 first
+		// byte (typeID, not protobuf field-tag) so the legacy proto-envelope
+		// decode is no longer applicable. Phase 7 deleted the proto messages
+		// outright; the bot's recv loop is currently a no-op shell. Re-wire
+		// against the typed registry (use BuildTypedEventFrameRaw and
+		// pkg/mmokit's RegisterEvent[T] tooling) when bot rewire is
+		// scheduled — until then, ConnectAndWait callers will time out
+		// because spawnCh never fires.
+		_ = payload
 	}
 }
 
@@ -410,7 +338,7 @@ func (b *Bot) CargoItemIDs() []uint32 {
 	defer b.mu.RUnlock()
 	ids := make([]uint32, 0, len(b.ownState.CargoItems))
 	for _, item := range b.ownState.CargoItems {
-		ids = append(ids, item.ItemId)
+		ids = append(ids, item.ItemID)
 	}
 	return ids
 }

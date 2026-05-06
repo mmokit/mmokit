@@ -114,7 +114,6 @@ func (t *fakeInputTransport) SendReliable(data []byte)   {}
 func (t *fakeInputTransport) SendUnreliable(data []byte) {}
 func (t *fakeInputTransport) DrainInput() [][]byte       { r := t.input; t.input = nil; return r }
 func (t *fakeInputTransport) DrainOpInput() [][]byte     { return nil }
-func (t *fakeInputTransport) DrainClientInput() [][]byte { return nil }
 func (t *fakeInputTransport) InjectInput(data []byte)    {}
 func (t *fakeInputTransport) Close()                     {}
 

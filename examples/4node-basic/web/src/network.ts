@@ -30,7 +30,7 @@ export function connect(name: string): void {
     onError: () => setStatus("connection error"),
   });
 
-  client.onPlayerSpawned((msg: SpawnedMsg) => {
+  client.onPlayerEntityAssigned((msg: SpawnedMsg) => {
     state.playerNetID = msg.entityNetId;
     setStatus("");
     showGameCallback?.();

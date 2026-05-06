@@ -7,7 +7,7 @@ import (
 
 // genBroadcasts emits the TypeScript file containing one class per
 // broadcast-eligible Go type, plus a TypedDispatcher that routes incoming
-// WorldUpdateMsg.events entries to the matching class's decode method.
+// typed-event frames to the matching class's decode method.
 //
 // The wire layout is the reflect_marshal codec defined in
 // pkg/universe/reflect_marshal.go: fields encoded in source declaration

@@ -2,7 +2,6 @@
 
 const CH_EVENT = 0x00;
 const CH_OPERATION = 0x01;
-const CH_CLIENT_INPUT = 0x02;
 
 export type MessageHandler = (data: Uint8Array) => void;
 

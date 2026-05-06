@@ -33,7 +33,6 @@ func (g *Generator) genTransport() string {
 
 const CH_EVENT = 0x00;
 const CH_OPERATION = 0x01;
-const CH_CLIENT_INPUT = 0x02;
 
 export type MessageHandler = (data: Uint8Array) => void;
 
@@ -689,25 +688,26 @@ func (g *Generator) genClient() string {
 
 	// Event dispatch.
 	//
-	// Channel 0x00 carries two coexisting wire formats during the
-	// events-channel-redesign migration:
+	// Channel 0x00 carries two coexisting wire formats. After Plan 1
+	// Phase 7 the proto-envelope path is retained only for the framework
+	// events that survived migration (SE_SERVER_CONFIG, SE_PLAYER_SPAWNED,
+	// SE_CELL_CHANGE); every game-specific server event rides the typed
+	// path:
 	//
-	//   1. Legacy ServerEvent envelope: protobuf wire format. The first
-	//      byte is the field-1 varint tag for the `code` field (0x08).
-	//      Decoded as before via ServerEventSchema.
+	//   1. ServerEvent envelope (framework only): protobuf wire format.
+	//      The first byte is the field-1 varint tag for the `code` field
+	//      (0x08). Decoded via ServerEventSchema.
 	//
-	//   2. New typed-event frame: repeated [typeID:u32 LE][body_len:u32 LE][body]
-	//      until end of message. Each entry dispatches to typedEvents.
+	//   2. Typed-event frame (everything else): repeated
+	//      [typeID:u32 LE][body_len:u32 LE][body] until end of message.
+	//      Each entry dispatches to typedEvents.
 	//
 	// Disambiguation: the first byte of the payload. ServerEvent always
-	// starts with 0x08 (the field-1 varint tag for `code`); a typed-event
-	// frame's first byte is the low byte of an FNV-1a typeID hash, which
-	// has a 1/256 chance of being 0x08. Collisions panic at registration
-	// time on the server (mmokit.RegisterEvent[T]) — if the legacy decode
-	// throws here, we log a defensive warning hinting at the collision.
-	//
-	// Phase 2.4 retires WorldUpdateMsg.events; Phase 7 retires the legacy
-	// ServerEvent envelope entirely. Until then, both paths coexist.
+	// starts with 0x08; a typed-event frame's first byte is the low byte
+	// of an FNV-1a typeID hash (1/256 chance of being 0x08). Collisions
+	// panic at registration time on the server side
+	// (mmokit.RegisterEvent[T]) — if the legacy decode throws here we log
+	// a defensive warning hinting at the collision.
 	b.WriteString("  private handleEvent(payload: Uint8Array): void {\n")
 	b.WriteString("    if (payload.length === 0) return;\n")
 	if hasTypedEvents {
@@ -796,19 +796,13 @@ func (g *Generator) genClient() string {
 		b.WriteString("  }\n\n")
 	}
 
-	// Pre-compute the set of typed-event method names. During Phase 3 of the
-	// events-channel-redesign migration, a single logical event (e.g.
-	// PlayerDied) may be registered both via the legacy proto-envelope path
-	// (gamepb.PlayerDiedMsg → onPlayerDied) AND via the typed path
-	// (game.PlayerDied → onPlayerDied). Without dedupe we'd emit two TS
-	// methods with the same name → TS error. Skip the legacy emit when a
-	// typed equivalent exists; the typed path is the new canonical surface.
-	typedMethodNames := map[string]struct{}{}
-	for _, st := range g.schema.ServerEventTypes {
-		typedMethodNames[serverEventMethodName(broadcastClassName(st.Name))] = struct{}{}
-	}
-
 	// --- Server → Client receive methods ---
+	//
+	// Phase 7 retired every game-specific proto-envelope server event; only
+	// engine-level framework events (SE_SERVER_CONFIG, SE_PLAYER_SPAWNED,
+	// SE_CELL_CHANGE) ride this path now. Binary events (no ProtoName) are
+	// rendered as a typed-decoder method; proto events emit a fromBinary
+	// subscriber.
 	for _, se := range g.schema.ServerEvents {
 		if se.ProtoName == "" {
 			// Binary event (e.g. deltaWorldUpdate).
@@ -823,13 +817,6 @@ func (g *Generator) genClient() string {
 				continue
 			}
 			methodName := "on" + titleCase(se.Name)
-			if _, dup := typedMethodNames[methodName]; dup {
-				// A typed RegisterEvent[T] for the same logical event already
-				// emits this method — the typed path is the canonical surface.
-				// Skip the legacy proto-envelope emit to avoid a TS duplicate
-				// method declaration.
-				continue
-			}
 			fmt.Fprintf(&b, "  /** Subscribe to %s (code %d). */\n", se.Name, se.Code)
 			fmt.Fprintf(&b, "  %s(handler: (msg: %s) => void): () => void {\n", methodName, msg.TypeName)
 			fmt.Fprintf(&b, "    return this.on(%d, (data) => handler(fromBinary(%s, data)));\n", se.Code, msg.SchemaName)
@@ -945,27 +932,6 @@ func (g *Generator) genClient() string {
 	return b.String()
 }
 
-// typedShadowedServerEvents returns the set of legacy proto-based server-event
-// codes whose method emit is suppressed because a typed RegisterEvent[T]
-// equivalent owns the canonical method name. Used by import collectors so we
-// don't emit dead `import { FooMsg, FooMsgSchema } from "@gen/..."` lines.
-func (g *Generator) typedShadowedServerEvents() map[uint32]struct{} {
-	typedNames := map[string]struct{}{}
-	for _, st := range g.schema.ServerEventTypes {
-		typedNames[serverEventMethodName(broadcastClassName(st.Name))] = struct{}{}
-	}
-	out := map[uint32]struct{}{}
-	for _, se := range g.schema.ServerEvents {
-		if se.ProtoName == "" {
-			continue
-		}
-		if _, dup := typedNames["on"+titleCase(se.Name)]; dup {
-			out[se.Code] = struct{}{}
-		}
-	}
-	return out
-}
-
 // collectProtoImports collects Schema imports (for encoding/decoding) grouped by import path.
 func (g *Generator) collectProtoImports() map[string][]string {
 	imports := make(map[string][]string)
@@ -982,12 +948,8 @@ func (g *Generator) collectProtoImports() map[string][]string {
 	for _, ce := range g.schema.ClientEvents {
 		addSchema(ce.ProtoName)
 	}
-	shadowed := g.typedShadowedServerEvents()
 	for _, se := range g.schema.ServerEvents {
 		if se.ProtoName == "" {
-			continue
-		}
-		if _, dup := shadowed[se.Code]; dup {
 			continue
 		}
 		addSchema(se.ProtoName)
@@ -1012,12 +974,8 @@ func (g *Generator) collectTypeImports() map[string][]string {
 		path := protoImportPath(msg)
 		imports[path] = append(imports[path], msg.TypeName)
 	}
-	shadowed := g.typedShadowedServerEvents()
 	for _, se := range g.schema.ServerEvents {
 		if se.ProtoName == "" {
-			continue
-		}
-		if _, dup := shadowed[se.Code]; dup {
 			continue
 		}
 		addType(se.ProtoName)

@@ -1,22 +1,21 @@
 package mmokit
 
 import (
-	"fmt"
 	"reflect"
 	"sort"
 
 	"google.golang.org/protobuf/proto"
 
 	"github.com/zenion/mmoserver/pkg/engine"
-	"github.com/zenion/mmoserver/pkg/net"
 )
 
 // ServerEvents is a typed registry of server→client event codes mapped to
-// their proto payload types. Each (code, protoType) pair is declared once at
-// game wiring time and consumed by both the runtime emit path (Build/Send)
-// and the schema dump (Schema). Validates at Build that the caller's payload
-// matches the registered type — eliminates the silent drift that ad-hoc
-// MakeEvent calls allow today.
+// their proto payload types. After Plan 1 Phase 7 it is purely a schema
+// hint surface for the SDK generator — every game-specific server event
+// rides the typed reflection-codec channel via mmokit.RegisterEvent[T].
+// The framework events that retain a proto-envelope path
+// (SE_SERVER_CONFIG, SE_PLAYER_SPAWNED, SE_CELL_CHANGE) are emitted with
+// makeEventFrame on the universe side, not through this registry.
 type ServerEvents struct {
 	entries map[uint32]serverEventEntry
 }
@@ -65,31 +64,9 @@ func RegisterServerEvent[T any, P interface {
 		opt(&entry)
 	}
 	// Last registration wins — lets games override engine-default
-	// registrations installed by NewProtocol (e.g. replacing enginepb.SpawnedMsg
-	// with a game-specific PlayerSpawnedMsg payload).
+	// registrations installed by NewProtocol (e.g. replacing
+	// enginepb.SpawnedMsg with a richer game-specific payload).
 	e.entries[entry.code] = entry
-}
-
-// Build marshals msg, validates it matches the registered type for code, and
-// returns a channel-0x00 wire frame. Panics if the code wasn't registered or
-// if the payload type doesn't match. Use when broadcasting a single frame to
-// many connections.
-func (e *ServerEvents) Build(code uint32, msg proto.Message) []byte {
-	entry, ok := e.entries[code]
-	if !ok {
-		panic(fmt.Sprintf("ServerEvents: code %d not registered — call RegisterServerEvent first", code))
-	}
-	if got := reflect.TypeOf(msg); got != entry.protoType {
-		panic(fmt.Sprintf("ServerEvents: code %d (%s) registered as %v, but Build called with %v",
-			code, entry.enumName, entry.protoType, got))
-	}
-	return MakeEvent(code, msg)
-}
-
-// Send builds the frame and writes it to the given connection. Convenience
-// wrapper for the common single-recipient case.
-func (e *ServerEvents) Send(sender net.ConnSender, connID uint32, code uint32, msg proto.Message) {
-	sender.SendReliable(connID, e.Build(code, msg))
 }
 
 // Schema returns the registered events as a deterministically-ordered slice

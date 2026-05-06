@@ -13,8 +13,8 @@ type BroadcastEvent struct {
 }
 
 // BroadcastQueue is the per-stage per-tick queue. Drained by the framework
-// at end-of-tick, AoI-filtered per viewer, packed into the WorldUpdateMsg
-// envelope's events list.
+// at end-of-tick, AoI-filtered per viewer, and emitted as typed-event
+// frames on the channel-0x00 wire.
 type BroadcastQueue struct {
 	mu     sync.Mutex
 	events []BroadcastEvent

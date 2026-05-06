@@ -24,7 +24,6 @@ import (
 	"fmt"
 	"sort"
 
-	enginepb "github.com/zenion/mmoserver/gen/go/enginepb"
 	"github.com/zenion/mmoserver/pkg/cmdsys"
 	"github.com/zenion/mmoserver/pkg/engine"
 	"github.com/zenion/mmoserver/pkg/persist"
@@ -89,19 +88,14 @@ type debugRepo interface {
 	LoadAllDebugFlags(ctx context.Context) (map[string][]string, error)
 }
 
-// debugSessionResolver locates a live PlayerSession by username and
-// pushes a sentinel empty DebugInfoMsg on revoke-to-zero.
+// debugSessionResolver locates a live PlayerSession by username so
+// grant/revoke handlers can mutate sess.DebugFlags in place. The
+// per-tick debug broadcaster handles the revoke-to-zero overlay clear
+// reactively (sends an empty typed DebugInfo on the transition).
 type debugSessionResolver interface {
 	// SessionByUsername returns the active session for the given
-	// username, or nil if the user is offline. Called by grant/revoke
-	// handlers to mutate sess.DebugFlags in place.
+	// username, or nil if the user is offline.
 	SessionByUsername(username string) *engine.PlayerSession
-
-	// SendDebugClear sends an empty DebugInfoMsg to the given
-	// connection so the client clears its overlay state. Invoked by
-	// debug.revoke when the session's flag set transitions from
-	// non-zero to zero.
-	SendDebugClear(connID uint32)
 }
 
 // GrantDebug enables a debug flag for a session both in-memory and
@@ -291,11 +285,9 @@ func debugRevokeHandler(ctx context.Context, repo debugRepo, resolver debugSessi
 				newBits |= bit
 			}
 		}
-		hadAny := sess.DebugFlags != 0
 		sess.DebugFlags = newBits
-		if hadAny && newBits == 0 {
-			resolver.SendDebugClear(sess.ConnID)
-		}
+		// Revoke-to-zero clear is sent by the per-tick debug broadcaster
+		// when it observes the transition (see pkg/mmokit/debug_broadcaster.go).
 	}
 	return nil
 }
@@ -383,8 +375,10 @@ func sliceEqual(a, b []string) bool {
 }
 
 // processDebugResolver is the production debugSessionResolver
-// implementation that walks the Process's cells to find live sessions
-// and dispatches the sentinel-clear event via per-cell SendEvent.
+// implementation that walks the Process's cells to find live sessions.
+// Revoke-to-zero overlay clears are sent reactively by the per-tick
+// debug broadcaster (pkg/mmokit/debug_broadcaster.go) — no per-event
+// sentinel push needed here.
 type processDebugResolver struct {
 	coord *Process
 }
@@ -401,19 +395,4 @@ func (r *processDebugResolver) SessionByUsername(username string) *engine.Player
 		}
 	}
 	return nil
-}
-
-// SendDebugClear pushes an empty DebugInfoMsg to the connection's
-// owning cell so the client clears overlay state immediately.
-func (r *processDebugResolver) SendDebugClear(connID uint32) {
-	for _, cell := range r.coord.Cells {
-		if cell.Engine == nil || cell.Engine.Players == nil {
-			continue
-		}
-		if cell.Engine.Players.ByConnID(connID) == nil {
-			continue
-		}
-		cell.Stage.SendEvent(connID, uint32(enginepb.ServerEventCode_SE_DEBUG_INFO), &enginepb.DebugInfoMsg{})
-		return
-	}
 }

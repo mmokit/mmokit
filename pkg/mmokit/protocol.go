@@ -83,9 +83,8 @@ type Protocol struct {
 // engine-level events are auto-registered — every game gets them for
 // free. Games can override any auto-registered event by calling
 // RegisterServerEvent / RegisterClientEvent for the same code with a
-// different payload type (e.g. the space game overrides
-// SE_PLAYER_SPAWNED with gamepb.PlayerSpawnedMsg to ship
-// inventory/equipment alongside the spawn).
+// different payload type, or (more commonly) publish an additional
+// typed event via mmokit.RegisterEvent[T] for richer payloads.
 func NewProtocol(game string) *Protocol {
 	p := &Protocol{
 		game:                 game,
@@ -93,26 +92,27 @@ func NewProtocol(game string) *Protocol {
 		clientEventsRegistry: NewClientEvents(),
 	}
 	// Universal server→client events — engine-defined codes with
-	// engine-defined payload shapes that every game uses as-is.
+	// engine-defined payload shapes that every game uses as-is. After
+	// Phase 7 the only proto-envelope events that survive are the bare
+	// framework hooks: SE_SERVER_CONFIG (sent inline before any cell
+	// exists), SE_CELL_CHANGE (reserved future hint), and the engine
+	// default SE_PLAYER_SPAWNED. Migrated events (Pong, LoginRejected,
+	// DebugInfo, WorldDelta) ride the typed registry below.
 	RegisterServerEvent[enginepb.ServerConfigMsg](p.serverEventsRegistry, enginepb.ServerEventCode_SE_SERVER_CONFIG)
-	RegisterServerEvent[enginepb.PongMsg](p.serverEventsRegistry, enginepb.ServerEventCode_SE_PONG)
-	registerEngineTypedEvents()
-	RegisterServerEvent[enginepb.LoginRejectedMsg](p.serverEventsRegistry, enginepb.ServerEventCode_SE_LOGIN_REJECTED)
 	RegisterServerEvent[enginepb.CellChangeMsg](p.serverEventsRegistry, enginepb.ServerEventCode_SE_CELL_CHANGE)
-	RegisterServerEvent[enginepb.DebugInfoMsg](p.serverEventsRegistry, enginepb.ServerEventCode_SE_DEBUG_INFO)
-	// SE_PLAYER_SPAWNED default is the engine's bare SpawnedMsg. Games
-	// like the space shooter override this via RegisterServerEvent with
-	// their own richer payload.
-	RegisterServerEvent[enginepb.SpawnedMsg](p.serverEventsRegistry, enginepb.ServerEventCode_SE_PLAYER_SPAWNED)
+	// Engine default for SE_PLAYER_SPAWNED is the bare SpawnedMsg sent by
+	// Stage.SpawnPlayer for games that have no richer payload. Use a
+	// distinct schema name ("playerEntityAssigned") so games like the
+	// space shooter that ALSO publish a typed game.PlayerSpawned event
+	// don't collide on the generated `onPlayerSpawned` method.
+	RegisterServerEvent[enginepb.SpawnedMsg](p.serverEventsRegistry, enginepb.ServerEventCode_SE_PLAYER_SPAWNED, WithEventName("playerEntityAssigned"))
+	registerEngineTypedEvents()
 
 	// Universal client→server events (CE_PING is handled inline in the
 	// engine's EventInterceptor; registering it here exposes it on the
 	// generated SDK's client surface).
 	RegisterClientEvent[enginepb.PingMsg](p.clientEventsRegistry, enginepb.ClientEventCode_CE_PING)
 
-	// SE_DELTA_WORLD_UPDATE is gone — per-tick replication migrated to the
-	// typed mmokit.WorldDelta event (registered in event_messages.go's
-	// registerEngineTypedEvents()). The SDK now emits onWorldDelta(handler).
 	return p
 }
 
