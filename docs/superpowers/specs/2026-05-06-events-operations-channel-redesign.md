@@ -29,7 +29,7 @@ Photon's guidance: *if the server is meant to do anything but forwarding the mes
 Mapping to this codebase:
 
 - **Events** = anything the game loop emits or consumes. Server-pushed state changes (spawn, death, docking transitions, currency changes, equipment results), per-tick broadcasts (Damage, MineExtract, Status, Killed), per-tick own-state pushes, the entity-state delta frame, and client-side game-loop inputs (move, cast, mine, dock, undock, respawn, equip, loot, jettison, chat-input). All fire-and-forget.
-- **Operations** = req/res or cross-service. Login (auth service), marketplace orders, bank operations, future GM commands, future shop interactions, future chat-service interactions. Each has a request_id and a typed response.
+- **Operations** = req/res or cross-service. Login (auth service), marketplace orders, future GM commands, future shop interactions, future chat-service interactions. Each has a request_id and a typed response.
 
 Two channels, two concepts. End state.
 
@@ -54,13 +54,27 @@ Two channels, two concepts. End state.
 ### Channel 0x01 — Operations
 
 ```
-[0x01] + protobuf(OpRequest{op_code, request_id, body})       client → server
-[0x01] + protobuf(OpResponse{op_code, request_id, status, body})   server → client
+[0x01]
+  ┌── one entry per WebSocket message ──────────┐
+  │  [typeID:     u32 BE] FNV-1a hash             │
+  │  [request_id: u64 BE] correlation token       │
+  │  [body_len:   u32 BE]                         │
+  │  [body:       N bytes] reflect-codec          │
+  └─────────────────────────────────────────────┘
 ```
 
-**Unchanged from today's marketplace/bank format.** This branch does not redesign operations. It only adds Login as a new operation alongside existing marketplace/bank ones.
+Same wire shape in both directions. Direction (client→server vs server→client) is implicit from the side parsing the frame. The receiver determines request-vs-response from the typeID — each operation registers a `Request → Response` type pair, so a known typeID is unambiguously one or the other.
 
-A future plan migrates 0x01 bodies to typed reflection-codec (same FNV-1a typeID + body_len + body shape, plus a request_id field), but that's out of scope here.
+**Status / errors.** No wire-level status field. A response body type may carry success/error fields per its domain (e.g., `MarketOrderResultResponse` has its own `success` + `error` fields today and that survives migration). For framework-level errors (unknown typeID, handler returned err, deserialization failure), a generic typed response `OperationError{code: u32, message: string}` is sent — the client framework intercepts this typeID and rejects the matching pending promise by `request_id`.
+
+**Routing kinds.** Each registered operation declares a `RouteKind`:
+
+- `RouteGatewayLocal` — handler runs on the gateway, no cell forwarding. Used by Login (no player cell yet at handshake time).
+- `RoutePlayerCell` — handler runs on the player's authoritative cell via `RunOnLoop`. Used by marketplace, bank, future GM commands.
+
+Same model as `cmdsys.Command.RouteKind` — uniform routing taxonomy across the codebase.
+
+**Out: today's `protobuf(OpRequest{op_code, request_id, body})` envelope.** No more `OpRequest` / `OpResponse` proto types, no more enum-based op codes. typeID + reflection codec everywhere.
 
 ### Retired channels
 
@@ -103,15 +117,35 @@ The auto-broadcast pipeline (`pkg/universe/broadcast_queue.go`, `pkg/mmokit/broa
 
 `BankRequest` is a borderline case — it's a request that produces a `BankContents` push as the result. By Photon's strict reading it's an operation. Pragmatically, today it's modelled as input + later push (the decoupled pattern Photon explicitly recommends), and that pattern survives the migration unchanged. Keep as event for this branch; revisit when the typed-ops migration lands.
 
-### Login → operation on 0x01
+### Operations on 0x01 — full migration to typed bodies
 
-- `gamepb.LoginMsg` (input) → `LoginRequest` op on 0x01. Body fields: `username string` (used as a fallback only — the cookie is the primary credential; username on the wire is ignored when a valid cookie is present, kept for the legacy no-cookie flow). Once the auth-cookie integration in `examples/4node-basic/web/src/auth.ts` is treated as universal and the no-cookie flow is removed, `username` can drop too.
-- `gamepb.LoginRejectedMsg` (push on 0x00) → carried inside the `LoginResponse` op-response on 0x01: response has `status` indicating accepted/rejected and `body` carrying either accepted-payload (user_id, username, spawn target) or rejected-reason.
-- `gamepb.PlayerSpawnedMsg` is a follow-up event on 0x00 once the cell has spawned the entity — fired regardless, same as today; this is the decoupled pattern (op returns OK, then state push events follow).
+Every existing operation migrates from protobuf to typed reflection-codec. No protobuf envelope, no enum-based op codes, no `OpRequest`/`OpResponse` proto types. Each op registers `Request → Response` typed Go struct pairs.
 
-**Routing:** the gateway inspects the inbound `OpRequest.op_code`. If it's `Login`, dispatch to the gateway-local `LoginHandler` callback (no cell forwarding) and return an `OpResponse` immediately. If it's marketplace/bank, dispatch to `OpRouter` (forwards to the player's authoritative cell). One switch in the gateway's read path.
+**Login → `RouteGatewayLocal`:**
 
-The gateway's existing `Config.LoginHandler` keeps its current signature: `func(payload []byte) (username string, sessionData any, err error)`. Only the wire framing changes — what hits the handler is the deserialized `LoginRequest` body bytes instead of the raw 0x00 frame body.
+- `gamepb.LoginMsg` → typed `LoginRequest`. Body fields: `username string` (fallback only — the cookie is the primary credential; username on the wire is ignored when a valid cookie is present, kept for the legacy no-cookie flow). Once cookie-auth in `examples/4node-basic/web/src/auth.ts` is universal and the no-cookie flow is removed, `username` can drop.
+- `gamepb.LoginRejectedMsg` → carried inside typed `LoginResponse`. Body: `accepted bool`, `user_id string`, `username string`, `spawn_x f32`, `spawn_y f32`, `error string` (populated on rejection).
+- Gateway routes typeID = `LoginRequest` to the existing `Config.LoginHandler` callback, builds a `LoginResponse`, and writes back on 0x01.
+- `gamepb.PlayerSpawnedMsg` is a follow-up *event* on 0x00 once the cell has spawned the entity — fired regardless, same as today (op returns OK, then state-push events follow).
+
+**Marketplace → `RoutePlayerCell`:**
+
+- `MarketBrowseRequest` → `MarketOrderBookResponse`
+- `MarketCreateOrderRequest` → `MarketOrderResultResponse`
+- `MarketCancelOrderRequest` → `MarketOrderResultResponse`
+- `MarketMyOrdersRequest` → `MarketMyOrdersResponse`
+- `MarketInstantTradeRequest` → `MarketOrderResultResponse`
+
+Each becomes a typed Go struct. The handler signature stays the same shape as today (`pkg/ops/router.go:197`):
+
+```go
+mmokit.RegisterOp[MarketBrowseRequest, MarketOrderBookResponse](
+    coord.Ops, mmokit.RoutePlayerCell, handler)
+```
+
+(verb name TBD-but-committed: `RegisterOp[Req, Res]`. The existing `ops.Register[Req, Res, Code, ReqP, ResP]` retires; the new shape drops the `code` arg — typeIDs are computed — and drops the `ProtoMessage` constraint.)
+
+**Bank → still event.** `BankRequest` (0x02 input today) and `BankContents` (0x00 push today) both move to typed events on 0x00. They're the explicit decoupled pattern Photon recommends — input fires, server pushes the result via the existing bank-state event channel. No request_id correlation needed; the bank-contents push is a state observation, not a per-request response. This was the Open Question from the earlier round; with typed-ops in scope this remains the right call because Bank doesn't need correlation (every request just refreshes the player's bank view, which is also pushed proactively on bank contents change).
 
 ## Server-side chat decommission
 
@@ -136,9 +170,15 @@ End state: client UI shells exist; nothing sends or receives chat. When the chat
 
 `mmokit` facade (`pkg/mmokit/`):
 
-- `RegisterServerEvent[T](e *ServerEvents, code uint32)` — verb stays, semantics change: the `code uint32` arg is dropped (the typeID is computed from `T` via the same FNV-1a hash already used by client-input registrations). Become `RegisterServerEvent[T](e *ServerEvents)`. The protocol registry continues to back `--dump-schema` for codegen.
+- `RegisterServerEvent[T](e *ServerEvents, code uint32)` — verb stays, semantics change: the `code uint32` arg is dropped (typeID is computed from `T` via FNV-1a). Becomes `RegisterServerEvent[T](e *ServerEvents)`. The protocol registry continues to back `--dump-schema` for codegen.
 - `ServerEvents.Build/Send` — `Build` is deleted (no envelope to build). `Send` becomes a thin wrapper around the typed-event encoder; eventually deleted in favour of direct `Stage.SendEvent[T](connID, *T)` typed sends.
-- `Stage.SendEvent(connID, code, msg)` — current shape is `(connID uint32, code uint32, msg proto.Message)`. New shape is `Stage.SendEvent[T](connID uint32, msg *T)`. Code arg goes away; typeID is implicit in the type.
+- `Stage.SendEvent(connID, code, msg)` — current shape is `(connID uint32, code uint32, msg proto.Message)`. New shape is `Stage.SendEvent[T](connID uint32, msg *T)`. Code arg goes away.
+- **New: `RegisterOp[Req, Res any](r *OpRouter, kind RouteKind, handler func(*OpContext, *Req) (*Res, error))`** — replaces today's `ops.Register[Req, Res, Code, ReqP, ResP]`. typeID is computed from `Req` and `Res` types; no `code` arg, no proto-message constraint. `RouteKind` is one of `RouteGatewayLocal` or `RoutePlayerCell`.
+- **`OpRouter` internals** — switches from a `map[uint32]handler` keyed by op code to a `map[uint32]handler` keyed by request typeID. Response typeIDs are emitted on the wire; the client framework correlates them back to pending requests by `request_id`. Server side is symmetric.
+
+`pkg/ops/`:
+
+- `Register` is renamed/restructured to drop the proto constraint; or kept as a deprecated proto-only alias and a new `RegisterTyped` is introduced — decision for the plan author. The simpler endpoint is to delete `Register` and inline the typed shape.
 
 `pkg/universe/`:
 
@@ -152,7 +192,8 @@ End state: client UI shells exist; nothing sends or receives chat. When the chat
 
 - `client.ts` — `onWorldUpdate` deleted. Per-event `onPlayerSpawned`, `onPlayerDied`, `onDockingState`, etc. handlers generated for every server-side typed event. `client.typedEvents.on(Damage, ...)` API surface unchanged for broadcasts.
 - `transport.ts` — channel constants reduced to `CH_EVENT = 0x00`, `CH_OPERATION = 0x01`. `CH_CLIENT_INPUT` removed. Single read-loop dispatcher per channel.
-- `inputs.ts` (client→server) and `broadcasts.ts` (server→client) — kept separate by direction for readability. Both use identical encode/decode primitives. `broadcasts.ts` gains the migrated server-event classes (`PlayerSpawned`, `PlayerDied`, `DockingState`, etc.) alongside the existing AoI broadcast classes (`Damage`, `MineExtract`, `Status`, `Killed`).
+- `inputs.ts` (client→server, 0x00) and `broadcasts.ts` (server→client, 0x00) — kept separate by direction. Both use identical encode/decode primitives. `broadcasts.ts` gains the migrated server-event classes (`PlayerSpawned`, `PlayerDied`, `DockingState`, etc.) alongside the existing AoI broadcast classes (`Damage`, `MineExtract`, `Status`, `Killed`).
+- `operations.ts` (new module, 0x01) — typed wrappers for every registered op: `client.login(req: LoginRequest): Promise<LoginResponse>`, `client.marketBrowse(req): Promise<MarketOrderBookResponse>`, `client.marketCreateOrder(req): Promise<MarketOrderResultResponse>`, etc. Each returns a Promise resolved when the matching `request_id` response arrives, or rejected on `OperationError`. Replaces the existing op-router client code.
 - A new `operations.ts` generated module exposes `client.login(req: LoginRequest): Promise<LoginResponse>` and the existing marketplace/bank op call sites continue working via the existing OpRouter client.
 
 ## Codegen impact
@@ -161,8 +202,8 @@ End state: client UI shells exist; nothing sends or receives chat. When the chat
 
 - `inputs.go` and `broadcasts.go` — body-encoding logic stays. Channel byte changes from 0x02 to 0x00 in the emitted `client.send(...)` wrapper. Per-event `client.on*` handlers added for server-side events (today only `onWorldUpdate` exists).
 - A new generator section emits typed-event server-push handlers — symmetric to client-input emission, just opposite direction.
-- Login operation generator — could be deferred; for this branch hand-write the `client.login()` wrapper since it's one operation. The future typed-ops plan introduces formal codegen.
-- `--dump-schema` adds a new section listing server-side typed events with their typeIDs (parallel to the existing client-input section). The protocol registry in `mmokit.NewProtocol(...)` remains the source of truth.
+- **New `operations.go` generator** — emits `operations.ts`. For each registered op, emits: a `Request` class (with `encode()`), a `Response` class (with `decode()`), and a `client.<opName>(req): Promise<Response>` wrapper. The wrapper allocates a request_id, encodes the request to 0x01, registers a pending-promise entry keyed by request_id, awaits the matching response or `OperationError`, decodes, resolves/rejects.
+- `--dump-schema` adds two new sections: server-side typed events (parallel to client-input), and operations (request typeID + response typeID + RouteKind). The protocol registry in `mmokit.NewProtocol(...)` remains the source of truth.
 
 ## Testing strategy
 
@@ -182,21 +223,23 @@ The migration is one logical change touching many files but with low coupling be
 3. **Server→client engine events** — migrate ~13 messages off the protobuf-envelope path. Most are mechanical: replace `mmokit.RegisterServerEvent[T]` + `Build/Send` with the typed-event primitive. Each migration ships green.
 4. **WorldDelta** — strip the protobuf envelope from `SE_DELTA_WORLD_UPDATE`; ship body as typed-event payload.
 5. **Inputs channel-byte change** — flip 0x02 → 0x00 in client SDK and gateway. Single-commit, runnable end-to-end.
-6. **Login → operation** — define `LoginRequest` / `LoginResponse` op protos; gateway routes Login op_code to `LoginHandler`; SDK exposes `client.login(...)`. Retire `gamepb.LoginMsg` / `gamepb.LoginRejectedMsg`.
-7. **Chat decomm** — delete server-side chat code, `enginepb.ChatMsg`, related plumbing. Client UI shells stay.
-8. **Cleanup** — delete `WorldUpdateMsg` proto entirely, retire `0x02` channel constants, retire `gamepb.TypedEvent`, retire `enginepb.ServerEventCode_SE_*` enums for migrated messages.
+6. **Operations foundation** — new typed-ops codec (the 0x01 wire format above), `RegisterOp[Req, Res]` API, `RouteKind` enum, `OperationError` framework type, request_id correlator on the client framework. Old protobuf `OpRequest`/`OpResponse` path coexists.
+7. **Marketplace ops migration** — port the 5 marketplace ops from `pkg/ops/Register` to `mmokit.RegisterOp`, with `RoutePlayerCell`. Convert the proto `Market*Request`/`Market*Response` types to typed Go structs (mirrors the field set; reflection codec handles serialization). SDK regenerates `operations.ts`.
+8. **Login → operation** — define typed `LoginRequest` / `LoginResponse`; register with `RouteGatewayLocal`; gateway routes Login typeID to `LoginHandler` and writes the typed response. Retire `gamepb.LoginMsg` / `gamepb.LoginRejectedMsg`.
+9. **Chat decomm** — delete server-side chat code, `enginepb.ChatMsg`, related plumbing. Client UI shells stay.
+10. **Cleanup** — delete `WorldUpdateMsg`, `TypedEvent`, `OpRequest`, `OpResponse` protos entirely. Retire `ChannelClientInput` (0x02). Retire `enginepb.ServerEventCode_SE_*` enums and op-code enums. Retire the deprecated `pkg/ops/Register` shape if a deprecation alias was kept during phasing.
 
 ## Out of scope
 
-- **Operations channel typed-bodies migration.** Marketplace/bank ops stay on 0x01 protobuf for this branch. A follow-up plan migrates op bodies to the typed reflection codec and adds a formal request/response correlation primitive that retires the OpRouter's bespoke shape.
-- **Unity client.** The Unity client codegen is dormant (no active use). When it returns, codegen emits typed-event handlers parallel to TS — out of scope here.
+- **Unity client.** The Unity client codegen is dormant (no active use). When it returns, codegen emits typed-event + typed-op handlers parallel to TS — out of scope here.
 - **Client-side input prediction / reconciliation.** Today every input is server-confirmed. Adding prediction is a feature, not a wire-format change.
 - **Cached events** (Photon-style — events that late-joiners receive on connect). Not needed today; revisit if a use case appears.
-- **Chat service.** Decommissioning the existing chat is in scope; building the new chat service is its own design + plan.
+- **Chat service.** Decommissioning the existing chat is in scope; building the new chat service is its own design + plan. The chat service will use 0x01 operations (for sending) and 0x00 events (for receiving) — both primitives are now in place after this branch lands.
+- **Server-initiated operations (push-style RPC).** This branch keeps operations as client-initiated only. Server-initiated would require a separate "server pushes a request, client responds" flow — no current use case.
 
 ## Open questions
 
-- **`BankRequest` placement** — strict-Photon says it's an operation (req/res with `BankContents` as the response). Today it's modelled as event in + event out, which is the explicit decoupled pattern Photon recommends. Keep as event for this branch; revisit when typed-ops lands. Decision: **as-is**.
+- **`BankRequest` placement** — strict-Photon says it's an operation (req/res with `BankContents` as the response). Today it's modelled as event in + event out, which is the explicit decoupled pattern Photon recommends. Decision: **keep as typed event on 0x00** — bank-contents pushes are state observations rather than per-request responses (the server may push a fresh BankContents whenever bank state changes for any reason, not just in reply to a request).
 - **TypeID collision risk** — FNV-1a 32-bit on Go type names. With ~30 message types we're well below birthday-paradox concern (probability of collision is < 1e-7 at this scale). If a collision is ever detected at registry-build time, panic with a clear message and the user renames. Decision: **don't pre-empt.**
 - **`MaxFrameSize`** — the 0x00 dispatcher should refuse frames over some sane upper bound (defensive against malformed clients sending u32-max body_len). Suggest 64KB per individual event body, no batch-frame ceiling beyond what WebSocket already enforces. Decision: **plan-time**.
 
@@ -204,25 +247,29 @@ The migration is one logical change touching many files but with low coupling be
 
 Server (Go):
 
-- Modify: `pkg/universe/{gateway,client_input_dispatch,broadcast_hooks,broadcast_queue,client_input_hooks,virtual_conn_manager}.go`
+- Modify: `pkg/universe/{gateway,client_input_dispatch,broadcast_hooks,broadcast_queue,client_input_hooks,virtual_conn_manager,service_runtime}.go`
 - Modify: `pkg/mmokit/{protocol,server_events,handle_client,handle_internal,broadcast,messaging*,init,mmokit}.go`
+- Modify: `pkg/ops/router.go` (`Register` retired or aliased; new typed `RegisterOp` lives in mmokit and delegates here)
 - Modify: `pkg/net/conn.go` (channel constants)
-- Modify: `cmd/server/main.go` (RegisterServerEvent calls)
+- Modify: `cmd/server/main.go` (RegisterServerEvent calls; op registrations)
 - Modify: `internal/game/{system_network,input_handlers,input_messages,hooks,gameworld}.go`
-- Delete: `proto/gamepb/game.proto` entries — `WorldUpdateMsg`, `TypedEvent`, `LoginMsg`, `LoginRejectedMsg`, `PlayerSpawnedMsg`, `PlayerDiedMsg`, `DockingStateMsg`, `DockedMsg`, `CurrencyUpdateMsg`, `BankContentsMsg`, `EquipResultMsg`, `TransferResultMsg`, `MapDataMsg`, `PlayerOwnStateMsg`
-- Delete: `proto/enginepb/engine.proto` — `ChatMsg`, all `SE_*` enum values made obsolete
+- Modify: `internal/marketplace/handler.go` (5 op registrations migrate to typed `RegisterOp`)
+- Delete: `proto/gamepb/game.proto` entries — `WorldUpdateMsg`, `TypedEvent`, `LoginMsg`, `LoginRejectedMsg`, `PlayerSpawnedMsg`, `PlayerDiedMsg`, `DockingStateMsg`, `DockedMsg`, `CurrencyUpdateMsg`, `BankContentsMsg`, `EquipResultMsg`, `TransferResultMsg`, `MapDataMsg`, `PlayerOwnStateMsg`, `MarketBrowseRequest`, `MarketCreateOrderRequest`, `MarketCancelOrderRequest`, `MarketMyOrdersRequest`, `MarketInstantTradeRequest`, `MarketOrderBookResponse`, `MarketOrderResultResponse`, `MarketMyOrdersResponse`, `BankRequestMsg`
+- Delete: `proto/enginepb/engine.proto` — `ChatMsg`, `OpRequest`, `OpResponse`, all `SE_*` enum values, all op-code enum values
 - Modify (regen): `gen/go/gamepb/`, `gen/go/enginepb/`, `gen/es/gamepb/`, `gen/es/enginepb/`
 
 Client (TS):
 
 - Modify: `web-pixi/sdk/{client,transport,inputs,broadcasts,index}.ts`
-- Modify: `web-pixi/src/{network,state}.ts` (per-event handler wiring)
-- Add: `web-pixi/sdk/operations.ts` (login wrapper)
+- Modify: `web-pixi/src/{network,state}.ts` and `web-pixi/src/ui/{bank,market,hud,loot-popup}.ts` (per-event handler wiring; market UI rewires from old op-router to typed `client.market*` calls)
+- Add: `web-pixi/sdk/operations.ts` (typed op wrappers)
+- Delete: existing op-router client code (replaced by `operations.ts`)
 - Mirror in: `examples/4node-basic/web/sdk/`
 
 Codegen (Go):
 
 - Modify: `cmd/sdkgen/{generate,broadcasts,inputs,schema,main}.go` — add server-event emission; merge channel-byte logic.
+- Add: `cmd/sdkgen/operations.go` — emits `operations.ts` from the protocol's op registry.
 
 Tests:
 
@@ -234,5 +281,6 @@ Tests:
 - `just build` produces a clean binary; `go vet ./...` clean; web-pixi `tsc --noEmit` clean.
 - `just dev` smoke flow passes for: connect, spawn, click-to-move, mining, ability cast, status effects (DoT visualization), dock, undock, respawn, marketplace browse/place/cancel/instant-trade, equip, loot, inventory transfer, jettison, login (cookie-resume + register + login-existing + duplicate-rejection).
 - `just distributed` smoke flow passes for: cross-host login, cross-host handoff (walk a player across cell boundary), cross-host operation (place a market order on a remote cell).
-- No protobuf wrapper on any 0x00 frame. `WorldUpdateMsg`, `TypedEvent`, `LoginMsg`, `LoginRejectedMsg`, `ChatMsg`, all migrated `SE_*` codes deleted from proto. Channel 0x01 retains its protobuf `OpRequest`/`OpResponse` envelope unchanged.
+- **Zero protobuf bytes on the wire** for any 0x00 or 0x01 frame. `WorldUpdateMsg`, `TypedEvent`, `LoginMsg`, `LoginRejectedMsg`, `ChatMsg`, `OpRequest`, `OpResponse`, all market request/response protos, and all migrated `SE_*` / op-code enum values deleted from proto.
+- The only remaining `gen/go/*pb/` code lives under `meshpb/` (server-internal mesh data plane — never reaches clients). All client-facing wire format is typed reflection codec.
 - Two channels in `pkg/net/conn.go`: `ChannelEvent = 0x00`, `ChannelOperation = 0x01`. `ChannelClientInput` retired.
