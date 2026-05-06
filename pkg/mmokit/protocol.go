@@ -50,6 +50,12 @@ type ProtocolSchema struct {
 	// proto-based ServerEvents path to the typed RegisterEvent[T] path; until
 	// then sdkgen emits zero per-event code from this section.
 	ServerEventTypes []ServerEventTypeSchema `json:"server_event_types,omitempty"`
+	// TypedOperations lists every RegisterOp[Req, Res any] registration.
+	// Sdkgen emits operations.ts (per-op Request + Response classes) plus a
+	// Promise correlator on the generated <Game>Client. Empty until games
+	// migrate to the typed RegisterOp path; until then sdkgen emits zero
+	// per-op code from this section.
+	TypedOperations []TypedOperationSchema `json:"typed_operations,omitempty"`
 }
 
 // ServerEventTypeSchema describes a typed server→client event registered via
@@ -58,6 +64,22 @@ type ProtocolSchema struct {
 // encoding logic. Sdkgen emits a TS class with a static `decode(buf)` method
 // mirror of the broadcast classes, plus a client.onXxx(handler) wrapper.
 type ServerEventTypeSchema = BroadcastTypeSchema
+
+// TypedOperationSchema describes one RegisterOp[Req, Res any] registration.
+// Both Request + Response use the same reflection-codec wire layout as
+// broadcasts/server-events/client-inputs (reuses BroadcastFieldSchema for
+// the per-field shape). Sdkgen consumes this section to emit operations.ts:
+// per-op Request class (with encode() instance method) + Response class
+// (with static decode), plus a client.<opName>(req): Promise<Res> wrapper.
+type TypedOperationSchema struct {
+	Kind             string                 `json:"kind"` // "gateway-local" or "player-cell"
+	RequestTypeID    uint32                 `json:"request_type_id"`
+	RequestTypeName  string                 `json:"request_type_name"`
+	RequestFields    []BroadcastFieldSchema `json:"request_fields"`
+	ResponseTypeID   uint32                 `json:"response_type_id"`
+	ResponseTypeName string                 `json:"response_type_name"`
+	ResponseFields   []BroadcastFieldSchema `json:"response_fields"`
+}
 
 // Protocol collects the full client/server contract for a game.
 type Protocol struct {
@@ -246,6 +268,23 @@ func (p *Protocol) Schema() ProtocolSchema {
 	// broadcast/client-input path; only the dispatch direction differs).
 	for _, t := range RegisteredServerEventTypes() {
 		ps.ServerEventTypes = append(ps.ServerEventTypes, BroadcastTypeOf(t))
+	}
+	// Typed operations: every RegisterOp[Req, Res any] entry exposes its
+	// request + response types here. Sdkgen emits operations.ts (per-op
+	// Request/Response classes) + a Promise correlator on the generated
+	// client. Wire layout reuses BroadcastTypeOf for both halves.
+	for _, e := range RegisteredTypedOps() {
+		reqType := BroadcastTypeOf(e.RequestType)
+		resType := BroadcastTypeOf(e.ResponseType)
+		ps.TypedOperations = append(ps.TypedOperations, TypedOperationSchema{
+			Kind:             e.Kind.String(),
+			RequestTypeID:    TypeIDOf(e.RequestType),
+			RequestTypeName:  e.RequestType.String(),
+			RequestFields:    reqType.Fields,
+			ResponseTypeID:   e.ResponseTypeID,
+			ResponseTypeName: e.ResponseType.String(),
+			ResponseFields:   resType.Fields,
+		})
 	}
 	// Final sort by code: InputRouter.Schema() iterates a map in random
 	// Go-map-order, so without this the generated TypeScript SDK methods

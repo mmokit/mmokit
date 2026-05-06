@@ -82,6 +82,20 @@ type ClientInputTypeSchema = BroadcastTypeSchema
 // with a static decode(buf) method + a client.onXxx(handler) wrapper.
 type ServerEventTypeSchema = BroadcastTypeSchema
 
+// TypedOperationSchema describes one RegisterOp[Req, Res any] registration.
+// JSON shape mirrors pkg/mmokit.TypedOperationSchema exactly. Both halves
+// reuse BroadcastFieldSchema (same reflect-codec wire layout as broadcasts/
+// server-events/client-inputs).
+type TypedOperationSchema struct {
+	Kind             string                 `json:"kind"`
+	RequestTypeID    uint32                 `json:"request_type_id"`
+	RequestTypeName  string                 `json:"request_type_name"`
+	RequestFields    []BroadcastFieldSchema `json:"request_fields"`
+	ResponseTypeID   uint32                 `json:"response_type_id"`
+	ResponseTypeName string                 `json:"response_type_name"`
+	ResponseFields   []BroadcastFieldSchema `json:"response_fields"`
+}
+
 type ProtocolSchema struct {
 	Game             string                   `json:"game"`
 	ClientEvents     []ClientEventSchema      `json:"clientEvents"`
@@ -91,4 +105,5 @@ type ProtocolSchema struct {
 	BroadcastTypes   []BroadcastTypeSchema    `json:"broadcast_types,omitempty"`
 	ClientInputTypes []ClientInputTypeSchema  `json:"client_input_types,omitempty"`
 	ServerEventTypes []ServerEventTypeSchema  `json:"server_event_types,omitempty"`
+	TypedOperations  []TypedOperationSchema   `json:"typed_operations,omitempty"`
 }
