@@ -110,12 +110,9 @@ func NewProtocol(game string) *Protocol {
 	// generated SDK's client surface).
 	RegisterClientEvent[enginepb.PingMsg](p.clientEventsRegistry, enginepb.ClientEventCode_CE_PING)
 
-	// SE_DELTA_WORLD_UPDATE is the engine's binary delta channel — emitted
-	// by the BinaryFrameWriter, never via ServerEvents.Send. Empty protoName
-	// signals the SDK generator to emit a binary-decoder method instead of
-	// a proto Subscribe wrapper. Not registered via the typed API because
-	// it has no proto message type.
-	ServerEvent(p, enginepb.ServerEventCode_SE_DELTA_WORLD_UPDATE, "deltaWorldUpdate", "")
+	// SE_DELTA_WORLD_UPDATE is gone — per-tick replication migrated to the
+	// typed mmokit.WorldDelta event (registered in event_messages.go's
+	// registerEngineTypedEvents()). The SDK now emits onWorldDelta(handler).
 	return p
 }
 
@@ -160,7 +157,11 @@ func ClientEvent[C engine.EventCode](p *Protocol, code C, protoName string) {
 }
 
 // ServerEvent registers a server→client event. Pass an empty protoName for
-// binary-encoded events (e.g. SE_DELTA_WORLD_UPDATE).
+// custom binary-encoded events (the SDK generator emits a binary-decoder
+// method instead of a proto Subscribe wrapper). The engine itself no
+// longer uses this path — per-tick replication moved to the typed
+// mmokit.WorldDelta event in Phase 4 — but games may still emit custom
+// binary frames over a ServerEventCode this way.
 func ServerEvent[C engine.EventCode](p *Protocol, code C, name string, protoName string) {
 	p.serverEvents = append(p.serverEvents, ServerEventSchema{
 		Code:      uint32(code),

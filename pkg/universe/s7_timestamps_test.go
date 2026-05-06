@@ -84,13 +84,13 @@ func (c *captureSender) DrainClientInput(connID uint32) [][]byte {
 // captured end-to-end — would require wiring a ConnSender into the
 // coordinator's cell set and is follow-up work.
 func TestBinaryFrameWriter_TimestampsAreMonotonic(t *testing.T) {
-	makeEvent := func(_ uint32, data []byte) []byte {
+	makeEvent := func(data []byte) []byte {
 		out := make([]byte, len(data))
 		copy(out, data)
 		return out
 	}
 	conn := &captureSender{}
-	w := system.NewBinaryFrameWriter(conn, 99, makeEvent)
+	w := system.NewBinaryFrameWriter(conn, makeEvent)
 
 	// Stamps that ReplicationSystem would have supplied from ClusterClock.
 	const stamp0 uint64 = 1_000_000

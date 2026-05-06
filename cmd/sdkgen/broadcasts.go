@@ -120,6 +120,8 @@ func broadcastFieldTSType(f BroadcastFieldSchema) string {
 		return "boolean"
 	case "string":
 		return "string"
+	case "bytes":
+		return "Uint8Array"
 	case "struct":
 		var b strings.Builder
 		b.WriteString("{ ")
@@ -150,6 +152,8 @@ func broadcastFieldTSInit(f BroadcastFieldSchema) string {
 		return "false"
 	case "string":
 		return "\"\""
+	case "bytes":
+		return "new Uint8Array(0)"
 	case "struct":
 		var b strings.Builder
 		b.WriteString("{ ")
@@ -202,6 +206,15 @@ func writeBroadcastFieldDecode(b *strings.Builder, target string, f BroadcastFie
 		fmt.Fprintf(b, "    {\n")
 		fmt.Fprintf(b, "      const sl = dv.getUint16(off, true); off += 2;\n")
 		fmt.Fprintf(b, "      %s = new TextDecoder().decode(buf.subarray(off, off + sl)); off += sl;\n", target)
+		fmt.Fprintf(b, "    }\n")
+	case "bytes":
+		// Matches reflect_marshal []byte fast path: 4-byte LE length prefix,
+		// then N raw bytes. Decoded as a Uint8Array view (subarray, then
+		// copied into a fresh buffer via slice() so the message owns its
+		// data and the caller's frame buffer can be reused).
+		fmt.Fprintf(b, "    {\n")
+		fmt.Fprintf(b, "      const bl = dv.getUint32(off, true); off += 4;\n")
+		fmt.Fprintf(b, "      %s = buf.slice(off, off + bl); off += bl;\n", target)
 		fmt.Fprintf(b, "    }\n")
 	case "struct":
 		// Inline: decode each inner field directly into target.fieldName.

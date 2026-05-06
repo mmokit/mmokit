@@ -73,6 +73,11 @@ func validateType(t reflect.Type, path string, allowSlice bool) {
 		if !allowSlice {
 			panic(fmt.Sprintf("reflect_marshal: unsupported type %s at %s (kind=%s)", t, path, t.Kind()))
 		}
+		// []byte fast path: encoded as [u32 len][bytes] without per-element
+		// iteration. Same validity rule as any byte field — always allowed.
+		if t.Elem().Kind() == reflect.Uint8 {
+			return
+		}
 		validateType(t.Elem(), path+"[]", allowSlice)
 	case reflect.Struct:
 		validateStruct(t, path, allowSlice)
@@ -162,6 +167,12 @@ func valueSize(v reflect.Value) int {
 		}
 		return total
 	case reflect.Slice:
+		// []byte fast path: [u32 len][N bytes]. Uses u32 (vs u16 for
+		// generic slices) because typed binary payloads (e.g. WorldDelta
+		// body) routinely exceed 65535 bytes for stress-test densities.
+		if v.Type().Elem().Kind() == reflect.Uint8 {
+			return 4 + v.Len()
+		}
 		// Wire layout: [u16 len][elem0]...[elemN-1]. Slices are length-prefixed
 		// rather than fixed-stride because they can hold strings (themselves
 		// length-prefixed) or nested structs whose own size varies.
@@ -246,6 +257,14 @@ func marshalValue(buf []byte, off int, v reflect.Value) int {
 		}
 		return off
 	case reflect.Slice:
+		// []byte fast path: [u32 len][N bytes]. See valueSize for rationale.
+		if v.Type().Elem().Kind() == reflect.Uint8 {
+			b := v.Bytes()
+			binary.LittleEndian.PutUint32(buf[off:], uint32(len(b)))
+			off += 4
+			copy(buf[off:], b)
+			return off + len(b)
+		}
 		n := v.Len()
 		binary.LittleEndian.PutUint16(buf[off:], uint16(n))
 		off += 2
@@ -323,6 +342,17 @@ func unmarshalValueOnStage(stage *Stage, data []byte, off int, v reflect.Value) 
 		}
 		return off
 	case reflect.Slice:
+		// []byte fast path: [u32 len][N bytes]. See valueSize for rationale.
+		if v.Type().Elem().Kind() == reflect.Uint8 {
+			n := int(binary.LittleEndian.Uint32(data[off:]))
+			off += 4
+			// Copy out so the decoded slice doesn't alias the caller's
+			// data buffer (which the connection layer may reuse).
+			out := make([]byte, n)
+			copy(out, data[off:off+n])
+			v.SetBytes(out)
+			return off + n
+		}
 		n := int(binary.LittleEndian.Uint16(data[off:]))
 		off += 2
 		// Allocate a fresh slice of the right length so the caller's

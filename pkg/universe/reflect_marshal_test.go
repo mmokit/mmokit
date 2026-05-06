@@ -286,3 +286,84 @@ func TestValidateMessageType_AcceptsSlice(t *testing.T) {
 	// Should not panic for typed-event message types.
 	ValidateMessageType(reflect.TypeFor[Msg]())
 }
+
+// TestReflectMarshal_BytesFastPath verifies the []byte fast path:
+// encoded as [u32 len][N bytes] without per-element iteration.
+// Used by mmokit.WorldDelta — the per-tick delta frame body.
+func TestReflectMarshal_BytesFastPath(t *testing.T) {
+	type Frame struct {
+		Body []byte
+	}
+	body := []byte{0x01, 0x02, 0x03, 0x04, 0xFF, 0xAB, 0xCD}
+	in := Frame{Body: body}
+	data := ReflectMarshal(&in)
+	// Wire: [u32 len=7][7 bytes]
+	if len(data) != 4+len(body) {
+		t.Fatalf("expected %d bytes (u32 len + N bytes), got %d", 4+len(body), len(data))
+	}
+	got32 := uint32(data[0]) | uint32(data[1])<<8 | uint32(data[2])<<16 | uint32(data[3])<<24
+	if int(got32) != len(body) {
+		t.Fatalf("u32 length prefix = %d, want %d", got32, len(body))
+	}
+	for i, b := range body {
+		if data[4+i] != b {
+			t.Fatalf("body[%d] = 0x%02x, want 0x%02x", i, data[4+i], b)
+		}
+	}
+	var out Frame
+	ReflectUnmarshal(data, &out)
+	if len(out.Body) != len(body) {
+		t.Fatalf("decoded body len = %d, want %d", len(out.Body), len(body))
+	}
+	for i, b := range body {
+		if out.Body[i] != b {
+			t.Fatalf("decoded body[%d] = 0x%02x, want 0x%02x", i, out.Body[i], b)
+		}
+	}
+}
+
+// TestReflectMarshal_BytesFastPath_Empty verifies a nil/empty []byte
+// round-trips as just a u32 zero-length prefix.
+func TestReflectMarshal_BytesFastPath_Empty(t *testing.T) {
+	type Frame struct {
+		Body []byte
+	}
+	in := Frame{Body: nil}
+	data := ReflectMarshal(&in)
+	if len(data) != 4 {
+		t.Fatalf("expected 4 bytes (u32 length=0), got %d", len(data))
+	}
+	var out Frame
+	ReflectUnmarshal(data, &out)
+	if len(out.Body) != 0 {
+		t.Fatalf("expected empty, got %v", out.Body)
+	}
+}
+
+// TestReflectMarshal_BytesFastPath_LargePayload verifies bodies above the
+// u16 cap (65535 bytes) round-trip correctly — the whole reason for the
+// u32 length prefix.
+func TestReflectMarshal_BytesFastPath_LargePayload(t *testing.T) {
+	type Frame struct {
+		Body []byte
+	}
+	body := make([]byte, 100_000)
+	for i := range body {
+		body[i] = byte(i & 0xff)
+	}
+	in := Frame{Body: body}
+	data := ReflectMarshal(&in)
+	if len(data) != 4+len(body) {
+		t.Fatalf("expected %d bytes, got %d", 4+len(body), len(data))
+	}
+	var out Frame
+	ReflectUnmarshal(data, &out)
+	if len(out.Body) != len(body) {
+		t.Fatalf("decoded body len = %d, want %d", len(out.Body), len(body))
+	}
+	for i := range body {
+		if out.Body[i] != body[i] {
+			t.Fatalf("byte %d: got 0x%02x want 0x%02x", i, out.Body[i], body[i])
+		}
+	}
+}

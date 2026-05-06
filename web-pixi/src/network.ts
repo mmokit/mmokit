@@ -1,5 +1,6 @@
 import {
   SpaceClient,
+  SpaceDeltaDecoder,
   type AnyEntity,
   type DeltaWorldUpdate,
   type ShipEntity,
@@ -23,6 +24,7 @@ import {
   Killed,
   BeamToggle,
   BankRequest,
+  WorldDelta,
 } from "../sdk/index.js";
 import { MAX_CHAT_DISPLAY, CELL_SIZE } from "./constants";
 import { updateEntityFromServer } from "./interpolation";
@@ -284,8 +286,14 @@ export function connect(state: GameState, callbacks: NetworkCallbacks): void {
   });
 
   // --- World state ---
-  client.onDeltaWorldUpdate((update: DeltaWorldUpdate) => {
-    applyDeltaUpdate(state, update);
+  // Per-tick entity-state delta arrives as a typed WorldDelta event (the
+  // legacy SE_DELTA_WORLD_UPDATE protobuf envelope is gone). The reflection
+  // codec hands us the raw delta-frame bytes via WorldDelta.body; decode
+  // them with the SDK's SpaceDeltaDecoder, which owns the per-baseline
+  // state for the local connection.
+  const deltaDecoder = new SpaceDeltaDecoder();
+  client.onWorldDelta((msg: WorldDelta) => {
+    applyDeltaUpdate(state, deltaDecoder.decode(msg.body));
   });
 
   // WorldUpdateMsg on SE_WORLD_UPDATE carries chat messages. Typed
@@ -293,7 +301,7 @@ export function connect(state: GameState, callbacks: NetworkCallbacks): void {
   // on this code via the framework's auto-broadcast pipeline; the SDK's
   // TypedDispatcher decodes them through client.typedEvents.on(...) below
   // so this handler only needs to forward chat. Entity state still comes
-  // via onDeltaWorldUpdate.
+  // via onWorldDelta.
   client.onWorldUpdate((msg: WorldUpdateMsg) => {
     if (msg.chatMessages) {
       for (const chat of msg.chatMessages) {

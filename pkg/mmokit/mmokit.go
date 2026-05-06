@@ -821,7 +821,7 @@ func DefaultReplicationConfig(eng *engine.Engine, grid *spatial.HashGrid, clock 
 		World:          eng.ECS,
 		SpatialGrid:    grid,
 		Viewers:        system.NewPlayerViewerSource(eng.ECS, eng.Players, engine.StateActive),
-		Frame:          system.NewBinaryFrameWriter(eng.ConnMgr, uint32(enginepb.ServerEventCode_SE_DELTA_WORLD_UPDATE), MakeEventRaw),
+		Frame:          system.NewBinaryFrameWriter(eng.ConnMgr, makeWorldDeltaFrame),
 		GetTick:        func() uint32 { return eng.Tick },
 		ClusterClock:   clock,
 		TickIntervalMs: eng.TickIntervalMs(),
@@ -1329,23 +1329,17 @@ func MakeEvent(code uint32, payload proto.Message) []byte {
 	return frame
 }
 
-// MakeEventRaw builds a channel-0x00 frame with raw bytes as the payload.
-// Unlike MakeEvent, the data is placed directly in the ServerEvent.Data field
-// without protobuf-marshaling it first. Use for custom binary wire formats.
-func MakeEventRaw(code uint32, data []byte) []byte {
-	evt := &enginepb.ServerEvent{
-		Code: code,
-		Data: data,
-	}
-	evtData, err := proto.Marshal(evt)
-	if err != nil {
-		log.Printf("MakeEventRaw: marshal event: %v", err)
-		return nil
-	}
-	frame := make([]byte, 1+len(evtData))
-	frame[0] = ChannelEvent
-	copy(frame[1:], evtData)
-	return frame
+// makeWorldDeltaFrame wraps the encoded delta body bytes as a typed-event
+// frame for WorldDelta. Used by BinaryFrameWriter (per-tick replication)
+// to publish entity-state deltas on the typed channel-0x00 path. The body
+// passes through the reflection codec's []byte fast path
+// ([u32 len][N bytes]), so the wire layout is:
+//
+//	[0x00][typeID(WorldDelta):u32 LE][bodyLen:u32 LE][u32 LE bodyByteLen][delta bytes]
+//
+// where bodyLen == 4 + bodyByteLen.
+func makeWorldDeltaFrame(body []byte) []byte {
+	return universe.BuildTypedEventFrameRaw(&WorldDelta{Body: body})
 }
 
 // MakeOpResponse builds a channel-0x01 frame: [0x01] + OperationResponse.

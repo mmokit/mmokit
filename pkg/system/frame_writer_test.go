@@ -33,13 +33,13 @@ var _ net.ConnSender = (*captureConn)(nil)
 // upstream in ReplicationSystem (local = ClusterClock.TickTime, replica =
 // cached Replica.ProducedAtMs from the border-frame codec).
 func TestBinaryFrameWriter_PassesThroughPerEntityProducedAtMs(t *testing.T) {
-	makeEvent := func(code uint32, data []byte) []byte {
+	makeEvent := func(data []byte) []byte {
 		out := make([]byte, len(data))
 		copy(out, data)
 		return out
 	}
 	conn := &captureConn{sent: make(map[uint32][]byte)}
-	w := NewBinaryFrameWriter(conn, 99 /* eventCode */, makeEvent)
+	w := NewBinaryFrameWriter(conn, makeEvent)
 
 	const localStamp uint64 = 42_000_000
 	const replicaStamp uint64 = 7_777_777

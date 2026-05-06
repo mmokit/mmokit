@@ -5,24 +5,28 @@ import (
 	"github.com/zenion/mmoserver/pkg/quantize"
 )
 
-// BinaryFrameWriter sends delta-compressed binary frames via a configurable event code.
-// This is the standard FrameWriter for the binary wire format. Games that need
-// custom framing can implement the FrameWriter interface directly.
+// BinaryFrameWriter sends delta-compressed binary frames wrapped via a
+// caller-supplied frame builder. This is the standard FrameWriter for the
+// binary delta wire format; games that need custom framing can implement
+// the FrameWriter interface directly.
+//
+// The build closure converts the encoded delta body bytes into a complete
+// channel-prefixed wire frame (typically a typed-event frame around
+// mmokit.WorldDelta). pkg/system can't import pkg/mmokit (cycle), so the
+// wiring lives one layer up — see pkg/mmokit/mmokit.go.
 type BinaryFrameWriter struct {
 	connMgr   net.ConnSender
 	encoder   *quantize.FrameEncoder
-	eventCode uint32
-	makeFrame func(code uint32, data []byte) []byte // MakeEventRaw function
+	makeFrame func(body []byte) []byte
 }
 
 // NewBinaryFrameWriter creates a FrameWriter that sends binary delta frames.
-// eventCode is the ServerEventCode (e.g., SE_DELTA_WORLD_UPDATE = 13).
-// makeFrame wraps raw binary data in a ServerEvent envelope (typically mmokit.MakeEventRaw).
-func NewBinaryFrameWriter(cm net.ConnSender, eventCode uint32, makeFrame func(uint32, []byte) []byte) *BinaryFrameWriter {
+// makeFrame wraps the encoded delta body in a wire-ready frame (typically
+// a typed-event frame for mmokit.WorldDelta).
+func NewBinaryFrameWriter(cm net.ConnSender, makeFrame func(body []byte) []byte) *BinaryFrameWriter {
 	return &BinaryFrameWriter{
 		connMgr:   cm,
 		encoder:   quantize.NewFrameEncoder(8192),
-		eventCode: eventCode,
 		makeFrame: makeFrame,
 	}
 }
@@ -67,7 +71,7 @@ func (w *BinaryFrameWriter) WriteFrame(frame *ReplicationFrame) {
 	wireData := make([]byte, len(binData))
 	copy(wireData, binData)
 
-	data := w.makeFrame(w.eventCode, wireData)
+	data := w.makeFrame(wireData)
 	if data != nil {
 		w.connMgr.Send(frame.Viewer.ConnID, data)
 	}

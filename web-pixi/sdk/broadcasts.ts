@@ -465,6 +465,23 @@ export class Pong {
   }
 }
 
+/** Broadcast-eligible event mmokit.WorldDelta (typeID 0x065b16f4). */
+export class WorldDelta {
+  static readonly typeID = 0x65b16f4;
+  body: Uint8Array = new Uint8Array(0);
+
+  static decode(buf: Uint8Array): WorldDelta {
+    const dv = new DataView(buf.buffer, buf.byteOffset, buf.byteLength);
+    let off = 0;
+    const m = new WorldDelta();
+    {
+      const bl = dv.getUint32(off, true); off += 4;
+      m.body = buf.slice(off, off + bl); off += bl;
+    }
+    return m;
+  }
+}
+
 /** Dispatches incoming TypedEvent (typeID + body bytes) to typed handlers. */
 export class TypedDispatcher {
   private handlers = new Map<number, (raw: Uint8Array) => void>();

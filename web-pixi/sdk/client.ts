@@ -8,7 +8,7 @@ import type { MarketMyOrdersResponse, MarketOrderBookResponse, MarketOrderResult
 import { Transport } from "./transport.js";
 import { SpaceDeltaDecoder } from "./delta-decoder.js";
 import type { DeltaWorldUpdate } from "./entities.js";
-import { TypedDispatcher, BankContents, CurrencyUpdate, Docked, DockingState, EquipResult, MapData, PlayerDied, PlayerOwnState, PlayerSpawned, TransferResult, DebugInfo, LoginRejected, Pong } from "./broadcasts.js";
+import { TypedDispatcher, BankContents, CurrencyUpdate, Docked, DockingState, EquipResult, MapData, PlayerDied, PlayerOwnState, PlayerSpawned, TransferResult, DebugInfo, LoginRejected, Pong, WorldDelta } from "./broadcasts.js";
 import { ClientEventSchema, ServerEventSchema, type ServerEvent, OperationRequestSchema, OperationResponseSchema, type OperationResponse } from "@gen/enginepb/engine_pb.js";
 
 export interface SpaceClientOptions {
@@ -143,11 +143,6 @@ export class SpaceClient {
     return this.on(15, (data) => handler(fromBinary(ServerConfigMsgSchema, data)));
   }
 
-  /** Subscribe to deltaWorldUpdate (code 13, binary). */
-  onDeltaWorldUpdate(handler: (update: DeltaWorldUpdate) => void): () => void {
-    return this.on(13, (data) => handler(this.decoder.decode(data)));
-  }
-
   /** Subscribe to typed server event game.BankContents (typeID 0xce9d072f). */
   onBankContents(handler: (msg: BankContents) => void): () => void {
     return this.typedEvents.on(BankContents, handler);
@@ -211,6 +206,11 @@ export class SpaceClient {
   /** Subscribe to typed server event mmokit.Pong (typeID 0x8527c2fc). */
   onPong(handler: (msg: Pong) => void): () => void {
     return this.typedEvents.on(Pong, handler);
+  }
+
+  /** Subscribe to typed server event mmokit.WorldDelta (typeID 0x065b16f4). */
+  onWorldDelta(handler: (msg: WorldDelta) => void): () => void {
+    return this.typedEvents.on(WorldDelta, handler);
   }
 
   private handleOperation(payload: Uint8Array): void {

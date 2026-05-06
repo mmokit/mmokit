@@ -1,6 +1,7 @@
 import { BasicClient } from "../sdk/client.js";
-import { DebugInfo } from "../sdk/broadcasts.js";
+import { DebugInfo, WorldDelta } from "../sdk/broadcasts.js";
 import { type DeltaWorldUpdate } from "../sdk/entities.js";
+import { BasicDeltaDecoder } from "../sdk/delta-decoder.js";
 import { MoveTargetMsg } from "../sdk/inputs.js";
 import { state, setTickRate, type ClientEntity, type CellInfo } from "./state.js";
 import { type SpawnedMsg } from "@gen/enginepb/engine_pb.js";
@@ -62,7 +63,15 @@ export function connect(name: string): void {
     state.aoiRadius = msg.aoIRadius;
   });
 
-  client.onDeltaWorldUpdate(applyWorldUpdate);
+  // Per-tick entity-state delta arrives as a typed WorldDelta event (the
+  // legacy SE_DELTA_WORLD_UPDATE protobuf envelope is gone). The reflection
+  // codec hands us the raw delta-frame bytes via WorldDelta.body; decode
+  // them with the SDK's BasicDeltaDecoder, which owns the per-baseline
+  // state for the local connection.
+  const deltaDecoder = new BasicDeltaDecoder();
+  client.onWorldDelta((msg: WorldDelta) => {
+    applyWorldUpdate(deltaDecoder.decode(msg.body));
+  });
 
   client.connect();
   state.client = client;

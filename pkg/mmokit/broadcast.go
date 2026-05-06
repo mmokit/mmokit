@@ -184,6 +184,16 @@ func schemaForType(t reflect.Type) BroadcastFieldSchema {
 			out.Fields = append(out.Fields, fieldSchemaOf(inner))
 		}
 	case reflect.Slice:
+		// []byte fast path: encoded as [u32 len][N bytes] (mirrors the
+		// reflect codec's []byte fast path in pkg/universe/reflect_marshal.go).
+		// Used for opaque binary payloads like WorldDelta.Body — avoids
+		// per-element iteration on the TS side and lifts the u16 element-
+		// count cap.
+		if t.Elem().Kind() == reflect.Uint8 {
+			out.Encoding = "bytes"
+			out.Size = 0 // u32 length + N bytes
+			break
+		}
 		out.Encoding = "slice"
 		out.Size = 0 // u16 length + N elements
 		item := schemaForType(t.Elem())

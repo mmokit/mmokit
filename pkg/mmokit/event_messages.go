@@ -59,6 +59,18 @@ type DebugInfo struct {
 	AoIRadius float32
 }
 
+// WorldDelta — per-tick entity-state delta. Body is the custom binary
+// frame produced by pkg/quantize.FrameEncoder (20-byte header + per-entity
+// FullEntry / DeltaEntry / Removed / Exited bytes). Body bytes are opaque
+// to the reflection codec — the schema generator and reflect codec
+// fast-path []byte to a `bytes` encoding (`[u32 len][bytes]`) so the
+// payload survives the round-trip without per-byte iteration on the
+// client side. Replaces the legacy SE_DELTA_WORLD_UPDATE proto-envelope
+// path.
+type WorldDelta struct {
+	Body []byte
+}
+
 // registerEngineTypedEvents registers each engine-level typed event
 // exactly once, regardless of how many Protocol instances the process
 // creates. NewProtocol calls this on every invocation; the sync.Once
@@ -68,6 +80,7 @@ func registerEngineTypedEvents() {
 		RegisterEvent[Pong]()
 		RegisterEvent[LoginRejected]()
 		RegisterEvent[DebugInfo]()
+		RegisterEvent[WorldDelta]()
 	})
 }
 
