@@ -69,8 +69,10 @@ func main() {
 				gamepb.GameServerEventCode_GSE_EQUIP_RESULT)
 			mmokit.RegisterServerEvent[gamepb.DockingStateMsg](e,
 				gamepb.GameServerEventCode_GSE_DOCKING_STATE)
+			mmokit.RegisterEvent[game.DockingState]()
 			mmokit.RegisterServerEvent[gamepb.DockedMsg](e,
 				gamepb.GameServerEventCode_GSE_DOCKED)
+			mmokit.RegisterEvent[game.Docked]()
 			mmokit.RegisterServerEvent[gamepb.MapDataMsg](e,
 				gamepb.GameServerEventCode_GSE_MAP_DATA)
 			mmokit.RegisterServerEvent[gamepb.CurrencyUpdateMsg](e,

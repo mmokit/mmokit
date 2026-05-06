@@ -160,7 +160,7 @@ func (gw *GameWorld) processDockCompletions() {
 		}
 
 		// Notify the client AFTER server-side state is fully consistent.
-		gw.ServerEvents().Send(gw.eng.ConnMgr, s.ConnID, uint32(gamepb.GameServerEventCode_GSE_DOCKED), &gamepb.DockedMsg{})
+		mmokit.SendEvent(gw.Stage, s.ConnID, &Docked{})
 
 		delete(gw.dockingStates, s.Username)
 		gw.Players.Transition(s, StateDocked)

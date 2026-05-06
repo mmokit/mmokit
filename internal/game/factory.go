@@ -3,7 +3,6 @@ package game
 import (
 	"github.com/mlange-42/ark/ecs"
 
-	gamepb "github.com/zenion/mmoserver/gen/go/gamepb"
 	"github.com/zenion/mmoserver/pkg/mmokit"
 )
 
@@ -98,8 +97,7 @@ func registerPlayerJoin(coord *mmokit.Process) {
 			// the bank panel / dock animation reopens.
 			switch s.State {
 			case StateDocked:
-				gw.ServerEvents().Send(gw.eng.ConnMgr, s.ConnID,
-					uint32(gamepb.GameServerEventCode_GSE_DOCKED), &gamepb.DockedMsg{})
+				mmokit.SendEvent(gw.Stage, s.ConnID, &Docked{})
 				gw.eng.Log.Log(CatPlayerDock, "reconnect-to-docked: conn=%d username=%s", s.ConnID, s.Username)
 			case StateDocking:
 				// Mid-dock disconnect+reconnect: re-send the docking-state
@@ -110,14 +108,12 @@ func registerPlayerJoin(coord *mmokit.Process) {
 					if progress > 1 {
 						progress = 1
 					}
-					gw.ServerEvents().Send(gw.eng.ConnMgr, s.ConnID,
-						uint32(gamepb.GameServerEventCode_GSE_DOCKING_STATE),
-						&gamepb.DockingStateMsg{
-							Docking:   true,
-							Progress:  progress,
-							TotalTime: gw.Config.DockTime,
-							StationId: ds.StationNetID,
-						})
+					mmokit.SendEvent(gw.Stage, s.ConnID, &DockingState{
+						Docking:   true,
+						Progress:  progress,
+						TotalTime: gw.Config.DockTime,
+						StationID: ds.StationNetID,
+					})
 					gw.eng.Log.Log(CatPlayerDock, "reconnect-to-docking: conn=%d username=%s progress=%.2f", s.ConnID, s.Username, progress)
 				}
 			}

@@ -9,7 +9,7 @@ import {
   type BankContentsMsg,
   type TransferResultMsg,
   type EquipResultMsg,
-  type DockingStateMsg,
+  DockingState,
   type PlayerOwnStateMsg,
   type MapDataMsg,
   type CurrencyUpdateMsg,
@@ -506,12 +506,12 @@ export function connect(state: GameState, callbacks: NetworkCallbacks): void {
   });
 
   // --- Docking ---
-  client.onDockingState((ds: DockingStateMsg) => {
+  client.onDockingState((ds: DockingState) => {
     const wasDocking = state.isDockingInProgress;
     state.isDockingInProgress = ds.docking;
     state.dockingProgress = ds.progress;
     state.dockingTotalTime = ds.totalTime;
-    state.dockingStationId = ds.stationId;
+    state.dockingStationId = ds.stationID;
     if (ds.docking && !wasDocking) {
       audio.play(SoundId.TractorBeam);
     }

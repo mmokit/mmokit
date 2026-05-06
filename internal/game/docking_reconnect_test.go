@@ -7,16 +7,16 @@ import (
 	pkguniverse "github.com/zenion/mmoserver/pkg/universe"
 )
 
-// TestDockingState_SurvivesReconnect pins the contract: dockingStates is
+// TestDockingProgress_SurvivesReconnect pins the contract: dockingStates is
 // keyed by Username (stable across reconnects), not ConnID (changes on
 // reconnect). A mid-dock disconnect+reconnect must find the same in-flight
-// DockingState so the timer keeps ticking and the player isn't stuck in
+// DockingProgress so the timer keeps ticking and the player isn't stuck in
 // StateDocking forever just outside the station.
 //
 // Regression: keying by ConnID stranded the player — `dockingStates[oldConnID]`
 // was orphaned and `dockingStates[newConnID]` was nil, so processDockCompletions
 // never advanced the timer and the dock never finished.
-func TestDockingState_SurvivesReconnect(t *testing.T) {
+func TestDockingProgress_SurvivesReconnect(t *testing.T) {
 	gw := testGW(newTestCell(pkguniverse.CellID{X: 0, Y: 0}))
 
 	const username = "alice"
@@ -25,7 +25,7 @@ func TestDockingState_SurvivesReconnect(t *testing.T) {
 
 	// Simulate the dock-start path: system_docking.go writes
 	// dockingStates[username] when the player begins docking.
-	gw.dockingStates[username] = &DockingState{
+	gw.dockingStates[username] = &DockingProgress{
 		Remaining:    1.5,
 		StationX:     100,
 		StationY:     200,
@@ -41,7 +41,7 @@ func TestDockingState_SurvivesReconnect(t *testing.T) {
 	}
 
 	// Sanity: the old/new ConnIDs are NOT keys (they're uint32, but if the
-	// map type ever flipped back to uint32→DockingState this lookup would
+	// map type ever flipped back to uint32→DockingProgress this lookup would
 	// compile and silently mask the bug).
 	_ = oldConnID
 	_ = newConnID
@@ -53,14 +53,14 @@ func TestDockingState_SurvivesReconnect(t *testing.T) {
 	}
 }
 
-// TestDockingState_KeyType is a compile-time/runtime guard that the map
+// TestDockingProgress_KeyType is a compile-time/runtime guard that the map
 // type stays string-keyed. If someone refactors back to ConnID, this test
 // fails loudly with a clear message instead of silently breaking reconnect.
-func TestDockingState_KeyType(t *testing.T) {
+func TestDockingProgress_KeyType(t *testing.T) {
 	gw := testGW(newTestCell(pkguniverse.CellID{X: 0, Y: 0}))
 	// Smoke-write with a string key — would not compile if the map type
-	// went back to map[uint32]*DockingState.
-	gw.dockingStates["test-username"] = &DockingState{Remaining: 0.5}
+	// went back to map[uint32]*DockingProgress.
+	gw.dockingStates["test-username"] = &DockingProgress{Remaining: 0.5}
 	if gw.dockingStates["test-username"] == nil {
 		t.Fatalf("string-keyed write rejected")
 	}

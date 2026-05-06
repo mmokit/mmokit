@@ -43,7 +43,7 @@ func NewGameWorld(base *mmokit.Stage, cfg *GameConfig, playerDB *PlayerRepo, cel
 		Config:        cfg,
 		Queue:         mmokit.NewTickQueue(),
 		PlayerDB:      playerDB,
-		dockingStates: make(map[string]*DockingState),
+		dockingStates: make(map[string]*DockingProgress),
 	}
 	gw.Players = eng.Players
 

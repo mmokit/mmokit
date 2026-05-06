@@ -19,3 +19,16 @@ package game
 type PlayerDied struct {
 	KillerID uint32 // network ID of who killed you, 0 if unknown
 }
+
+// DockingState — progress update while docking (in-progress or cancelled).
+// Replaces gamepb.DockingStateMsg.
+type DockingState struct {
+	Docking   bool    // true = docking in progress, false = cancelled
+	Progress  float32 // 0.0 to 1.0
+	TotalTime float32 // total docking duration (for client progress bar)
+	StationID uint32  // net ID of station being docked at (for tractor beam VFX)
+}
+
+// Docked — fired once the docking sequence completes.
+// Replaces gamepb.DockedMsg.
+type Docked struct{}

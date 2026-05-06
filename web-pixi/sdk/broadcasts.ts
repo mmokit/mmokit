@@ -116,6 +116,38 @@ export class Status {
   }
 }
 
+/** Broadcast-eligible event game.Docked (typeID 0x8bf5541d). */
+export class Docked {
+  static readonly typeID = 0x8bf5541d;
+
+  static decode(buf: Uint8Array): Docked {
+    const dv = new DataView(buf.buffer, buf.byteOffset, buf.byteLength);
+    let off = 0;
+    const m = new Docked();
+    return m;
+  }
+}
+
+/** Broadcast-eligible event game.DockingState (typeID 0x5c80df11). */
+export class DockingState {
+  static readonly typeID = 0x5c80df11;
+  docking: boolean = false;
+  progress: number = 0;
+  totalTime: number = 0;
+  stationID: number = 0;
+
+  static decode(buf: Uint8Array): DockingState {
+    const dv = new DataView(buf.buffer, buf.byteOffset, buf.byteLength);
+    let off = 0;
+    const m = new DockingState();
+    m.docking = dv.getUint8(off) !== 0; off += 1;
+    m.progress = dv.getFloat32(off, true); off += 4;
+    m.totalTime = dv.getFloat32(off, true); off += 4;
+    m.stationID = dv.getUint32(off, true); off += 4;
+    return m;
+  }
+}
+
 /** Broadcast-eligible event game.PlayerDied (typeID 0xef56f740). */
 export class PlayerDied {
   static readonly typeID = 0xef56f740;
