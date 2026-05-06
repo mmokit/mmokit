@@ -21,6 +21,60 @@ func TestRouteKind_StringNames(t *testing.T) {
 	}
 }
 
+type tOpReq struct {
+	X int32
+}
+
+type tOpRes struct {
+	Y int32
+}
+
+func TestRegisterOp_LookupByTypeID(t *testing.T) {
+	t.Cleanup(ResetTypedOpRegistryForTest)
+	ResetTypedOpRegistryForTest()
+
+	RegisterOp[tOpReq, tOpRes](RouteGatewayLocal,
+		func(_ *OpContext, req *tOpReq) (*tOpRes, error) {
+			return &tOpRes{Y: req.X * 2}, nil
+		})
+
+	reqID := TypeIDOf(reflect.TypeFor[tOpReq]())
+	resID := TypeIDOf(reflect.TypeFor[tOpRes]())
+
+	entry, ok := LookupTypedOp(reqID)
+	if !ok {
+		t.Fatalf("LookupTypedOp(%#x): not found", reqID)
+	}
+	if entry.Kind != RouteGatewayLocal {
+		t.Errorf("Kind: got %v, want RouteGatewayLocal", entry.Kind)
+	}
+	if entry.ResponseTypeID != resID {
+		t.Errorf("ResponseTypeID: got %#x, want %#x", entry.ResponseTypeID, resID)
+	}
+	if entry.RequestType != reflect.TypeFor[tOpReq]() {
+		t.Errorf("RequestType: got %v", entry.RequestType)
+	}
+	if entry.ResponseType != reflect.TypeFor[tOpRes]() {
+		t.Errorf("ResponseType: got %v", entry.ResponseType)
+	}
+}
+
+func TestRegisterOp_DuplicatePanics(t *testing.T) {
+	t.Cleanup(ResetTypedOpRegistryForTest)
+	ResetTypedOpRegistryForTest()
+
+	RegisterOp[tOpReq, tOpRes](RouteGatewayLocal,
+		func(_ *OpContext, _ *tOpReq) (*tOpRes, error) { return nil, nil })
+
+	defer func() {
+		if r := recover(); r == nil {
+			t.Fatalf("expected panic on duplicate RegisterOp[tOpReq], got nil")
+		}
+	}()
+	RegisterOp[tOpReq, tOpRes](RouteGatewayLocal,
+		func(_ *OpContext, _ *tOpReq) (*tOpRes, error) { return nil, nil })
+}
+
 func TestOperationError_TypeIDStable(t *testing.T) {
 	// The package init() registers OperationError as a framework typed-op
 	// response. LookupServerEventType must resolve its typeID back to the

@@ -1,6 +1,9 @@
 package mmokit
 
 import (
+	"fmt"
+	"reflect"
+	"sort"
 	"sync"
 )
 
@@ -61,4 +64,93 @@ func registerFrameworkOps() {
 
 func init() {
 	registerFrameworkOps()
+}
+
+// TypedOpEntry is the registry record for one typed-op binding. Created by
+// RegisterOp[Req, Res] and looked up by request typeID by the dispatcher.
+type TypedOpEntry struct {
+	Kind           RouteKind
+	RequestType    reflect.Type
+	ResponseType   reflect.Type
+	ResponseTypeID uint32
+	// Handler is the originally-registered func(*OpContext, *Req) (*Res, error)
+	// stored as `any`. The dispatcher uses reflect.Call to invoke it.
+	Handler any
+}
+
+var (
+	typedOpMu  sync.RWMutex
+	typedOps   = map[uint32]*TypedOpEntry{}
+	typedOpSet = map[reflect.Type]struct{}{}
+)
+
+// RegisterOp registers a typed operation handler. The wire typeID is
+// derived from the Request type via TypeIDOf; the response typeID is
+// derived from Res. Each handler signature is
+//
+//	func(*OpContext, *Req) (*Res, error)
+//
+// — the dispatcher allocates a fresh *Req, decodes the body via the
+// reflection codec, calls the handler, and encodes (*Res) on the
+// outbound 0x01 frame. A nil response (with a nil error) emits a frame
+// with an empty body.
+//
+// Panics on duplicate registration of the same Request type, or on a
+// typeID collision between two distinct types (collision should never
+// happen at codebase scale; rename one type if it does).
+func RegisterOp[Req any, Res any](kind RouteKind, handler func(*OpContext, *Req) (*Res, error)) {
+	reqType := reflect.TypeFor[Req]()
+	resType := reflect.TypeFor[Res]()
+	reqID := TypeIDOf(reqType)
+	resID := TypeIDOf(resType)
+
+	typedOpMu.Lock()
+	defer typedOpMu.Unlock()
+	if _, exists := typedOpSet[reqType]; exists {
+		panic(fmt.Sprintf("RegisterOp: request type %s already registered", reqType.String()))
+	}
+	if existing, ok := typedOps[reqID]; ok && existing.RequestType != reqType {
+		panic(fmt.Sprintf("RegisterOp: typeID collision between %s and %s (id=%#x)",
+			existing.RequestType.String(), reqType.String(), reqID))
+	}
+	typedOps[reqID] = &TypedOpEntry{
+		Kind:           kind,
+		RequestType:    reqType,
+		ResponseType:   resType,
+		ResponseTypeID: resID,
+		Handler:        handler,
+	}
+	typedOpSet[reqType] = struct{}{}
+}
+
+// LookupTypedOp returns the registry entry for the given request typeID,
+// or (nil, false) if none.
+func LookupTypedOp(reqTypeID uint32) (*TypedOpEntry, bool) {
+	typedOpMu.RLock()
+	defer typedOpMu.RUnlock()
+	e, ok := typedOps[reqTypeID]
+	return e, ok
+}
+
+// RegisteredTypedOps returns all registered entries in deterministic
+// (request type name) order. Used by sdkgen and protocol-schema export.
+func RegisteredTypedOps() []*TypedOpEntry {
+	typedOpMu.RLock()
+	defer typedOpMu.RUnlock()
+	out := make([]*TypedOpEntry, 0, len(typedOps))
+	for _, e := range typedOps {
+		out = append(out, e)
+	}
+	sort.Slice(out, func(i, j int) bool {
+		return out[i].RequestType.String() < out[j].RequestType.String()
+	})
+	return out
+}
+
+// ResetTypedOpRegistryForTest is exported for tests only.
+func ResetTypedOpRegistryForTest() {
+	typedOpMu.Lock()
+	defer typedOpMu.Unlock()
+	typedOps = map[uint32]*TypedOpEntry{}
+	typedOpSet = map[reflect.Type]struct{}{}
 }
