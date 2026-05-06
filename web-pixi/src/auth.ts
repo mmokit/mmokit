@@ -9,7 +9,7 @@ export interface MeResponse {
 }
 
 export interface AuthError extends Error {
-  code: number; // enginepb.AuthError enum value
+  code: number; // pkg/auth.AuthError* constant value
   retryAfterMs?: number;
 }
 

@@ -31,17 +31,6 @@ type EntitySchema struct {
 	InitialData string          `json:"initialData,omitempty"`
 }
 
-type ClientEventSchema struct {
-	Code      uint32 `json:"code"`
-	ProtoName string `json:"protoName"`
-}
-
-type ServerEventSchema struct {
-	Code      uint32 `json:"code"`
-	Name      string `json:"name"`
-	ProtoName string `json:"protoName"`
-}
-
 // BroadcastFieldSchema describes one field on a broadcast-eligible type.
 // JSON shape mirrors pkg/mmokit.BroadcastFieldSchema exactly.
 //
@@ -91,8 +80,6 @@ type OperationSchema struct {
 
 type ProtocolSchema struct {
 	Game             string                  `json:"game"`
-	ClientEvents     []ClientEventSchema     `json:"clientEvents"`
-	ServerEvents     []ServerEventSchema     `json:"serverEvents"`
 	Entities         []EntitySchema          `json:"entities"`
 	BroadcastTypes   []BroadcastTypeSchema   `json:"broadcast_types,omitempty"`
 	ClientInputTypes []ClientInputTypeSchema `json:"client_input_types,omitempty"`

@@ -1407,12 +1407,3 @@ func ProtocolOf(p *Process) *Protocol {
 	}
 	return nil
 }
-
-// ServerEventsOf returns the ServerEvents registry from the protocol stored in
-// p, or nil if no protocol is set or the protocol has no registry.
-func ServerEventsOf(p *Process) *ServerEvents {
-	if proto := ProtocolOf(p); proto != nil {
-		return proto.ServerEventsRegistry()
-	}
-	return nil
-}

@@ -3,35 +3,26 @@ package mmokit
 import (
 	"encoding/json"
 	"io"
-	"sort"
 
 	"github.com/mlange-42/ark/ecs"
-	"github.com/zenion/mmoserver/pkg/engine"
 	"github.com/zenion/mmoserver/pkg/system"
 	"github.com/zenion/mmoserver/pkg/universe"
 )
 
 // ---------------------------------------------------------------------------
 // Protocol — aggregates the full client/server contract for schema export.
-// Games register their server events and wire in the router + replicators.
-// The resulting ProtocolSchema is exported via --dump-schema for client codegen.
+// Games wire in the router + replicators and register typed events via
+// mmokit.RegisterEvent[T] / RegisterOp[Req, Res] / HandleClient[T] /
+// HandleAll[T]. The resulting ProtocolSchema is exported via
+// --dump-schema for client codegen.
 // ---------------------------------------------------------------------------
-
-// ServerEventSchema describes one server→client event for schema export.
-type ServerEventSchema struct {
-	Code      uint32 `json:"code"`
-	Name      string `json:"name"`      // camelCase method name hint (e.g. "playerSpawned")
-	ProtoName string `json:"protoName"` // fully qualified proto name; empty = custom binary
-}
 
 // ProtocolSchema is the complete machine-readable protocol description.
 type ProtocolSchema struct {
-	Game             string                     `json:"game"`
-	ClientEvents     []engine.ClientEventSchema `json:"clientEvents"`
-	ServerEvents     []ServerEventSchema        `json:"serverEvents"`
-	Entities         []system.EntitySchema      `json:"entities"`
-	BroadcastTypes   []BroadcastTypeSchema      `json:"broadcast_types,omitempty"`
-	ClientInputTypes []ClientInputTypeSchema    `json:"client_input_types,omitempty"`
+	Game             string                  `json:"game"`
+	Entities         []system.EntitySchema   `json:"entities"`
+	BroadcastTypes   []BroadcastTypeSchema   `json:"broadcast_types,omitempty"`
+	ClientInputTypes []ClientInputTypeSchema `json:"client_input_types,omitempty"`
 	// ServerEventTypes lists every type registered via mmokit.RegisterEvent[T].
 	// Wire layout mirrors broadcast types (reflection codec); sdkgen emits a
 	// TS class per entry plus a client.onXxx(handler) method that subscribes
@@ -68,100 +59,22 @@ type OperationSchema struct {
 
 // Protocol collects the full client/server contract for a game.
 type Protocol struct {
-	game         string
-	clientEvents []engine.ClientEventSchema
-	serverEvents []ServerEventSchema
-	entityNames  []entityNameEntry
-	replicators  *system.ReplicatorRegistry
-	// serverEventsRegistry holds the typed server-event registry when the
-	// game uses Protocol.ServerEvents(fn) to declare its events. Schema()
-	// pulls from here when set; manual registrations via ServerEvent (the
-	// legacy function) are still appended for the migration window.
-	serverEventsRegistry *ServerEvents
-	// clientEventsRegistry holds the typed client-event registry when the
-	// game uses Protocol.ClientEvents(fn) to declare events that bypass the
-	// runtime InputRouter or are registered via low-level router.Handle
-	// without proto-name capture.
-	clientEventsRegistry *ClientEvents
+	game        string
+	entityNames []entityNameEntry
+	replicators *system.ReplicatorRegistry
 }
 
 // NewProtocol creates a Protocol with the given game name. Universal
-// engine-level events are auto-registered — every game gets them for
-// free. Games can override any auto-registered event by calling
-// RegisterServerEvent / RegisterClientEvent for the same code with a
-// different payload type, or (more commonly) publish an additional
-// typed event via mmokit.RegisterEvent[T] for richer payloads.
+// engine-level typed events (Pong, DebugInfo, WorldDelta,
+// PlayerEntityAssigned, CellChange, ServerConfig) are auto-registered
+// via mmokit.RegisterEvent[T] — every game gets them for free. The
+// universal client→server Ping input is registered as a typed
+// client-input via the engine-default HandleClient[Ping] handler
+// installed by universe.New (see EngineDefaultClientHandlers in
+// init.go); games never need to wire it themselves.
 func NewProtocol(game string) *Protocol {
-	p := &Protocol{
-		game:                 game,
-		serverEventsRegistry: NewServerEvents(),
-		clientEventsRegistry: NewClientEvents(),
-	}
-	// Universal server→client events — every engine-default event now
-	// rides the typed reflection-codec channel via mmokit.RegisterEvent[T]
-	// (Pong, PlayerEntityAssigned, CellChange, ServerConfig — see
-	// registerEngineTypedEvents below). The universal client→server Ping
-	// input is registered as a typed client-input via the engine-default
-	// HandleClient[Ping] handler installed by universe.New (see
-	// pkguniverse.EngineDefaultClientHandlers in init.go); no
-	// RegisterClientEvent registration is needed.
 	registerEngineTypedEvents()
-
-	return p
-}
-
-// ServerEvents declares the server→client events for this protocol.
-// The callback receives the registry pre-populated with engine defaults;
-// register game-specific events or override engine defaults via
-// RegisterServerEvent[T]. Returns the protocol for chaining.
-func (p *Protocol) ServerEvents(fn func(*ServerEvents)) *Protocol {
-	fn(p.serverEventsRegistry)
-	return p
-}
-
-// ServerEventsRegistry returns the underlying registry — used by the engine
-// at runtime emit time. Games normally don't call this directly.
-func (p *Protocol) ServerEventsRegistry() *ServerEvents {
-	return p.serverEventsRegistry
-}
-
-// ClientEvents declares the client→server events that bypass the runtime
-// InputRouter or were registered via low-level router.Handle without
-// proto-name capture. The callback receives the registry pre-populated
-// with engine defaults; register game-specific events or override engine
-// defaults via RegisterClientEvent[T]. Returns the protocol for chaining.
-func (p *Protocol) ClientEvents(fn func(*ClientEvents)) *Protocol {
-	fn(p.clientEventsRegistry)
-	return p
-}
-
-// ClientEventsRegistry returns the underlying client-event registry.
-// Games normally don't call this directly.
-func (p *Protocol) ClientEventsRegistry() *ClientEvents {
-	return p.clientEventsRegistry
-}
-
-// ClientEvent registers a client→server event manually (bypassing InputRouter).
-// Use this when building schema without a running InputRouter.
-func ClientEvent[C engine.EventCode](p *Protocol, code C, protoName string) {
-	p.clientEvents = append(p.clientEvents, engine.ClientEventSchema{
-		Code:      uint32(code),
-		ProtoName: protoName,
-	})
-}
-
-// ServerEvent registers a server→client event. Pass an empty protoName for
-// custom binary-encoded events (the SDK generator emits a binary-decoder
-// method instead of a proto Subscribe wrapper). The engine itself no
-// longer uses this path — per-tick replication moved to the typed
-// mmokit.WorldDelta event in Phase 4 — but games may still emit custom
-// binary frames over a ServerEventCode this way.
-func ServerEvent[C engine.EventCode](p *Protocol, code C, name string, protoName string) {
-	p.serverEvents = append(p.serverEvents, ServerEventSchema{
-		Code:      uint32(code),
-		Name:      name,
-		ProtoName: protoName,
-	})
+	return &Protocol{game: game}
 }
 
 // SetReplicators wires in the ReplicatorRegistry for entity schema extraction.
@@ -181,24 +94,7 @@ type entityNameEntry struct {
 
 // Schema builds the complete ProtocolSchema from all registered sources.
 func (p *Protocol) Schema() ProtocolSchema {
-	serverEvents := p.serverEvents
-	if p.serverEventsRegistry != nil {
-		// Registry-sourced events take precedence; manual entries (from the
-		// legacy ServerEvent function) appended for the migration window
-		// until every game declares via the registry.
-		serverEvents = append(p.serverEventsRegistry.Schema(), p.serverEvents...)
-	}
-	ps := ProtocolSchema{
-		Game:         p.game,
-		ClientEvents: p.clientEvents,
-		ServerEvents: serverEvents,
-	}
-	// Merge client events: registry entries (with typed proto names) take
-	// precedence. Router entries for codes already declared in the registry
-	// are skipped to avoid duplicate codes in the schema output.
-	if p.clientEventsRegistry != nil {
-		ps.ClientEvents = append(ps.ClientEvents, p.clientEventsRegistry.Schema()...)
-	}
+	ps := ProtocolSchema{Game: p.game}
 	if p.replicators != nil {
 		ps.Entities = p.replicators.Schema()
 		// Apply entity names.
@@ -247,11 +143,6 @@ func (p *Protocol) Schema() ProtocolSchema {
 			ResponseFields:   resType.Fields,
 		})
 	}
-	// Final sort by code: InputRouter.Schema() iterates a map in random
-	// Go-map-order, so without this the generated TypeScript SDK methods
-	// would be reordered between successive --dump-schema runs, producing
-	// noisy git diffs with no semantic change.
-	sort.Slice(ps.ClientEvents, func(i, j int) bool { return ps.ClientEvents[i].Code < ps.ClientEvents[j].Code })
 	return ps
 }
 

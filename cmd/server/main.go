@@ -30,35 +30,14 @@ func main() {
 		StaticFS:       webpixi.FS,
 		StaticFSPrefix: "dist",
 	}
-	coordCfg.Protocol = mmokit.NewProtocol("space").
-		ClientEvents(func(_ *mmokit.ClientEvents) {
-			// Ping (formerly CE_PING) rides the typed client-input channel
-			// — the engine-default HandleClient[Ping] handler installed by
-			// universe.New emits the Pong reply. Login moved to pkg/auth's
-			// typed op channel (AUTH_OPCODE_LOGIN). All typed client-input
-			// messages (RESPAWN, BANK, DOCK, UNDOCK, etc.) are registered
-			// via mmokit.HandleClient[T] and exposed through the
-			// ClientInputTypes schema, not the ClientEvents registry.
-		}).
-		ServerEvents(func(e *mmokit.ServerEvents) {
-			// All server events ride the typed reflection-codec channel —
-			// engine defaults (PlayerEntityAssigned / CellChange /
-			// ServerConfig) are auto-registered by NewProtocol; the typed
-			// game.PlayerSpawned below is the richer payload the space
-			// client consumes for its own spawn flow.
-			_ = e
-			mmokit.RegisterEvent[game.PlayerSpawned]()
-			mmokit.RegisterEvent[game.PlayerDied]()
-			mmokit.RegisterEvent[game.PlayerOwnState]()
-			mmokit.RegisterEvent[game.BankContents]()
-			mmokit.RegisterEvent[game.TransferResult]()
-			mmokit.RegisterEvent[game.EquipResult]()
-			mmokit.RegisterEvent[game.DockingState]()
-			mmokit.RegisterEvent[game.Docked]()
-			mmokit.RegisterEvent[game.MapData]()
-			mmokit.RegisterEvent[game.CurrencyUpdate]()
-			mmokit.RegisterEvent[marketplace.MarketTradeNotification]()
-		})
+	// Engine-default typed events (Pong, DebugInfo, WorldDelta,
+	// PlayerEntityAssigned, CellChange, ServerConfig) are auto-registered
+	// by NewProtocol. Game-specific events are registered by GameSetup via
+	// game.RegisterServerEvents below. Client→server typed inputs are
+	// registered via mmokit.HandleClient[T] in input_handlers.go and
+	// exposed through the ClientInputTypes schema; engine-default
+	// HandleClient[Ping] is installed by universe.New.
+	coordCfg.Protocol = mmokit.NewProtocol("space")
 	coordCfg.BindFlags()
 	flag.Parse()
 
