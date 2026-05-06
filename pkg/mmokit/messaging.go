@@ -48,6 +48,20 @@ func entityCtorAdapter(stage *pkguniverse.Stage, netID uint32) any {
 	return EntityByNetID(stage, netID)
 }
 
+// SendEvent writes a single typed server→client event to one connection.
+// T must be registered via RegisterEvent[T]() at startup, otherwise this
+// panics. The frame is delivered reliably over the event channel.
+//
+// Usage:
+//
+//	mmokit.SendEvent(gw.Stage, connID, &MyEvent{Field: 42})
+//
+// Thin pass-through to pkguniverse.SendEventTyped so game code stays on
+// the mmokit-facade-only convention.
+func SendEvent[T any](stage *Stage, connID uint32, msg *T) {
+	pkguniverse.SendEventTyped(stage, connID, msg)
+}
+
 // Send delivers msg to the entity. If the entity is local on its stage, the
 // registered handler runs synchronously before Send returns. If the entity
 // is a replica (lives elsewhere), Send is fire-and-forget — the handler runs
