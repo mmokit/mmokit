@@ -306,13 +306,6 @@ func (c *Cell) processMessage(msg CellMessage) {
 		c.onMessage(msg)
 	}
 	switch msg.Type {
-	case MsgChat:
-		if msg.Chat == nil {
-			return
-		}
-		c.Log.Log(CatMeshMsg, "[%s] msg MsgChat from=%s user=%s", c.MeshID, msg.FromCellID, msg.Chat.Username)
-		c.World.DispatchChat(msg.Chat.Username, msg.Chat.Text)
-
 	case MsgSpawnTransfer:
 		if msg.Spawn == nil {
 			return

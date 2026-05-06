@@ -173,20 +173,6 @@ func (b *cellBridge) OnPlayerTransfer(connID uint32, destCellID MeshCellID) {
 	b.cell.Log.Log(CatMeshTransfer, "[%s] player transfer: conn=%d -> %s", b.cell.MeshID, connID, destCellID)
 }
 
-func (b *cellBridge) RelayChatToOtherCells(username, text string) {
-	b.cell.Log.Log(CatMeshMsg, "[%s] relaying chat from %s to %d cells", b.cell.MeshID, username, len(b.coord.Cells)-1)
-	for _, other := range b.coord.Cells {
-		if other.MeshID == b.cell.MeshID {
-			continue
-		}
-		other.Inbox <- CellMessage{
-			Type:       MsgChat,
-			FromCellID: b.cell.MeshID,
-			Chat:       &ChatRelay{Username: username, Text: text},
-		}
-	}
-}
-
 func (b *cellBridge) RequestRespawn(connID uint32, username string) {
 	b.cell.Log.Log(CatMeshMsg, "[%s] requesting respawn: conn=%d user=%s", b.cell.MeshID, connID, username)
 	b.coord.mu.RLock()

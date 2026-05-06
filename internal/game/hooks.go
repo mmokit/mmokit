@@ -140,8 +140,8 @@ func (gw *GameWorld) processDockCompletions() {
 		// pilots see the ship vanish into the station) AND from border
 		// scans, while keeping it in the spatial grid AND keeping the
 		// session as a viewer in PlayerViewerSource. The viewer-ness is
-		// what keeps WorldUpdateMsg flowing — tick counter, chat, and
-		// other ships' AoI deltas continue to reach the docked player so
+		// what keeps WorldUpdateMsg flowing — tick counter and other
+		// ships' AoI deltas continue to reach the docked player so
 		// they "see" the world from the station hangar window.
 		if pos := mmokit.Get[mmokit.Position](entity); pos != nil {
 			pos.X = ds.StationX

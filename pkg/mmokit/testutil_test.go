@@ -80,7 +80,6 @@ func (b *loopbackBridge) PostSystems()                                          
 func (b *loopbackBridge) CellOwner(pkguniverse.CellID) string                         { return "" }
 func (b *loopbackBridge) CellOwnerAtPos(float32, float32) string                      { return "" }
 func (b *loopbackBridge) OnPlayerTransfer(uint32, pkguniverse.MeshCellID)             {}
-func (b *loopbackBridge) RelayChatToOtherCells(string, string)                        {}
 func (b *loopbackBridge) RequestRespawn(uint32, string)                               {}
 func (b *loopbackBridge) SendBorderFrame(pkguniverse.MeshCellID, pkguniverse.MeshCellID, []byte) {
 }

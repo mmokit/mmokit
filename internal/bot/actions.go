@@ -114,12 +114,6 @@ func (b *Bot) Respawn() {
 	b.sendTypedInput(&game.Respawn{Sequence: b.inputSeq}, true)
 }
 
-// Chat sends a chat message (reliable, typed).
-func (b *Bot) Chat(text string) {
-	b.inputSeq++
-	b.sendTypedInput(&game.Chat{Sequence: b.inputSeq, Username: b.name, Text: text}, true)
-}
-
 // DepositItem transfers an item from cargo to bank (reliable, typed).
 func (b *Bot) DepositItem(itemID uint32, qty int32) {
 	b.inputSeq++

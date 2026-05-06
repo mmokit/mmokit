@@ -208,27 +208,6 @@ export declare type LoginRejectedMsg = Message<"enginepb.LoginRejectedMsg"> & {
 export declare const LoginRejectedMsgSchema: GenMessage<LoginRejectedMsg>;
 
 /**
- * @generated from message enginepb.ChatMsg
- */
-export declare type ChatMsg = Message<"enginepb.ChatMsg"> & {
-  /**
-   * @generated from field: string username = 1;
-   */
-  username: string;
-
-  /**
-   * @generated from field: string text = 2;
-   */
-  text: string;
-};
-
-/**
- * Describes the message enginepb.ChatMsg.
- * Use `create(ChatMsgSchema)` to create a new message.
- */
-export declare const ChatMsgSchema: GenMessage<ChatMsg>;
-
-/**
  * @generated from message enginepb.CellChangeMsg
  */
 export declare type CellChangeMsg = Message<"enginepb.CellChangeMsg"> & {
@@ -410,9 +389,10 @@ export declare const DebugInfoMsgSchema: GenMessage<DebugInfoMsg>;
 
 /**
  * Client → Server event codes (engine-level). PLAYER_INPUT and CHAT
- * migrated to mmokit.HandleClient typed-input (channel 0x02) — they no
- * longer have engine event codes. The remaining codes service login,
- * liveness, and snapshot ack — none of which are HandleClient-eligible.
+ * migrated off the engine event surface — input rides mmokit.HandleClient
+ * typed-input (channel 0x02), and chat moved to its own service. The
+ * remaining codes service login, liveness, and snapshot ack — none of
+ * which are HandleClient-eligible.
  *
  * @generated from enum enginepb.ClientEventCode
  */
@@ -472,40 +452,35 @@ export enum ServerEventCode {
   SE_LOGIN_REJECTED = 3,
 
   /**
-   * @generated from enum value: SE_CHAT = 10;
+   * @generated from enum value: SE_PLAYER_OWN_STATE = 4;
    */
-  SE_CHAT = 10,
+  SE_PLAYER_OWN_STATE = 4,
 
   /**
-   * @generated from enum value: SE_PLAYER_OWN_STATE = 11;
+   * @generated from enum value: SE_CELL_CHANGE = 5;
    */
-  SE_PLAYER_OWN_STATE = 11,
-
-  /**
-   * @generated from enum value: SE_CELL_CHANGE = 12;
-   */
-  SE_CELL_CHANGE = 12,
+  SE_CELL_CHANGE = 5,
 
   /**
    * binary delta-compressed world update
    *
-   * @generated from enum value: SE_DELTA_WORLD_UPDATE = 13;
+   * @generated from enum value: SE_DELTA_WORLD_UPDATE = 6;
    */
-  SE_DELTA_WORLD_UPDATE = 13,
+  SE_DELTA_WORLD_UPDATE = 6,
 
   /**
    * debug overlay data (per-player gated)
    *
-   * @generated from enum value: SE_DEBUG_INFO = 14;
+   * @generated from enum value: SE_DEBUG_INFO = 7;
    */
-  SE_DEBUG_INFO = 14,
+  SE_DEBUG_INFO = 7,
 
   /**
    * engine config sent on connect (tick rate, etc.)
    *
-   * @generated from enum value: SE_SERVER_CONFIG = 15;
+   * @generated from enum value: SE_SERVER_CONFIG = 8;
    */
-  SE_SERVER_CONFIG = 15,
+  SE_SERVER_CONFIG = 8,
 }
 
 /**

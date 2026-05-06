@@ -3,8 +3,6 @@ package gamepb;
 option go_package = "github.com/zenion/mmoserver/gen/go/gamepb";
 option csharp_namespace = "Zenion.GameServer.Proto";
 
-import "enginepb/engine.proto";
-
 // ═══════════════════════════════════════════════
 // GAME-SPECIFIC EVENT CODES
 // ═══════════════════════════════════════════════
@@ -111,8 +109,7 @@ message WorldUpdateMsg {
     uint32 ack_input_seq = 2;
     repeated EntityState entities = 3;
     repeated uint32 removed_ids = 4;       // left AoI (no visual effect)
-    repeated enginepb.ChatMsg chat_messages = 5;
-    repeated uint32 killed_ids = 6;        // actually died/destroyed (play explosion)
+    repeated uint32 killed_ids = 5;        // actually died/destroyed (play explosion)
 }
 
 message EntityState {

@@ -10,7 +10,6 @@ import (
 type MsgType uint8
 
 const (
-	MsgChat               MsgType = 4   // chat relay
 	MsgSpawnTransfer      MsgType = 5   // player spawn on another cell
 	MsgCrossCellAction    MsgType = 6   // cross-cell action request to authoritative cell
 	MsgPlayerAssignment   MsgType = 8   // coordinator -> cell: player login routed
@@ -20,12 +19,6 @@ const (
 	MsgForwardInput       MsgType = 103 // safety path during single-tick routing overlap
 	MsgPlayerDisconnected MsgType = 107 // cross-process player disconnect notification
 )
-
-// ChatRelay relays chat messages across cells.
-type ChatRelay struct {
-	Username string
-	Text     string
-}
 
 // SpawnTransfer requests a player spawn on another cell.
 type SpawnTransfer struct {
@@ -98,7 +91,6 @@ type DisconnectPayload struct {
 type CellMessage struct {
 	Type         MsgType
 	FromCellID   MeshCellID
-	Chat         *ChatRelay
 	Spawn        *SpawnTransfer
 	Assignment   *PlayerAssignment    // coordinator -> cell player assignment
 	Action       *CrossCellAction     // cross-cell action request

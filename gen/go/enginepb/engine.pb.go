@@ -22,9 +22,10 @@ const (
 )
 
 // Client → Server event codes (engine-level). PLAYER_INPUT and CHAT
-// migrated to mmokit.HandleClient typed-input (channel 0x02) — they no
-// longer have engine event codes. The remaining codes service login,
-// liveness, and snapshot ack — none of which are HandleClient-eligible.
+// migrated off the engine event surface — input rides mmokit.HandleClient
+// typed-input (channel 0x02), and chat moved to its own service. The
+// remaining codes service login, liveness, and snapshot ack — none of
+// which are HandleClient-eligible.
 type ClientEventCode int32
 
 const (
@@ -85,39 +86,36 @@ const (
 	ServerEventCode_SE_PLAYER_SPAWNED     ServerEventCode = 1
 	ServerEventCode_SE_PONG               ServerEventCode = 2
 	ServerEventCode_SE_LOGIN_REJECTED     ServerEventCode = 3
-	ServerEventCode_SE_CHAT               ServerEventCode = 10
-	ServerEventCode_SE_PLAYER_OWN_STATE   ServerEventCode = 11
-	ServerEventCode_SE_CELL_CHANGE        ServerEventCode = 12
-	ServerEventCode_SE_DELTA_WORLD_UPDATE ServerEventCode = 13 // binary delta-compressed world update
-	ServerEventCode_SE_DEBUG_INFO         ServerEventCode = 14 // debug overlay data (per-player gated)
-	ServerEventCode_SE_SERVER_CONFIG      ServerEventCode = 15 // engine config sent on connect (tick rate, etc.)
+	ServerEventCode_SE_PLAYER_OWN_STATE   ServerEventCode = 4
+	ServerEventCode_SE_CELL_CHANGE        ServerEventCode = 5
+	ServerEventCode_SE_DELTA_WORLD_UPDATE ServerEventCode = 6 // binary delta-compressed world update
+	ServerEventCode_SE_DEBUG_INFO         ServerEventCode = 7 // debug overlay data (per-player gated)
+	ServerEventCode_SE_SERVER_CONFIG      ServerEventCode = 8 // engine config sent on connect (tick rate, etc.)
 )
 
 // Enum value maps for ServerEventCode.
 var (
 	ServerEventCode_name = map[int32]string{
-		0:  "SE_WORLD_UPDATE",
-		1:  "SE_PLAYER_SPAWNED",
-		2:  "SE_PONG",
-		3:  "SE_LOGIN_REJECTED",
-		10: "SE_CHAT",
-		11: "SE_PLAYER_OWN_STATE",
-		12: "SE_CELL_CHANGE",
-		13: "SE_DELTA_WORLD_UPDATE",
-		14: "SE_DEBUG_INFO",
-		15: "SE_SERVER_CONFIG",
+		0: "SE_WORLD_UPDATE",
+		1: "SE_PLAYER_SPAWNED",
+		2: "SE_PONG",
+		3: "SE_LOGIN_REJECTED",
+		4: "SE_PLAYER_OWN_STATE",
+		5: "SE_CELL_CHANGE",
+		6: "SE_DELTA_WORLD_UPDATE",
+		7: "SE_DEBUG_INFO",
+		8: "SE_SERVER_CONFIG",
 	}
 	ServerEventCode_value = map[string]int32{
 		"SE_WORLD_UPDATE":       0,
 		"SE_PLAYER_SPAWNED":     1,
 		"SE_PONG":               2,
 		"SE_LOGIN_REJECTED":     3,
-		"SE_CHAT":               10,
-		"SE_PLAYER_OWN_STATE":   11,
-		"SE_CELL_CHANGE":        12,
-		"SE_DELTA_WORLD_UPDATE": 13,
-		"SE_DEBUG_INFO":         14,
-		"SE_SERVER_CONFIG":      15,
+		"SE_PLAYER_OWN_STATE":   4,
+		"SE_CELL_CHANGE":        5,
+		"SE_DELTA_WORLD_UPDATE": 6,
+		"SE_DEBUG_INFO":         7,
+		"SE_SERVER_CONFIG":      8,
 	}
 )
 
@@ -624,58 +622,6 @@ func (x *LoginRejectedMsg) GetReason() string {
 	return ""
 }
 
-type ChatMsg struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Username      string                 `protobuf:"bytes,1,opt,name=username,proto3" json:"username,omitempty"`
-	Text          string                 `protobuf:"bytes,2,opt,name=text,proto3" json:"text,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *ChatMsg) Reset() {
-	*x = ChatMsg{}
-	mi := &file_enginepb_engine_proto_msgTypes[8]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *ChatMsg) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*ChatMsg) ProtoMessage() {}
-
-func (x *ChatMsg) ProtoReflect() protoreflect.Message {
-	mi := &file_enginepb_engine_proto_msgTypes[8]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use ChatMsg.ProtoReflect.Descriptor instead.
-func (*ChatMsg) Descriptor() ([]byte, []int) {
-	return file_enginepb_engine_proto_rawDescGZIP(), []int{8}
-}
-
-func (x *ChatMsg) GetUsername() string {
-	if x != nil {
-		return x.Username
-	}
-	return ""
-}
-
-func (x *ChatMsg) GetText() string {
-	if x != nil {
-		return x.Text
-	}
-	return ""
-}
-
 type CellChangeMsg struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	CellX         int32                  `protobuf:"varint,1,opt,name=cell_x,json=cellX,proto3" json:"cell_x,omitempty"`
@@ -686,7 +632,7 @@ type CellChangeMsg struct {
 
 func (x *CellChangeMsg) Reset() {
 	*x = CellChangeMsg{}
-	mi := &file_enginepb_engine_proto_msgTypes[9]
+	mi := &file_enginepb_engine_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -698,7 +644,7 @@ func (x *CellChangeMsg) String() string {
 func (*CellChangeMsg) ProtoMessage() {}
 
 func (x *CellChangeMsg) ProtoReflect() protoreflect.Message {
-	mi := &file_enginepb_engine_proto_msgTypes[9]
+	mi := &file_enginepb_engine_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -711,7 +657,7 @@ func (x *CellChangeMsg) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CellChangeMsg.ProtoReflect.Descriptor instead.
 func (*CellChangeMsg) Descriptor() ([]byte, []int) {
-	return file_enginepb_engine_proto_rawDescGZIP(), []int{9}
+	return file_enginepb_engine_proto_rawDescGZIP(), []int{8}
 }
 
 func (x *CellChangeMsg) GetCellX() int32 {
@@ -737,7 +683,7 @@ type ServerConfigMsg struct {
 
 func (x *ServerConfigMsg) Reset() {
 	*x = ServerConfigMsg{}
-	mi := &file_enginepb_engine_proto_msgTypes[10]
+	mi := &file_enginepb_engine_proto_msgTypes[9]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -749,7 +695,7 @@ func (x *ServerConfigMsg) String() string {
 func (*ServerConfigMsg) ProtoMessage() {}
 
 func (x *ServerConfigMsg) ProtoReflect() protoreflect.Message {
-	mi := &file_enginepb_engine_proto_msgTypes[10]
+	mi := &file_enginepb_engine_proto_msgTypes[9]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -762,7 +708,7 @@ func (x *ServerConfigMsg) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ServerConfigMsg.ProtoReflect.Descriptor instead.
 func (*ServerConfigMsg) Descriptor() ([]byte, []int) {
-	return file_enginepb_engine_proto_rawDescGZIP(), []int{10}
+	return file_enginepb_engine_proto_rawDescGZIP(), []int{9}
 }
 
 func (x *ServerConfigMsg) GetTickRate() uint32 {
@@ -784,7 +730,7 @@ type SpawnedMsg struct {
 
 func (x *SpawnedMsg) Reset() {
 	*x = SpawnedMsg{}
-	mi := &file_enginepb_engine_proto_msgTypes[11]
+	mi := &file_enginepb_engine_proto_msgTypes[10]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -796,7 +742,7 @@ func (x *SpawnedMsg) String() string {
 func (*SpawnedMsg) ProtoMessage() {}
 
 func (x *SpawnedMsg) ProtoReflect() protoreflect.Message {
-	mi := &file_enginepb_engine_proto_msgTypes[11]
+	mi := &file_enginepb_engine_proto_msgTypes[10]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -809,7 +755,7 @@ func (x *SpawnedMsg) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SpawnedMsg.ProtoReflect.Descriptor instead.
 func (*SpawnedMsg) Descriptor() ([]byte, []int) {
-	return file_enginepb_engine_proto_rawDescGZIP(), []int{11}
+	return file_enginepb_engine_proto_rawDescGZIP(), []int{10}
 }
 
 func (x *SpawnedMsg) GetEntityNetId() uint32 {
@@ -849,7 +795,7 @@ type CellInfo struct {
 
 func (x *CellInfo) Reset() {
 	*x = CellInfo{}
-	mi := &file_enginepb_engine_proto_msgTypes[12]
+	mi := &file_enginepb_engine_proto_msgTypes[11]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -861,7 +807,7 @@ func (x *CellInfo) String() string {
 func (*CellInfo) ProtoMessage() {}
 
 func (x *CellInfo) ProtoReflect() protoreflect.Message {
-	mi := &file_enginepb_engine_proto_msgTypes[12]
+	mi := &file_enginepb_engine_proto_msgTypes[11]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -874,7 +820,7 @@ func (x *CellInfo) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CellInfo.ProtoReflect.Descriptor instead.
 func (*CellInfo) Descriptor() ([]byte, []int) {
-	return file_enginepb_engine_proto_rawDescGZIP(), []int{12}
+	return file_enginepb_engine_proto_rawDescGZIP(), []int{11}
 }
 
 func (x *CellInfo) GetCellX() int32 {
@@ -941,7 +887,7 @@ type CellTopologyMsg struct {
 
 func (x *CellTopologyMsg) Reset() {
 	*x = CellTopologyMsg{}
-	mi := &file_enginepb_engine_proto_msgTypes[13]
+	mi := &file_enginepb_engine_proto_msgTypes[12]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -953,7 +899,7 @@ func (x *CellTopologyMsg) String() string {
 func (*CellTopologyMsg) ProtoMessage() {}
 
 func (x *CellTopologyMsg) ProtoReflect() protoreflect.Message {
-	mi := &file_enginepb_engine_proto_msgTypes[13]
+	mi := &file_enginepb_engine_proto_msgTypes[12]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -966,7 +912,7 @@ func (x *CellTopologyMsg) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CellTopologyMsg.ProtoReflect.Descriptor instead.
 func (*CellTopologyMsg) Descriptor() ([]byte, []int) {
-	return file_enginepb_engine_proto_rawDescGZIP(), []int{13}
+	return file_enginepb_engine_proto_rawDescGZIP(), []int{12}
 }
 
 func (x *CellTopologyMsg) GetCells() []*CellInfo {
@@ -1013,7 +959,7 @@ type DebugInfoMsg struct {
 
 func (x *DebugInfoMsg) Reset() {
 	*x = DebugInfoMsg{}
-	mi := &file_enginepb_engine_proto_msgTypes[14]
+	mi := &file_enginepb_engine_proto_msgTypes[13]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1025,7 +971,7 @@ func (x *DebugInfoMsg) String() string {
 func (*DebugInfoMsg) ProtoMessage() {}
 
 func (x *DebugInfoMsg) ProtoReflect() protoreflect.Message {
-	mi := &file_enginepb_engine_proto_msgTypes[14]
+	mi := &file_enginepb_engine_proto_msgTypes[13]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1038,7 +984,7 @@ func (x *DebugInfoMsg) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DebugInfoMsg.ProtoReflect.Descriptor instead.
 func (*DebugInfoMsg) Descriptor() ([]byte, []int) {
-	return file_enginepb_engine_proto_rawDescGZIP(), []int{14}
+	return file_enginepb_engine_proto_rawDescGZIP(), []int{13}
 }
 
 func (x *DebugInfoMsg) GetTopology() *CellTopologyMsg {
@@ -1090,10 +1036,7 @@ const file_enginepb_engine_proto_rawDesc = "" +
 	"\bLoginMsg\x12\x1a\n" +
 	"\busername\x18\x01 \x01(\tR\busername\"*\n" +
 	"\x10LoginRejectedMsg\x12\x16\n" +
-	"\x06reason\x18\x01 \x01(\tR\x06reason\"9\n" +
-	"\aChatMsg\x12\x1a\n" +
-	"\busername\x18\x01 \x01(\tR\busername\x12\x12\n" +
-	"\x04text\x18\x02 \x01(\tR\x04text\"=\n" +
+	"\x06reason\x18\x01 \x01(\tR\x06reason\"=\n" +
 	"\rCellChangeMsg\x12\x15\n" +
 	"\x06cell_x\x18\x01 \x01(\x05R\x05cellX\x12\x15\n" +
 	"\x06cell_y\x18\x02 \x01(\x05R\x05cellY\".\n" +
@@ -1128,19 +1071,17 @@ const file_enginepb_engine_proto_rawDesc = "" +
 	"CE_UNKNOWN\x10\x00\x12\v\n" +
 	"\aCE_PING\x10\x01\x12\f\n" +
 	"\bCE_LOGIN\x10\x02\x12\x13\n" +
-	"\x0fCE_ACK_SNAPSHOT\x10\x04*\xdf\x01\n" +
+	"\x0fCE_ACK_SNAPSHOT\x10\x04*\xd2\x01\n" +
 	"\x0fServerEventCode\x12\x13\n" +
 	"\x0fSE_WORLD_UPDATE\x10\x00\x12\x15\n" +
 	"\x11SE_PLAYER_SPAWNED\x10\x01\x12\v\n" +
 	"\aSE_PONG\x10\x02\x12\x15\n" +
-	"\x11SE_LOGIN_REJECTED\x10\x03\x12\v\n" +
-	"\aSE_CHAT\x10\n" +
-	"\x12\x17\n" +
-	"\x13SE_PLAYER_OWN_STATE\x10\v\x12\x12\n" +
-	"\x0eSE_CELL_CHANGE\x10\f\x12\x19\n" +
-	"\x15SE_DELTA_WORLD_UPDATE\x10\r\x12\x11\n" +
-	"\rSE_DEBUG_INFO\x10\x0e\x12\x14\n" +
-	"\x10SE_SERVER_CONFIG\x10\x0f*@\n" +
+	"\x11SE_LOGIN_REJECTED\x10\x03\x12\x17\n" +
+	"\x13SE_PLAYER_OWN_STATE\x10\x04\x12\x12\n" +
+	"\x0eSE_CELL_CHANGE\x10\x05\x12\x19\n" +
+	"\x15SE_DELTA_WORLD_UPDATE\x10\x06\x12\x11\n" +
+	"\rSE_DEBUG_INFO\x10\a\x12\x14\n" +
+	"\x10SE_SERVER_CONFIG\x10\b*@\n" +
 	"\x0fEntityMeshState\x12\r\n" +
 	"\tEMS_LOCAL\x10\x00\x12\x0f\n" +
 	"\vEMS_REPLICA\x10\x01\x12\r\n" +
@@ -1159,7 +1100,7 @@ func file_enginepb_engine_proto_rawDescGZIP() []byte {
 }
 
 var file_enginepb_engine_proto_enumTypes = make([]protoimpl.EnumInfo, 3)
-var file_enginepb_engine_proto_msgTypes = make([]protoimpl.MessageInfo, 15)
+var file_enginepb_engine_proto_msgTypes = make([]protoimpl.MessageInfo, 14)
 var file_enginepb_engine_proto_goTypes = []any{
 	(ClientEventCode)(0),      // 0: enginepb.ClientEventCode
 	(ServerEventCode)(0),      // 1: enginepb.ServerEventCode
@@ -1172,17 +1113,16 @@ var file_enginepb_engine_proto_goTypes = []any{
 	(*PongMsg)(nil),           // 8: enginepb.PongMsg
 	(*LoginMsg)(nil),          // 9: enginepb.LoginMsg
 	(*LoginRejectedMsg)(nil),  // 10: enginepb.LoginRejectedMsg
-	(*ChatMsg)(nil),           // 11: enginepb.ChatMsg
-	(*CellChangeMsg)(nil),     // 12: enginepb.CellChangeMsg
-	(*ServerConfigMsg)(nil),   // 13: enginepb.ServerConfigMsg
-	(*SpawnedMsg)(nil),        // 14: enginepb.SpawnedMsg
-	(*CellInfo)(nil),          // 15: enginepb.CellInfo
-	(*CellTopologyMsg)(nil),   // 16: enginepb.CellTopologyMsg
-	(*DebugInfoMsg)(nil),      // 17: enginepb.DebugInfoMsg
+	(*CellChangeMsg)(nil),     // 11: enginepb.CellChangeMsg
+	(*ServerConfigMsg)(nil),   // 12: enginepb.ServerConfigMsg
+	(*SpawnedMsg)(nil),        // 13: enginepb.SpawnedMsg
+	(*CellInfo)(nil),          // 14: enginepb.CellInfo
+	(*CellTopologyMsg)(nil),   // 15: enginepb.CellTopologyMsg
+	(*DebugInfoMsg)(nil),      // 16: enginepb.DebugInfoMsg
 }
 var file_enginepb_engine_proto_depIdxs = []int32{
-	15, // 0: enginepb.CellTopologyMsg.cells:type_name -> enginepb.CellInfo
-	16, // 1: enginepb.DebugInfoMsg.topology:type_name -> enginepb.CellTopologyMsg
+	14, // 0: enginepb.CellTopologyMsg.cells:type_name -> enginepb.CellInfo
+	15, // 1: enginepb.DebugInfoMsg.topology:type_name -> enginepb.CellTopologyMsg
 	2,  // [2:2] is the sub-list for method output_type
 	2,  // [2:2] is the sub-list for method input_type
 	2,  // [2:2] is the sub-list for extension type_name
@@ -1195,14 +1135,14 @@ func file_enginepb_engine_proto_init() {
 	if File_enginepb_engine_proto != nil {
 		return
 	}
-	file_enginepb_engine_proto_msgTypes[14].OneofWrappers = []any{}
+	file_enginepb_engine_proto_msgTypes[13].OneofWrappers = []any{}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_enginepb_engine_proto_rawDesc), len(file_enginepb_engine_proto_rawDesc)),
 			NumEnums:      3,
-			NumMessages:   15,
+			NumMessages:   14,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

@@ -7,7 +7,6 @@
 package gamepb
 
 import (
-	enginepb "github.com/zenion/mmoserver/gen/go/enginepb"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 	reflect "reflect"
@@ -614,8 +613,7 @@ type WorldUpdateMsg struct {
 	AckInputSeq   uint32                 `protobuf:"varint,2,opt,name=ack_input_seq,json=ackInputSeq,proto3" json:"ack_input_seq,omitempty"`
 	Entities      []*EntityState         `protobuf:"bytes,3,rep,name=entities,proto3" json:"entities,omitempty"`
 	RemovedIds    []uint32               `protobuf:"varint,4,rep,packed,name=removed_ids,json=removedIds,proto3" json:"removed_ids,omitempty"` // left AoI (no visual effect)
-	ChatMessages  []*enginepb.ChatMsg    `protobuf:"bytes,5,rep,name=chat_messages,json=chatMessages,proto3" json:"chat_messages,omitempty"`
-	KilledIds     []uint32               `protobuf:"varint,6,rep,packed,name=killed_ids,json=killedIds,proto3" json:"killed_ids,omitempty"` // actually died/destroyed (play explosion)
+	KilledIds     []uint32               `protobuf:"varint,5,rep,packed,name=killed_ids,json=killedIds,proto3" json:"killed_ids,omitempty"`    // actually died/destroyed (play explosion)
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -674,13 +672,6 @@ func (x *WorldUpdateMsg) GetEntities() []*EntityState {
 func (x *WorldUpdateMsg) GetRemovedIds() []uint32 {
 	if x != nil {
 		return x.RemovedIds
-	}
-	return nil
-}
-
-func (x *WorldUpdateMsg) GetChatMessages() []*enginepb.ChatMsg {
-	if x != nil {
-		return x.ChatMessages
 	}
 	return nil
 }
@@ -3307,7 +3298,7 @@ var File_gamepb_game_proto protoreflect.FileDescriptor
 
 const file_gamepb_game_proto_rawDesc = "" +
 	"\n" +
-	"\x11gamepb/game.proto\x12\x06gamepb\x1a\x15enginepb/engine.proto\"D\n" +
+	"\x11gamepb/game.proto\x12\x06gamepb\"D\n" +
 	"\rInventoryItem\x12\x17\n" +
 	"\aitem_id\x18\x01 \x01(\rR\x06itemId\x12\x1a\n" +
 	"\bquantity\x18\x02 \x01(\x05R\bquantity\"\x8f\x01\n" +
@@ -3323,16 +3314,15 @@ const file_gamepb_game_proto_rawDesc = "" +
 	"\aweapon1\x18\x01 \x01(\rR\aweapon1\x12\x18\n" +
 	"\aweapon2\x18\x02 \x01(\rR\aweapon2\x12\x16\n" +
 	"\x06shield\x18\x03 \x01(\rR\x06shield\x12\x1a\n" +
-	"\bthruster\x18\x04 \x01(\rR\bthruster\"\xf1\x01\n" +
+	"\bthruster\x18\x04 \x01(\rR\bthruster\"\xb9\x01\n" +
 	"\x0eWorldUpdateMsg\x12\x12\n" +
 	"\x04tick\x18\x01 \x01(\rR\x04tick\x12\"\n" +
 	"\rack_input_seq\x18\x02 \x01(\rR\vackInputSeq\x12/\n" +
 	"\bentities\x18\x03 \x03(\v2\x13.gamepb.EntityStateR\bentities\x12\x1f\n" +
 	"\vremoved_ids\x18\x04 \x03(\rR\n" +
-	"removedIds\x126\n" +
-	"\rchat_messages\x18\x05 \x03(\v2\x11.enginepb.ChatMsgR\fchatMessages\x12\x1d\n" +
+	"removedIds\x12\x1d\n" +
 	"\n" +
-	"killed_ids\x18\x06 \x03(\rR\tkilledIds\"\xba\x05\n" +
+	"killed_ids\x18\x05 \x03(\rR\tkilledIds\"\xba\x05\n" +
 	"\vEntityState\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\rR\x02id\x123\n" +
 	"\ventity_type\x18\x02 \x01(\x0e2\x12.gamepb.EntityTypeR\n" +
@@ -3664,43 +3654,41 @@ var file_gamepb_game_proto_goTypes = []any{
 	(*ReplicaSnapshotPB)(nil),         // 46: gamepb.ReplicaSnapshotPB
 	(*CurrencyBalance)(nil),           // 47: gamepb.CurrencyBalance
 	(*CurrencyUpdateMsg)(nil),         // 48: gamepb.CurrencyUpdateMsg
-	(*enginepb.ChatMsg)(nil),          // 49: enginepb.ChatMsg
 }
 var file_gamepb_game_proto_depIdxs = []int32{
 	11, // 0: gamepb.WorldUpdateMsg.entities:type_name -> gamepb.EntityState
-	49, // 1: gamepb.WorldUpdateMsg.chat_messages:type_name -> enginepb.ChatMsg
-	2,  // 2: gamepb.EntityState.entity_type:type_name -> gamepb.EntityType
-	13, // 3: gamepb.EntityState.ship:type_name -> gamepb.ShipState
-	14, // 4: gamepb.EntityState.npc:type_name -> gamepb.NpcState
-	15, // 5: gamepb.EntityState.asteroid:type_name -> gamepb.AsteroidState
-	16, // 6: gamepb.EntityState.loot_crate:type_name -> gamepb.LootCrateState
-	17, // 7: gamepb.EntityState.station:type_name -> gamepb.StationState
-	24, // 8: gamepb.CombatState.status_effects:type_name -> gamepb.ActiveStatusEffect
-	12, // 9: gamepb.ShipState.combat:type_name -> gamepb.CombatState
-	12, // 10: gamepb.NpcState.combat:type_name -> gamepb.CombatState
-	7,  // 11: gamepb.LootCrateState.cargo_items:type_name -> gamepb.InventoryItem
-	8,  // 12: gamepb.PlayerSpawnedMsg.item_defs:type_name -> gamepb.ItemDefMsg
-	9,  // 13: gamepb.PlayerSpawnedMsg.equipment:type_name -> gamepb.EquipmentState
-	23, // 14: gamepb.PlayerOwnStateMsg.ability_cooldowns:type_name -> gamepb.AbilityCooldownState
-	9,  // 15: gamepb.PlayerOwnStateMsg.equipment:type_name -> gamepb.EquipmentState
-	7,  // 16: gamepb.PlayerOwnStateMsg.cargo_items:type_name -> gamepb.InventoryItem
-	7,  // 17: gamepb.BankContentsMsg.items:type_name -> gamepb.InventoryItem
-	7,  // 18: gamepb.BankContentsMsg.cargo_items:type_name -> gamepb.InventoryItem
-	47, // 19: gamepb.BankContentsMsg.currencies:type_name -> gamepb.CurrencyBalance
-	5,  // 20: gamepb.EquipResultMsg.slot:type_name -> gamepb.EquipSlot
-	4,  // 21: gamepb.ActiveStatusEffect.type:type_name -> gamepb.StatusEffectType
-	28, // 22: gamepb.MapDataMsg.stations:type_name -> gamepb.MapStationInfo
-	36, // 23: gamepb.MarketOrderBookResponse.sell_levels:type_name -> gamepb.MarketPriceLevel
-	36, // 24: gamepb.MarketOrderBookResponse.buy_levels:type_name -> gamepb.MarketPriceLevel
-	39, // 25: gamepb.MarketMyOrdersResponse.orders:type_name -> gamepb.MarketOrderEntry
-	42, // 26: gamepb.ReplicaSnapshotPB.health:type_name -> gamepb.HealthPB
-	43, // 27: gamepb.ReplicaSnapshotPB.shield:type_name -> gamepb.ShieldPB
-	44, // 28: gamepb.ReplicaSnapshotPB.minable:type_name -> gamepb.MinablePB
-	29, // [29:29] is the sub-list for method output_type
-	29, // [29:29] is the sub-list for method input_type
-	29, // [29:29] is the sub-list for extension type_name
-	29, // [29:29] is the sub-list for extension extendee
-	0,  // [0:29] is the sub-list for field type_name
+	2,  // 1: gamepb.EntityState.entity_type:type_name -> gamepb.EntityType
+	13, // 2: gamepb.EntityState.ship:type_name -> gamepb.ShipState
+	14, // 3: gamepb.EntityState.npc:type_name -> gamepb.NpcState
+	15, // 4: gamepb.EntityState.asteroid:type_name -> gamepb.AsteroidState
+	16, // 5: gamepb.EntityState.loot_crate:type_name -> gamepb.LootCrateState
+	17, // 6: gamepb.EntityState.station:type_name -> gamepb.StationState
+	24, // 7: gamepb.CombatState.status_effects:type_name -> gamepb.ActiveStatusEffect
+	12, // 8: gamepb.ShipState.combat:type_name -> gamepb.CombatState
+	12, // 9: gamepb.NpcState.combat:type_name -> gamepb.CombatState
+	7,  // 10: gamepb.LootCrateState.cargo_items:type_name -> gamepb.InventoryItem
+	8,  // 11: gamepb.PlayerSpawnedMsg.item_defs:type_name -> gamepb.ItemDefMsg
+	9,  // 12: gamepb.PlayerSpawnedMsg.equipment:type_name -> gamepb.EquipmentState
+	23, // 13: gamepb.PlayerOwnStateMsg.ability_cooldowns:type_name -> gamepb.AbilityCooldownState
+	9,  // 14: gamepb.PlayerOwnStateMsg.equipment:type_name -> gamepb.EquipmentState
+	7,  // 15: gamepb.PlayerOwnStateMsg.cargo_items:type_name -> gamepb.InventoryItem
+	7,  // 16: gamepb.BankContentsMsg.items:type_name -> gamepb.InventoryItem
+	7,  // 17: gamepb.BankContentsMsg.cargo_items:type_name -> gamepb.InventoryItem
+	47, // 18: gamepb.BankContentsMsg.currencies:type_name -> gamepb.CurrencyBalance
+	5,  // 19: gamepb.EquipResultMsg.slot:type_name -> gamepb.EquipSlot
+	4,  // 20: gamepb.ActiveStatusEffect.type:type_name -> gamepb.StatusEffectType
+	28, // 21: gamepb.MapDataMsg.stations:type_name -> gamepb.MapStationInfo
+	36, // 22: gamepb.MarketOrderBookResponse.sell_levels:type_name -> gamepb.MarketPriceLevel
+	36, // 23: gamepb.MarketOrderBookResponse.buy_levels:type_name -> gamepb.MarketPriceLevel
+	39, // 24: gamepb.MarketMyOrdersResponse.orders:type_name -> gamepb.MarketOrderEntry
+	42, // 25: gamepb.ReplicaSnapshotPB.health:type_name -> gamepb.HealthPB
+	43, // 26: gamepb.ReplicaSnapshotPB.shield:type_name -> gamepb.ShieldPB
+	44, // 27: gamepb.ReplicaSnapshotPB.minable:type_name -> gamepb.MinablePB
+	28, // [28:28] is the sub-list for method output_type
+	28, // [28:28] is the sub-list for method input_type
+	28, // [28:28] is the sub-list for extension type_name
+	28, // [28:28] is the sub-list for extension extendee
+	0,  // [0:28] is the sub-list for field type_name
 }
 
 func init() { file_gamepb_game_proto_init() }

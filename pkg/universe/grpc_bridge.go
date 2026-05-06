@@ -224,30 +224,6 @@ func (b *grpcBridge) OnPlayerTransfer(connID uint32, destCellID MeshCellID) {
 	})
 }
 
-// RelayChatToOtherCells broadcasts a chat message to all other cells.
-// For cells on this host the message is pushed directly via the local
-// coordinator inbox. For cells on remote hosts it is dispatched via
-// SendReliable (user-visible chat must not drop).
-func (b *grpcBridge) RelayChatToOtherCells(username, text string) {
-	b.cell.Log.Log(CatMeshMsg, "[%s] relaying chat from %s to %d cells", b.cell.MeshID, username, len(b.coord.Cells)-1)
-	for _, other := range b.coord.Cells {
-		if other.MeshID == b.cell.MeshID {
-			continue
-		}
-		msg := CellMessage{
-			Type:       MsgChat,
-			FromCellID: b.cell.MeshID,
-			Chat:       &ChatRelay{Username: username, Text: text},
-		}
-		useLocal, destHostID := b.resolveDest(other.MeshID)
-		if useLocal {
-			other.Inbox <- msg
-		} else {
-			b.sendViaGrpc(destHostID, other.MeshID, msg, true)
-		}
-	}
-}
-
 // RequestRespawn delegates to the local cellBridge. S3 coordinator
 // is still in-process, so the respawn routing stays local.
 func (b *grpcBridge) RequestRespawn(connID uint32, username string) {

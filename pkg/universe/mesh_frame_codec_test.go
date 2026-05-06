@@ -58,17 +58,6 @@ func TestMeshFrameRoundTrip(t *testing.T) {
 			},
 		},
 		{
-			"chat",
-			CellMessage{
-				Type:       MsgChat,
-				FromCellID: "cell_0_0",
-				Chat: &ChatRelay{
-					Username: "alice",
-					Text:     "hello world",
-				},
-			},
-		},
-		{
 			"cross_node_action",
 			CellMessage{
 				Type:       MsgCrossCellAction,
@@ -223,15 +212,6 @@ func cellMessagesEqual(t *testing.T, orig, got CellMessage) bool {
 		}
 		check("ForwardInput.ConnID", of.ConnID, gf.ConnID)
 		check("ForwardInput.InputBlob", of.InputBlob, gf.InputBlob)
-
-	case MsgChat:
-		oc, gc := orig.Chat, got.Chat
-		if oc == nil || gc == nil {
-			check("Chat nil", oc, gc)
-			break
-		}
-		check("Chat.Username", oc.Username, gc.Username)
-		check("Chat.Text", oc.Text, gc.Text)
 
 	case MsgCrossCellAction:
 		oa, ga := orig.Action, got.Action

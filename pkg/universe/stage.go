@@ -763,8 +763,6 @@ func (b *Stage) UpdateCellBounds(cell CellID, cellSize float32) {
 		}
 	}
 }
-func (b *Stage) DispatchChat(string, string) {}
-
 // ---------------------------------------------------------------------------
 // Transfer serialization
 // ---------------------------------------------------------------------------

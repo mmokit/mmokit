@@ -329,12 +329,11 @@ message MeshFrame {
     CellTransferAbort cell_transfer_abort = 6;  // S7: orchestrator-driven rollback
     ClientInput       client_input        = 7;
     ClientFrame       client_frame        = 8;
-    ChatRelay         chat_relay          = 9;
-    CrossCellAction   cross_action        = 10;
-    PlayerAssignment  player_assignment   = 11;
-    SessionTransfer   session_transfer    = 12;
-    SpawnTransfer     spawn_transfer      = 13;
-    ClientDisconnect  client_disconnect   = 14; // S6: pair with client_input/client_frame — graceful disconnect
+    CrossCellAction   cross_action        = 9;
+    PlayerAssignment  player_assignment   = 10;
+    SessionTransfer   session_transfer    = 11;
+    SpawnTransfer     spawn_transfer      = 12;
+    ClientDisconnect  client_disconnect   = 13; // S6: pair with client_input/client_frame — graceful disconnect
   }
 }
 
@@ -381,13 +380,6 @@ message CrossCellAction {
   uint32 source_net_id  = 4;
   string source_cell_id = 5;
   bytes  payload        = 6;
-}
-
-// ChatRelay mirrors pkg/universe/message.go ChatRelay.
-message ChatRelay {
-  string from_cell_id = 1;
-  string username     = 2;
-  string text         = 3;
 }
 
 // Location is the wire form of coords.Location — world-space anchor for

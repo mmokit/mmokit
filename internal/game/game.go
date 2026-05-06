@@ -6,7 +6,6 @@ import (
 
 	"github.com/mlange-42/ark/ecs"
 
-	enginepb "github.com/zenion/mmoserver/gen/go/enginepb"
 	"github.com/zenion/mmoserver/internal/item"
 	"github.com/zenion/mmoserver/pkg/mmokit"
 )
@@ -160,15 +159,6 @@ func NewGameWorld(base *mmokit.Stage, cfg *GameConfig, playerDB *PlayerRepo, cel
 	}
 
 	return gw
-}
-
-// DispatchChat handles a chat message relayed from another node.
-func (gw *GameWorld) DispatchChat(username, text string) {
-	gw.eng.Log.Log(CatPlayerChat, "inbox: relayed chat <%s> %s", username, text)
-	mmokit.Enqueue(gw.Queue, &enginepb.ChatMsg{
-		Username: username,
-		Text:     text,
-	})
 }
 
 // UnwrapGameWorld extracts the underlying *GameWorld from a mmokit.GameWorld.

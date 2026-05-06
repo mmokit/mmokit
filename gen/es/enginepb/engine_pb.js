@@ -8,7 +8,7 @@ import { enumDesc, fileDesc, messageDesc, tsEnum } from "@bufbuild/protobuf/code
  * Describes the file enginepb/engine.proto.
  */
 export const file_enginepb_engine = /*@__PURE__*/
-  fileDesc("ChVlbmdpbmVwYi9lbmdpbmUucHJvdG8SCGVuZ2luZXBiIikKC0NsaWVudEV2ZW50EgwKBGNvZGUYASABKA0SDAoEZGF0YRgCIAEoDCIpCgtTZXJ2ZXJFdmVudBIMCgRjb2RlGAEgASgNEgwKBGRhdGEYAiABKAwiQgoQT3BlcmF0aW9uUmVxdWVzdBIMCgRjb2RlGAEgASgNEhIKCnJlcXVlc3RfaWQYAiABKA0SDAoEZGF0YRgDIAEoDCJrChFPcGVyYXRpb25SZXNwb25zZRIMCgRjb2RlGAEgASgNEhIKCnJlcXVlc3RfaWQYAiABKA0SEwoLcmV0dXJuX2NvZGUYAyABKAUSEQoJZXJyb3JfbXNnGAQgASgJEgwKBGRhdGEYBSABKAwiHgoHUGluZ01zZxITCgtjbGllbnRfdGltZRgBIAEoAyIzCgdQb25nTXNnEhMKC2NsaWVudF90aW1lGAEgASgDEhMKC3NlcnZlcl90aW1lGAIgASgDIhwKCExvZ2luTXNnEhAKCHVzZXJuYW1lGAEgASgJIiIKEExvZ2luUmVqZWN0ZWRNc2cSDgoGcmVhc29uGAEgASgJIikKB0NoYXRNc2cSEAoIdXNlcm5hbWUYASABKAkSDAoEdGV4dBgCIAEoCSIvCg1DZWxsQ2hhbmdlTXNnEg4KBmNlbGxfeBgBIAEoBRIOCgZjZWxsX3kYAiABKAUiJAoPU2VydmVyQ29uZmlnTXNnEhEKCXRpY2tfcmF0ZRgBIAEoDSJFCgpTcGF3bmVkTXNnEhUKDWVudGl0eV9uZXRfaWQYASABKA0SDwoHd29ybGRfeBgCIAEoAhIPCgd3b3JsZF95GAMgASgCInwKCENlbGxJbmZvEg4KBmNlbGxfeBgBIAEoBRIOCgZjZWxsX3kYAiABKAUSDQoFZGVwdGgYAyABKA0SDAoEc2l6ZRgEIAEoAhIQCghvcmlnaW5feBgFIAEoAhIQCghvcmlnaW5feRgGIAEoAhIPCgdub2RlX2lkGAcgASgJImwKD0NlbGxUb3BvbG9neU1zZxIhCgVjZWxscxgBIAMoCzISLmVuZ2luZXBiLkNlbGxJbmZvEg4KBmdyaWRfdxgCIAEoBRIOCgZncmlkX2gYAyABKAUSFgoOYmFzZV9jZWxsX3NpemUYBCABKAIidQoMRGVidWdJbmZvTXNnEjAKCHRvcG9sb2d5GAEgASgLMhkuZW5naW5lcGIuQ2VsbFRvcG9sb2d5TXNnSACIAQESFwoKYW9pX3JhZGl1cxgCIAEoAkgBiAEBQgsKCV90b3BvbG9neUINCgtfYW9pX3JhZGl1cypRCg9DbGllbnRFdmVudENvZGUSDgoKQ0VfVU5LTk9XThAAEgsKB0NFX1BJTkcQARIMCghDRV9MT0dJThACEhMKD0NFX0FDS19TTkFQU0hPVBAEKt8BCg9TZXJ2ZXJFdmVudENvZGUSEwoPU0VfV09STERfVVBEQVRFEAASFQoRU0VfUExBWUVSX1NQQVdORUQQARILCgdTRV9QT05HEAISFQoRU0VfTE9HSU5fUkVKRUNURUQQAxILCgdTRV9DSEFUEAoSFwoTU0VfUExBWUVSX09XTl9TVEFURRALEhIKDlNFX0NFTExfQ0hBTkdFEAwSGQoVU0VfREVMVEFfV09STERfVVBEQVRFEA0SEQoNU0VfREVCVUdfSU5GTxAOEhQKEFNFX1NFUlZFUl9DT05GSUcQDypACg9FbnRpdHlNZXNoU3RhdGUSDQoJRU1TX0xPQ0FMEAASDwoLRU1TX1JFUExJQ0EQARINCglFTVNfR0hPU1QQAkJOWitnaXRodWIuY29tL3plbmlvbi9tbW9zZXJ2ZXIvZ2VuL2dvL2VuZ2luZXBiqgIeWmVuaW9uLkdhbWVTZXJ2ZXIuUHJvdG8uRW5naW5lYgZwcm90bzM");
+  fileDesc("ChVlbmdpbmVwYi9lbmdpbmUucHJvdG8SCGVuZ2luZXBiIikKC0NsaWVudEV2ZW50EgwKBGNvZGUYASABKA0SDAoEZGF0YRgCIAEoDCIpCgtTZXJ2ZXJFdmVudBIMCgRjb2RlGAEgASgNEgwKBGRhdGEYAiABKAwiQgoQT3BlcmF0aW9uUmVxdWVzdBIMCgRjb2RlGAEgASgNEhIKCnJlcXVlc3RfaWQYAiABKA0SDAoEZGF0YRgDIAEoDCJrChFPcGVyYXRpb25SZXNwb25zZRIMCgRjb2RlGAEgASgNEhIKCnJlcXVlc3RfaWQYAiABKA0SEwoLcmV0dXJuX2NvZGUYAyABKAUSEQoJZXJyb3JfbXNnGAQgASgJEgwKBGRhdGEYBSABKAwiHgoHUGluZ01zZxITCgtjbGllbnRfdGltZRgBIAEoAyIzCgdQb25nTXNnEhMKC2NsaWVudF90aW1lGAEgASgDEhMKC3NlcnZlcl90aW1lGAIgASgDIhwKCExvZ2luTXNnEhAKCHVzZXJuYW1lGAEgASgJIiIKEExvZ2luUmVqZWN0ZWRNc2cSDgoGcmVhc29uGAEgASgJIi8KDUNlbGxDaGFuZ2VNc2cSDgoGY2VsbF94GAEgASgFEg4KBmNlbGxfeRgCIAEoBSIkCg9TZXJ2ZXJDb25maWdNc2cSEQoJdGlja19yYXRlGAEgASgNIkUKClNwYXduZWRNc2cSFQoNZW50aXR5X25ldF9pZBgBIAEoDRIPCgd3b3JsZF94GAIgASgCEg8KB3dvcmxkX3kYAyABKAIifAoIQ2VsbEluZm8SDgoGY2VsbF94GAEgASgFEg4KBmNlbGxfeRgCIAEoBRINCgVkZXB0aBgDIAEoDRIMCgRzaXplGAQgASgCEhAKCG9yaWdpbl94GAUgASgCEhAKCG9yaWdpbl95GAYgASgCEg8KB25vZGVfaWQYByABKAkibAoPQ2VsbFRvcG9sb2d5TXNnEiEKBWNlbGxzGAEgAygLMhIuZW5naW5lcGIuQ2VsbEluZm8SDgoGZ3JpZF93GAIgASgFEg4KBmdyaWRfaBgDIAEoBRIWCg5iYXNlX2NlbGxfc2l6ZRgEIAEoAiJ1CgxEZWJ1Z0luZm9Nc2cSMAoIdG9wb2xvZ3kYASABKAsyGS5lbmdpbmVwYi5DZWxsVG9wb2xvZ3lNc2dIAIgBARIXCgphb2lfcmFkaXVzGAIgASgCSAGIAQFCCwoJX3RvcG9sb2d5Qg0KC19hb2lfcmFkaXVzKlEKD0NsaWVudEV2ZW50Q29kZRIOCgpDRV9VTktOT1dOEAASCwoHQ0VfUElORxABEgwKCENFX0xPR0lOEAISEwoPQ0VfQUNLX1NOQVBTSE9UEAQq0gEKD1NlcnZlckV2ZW50Q29kZRITCg9TRV9XT1JMRF9VUERBVEUQABIVChFTRV9QTEFZRVJfU1BBV05FRBABEgsKB1NFX1BPTkcQAhIVChFTRV9MT0dJTl9SRUpFQ1RFRBADEhcKE1NFX1BMQVlFUl9PV05fU1RBVEUQBBISCg5TRV9DRUxMX0NIQU5HRRAFEhkKFVNFX0RFTFRBX1dPUkxEX1VQREFURRAGEhEKDVNFX0RFQlVHX0lORk8QBxIUChBTRV9TRVJWRVJfQ09ORklHEAgqQAoPRW50aXR5TWVzaFN0YXRlEg0KCUVNU19MT0NBTBAAEg8KC0VNU19SRVBMSUNBEAESDQoJRU1TX0dIT1NUEAJCTlorZ2l0aHViLmNvbS96ZW5pb24vbW1vc2VydmVyL2dlbi9nby9lbmdpbmVwYqoCHlplbmlvbi5HYW1lU2VydmVyLlByb3RvLkVuZ2luZWIGcHJvdG8z");
 
 /**
  * Describes the message enginepb.ClientEvent.
@@ -67,53 +67,46 @@ export const LoginRejectedMsgSchema = /*@__PURE__*/
   messageDesc(file_enginepb_engine, 7);
 
 /**
- * Describes the message enginepb.ChatMsg.
- * Use `create(ChatMsgSchema)` to create a new message.
- */
-export const ChatMsgSchema = /*@__PURE__*/
-  messageDesc(file_enginepb_engine, 8);
-
-/**
  * Describes the message enginepb.CellChangeMsg.
  * Use `create(CellChangeMsgSchema)` to create a new message.
  */
 export const CellChangeMsgSchema = /*@__PURE__*/
-  messageDesc(file_enginepb_engine, 9);
+  messageDesc(file_enginepb_engine, 8);
 
 /**
  * Describes the message enginepb.ServerConfigMsg.
  * Use `create(ServerConfigMsgSchema)` to create a new message.
  */
 export const ServerConfigMsgSchema = /*@__PURE__*/
-  messageDesc(file_enginepb_engine, 10);
+  messageDesc(file_enginepb_engine, 9);
 
 /**
  * Describes the message enginepb.SpawnedMsg.
  * Use `create(SpawnedMsgSchema)` to create a new message.
  */
 export const SpawnedMsgSchema = /*@__PURE__*/
-  messageDesc(file_enginepb_engine, 11);
+  messageDesc(file_enginepb_engine, 10);
 
 /**
  * Describes the message enginepb.CellInfo.
  * Use `create(CellInfoSchema)` to create a new message.
  */
 export const CellInfoSchema = /*@__PURE__*/
-  messageDesc(file_enginepb_engine, 12);
+  messageDesc(file_enginepb_engine, 11);
 
 /**
  * Describes the message enginepb.CellTopologyMsg.
  * Use `create(CellTopologyMsgSchema)` to create a new message.
  */
 export const CellTopologyMsgSchema = /*@__PURE__*/
-  messageDesc(file_enginepb_engine, 13);
+  messageDesc(file_enginepb_engine, 12);
 
 /**
  * Describes the message enginepb.DebugInfoMsg.
  * Use `create(DebugInfoMsgSchema)` to create a new message.
  */
 export const DebugInfoMsgSchema = /*@__PURE__*/
-  messageDesc(file_enginepb_engine, 14);
+  messageDesc(file_enginepb_engine, 13);
 
 /**
  * Describes the enum enginepb.ClientEventCode.
@@ -123,9 +116,10 @@ export const ClientEventCodeSchema = /*@__PURE__*/
 
 /**
  * Client → Server event codes (engine-level). PLAYER_INPUT and CHAT
- * migrated to mmokit.HandleClient typed-input (channel 0x02) — they no
- * longer have engine event codes. The remaining codes service login,
- * liveness, and snapshot ack — none of which are HandleClient-eligible.
+ * migrated off the engine event surface — input rides mmokit.HandleClient
+ * typed-input (channel 0x02), and chat moved to its own service. The
+ * remaining codes service login, liveness, and snapshot ack — none of
+ * which are HandleClient-eligible.
  *
  * @generated from enum enginepb.ClientEventCode
  */

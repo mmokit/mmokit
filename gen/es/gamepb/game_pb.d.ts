@@ -4,7 +4,6 @@
 
 import type { GenEnum, GenFile, GenMessage } from "@bufbuild/protobuf/codegenv2";
 import type { Message } from "@bufbuild/protobuf";
-import type { ChatMsg } from "../enginepb/engine_pb";
 
 /**
  * Describes the file gamepb/game.proto.
@@ -130,14 +129,9 @@ export declare type WorldUpdateMsg = Message<"gamepb.WorldUpdateMsg"> & {
   removedIds: number[];
 
   /**
-   * @generated from field: repeated enginepb.ChatMsg chat_messages = 5;
-   */
-  chatMessages: ChatMsg[];
-
-  /**
    * actually died/destroyed (play explosion)
    *
-   * @generated from field: repeated uint32 killed_ids = 6;
+   * @generated from field: repeated uint32 killed_ids = 5;
    */
   killedIds: number[];
 };

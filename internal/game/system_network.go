@@ -3,14 +3,12 @@ package game
 import (
 	"github.com/mlange-42/ark/ecs"
 
-	enginepb "github.com/zenion/mmoserver/gen/go/enginepb"
-	gamepb "github.com/zenion/mmoserver/gen/go/gamepb"
 	gamecomp "github.com/zenion/mmoserver/internal/component"
 	"github.com/zenion/mmoserver/pkg/mmokit"
 )
 
 // NetworkSystem wraps the generic ReplicationSystem with game-specific
-// lifecycle handling (reverse lock map, PlayerOwnState, chat, auto-broadcast
+// lifecycle handling (reverse lock map, PlayerOwnState, auto-broadcast
 // typed events).
 type NetworkSystem struct {
 	mmokit.SystemBase[*GameWorld]
@@ -27,7 +25,6 @@ type NetworkSystem struct {
 	}]
 
 	// Per-tick shared data hoisted outside the per-viewer loop
-	pendingChat       []*enginepb.ChatMsg
 	pendingBroadcasts []mmokit.BroadcastEvent
 }
 
@@ -61,7 +58,7 @@ func (s *NetworkSystem) Init() {
 	cfg := mmokit.DefaultReplicationConfig(gw.eng, gw.Spatial, clock)
 	// StateDocked players keep their entity (Dormant + at station center), so
 	// they're still a valid viewer with a position. Including them in the
-	// viewer list keeps WorldUpdateMsg flowing — tick counter, chat, AoI of
+	// viewer list keeps WorldUpdateMsg flowing — tick counter, AoI of
 	// other ships flying past the station — so the HUD stays alive while
 	// the player is hangared.
 	cfg.Viewers = mmokit.NewPlayerViewerSource(gw.eng.ECS, gw.Players, mmokit.StateActive, StateDocking, StateDocked)
@@ -127,25 +124,15 @@ func (s *NetworkSystem) beforeTick(tick uint32) {
 		}
 	}
 
-	// Hoist per-tick lookups outside the viewer loop.
-	s.pendingChat = mmokit.Peek[*enginepb.ChatMsg](gw.Queue)
 	// Drain the per-stage auto-broadcast queue: each event carries an opaque
 	// reflect-codec body + a list of anchor NetIDs whose positions drive the
 	// per-viewer AoI filter applied in afterSend.
 	s.pendingBroadcasts = gw.Stage.BroadcastQueue().Drain()
 }
 
-// beforeSend sends chat messages reliably and PlayerOwnState per viewer.
+// beforeSend sends PlayerOwnState per viewer.
 func (s *NetworkSystem) beforeSend(viewer *mmokit.ViewerInfo, visible map[uint32]bool) {
 	gw := s.World()
-
-	// Send chat messages reliably.
-	if len(s.pendingChat) > 0 {
-		gw.ServerEvents().Send(gw.eng.ConnMgr, viewer.ConnID, uint32(enginepb.ServerEventCode_SE_WORLD_UPDATE), &gamepb.WorldUpdateMsg{
-			Tick:         gw.eng.Tick,
-			ChatMessages: s.pendingChat,
-		})
-	}
 
 	// Send own-entity state.
 	if sess := gw.Players.ByConnID(viewer.ConnID); sess != nil && sess.State == mmokit.StateActive && gw.Stage.ECSWorld().Alive(sess.Entity) {
@@ -186,24 +173,9 @@ func (s *NetworkSystem) afterSend(viewer *mmokit.ViewerInfo, visible map[uint32]
 	gw.eng.ConnMgr.Send(viewer.ConnID, frame)
 }
 
-// afterTick drains queues and sends chat to docked players.
+// afterTick is reserved for end-of-tick post-replication work. The
+// auto-broadcast queue was drained in beforeTick (see s.pendingBroadcasts).
 func (s *NetworkSystem) afterTick(tick uint32) {
-	gw := s.World()
-
-	// Send chat messages to docked players (they have no entity in the AoI loop).
-	if len(s.pendingChat) > 0 {
-		chatFrame := gw.ServerEvents().Build(uint32(enginepb.ServerEventCode_SE_WORLD_UPDATE), &gamepb.WorldUpdateMsg{
-			Tick:         gw.eng.Tick,
-			ChatMessages: s.pendingChat,
-		})
-		gw.Players.ForEach(StateDocked, func(sess *mmokit.PlayerSession) {
-			gw.eng.ConnMgr.SendReliable(sess.ConnID, chatFrame)
-		})
-	}
-
-	// Drain chat after broadcasting to all players. The auto-broadcast queue
-	// was drained in beforeTick (see s.pendingBroadcasts).
-	mmokit.Drain[*enginepb.ChatMsg](gw.Queue)
 }
 
 // sendOwnState builds and sends a typed PlayerOwnState event to the owning

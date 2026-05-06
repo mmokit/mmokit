@@ -17,7 +17,6 @@ import (
 
 type mockWorld struct {
 	spawned        [][]byte
-	chats          []ChatRelay
 	bridge         Bridge
 	shutdownCalled bool
 
@@ -43,10 +42,6 @@ func (m *mockWorld) SpawnFromTransfer(data []byte) (uint32, uint32, error) {
 }
 
 func (m *mockWorld) MarkForRemoval(ecs.Entity) {}
-
-func (m *mockWorld) DispatchChat(username, text string) {
-	m.chats = append(m.chats, ChatRelay{Username: username, Text: text})
-}
 
 func (m *mockWorld) SetBridge(bridge Bridge) {
 	m.bridge = bridge
@@ -398,26 +393,6 @@ func TestCell_MsgHandoff_PreservesDebugFlagsOnSession(t *testing.T) {
 	}
 }
 
-func TestCell_DrainInbox_Chat(t *testing.T) {
-	node, mw := newTestCell("dest", CellID{X: 0, Y: 0})
-	node.Bridge = &recordingBridge{}
-
-	node.Inbox <- CellMessage{
-		Type:       MsgChat,
-		FromCellID: "other",
-		Chat:       &ChatRelay{Username: "alice", Text: "hello"},
-	}
-
-	node.DrainInbox()
-
-	if len(mw.chats) != 1 {
-		t.Fatalf("expected 1 chat dispatch, got %d", len(mw.chats))
-	}
-	if mw.chats[0].Username != "alice" || mw.chats[0].Text != "hello" {
-		t.Fatalf("unexpected chat: %+v", mw.chats[0])
-	}
-}
-
 func TestCell_DrainInbox_SpawnTransfer(t *testing.T) {
 	node, _ := newTestCell("default", CellID{X: 0, Y: 0})
 	node.Bridge = &recordingBridge{}
@@ -446,28 +421,6 @@ func TestCell_DrainInbox_TicksAfterDrain(t *testing.T) {
 	// Empty inbox — DrainInbox calls TickGhosts and TickTransferCooldowns on Base
 	node.DrainInbox()
 	// No panic = success; ticks go to real Stage (no-op with empty world)
-}
-
-func TestCell_DrainInbox_MultipleMessages(t *testing.T) {
-	node, mw := newTestCell("n", CellID{X: 0, Y: 0})
-	node.Bridge = &recordingBridge{}
-
-	node.Inbox <- CellMessage{
-		Type:       MsgChat,
-		FromCellID: "a",
-		Chat:       &ChatRelay{Username: "u1", Text: "t1"},
-	}
-	node.Inbox <- CellMessage{
-		Type:       MsgChat,
-		FromCellID: "b",
-		Chat:       &ChatRelay{Username: "u2", Text: "t2"},
-	}
-
-	node.DrainInbox()
-
-	if len(mw.chats) != 2 {
-		t.Fatalf("expected 2 chats, got %d", len(mw.chats))
-	}
 }
 
 // ---------------------------------------------------------------------------
@@ -631,41 +584,6 @@ func TestBridge_SendHandoff(t *testing.T) {
 		}
 	default:
 		t.Fatal("no message in destination inbox")
-	}
-}
-
-func TestBridge_RelayChatToOtherCells(t *testing.T) {
-	grid := Config{CellsX: 3, CellsY: 1}
-	c, _ := newTestCoordinator(grid)
-
-	senderID := string(CellID{X: 1, Y: 0}.MeshID())
-	sender := c.Cells[MeshCellID(senderID)]
-
-	sender.Bridge.RelayChatToOtherCells("alice", "hello world")
-
-	// All nodes except sender should get the chat
-	for id, node := range c.Cells {
-		if string(id) == senderID {
-			// Sender's inbox should be empty
-			select {
-			case msg := <-node.Inbox:
-				t.Fatalf("sender should not receive own chat, got: %+v", msg)
-			default:
-			}
-			continue
-		}
-
-		select {
-		case msg := <-node.Inbox:
-			if msg.Type != MsgChat {
-				t.Fatalf("expected MsgChat on %s, got %d", id, msg.Type)
-			}
-			if msg.Chat.Username != "alice" || msg.Chat.Text != "hello world" {
-				t.Fatalf("unexpected chat on %s: %+v", id, msg.Chat)
-			}
-		default:
-			t.Fatalf("node %s did not receive chat", id)
-		}
 	}
 }
 

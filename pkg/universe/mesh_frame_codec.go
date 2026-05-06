@@ -99,18 +99,6 @@ func encodeCellMessage(msg CellMessage, destCellID MeshCellID) (*meshpb.MeshFram
 			},
 		}
 
-	case MsgChat:
-		if msg.Chat == nil {
-			return nil, fmt.Errorf("encodeCellMessage: MsgChat payload is nil")
-		}
-		frame.Msg = &meshpb.MeshFrame_ChatRelay{
-			ChatRelay: &meshpb.ChatRelay{
-				FromCellId: string(msg.FromCellID),
-				Username:   msg.Chat.Username,
-				Text:       msg.Chat.Text,
-			},
-		}
-
 	case MsgCrossCellAction:
 		if msg.Action == nil {
 			return nil, fmt.Errorf("encodeCellMessage: MsgCrossCellAction payload is nil")
@@ -242,20 +230,6 @@ func decodeMeshFrame(frame *meshpb.MeshFrame) (CellMessage, error) {
 			ForwardInput: &ForwardInputPayload{
 				ConnID:    fi.ConnId,
 				InputBlob: fi.InputBlob,
-			},
-		}, nil
-
-	case *meshpb.MeshFrame_ChatRelay:
-		if p.ChatRelay == nil {
-			return CellMessage{}, fmt.Errorf("decodeMeshFrame: ChatRelay payload is nil")
-		}
-		cr := p.ChatRelay
-		return CellMessage{
-			Type:       MsgChat,
-			FromCellID: MeshCellID(cr.FromCellId),
-			Chat: &ChatRelay{
-				Username: cr.Username,
-				Text:     cr.Text,
 			},
 		}, nil
 
