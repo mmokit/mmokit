@@ -97,6 +97,13 @@ func main() {
 
 	// Handle pings immediately on the read goroutine (bypasses game loop
 	// tick delay) so the client sees true network RTT, not RTT + up-to-50ms.
+	//
+	// TODO(events-channel-redesign Phase 5): migrate the inbound CE_PING
+	// envelope to a typed client-input frame (channel 0x02). The
+	// EventInterceptor currently only sees channel 0x00; switching Ping
+	// would require either a parallel ClientInputInterceptor or routing
+	// channel 0x02 through this hook with a typeID dispatch. Outbound
+	// Pong is already typed (mmokit.BuildTypedEventFrame[Pong]).
 	connMgr.EventInterceptor = func(conn *mmokit.Conn, payload []byte) bool {
 		var evt enginepb.ClientEvent
 		if err := proto.Unmarshal(payload, &evt); err != nil {
