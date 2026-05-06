@@ -1,6 +1,6 @@
 # Entity-Kind SDK Export and Proto Pipeline Retirement
 
-**Status:** Draft 2026-05-07
+**Status:** Landed 2026-05-07
 **Author:** brainstormed via session
 **Supersedes parts of:** none — incremental cleanup on top of the 2026-05-06 events/operations channel redesign
 
