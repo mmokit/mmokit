@@ -9,19 +9,7 @@ import (
 // Generator produces TypeScript SDK files from a protocol schema.
 type Generator struct {
 	schema ProtocolSchema
-	msgs   MessageDB
 	outDir string
-}
-
-// resolveMsg looks up a proto message by full name.
-func (g *Generator) resolveMsg(fullName string) *ProtoMessage {
-	return g.msgs[fullName]
-}
-
-// protoImportPath returns the relative import path from the SDK output dir to
-// gen/es proto files. For now we use a path alias that games configure in tsconfig.
-func protoImportPath(msg *ProtoMessage) string {
-	return fmt.Sprintf("@gen/%s", msg.ImportPath)
 }
 
 // ---------------------------------------------------------------------------
@@ -815,27 +803,6 @@ func (g *Generator) genClient() string {
 	b.WriteString("}\n")
 
 	return b.String()
-}
-
-// protoToMethodName strips game-prefix from proto message names for cleaner methods.
-// "BasicMoveTargetMsg" with game="basic" → "MoveTarget"
-func protoToMethodName(typeName string, game string) string {
-	name := typeName
-	prefix := titleCase(game)
-	name = strings.TrimPrefix(name, prefix)
-	name = strings.TrimSuffix(name, "Msg")
-	if name == "" {
-		return typeName
-	}
-	return name
-}
-
-func fieldParamList(fields []ProtoField) string {
-	parts := make([]string, len(fields))
-	for i, f := range fields {
-		parts[i] = fmt.Sprintf("%s: %s", f.Name, f.Type)
-	}
-	return strings.Join(parts, "; ")
 }
 
 // ---------------------------------------------------------------------------

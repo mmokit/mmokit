@@ -10,11 +10,7 @@
     "resolveJsonModule": true,
     "isolatedModules": true,
     "noEmit": true,
-    "lib": ["ES2020", "DOM", "DOM.Iterable"],
-    "paths": {
-      "@gen/enginepb/engine_pb.js": ["../../../gen/es/enginepb/engine_pb"],
-      "@gen/basicpb/basic_pb.js": ["../../../gen/es/basicpb/basic_pb"]
-    }
+    "lib": ["ES2020", "DOM", "DOM.Iterable"]
   },
   "include": ["src", "sdk"],
   "exclude": ["src/__tests__"]

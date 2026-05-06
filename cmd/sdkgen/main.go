@@ -21,7 +21,6 @@ import (
 func main() {
 	schemaFile := flag.String("schema", "", "Path to protocol-schema.json (reads stdin if empty)")
 	outDir := flag.String("out", "sdk", "Output directory for generated SDK")
-	protoESRoot := flag.String("proto-es", "gen/es", "Root of proto-es generated files (for .d.ts parsing)")
 	coreTS := flag.String("core", "pkg/quantize/ts/delta-decoder-core.ts", "Path to delta-decoder-core.ts to copy")
 	interpTS := flag.String("interp", "pkg/quantize/ts/interpolation-core.ts", "Path to interpolation-core.ts to copy")
 	flag.Parse()
@@ -42,13 +41,9 @@ func main() {
 		log.Fatalf("decode schema: %v", err)
 	}
 
-	// Parse proto .d.ts files to get message field info.
-	msgDB := parseProtoES(*protoESRoot)
-
 	// Generate SDK files.
 	g := &Generator{
 		schema: schema,
-		msgs:   msgDB,
 		outDir: *outDir,
 	}
 
