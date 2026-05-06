@@ -289,6 +289,16 @@ type Stage = universe.Stage
 // See Stage.BroadcastQueue.
 type BroadcastEvent = universe.BroadcastEvent
 
+// EncodeTypedEventFrame produces a single-event 0x00 typed-event frame:
+//
+//	[0x00][typeID:u32 LE][body_len:u32 LE][body]
+var EncodeTypedEventFrame = universe.EncodeTypedEventFrame
+
+// EncodeBatchedTypedEventFrame packs multiple BroadcastEvents into a single
+// 0x00 typed-event frame. Returns nil for an empty list — callers must skip
+// writing empty frames.
+var EncodeBatchedTypedEventFrame = universe.EncodeBatchedTypedEventFrame
+
 // WorldBase is a backward-compatibility alias for Stage. internal/game/ embeds
 // *mmokit.WorldBase; this alias keeps that compiling while the rename is in flight.
 // Slated for removal once internal/game is updated to embed *mmokit.Stage directly.

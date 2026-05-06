@@ -153,32 +153,37 @@ func (s *NetworkSystem) beforeSend(viewer *mmokit.ViewerInfo, visible map[uint32
 	}
 }
 
-// afterSend filters auto-broadcast typed events by AoI and dispatches a
-// per-viewer WorldUpdateMsg.events frame. Each broadcast event passes if any
-// of its anchor NetIDs is in the viewer's currently-visible set.
+// afterSend filters auto-broadcast typed events by AoI and writes a single
+// batched 0x00 typed-event frame to the viewer. Each broadcast event passes
+// if any of its anchor NetIDs is in the viewer's currently-visible set.
+//
+// Wire format (one frame per viewer per tick):
+//
+//	[0x00] [typeID:u32 LE] [body_len:u32 LE] [body] ...
+//
+// Empty-AoI viewers skip the write entirely (encoder returns nil for an
+// empty list).
 func (s *NetworkSystem) afterSend(viewer *mmokit.ViewerInfo, visible map[uint32]bool) {
 	if len(s.pendingBroadcasts) == 0 {
 		return
 	}
 
 	gw := s.World()
-	var events []*gamepb.TypedEvent
+	var passed []mmokit.BroadcastEvent
 	for _, evt := range s.pendingBroadcasts {
 		for _, nid := range evt.Anchors {
 			if visible[nid] {
-				events = append(events, &gamepb.TypedEvent{TypeId: evt.TypeID, Body: evt.Body})
+				passed = append(passed, evt)
 				break
 			}
 		}
 	}
 
-	if len(events) > 0 {
-		frame := gw.ServerEvents().Build(uint32(enginepb.ServerEventCode_SE_WORLD_UPDATE), &gamepb.WorldUpdateMsg{
-			Tick:   gw.eng.Tick,
-			Events: events,
-		})
-		gw.eng.ConnMgr.Send(viewer.ConnID, frame)
+	frame := mmokit.EncodeBatchedTypedEventFrame(passed)
+	if frame == nil {
+		return
 	}
+	gw.eng.ConnMgr.Send(viewer.ConnID, frame)
 }
 
 // afterTick drains queues and sends chat to docked players.
