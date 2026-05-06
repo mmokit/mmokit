@@ -1,4 +1,5 @@
 import { connect, onShowGame } from "./network.js";
+import { loginAsName } from "./auth.js";
 import { setupInput } from "./input.js";
 import { startRenderLoop } from "./renderer.js";
 
@@ -22,14 +23,21 @@ window.addEventListener("resize", resizeCanvas);
 const connectBtn = document.getElementById("connectBtn")!;
 const nameInput = document.getElementById("nameInput") as HTMLInputElement;
 
-connectBtn.addEventListener("click", () => {
+connectBtn.addEventListener("click", async () => {
   const name = nameInput.value.trim();
+  const status = document.getElementById("status")!;
   if (!name) {
-    document.getElementById("status")!.textContent = "enter a name";
+    status.textContent = "enter a name";
     return;
   }
-  document.getElementById("status")!.textContent = "connecting...";
-  connect(name);
+  status.textContent = "authenticating...";
+  try {
+    const username = await loginAsName(name);
+    status.textContent = "connecting...";
+    connect(username);
+  } catch (e) {
+    status.textContent = e instanceof Error ? e.message : String(e);
+  }
 });
 
 nameInput.addEventListener("keydown", (e) => {

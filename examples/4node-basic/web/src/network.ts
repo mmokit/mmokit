@@ -24,13 +24,7 @@ export function connect(name: string): void {
   const proto = location.protocol === "https:" ? "wss:" : "ws:";
   const client = new BasicClient({
     url: `${proto}//${location.host}/ws`,
-    onOpen: () => {
-      setStatus("connected — logging in...");
-      // Login is performed via auth-cookie inline on the gateway —
-      // no client-side LoginMsg send needed. The server emits
-      // SE_PLAYER_SPAWNED once auth succeeds.
-      void name;
-    },
+    onOpen: () => setStatus(`connected as ${name} — waiting for spawn...`),
     onClose: () => setStatus("disconnected"),
     onError: () => setStatus("connection error"),
   });
