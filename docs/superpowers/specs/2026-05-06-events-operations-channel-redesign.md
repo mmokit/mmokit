@@ -29,7 +29,7 @@ Photon's guidance: *if the server is meant to do anything but forwarding the mes
 Mapping to this codebase:
 
 - **Events** = anything the game loop emits or consumes. Server-pushed state changes (spawn, death, docking transitions, currency changes, equipment results), per-tick broadcasts (Damage, MineExtract, Status, Killed), per-tick own-state pushes, the entity-state delta frame, and client-side game-loop inputs (move, cast, mine, dock, undock, respawn, equip, loot, jettison, chat-input). All fire-and-forget.
-- **Operations** = req/res or cross-service. Login (auth service), marketplace orders, future GM commands, future shop interactions, future chat-service interactions. Each has a request_id and a typed response.
+- **Operations** = req/res, transactional, or cross-service. Login (auth service), marketplace orders, **bank operations** (transactional financial state — race/exploit-sensitive, plausibly migrates off the eventloop to a dedicated service later), future GM commands, future shop interactions, future chat-service interactions. Each has a request_id and a typed response.
 
 Two channels, two concepts. End state.
 
@@ -145,7 +145,13 @@ mmokit.RegisterOp[MarketBrowseRequest, MarketOrderBookResponse](
 
 (verb name TBD-but-committed: `RegisterOp[Req, Res]`. The existing `ops.Register[Req, Res, Code, ReqP, ResP]` retires; the new shape drops the `code` arg — typeIDs are computed — and drops the `ProtoMessage` constraint.)
 
-**Bank → still event.** `BankRequest` (0x02 input today) and `BankContents` (0x00 push today) both move to typed events on 0x00. They're the explicit decoupled pattern Photon recommends — input fires, server pushes the result via the existing bank-state event channel. No request_id correlation needed; the bank-contents push is a state observation, not a per-request response. This was the Open Question from the earlier round; with typed-ops in scope this remains the right call because Bank doesn't need correlation (every request just refreshes the player's bank view, which is also pushed proactively on bank contents change).
+**Bank → `RoutePlayerCell` operation:**
+
+- `BankRequest` (today: 0x02 typed input with a `kind` discriminator for deposit/withdraw/query) → typed `BankRequest` op on 0x01. Same Go-struct shape, just registered as an op rather than an input handler.
+- `BankResponse` — new typed response carrying `contents: BankContents`, `error: string` (empty on success). Returned synchronously from the op handler.
+- `BankContents` event push remains on 0x00 as a typed event for **out-of-band** state changes only (admin/GM commands, future automated payouts, cross-process bank service notifications). The vast majority of bank state arrives via op responses, not events.
+
+**Why operation, not event:** bank operations are transactional financial state mutations. Race/exploit hardening matters: the framework needs an unambiguous serialization point per request, with a guaranteed response that carries the post-mutation state. Modeling as event in + event out leaves the client without a per-request anchor (which response goes with which request?), and any future migration of bank to a dedicated non-eventloop backend (mirroring the auth-service pattern) requires a real request/response framing. Better to land that framing now than refactor later. Same body type (`BankContents`) reused as both the op response payload and the event push payload — the framework handles framing per channel, the underlying typeID and reflect-codec bytes are identical.
 
 ## Server-side chat decommission
 
@@ -224,7 +230,7 @@ The migration is one logical change touching many files but with low coupling be
 4. **WorldDelta** — strip the protobuf envelope from `SE_DELTA_WORLD_UPDATE`; ship body as typed-event payload.
 5. **Inputs channel-byte change** — flip 0x02 → 0x00 in client SDK and gateway. Single-commit, runnable end-to-end.
 6. **Operations foundation** — new typed-ops codec (the 0x01 wire format above), `RegisterOp[Req, Res]` API, `RouteKind` enum, `OperationError` framework type, request_id correlator on the client framework. Old protobuf `OpRequest`/`OpResponse` path coexists.
-7. **Marketplace ops migration** — port the 5 marketplace ops from `pkg/ops/Register` to `mmokit.RegisterOp`, with `RoutePlayerCell`. Convert the proto `Market*Request`/`Market*Response` types to typed Go structs (mirrors the field set; reflection codec handles serialization). SDK regenerates `operations.ts`.
+7. **Marketplace + bank ops migration** — port the 5 marketplace ops from `pkg/ops/Register` to `mmokit.RegisterOp` with `RoutePlayerCell`. Migrate `BankRequest` from typed input (0x02) to a `RoutePlayerCell` op with a typed `BankResponse` carrying the post-mutation `BankContents`. Convert all proto `Market*Request`/`Market*Response` and `BankRequest` types to typed Go structs. SDK regenerates `operations.ts`. The `BankContents` event push on 0x00 stays for out-of-band state changes.
 8. **Login → operation** — define typed `LoginRequest` / `LoginResponse`; register with `RouteGatewayLocal`; gateway routes Login typeID to `LoginHandler` and writes the typed response. Retire `gamepb.LoginMsg` / `gamepb.LoginRejectedMsg`.
 9. **Chat decomm** — delete server-side chat code, `enginepb.ChatMsg`, related plumbing. Client UI shells stay.
 10. **Cleanup** — delete `WorldUpdateMsg`, `TypedEvent`, `OpRequest`, `OpResponse` protos entirely. Retire `ChannelClientInput` (0x02). Retire `enginepb.ServerEventCode_SE_*` enums and op-code enums. Retire the deprecated `pkg/ops/Register` shape if a deprecation alias was kept during phasing.
@@ -239,7 +245,6 @@ The migration is one logical change touching many files but with low coupling be
 
 ## Open questions
 
-- **`BankRequest` placement** — strict-Photon says it's an operation (req/res with `BankContents` as the response). Today it's modelled as event in + event out, which is the explicit decoupled pattern Photon recommends. Decision: **keep as typed event on 0x00** — bank-contents pushes are state observations rather than per-request responses (the server may push a fresh BankContents whenever bank state changes for any reason, not just in reply to a request).
 - **TypeID collision risk** — FNV-1a 32-bit on Go type names. With ~30 message types we're well below birthday-paradox concern (probability of collision is < 1e-7 at this scale). If a collision is ever detected at registry-build time, panic with a clear message and the user renames. Decision: **don't pre-empt.**
 - **`MaxFrameSize`** — the 0x00 dispatcher should refuse frames over some sane upper bound (defensive against malformed clients sending u32-max body_len). Suggest 64KB per individual event body, no batch-frame ceiling beyond what WebSocket already enforces. Decision: **plan-time**.
 
@@ -254,6 +259,7 @@ Server (Go):
 - Modify: `cmd/server/main.go` (RegisterServerEvent calls; op registrations)
 - Modify: `internal/game/{system_network,input_handlers,input_messages,hooks,gameworld}.go`
 - Modify: `internal/marketplace/handler.go` (5 op registrations migrate to typed `RegisterOp`)
+- Modify: `internal/game/input_handlers.go:223` (bank `HandleClient` → `RegisterOp`), `internal/game/system_economy.go:198-280` (processBankRequests + SendBankContents — collapsed into the op handler returning `BankResponse` synchronously, with the queue removed; sell/buy follow-on bank pushes still call into a typed event push for out-of-band changes)
 - Delete: `proto/gamepb/game.proto` entries — `WorldUpdateMsg`, `TypedEvent`, `LoginMsg`, `LoginRejectedMsg`, `PlayerSpawnedMsg`, `PlayerDiedMsg`, `DockingStateMsg`, `DockedMsg`, `CurrencyUpdateMsg`, `BankContentsMsg`, `EquipResultMsg`, `TransferResultMsg`, `MapDataMsg`, `PlayerOwnStateMsg`, `MarketBrowseRequest`, `MarketCreateOrderRequest`, `MarketCancelOrderRequest`, `MarketMyOrdersRequest`, `MarketInstantTradeRequest`, `MarketOrderBookResponse`, `MarketOrderResultResponse`, `MarketMyOrdersResponse`, `BankRequestMsg`
 - Delete: `proto/enginepb/engine.proto` — `ChatMsg`, `OpRequest`, `OpResponse`, all `SE_*` enum values, all op-code enum values
 - Modify (regen): `gen/go/gamepb/`, `gen/go/enginepb/`, `gen/es/gamepb/`, `gen/es/enginepb/`
