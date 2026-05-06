@@ -36,7 +36,7 @@ export function connect(name: string): void {
     showGameCallback?.();
     // Mount the echo demo panel once the session is authenticated.
     // Toggled with 'e'. Hidden by default.
-    mountEchoPanel(client.rawTransport);
+    mountEchoPanel(client);
   });
 
   client.onServerConfig((msg) => {
