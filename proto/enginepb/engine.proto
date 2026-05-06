@@ -18,24 +18,6 @@ message ServerEvent {
 }
 
 // ═══════════════════════════════════════════════
-// OPERATIONS — request/response, services (channel 0x01)
-// ═══════════════════════════════════════════════
-
-message OperationRequest {
-    uint32 code = 1;         // OperationCode
-    uint32 request_id = 2;   // client-assigned correlation ID, echoed in response
-    bytes data = 3;          // serialized op-specific request
-}
-
-message OperationResponse {
-    uint32 code = 1;         // OperationCode (echoed from request)
-    uint32 request_id = 2;   // correlation ID (echoed, 0 = server-pushed notification)
-    int32 return_code = 3;   // 0 = success, non-zero = error
-    string error_msg = 4;    // human-readable error detail
-    bytes data = 5;          // serialized op-specific response
-}
-
-// ═══════════════════════════════════════════════
 // ENGINE EVENT CODES
 // ═══════════════════════════════════════════════
 

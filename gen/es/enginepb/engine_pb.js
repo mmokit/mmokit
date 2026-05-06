@@ -8,7 +8,7 @@ import { enumDesc, fileDesc, messageDesc, tsEnum } from "@bufbuild/protobuf/code
  * Describes the file enginepb/engine.proto.
  */
 export const file_enginepb_engine = /*@__PURE__*/
-  fileDesc("ChVlbmdpbmVwYi9lbmdpbmUucHJvdG8SCGVuZ2luZXBiIikKC0NsaWVudEV2ZW50EgwKBGNvZGUYASABKA0SDAoEZGF0YRgCIAEoDCIpCgtTZXJ2ZXJFdmVudBIMCgRjb2RlGAEgASgNEgwKBGRhdGEYAiABKAwiQgoQT3BlcmF0aW9uUmVxdWVzdBIMCgRjb2RlGAEgASgNEhIKCnJlcXVlc3RfaWQYAiABKA0SDAoEZGF0YRgDIAEoDCJrChFPcGVyYXRpb25SZXNwb25zZRIMCgRjb2RlGAEgASgNEhIKCnJlcXVlc3RfaWQYAiABKA0SEwoLcmV0dXJuX2NvZGUYAyABKAUSEQoJZXJyb3JfbXNnGAQgASgJEgwKBGRhdGEYBSABKAwiHgoHUGluZ01zZxITCgtjbGllbnRfdGltZRgBIAEoAyIvCg1DZWxsQ2hhbmdlTXNnEg4KBmNlbGxfeBgBIAEoBRIOCgZjZWxsX3kYAiABKAUiJAoPU2VydmVyQ29uZmlnTXNnEhEKCXRpY2tfcmF0ZRgBIAEoDSJFCgpTcGF3bmVkTXNnEhUKDWVudGl0eV9uZXRfaWQYASABKA0SDwoHd29ybGRfeBgCIAEoAhIPCgd3b3JsZF95GAMgASgCKi4KD0NsaWVudEV2ZW50Q29kZRIOCgpDRV9VTktOT1dOEAASCwoHQ0VfUElORxABKmIKD1NlcnZlckV2ZW50Q29kZRIOCgpTRV9VTktOT1dOEAASFQoRU0VfUExBWUVSX1NQQVdORUQQARISCg5TRV9DRUxMX0NIQU5HRRACEhQKEFNFX1NFUlZFUl9DT05GSUcQAypACg9FbnRpdHlNZXNoU3RhdGUSDQoJRU1TX0xPQ0FMEAASDwoLRU1TX1JFUExJQ0EQARINCglFTVNfR0hPU1QQAkJOWitnaXRodWIuY29tL3plbmlvbi9tbW9zZXJ2ZXIvZ2VuL2dvL2VuZ2luZXBiqgIeWmVuaW9uLkdhbWVTZXJ2ZXIuUHJvdG8uRW5naW5lYgZwcm90bzM");
+  fileDesc("ChVlbmdpbmVwYi9lbmdpbmUucHJvdG8SCGVuZ2luZXBiIikKC0NsaWVudEV2ZW50EgwKBGNvZGUYASABKA0SDAoEZGF0YRgCIAEoDCIpCgtTZXJ2ZXJFdmVudBIMCgRjb2RlGAEgASgNEgwKBGRhdGEYAiABKAwiHgoHUGluZ01zZxITCgtjbGllbnRfdGltZRgBIAEoAyIvCg1DZWxsQ2hhbmdlTXNnEg4KBmNlbGxfeBgBIAEoBRIOCgZjZWxsX3kYAiABKAUiJAoPU2VydmVyQ29uZmlnTXNnEhEKCXRpY2tfcmF0ZRgBIAEoDSJFCgpTcGF3bmVkTXNnEhUKDWVudGl0eV9uZXRfaWQYASABKA0SDwoHd29ybGRfeBgCIAEoAhIPCgd3b3JsZF95GAMgASgCKi4KD0NsaWVudEV2ZW50Q29kZRIOCgpDRV9VTktOT1dOEAASCwoHQ0VfUElORxABKmIKD1NlcnZlckV2ZW50Q29kZRIOCgpTRV9VTktOT1dOEAASFQoRU0VfUExBWUVSX1NQQVdORUQQARISCg5TRV9DRUxMX0NIQU5HRRACEhQKEFNFX1NFUlZFUl9DT05GSUcQAypACg9FbnRpdHlNZXNoU3RhdGUSDQoJRU1TX0xPQ0FMEAASDwoLRU1TX1JFUExJQ0EQARINCglFTVNfR0hPU1QQAkJOWitnaXRodWIuY29tL3plbmlvbi9tbW9zZXJ2ZXIvZ2VuL2dvL2VuZ2luZXBiqgIeWmVuaW9uLkdhbWVTZXJ2ZXIuUHJvdG8uRW5naW5lYgZwcm90bzM");
 
 /**
  * Describes the message enginepb.ClientEvent.
@@ -25,46 +25,32 @@ export const ServerEventSchema = /*@__PURE__*/
   messageDesc(file_enginepb_engine, 1);
 
 /**
- * Describes the message enginepb.OperationRequest.
- * Use `create(OperationRequestSchema)` to create a new message.
- */
-export const OperationRequestSchema = /*@__PURE__*/
-  messageDesc(file_enginepb_engine, 2);
-
-/**
- * Describes the message enginepb.OperationResponse.
- * Use `create(OperationResponseSchema)` to create a new message.
- */
-export const OperationResponseSchema = /*@__PURE__*/
-  messageDesc(file_enginepb_engine, 3);
-
-/**
  * Describes the message enginepb.PingMsg.
  * Use `create(PingMsgSchema)` to create a new message.
  */
 export const PingMsgSchema = /*@__PURE__*/
-  messageDesc(file_enginepb_engine, 4);
+  messageDesc(file_enginepb_engine, 2);
 
 /**
  * Describes the message enginepb.CellChangeMsg.
  * Use `create(CellChangeMsgSchema)` to create a new message.
  */
 export const CellChangeMsgSchema = /*@__PURE__*/
-  messageDesc(file_enginepb_engine, 5);
+  messageDesc(file_enginepb_engine, 3);
 
 /**
  * Describes the message enginepb.ServerConfigMsg.
  * Use `create(ServerConfigMsgSchema)` to create a new message.
  */
 export const ServerConfigMsgSchema = /*@__PURE__*/
-  messageDesc(file_enginepb_engine, 6);
+  messageDesc(file_enginepb_engine, 4);
 
 /**
  * Describes the message enginepb.SpawnedMsg.
  * Use `create(SpawnedMsgSchema)` to create a new message.
  */
 export const SpawnedMsgSchema = /*@__PURE__*/
-  messageDesc(file_enginepb_engine, 7);
+  messageDesc(file_enginepb_engine, 5);
 
 /**
  * Describes the enum enginepb.ClientEventCode.

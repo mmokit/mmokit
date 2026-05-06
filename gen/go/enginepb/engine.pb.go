@@ -289,142 +289,6 @@ func (x *ServerEvent) GetData() []byte {
 	return nil
 }
 
-type OperationRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Code          uint32                 `protobuf:"varint,1,opt,name=code,proto3" json:"code,omitempty"`                            // OperationCode
-	RequestId     uint32                 `protobuf:"varint,2,opt,name=request_id,json=requestId,proto3" json:"request_id,omitempty"` // client-assigned correlation ID, echoed in response
-	Data          []byte                 `protobuf:"bytes,3,opt,name=data,proto3" json:"data,omitempty"`                             // serialized op-specific request
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *OperationRequest) Reset() {
-	*x = OperationRequest{}
-	mi := &file_enginepb_engine_proto_msgTypes[2]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *OperationRequest) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*OperationRequest) ProtoMessage() {}
-
-func (x *OperationRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_enginepb_engine_proto_msgTypes[2]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use OperationRequest.ProtoReflect.Descriptor instead.
-func (*OperationRequest) Descriptor() ([]byte, []int) {
-	return file_enginepb_engine_proto_rawDescGZIP(), []int{2}
-}
-
-func (x *OperationRequest) GetCode() uint32 {
-	if x != nil {
-		return x.Code
-	}
-	return 0
-}
-
-func (x *OperationRequest) GetRequestId() uint32 {
-	if x != nil {
-		return x.RequestId
-	}
-	return 0
-}
-
-func (x *OperationRequest) GetData() []byte {
-	if x != nil {
-		return x.Data
-	}
-	return nil
-}
-
-type OperationResponse struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Code          uint32                 `protobuf:"varint,1,opt,name=code,proto3" json:"code,omitempty"`                               // OperationCode (echoed from request)
-	RequestId     uint32                 `protobuf:"varint,2,opt,name=request_id,json=requestId,proto3" json:"request_id,omitempty"`    // correlation ID (echoed, 0 = server-pushed notification)
-	ReturnCode    int32                  `protobuf:"varint,3,opt,name=return_code,json=returnCode,proto3" json:"return_code,omitempty"` // 0 = success, non-zero = error
-	ErrorMsg      string                 `protobuf:"bytes,4,opt,name=error_msg,json=errorMsg,proto3" json:"error_msg,omitempty"`        // human-readable error detail
-	Data          []byte                 `protobuf:"bytes,5,opt,name=data,proto3" json:"data,omitempty"`                                // serialized op-specific response
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *OperationResponse) Reset() {
-	*x = OperationResponse{}
-	mi := &file_enginepb_engine_proto_msgTypes[3]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *OperationResponse) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*OperationResponse) ProtoMessage() {}
-
-func (x *OperationResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_enginepb_engine_proto_msgTypes[3]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use OperationResponse.ProtoReflect.Descriptor instead.
-func (*OperationResponse) Descriptor() ([]byte, []int) {
-	return file_enginepb_engine_proto_rawDescGZIP(), []int{3}
-}
-
-func (x *OperationResponse) GetCode() uint32 {
-	if x != nil {
-		return x.Code
-	}
-	return 0
-}
-
-func (x *OperationResponse) GetRequestId() uint32 {
-	if x != nil {
-		return x.RequestId
-	}
-	return 0
-}
-
-func (x *OperationResponse) GetReturnCode() int32 {
-	if x != nil {
-		return x.ReturnCode
-	}
-	return 0
-}
-
-func (x *OperationResponse) GetErrorMsg() string {
-	if x != nil {
-		return x.ErrorMsg
-	}
-	return ""
-}
-
-func (x *OperationResponse) GetData() []byte {
-	if x != nil {
-		return x.Data
-	}
-	return nil
-}
-
 type PingMsg struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	ClientTime    int64                  `protobuf:"varint,1,opt,name=client_time,json=clientTime,proto3" json:"client_time,omitempty"`
@@ -434,7 +298,7 @@ type PingMsg struct {
 
 func (x *PingMsg) Reset() {
 	*x = PingMsg{}
-	mi := &file_enginepb_engine_proto_msgTypes[4]
+	mi := &file_enginepb_engine_proto_msgTypes[2]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -446,7 +310,7 @@ func (x *PingMsg) String() string {
 func (*PingMsg) ProtoMessage() {}
 
 func (x *PingMsg) ProtoReflect() protoreflect.Message {
-	mi := &file_enginepb_engine_proto_msgTypes[4]
+	mi := &file_enginepb_engine_proto_msgTypes[2]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -459,7 +323,7 @@ func (x *PingMsg) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PingMsg.ProtoReflect.Descriptor instead.
 func (*PingMsg) Descriptor() ([]byte, []int) {
-	return file_enginepb_engine_proto_rawDescGZIP(), []int{4}
+	return file_enginepb_engine_proto_rawDescGZIP(), []int{2}
 }
 
 func (x *PingMsg) GetClientTime() int64 {
@@ -479,7 +343,7 @@ type CellChangeMsg struct {
 
 func (x *CellChangeMsg) Reset() {
 	*x = CellChangeMsg{}
-	mi := &file_enginepb_engine_proto_msgTypes[5]
+	mi := &file_enginepb_engine_proto_msgTypes[3]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -491,7 +355,7 @@ func (x *CellChangeMsg) String() string {
 func (*CellChangeMsg) ProtoMessage() {}
 
 func (x *CellChangeMsg) ProtoReflect() protoreflect.Message {
-	mi := &file_enginepb_engine_proto_msgTypes[5]
+	mi := &file_enginepb_engine_proto_msgTypes[3]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -504,7 +368,7 @@ func (x *CellChangeMsg) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CellChangeMsg.ProtoReflect.Descriptor instead.
 func (*CellChangeMsg) Descriptor() ([]byte, []int) {
-	return file_enginepb_engine_proto_rawDescGZIP(), []int{5}
+	return file_enginepb_engine_proto_rawDescGZIP(), []int{3}
 }
 
 func (x *CellChangeMsg) GetCellX() int32 {
@@ -530,7 +394,7 @@ type ServerConfigMsg struct {
 
 func (x *ServerConfigMsg) Reset() {
 	*x = ServerConfigMsg{}
-	mi := &file_enginepb_engine_proto_msgTypes[6]
+	mi := &file_enginepb_engine_proto_msgTypes[4]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -542,7 +406,7 @@ func (x *ServerConfigMsg) String() string {
 func (*ServerConfigMsg) ProtoMessage() {}
 
 func (x *ServerConfigMsg) ProtoReflect() protoreflect.Message {
-	mi := &file_enginepb_engine_proto_msgTypes[6]
+	mi := &file_enginepb_engine_proto_msgTypes[4]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -555,7 +419,7 @@ func (x *ServerConfigMsg) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ServerConfigMsg.ProtoReflect.Descriptor instead.
 func (*ServerConfigMsg) Descriptor() ([]byte, []int) {
-	return file_enginepb_engine_proto_rawDescGZIP(), []int{6}
+	return file_enginepb_engine_proto_rawDescGZIP(), []int{4}
 }
 
 func (x *ServerConfigMsg) GetTickRate() uint32 {
@@ -577,7 +441,7 @@ type SpawnedMsg struct {
 
 func (x *SpawnedMsg) Reset() {
 	*x = SpawnedMsg{}
-	mi := &file_enginepb_engine_proto_msgTypes[7]
+	mi := &file_enginepb_engine_proto_msgTypes[5]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -589,7 +453,7 @@ func (x *SpawnedMsg) String() string {
 func (*SpawnedMsg) ProtoMessage() {}
 
 func (x *SpawnedMsg) ProtoReflect() protoreflect.Message {
-	mi := &file_enginepb_engine_proto_msgTypes[7]
+	mi := &file_enginepb_engine_proto_msgTypes[5]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -602,7 +466,7 @@ func (x *SpawnedMsg) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SpawnedMsg.ProtoReflect.Descriptor instead.
 func (*SpawnedMsg) Descriptor() ([]byte, []int) {
-	return file_enginepb_engine_proto_rawDescGZIP(), []int{7}
+	return file_enginepb_engine_proto_rawDescGZIP(), []int{5}
 }
 
 func (x *SpawnedMsg) GetEntityNetId() uint32 {
@@ -636,20 +500,7 @@ const file_enginepb_engine_proto_rawDesc = "" +
 	"\x04data\x18\x02 \x01(\fR\x04data\"5\n" +
 	"\vServerEvent\x12\x12\n" +
 	"\x04code\x18\x01 \x01(\rR\x04code\x12\x12\n" +
-	"\x04data\x18\x02 \x01(\fR\x04data\"Y\n" +
-	"\x10OperationRequest\x12\x12\n" +
-	"\x04code\x18\x01 \x01(\rR\x04code\x12\x1d\n" +
-	"\n" +
-	"request_id\x18\x02 \x01(\rR\trequestId\x12\x12\n" +
-	"\x04data\x18\x03 \x01(\fR\x04data\"\x98\x01\n" +
-	"\x11OperationResponse\x12\x12\n" +
-	"\x04code\x18\x01 \x01(\rR\x04code\x12\x1d\n" +
-	"\n" +
-	"request_id\x18\x02 \x01(\rR\trequestId\x12\x1f\n" +
-	"\vreturn_code\x18\x03 \x01(\x05R\n" +
-	"returnCode\x12\x1b\n" +
-	"\terror_msg\x18\x04 \x01(\tR\berrorMsg\x12\x12\n" +
-	"\x04data\x18\x05 \x01(\fR\x04data\"*\n" +
+	"\x04data\x18\x02 \x01(\fR\x04data\"*\n" +
 	"\aPingMsg\x12\x1f\n" +
 	"\vclient_time\x18\x01 \x01(\x03R\n" +
 	"clientTime\"=\n" +
@@ -691,19 +542,17 @@ func file_enginepb_engine_proto_rawDescGZIP() []byte {
 }
 
 var file_enginepb_engine_proto_enumTypes = make([]protoimpl.EnumInfo, 3)
-var file_enginepb_engine_proto_msgTypes = make([]protoimpl.MessageInfo, 8)
+var file_enginepb_engine_proto_msgTypes = make([]protoimpl.MessageInfo, 6)
 var file_enginepb_engine_proto_goTypes = []any{
-	(ClientEventCode)(0),      // 0: enginepb.ClientEventCode
-	(ServerEventCode)(0),      // 1: enginepb.ServerEventCode
-	(EntityMeshState)(0),      // 2: enginepb.EntityMeshState
-	(*ClientEvent)(nil),       // 3: enginepb.ClientEvent
-	(*ServerEvent)(nil),       // 4: enginepb.ServerEvent
-	(*OperationRequest)(nil),  // 5: enginepb.OperationRequest
-	(*OperationResponse)(nil), // 6: enginepb.OperationResponse
-	(*PingMsg)(nil),           // 7: enginepb.PingMsg
-	(*CellChangeMsg)(nil),     // 8: enginepb.CellChangeMsg
-	(*ServerConfigMsg)(nil),   // 9: enginepb.ServerConfigMsg
-	(*SpawnedMsg)(nil),        // 10: enginepb.SpawnedMsg
+	(ClientEventCode)(0),    // 0: enginepb.ClientEventCode
+	(ServerEventCode)(0),    // 1: enginepb.ServerEventCode
+	(EntityMeshState)(0),    // 2: enginepb.EntityMeshState
+	(*ClientEvent)(nil),     // 3: enginepb.ClientEvent
+	(*ServerEvent)(nil),     // 4: enginepb.ServerEvent
+	(*PingMsg)(nil),         // 5: enginepb.PingMsg
+	(*CellChangeMsg)(nil),   // 6: enginepb.CellChangeMsg
+	(*ServerConfigMsg)(nil), // 7: enginepb.ServerConfigMsg
+	(*SpawnedMsg)(nil),      // 8: enginepb.SpawnedMsg
 }
 var file_enginepb_engine_proto_depIdxs = []int32{
 	0, // [0:0] is the sub-list for method output_type
@@ -724,7 +573,7 @@ func file_enginepb_engine_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_enginepb_engine_proto_rawDesc), len(file_enginepb_engine_proto_rawDesc)),
 			NumEnums:      3,
-			NumMessages:   8,
+			NumMessages:   6,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

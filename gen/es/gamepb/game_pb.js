@@ -2,90 +2,13 @@
 // @generated from file gamepb/game.proto (package gamepb, syntax proto3)
 /* eslint-disable */
 
-import { enumDesc, fileDesc, messageDesc, tsEnum } from "@bufbuild/protobuf/codegenv2";
+import { enumDesc, fileDesc, tsEnum } from "@bufbuild/protobuf/codegenv2";
 
 /**
  * Describes the file gamepb/game.proto.
  */
 export const file_gamepb_game = /*@__PURE__*/
-  fileDesc("ChFnYW1lcGIvZ2FtZS5wcm90bxIGZ2FtZXBiIiYKE01hcmtldEJyb3dzZVJlcXVlc3QSDwoHaXRlbV9pZBgBIAEoDSJlChhNYXJrZXRDcmVhdGVPcmRlclJlcXVlc3QSDwoHaXRlbV9pZBgBIAEoDRIOCgZpc19idXkYAiABKAgSFgoOcHJpY2VfcGVyX3VuaXQYAyABKAMSEAoIcXVhbnRpdHkYBCABKAUiLAoYTWFya2V0Q2FuY2VsT3JkZXJSZXF1ZXN0EhAKCG9yZGVyX2lkGAEgASgEIhcKFU1hcmtldE15T3JkZXJzUmVxdWVzdCJOChlNYXJrZXRJbnN0YW50VHJhZGVSZXF1ZXN0Eg8KB2l0ZW1faWQYASABKA0SDgoGaXNfYnV5GAIgASgIEhAKCHF1YW50aXR5GAMgASgFIocBChdNYXJrZXRPcmRlckJvb2tSZXNwb25zZRIPCgdpdGVtX2lkGAEgASgNEi0KC3NlbGxfbGV2ZWxzGAIgAygLMhguZ2FtZXBiLk1hcmtldFByaWNlTGV2ZWwSLAoKYnV5X2xldmVscxgDIAMoCzIYLmdhbWVwYi5NYXJrZXRQcmljZUxldmVsIkgKEE1hcmtldFByaWNlTGV2ZWwSDQoFcHJpY2UYASABKAMSEAoIcXVhbnRpdHkYAiABKAUSEwoLb3JkZXJfY291bnQYAyABKA0iaAoZTWFya2V0T3JkZXJSZXN1bHRSZXNwb25zZRIQCghvcmRlcl9pZBgBIAEoBBISCgpmaWxsZWRfcXR5GAIgASgFEhEKCWF2Z19wcmljZRgDIAEoAxISCgp0b3RhbF9jb3N0GAQgASgDIkIKFk1hcmtldE15T3JkZXJzUmVzcG9uc2USKAoGb3JkZXJzGAEgAygLMhguZ2FtZXBiLk1hcmtldE9yZGVyRW50cnkirgEKEE1hcmtldE9yZGVyRW50cnkSEAoIb3JkZXJfaWQYASABKAQSDwoHaXRlbV9pZBgCIAEoDRIOCgZpc19idXkYAyABKAgSFgoOcHJpY2VfcGVyX3VuaXQYBCABKAMSEAoIcXVhbnRpdHkYBSABKAUSFQoNb3JpZ19xdWFudGl0eRgGIAEoBRISCgpjcmVhdGVkX2F0GAcgASgDEhIKCmV4cGlyZXNfYXQYCCABKAMinwEKF01hcmtldFRyYWRlTm90aWZpY2F0aW9uEhAKCG9yZGVyX2lkGAEgASgEEg8KB2l0ZW1faWQYAiABKA0SEgoKZmlsbGVkX3F0eRgDIAEoBRINCgVwcmljZRgEIAEoAxIQCgh5b3Vfc29sZBgFIAEoCBIXCg9jdXJyZW5jeV9jaGFuZ2UYBiABKAMSEwoLY3VycmVuY3lfaWQYByABKA0qJgoTR2FtZUNsaWVudEV2ZW50Q29kZRIPCgtHQ0VfVU5LTk9XThAAKiYKE0dhbWVTZXJ2ZXJFdmVudENvZGUSDwoLR1NFX1VOS05PV04QACqiAQoKRW50aXR5VHlwZRIUChBFTlRJVFlfVFlQRV9TSElQEAASGAoURU5USVRZX1RZUEVfQVNURVJPSUQQARIaChZFTlRJVFlfVFlQRV9QUk9KRUNUSUxFEAISFwoTRU5USVRZX1RZUEVfU1RBVElPThADEhoKFkVOVElUWV9UWVBFX0xPT1RfQ1JBVEUQBBITCg9FTlRJVFlfVFlQRV9OUEMQBSqTAQoNT3BlcmF0aW9uQ29kZRIUChBPUF9NQVJLRVRfQlJPV1NFEAASGgoWT1BfTUFSS0VUX0NSRUFURV9PUkRFUhABEhoKFk9QX01BUktFVF9DQU5DRUxfT1JERVIQAhIXChNPUF9NQVJLRVRfTVlfT1JERVJTEAMSGwoXT1BfTUFSS0VUX0lOU1RBTlRfVFJBREUQBEJFWilnaXRodWIuY29tL3plbmlvbi9tbW9zZXJ2ZXIvZ2VuL2dvL2dhbWVwYqoCF1plbmlvbi5HYW1lU2VydmVyLlByb3RvYgZwcm90bzM");
-
-/**
- * Describes the message gamepb.MarketBrowseRequest.
- * Use `create(MarketBrowseRequestSchema)` to create a new message.
- */
-export const MarketBrowseRequestSchema = /*@__PURE__*/
-  messageDesc(file_gamepb_game, 0);
-
-/**
- * Describes the message gamepb.MarketCreateOrderRequest.
- * Use `create(MarketCreateOrderRequestSchema)` to create a new message.
- */
-export const MarketCreateOrderRequestSchema = /*@__PURE__*/
-  messageDesc(file_gamepb_game, 1);
-
-/**
- * Describes the message gamepb.MarketCancelOrderRequest.
- * Use `create(MarketCancelOrderRequestSchema)` to create a new message.
- */
-export const MarketCancelOrderRequestSchema = /*@__PURE__*/
-  messageDesc(file_gamepb_game, 2);
-
-/**
- * Describes the message gamepb.MarketMyOrdersRequest.
- * Use `create(MarketMyOrdersRequestSchema)` to create a new message.
- */
-export const MarketMyOrdersRequestSchema = /*@__PURE__*/
-  messageDesc(file_gamepb_game, 3);
-
-/**
- * Describes the message gamepb.MarketInstantTradeRequest.
- * Use `create(MarketInstantTradeRequestSchema)` to create a new message.
- */
-export const MarketInstantTradeRequestSchema = /*@__PURE__*/
-  messageDesc(file_gamepb_game, 4);
-
-/**
- * Describes the message gamepb.MarketOrderBookResponse.
- * Use `create(MarketOrderBookResponseSchema)` to create a new message.
- */
-export const MarketOrderBookResponseSchema = /*@__PURE__*/
-  messageDesc(file_gamepb_game, 5);
-
-/**
- * Describes the message gamepb.MarketPriceLevel.
- * Use `create(MarketPriceLevelSchema)` to create a new message.
- */
-export const MarketPriceLevelSchema = /*@__PURE__*/
-  messageDesc(file_gamepb_game, 6);
-
-/**
- * Describes the message gamepb.MarketOrderResultResponse.
- * Use `create(MarketOrderResultResponseSchema)` to create a new message.
- */
-export const MarketOrderResultResponseSchema = /*@__PURE__*/
-  messageDesc(file_gamepb_game, 7);
-
-/**
- * Describes the message gamepb.MarketMyOrdersResponse.
- * Use `create(MarketMyOrdersResponseSchema)` to create a new message.
- */
-export const MarketMyOrdersResponseSchema = /*@__PURE__*/
-  messageDesc(file_gamepb_game, 8);
-
-/**
- * Describes the message gamepb.MarketOrderEntry.
- * Use `create(MarketOrderEntrySchema)` to create a new message.
- */
-export const MarketOrderEntrySchema = /*@__PURE__*/
-  messageDesc(file_gamepb_game, 9);
-
-/**
- * Describes the message gamepb.MarketTradeNotification.
- * Use `create(MarketTradeNotificationSchema)` to create a new message.
- */
-export const MarketTradeNotificationSchema = /*@__PURE__*/
-  messageDesc(file_gamepb_game, 10);
+  fileDesc("ChFnYW1lcGIvZ2FtZS5wcm90bxIGZ2FtZXBiKiYKE0dhbWVDbGllbnRFdmVudENvZGUSDwoLR0NFX1VOS05PV04QAComChNHYW1lU2VydmVyRXZlbnRDb2RlEg8KC0dTRV9VTktOT1dOEAAqogEKCkVudGl0eVR5cGUSFAoQRU5USVRZX1RZUEVfU0hJUBAAEhgKFEVOVElUWV9UWVBFX0FTVEVST0lEEAESGgoWRU5USVRZX1RZUEVfUFJPSkVDVElMRRACEhcKE0VOVElUWV9UWVBFX1NUQVRJT04QAxIaChZFTlRJVFlfVFlQRV9MT09UX0NSQVRFEAQSEwoPRU5USVRZX1RZUEVfTlBDEAVCRVopZ2l0aHViLmNvbS96ZW5pb24vbW1vc2VydmVyL2dlbi9nby9nYW1lcGKqAhdaZW5pb24uR2FtZVNlcnZlci5Qcm90b2IGcHJvdG8z");
 
 /**
  * Describes the enum gamepb.GameClientEventCode.
@@ -122,16 +45,4 @@ export const EntityTypeSchema = /*@__PURE__*/
  */
 export const EntityType = /*@__PURE__*/
   tsEnum(EntityTypeSchema);
-
-/**
- * Describes the enum gamepb.OperationCode.
- */
-export const OperationCodeSchema = /*@__PURE__*/
-  enumDesc(file_gamepb_game, 3);
-
-/**
- * @generated from enum gamepb.OperationCode
- */
-export const OperationCode = /*@__PURE__*/
-  tsEnum(OperationCodeSchema);
 
