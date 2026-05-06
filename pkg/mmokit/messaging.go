@@ -62,6 +62,19 @@ func SendEvent[T any](stage *Stage, connID uint32, msg *T) {
 	pkguniverse.SendEventTyped(stage, connID, msg)
 }
 
+// BuildTypedEventFrame returns a fully-framed channel-0x00 typed-event
+// payload for msg, suitable for direct Conn.Send() — bypasses the engine
+// connection manager entirely. T must be registered via RegisterEvent[T]
+// at startup, otherwise this panics.
+//
+// Use only when you cannot route through the engine: the EventInterceptor
+// runs on the WebSocket read goroutine before any game state exists, so
+// direct framing + Conn.Send is the only available path. Game-loop code
+// should prefer SendEvent.
+func BuildTypedEventFrame[T any](msg *T) []byte {
+	return pkguniverse.BuildTypedEventFrameRaw(msg)
+}
+
 // Send delivers msg to the entity. If the entity is local on its stage, the
 // registered handler runs synchronously before Send returns. If the entity
 // is a replica (lives elsewhere), Send is fire-and-forget — the handler runs

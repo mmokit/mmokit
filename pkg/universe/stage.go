@@ -682,17 +682,28 @@ func SetWorldBaseSendEvent(fn func(*Stage, uint32, uint32, interface{ Reset() })
 // Stage.SendEvent; proto-based SendEvent will be deleted in the cleanup
 // phase once all callers migrate.
 func SendEventTyped[T any](stage *Stage, connID uint32, msg *T) {
+	stage.eng.ConnMgr.SendReliable(connID, BuildTypedEventFrameRaw(msg))
+}
+
+// BuildTypedEventFrameRaw returns the encoded channel-0x00 typed-event
+// frame for msg without sending it. Used by direct-Conn.Send paths (e.g.
+// the EventInterceptor on the WebSocket read goroutine, which runs before
+// any Stage exists for the connection). T must be registered via
+// mmokit.RegisterEvent[T] at startup; panics otherwise.
+//
+// Same wire layout as SendEventTyped; the only difference is that the
+// caller is responsible for delivering the frame.
+func BuildTypedEventFrameRaw[T any](msg *T) []byte {
 	t := reflect.TypeFor[T]()
 	if ServerEventHooks.IsRegistered == nil || ServerEventHooks.TypeIDOf == nil {
-		panic(fmt.Sprintf("SendEventTyped: ServerEventHooks not wired (import mmokit so its init() runs); type %s", t.String()))
+		panic(fmt.Sprintf("BuildTypedEventFrameRaw: ServerEventHooks not wired (import mmokit so its init() runs); type %s", t.String()))
 	}
 	if !ServerEventHooks.IsRegistered(t) {
-		panic(fmt.Sprintf("SendEventTyped: type %s not registered via mmokit.RegisterEvent[T]", t.String()))
+		panic(fmt.Sprintf("BuildTypedEventFrameRaw: type %s not registered via mmokit.RegisterEvent[T]", t.String()))
 	}
 	id := ServerEventHooks.TypeIDOf(t)
 	body := ReflectMarshal(msg)
-	frame := EncodeTypedEventFrame(id, body)
-	stage.eng.ConnMgr.SendReliable(connID, frame)
+	return EncodeTypedEventFrame(id, body)
 }
 
 // UpdateCellBounds updates the cell identity and coordinate bounds for this world.

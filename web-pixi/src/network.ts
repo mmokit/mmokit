@@ -14,8 +14,8 @@ import {
   type MapDataMsg,
   CurrencyUpdate,
   PlayerDied,
-  type PongMsg,
-  type LoginRejectedMsg,
+  Pong,
+  LoginRejected,
   Damage,
   MineExtract,
   Status,
@@ -285,7 +285,7 @@ export function connect(state: GameState, callbacks: NetworkCallbacks): void {
     state.myEntityId = 0;
   });
 
-  client.onLoginRejected((rejected: LoginRejectedMsg) => {
+  client.onLoginRejected((rejected: LoginRejected) => {
     callbacks.onLoginRejected(rejected.reason || "Login rejected");
     client.disconnect();
   });
@@ -430,7 +430,7 @@ export function connect(state: GameState, callbacks: NetworkCallbacks): void {
   });
 
   // --- Ping ---
-  client.onPong((pong: PongMsg) => {
+  client.onPong((pong: Pong) => {
     state.pingMs = Date.now() - Number(pong.clientTime);
   });
 

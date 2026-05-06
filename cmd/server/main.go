@@ -108,26 +108,12 @@ func main() {
 		if err := proto.Unmarshal(evt.Data, &ping); err != nil {
 			return false
 		}
-		pong := &enginepb.PongMsg{
+		// Typed Pong: bypasses the engine ConnMgr (no Stage exists yet for
+		// pre-login conns) by framing inline and writing directly to conn.
+		conn.Send(mmokit.BuildTypedEventFrame(&mmokit.Pong{
 			ClientTime: ping.ClientTime,
 			ServerTime: time.Now().UnixMilli(),
-		}
-		pongData, err := proto.Marshal(pong)
-		if err != nil {
-			return true
-		}
-		srvEvt := &enginepb.ServerEvent{
-			Code: uint32(enginepb.ServerEventCode_SE_PONG),
-			Data: pongData,
-		}
-		srvEvtData, err := proto.Marshal(srvEvt)
-		if err != nil {
-			return true
-		}
-		frame := make([]byte, 1+len(srvEvtData))
-		frame[0] = mmokit.ChannelEvent
-		copy(frame[1:], srvEvtData)
-		conn.Send(frame)
+		}))
 		return true
 	}
 

@@ -230,6 +230,39 @@ export class TransferResult {
   }
 }
 
+/** Broadcast-eligible event mmokit.LoginRejected (typeID 0x62f41d81). */
+export class LoginRejected {
+  static readonly typeID = 0x62f41d81;
+  reason: string = "";
+
+  static decode(buf: Uint8Array): LoginRejected {
+    const dv = new DataView(buf.buffer, buf.byteOffset, buf.byteLength);
+    let off = 0;
+    const m = new LoginRejected();
+    {
+      const sl = dv.getUint16(off, true); off += 2;
+      m.reason = new TextDecoder().decode(buf.subarray(off, off + sl)); off += sl;
+    }
+    return m;
+  }
+}
+
+/** Broadcast-eligible event mmokit.Pong (typeID 0x8527c2fc). */
+export class Pong {
+  static readonly typeID = 0x8527c2fc;
+  clientTime: number = 0;
+  serverTime: number = 0;
+
+  static decode(buf: Uint8Array): Pong {
+    const dv = new DataView(buf.buffer, buf.byteOffset, buf.byteLength);
+    let off = 0;
+    const m = new Pong();
+    m.clientTime = Number(dv.getBigInt64(off, true)); off += 8;
+    m.serverTime = Number(dv.getBigInt64(off, true)); off += 8;
+    return m;
+  }
+}
+
 /** Dispatches incoming TypedEvent (typeID + body bytes) to typed handlers. */
 export class TypedDispatcher {
   private handlers = new Map<number, (raw: Uint8Array) => void>();

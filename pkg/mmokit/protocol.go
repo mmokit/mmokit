@@ -96,6 +96,7 @@ func NewProtocol(game string) *Protocol {
 	// engine-defined payload shapes that every game uses as-is.
 	RegisterServerEvent[enginepb.ServerConfigMsg](p.serverEventsRegistry, enginepb.ServerEventCode_SE_SERVER_CONFIG)
 	RegisterServerEvent[enginepb.PongMsg](p.serverEventsRegistry, enginepb.ServerEventCode_SE_PONG)
+	registerEngineTypedEvents()
 	RegisterServerEvent[enginepb.LoginRejectedMsg](p.serverEventsRegistry, enginepb.ServerEventCode_SE_LOGIN_REJECTED)
 	RegisterServerEvent[enginepb.CellChangeMsg](p.serverEventsRegistry, enginepb.ServerEventCode_SE_CELL_CHANGE)
 	RegisterServerEvent[enginepb.DebugInfoMsg](p.serverEventsRegistry, enginepb.ServerEventCode_SE_DEBUG_INFO)
