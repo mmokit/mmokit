@@ -7,7 +7,6 @@ import (
 
 	"github.com/mlange-42/ark/ecs"
 
-	gamepb "github.com/zenion/mmoserver/gen/go/gamepb"
 	gamecomp "github.com/zenion/mmoserver/internal/component"
 	"github.com/zenion/mmoserver/pkg/mmokit"
 )
@@ -48,7 +47,7 @@ func (gw *GameWorld) Init() {
 		// cl_fullupdate or Gaffer's "encoded relative to initial state"
 		// pattern. Clients never learn about cells, authority transfers,
 		// or server boundaries.
-		gw.ServerEvents().Send(gw.eng.ConnMgr, frame.ConnID, uint32(gamepb.GameServerEventCode_GSE_MAP_DATA), &gamepb.MapDataMsg{
+		mmokit.SendEvent(gw.Stage, frame.ConnID, &MapData{
 			Stations: gw.CollectStationMapData(),
 		})
 		// Topology / debug overlay is pushed reactively by the

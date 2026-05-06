@@ -11,7 +11,7 @@ import {
   EquipResult,
   DockingState,
   type PlayerOwnStateMsg,
-  type MapDataMsg,
+  MapData,
   CurrencyUpdate,
   PlayerDied,
   Pong,
@@ -27,7 +27,6 @@ import type { DebugInfoMsg } from "@gen/enginepb/engine_pb.js";
 // Nested proto types used for iterating repeated fields on server-event
 // messages — the SDK doesn't re-export nested shapes yet, so import
 // these directly from @gen/... as an explicit escape hatch.
-import type { MapStationInfo } from "@gen/gamepb/game_pb.js";
 import type { CellInfo as PbCellInfo } from "@gen/enginepb/engine_pb.js";
 import { MAX_CHAT_DISPLAY, CELL_SIZE } from "./constants";
 import { updateEntityFromServer } from "./interpolation";
@@ -537,8 +536,8 @@ export function connect(state: GameState, callbacks: NetworkCallbacks): void {
   });
 
   // --- Map / currency ---
-  client.onMapData((mapData: MapDataMsg) => {
-    state.mapStations = mapData.stations.map((s: MapStationInfo) => ({
+  client.onMapData((mapData: MapData) => {
+    state.mapStations = mapData.stations.map((s) => ({
       cellX: s.cellX,
       cellY: s.cellY,
       localX: s.localX,

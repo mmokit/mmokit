@@ -62,3 +62,19 @@ type TransferResult struct {
 	Quantity int32 // actual amount transferred
 	Deposit  bool  // direction of transfer
 }
+
+// MapStationInfo — single station marker on the world map.
+// Replaces gamepb.MapStationInfo.
+type MapStationInfo struct {
+	CellX  int32
+	CellY  int32
+	LocalX float32
+	LocalY float32
+	Name   string
+}
+
+// MapData — world-map info bundle (currently just stations).
+// Replaces gamepb.MapDataMsg.
+type MapData struct {
+	Stations []MapStationInfo
+}

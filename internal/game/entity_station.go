@@ -3,7 +3,6 @@ package game
 import (
 	"github.com/mlange-42/ark/ecs"
 
-	gamepb "github.com/zenion/mmoserver/gen/go/gamepb"
 	gamecomp "github.com/zenion/mmoserver/internal/component"
 	"github.com/zenion/mmoserver/pkg/mmokit"
 )
@@ -40,16 +39,16 @@ func (gw *GameWorld) SpawnStation() {
 }
 
 // CollectStationMapData returns map marker data for all stations in the world.
-func (gw *GameWorld) CollectStationMapData() []*gamepb.MapStationInfo {
+func (gw *GameWorld) CollectStationMapData() []MapStationInfo {
 	filter := ecs.NewFilter3[gamecomp.Station, mmokit.Position, mmokit.CellCoord](gw.Stage.ECSWorld())
 	query := filter.Query()
 	defer query.Close() // ark holds a world write-lock for the duration of an
 	// open query; a panic in the loop body would otherwise leak the lock and
 	// trip the next write-side op with "cannot modify a locked world".
-	var stations []*gamepb.MapStationInfo
+	var stations []MapStationInfo
 	for query.Next() {
 		_, pos, sec := query.Get()
-		stations = append(stations, &gamepb.MapStationInfo{
+		stations = append(stations, MapStationInfo{
 			CellX:  sec.CellX,
 			CellY:  sec.CellY,
 			LocalX: pos.X,

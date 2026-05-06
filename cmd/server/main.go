@@ -77,6 +77,7 @@ func main() {
 			mmokit.RegisterEvent[game.Docked]()
 			mmokit.RegisterServerEvent[gamepb.MapDataMsg](e,
 				gamepb.GameServerEventCode_GSE_MAP_DATA)
+			mmokit.RegisterEvent[game.MapData]()
 			mmokit.RegisterServerEvent[gamepb.CurrencyUpdateMsg](e,
 				gamepb.GameServerEventCode_GSE_CURRENCY_UPDATE)
 			mmokit.RegisterEvent[game.CurrencyUpdate]()

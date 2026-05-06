@@ -191,6 +191,34 @@ export class EquipResult {
   }
 }
 
+/** Broadcast-eligible event game.MapData (typeID 0xc16d89a3). */
+export class MapData {
+  static readonly typeID = 0xc16d89a3;
+  stations: { cellX: number; cellY: number; localX: number; localY: number; name: string }[] = [];
+
+  static decode(buf: Uint8Array): MapData {
+    const dv = new DataView(buf.buffer, buf.byteOffset, buf.byteLength);
+    let off = 0;
+    const m = new MapData();
+    {
+      const sliceLen = dv.getUint16(off, true); off += 2;
+      for (let i = 0; i < sliceLen; i++) {
+        const item: { cellX: number; cellY: number; localX: number; localY: number; name: string } = { cellX: 0, cellY: 0, localX: 0, localY: 0, name: "" };
+            item.cellX = dv.getInt32(off, true); off += 4;
+            item.cellY = dv.getInt32(off, true); off += 4;
+            item.localX = dv.getFloat32(off, true); off += 4;
+            item.localY = dv.getFloat32(off, true); off += 4;
+    {
+      const sl = dv.getUint16(off, true); off += 2;
+              item.name = new TextDecoder().decode(buf.subarray(off, off + sl)); off += sl;
+    }
+        m.stations.push(item);
+      }
+    }
+    return m;
+  }
+}
+
 /** Broadcast-eligible event game.PlayerDied (typeID 0xef56f740). */
 export class PlayerDied {
   static readonly typeID = 0xef56f740;

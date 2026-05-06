@@ -2,13 +2,13 @@
 
 import { create, toBinary, fromBinary } from "@bufbuild/protobuf";
 import { CellChangeMsgSchema, DebugInfoMsgSchema, LoginMsgSchema, PingMsgSchema, ServerConfigMsgSchema } from "@gen/enginepb/engine_pb.js";
-import { BankContentsMsgSchema, MapDataMsgSchema, MarketBrowseRequestSchema, MarketCancelOrderRequestSchema, MarketCreateOrderRequestSchema, MarketInstantTradeRequestSchema, MarketMyOrdersRequestSchema, MarketMyOrdersResponseSchema, MarketOrderBookResponseSchema, MarketOrderResultResponseSchema, PlayerOwnStateMsgSchema, PlayerSpawnedMsgSchema, WorldUpdateMsgSchema } from "@gen/gamepb/game_pb.js";
+import { BankContentsMsgSchema, MarketBrowseRequestSchema, MarketCancelOrderRequestSchema, MarketCreateOrderRequestSchema, MarketInstantTradeRequestSchema, MarketMyOrdersRequestSchema, MarketMyOrdersResponseSchema, MarketOrderBookResponseSchema, MarketOrderResultResponseSchema, PlayerOwnStateMsgSchema, PlayerSpawnedMsgSchema, WorldUpdateMsgSchema } from "@gen/gamepb/game_pb.js";
 import type { CellChangeMsg, DebugInfoMsg, ServerConfigMsg } from "@gen/enginepb/engine_pb.js";
-import type { BankContentsMsg, MapDataMsg, MarketMyOrdersResponse, MarketOrderBookResponse, MarketOrderResultResponse, PlayerOwnStateMsg, PlayerSpawnedMsg, WorldUpdateMsg } from "@gen/gamepb/game_pb.js";
+import type { BankContentsMsg, MarketMyOrdersResponse, MarketOrderBookResponse, MarketOrderResultResponse, PlayerOwnStateMsg, PlayerSpawnedMsg, WorldUpdateMsg } from "@gen/gamepb/game_pb.js";
 import { Transport } from "./transport.js";
 import { SpaceDeltaDecoder } from "./delta-decoder.js";
 import type { DeltaWorldUpdate } from "./entities.js";
-import { TypedDispatcher, CurrencyUpdate, Docked, DockingState, EquipResult, PlayerDied, TransferResult, LoginRejected, Pong } from "./broadcasts.js";
+import { TypedDispatcher, CurrencyUpdate, Docked, DockingState, EquipResult, MapData, PlayerDied, TransferResult, LoginRejected, Pong } from "./broadcasts.js";
 import { ClientEventSchema, ServerEventSchema, type ServerEvent, OperationRequestSchema, OperationResponseSchema, type OperationResponse } from "@gen/enginepb/engine_pb.js";
 
 export interface SpaceClientOptions {
@@ -163,11 +163,6 @@ export class SpaceClient {
     return this.on(100, (data) => handler(fromBinary(BankContentsMsgSchema, data)));
   }
 
-  /** Subscribe to mapData (code 105). */
-  onMapData(handler: (msg: MapDataMsg) => void): () => void {
-    return this.on(105, (data) => handler(fromBinary(MapDataMsgSchema, data)));
-  }
-
   /** Subscribe to deltaWorldUpdate (code 13, binary). */
   onDeltaWorldUpdate(handler: (update: DeltaWorldUpdate) => void): () => void {
     return this.on(13, (data) => handler(this.decoder.decode(data)));
@@ -191,6 +186,11 @@ export class SpaceClient {
   /** Subscribe to typed server event game.EquipResult (typeID 0x50af4abc). */
   onEquipResult(handler: (msg: EquipResult) => void): () => void {
     return this.typedEvents.on(EquipResult, handler);
+  }
+
+  /** Subscribe to typed server event game.MapData (typeID 0xc16d89a3). */
+  onMapData(handler: (msg: MapData) => void): () => void {
+    return this.typedEvents.on(MapData, handler);
   }
 
   /** Subscribe to typed server event game.PlayerDied (typeID 0xef56f740). */

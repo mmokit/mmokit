@@ -175,9 +175,7 @@ func (gw *GameWorld) SpawnPlayer(s *mmokit.PlayerSession) {
 
 	// Send map data (station positions) to the client
 	mapStations := gw.CollectStationMapData()
-	gw.ServerEvents().Send(gw.eng.ConnMgr, connID, uint32(gamepb.GameServerEventCode_GSE_MAP_DATA), &gamepb.MapDataMsg{
-		Stations: mapStations,
-	})
+	mmokit.SendEvent(gw.Stage, connID, &MapData{Stations: mapStations})
 	gw.eng.Log.Log(CatWorldMap, "map data sent: conn=%d stations=%d", connID, len(mapStations))
 
 	// Send current currency balances so the client has them immediately
@@ -241,9 +239,7 @@ func (gw *GameWorld) reconnectPlayer(s *mmokit.PlayerSession) {
 
 	// Send map data
 	mapStations := gw.CollectStationMapData()
-	gw.ServerEvents().Send(gw.eng.ConnMgr, connID, uint32(gamepb.GameServerEventCode_GSE_MAP_DATA), &gamepb.MapDataMsg{
-		Stations: mapStations,
-	})
+	mmokit.SendEvent(gw.Stage, connID, &MapData{Stations: mapStations})
 
 	// Send currency balances
 	pdata := gw.PlayerDB.GetOrCreate(s.Username)
