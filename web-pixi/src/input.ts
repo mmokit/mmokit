@@ -6,19 +6,13 @@ import { getAbilityRange } from "./ui/ability-bar";
 import {
   CastAbility,
   Dock,
+  EntityType,
   JettisonItem,
   Respawn,
   SetLockTarget,
   SetMoveTarget,
   Undock,
 } from "../sdk/index.js";
-
-// Entity kind numeric literals (match server-side component.Type*).
-const KIND_SHIP = 0;
-const KIND_ASTEROID = 1;
-const KIND_STATION = 3;
-const KIND_LOOT_CRATE = 4;
-const KIND_NPC = 5;
 
 // Ability key -> bitmask bit mapping
 const ABILITY_KEYS: Record<string, number> = {
@@ -35,7 +29,7 @@ function isNearStation(state: GameState): boolean {
   const myEntity = state.entities.get(state.myEntityId);
   if (!myEntity) return false;
   for (const [, ent] of state.entities) {
-    if (ent.current.entityType !== KIND_STATION) continue;
+    if (ent.current.entityType !== EntityType.Station) continue;
     const dx = myEntity.renderX - ent.renderX;
     const dy = myEntity.renderY - ent.renderY;
     if (Math.sqrt(dx * dx + dy * dy) < 400) return true;
@@ -131,9 +125,9 @@ export function setupInput(
       const tgt = state.entities.get(state.targetId);
       if (
         tgt &&
-        (tgt.current.entityType === KIND_SHIP ||
-          tgt.current.entityType === KIND_NPC ||
-          tgt.current.entityType === KIND_ASTEROID)
+        (tgt.current.entityType === EntityType.Ship ||
+          tgt.current.entityType === EntityType.NPC ||
+          tgt.current.entityType === EntityType.Asteroid)
       ) {
         state.lockTargetId = state.targetId;
         audio.play(SoundId.TargetLock);
@@ -226,7 +220,7 @@ export function setupInput(
     for (const [id, ent] of state.entities) {
       if (id === state.myEntityId) continue; // can't target self
       // Skip stations
-      if (ent.current.entityType === KIND_STATION) continue;
+      if (ent.current.entityType === EntityType.Station) continue;
       const dx = ent.renderX - world.x;
       const dy = ent.renderY - world.y;
       const dist = Math.sqrt(dx * dx + dy * dy);
@@ -242,9 +236,9 @@ export function setupInput(
       const ent = state.entities.get(bestId);
       if (
         ent &&
-        (ent.current.entityType === KIND_SHIP ||
-          ent.current.entityType === KIND_NPC ||
-          ent.current.entityType === KIND_ASTEROID)
+        (ent.current.entityType === EntityType.Ship ||
+          ent.current.entityType === EntityType.NPC ||
+          ent.current.entityType === EntityType.Asteroid)
       ) {
         state.lockTargetId = bestId;
       }
@@ -253,7 +247,7 @@ export function setupInput(
     // Left-click on loot crate: open loot popup if in range, or move toward it
     if (bestId !== 0) {
       const ent = state.entities.get(bestId);
-      if (ent && ent.current.entityType === KIND_LOOT_CRATE) {
+      if (ent && ent.current.entityType === EntityType.LootCrate) {
         const myEnt = state.entities.get(state.myEntityId);
         if (myEnt) {
           const dx = myEnt.renderX - ent.renderX;

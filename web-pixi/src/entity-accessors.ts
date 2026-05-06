@@ -1,24 +1,25 @@
 import type { ShipEntity, AsteroidEntity, NPCEntity, StationEntity, LootCrateEntity } from "../sdk/index.js";
+import { EntityType } from "../sdk/index.js";
 import type { ClientEntity } from "./types";
 
 export function getShip(ent: ClientEntity): ShipEntity | undefined {
-  return ent.current.entityType === 0 ? ent.current : undefined;
+  return ent.current.entityType === EntityType.Ship ? ent.current : undefined;
 }
 
 export function getAsteroid(ent: ClientEntity): AsteroidEntity | undefined {
-  return ent.current.entityType === 1 ? ent.current : undefined;
+  return ent.current.entityType === EntityType.Asteroid ? ent.current : undefined;
 }
 
 export function getNpc(ent: ClientEntity): NPCEntity | undefined {
-  return ent.current.entityType === 5 ? ent.current : undefined;
+  return ent.current.entityType === EntityType.NPC ? ent.current : undefined;
 }
 
 export function getStation(ent: ClientEntity): StationEntity | undefined {
-  return ent.current.entityType === 3 ? ent.current : undefined;
+  return ent.current.entityType === EntityType.Station ? ent.current : undefined;
 }
 
 export function getLootCrate(ent: ClientEntity): LootCrateEntity | undefined {
-  return ent.current.entityType === 4 ? ent.current : undefined;
+  return ent.current.entityType === EntityType.LootCrate ? ent.current : undefined;
 }
 
 /**
@@ -34,7 +35,7 @@ export interface CombatView {
 
 export function getCombat(ent: ClientEntity): CombatView | undefined {
   const e = ent.current;
-  if (e.entityType === 0) {
+  if (e.entityType === EntityType.Ship) {
     return {
       health: e.healthCurrent,
       maxHealth: e.healthMax,
@@ -42,7 +43,7 @@ export function getCombat(ent: ClientEntity): CombatView | undefined {
       maxShield: e.shieldMax,
     };
   }
-  if (e.entityType === 5) {
+  if (e.entityType === EntityType.NPC) {
     return {
       health: e.healthCurrent,
       maxHealth: e.healthMax,

@@ -73,7 +73,7 @@ function decodeStationEntitySnapshot(snap: Uint8Array, initial: Uint8Array | nul
   const radius = unVel(readInt16(snap, o), 500); o += 2;
   const width = unVel(readInt16(snap, o), 500); o += 2;
   const height = unVel(readInt16(snap, o), 500); o += 2;
-  return { netID: 0, producedAtMs: 0, entityType: 3, worldX, worldY, velX, velY, radius, width, height };
+  return { netID: 0, producedAtMs: 0, entityType: 2, worldX, worldY, velX, velY, radius, width, height };
 }
 
 const LOOTCRATEENTITY_FIELD_SIZES = [4, 4, 2, 2, 2, 2, 2];
@@ -96,7 +96,7 @@ function decodeLootCrateEntitySnapshot(snap: Uint8Array, initial: Uint8Array | n
     const quantity = readUint32(snap, o); o += 4;
     items.push({ itemId, quantity });
   }
-  return { netID: 0, producedAtMs: 0, entityType: 4, worldX, worldY, velX, velY, radius, width, height, items };
+  return { netID: 0, producedAtMs: 0, entityType: 3, worldX, worldY, velX, velY, radius, width, height, items };
 }
 
 const NPCENTITY_FIELD_SIZES = [4, 4, 2, 2, 2, 2, 2, 4, 4, 4, 4];
@@ -123,7 +123,7 @@ function decodeNPCEntitySnapshot(snap: Uint8Array, initial: Uint8Array | null, e
     const duration = unNorm(snap[o]); o += 1;
     statusEffects.push({ type, duration });
   }
-  return { netID: 0, producedAtMs: 0, entityType: 5, worldX, worldY, velX, velY, radius, width, height, healthCurrent, healthMax, shieldCurrent, shieldMax, statusEffects };
+  return { netID: 0, producedAtMs: 0, entityType: 4, worldX, worldY, velX, velY, radius, width, height, healthCurrent, healthMax, shieldCurrent, shieldMax, statusEffects };
 }
 
 export class SpaceDeltaDecoder {
@@ -181,9 +181,9 @@ export class SpaceDeltaDecoder {
     switch (type_) {
       case 0: { const prev = existing && existing.entityType === 0 ? existing : undefined; const e = decodeShipEntitySnapshot(snap, initial, prev); e.netID = netID; e.producedAtMs = producedAtMs; return e; }
       case 1: { const prev = existing && existing.entityType === 1 ? existing : undefined; const e = decodeAsteroidEntitySnapshot(snap, initial, prev); e.netID = netID; e.producedAtMs = producedAtMs; return e; }
-      case 3: { const prev = existing && existing.entityType === 3 ? existing : undefined; const e = decodeStationEntitySnapshot(snap, initial, prev); e.netID = netID; e.producedAtMs = producedAtMs; return e; }
-      case 4: { const prev = existing && existing.entityType === 4 ? existing : undefined; const e = decodeLootCrateEntitySnapshot(snap, initial, prev); e.netID = netID; e.producedAtMs = producedAtMs; return e; }
-      case 5: { const prev = existing && existing.entityType === 5 ? existing : undefined; const e = decodeNPCEntitySnapshot(snap, initial, prev); e.netID = netID; e.producedAtMs = producedAtMs; return e; }
+      case 2: { const prev = existing && existing.entityType === 2 ? existing : undefined; const e = decodeStationEntitySnapshot(snap, initial, prev); e.netID = netID; e.producedAtMs = producedAtMs; return e; }
+      case 3: { const prev = existing && existing.entityType === 3 ? existing : undefined; const e = decodeLootCrateEntitySnapshot(snap, initial, prev); e.netID = netID; e.producedAtMs = producedAtMs; return e; }
+      case 4: { const prev = existing && existing.entityType === 4 ? existing : undefined; const e = decodeNPCEntitySnapshot(snap, initial, prev); e.netID = netID; e.producedAtMs = producedAtMs; return e; }
       default: return null;
     }
   }
@@ -192,9 +192,9 @@ export class SpaceDeltaDecoder {
     switch (type_) {
       case 0: return SHIPENTITY_FIELD_SIZES;
       case 1: return ASTEROIDENTITY_FIELD_SIZES;
-      case 3: return STATIONENTITY_FIELD_SIZES;
-      case 4: return LOOTCRATEENTITY_FIELD_SIZES;
-      case 5: return NPCENTITY_FIELD_SIZES;
+      case 2: return STATIONENTITY_FIELD_SIZES;
+      case 3: return LOOTCRATEENTITY_FIELD_SIZES;
+      case 4: return NPCENTITY_FIELD_SIZES;
       default: return [];
     }
   }
@@ -203,9 +203,9 @@ export class SpaceDeltaDecoder {
     switch (type_) {
       case 0: return SHIPENTITY_HAS_VAR_TAIL;
       case 1: return ASTEROIDENTITY_HAS_VAR_TAIL;
-      case 3: return STATIONENTITY_HAS_VAR_TAIL;
-      case 4: return LOOTCRATEENTITY_HAS_VAR_TAIL;
-      case 5: return NPCENTITY_HAS_VAR_TAIL;
+      case 2: return STATIONENTITY_HAS_VAR_TAIL;
+      case 3: return LOOTCRATEENTITY_HAS_VAR_TAIL;
+      case 4: return NPCENTITY_HAS_VAR_TAIL;
       default: return false;
     }
   }

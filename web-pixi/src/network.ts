@@ -24,6 +24,7 @@ import {
   BeamToggle,
   BankRequest,
   WorldDelta,
+  EntityType,
 } from "../sdk/index.js";
 import { CELL_SIZE } from "./constants";
 import { updateEntityFromServer } from "./interpolation";
@@ -121,7 +122,7 @@ function applyDeltaUpdate(state: GameState, update: DeltaWorldUpdate): void {
     const killed = state.entities.get(id);
     if (killed) {
       const t = killed.current.entityType;
-      if (t === 0 || t === 5) {
+      if (t === EntityType.Ship || t === EntityType.NPC) {
         const e = killed.current as ShipEntity | NPCEntity;
         spawnExplosion(
           state.explosions,

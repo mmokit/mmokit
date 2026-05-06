@@ -91,6 +91,12 @@ func main() {
 	if len(schema.Operations) > 0 {
 		files["operations.ts"] = g.genOperations
 	}
+	// entityType.ts holds the EntityType const block (one entry per
+	// kind registered via mmokit.RegisterKind[T]). Skipped when no
+	// entity kinds are registered.
+	if len(schema.Entities) > 0 {
+		files["entityType.ts"] = g.genEntityType
+	}
 	for name, fn := range files {
 		path := filepath.Join(*outDir, name)
 		content := fn()

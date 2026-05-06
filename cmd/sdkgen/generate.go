@@ -865,6 +865,12 @@ func (g *Generator) genIndex() string {
 		sort.Strings(names)
 		fmt.Fprintf(&b, "export { %s } from \"./operations.js\";\n", strings.Join(names, ", "))
 	}
+	if len(g.schema.Entities) > 0 {
+		// Re-export the EntityType const + type alias so app code
+		// imports them via the SDK's public surface.
+		b.WriteString("export { EntityType } from \"./entityType.js\";\n")
+		b.WriteString("export type { EntityTypeValue } from \"./entityType.js\";\n")
+	}
 
 	return b.String()
 }
