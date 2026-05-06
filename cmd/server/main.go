@@ -63,6 +63,7 @@ func main() {
 			// Game-only events (no engine counterpart).
 			mmokit.RegisterServerEvent[gamepb.BankContentsMsg](e,
 				gamepb.GameServerEventCode_GSE_BANK_CONTENTS)
+			mmokit.RegisterEvent[game.BankContents]()
 			mmokit.RegisterServerEvent[gamepb.TransferResultMsg](e,
 				gamepb.GameServerEventCode_GSE_TRANSFER_RESULT)
 			mmokit.RegisterEvent[game.TransferResult]()
@@ -82,9 +83,6 @@ func main() {
 				gamepb.GameServerEventCode_GSE_CURRENCY_UPDATE)
 			mmokit.RegisterEvent[game.CurrencyUpdate]()
 		})
-	// Capture the registry for closures (LoginRejected, op-router pushes) that
-	// emit server events without access to *GameWorld.
-	events := coordCfg.Protocol.(*mmokit.Protocol).ServerEventsRegistry()
 	coordCfg.BindFlags()
 	flag.Parse()
 
@@ -261,25 +259,25 @@ func main() {
 					if pdata == nil {
 						return
 					}
-					var items []*gamepb.InventoryItem
+					var items []game.InventoryItem
 					for id, qty := range pdata.Bank {
 						if qty > 0 {
-							items = append(items, &gamepb.InventoryItem{ItemId: id, Quantity: qty})
+							items = append(items, game.InventoryItem{ItemID: id, Quantity: qty})
 						}
 					}
-					var cargoItems []*gamepb.InventoryItem
+					var cargoItems []game.InventoryItem
 					for id, qty := range pdata.Cargo {
 						if qty > 0 {
-							cargoItems = append(cargoItems, &gamepb.InventoryItem{ItemId: id, Quantity: qty})
+							cargoItems = append(cargoItems, game.InventoryItem{ItemID: id, Quantity: qty})
 						}
 					}
-					var currencies []*gamepb.CurrencyBalance
+					var currencies []game.CurrencyBalance
 					for curID, bal := range pdata.Currencies {
 						if bal != 0 {
-							currencies = append(currencies, &gamepb.CurrencyBalance{CurrencyId: curID, Balance: bal})
+							currencies = append(currencies, game.CurrencyBalance{CurrencyID: curID, Balance: bal})
 						}
 					}
-					events.Send(connMgr, connID, uint32(gamepb.GameServerEventCode_GSE_BANK_CONTENTS), &gamepb.BankContentsMsg{
+					connMgr.SendReliable(connID, mmokit.BuildTypedEventFrame(&game.BankContents{
 						Items:        items,
 						TotalMass:    pdata.BankTotalMass(),
 						MaxMass:      gameCfg.BankMaxMass,
@@ -287,7 +285,7 @@ func main() {
 						CargoMass:    pdata.CargoTotalMass(),
 						MaxCargoMass: gameCfg.MaxCargo,
 						Currencies:   currencies,
-					})
+					}))
 				},
 			},
 			marketCfg,

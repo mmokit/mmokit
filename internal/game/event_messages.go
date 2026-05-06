@@ -78,3 +78,28 @@ type MapStationInfo struct {
 type MapData struct {
 	Stations []MapStationInfo
 }
+
+// InventoryItem — typed mirror of gamepb.InventoryItem for typed-event use.
+type InventoryItem struct {
+	ItemID   uint32
+	Quantity int32
+}
+
+// CurrencyBalance — typed mirror of gamepb.CurrencyBalance for typed-event use.
+type CurrencyBalance struct {
+	CurrencyID uint32
+	Balance    int64
+}
+
+// BankContents — full snapshot of a player's bank, cargo, and currency
+// balances. Sent on dock + on every bank/cargo mutation.
+// Replaces gamepb.BankContentsMsg.
+type BankContents struct {
+	Items        []InventoryItem
+	TotalMass    float32
+	MaxMass      float32
+	CargoItems   []InventoryItem
+	CargoMass    float32
+	MaxCargoMass float32
+	Currencies   []CurrencyBalance
+}

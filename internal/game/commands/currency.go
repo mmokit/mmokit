@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"strings"
 
-	gamepb "github.com/zenion/mmoserver/gen/go/gamepb"
 	"github.com/zenion/mmoserver/internal/game"
 	"github.com/zenion/mmoserver/pkg/cmdsys"
 	"github.com/zenion/mmoserver/pkg/mmokit"
@@ -78,25 +77,25 @@ func registerCurrency(reg *cmdsys.Registry, coord *mmokit.Process, playerDB *gam
 	})
 }
 
-// sendBankContentsAdmin sends a BankContentsMsg to a player.
+// sendBankContentsAdmin sends a typed BankContents event to a player.
 func sendBankContentsAdmin(gw *game.GameWorld, connID uint32, pdata *game.PlayerData, cfg *game.GameConfig) {
-	var items []*gamepb.InventoryItem
+	var items []game.InventoryItem
 	for id, qty := range pdata.Bank {
 		if qty > 0 {
-			items = append(items, &gamepb.InventoryItem{ItemId: id, Quantity: qty})
+			items = append(items, game.InventoryItem{ItemID: id, Quantity: qty})
 		}
 	}
-	var currencies []*gamepb.CurrencyBalance
+	var currencies []game.CurrencyBalance
 	for curID, bal := range pdata.Currencies {
 		if bal != 0 {
-			currencies = append(currencies, &gamepb.CurrencyBalance{CurrencyId: curID, Balance: bal})
+			currencies = append(currencies, game.CurrencyBalance{CurrencyID: curID, Balance: bal})
 		}
 	}
 	var bankMaxMass float32
 	if cfg != nil {
 		bankMaxMass = cfg.BankMaxMass
 	}
-	gw.ServerEvents().Send(gw.Engine().ConnMgr, connID, uint32(gamepb.GameServerEventCode_GSE_BANK_CONTENTS), &gamepb.BankContentsMsg{
+	mmokit.SendEvent(gw.Stage, connID, &game.BankContents{
 		Items:      items,
 		TotalMass:  pdata.BankTotalMass(),
 		MaxMass:    bankMaxMass,

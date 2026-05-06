@@ -116,6 +116,56 @@ export class Status {
   }
 }
 
+/** Broadcast-eligible event game.BankContents (typeID 0xce9d072f). */
+export class BankContents {
+  static readonly typeID = 0xce9d072f;
+  items: { itemID: number; quantity: number }[] = [];
+  totalMass: number = 0;
+  maxMass: number = 0;
+  cargoItems: { itemID: number; quantity: number }[] = [];
+  cargoMass: number = 0;
+  maxCargoMass: number = 0;
+  currencies: { currencyID: number; balance: number }[] = [];
+
+  static decode(buf: Uint8Array): BankContents {
+    const dv = new DataView(buf.buffer, buf.byteOffset, buf.byteLength);
+    let off = 0;
+    const m = new BankContents();
+    {
+      const sliceLen = dv.getUint16(off, true); off += 2;
+      for (let i = 0; i < sliceLen; i++) {
+        const item: { itemID: number; quantity: number } = { itemID: 0, quantity: 0 };
+            item.itemID = dv.getUint32(off, true); off += 4;
+            item.quantity = dv.getInt32(off, true); off += 4;
+        m.items.push(item);
+      }
+    }
+    m.totalMass = dv.getFloat32(off, true); off += 4;
+    m.maxMass = dv.getFloat32(off, true); off += 4;
+    {
+      const sliceLen = dv.getUint16(off, true); off += 2;
+      for (let i = 0; i < sliceLen; i++) {
+        const item: { itemID: number; quantity: number } = { itemID: 0, quantity: 0 };
+            item.itemID = dv.getUint32(off, true); off += 4;
+            item.quantity = dv.getInt32(off, true); off += 4;
+        m.cargoItems.push(item);
+      }
+    }
+    m.cargoMass = dv.getFloat32(off, true); off += 4;
+    m.maxCargoMass = dv.getFloat32(off, true); off += 4;
+    {
+      const sliceLen = dv.getUint16(off, true); off += 2;
+      for (let i = 0; i < sliceLen; i++) {
+        const item: { currencyID: number; balance: number } = { currencyID: 0, balance: 0 };
+            item.currencyID = dv.getUint32(off, true); off += 4;
+            item.balance = Number(dv.getBigInt64(off, true)); off += 8;
+        m.currencies.push(item);
+      }
+    }
+    return m;
+  }
+}
+
 /** Broadcast-eligible event game.CurrencyUpdate (typeID 0x722e1d79). */
 export class CurrencyUpdate {
   static readonly typeID = 0x722e1d79;

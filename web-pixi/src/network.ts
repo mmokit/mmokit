@@ -6,7 +6,7 @@ import {
   type NPCEntity,
   type WorldUpdateMsg,
   type PlayerSpawnedMsg,
-  type BankContentsMsg,
+  BankContents,
   TransferResult,
   EquipResult,
   DockingState,
@@ -434,14 +434,14 @@ export function connect(state: GameState, callbacks: NetworkCallbacks): void {
   });
 
   // --- Bank / inventory ---
-  client.onBankContents((bank: BankContentsMsg) => {
+  client.onBankContents((bank: BankContents) => {
     for (const cur of bank.currencies) {
-      state.currencyBalances[cur.currencyId] = Number(cur.balance);
+      state.currencyBalances[cur.currencyID] = Number(cur.balance);
     }
     state.bankItems.clear();
     for (const item of bank.items) {
       if (item.quantity > 0) {
-        state.bankItems.set(item.itemId, item.quantity);
+        state.bankItems.set(item.itemID, item.quantity);
       }
     }
     state.bankTotalMass = bank.totalMass;
@@ -449,7 +449,7 @@ export function connect(state: GameState, callbacks: NetworkCallbacks): void {
     state.dockedCargoItems.clear();
     for (const item of bank.cargoItems) {
       if (item.quantity > 0) {
-        state.dockedCargoItems.set(item.itemId, item.quantity);
+        state.dockedCargoItems.set(item.itemID, item.quantity);
       }
     }
     state.dockedCargoMass = bank.cargoMass;
