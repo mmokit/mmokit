@@ -65,6 +65,15 @@ type WorldDelta struct {
 	Body []byte
 }
 
+// PlayerEntityAssigned — sent once per session right after the player's
+// entity is spawned, telling the client its authoritative entity NetID and
+// world-space position. Replaces enginepb.SpawnedMsg (SE_PLAYER_SPAWNED).
+type PlayerEntityAssigned struct {
+	EntityNetID uint32
+	WorldX      float32
+	WorldY      float32
+}
+
 // registerEngineTypedEvents registers each engine-level typed event
 // exactly once, regardless of how many Protocol instances the process
 // creates. NewProtocol calls this on every invocation; the sync.Once
@@ -74,6 +83,7 @@ func registerEngineTypedEvents() {
 		RegisterEvent[Pong]()
 		RegisterEvent[DebugInfo]()
 		RegisterEvent[WorldDelta]()
+		RegisterEvent[PlayerEntityAssigned]()
 	})
 }
 

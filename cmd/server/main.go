@@ -43,11 +43,11 @@ func main() {
 			// ClientInputTypes schema, not the ClientEvents registry.
 		}).
 		ServerEvents(func(e *mmokit.ServerEvents) {
-			// All game-specific server events ride the typed
-			// reflection-codec channel after Plan 1 Phase 7. SE_PLAYER_SPAWNED
-			// keeps an engine-default proto registration (enginepb.SpawnedMsg)
-			// for SDK schema visibility; the typed PlayerSpawned below is the
-			// payload the space client actually consumes.
+			// All server events ride the typed reflection-codec channel —
+			// engine defaults (PlayerEntityAssigned / CellChange /
+			// ServerConfig) are auto-registered by NewProtocol; the typed
+			// game.PlayerSpawned below is the richer payload the space
+			// client consumes for its own spawn flow.
 			_ = e
 			mmokit.RegisterEvent[game.PlayerSpawned]()
 			mmokit.RegisterEvent[game.PlayerDied]()

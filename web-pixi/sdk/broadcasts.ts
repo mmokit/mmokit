@@ -477,6 +477,24 @@ export class OperationError {
   }
 }
 
+/** Broadcast-eligible event mmokit.PlayerEntityAssigned (typeID 0x02a6f7d8). */
+export class PlayerEntityAssigned {
+  static readonly typeID = 0x2a6f7d8;
+  entityNetID: number = 0;
+  worldX: number = 0;
+  worldY: number = 0;
+
+  static decode(buf: Uint8Array): PlayerEntityAssigned {
+    const dv = new DataView(buf.buffer, buf.byteOffset, buf.byteLength);
+    let off = 0;
+    const m = new PlayerEntityAssigned();
+    m.entityNetID = dv.getUint32(off, true); off += 4;
+    m.worldX = dv.getFloat32(off, true); off += 4;
+    m.worldY = dv.getFloat32(off, true); off += 4;
+    return m;
+  }
+}
+
 /** Broadcast-eligible event mmokit.Pong (typeID 0x8527c2fc). */
 export class Pong {
   static readonly typeID = 0x8527c2fc;

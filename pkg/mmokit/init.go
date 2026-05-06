@@ -48,6 +48,20 @@ func init() {
 	}
 	pkguniverse.ServerEventHooks.TypeIDOf = TypeIDOf
 
+	// Engine-default typed events. Universe + engine call these helpers
+	// to emit the framework events without importing pkg/mmokit. Register
+	// the types here at package-init time so the build helpers are usable
+	// before any NewProtocol call (the engine's PlayerManager.OnConnect
+	// hook may fire before user code runs NewProtocol).
+	registerEngineTypedEvents()
+	pkguniverse.EngineDefaultFrameHooks.PlayerEntityAssigned = func(netID uint32, worldX, worldY float32) []byte {
+		return pkguniverse.BuildTypedEventFrameRaw(&PlayerEntityAssigned{
+			EntityNetID: netID,
+			WorldX:      worldX,
+			WorldY:      worldY,
+		})
+	}
+
 	pkguniverse.TypedOpHooks.LookupTypedOp = func(reqTypeID uint32) (uint8, reflect.Type, reflect.Type, uint32, any, bool) {
 		e, ok := LookupTypedOp(reqTypeID)
 		if !ok {

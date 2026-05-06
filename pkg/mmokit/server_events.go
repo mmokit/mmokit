@@ -14,8 +14,10 @@ import (
 // hint surface for the SDK generator — every game-specific server event
 // rides the typed reflection-codec channel via mmokit.RegisterEvent[T].
 // The framework events that retain a proto-envelope path
-// (SE_SERVER_CONFIG, SE_PLAYER_SPAWNED, SE_CELL_CHANGE) are emitted with
-// makeEventFrame on the universe side, not through this registry.
+// (SE_SERVER_CONFIG, SE_CELL_CHANGE) are emitted with makeEventFrame on
+// the universe / engine side, not through this registry. SE_PLAYER_SPAWNED
+// migrated to the typed PlayerEntityAssigned event in the protobuf-residue
+// cleanup Phase 1.
 type ServerEvents struct {
 	entries map[uint32]serverEventEntry
 }

@@ -100,20 +100,13 @@ func NewProtocol(game string) *Protocol {
 		clientEventsRegistry: NewClientEvents(),
 	}
 	// Universal server→client events — engine-defined codes with
-	// engine-defined payload shapes that every game uses as-is. After
-	// Phase 7 the only proto-envelope events that survive are the bare
-	// framework hooks: SE_SERVER_CONFIG (sent inline before any cell
-	// exists), SE_CELL_CHANGE (reserved future hint), and the engine
-	// default SE_PLAYER_SPAWNED. Migrated events (Pong, DebugInfo,
-	// WorldDelta) ride the typed registry below.
+	// engine-defined payload shapes that every game uses as-is. Phase 1 of
+	// the protobuf-residue cleanup migrated SE_PLAYER_SPAWNED to the typed
+	// PlayerEntityAssigned event (see registerEngineTypedEvents below);
+	// SE_SERVER_CONFIG and SE_CELL_CHANGE remain on the proto-envelope path
+	// until subsequent commits in this phase migrate them too.
 	RegisterServerEvent[enginepb.ServerConfigMsg](p.serverEventsRegistry, enginepb.ServerEventCode_SE_SERVER_CONFIG)
 	RegisterServerEvent[enginepb.CellChangeMsg](p.serverEventsRegistry, enginepb.ServerEventCode_SE_CELL_CHANGE)
-	// Engine default for SE_PLAYER_SPAWNED is the bare SpawnedMsg sent by
-	// Stage.SpawnPlayer for games that have no richer payload. Use a
-	// distinct schema name ("playerEntityAssigned") so games like the
-	// space shooter that ALSO publish a typed game.PlayerSpawned event
-	// don't collide on the generated `onPlayerSpawned` method.
-	RegisterServerEvent[enginepb.SpawnedMsg](p.serverEventsRegistry, enginepb.ServerEventCode_SE_PLAYER_SPAWNED, WithEventName("playerEntityAssigned"))
 	registerEngineTypedEvents()
 
 	// Universal client→server events (CE_PING is handled inline in the

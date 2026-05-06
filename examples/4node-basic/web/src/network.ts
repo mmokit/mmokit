@@ -1,10 +1,9 @@
 import { BasicClient } from "../sdk/client.js";
-import { DebugInfo, WorldDelta } from "../sdk/broadcasts.js";
+import { DebugInfo, PlayerEntityAssigned, WorldDelta } from "../sdk/broadcasts.js";
 import { type DeltaWorldUpdate } from "../sdk/entities.js";
 import { BasicDeltaDecoder } from "../sdk/delta-decoder.js";
 import { MoveTargetMsg } from "../sdk/inputs.js";
 import { state, setTickRate, type ClientEntity, type CellInfo } from "./state.js";
-import { type SpawnedMsg } from "@gen/enginepb/engine_pb.js";
 import { observeFrameStamps } from "./clockSync.js";
 import { updateEntityFromServer } from "./interpolation.js";
 import { pruneStaleOnFreshSnapshot } from "./reconcile.js";
@@ -30,8 +29,8 @@ export function connect(name: string): void {
     onError: () => setStatus("connection error"),
   });
 
-  client.onPlayerEntityAssigned((msg: SpawnedMsg) => {
-    state.playerNetID = msg.entityNetId;
+  client.onPlayerEntityAssigned((msg: PlayerEntityAssigned) => {
+    state.playerNetID = msg.entityNetID;
     setStatus("");
     showGameCallback?.();
     // Mount the echo demo panel once the session is authenticated.
