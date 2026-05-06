@@ -40,3 +40,25 @@ type CurrencyUpdate struct {
 	Balance    int64
 	Earned     int64
 }
+
+// EquipResult — server response to an equip request.
+// Replaces gamepb.EquipResultMsg. Slot is the underlying uint32 of the
+// EquipSlot enum (matches the proto wire format — proto enums are int32
+// on the wire, but EquipSlot values are all small non-negative).
+type EquipResult struct {
+	Success        bool
+	Reason         string
+	Slot           uint32 // EquipSlot enum value (0=NONE, 1=WEAPON1, 2=WEAPON2, 3=SHIELD, 4=THRUSTER)
+	EquippedItemID uint32 // 0 if slot is now empty
+	PreviousItemID uint32 // what was in the slot before
+}
+
+// TransferResult — bank/cargo transfer outcome (deposit or withdraw).
+// Replaces gamepb.TransferResultMsg.
+type TransferResult struct {
+	Success  bool
+	Reason   string
+	ItemID   uint32
+	Quantity int32 // actual amount transferred
+	Deposit  bool  // direction of transfer
+}

@@ -1,7 +1,6 @@
 package game
 
 import (
-	gamepb "github.com/zenion/mmoserver/gen/go/gamepb"
 	"github.com/zenion/mmoserver/internal/component"
 	"github.com/zenion/mmoserver/internal/item"
 	"github.com/zenion/mmoserver/pkg/mmokit"
@@ -414,11 +413,11 @@ func (s *EquipmentSystem) setSlot(eq *component.Equipment, slot item.EquipSlot, 
 
 func (s *EquipmentSystem) sendResult(connID uint32, success bool, reason string, slot item.EquipSlot, equippedID, previousID uint32) {
 	gw := s.World()
-	gw.ServerEvents().Send(gw.eng.ConnMgr, connID, uint32(gamepb.GameServerEventCode_GSE_EQUIP_RESULT), &gamepb.EquipResultMsg{
+	mmokit.SendEvent(gw.Stage, connID, &EquipResult{
 		Success:        success,
 		Reason:         reason,
-		Slot:           gamepb.EquipSlot(slot),
-		EquippedItemId: equippedID,
-		PreviousItemId: previousID,
+		Slot:           uint32(slot),
+		EquippedItemID: equippedID,
+		PreviousItemID: previousID,
 	})
 }

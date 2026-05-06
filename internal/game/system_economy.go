@@ -241,10 +241,10 @@ func (s *EconomySystem) nearStation(pos *mmokit.Position, stations []mmokit.Posi
 
 func (s *EconomySystem) sendTransferResult(connID uint32, success bool, reason string, itemID uint32, qty int32, deposit bool) {
 	gw := s.World()
-	gw.ServerEvents().Send(gw.eng.ConnMgr, connID, uint32(gamepb.GameServerEventCode_GSE_TRANSFER_RESULT), &gamepb.TransferResultMsg{
+	mmokit.SendEvent(gw.Stage, connID, &TransferResult{
 		Success:  success,
 		Reason:   reason,
-		ItemId:   itemID,
+		ItemID:   itemID,
 		Quantity: qty,
 		Deposit:  deposit,
 	})

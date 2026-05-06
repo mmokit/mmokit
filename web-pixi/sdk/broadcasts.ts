@@ -166,6 +166,31 @@ export class DockingState {
   }
 }
 
+/** Broadcast-eligible event game.EquipResult (typeID 0x50af4abc). */
+export class EquipResult {
+  static readonly typeID = 0x50af4abc;
+  success: boolean = false;
+  reason: string = "";
+  slot: number = 0;
+  equippedItemID: number = 0;
+  previousItemID: number = 0;
+
+  static decode(buf: Uint8Array): EquipResult {
+    const dv = new DataView(buf.buffer, buf.byteOffset, buf.byteLength);
+    let off = 0;
+    const m = new EquipResult();
+    m.success = dv.getUint8(off) !== 0; off += 1;
+    {
+      const sl = dv.getUint16(off, true); off += 2;
+      m.reason = new TextDecoder().decode(buf.subarray(off, off + sl)); off += sl;
+    }
+    m.slot = dv.getUint32(off, true); off += 4;
+    m.equippedItemID = dv.getUint32(off, true); off += 4;
+    m.previousItemID = dv.getUint32(off, true); off += 4;
+    return m;
+  }
+}
+
 /** Broadcast-eligible event game.PlayerDied (typeID 0xef56f740). */
 export class PlayerDied {
   static readonly typeID = 0xef56f740;
@@ -176,6 +201,31 @@ export class PlayerDied {
     let off = 0;
     const m = new PlayerDied();
     m.killerID = dv.getUint32(off, true); off += 4;
+    return m;
+  }
+}
+
+/** Broadcast-eligible event game.TransferResult (typeID 0xed313859). */
+export class TransferResult {
+  static readonly typeID = 0xed313859;
+  success: boolean = false;
+  reason: string = "";
+  itemID: number = 0;
+  quantity: number = 0;
+  deposit: boolean = false;
+
+  static decode(buf: Uint8Array): TransferResult {
+    const dv = new DataView(buf.buffer, buf.byteOffset, buf.byteLength);
+    let off = 0;
+    const m = new TransferResult();
+    m.success = dv.getUint8(off) !== 0; off += 1;
+    {
+      const sl = dv.getUint16(off, true); off += 2;
+      m.reason = new TextDecoder().decode(buf.subarray(off, off + sl)); off += sl;
+    }
+    m.itemID = dv.getUint32(off, true); off += 4;
+    m.quantity = dv.getInt32(off, true); off += 4;
+    m.deposit = dv.getUint8(off) !== 0; off += 1;
     return m;
   }
 }

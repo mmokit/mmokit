@@ -65,8 +65,10 @@ func main() {
 				gamepb.GameServerEventCode_GSE_BANK_CONTENTS)
 			mmokit.RegisterServerEvent[gamepb.TransferResultMsg](e,
 				gamepb.GameServerEventCode_GSE_TRANSFER_RESULT)
+			mmokit.RegisterEvent[game.TransferResult]()
 			mmokit.RegisterServerEvent[gamepb.EquipResultMsg](e,
 				gamepb.GameServerEventCode_GSE_EQUIP_RESULT)
+			mmokit.RegisterEvent[game.EquipResult]()
 			mmokit.RegisterServerEvent[gamepb.DockingStateMsg](e,
 				gamepb.GameServerEventCode_GSE_DOCKING_STATE)
 			mmokit.RegisterEvent[game.DockingState]()

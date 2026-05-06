@@ -7,8 +7,8 @@ import {
   type WorldUpdateMsg,
   type PlayerSpawnedMsg,
   type BankContentsMsg,
-  type TransferResultMsg,
-  type EquipResultMsg,
+  TransferResult,
+  EquipResult,
   DockingState,
   type PlayerOwnStateMsg,
   type MapDataMsg,
@@ -457,10 +457,10 @@ export function connect(state: GameState, callbacks: NetworkCallbacks): void {
     state.dockedMaxCargoMass = bank.maxCargoMass;
   });
 
-  client.onTransferResult((result: TransferResultMsg) => {
+  client.onTransferResult((result: TransferResult) => {
     if (result.success) {
-      const def = state.itemDefs.get(result.itemId);
-      const name = def ? def.name : `Item #${result.itemId}`;
+      const def = state.itemDefs.get(result.itemID);
+      const name = def ? def.name : `Item #${result.itemID}`;
       const action = result.deposit ? "Deposited" : "Withdrew";
       state.toasts.push({
         text: `${action} ${result.quantity.toFixed(0)} ${name}`,
@@ -474,10 +474,10 @@ export function connect(state: GameState, callbacks: NetworkCallbacks): void {
     }
   });
 
-  client.onEquipResult((result: EquipResultMsg) => {
+  client.onEquipResult((result: EquipResult) => {
     if (result.success) {
-      const isEquip = result.equippedItemId !== 0;
-      const relevantId = isEquip ? result.equippedItemId : result.previousItemId;
+      const isEquip = result.equippedItemID !== 0;
+      const relevantId = isEquip ? result.equippedItemID : result.previousItemID;
       const def = state.itemDefs.get(relevantId);
       const name = def ? def.name : (relevantId ? `Item #${relevantId}` : "Unknown");
       const action = isEquip ? "Equipped" : "Unequipped";
@@ -492,10 +492,10 @@ export function connect(state: GameState, callbacks: NetworkCallbacks): void {
       // come through that channel — apply locally from the result message.
       // EquipSlot enum: 1=Weapon1, 2=Weapon2, 3=Shield, 4=Thruster.
       switch (result.slot) {
-        case 1: state.equipment.weapon1 = result.equippedItemId; break;
-        case 2: state.equipment.weapon2 = result.equippedItemId; break;
-        case 3: state.equipment.shield = result.equippedItemId; break;
-        case 4: state.equipment.thruster = result.equippedItemId; break;
+        case 1: state.equipment.weapon1 = result.equippedItemID; break;
+        case 2: state.equipment.weapon2 = result.equippedItemID; break;
+        case 3: state.equipment.shield = result.equippedItemID; break;
+        case 4: state.equipment.thruster = result.equippedItemID; break;
       }
     } else {
       state.toasts.push({
