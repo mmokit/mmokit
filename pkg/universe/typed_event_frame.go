@@ -8,12 +8,12 @@ import (
 
 // EncodeTypedEventFrame produces a single-event 0x00 frame:
 //
-//	[0x00][typeID:u32 BE][body_len:u32 BE][body]
+//	[0x00][typeID:u32 LE][body_len:u32 LE][body]
 func EncodeTypedEventFrame(typeID uint32, body []byte) []byte {
 	frame := make([]byte, 1+4+4+len(body))
 	frame[0] = pkgnet.ChannelEvent
-	binary.BigEndian.PutUint32(frame[1:5], typeID)
-	binary.BigEndian.PutUint32(frame[5:9], uint32(len(body)))
+	binary.LittleEndian.PutUint32(frame[1:5], typeID)
+	binary.LittleEndian.PutUint32(frame[5:9], uint32(len(body)))
 	copy(frame[9:], body)
 	return frame
 }
@@ -32,9 +32,9 @@ func EncodeBatchedTypedEventFrame(events []BroadcastEvent) []byte {
 	frame[0] = pkgnet.ChannelEvent
 	off := 1
 	for _, e := range events {
-		binary.BigEndian.PutUint32(frame[off:off+4], e.TypeID)
+		binary.LittleEndian.PutUint32(frame[off:off+4], e.TypeID)
 		off += 4
-		binary.BigEndian.PutUint32(frame[off:off+4], uint32(len(e.Body)))
+		binary.LittleEndian.PutUint32(frame[off:off+4], uint32(len(e.Body)))
 		off += 4
 		copy(frame[off:off+len(e.Body)], e.Body)
 		off += len(e.Body)

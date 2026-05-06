@@ -8,7 +8,7 @@ import (
 // DispatchInboundEventFrame consumes a payload (frame body, channel byte
 // already stripped) carrying one or more typed-event entries:
 //
-//	[typeID:u32 BE][body_len:u32 BE][body] repeated
+//	[typeID:u32 LE][body_len:u32 LE][body] repeated
 //
 // For each entry, the typeID is looked up in the client-input registry
 // (populated by mmokit.HandleClient) via the ClientInputHooks indirection;
@@ -39,8 +39,8 @@ func DispatchInboundEventFrame(stage *Stage, playerNetID uint32, payload []byte)
 	}
 	off := 0
 	for off+8 <= len(payload) {
-		typeID := binary.BigEndian.Uint32(payload[off : off+4])
-		bodyLen := binary.BigEndian.Uint32(payload[off+4 : off+8])
+		typeID := binary.LittleEndian.Uint32(payload[off : off+4])
+		bodyLen := binary.LittleEndian.Uint32(payload[off+4 : off+8])
 		off += 8
 		if int(bodyLen) > len(payload)-off {
 			if stage.eng != nil {

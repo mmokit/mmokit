@@ -13,11 +13,11 @@ func TestEncodeTypedEventFrame_SingleEvent(t *testing.T) {
 	if frame[0] != 0x00 {
 		t.Fatalf("channel byte: got %#x, want 0x00", frame[0])
 	}
-	gotTypeID := binary.BigEndian.Uint32(frame[1:5])
+	gotTypeID := binary.LittleEndian.Uint32(frame[1:5])
 	if gotTypeID != 0xDEADBEEF {
 		t.Fatalf("typeID: got %#x, want 0xDEADBEEF", gotTypeID)
 	}
-	gotLen := binary.BigEndian.Uint32(frame[5:9])
+	gotLen := binary.LittleEndian.Uint32(frame[5:9])
 	if gotLen != uint32(len(body)) {
 		t.Fatalf("body_len: got %d, want %d", gotLen, len(body))
 	}
@@ -40,20 +40,20 @@ func TestEncodeBatchedTypedEventFrame_TwoEvents(t *testing.T) {
 		t.Fatalf("channel byte: got %#x, want 0x00", frame[0])
 	}
 	// Entry 1: typeID=AAAA0001 len=2 body=10,20
-	if binary.BigEndian.Uint32(frame[1:5]) != 0xAAAA0001 {
+	if binary.LittleEndian.Uint32(frame[1:5]) != 0xAAAA0001 {
 		t.Fatal("entry 1 typeID")
 	}
-	if binary.BigEndian.Uint32(frame[5:9]) != 2 {
+	if binary.LittleEndian.Uint32(frame[5:9]) != 2 {
 		t.Fatal("entry 1 body_len")
 	}
 	if !bytes.Equal(frame[9:11], []byte{0x10, 0x20}) {
 		t.Fatal("entry 1 body")
 	}
 	// Entry 2: typeID=BBBB0002 len=3 body=30,40,50
-	if binary.BigEndian.Uint32(frame[11:15]) != 0xBBBB0002 {
+	if binary.LittleEndian.Uint32(frame[11:15]) != 0xBBBB0002 {
 		t.Fatal("entry 2 typeID")
 	}
-	if binary.BigEndian.Uint32(frame[15:19]) != 3 {
+	if binary.LittleEndian.Uint32(frame[15:19]) != 3 {
 		t.Fatal("entry 2 body_len")
 	}
 	if !bytes.Equal(frame[19:22], []byte{0x30, 0x40, 0x50}) {

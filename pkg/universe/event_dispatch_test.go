@@ -22,11 +22,11 @@ type evDispatchOther struct {
 	X int32
 }
 
-// buildTypedEntry packs one [typeID:u32 BE][bodyLen:u32 BE][body] entry.
+// buildTypedEntry packs one [typeID:u32 LE][bodyLen:u32 LE][body] entry.
 func buildTypedEntry(typeID uint32, body []byte) []byte {
 	out := make([]byte, 8+len(body))
-	binary.BigEndian.PutUint32(out[0:4], typeID)
-	binary.BigEndian.PutUint32(out[4:8], uint32(len(body)))
+	binary.LittleEndian.PutUint32(out[0:4], typeID)
+	binary.LittleEndian.PutUint32(out[4:8], uint32(len(body)))
 	copy(out[8:], body)
 	return out
 }
@@ -136,8 +136,8 @@ func TestDispatchInboundEventFrame_TruncatedBody(t *testing.T) {
 	// Header declares 100 body bytes; we only supply 4. Must be detected
 	// before the read goes out of bounds.
 	payload := make([]byte, 8+4)
-	binary.BigEndian.PutUint32(payload[0:4], typeID)
-	binary.BigEndian.PutUint32(payload[4:8], 100)
+	binary.LittleEndian.PutUint32(payload[0:4], typeID)
+	binary.LittleEndian.PutUint32(payload[4:8], 100)
 	// trailing 4 bytes left zero — definitely shorter than declared 100
 
 	// Should not panic.

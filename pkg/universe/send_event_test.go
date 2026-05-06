@@ -80,13 +80,13 @@ func TestStageSendEventTyped(t *testing.T) {
 		t.Fatalf("frame[0] = %#x, want %#x (ChannelEvent)", frame[0], pkgnet.ChannelEvent)
 	}
 
-	gotTypeID := binary.BigEndian.Uint32(frame[1:5])
+	gotTypeID := binary.LittleEndian.Uint32(frame[1:5])
 	wantTypeID := mmokit.TypeIDOf(reflect.TypeFor[sendEventTestMsg]())
 	if gotTypeID != wantTypeID {
 		t.Fatalf("typeID = %#x, want %#x", gotTypeID, wantTypeID)
 	}
 
-	gotBodyLen := binary.BigEndian.Uint32(frame[5:9])
+	gotBodyLen := binary.LittleEndian.Uint32(frame[5:9])
 	if gotBodyLen != bodyLen {
 		t.Fatalf("bodyLen field = %d, want %d", gotBodyLen, bodyLen)
 	}
