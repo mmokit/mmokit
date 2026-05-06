@@ -1336,18 +1336,21 @@ func MakeOpResponse(code, reqID uint32, returnCode int32, errorMsg string, paylo
 	return frame
 }
 
-// RegisterOp registers a typed operation handler on an OpRouter. It wraps
-// ops.Register, capturing request and response proto type names for schema
-// export via Router.Schema(). Prefer this over the untyped Router.Register for
-// any operation that should appear in the SDK schema.
+// RegisterProtoOp registers a typed operation handler on an OpRouter. It
+// wraps ops.Register, capturing request and response proto type names for
+// schema export via Router.Schema(). Prefer this over the untyped
+// Router.Register for any operation that should appear in the SDK schema.
 //
 // Specify only the value types Req and Res; pointer types are inferred:
 //
-//	mmokit.RegisterOp[MarketBrowseRequest, MarketOrderBookResponse](router, code, "name", handler)
+//	mmokit.RegisterProtoOp[MarketBrowseRequest, MarketOrderBookResponse](router, code, "name", handler)
 //
 // `code` accepts any `~int32` or `~uint32` so proto enum values flow
 // through directly without a `uint32(...)` cast at the call site.
-func RegisterOp[Req any, Res any, Code OpEventCode, ReqP ops.ProtoMessage[Req], ResP ops.ProtoMessage[Res]](
+//
+// Deprecated: this proto-constrained shape is being phased out by Plan 2.
+// Will be removed in Plan 2 Phase 5; use RegisterOp[Req, Res] for new code.
+func RegisterProtoOp[Req any, Res any, Code OpEventCode, ReqP ops.ProtoMessage[Req], ResP ops.ProtoMessage[Res]](
 	r *ops.Router, code Code, name string,
 	handler func(ctx *ops.OpContext, req ReqP) (ResP, error)) {
 	ops.Register(r, code, name, handler)

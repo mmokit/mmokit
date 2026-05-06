@@ -7,7 +7,7 @@ import (
 
 // RegisterHandlers registers all marketplace operation handlers with the router.
 func RegisterHandlers(router *mmokit.OpRouter, svc *Settlement, stationID uint32) {
-	mmokit.RegisterOp(
+	mmokit.RegisterProtoOp(
 		router, uint32(gamepb.OperationCode_OP_MARKET_BROWSE), "marketBrowse",
 		func(ctx *mmokit.OpContext, req *gamepb.MarketBrowseRequest) (*gamepb.MarketOrderBookResponse, error) {
 			view := svc.Browse(stationID, req.ItemId)
@@ -31,7 +31,7 @@ func RegisterHandlers(router *mmokit.OpRouter, svc *Settlement, stationID uint32
 			return resp, nil
 		})
 
-	mmokit.RegisterOp(
+	mmokit.RegisterProtoOp(
 		router, uint32(gamepb.OperationCode_OP_MARKET_CREATE_ORDER), "marketCreateOrder",
 		func(ctx *mmokit.OpContext, req *gamepb.MarketCreateOrderRequest) (*gamepb.MarketOrderResultResponse, error) {
 			var result *mmokit.PlaceResult
@@ -52,7 +52,7 @@ func RegisterHandlers(router *mmokit.OpRouter, svc *Settlement, stationID uint32
 			}, nil
 		})
 
-	mmokit.RegisterOp(
+	mmokit.RegisterProtoOp(
 		router, uint32(gamepb.OperationCode_OP_MARKET_CANCEL_ORDER), "marketCancelOrder",
 		func(ctx *mmokit.OpContext, req *gamepb.MarketCancelOrderRequest) (*gamepb.MarketOrderResultResponse, error) {
 			if err := svc.CancelOrder(ctx.Username, req.OrderId); err != nil {
@@ -61,7 +61,7 @@ func RegisterHandlers(router *mmokit.OpRouter, svc *Settlement, stationID uint32
 			return &gamepb.MarketOrderResultResponse{OrderId: req.OrderId}, nil
 		})
 
-	mmokit.RegisterOp(
+	mmokit.RegisterProtoOp(
 		router, uint32(gamepb.OperationCode_OP_MARKET_MY_ORDERS), "marketMyOrders",
 		func(ctx *mmokit.OpContext, _ *gamepb.MarketMyOrdersRequest) (*gamepb.MarketMyOrdersResponse, error) {
 			orders := svc.PlayerOrders(ctx.Username)
@@ -81,7 +81,7 @@ func RegisterHandlers(router *mmokit.OpRouter, svc *Settlement, stationID uint32
 			return resp, nil
 		})
 
-	mmokit.RegisterOp(
+	mmokit.RegisterProtoOp(
 		router, uint32(gamepb.OperationCode_OP_MARKET_INSTANT_TRADE), "marketInstantTrade",
 		func(ctx *mmokit.OpContext, req *gamepb.MarketInstantTradeRequest) (*gamepb.MarketOrderResultResponse, error) {
 			var result *mmokit.PlaceResult

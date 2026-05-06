@@ -45,7 +45,7 @@ type serviceOpsResult struct {
 
 // opSchemaMap returns a code→schema lookup built from the router's typed
 // registrations. Empty when router is nil or no handlers were registered
-// via the typed mmokit.RegisterOp helper.
+// via the typed mmokit.RegisterProtoOp helper.
 func opSchemaMap(router *ops.Router) map[uint32]ops.OperationSchema {
 	out := map[uint32]ops.OperationSchema{}
 	if router == nil {
@@ -132,7 +132,7 @@ func registerServiceBuiltins(reg *cmdsys.Registry, coord *Process) error {
 				}
 				// Resolve op codes to handler names + proto types via the
 				// local OpRouter's schema. Names come from typed
-				// mmokit.RegisterOp calls; bare ops.Router.Register
+				// mmokit.RegisterProtoOp calls; bare ops.Router.Register
 				// handlers show up as (unnamed).
 				schemaByCode := opSchemaMap(c.cfg.OpRouter)
 				fmt.Fprintf(&sb, "  Ops:\n")

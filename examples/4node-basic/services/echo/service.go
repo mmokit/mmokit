@@ -65,7 +65,7 @@ func (s *Service) Init(ctx *mmokit.ServiceContext) error {
 
 // RegisterOps wires the three handlers — ping, persist, fetch.
 func (s *Service) RegisterOps(router *mmokit.OpRouter) error {
-	mmokit.RegisterOp(router, basicpb.EchoOpCode_BOP_ECHO_PING, "echoPing",
+	mmokit.RegisterProtoOp(router, basicpb.EchoOpCode_BOP_ECHO_PING, "echoPing",
 		func(opCtx *mmokit.OpContext, req *basicpb.EchoPingRequest) (*basicpb.EchoPingResponse, error) {
 			s.ctx.Logger.Log(logCat, "ping: user=%s msg=%q", opCtx.Username, req.Msg)
 			return &basicpb.EchoPingResponse{
@@ -75,7 +75,7 @@ func (s *Service) RegisterOps(router *mmokit.OpRouter) error {
 		},
 	)
 
-	mmokit.RegisterOp(router, basicpb.EchoOpCode_BOP_ECHO_PERSIST, "echoPersist",
+	mmokit.RegisterProtoOp(router, basicpb.EchoOpCode_BOP_ECHO_PERSIST, "echoPersist",
 		func(opCtx *mmokit.OpContext, req *basicpb.EchoPersistRequest) (*basicpb.EchoPersistResponse, error) {
 			pool := s.ctx.DB.Pool()
 			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -94,7 +94,7 @@ func (s *Service) RegisterOps(router *mmokit.OpRouter) error {
 		},
 	)
 
-	mmokit.RegisterOp(router, basicpb.EchoOpCode_BOP_ECHO_FETCH, "echoFetch",
+	mmokit.RegisterProtoOp(router, basicpb.EchoOpCode_BOP_ECHO_FETCH, "echoFetch",
 		func(opCtx *mmokit.OpContext, req *basicpb.EchoFetchRequest) (*basicpb.EchoFetchResponse, error) {
 			pool := s.ctx.DB.Pool()
 			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
