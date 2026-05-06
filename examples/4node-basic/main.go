@@ -23,7 +23,7 @@ type MoveTargetMsg struct {
 var webDist embed.FS
 
 func main() {
-	mmo := mmokit.New(mmokit.Config{
+	process := mmokit.New(mmokit.Config{
 		InvariantMode:    mmokit.InvariantPanic,
 		StrictNetIDIndex: true,
 		CellsX:           CellsX,
@@ -42,31 +42,31 @@ func main() {
 		Protocol: mmokit.NewProtocol("basic"),
 	})
 
-	if err := mmokit.RegisterAuthService(mmo, mmokit.DefaultAuthOpts()); err != nil {
+	if err := mmokit.RegisterAuthService(process, mmokit.DefaultAuthOpts()); err != nil {
 		log.Fatalf("4node-basic: RegisterAuthService: %v", err)
 	}
 
-	mmokit.RegisterKind[PlayerComponents](mmo, KindPlayer, "Player")
-	mmokit.RegisterKind[BotComponents](mmo, KindBot, "Bot")
+	mmokit.RegisterKind[PlayerComponents](process, KindPlayer, "Player")
+	mmokit.RegisterKind[BotComponents](process, KindBot, "Bot")
 
-	mmo.OnPlayerJoin(func(s *mmokit.PlayerSession, stage *mmokit.Stage) {
-		if err := mmokit.GrantDebug(mmo, s, "topology"); err != nil {
-			log.Printf("4node-basic: auto-grant topology for %s: %v", s.Username, err)
+	process.OnPlayerJoin(func(session *mmokit.PlayerSession, stage *mmokit.Stage) {
+		if err := mmokit.GrantDebug(process, session, "topology"); err != nil {
+			log.Printf("4node-basic: auto-grant topology for %s: %v", session.Username, err)
 		}
-		stage.SpawnPlayer(s,
+		stage.SpawnPlayer(session,
 			mmokit.WithCollider(PlayerRadius),
 			mmokit.WithEntityKind(KindPlayer),
 			mmokit.Init(func(c *PlayerComponents) {
-				c.Name.Name = s.Username
+				c.Name.Name = session.Username
 			}),
 		)
 	})
 
-	if err := mmo.RegisterService(echo.Kind); err != nil {
+	if err := process.RegisterService(echo.Kind); err != nil {
 		log.Fatalf("4node-basic: register echo service: %v", err)
 	}
 
-	mmokit.HandleClient(mmo, func(player mmokit.Entity, msg *MoveTargetMsg) {
+	mmokit.HandleClient(process, func(player mmokit.Entity, msg *MoveTargetMsg) {
 		if mmokit.PlayerStateOf(player) != mmokit.StateActive {
 			return
 		}
@@ -77,13 +77,13 @@ func main() {
 		mt.SetTarget(msg.TargetX, msg.TargetY)
 	})
 
-	mmo.AddSystem(mmokit.NewClickToMoveSystem())
-	mmo.AddSystem(mmokit.NewPhysicsSystem())
-	mmo.AddSystem(mmokit.NewSpatialSystem())
-	mmo.AddSystem(mmokit.NewDebugBroadcaster())
-	mmo.AddSystem(mmokit.NewSystem(&BotSystem{}))
-	mmo.AddSystem(mmokit.NewNetworkSystem())
+	process.AddSystem(mmokit.NewClickToMoveSystem())
+	process.AddSystem(mmokit.NewPhysicsSystem())
+	process.AddSystem(mmokit.NewSpatialSystem())
+	process.AddSystem(mmokit.NewDebugBroadcaster())
+	process.AddSystem(mmokit.NewSystem(&BotSystem{}))
+	process.AddSystem(mmokit.NewNetworkSystem())
 
 	log.Printf("4node-basic: grid %dx%d cells, cell size %.0f, AoI %.0f", CellsX, CellsY, CellSize, AoIRadius)
-	mmo.Start()
+	process.Start()
 }
