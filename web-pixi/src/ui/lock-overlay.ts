@@ -160,7 +160,7 @@ export function updateLockOverlay(state: GameState): void {
 
   overlayEl.style.display = "block";
   const tgt = state.entities.get(state.lockTargetId)!;
-  const isAsteroid = tgt.current.entityType === 1; // ASTEROID
+  const isAsteroid = tgt.current.entityType === EntityType.Asteroid;
 
   // Lock status
   const progress = state.lockProgress;

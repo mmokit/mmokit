@@ -5,6 +5,7 @@ import type { ThrusterParticle } from "../types";
 import type { GameState } from "../state";
 import { audio } from "../audio/audio-manager";
 import { SoundId } from "../audio/sounds";
+import { EntityType } from "../../sdk/index.js";
 
 // Per-entity thruster particle arrays
 const particleMap = new Map<number, ThrusterParticle[]>();
@@ -44,7 +45,7 @@ export class ThrusterRenderer {
 
     for (const [id, ent] of state.entities) {
       const e = ent.current;
-      if (e.entityType !== 0) continue; // SHIP = 0
+      if (e.entityType !== EntityType.Ship) continue;
 
       const spd = Math.sqrt(e.velX * e.velX + e.velY * e.velY);
       const isThrusting = spd > 30;
