@@ -1,9 +1,9 @@
 import { BasicClient } from "../sdk/client.js";
+import { DebugInfo } from "../sdk/broadcasts.js";
 import { type DeltaWorldUpdate } from "../sdk/entities.js";
 import { MoveTargetMsg } from "../sdk/inputs.js";
 import { state, setTickRate, type ClientEntity, type CellInfo } from "./state.js";
-import { ServerEventCode, type SpawnedMsg, type CellInfo as PbCellInfo, type DebugInfoMsg, DebugInfoMsgSchema } from "@gen/enginepb/engine_pb.js";
-import { fromBinary } from "@bufbuild/protobuf";
+import { type SpawnedMsg } from "@gen/enginepb/engine_pb.js";
 import { observeFrameStamps } from "./clockSync.js";
 import { updateEntityFromServer } from "./interpolation.js";
 import { pruneStaleOnFreshSnapshot } from "./reconcile.js";
@@ -42,32 +42,24 @@ export function connect(name: string): void {
     setTickRate(msg.tickRate);
   });
 
-  // SE_DEBUG_INFO carries per-player debug overlay data (gated by
+  // Typed DebugInfo carries per-player debug overlay data (gated by
   // DebugFlags). Currently topology + AoI radius; future debug
-  // capabilities slot in as new optional fields. Decoded directly via
-  // fromBinary so we get the typed DebugInfoMsg shape.
-  client.onRawEvent((code, data) => {
-    if (code !== ServerEventCode.SE_DEBUG_INFO) return;
-    const msg: DebugInfoMsg = fromBinary(DebugInfoMsgSchema, data);
-    if (msg.topology) {
-      state.cells = msg.topology.cells.map((c: PbCellInfo): CellInfo => ({
+  // capabilities slot in as new typed-event fields. Empty Topology.cells
+  // + AoIRadius==0 is the sentinel sent on revoke-to-zero — clear the
+  // cached topology so the overlay vanishes until the player is
+  // re-granted.
+  client.onDebugInfo((msg: DebugInfo) => {
+    if (msg.topology.cells.length > 0) {
+      state.cells = msg.topology.cells.map((c): CellInfo => ({
         cellX: c.cellX, cellY: c.cellY,
         depth: c.depth, size: c.size,
         originX: c.originX, originY: c.originY,
-        nodeId: c.nodeId,
+        nodeId: c.nodeID,
       }));
-    }
-    // aoiRadius is optional in DebugInfoMsg; only update when present.
-    if (msg.aoiRadius !== undefined) {
-      state.aoiRadius = msg.aoiRadius;
-    }
-    // Empty payload (no topology, no aoiRadius) is the sentinel sent on
-    // revoke-to-zero — clear the cached topology so the overlay vanishes
-    // until the player is re-granted.
-    if (!msg.topology && msg.aoiRadius === undefined) {
+    } else {
       state.cells = [];
-      state.aoiRadius = 0;
     }
+    state.aoiRadius = msg.aoIRadius;
   });
 
   client.onDeltaWorldUpdate(applyWorldUpdate);

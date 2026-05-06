@@ -28,6 +28,37 @@ type LoginRejected struct {
 	Reason string
 }
 
+// CellInfo — per-cell layout for debug overlays.
+// Replaces enginepb.CellInfo.
+type CellInfo struct {
+	CellX   int32
+	CellY   int32
+	Depth   uint32
+	Size    float32
+	OriginX float32
+	OriginY float32
+	NodeID  string
+}
+
+// CellTopology — full cluster cell layout for the debug overlay.
+// Replaces enginepb.CellTopologyMsg. Sent at most once per topology
+// change, gated by DebugTopology flag.
+type CellTopology struct {
+	Cells        []CellInfo
+	GridW        int32
+	GridH        int32
+	BaseCellSize float32
+}
+
+// DebugInfo — per-player debug-overlay payload, gated by DebugFlags
+// bits. Empty Topology.Cells means topology is not currently enabled
+// (or topology is empty); AoIRadius == 0 means the AoI overlay is off.
+// Replaces enginepb.DebugInfoMsg.
+type DebugInfo struct {
+	Topology  CellTopology
+	AoIRadius float32
+}
+
 // registerEngineTypedEvents registers each engine-level typed event
 // exactly once, regardless of how many Protocol instances the process
 // creates. NewProtocol calls this on every invocation; the sync.Once
@@ -36,6 +67,7 @@ func registerEngineTypedEvents() {
 	engineTypedEventsOnce.Do(func() {
 		RegisterEvent[Pong]()
 		RegisterEvent[LoginRejected]()
+		RegisterEvent[DebugInfo]()
 	})
 }
 

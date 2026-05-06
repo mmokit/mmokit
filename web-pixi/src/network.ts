@@ -16,6 +16,7 @@ import {
   PlayerDied,
   Pong,
   LoginRejected,
+  DebugInfo,
   Damage,
   MineExtract,
   Status,
@@ -23,11 +24,6 @@ import {
   BeamToggle,
   BankRequest,
 } from "../sdk/index.js";
-import type { DebugInfoMsg } from "@gen/enginepb/engine_pb.js";
-// Nested proto types used for iterating repeated fields on server-event
-// messages — the SDK doesn't re-export nested shapes yet, so import
-// these directly from @gen/... as an explicit escape hatch.
-import type { CellInfo as PbCellInfo } from "@gen/enginepb/engine_pb.js";
 import { MAX_CHAT_DISPLAY, CELL_SIZE } from "./constants";
 import { updateEntityFromServer } from "./interpolation";
 import { observeFrameStamps } from "./clockSync";
@@ -404,17 +400,17 @@ export function connect(state: GameState, callbacks: NetworkCallbacks): void {
   // msg.topology and is only populated for players with the topology
   // debug flag granted. Empty payload (topology cleared, aoiRadius
   // unset) is the sentinel sent on revoke-to-zero.
-  client.onDebugInfo((msg: DebugInfoMsg) => {
-    if (msg.topology && msg.topology.cells.length > 0) {
+  client.onDebugInfo((msg: DebugInfo) => {
+    if (msg.topology.cells.length > 0) {
       const topo = msg.topology;
-      state.cellTopology = topo.cells.map((c: PbCellInfo): CellInfo => ({
+      state.cellTopology = topo.cells.map((c): CellInfo => ({
         cellX: c.cellX,
         cellY: c.cellY,
         depth: c.depth,
         size: c.size,
         originX: c.originX,
         originY: c.originY,
-        nodeId: c.nodeId,
+        nodeId: c.nodeID,
       }));
       if (topo.gridW > 0) state.gridCellsX = topo.gridW;
       if (topo.gridH > 0) state.gridCellsY = topo.gridH;

@@ -397,6 +397,41 @@ export class TransferResult {
   }
 }
 
+/** Broadcast-eligible event mmokit.DebugInfo (typeID 0x83f2dca1). */
+export class DebugInfo {
+  static readonly typeID = 0x83f2dca1;
+  topology: { cells: { cellX: number; cellY: number; depth: number; size: number; originX: number; originY: number; nodeID: string }[]; gridW: number; gridH: number; baseCellSize: number } = { cells: [], gridW: 0, gridH: 0, baseCellSize: 0 };
+  aoIRadius: number = 0;
+
+  static decode(buf: Uint8Array): DebugInfo {
+    const dv = new DataView(buf.buffer, buf.byteOffset, buf.byteLength);
+    let off = 0;
+    const m = new DebugInfo();
+    {
+      const sliceLen = dv.getUint16(off, true); off += 2;
+      for (let i = 0; i < sliceLen; i++) {
+        const item: { cellX: number; cellY: number; depth: number; size: number; originX: number; originY: number; nodeID: string } = { cellX: 0, cellY: 0, depth: 0, size: 0, originX: 0, originY: 0, nodeID: "" };
+            item.cellX = dv.getInt32(off, true); off += 4;
+            item.cellY = dv.getInt32(off, true); off += 4;
+            item.depth = dv.getUint32(off, true); off += 4;
+            item.size = dv.getFloat32(off, true); off += 4;
+            item.originX = dv.getFloat32(off, true); off += 4;
+            item.originY = dv.getFloat32(off, true); off += 4;
+    {
+      const sl = dv.getUint16(off, true); off += 2;
+              item.nodeID = new TextDecoder().decode(buf.subarray(off, off + sl)); off += sl;
+    }
+        m.topology.cells.push(item);
+      }
+    }
+    m.topology.gridW = dv.getInt32(off, true); off += 4;
+    m.topology.gridH = dv.getInt32(off, true); off += 4;
+    m.topology.baseCellSize = dv.getFloat32(off, true); off += 4;
+    m.aoIRadius = dv.getFloat32(off, true); off += 4;
+    return m;
+  }
+}
+
 /** Broadcast-eligible event mmokit.LoginRejected (typeID 0x62f41d81). */
 export class LoginRejected {
   static readonly typeID = 0x62f41d81;

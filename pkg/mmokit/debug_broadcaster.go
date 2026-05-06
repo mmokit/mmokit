@@ -5,19 +5,19 @@ import (
 	"sort"
 	"strconv"
 
-	enginepb "github.com/zenion/mmoserver/gen/go/enginepb"
 	"github.com/zenion/mmoserver/pkg/coords"
 	"github.com/zenion/mmoserver/pkg/engine"
 )
 
 // debugBroadcasterWorld is the minimal interface debugBroadcaster needs
-// from a game world. *Stage satisfies it via Topology() + GetAoIRadius()
-// + Engine() + SendEvent() + HasInflightTransfers().
+// from a game world. *Stage satisfies it directly; *GameWorld-shaped
+// types satisfy it because they embed *Stage. SendEvent below frames
+// the typed event and writes directly to ConnMgr — no Stage handle
+// needed at the call site.
 type debugBroadcasterWorld interface {
 	Topology() []ClusterCellInfo
 	GridDimensions() (uint32, uint32, float32)
 	GetAoIRadius() float32
-	SendEvent(connID, code uint32, msg interface{ Reset() })
 	Engine() *engine.Engine
 	HasInflightTransfers() bool
 }
@@ -73,8 +73,11 @@ func (s *debugBroadcaster) Update(dt float32) {
 		if s.sentHash[sess.ConnID] == hash {
 			return
 		}
-		msg := buildDebugInfoPayload(cells, radius, sess.DebugFlags)
-		s.World().SendEvent(sess.ConnID, uint32(enginepb.ServerEventCode_SE_DEBUG_INFO), msg)
+		msg := buildDebugInfo(cells, radius, sess.DebugFlags)
+		// Frame inline + write through ConnMgr — interface doesn't expose
+		// a *Stage handle, but the engine's ConnMgr is enough for the
+		// reliable typed-event channel.
+		s.World().Engine().ConnMgr.SendReliable(sess.ConnID, BuildTypedEventFrame(&msg))
 		s.sentHash[sess.ConnID] = hash
 	})
 
@@ -86,39 +89,39 @@ func (s *debugBroadcaster) Update(dt float32) {
 	}
 }
 
-// buildDebugInfoPayload constructs a per-player DebugInfoMsg with only
-// the fields whose flag the player has.
-func buildDebugInfoPayload(cells []ClusterCellInfo, aoiRadius float32, flags engine.DebugFlag) *enginepb.DebugInfoMsg {
-	msg := &enginepb.DebugInfoMsg{}
+// buildDebugInfo constructs a per-player DebugInfo with only the fields
+// whose flag the player has. AoIRadius == 0 + empty cells is the
+// "everything off" sentinel; clients render no overlay in that state.
+func buildDebugInfo(cells []ClusterCellInfo, aoiRadius float32, flags engine.DebugFlag) DebugInfo {
+	var msg DebugInfo
 	if flags&engine.DebugTopology != 0 {
-		msg.Topology = buildTopologyMsg(cells)
-		r := aoiRadius
-		msg.AoiRadius = &r
+		msg.Topology = buildTopology(cells)
+		msg.AoIRadius = aoiRadius
 	}
 	// Future flags slot here as additional `if flags & <bit> != 0` branches.
 	return msg
 }
 
-// buildTopologyMsg is the cell-list → CellTopologyMsg helper.
-func buildTopologyMsg(cells []ClusterCellInfo) *enginepb.CellTopologyMsg {
-	msg := &enginepb.CellTopologyMsg{}
+// buildTopology is the cell-list → CellTopology helper.
+func buildTopology(cells []ClusterCellInfo) CellTopology {
+	var out CellTopology
 	if len(cells) == 0 {
-		return msg
+		return out
 	}
 	for _, c := range cells {
 		size := c.Cell.Size(coords.CellSize)
 		ox, oy := c.Cell.WorldOrigin(coords.CellSize)
-		msg.Cells = append(msg.Cells, &enginepb.CellInfo{
+		out.Cells = append(out.Cells, CellInfo{
 			CellX:   c.Cell.X,
 			CellY:   c.Cell.Y,
 			Depth:   uint32(c.Cell.Depth),
 			Size:    size,
 			OriginX: ox,
 			OriginY: oy,
-			NodeId:  c.HostID,
+			NodeID:  c.HostID,
 		})
 	}
-	return msg
+	return out
 }
 
 // hashDebugPayload fingerprints the per-player payload contents. Clones
