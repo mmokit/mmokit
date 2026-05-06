@@ -5,7 +5,6 @@ import { SoundId } from "./audio/sounds";
 import { getAbilityRange } from "./ui/ability-bar";
 import {
   CastAbility,
-  Chat,
   Dock,
   JettisonItem,
   Respawn,
@@ -63,22 +62,12 @@ export function setupInput(
   window.addEventListener("keydown", (e) => {
     if (!state.loggedIn) return;
 
-    // Chat mode handling
+    // Chat mode handling — server-side chat decommissioned in Plan 1
+    // Phase 6; the input box UI is preserved as a shell so the future
+    // chat service can wire up its own send handler. Enter/Escape just
+    // close + clear the box.
     if (state.chatMode) {
-      if (e.code === "Escape") {
-        state.chatMode = false;
-        chatInputEl.style.display = "none";
-        chatInputEl.value = "";
-      } else if (e.code === "Enter") {
-        const text = chatInputEl.value.trim();
-        if (text && state.connected && state.client) {
-          state.inputSeq++;
-          state.client.send(new Chat({
-            sequence: state.inputSeq,
-            username: state.playerUsername,
-            text,
-          }));
-        }
+      if (e.code === "Escape" || e.code === "Enter") {
         state.chatMode = false;
         chatInputEl.style.display = "none";
         chatInputEl.value = "";

@@ -133,14 +133,14 @@ export class SpaceClient {
     return this.on(0, (data) => handler(fromBinary(WorldUpdateMsgSchema, data)));
   }
 
-  /** Subscribe to cellChange (code 12). */
+  /** Subscribe to cellChange (code 5). */
   onCellChange(handler: (msg: CellChangeMsg) => void): () => void {
-    return this.on(12, (data) => handler(fromBinary(CellChangeMsgSchema, data)));
+    return this.on(5, (data) => handler(fromBinary(CellChangeMsgSchema, data)));
   }
 
-  /** Subscribe to serverConfig (code 15). */
+  /** Subscribe to serverConfig (code 8). */
   onServerConfig(handler: (msg: ServerConfigMsg) => void): () => void {
-    return this.on(15, (data) => handler(fromBinary(ServerConfigMsgSchema, data)));
+    return this.on(8, (data) => handler(fromBinary(ServerConfigMsgSchema, data)));
   }
 
   /** Subscribe to typed server event game.BankContents (typeID 0xce9d072f). */

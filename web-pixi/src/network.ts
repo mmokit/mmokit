@@ -5,7 +5,6 @@ import {
   type DeltaWorldUpdate,
   type ShipEntity,
   type NPCEntity,
-  type WorldUpdateMsg,
   PlayerSpawned,
   BankContents,
   TransferResult,
@@ -26,7 +25,7 @@ import {
   BankRequest,
   WorldDelta,
 } from "../sdk/index.js";
-import { MAX_CHAT_DISPLAY, CELL_SIZE } from "./constants";
+import { CELL_SIZE } from "./constants";
 import { updateEntityFromServer } from "./interpolation";
 import { observeFrameStamps } from "./clockSync";
 import { spawnExplosion } from "./effects/explosion";
@@ -161,7 +160,6 @@ function applyDeltaUpdate(state: GameState, update: DeltaWorldUpdate): void {
 export function connect(state: GameState, callbacks: NetworkCallbacks): void {
   const proto = window.location.protocol === "https:" ? "wss:" : "ws:";
   const statusEl = document.getElementById("status")!;
-  const chatMessagesEl = document.getElementById("chat-messages")!;
 
   let pingInterval: ReturnType<typeof setInterval> | null = null;
 
@@ -294,26 +292,6 @@ export function connect(state: GameState, callbacks: NetworkCallbacks): void {
   const deltaDecoder = new SpaceDeltaDecoder();
   client.onWorldDelta((msg: WorldDelta) => {
     applyDeltaUpdate(state, deltaDecoder.decode(msg.body));
-  });
-
-  // WorldUpdateMsg on SE_WORLD_UPDATE carries chat messages. Typed
-  // broadcast events (Damage / MineExtract / Status / Killed) also flow
-  // on this code via the framework's auto-broadcast pipeline; the SDK's
-  // TypedDispatcher decodes them through client.typedEvents.on(...) below
-  // so this handler only needs to forward chat. Entity state still comes
-  // via onWorldDelta.
-  client.onWorldUpdate((msg: WorldUpdateMsg) => {
-    if (msg.chatMessages) {
-      for (const chat of msg.chatMessages) {
-        const div = document.createElement("div");
-        div.textContent = `[${chat.username}]: ${chat.text}`;
-        chatMessagesEl.appendChild(div);
-      }
-      while (chatMessagesEl.childElementCount > MAX_CHAT_DISPLAY) {
-        chatMessagesEl.removeChild(chatMessagesEl.firstChild!);
-      }
-      chatMessagesEl.scrollTop = chatMessagesEl.scrollHeight;
-    }
   });
 
   // Typed broadcast events — dispatched per-class via the framework's
