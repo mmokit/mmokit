@@ -15,10 +15,12 @@ import (
 
 	gamepb "github.com/zenion/mmoserver/gen/go/gamepb"
 	"github.com/zenion/mmoserver/internal/game"
+	"github.com/zenion/mmoserver/pkg/mmokit"
 )
 
 const (
 	defaultInputRate = 50 * time.Millisecond // 20Hz
+	defaultPingRate  = 2 * time.Second
 	connectTimeout   = 10 * time.Second
 )
 
@@ -151,10 +153,10 @@ func (b *Bot) Connect(addr string) error {
 		return errors.New("connect timeout waiting for spawn")
 	}
 
-	// Start input loop only after spawn so we never write before the
-	// server has dispatched our PlayerAssignment. (Ping send and the
-	// typed-event dispatch are wired in the next task.)
+	// Start input + ping loops only after spawn so we never write
+	// before the server has dispatched our PlayerAssignment.
 	go b.inputLoop()
+	go b.pingLoop()
 
 	return nil
 }
@@ -213,24 +215,33 @@ func (b *Bot) recvLoop() {
 		channel := data[0]
 		payload := data[1:]
 
-		// Channel-byte routing is in place but the per-frame typed-event
-		// decoder lands in the next task. For now, the bot reads frames
-		// to keep the WebSocket flowing (without reads, the server's
-		// flow control eventually backpressures sends) and discards
-		// the payload; spawnCh is therefore wired through a temporary
-		// "first frame on channel 0x00 = we're alive" promotion below
-		// so Connect's spawn-wait doesn't hang forever during the
-		// transport-only phase.
-		_ = channel
-		_ = payload
-
-		// Temporary spawn promotion: the first server frame proves the
-		// gateway accepted the cookie and dispatched our PlayerAssignment.
-		// Replaced by the real PlayerEntityAssigned dispatch in the next
-		// task.
-		select {
-		case b.spawnCh <- struct{}{}:
+		switch channel {
+		case 0x00: // ChannelEvent — typed events
+			b.decodeTypedEventFrame(payload)
+		case 0x01: // ChannelOperation — typed-op responses
+			// Bots are fire-and-forget on ops today (sendTypedOp does
+			// not correlate). Drop the response payload silently rather
+			// than log per-frame; rewire when a bot scenario actually
+			// needs the response.
+			_ = payload
 		default:
+			// Unknown channel; skip
+		}
+	}
+}
+
+// pingLoop keeps the connection liveness signal flowing through the
+// typed-input path. Server-side HandleClient[Ping] (engine default)
+// echoes a Pong with the same timestamp.
+func (b *Bot) pingLoop() {
+	ticker := time.NewTicker(defaultPingRate)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-b.ctx.Done():
+			return
+		case <-ticker.C:
+			b.sendTypedInput(&mmokit.Ping{ClientTime: time.Now().UnixMilli()}, false)
 		}
 	}
 }
