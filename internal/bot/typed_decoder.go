@@ -3,6 +3,7 @@ package bot
 import (
 	"encoding/binary"
 	"log"
+	"maps"
 	"os"
 	"reflect"
 
@@ -207,9 +208,7 @@ func (b *Bot) applyWorldDelta(body []byte) {
 	if b.state.Entities == nil {
 		b.state.Entities = make(map[uint32]*EntitySnapshot)
 	}
-	for id, e := range ws.Entities {
-		b.state.Entities[id] = e
-	}
+	maps.Copy(b.state.Entities, ws.Entities)
 	for _, id := range ws.DestroyedIDs {
 		delete(b.state.Entities, id)
 	}

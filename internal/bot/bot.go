@@ -16,6 +16,7 @@ import (
 	gamepb "github.com/zenion/mmoserver/gen/go/gamepb"
 	"github.com/zenion/mmoserver/internal/game"
 	"github.com/zenion/mmoserver/pkg/mmokit"
+	pkgnet "github.com/zenion/mmoserver/pkg/net"
 )
 
 const (
@@ -216,9 +217,9 @@ func (b *Bot) recvLoop() {
 		payload := data[1:]
 
 		switch channel {
-		case 0x00: // ChannelEvent — typed events
+		case pkgnet.ChannelEvent: // typed events
 			b.decodeTypedEventFrame(payload)
-		case 0x01: // ChannelOperation — typed-op responses
+		case pkgnet.ChannelOperation: // typed-op responses
 			// Bots are fire-and-forget on ops today (sendTypedOp does
 			// not correlate). Drop the response payload silently rather
 			// than log per-frame; rewire when a bot scenario actually
@@ -241,7 +242,7 @@ func (b *Bot) pingLoop() {
 		case <-b.ctx.Done():
 			return
 		case <-ticker.C:
-			b.sendTypedInput(&mmokit.Ping{ClientTime: time.Now().UnixMilli()}, false)
+			b.sendTypedInput(&mmokit.Ping{ClientTime: time.Now().UnixMilli()})
 		}
 	}
 }
@@ -279,14 +280,14 @@ func (b *Bot) sendInput() {
 			Active:   inp.moveActive,
 			X:        inp.moveX,
 			Y:        inp.moveY,
-		}, false)
+		})
 	}
 	if inp.lockDirty {
 		b.inputSeq++
 		b.sendTypedInput(&game.SetLockTarget{
 			Sequence:    b.inputSeq,
 			TargetNetID: inp.lockTargetID,
-		}, false)
+		})
 	}
 	for slot := uint8(0); slot < 8; slot++ {
 		if inp.abilityCast&(1<<slot) == 0 {
@@ -296,14 +297,14 @@ func (b *Bot) sendInput() {
 		b.sendTypedInput(&game.CastAbility{
 			Sequence: b.inputSeq,
 			Slot:     slot,
-		}, false)
+		})
 	}
 	if inp.jettison != 0 {
 		b.inputSeq++
 		b.sendTypedInput(&game.JettisonItem{
 			Sequence: b.inputSeq,
 			ItemID:   inp.jettison,
-		}, false)
+		})
 	}
 }
 

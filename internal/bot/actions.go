@@ -110,7 +110,7 @@ func (b *Bot) Jettison(itemID uint32) {
 // Respawn sends a respawn request (reliable, typed).
 func (b *Bot) Respawn() {
 	b.inputSeq++
-	b.sendTypedInput(&game.Respawn{Sequence: b.inputSeq}, true)
+	b.sendTypedInput(&game.Respawn{Sequence: b.inputSeq})
 }
 
 // DepositItem transfers an item from cargo to bank (reliable, typed).
@@ -118,7 +118,7 @@ func (b *Bot) DepositItem(itemID uint32, qty int32) {
 	b.inputSeq++
 	b.sendTypedInput(&game.InventoryTransfer{
 		Sequence: b.inputSeq, ItemID: itemID, Quantity: qty, Deposit: true,
-	}, true)
+	})
 }
 
 // WithdrawItem transfers an item from bank to cargo (reliable, typed).
@@ -126,7 +126,7 @@ func (b *Bot) WithdrawItem(itemID uint32, qty int32) {
 	b.inputSeq++
 	b.sendTypedInput(&game.InventoryTransfer{
 		Sequence: b.inputSeq, ItemID: itemID, Quantity: qty, Deposit: false,
-	}, true)
+	})
 }
 
 // RequestBank fires the typed-op bank request. Bot is fire-and-forget —
@@ -181,12 +181,7 @@ func (b *Bot) sendTypedOp(msg any) {
 // client-input channel with the event channel; the leading byte is now
 // pkgnet.ChannelEvent (0x00) — frames that still use ChannelClientInput
 // (0x02) panic on the read pump.
-//
-// The reliable arg is preserved on the API for symmetry with the
-// pre-WebSocket UDP era; over WebSocket every write is reliable, so
-// the flag is observational only.
-func (b *Bot) sendTypedInput(msg any, reliable bool) {
-	_ = reliable
+func (b *Bot) sendTypedInput(msg any) {
 	t := reflect.TypeOf(msg)
 	if t.Kind() == reflect.Pointer {
 		t = t.Elem()
