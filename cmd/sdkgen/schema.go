@@ -51,10 +51,15 @@ type OperationSchema struct {
 
 // BroadcastFieldSchema describes one field on a broadcast-eligible type.
 // JSON shape mirrors pkg/mmokit.BroadcastFieldSchema exactly.
+//
+// For encoding == "struct": Fields lists the inner fields in source order.
+// For encoding == "slice":  Item describes the element schema.
 type BroadcastFieldSchema struct {
-	Name     string `json:"name"`
-	Encoding string `json:"encoding"`
-	Size     int    `json:"size"`
+	Name     string                 `json:"name"`
+	Encoding string                 `json:"encoding"`
+	Size     int                    `json:"size"`
+	Fields   []BroadcastFieldSchema `json:"fields,omitempty"`
+	Item     *BroadcastFieldSchema  `json:"item,omitempty"`
 }
 
 // BroadcastTypeSchema describes a broadcast-eligible Go type for sdkgen.

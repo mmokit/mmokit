@@ -67,8 +67,7 @@ func writeClientInputClass(b *strings.Builder, ct ClientInputTypeSchema) {
 	fmt.Fprintf(b, "export class %s {\n", className)
 	fmt.Fprintf(b, "  static readonly typeID = 0x%x;\n", ct.TypeID)
 	for _, f := range ct.Fields {
-		tsType, init := broadcastFieldTSType(f.Encoding)
-		fmt.Fprintf(b, "  %s: %s = %s;\n", f.Name, tsType, init)
+		fmt.Fprintf(b, "  %s: %s = %s;\n", f.Name, broadcastFieldTSType(f), broadcastFieldTSInit(f))
 	}
 	b.WriteString("\n")
 

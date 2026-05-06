@@ -215,3 +215,74 @@ func TestValidateComponentType_AcceptsEntityField(t *testing.T) {
 	// Should not panic — entity fields are skipped, not rejected
 	ValidateComponentType(reflect.TypeFor[WithEntity]())
 }
+
+func TestReflectMarshal_SliceOfStructs(t *testing.T) {
+	type Item struct {
+		ID   uint32
+		Name string
+	}
+	type Bag struct {
+		Owner string
+		Items []Item
+	}
+	b := Bag{
+		Owner: "alice",
+		Items: []Item{
+			{ID: 1, Name: "potion"},
+			{ID: 7, Name: "sword"},
+		},
+	}
+	data := ReflectMarshal(&b)
+	var out Bag
+	ReflectUnmarshal(data, &out)
+	if out.Owner != b.Owner || len(out.Items) != len(b.Items) {
+		t.Fatalf("got %+v, want %+v", out, b)
+	}
+	for i := range b.Items {
+		if out.Items[i] != b.Items[i] {
+			t.Fatalf("item %d: got %+v, want %+v", i, out.Items[i], b.Items[i])
+		}
+	}
+}
+
+func TestReflectMarshal_SliceOfPrimitives(t *testing.T) {
+	type Bag struct {
+		IDs []uint32
+	}
+	b := Bag{IDs: []uint32{42, 7, 1024}}
+	data := ReflectMarshal(&b)
+	var out Bag
+	ReflectUnmarshal(data, &out)
+	if len(out.IDs) != len(b.IDs) {
+		t.Fatalf("len: got %d, want %d", len(out.IDs), len(b.IDs))
+	}
+	for i := range b.IDs {
+		if out.IDs[i] != b.IDs[i] {
+			t.Fatalf("IDs[%d]: got %d, want %d", i, out.IDs[i], b.IDs[i])
+		}
+	}
+}
+
+func TestReflectMarshal_EmptySlice(t *testing.T) {
+	type Bag struct {
+		Items []uint32
+	}
+	b := Bag{Items: nil}
+	data := ReflectMarshal(&b)
+	if len(data) != 2 { // just the u16 zero length
+		t.Fatalf("expected 2 bytes (u16 length=0), got %d", len(data))
+	}
+	var out Bag
+	ReflectUnmarshal(data, &out)
+	if len(out.Items) != 0 {
+		t.Fatalf("expected empty, got %v", out.Items)
+	}
+}
+
+func TestValidateMessageType_AcceptsSlice(t *testing.T) {
+	type Msg struct {
+		Items []uint32
+	}
+	// Should not panic for typed-event message types.
+	ValidateMessageType(reflect.TypeFor[Msg]())
+}

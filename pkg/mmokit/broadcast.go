@@ -28,12 +28,20 @@ type ClientInputTypeSchema = BroadcastTypeSchema
 
 // BroadcastFieldSchema describes one field on a broadcast-eligible type.
 // Encoding strings: f32, f64, u8/u16/u32/u64, i8/i16/i32/i64, bool, entity,
-// string. Size is the on-wire byte count for fixed-width fields; zero for
-// length-prefixed strings.
+// string, struct, slice. Size is the on-wire byte count for fixed-width
+// fields; zero for length-prefixed (string, slice, struct).
+//
+//   - struct: nested-struct field. Fields lists the inner fields in source
+//     order; the wire format inlines their bytes contiguously.
+//   - slice:  variable-length sequence. Item describes the element schema
+//     (recursive, so slices of structs work). Wire format prefixes a
+//     uint16 LE length, then encodes each element via Item.
 type BroadcastFieldSchema struct {
-	Name     string `json:"name"`
-	Encoding string `json:"encoding"`
-	Size     int    `json:"size"`
+	Name     string                 `json:"name"`
+	Encoding string                 `json:"encoding"`
+	Size     int                    `json:"size"`
+	Fields   []BroadcastFieldSchema `json:"fields,omitempty"` // for encoding == "struct"
+	Item     *BroadcastFieldSchema  `json:"item,omitempty"`   // for encoding == "slice"
 }
 
 // TypeIDOf returns the stable wire identifier for a broadcast-eligible Go type.
@@ -112,16 +120,23 @@ func BroadcastTypeOf(t reflect.Type) BroadcastTypeSchema {
 // Mirrors reflect_marshal.marshalValue exactly — any encoding added there
 // must be added here too, otherwise schema dump and runtime bytes drift.
 func fieldSchemaOf(f reflect.StructField) BroadcastFieldSchema {
-	out := BroadcastFieldSchema{Name: lowerFirst(f.Name)}
-	// Entity has a custom reflect codec (4-byte NetID). Detect via the
-	// concrete type rather than reflect.Kind — Entity is a struct, but its
-	// codec encodes only the NetID, not the embedded *Stage pointer.
-	if f.Type == entityType {
+	out := schemaForType(f.Type)
+	out.Name = lowerFirst(f.Name)
+	return out
+}
+
+// schemaForType is the recursive helper used by fieldSchemaOf to walk into
+// nested structs and slice element types. Returns a schema with Encoding +
+// Size + (optionally) Fields/Item populated; Name is filled in by the
+// caller.
+func schemaForType(t reflect.Type) BroadcastFieldSchema {
+	var out BroadcastFieldSchema
+	if t == entityType {
 		out.Encoding = "entity"
 		out.Size = 4
 		return out
 	}
-	switch f.Type.Kind() {
+	switch t.Kind() {
 	case reflect.Float32:
 		out.Encoding = "f32"
 		out.Size = 4
@@ -158,9 +173,23 @@ func fieldSchemaOf(f reflect.StructField) BroadcastFieldSchema {
 	case reflect.String:
 		out.Encoding = "string"
 		out.Size = 0 // length-prefixed (uint16 length + bytes)
+	case reflect.Struct:
+		out.Encoding = "struct"
+		out.Size = 0 // variable size (sum of inner fields)
+		for i := range t.NumField() {
+			inner := t.Field(i)
+			if !inner.IsExported() {
+				continue
+			}
+			out.Fields = append(out.Fields, fieldSchemaOf(inner))
+		}
+	case reflect.Slice:
+		out.Encoding = "slice"
+		out.Size = 0 // u16 length + N elements
+		item := schemaForType(t.Elem())
+		out.Item = &item
 	default:
-		panic(fmt.Sprintf("BroadcastTypeOf: unsupported field %s of type %s (kind=%s)",
-			f.Name, f.Type, f.Type.Kind()))
+		panic(fmt.Sprintf("BroadcastTypeOf: unsupported type %s (kind=%s)", t, t.Kind()))
 	}
 	return out
 }
