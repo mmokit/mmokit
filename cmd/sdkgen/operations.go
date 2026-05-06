@@ -40,22 +40,33 @@ func (g *Generator) genOperations() string {
 	b.WriteString("// Bodies use the reflect-codec layout from pkg/universe/reflect_marshal.go\n")
 	b.WriteString("// (matches broadcasts.ts and inputs.ts).\n\n")
 
+	// Multiple ops can share a Response class (e.g. MarketOrderResultResponse
+	// covers create/cancel/instant-trade) so dedupe by class name. Request
+	// types are 1:1 with ops by construction (each registers a unique pair)
+	// but we dedupe both sides defensively.
+	emitted := map[string]struct{}{}
+	emit := func(bt BroadcastTypeSchema, withEncode bool) {
+		name := broadcastClassName(bt.Name)
+		if _, dup := emitted[name]; dup {
+			return
+		}
+		emitted[name] = struct{}{}
+		writeBroadcastClass(&b, bt, withEncode)
+	}
 	for _, op := range g.schema.TypedOperations {
 		// Request: encode (client → server) + decode (for symmetry).
-		reqBT := BroadcastTypeSchema{
+		emit(BroadcastTypeSchema{
 			Name:   op.RequestTypeName,
 			TypeID: op.RequestTypeID,
 			Fields: op.RequestFields,
-		}
-		writeBroadcastClass(&b, reqBT, true)
+		}, true)
 
 		// Response: decode-only (server → client).
-		resBT := BroadcastTypeSchema{
+		emit(BroadcastTypeSchema{
 			Name:   op.ResponseTypeName,
 			TypeID: op.ResponseTypeID,
 			Fields: op.ResponseFields,
-		}
-		writeBroadcastClass(&b, resBT, false)
+		}, false)
 	}
 
 	return b.String()

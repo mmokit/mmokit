@@ -8,5 +8,5 @@ export { SpaceDeltaDecoder } from "./delta-decoder.js";
 export { Transport } from "./transport.js";
 export { BankContents, BeamToggle, CurrencyUpdate, Damage, DebugInfo, Docked, DockingState, EquipResult, Killed, LoginRejected, MapData, MineExtract, OperationError, PlayerDied, PlayerOwnState, PlayerSpawned, Pong, Status, TransferResult, TypedDispatcher, WorldDelta } from "./broadcasts.js";
 export { BankRequest, CastAbility, Dock, Equip, InventoryTransfer, JettisonItem, LootAll, LootItem, Respawn, SetLockTarget, SetMoveTarget, Undock } from "./inputs.js";
+export { MarketBrowseRequest, MarketCancelOrderRequest, MarketCreateOrderRequest, MarketInstantTradeRequest, MarketMyOrdersRequest, MarketMyOrdersResponse, MarketOrderBookResponse, MarketOrderResultResponse } from "./operations.js";
 export type { CellChangeMsg, ServerConfigMsg, SpawnedMsg } from "@gen/enginepb/engine_pb.js";
-export type { MarketMyOrdersResponse, MarketOrderBookResponse, MarketOrderResultResponse } from "@gen/gamepb/game_pb.js";

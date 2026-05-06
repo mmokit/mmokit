@@ -635,11 +635,19 @@ func (g *Generator) genClient() string {
 	if hasTypedOps {
 		// Per-op Request + Response classes — imported eagerly so the
 		// generated client.<opName>() wrapper methods can hand the Response
-		// class to callOp<Req, Res> as the decode hook.
+		// class to callOp<Req, Res> as the decode hook. Multiple ops can
+		// share a Response class (e.g. MarketOrderResultResponse covers
+		// create/cancel/instant-trade) so dedupe before emitting.
+		seen := map[string]struct{}{}
 		var imports []string
 		for _, op := range g.schema.TypedOperations {
-			imports = append(imports, typedOpRequestClassName(op))
-			imports = append(imports, typedOpResponseClassName(op))
+			for _, name := range []string{typedOpRequestClassName(op), typedOpResponseClassName(op)} {
+				if _, dup := seen[name]; dup {
+					continue
+				}
+				seen[name] = struct{}{}
+				imports = append(imports, name)
+			}
 		}
 		// Deterministic order for codegen-stability.
 		sort.Strings(imports)
@@ -1174,11 +1182,19 @@ func (g *Generator) genIndex() string {
 	}
 	if len(g.schema.TypedOperations) > 0 {
 		// Re-export every generated typed-op Request + Response class so app
-		// code can construct requests via the SDK's public surface.
+		// code can construct requests via the SDK's public surface. Multiple
+		// ops can share a Response class (MarketOrderResultResponse) so
+		// dedupe.
+		seen := map[string]struct{}{}
 		var names []string
 		for _, op := range g.schema.TypedOperations {
-			names = append(names, typedOpRequestClassName(op))
-			names = append(names, typedOpResponseClassName(op))
+			for _, name := range []string{typedOpRequestClassName(op), typedOpResponseClassName(op)} {
+				if _, dup := seen[name]; dup {
+					continue
+				}
+				seen[name] = struct{}{}
+				names = append(names, name)
+			}
 		}
 		sort.Strings(names)
 		fmt.Fprintf(&b, "export { %s } from \"./operations.js\";\n", strings.Join(names, ", "))

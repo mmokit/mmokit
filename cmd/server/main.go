@@ -287,7 +287,7 @@ func main() {
 		if err := marketSvc.LoadAll(context.Background()); err != nil {
 			log.Fatalf("failed to load marketplace data: %v", err)
 		}
-		marketplace.RegisterHandlers(opRouter, marketSvc, 1)
+		marketplace.RegisterHandlers(marketSvc, 1)
 	}
 
 	// Wire dynamic-cells topology-change broadcast before constructing the
