@@ -1,6 +1,6 @@
 // Package marketplace — typed_messages.go defines the typed Go structs
-// that replace the gamepb.Market* protobuf types on the typed-op channel
-// (channel 0x01, mmokit.RegisterOp[Req, Res]).
+// for marketplace ops on the typed-op channel (channel 0x01,
+// mmokit.RegisterOp[Req, Res]).
 //
 // These run through the engine's reflection codec — same shape as typed
 // events on channel 0x00. Field names use Go's CamelCase convention; the
@@ -15,7 +15,7 @@ package marketplace
 // MarketBrowseRequest fetches the aggregated order book for a single item
 // at the calling player's current station. RoutePlayerCell — the cell
 // engine accesses Settlement (which wraps the in-memory order book +
-// MarketRepository). Replaces gamepb.MarketBrowseRequest.
+// MarketRepository).
 type MarketBrowseRequest struct {
 	ItemID uint32
 }
@@ -101,8 +101,7 @@ type MarketOrderResultResponse struct {
 // MarketTradeNotification is a server-side push to an online player when
 // one of their resting orders fills (in part or in full) against another
 // trader's order. Sent as a typed event on channel 0x00 — the recipient is
-// not necessarily the one who triggered the trade. Replaces
-// gamepb.MarketTradeNotification.
+// not necessarily the one who triggered the trade.
 type MarketTradeNotification struct {
 	OrderID        uint64
 	ItemID         uint32

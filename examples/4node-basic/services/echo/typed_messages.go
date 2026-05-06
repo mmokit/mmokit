@@ -1,6 +1,6 @@
-// Package echo — typed_messages.go defines the typed Go structs that
-// replace the basicpb.Echo* protobuf types on the typed-op channel
-// (channel 0x01, mmokit.RegisterOp[Req, Res]).
+// Package echo — typed_messages.go defines the typed Go structs for the
+// echo demo service ops on the typed-op channel (channel 0x01,
+// mmokit.RegisterOp[Req, Res]).
 //
 // These run through the engine's reflection codec — same shape as typed
 // events on channel 0x00. Field names use Go's CamelCase convention; the

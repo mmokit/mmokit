@@ -10,36 +10,6 @@ import type { GenEnum, GenFile } from "@bufbuild/protobuf/codegenv2";
 export declare const file_gamepb_game: GenFile;
 
 /**
- * @generated from enum gamepb.GameClientEventCode
- */
-export enum GameClientEventCode {
-  /**
-   * @generated from enum value: GCE_UNKNOWN = 0;
-   */
-  GCE_UNKNOWN = 0,
-}
-
-/**
- * Describes the enum gamepb.GameClientEventCode.
- */
-export declare const GameClientEventCodeSchema: GenEnum<GameClientEventCode>;
-
-/**
- * @generated from enum gamepb.GameServerEventCode
- */
-export enum GameServerEventCode {
-  /**
-   * @generated from enum value: GSE_UNKNOWN = 0;
-   */
-  GSE_UNKNOWN = 0,
-}
-
-/**
- * Describes the enum gamepb.GameServerEventCode.
- */
-export declare const GameServerEventCodeSchema: GenEnum<GameServerEventCode>;
-
-/**
  * @generated from enum gamepb.EntityType
  */
 export enum EntityType {

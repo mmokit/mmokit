@@ -21,92 +21,6 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
-type GameClientEventCode int32
-
-const (
-	GameClientEventCode_GCE_UNKNOWN GameClientEventCode = 0
-)
-
-// Enum value maps for GameClientEventCode.
-var (
-	GameClientEventCode_name = map[int32]string{
-		0: "GCE_UNKNOWN",
-	}
-	GameClientEventCode_value = map[string]int32{
-		"GCE_UNKNOWN": 0,
-	}
-)
-
-func (x GameClientEventCode) Enum() *GameClientEventCode {
-	p := new(GameClientEventCode)
-	*p = x
-	return p
-}
-
-func (x GameClientEventCode) String() string {
-	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
-}
-
-func (GameClientEventCode) Descriptor() protoreflect.EnumDescriptor {
-	return file_gamepb_game_proto_enumTypes[0].Descriptor()
-}
-
-func (GameClientEventCode) Type() protoreflect.EnumType {
-	return &file_gamepb_game_proto_enumTypes[0]
-}
-
-func (x GameClientEventCode) Number() protoreflect.EnumNumber {
-	return protoreflect.EnumNumber(x)
-}
-
-// Deprecated: Use GameClientEventCode.Descriptor instead.
-func (GameClientEventCode) EnumDescriptor() ([]byte, []int) {
-	return file_gamepb_game_proto_rawDescGZIP(), []int{0}
-}
-
-type GameServerEventCode int32
-
-const (
-	GameServerEventCode_GSE_UNKNOWN GameServerEventCode = 0
-)
-
-// Enum value maps for GameServerEventCode.
-var (
-	GameServerEventCode_name = map[int32]string{
-		0: "GSE_UNKNOWN",
-	}
-	GameServerEventCode_value = map[string]int32{
-		"GSE_UNKNOWN": 0,
-	}
-)
-
-func (x GameServerEventCode) Enum() *GameServerEventCode {
-	p := new(GameServerEventCode)
-	*p = x
-	return p
-}
-
-func (x GameServerEventCode) String() string {
-	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
-}
-
-func (GameServerEventCode) Descriptor() protoreflect.EnumDescriptor {
-	return file_gamepb_game_proto_enumTypes[1].Descriptor()
-}
-
-func (GameServerEventCode) Type() protoreflect.EnumType {
-	return &file_gamepb_game_proto_enumTypes[1]
-}
-
-func (x GameServerEventCode) Number() protoreflect.EnumNumber {
-	return protoreflect.EnumNumber(x)
-}
-
-// Deprecated: Use GameServerEventCode.Descriptor instead.
-func (GameServerEventCode) EnumDescriptor() ([]byte, []int) {
-	return file_gamepb_game_proto_rawDescGZIP(), []int{1}
-}
-
 type EntityType int32
 
 const (
@@ -149,11 +63,11 @@ func (x EntityType) String() string {
 }
 
 func (EntityType) Descriptor() protoreflect.EnumDescriptor {
-	return file_gamepb_game_proto_enumTypes[2].Descriptor()
+	return file_gamepb_game_proto_enumTypes[0].Descriptor()
 }
 
 func (EntityType) Type() protoreflect.EnumType {
-	return &file_gamepb_game_proto_enumTypes[2]
+	return &file_gamepb_game_proto_enumTypes[0]
 }
 
 func (x EntityType) Number() protoreflect.EnumNumber {
@@ -162,18 +76,14 @@ func (x EntityType) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use EntityType.Descriptor instead.
 func (EntityType) EnumDescriptor() ([]byte, []int) {
-	return file_gamepb_game_proto_rawDescGZIP(), []int{2}
+	return file_gamepb_game_proto_rawDescGZIP(), []int{0}
 }
 
 var File_gamepb_game_proto protoreflect.FileDescriptor
 
 const file_gamepb_game_proto_rawDesc = "" +
 	"\n" +
-	"\x11gamepb/game.proto\x12\x06gamepb*&\n" +
-	"\x13GameClientEventCode\x12\x0f\n" +
-	"\vGCE_UNKNOWN\x10\x00*&\n" +
-	"\x13GameServerEventCode\x12\x0f\n" +
-	"\vGSE_UNKNOWN\x10\x00*\xa2\x01\n" +
+	"\x11gamepb/game.proto\x12\x06gamepb*\xa2\x01\n" +
 	"\n" +
 	"EntityType\x12\x14\n" +
 	"\x10ENTITY_TYPE_SHIP\x10\x00\x12\x18\n" +
@@ -195,11 +105,9 @@ func file_gamepb_game_proto_rawDescGZIP() []byte {
 	return file_gamepb_game_proto_rawDescData
 }
 
-var file_gamepb_game_proto_enumTypes = make([]protoimpl.EnumInfo, 3)
+var file_gamepb_game_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
 var file_gamepb_game_proto_goTypes = []any{
-	(GameClientEventCode)(0), // 0: gamepb.GameClientEventCode
-	(GameServerEventCode)(0), // 1: gamepb.GameServerEventCode
-	(EntityType)(0),          // 2: gamepb.EntityType
+	(EntityType)(0), // 0: gamepb.EntityType
 }
 var file_gamepb_game_proto_depIdxs = []int32{
 	0, // [0:0] is the sub-list for method output_type
@@ -219,7 +127,7 @@ func file_gamepb_game_proto_init() {
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_gamepb_game_proto_rawDesc), len(file_gamepb_game_proto_rawDesc)),
-			NumEnums:      3,
+			NumEnums:      1,
 			NumMessages:   0,
 			NumExtensions: 0,
 			NumServices:   0,

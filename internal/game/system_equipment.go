@@ -268,8 +268,8 @@ func (s *EquipmentSystem) unequipDocked(sess *mmokit.PlayerSession, pdata *Playe
 
 // sendBankContents notifies the client that bank/cargo state has changed,
 // reusing EconomySystem's sender via the GameWorld's wired Settlement
-// machinery. Goes through the same GSE_BANK_CONTENTS path the bank UI
-// already listens for.
+// machinery. Goes through the same BankContents typed-event path the bank
+// UI already listens for.
 func (s *EquipmentSystem) sendBankContents(connID uint32, pdata *PlayerData) {
 	gw := s.World()
 	gw.SendBankContents(connID, pdata)

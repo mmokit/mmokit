@@ -8,37 +8,13 @@ import { enumDesc, fileDesc, tsEnum } from "@bufbuild/protobuf/codegenv2";
  * Describes the file gamepb/game.proto.
  */
 export const file_gamepb_game = /*@__PURE__*/
-  fileDesc("ChFnYW1lcGIvZ2FtZS5wcm90bxIGZ2FtZXBiKiYKE0dhbWVDbGllbnRFdmVudENvZGUSDwoLR0NFX1VOS05PV04QAComChNHYW1lU2VydmVyRXZlbnRDb2RlEg8KC0dTRV9VTktOT1dOEAAqogEKCkVudGl0eVR5cGUSFAoQRU5USVRZX1RZUEVfU0hJUBAAEhgKFEVOVElUWV9UWVBFX0FTVEVST0lEEAESGgoWRU5USVRZX1RZUEVfUFJPSkVDVElMRRACEhcKE0VOVElUWV9UWVBFX1NUQVRJT04QAxIaChZFTlRJVFlfVFlQRV9MT09UX0NSQVRFEAQSEwoPRU5USVRZX1RZUEVfTlBDEAVCRVopZ2l0aHViLmNvbS96ZW5pb24vbW1vc2VydmVyL2dlbi9nby9nYW1lcGKqAhdaZW5pb24uR2FtZVNlcnZlci5Qcm90b2IGcHJvdG8z");
-
-/**
- * Describes the enum gamepb.GameClientEventCode.
- */
-export const GameClientEventCodeSchema = /*@__PURE__*/
-  enumDesc(file_gamepb_game, 0);
-
-/**
- * @generated from enum gamepb.GameClientEventCode
- */
-export const GameClientEventCode = /*@__PURE__*/
-  tsEnum(GameClientEventCodeSchema);
-
-/**
- * Describes the enum gamepb.GameServerEventCode.
- */
-export const GameServerEventCodeSchema = /*@__PURE__*/
-  enumDesc(file_gamepb_game, 1);
-
-/**
- * @generated from enum gamepb.GameServerEventCode
- */
-export const GameServerEventCode = /*@__PURE__*/
-  tsEnum(GameServerEventCodeSchema);
+  fileDesc("ChFnYW1lcGIvZ2FtZS5wcm90bxIGZ2FtZXBiKqIBCgpFbnRpdHlUeXBlEhQKEEVOVElUWV9UWVBFX1NISVAQABIYChRFTlRJVFlfVFlQRV9BU1RFUk9JRBABEhoKFkVOVElUWV9UWVBFX1BST0pFQ1RJTEUQAhIXChNFTlRJVFlfVFlQRV9TVEFUSU9OEAMSGgoWRU5USVRZX1RZUEVfTE9PVF9DUkFURRAEEhMKD0VOVElUWV9UWVBFX05QQxAFQkVaKWdpdGh1Yi5jb20vemVuaW9uL21tb3NlcnZlci9nZW4vZ28vZ2FtZXBiqgIXWmVuaW9uLkdhbWVTZXJ2ZXIuUHJvdG9iBnByb3RvMw");
 
 /**
  * Describes the enum gamepb.EntityType.
  */
 export const EntityTypeSchema = /*@__PURE__*/
-  enumDesc(file_gamepb_game, 2);
+  enumDesc(file_gamepb_game, 0);
 
 /**
  * @generated from enum gamepb.EntityType

@@ -1,6 +1,6 @@
-// Package auth — typed_messages.go defines the typed Go structs that
-// replace the enginepb.Auth* protobuf types on the typed-op channel
-// (channel 0x01, mmokit.RegisterOp[Req, Res]).
+// Package auth — typed_messages.go defines the typed Go structs for the
+// auth ops on the typed-op channel (channel 0x01,
+// mmokit.RegisterOp[Req, Res]).
 //
 // These run through the engine's reflection codec — same shape as typed
 // events on channel 0x00. Field names use Go's CamelCase convention; the
@@ -15,9 +15,8 @@ package auth
 // AuthError is the stable code identifying an auth failure mode. Wire
 // values must not change once shipped — clients branch on this.
 //
-// Defined as a package-local Go const set instead of a proto enum so the
-// auth subsystem owns its error vocabulary without leaking into the
-// (now wire-empty) enginepb package.
+// Defined as a package-local Go const set so the auth subsystem owns its
+// error vocabulary without leaking into a shared engine namespace.
 type AuthError uint32
 
 const (

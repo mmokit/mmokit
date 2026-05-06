@@ -22,13 +22,11 @@ import (
 // cmd/sdkgen/broadcasts.go.
 
 // PlayerDied — sent to a player when their entity dies.
-// Replaces gamepb.PlayerDiedMsg.
 type PlayerDied struct {
 	KillerID uint32 // network ID of who killed you, 0 if unknown
 }
 
 // DockingState — progress update while docking (in-progress or cancelled).
-// Replaces gamepb.DockingStateMsg.
 type DockingState struct {
 	Docking   bool    // true = docking in progress, false = cancelled
 	Progress  float32 // 0.0 to 1.0
@@ -37,21 +35,17 @@ type DockingState struct {
 }
 
 // Docked — fired once the docking sequence completes.
-// Replaces gamepb.DockedMsg.
 type Docked struct{}
 
 // CurrencyUpdate — notifies the client of a change to a currency balance.
-// Replaces gamepb.CurrencyUpdateMsg.
 type CurrencyUpdate struct {
 	CurrencyID uint32
 	Balance    int64
 	Earned     int64
 }
 
-// EquipResult — server response to an equip request.
-// Replaces gamepb.EquipResultMsg. Slot is the underlying uint32 of the
-// EquipSlot enum (matches the proto wire format — proto enums are int32
-// on the wire, but EquipSlot values are all small non-negative).
+// EquipResult — server response to an equip request. Slot is the
+// underlying uint32 of the EquipSlot enum.
 type EquipResult struct {
 	Success        bool
 	Reason         string
@@ -61,7 +55,6 @@ type EquipResult struct {
 }
 
 // TransferResult — bank/cargo transfer outcome (deposit or withdraw).
-// Replaces gamepb.TransferResultMsg.
 type TransferResult struct {
 	Success  bool
 	Reason   string
@@ -71,7 +64,6 @@ type TransferResult struct {
 }
 
 // MapStationInfo — single station marker on the world map.
-// Replaces gamepb.MapStationInfo.
 type MapStationInfo struct {
 	CellX  int32
 	CellY  int32
@@ -81,18 +73,17 @@ type MapStationInfo struct {
 }
 
 // MapData — world-map info bundle (currently just stations).
-// Replaces gamepb.MapDataMsg.
 type MapData struct {
 	Stations []MapStationInfo
 }
 
-// InventoryItem — typed mirror of gamepb.InventoryItem for typed-event use.
+// InventoryItem — one (item, qty) pair in a bank / cargo snapshot.
 type InventoryItem struct {
 	ItemID   uint32
 	Quantity int32
 }
 
-// CurrencyBalance — typed mirror of gamepb.CurrencyBalance for typed-event use.
+// CurrencyBalance — one (currency, balance) pair in a bank snapshot.
 type CurrencyBalance struct {
 	CurrencyID uint32
 	Balance    int64
@@ -100,7 +91,6 @@ type CurrencyBalance struct {
 
 // BankContents — full snapshot of a player's bank, cargo, and currency
 // balances. Sent on dock + on every bank/cargo mutation.
-// Replaces gamepb.BankContentsMsg.
 type BankContents struct {
 	Items        []InventoryItem
 	TotalMass    float32
@@ -111,7 +101,7 @@ type BankContents struct {
 	Currencies   []CurrencyBalance
 }
 
-// EquipmentState — typed mirror of gamepb.EquipmentState for typed-event use.
+// EquipmentState — equipped item IDs by slot (0 = empty slot).
 type EquipmentState struct {
 	Weapon1  uint32
 	Weapon2  uint32
@@ -119,7 +109,7 @@ type EquipmentState struct {
 	Thruster uint32
 }
 
-// AbilityCooldownState — typed mirror of gamepb.AbilityCooldownState.
+// AbilityCooldownState — cooldown timer for one ability slot.
 type AbilityCooldownState struct {
 	Slot      uint32  // 0=Q, 1=W, 2=E, 3=R, 4=D, 5=F
 	Remaining float32 // seconds remaining
@@ -127,7 +117,6 @@ type AbilityCooldownState struct {
 }
 
 // PlayerOwnState — per-tick state sent only to the owning player.
-// Replaces gamepb.PlayerOwnStateMsg.
 type PlayerOwnState struct {
 	LockProgress          float32
 	LockTargetID          uint32
@@ -140,8 +129,7 @@ type PlayerOwnState struct {
 	BeingLockedByProgress float32
 }
 
-// ItemDef — single item-registry entry (used in PlayerSpawned). Replaces
-// gamepb.ItemDefMsg.
+// ItemDef — single item-registry entry (used in PlayerSpawned).
 type ItemDef struct {
 	ID          uint32
 	Name        string

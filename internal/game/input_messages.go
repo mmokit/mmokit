@@ -1,12 +1,11 @@
 package game
 
-// Typed client-input messages — replace the pre-Plan-G gamepb.* proto
-// types. Each registers via mmokit.HandleClient (Phase 6); the client
-// SDK exposes them via client.send(new MessageClass{...}).
+// Typed client-input messages — each registers via mmokit.HandleClient;
+// the client SDK exposes them via client.send(new MessageClass{...}).
 //
-// PlayerInputMsg's bundled snapshot pattern is decomposed into four
-// discrete typed messages aligned with their semantic shape (continuous
-// state vs discrete event). See spec §5.
+// Inputs are decomposed into discrete typed messages aligned with their
+// semantic shape (continuous state vs discrete event) rather than bundled
+// per-tick snapshots.
 
 // SetMoveTarget — continuous-state click-to-move target. Active=false
 // clears (player stops at current position).
@@ -75,11 +74,8 @@ type Equip struct {
 	TargetBank bool
 }
 
-// LootItem — take a specific item from a loot crate.
-//
-// Mirrors gamepb.LootItemMsg exactly: only crate_net_id + item_id. The
-// proto has no quantity field — the loot handler transfers the full
-// stack of that item from the crate.
+// LootItem — take a specific item from a loot crate. No quantity field;
+// the loot handler transfers the full stack of that item from the crate.
 type LootItem struct {
 	Sequence   uint32
 	CrateNetID uint32

@@ -4,23 +4,6 @@ option go_package = "github.com/zenion/mmoserver/gen/go/gamepb";
 option csharp_namespace = "Zenion.GameServer.Proto";
 
 // ═══════════════════════════════════════════════
-// GAME-SPECIFIC EVENT CODES
-// ═══════════════════════════════════════════════
-//
-// Plan 1 Phase 7 retired every GSE_* code: each game-specific server
-// event migrated to a typed reflection-codec frame (mmokit.RegisterEvent[T]
-// + internal/game/event_messages.go). The enum is retained as a
-// placeholder for future non-typed game-specific client codes.
-
-enum GameClientEventCode {
-    GCE_UNKNOWN = 0;
-}
-
-enum GameServerEventCode {
-    GSE_UNKNOWN = 0;
-}
-
-// ═══════════════════════════════════════════════
 // GAME-SPECIFIC ENUMS
 // ═══════════════════════════════════════════════
 
@@ -32,4 +15,3 @@ enum EntityType {
     ENTITY_TYPE_LOOT_CRATE = 4;
     ENTITY_TYPE_NPC = 5;
 }
-
