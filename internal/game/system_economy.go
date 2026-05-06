@@ -53,16 +53,15 @@ func (s *EconomySystem) processTransfers(stationPositions []mmokit.Position, sel
 			continue
 		}
 
-		entity := sess.Entity
-		if !gw.eng.ECS.Alive(entity) {
+		entity := mmokit.EntityFromECS(gw.Stage, sess.Entity)
+		if !entity.Alive() {
 			continue
 		}
-		if !gw.C.Inventory.HasAll(entity) || !gw.C.Position.HasAll(entity) {
+		pos := mmokit.Get[mmokit.Position](entity)
+		inv := mmokit.Get[gamecomp.Inventory](entity)
+		if pos == nil || inv == nil {
 			continue
 		}
-
-		pos := gw.C.Position.Get(entity)
-		inv := gw.C.Inventory.Get(entity)
 
 		if !s.nearStation(pos, stationPositions, sellRange2) {
 			s.sendTransferResult(t.ConnID, false, "Not near a station", t.ItemID, 0, t.Deposit)
@@ -206,14 +205,14 @@ func (s *EconomySystem) processBankRequests(stationPositions []mmokit.Position, 
 
 		// Docked players skip entity/proximity check
 		if sess.State != StateDocked {
-			entity := sess.Entity
-			if !gw.eng.ECS.Alive(entity) {
+			entity := mmokit.EntityFromECS(gw.Stage, sess.Entity)
+			if !entity.Alive() {
 				continue
 			}
-			if !gw.C.Position.HasAll(entity) {
+			pos := mmokit.Get[mmokit.Position](entity)
+			if pos == nil {
 				continue
 			}
-			pos := gw.C.Position.Get(entity)
 			if !s.nearStation(pos, stationPositions, sellRange2) {
 				continue
 			}
@@ -298,47 +297,49 @@ func (s *EconomySystem) processLootItems() {
 		if sess == nil || sess.State != mmokit.StateActive {
 			continue
 		}
-		entity := sess.Entity
-		if !gw.eng.ECS.Alive(entity) {
+		entity := mmokit.EntityFromECS(gw.Stage, sess.Entity)
+		if !entity.Alive() {
 			continue
 		}
-		if !gw.C.Position.HasAll(entity) || !gw.C.Inventory.HasAll(entity) {
-			continue
-		}
-
-		crateEntity, ok := gw.NetIDToEntity[req.CrateNetID]
-		if !ok || !gw.eng.ECS.Alive(crateEntity) {
-			continue
-		}
-		if !gw.C.LootCrate.HasAll(crateEntity) {
+		playerPos := mmokit.Get[mmokit.Position](entity)
+		playerInv := mmokit.Get[gamecomp.Inventory](entity)
+		if playerPos == nil || playerInv == nil {
 			continue
 		}
 
-		playerPos := gw.C.Position.Get(entity)
-		cratePos := gw.C.Position.Get(crateEntity)
+		crateE := mmokit.EntityByNetID(gw.Stage, req.CrateNetID)
+		if !crateE.Alive() || !mmokit.Has[gamecomp.LootCrate](crateE) {
+			continue
+		}
+
+		cratePos := mmokit.Get[mmokit.Position](crateE)
+		if cratePos == nil {
+			continue
+		}
 		dx := float64(playerPos.X - cratePos.X)
 		dy := float64(playerPos.Y - cratePos.Y)
 		if dx*dx+dy*dy > pickupRange2 {
 			continue
 		}
 
-		crateInv := gw.C.Inventory.Get(crateEntity)
+		crateInv := mmokit.Get[gamecomp.Inventory](crateE)
+		if crateInv == nil {
+			continue
+		}
 		qty := crateInv.Items[req.ItemID]
 		if qty <= 0 {
 			continue
 		}
 
-		playerInv := gw.C.Inventory.Get(entity)
 		added := playerInv.AddItem(req.ItemID, qty)
 		if added > 0 {
 			crateInv.RemoveItem(req.ItemID, added)
-			playerNetID := gw.C.NetworkID.Get(entity).ID
 			gw.eng.Log.Log(CatEconomyLoot, "loot pickup: player=%d item=%d qty=%d cargo_mass=%.1f/%.1f",
-				playerNetID, req.ItemID, added, playerInv.TotalMass(), playerInv.MaxMass)
+				entity.NetID(), req.ItemID, added, playerInv.TotalMass(), playerInv.MaxMass)
 		}
 
 		if crateInv.IsEmpty() {
-			gw.MarkForRemoval(crateEntity)
+			gw.MarkForRemoval(crateE.Handle())
 		}
 	}
 }
@@ -352,33 +353,33 @@ func (s *EconomySystem) processLootAlls() {
 		if sess == nil || sess.State != mmokit.StateActive {
 			continue
 		}
-		entity := sess.Entity
-		if !gw.eng.ECS.Alive(entity) {
+		entity := mmokit.EntityFromECS(gw.Stage, sess.Entity)
+		if !entity.Alive() {
 			continue
 		}
-		if !gw.C.Position.HasAll(entity) || !gw.C.Inventory.HasAll(entity) {
-			continue
-		}
-
-		crateEntity, ok := gw.NetIDToEntity[req.CrateNetID]
-		if !ok || !gw.eng.ECS.Alive(crateEntity) {
-			continue
-		}
-		if !gw.C.LootCrate.HasAll(crateEntity) {
+		playerPos := mmokit.Get[mmokit.Position](entity)
+		playerInv := mmokit.Get[gamecomp.Inventory](entity)
+		if playerPos == nil || playerInv == nil {
 			continue
 		}
 
-		playerPos := gw.C.Position.Get(entity)
-		cratePos := gw.C.Position.Get(crateEntity)
+		crateE := mmokit.EntityByNetID(gw.Stage, req.CrateNetID)
+		if !crateE.Alive() || !mmokit.Has[gamecomp.LootCrate](crateE) {
+			continue
+		}
+
+		cratePos := mmokit.Get[mmokit.Position](crateE)
+		crateInv := mmokit.Get[gamecomp.Inventory](crateE)
+		if cratePos == nil || crateInv == nil {
+			continue
+		}
 		dx := float64(playerPos.X - cratePos.X)
 		dy := float64(playerPos.Y - cratePos.Y)
 		if dx*dx+dy*dy > pickupRange2 {
 			continue
 		}
 
-		crateInv := gw.C.Inventory.Get(crateEntity)
-		playerInv := gw.C.Inventory.Get(entity)
-		playerNetID := gw.C.NetworkID.Get(entity).ID
+		playerNetID := entity.NetID()
 
 		for itemID, qty := range crateInv.Items {
 			if qty <= 0 {
@@ -396,7 +397,7 @@ func (s *EconomySystem) processLootAlls() {
 		}
 
 		if crateInv.IsEmpty() {
-			gw.MarkForRemoval(crateEntity)
+			gw.MarkForRemoval(crateE.Handle())
 		}
 	}
 }

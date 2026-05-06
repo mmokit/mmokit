@@ -78,6 +78,7 @@ export interface GameState {
   // Targeting/Input
   targetId: number; // mining target
   lockTargetId: number; // combat lock target
+  lastSentLockTargetId: number; // last value sent via SetLockTarget (transition tracking)
   lockProgress: number; // 0-1 from server
   serverLockTargetId: number; // last lock target confirmed by server
   mouseX: number;
@@ -195,6 +196,7 @@ export function createInitialState(): GameState {
 
     targetId: 0,
     lockTargetId: 0,
+    lastSentLockTargetId: 0,
     lockProgress: 0,
     serverLockTargetId: 0,
     mouseX: 0,

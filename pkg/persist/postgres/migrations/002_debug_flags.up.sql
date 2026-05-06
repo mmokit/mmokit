@@ -1,1 +1,1 @@
-ALTER TABLE players ADD COLUMN debug_flags JSONB NOT NULL DEFAULT '[]'::jsonb;
+ALTER TABLE players ADD COLUMN IF NOT EXISTS debug_flags JSONB NOT NULL DEFAULT '[]'::jsonb;

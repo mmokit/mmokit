@@ -1,6 +1,6 @@
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
 
-CREATE TABLE auth_users (
+CREATE TABLE IF NOT EXISTS auth_users (
   user_id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   username         TEXT NOT NULL UNIQUE,
   email            TEXT,
@@ -15,14 +15,14 @@ CREATE TABLE auth_users (
   updated_at       TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE TABLE auth_passwords (
+CREATE TABLE IF NOT EXISTS auth_passwords (
   user_id        UUID PRIMARY KEY REFERENCES auth_users(user_id) ON DELETE CASCADE,
   password_hash  TEXT NOT NULL,
   hash_algorithm TEXT NOT NULL DEFAULT 'argon2id',
   changed_at     TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE TABLE auth_identities (
+CREATE TABLE IF NOT EXISTS auth_identities (
   provider      TEXT NOT NULL,
   subject       TEXT NOT NULL,
   user_id       UUID NOT NULL REFERENCES auth_users(user_id) ON DELETE CASCADE,
@@ -31,9 +31,9 @@ CREATE TABLE auth_identities (
   linked_at     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   PRIMARY KEY (provider, subject)
 );
-CREATE INDEX auth_identities_user ON auth_identities(user_id);
+CREATE INDEX IF NOT EXISTS auth_identities_user ON auth_identities(user_id);
 
-CREATE TABLE auth_sessions (
+CREATE TABLE IF NOT EXISTS auth_sessions (
   token_hash       BYTEA PRIMARY KEY,
   user_id          UUID NOT NULL REFERENCES auth_users(user_id) ON DELETE CASCADE,
   issued_at        TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -42,10 +42,10 @@ CREATE TABLE auth_sessions (
   revoked_at       TIMESTAMPTZ,
   client_meta      JSONB
 );
-CREATE INDEX auth_sessions_user_active ON auth_sessions(user_id) WHERE revoked_at IS NULL;
-CREATE INDEX auth_sessions_expiry      ON auth_sessions(expires_at) WHERE revoked_at IS NULL;
+CREATE INDEX IF NOT EXISTS auth_sessions_user_active ON auth_sessions(user_id) WHERE revoked_at IS NULL;
+CREATE INDEX IF NOT EXISTS auth_sessions_expiry      ON auth_sessions(expires_at) WHERE revoked_at IS NULL;
 
-CREATE TABLE auth_audit_log (
+CREATE TABLE IF NOT EXISTS auth_audit_log (
   audit_id            BIGSERIAL PRIMARY KEY,
   occurred_at         TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   event               TEXT NOT NULL,
@@ -56,5 +56,5 @@ CREATE TABLE auth_audit_log (
   gateway_id          TEXT,
   metadata            JSONB
 );
-CREATE INDEX auth_audit_user_recent  ON auth_audit_log(user_id, occurred_at DESC);
-CREATE INDEX auth_audit_event_recent ON auth_audit_log(event, occurred_at DESC);
+CREATE INDEX IF NOT EXISTS auth_audit_user_recent  ON auth_audit_log(user_id, occurred_at DESC);
+CREATE INDEX IF NOT EXISTS auth_audit_event_recent ON auth_audit_log(event, occurred_at DESC);

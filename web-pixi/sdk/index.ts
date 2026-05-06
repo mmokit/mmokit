@@ -6,5 +6,7 @@ export type { AnyEntity, DeltaWorldUpdate } from "./entities.js";
 export * from "./entities.js";
 export { SpaceDeltaDecoder } from "./delta-decoder.js";
 export { Transport } from "./transport.js";
+export { BeamToggle, Damage, Killed, MineExtract, Status, TypedDispatcher } from "./broadcasts.js";
+export { BankRequest, CastAbility, Chat, Dock, Equip, InventoryTransfer, JettisonItem, LootAll, LootItem, Respawn, SetLockTarget, SetMoveTarget, Undock } from "./inputs.js";
 export type { CellChangeMsg, DebugInfoMsg, LoginRejectedMsg, PongMsg, ServerConfigMsg } from "@gen/enginepb/engine_pb.js";
 export type { BankContentsMsg, CurrencyUpdateMsg, DockedMsg, DockingStateMsg, EquipResultMsg, MapDataMsg, MarketMyOrdersResponse, MarketOrderBookResponse, MarketOrderResultResponse, PlayerDiedMsg, PlayerOwnStateMsg, PlayerSpawnedMsg, TransferResultMsg, WorldUpdateMsg } from "@gen/gamepb/game_pb.js";

@@ -18,20 +18,17 @@ func (s *StatusEffectSystem) Update(dt float32) {
 
 	for e, b := range s.entities.Iter {
 		se := b.SE
+		entity := mmokit.EntityFromECS(gw.Stage, e)
 
 		// Apply per-tick effects before ticking down durations
 		for i := uint8(0); i < se.Count; i++ {
 			eff := &se.Effects[i]
 			switch eff.Type {
 			case gamecomp.StatusIonBurn:
-				sourceNetID := uint32(0)
-				if gw.eng.ECS.Alive(eff.Source) && gw.C.NetworkID.HasAll(eff.Source) {
-					sourceNetID = gw.C.NetworkID.Get(eff.Source).ID
-				}
-				gw.ApplyDamage(e, eff.Value*dt, sourceNetID)
+				source := mmokit.EntityFromECS(gw.Stage, eff.Source)
+				gw.ApplyDamage(entity, eff.Value*dt, source.NetID())
 			case gamecomp.StatusShieldRegen:
-				if gw.C.Shield.HasAll(e) {
-					shield := gw.C.Shield.Get(e)
+				if shield := mmokit.Get[gamecomp.Shield](entity); shield != nil {
 					shield.Current = min(shield.Current+eff.Value*dt, shield.Max)
 				}
 			}

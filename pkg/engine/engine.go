@@ -51,23 +51,20 @@ type Engine struct {
 
 	Players *PlayerManager
 
-	// inputDispatcher is wired by universe.Process.createNode at cell
-	// creation time. Drained by GameLoop.tick in the dispatchInput phase.
-	// nil on engines used outside the universe stack.
-	inputDispatcher *inputDispatcher
+	// clientInputTick is the per-tick hook for the typed client-input
+	// channel (0x02; mmokit.HandleClient). Wired opaquely by
+	// universe.Process.createNode (engine doesn't import universe). nil
+	// on engines used outside the universe stack.
+	clientInputTick func()
 }
 
-// SetInputDispatcher wires the engine to its cell's input dispatcher.
-// Called once at cell creation. Subsequent calls panic.
-func (e *Engine) SetInputDispatcher(d *inputDispatcher) {
-	if e.inputDispatcher != nil {
-		panic("Engine.SetInputDispatcher: dispatcher already set")
-	}
-	e.inputDispatcher = d
+// SetClientInputTick wires the per-tick typed-client-input dispatch hook
+// (channel 0x02; mmokit.HandleClient). Called once by
+// universe.Process.createNode at cell creation. Idempotent — re-wiring
+// with the same fn is allowed; nil clears the hook.
+func (e *Engine) SetClientInputTick(fn func()) {
+	e.clientInputTick = fn
 }
-
-// InputDispatcher returns the engine's per-cell input dispatcher (or nil).
-func (e *Engine) InputDispatcher() *inputDispatcher { return e.inputDispatcher }
 
 // SetNetIDBase sets the base offset for NetworkID allocation.
 // Each node should have a unique base to prevent ID collisions.

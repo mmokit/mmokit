@@ -48,12 +48,15 @@ func (s *DockingSystem) Update(dt float32) {
 			continue
 		}
 
-		entity := sess.Entity
-		if !gw.eng.ECS.Alive(entity) {
+		entity := mmokit.EntityFromECS(gw.Stage, sess.Entity)
+		if !entity.Alive() {
 			continue
 		}
 
-		pos := gw.C.Position.Get(entity)
+		pos := mmokit.Get[mmokit.Position](entity)
+		if pos == nil {
+			continue
+		}
 
 		// Find nearest station within range
 		var nearest *stationInfo
@@ -83,8 +86,8 @@ func (s *DockingSystem) Update(dt float32) {
 		gw.Players.Transition(sess, StateDocking)
 
 		// Deactivate move target immediately
-		if gw.C.MoveTarget.HasAll(entity) {
-			gw.C.MoveTarget.Get(entity).Active = false
+		if mt := mmokit.Get[mmokit.MoveTarget](entity); mt != nil {
+			mt.Active = false
 		}
 
 		s.sendDockingState(req.ConnID, true, 0, gw.Config.DockTime, nearest.netID)
@@ -100,18 +103,21 @@ func (s *DockingSystem) Update(dt float32) {
 			return
 		}
 
-		entity := sess.Entity
-		if !gw.eng.ECS.Alive(entity) {
+		entity := mmokit.EntityFromECS(gw.Stage, sess.Entity)
+		if !entity.Alive() {
 			return
 		}
 
 		// Deactivate move target each tick (prevent input override)
-		if gw.C.MoveTarget.HasAll(entity) {
-			gw.C.MoveTarget.Get(entity).Active = false
+		if mt := mmokit.Get[mmokit.MoveTarget](entity); mt != nil {
+			mt.Active = false
 		}
 
-		pos := gw.C.Position.Get(entity)
-		vel := gw.C.Velocity.Get(entity)
+		pos := mmokit.Get[mmokit.Position](entity)
+		vel := mmokit.Get[mmokit.Velocity](entity)
+		if pos == nil || vel == nil {
+			return
+		}
 
 		// Exponential velocity decay (heavy drag)
 		vel.X *= dragFactor

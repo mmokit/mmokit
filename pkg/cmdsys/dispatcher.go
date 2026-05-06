@@ -352,7 +352,7 @@ func (d *Dispatcher) Invoke(ctx context.Context, caller Caller, verb string, raw
 				// Unmarshal result JSON into cmd.Result type if available.
 				if cmd.Result != nil && len(resp.ResultJSON) > 0 {
 					resultType := reflect.TypeOf(cmd.Result)
-					if resultType.Kind() == reflect.Ptr {
+					if resultType.Kind() == reflect.Pointer {
 						resultType = resultType.Elem()
 					}
 					resultPtr := reflect.New(resultType)

@@ -3,6 +3,16 @@ import type { GameState } from "./state";
 import { audio } from "./audio/audio-manager";
 import { SoundId } from "./audio/sounds";
 import { getAbilityRange } from "./ui/ability-bar";
+import {
+  CastAbility,
+  Chat,
+  Dock,
+  JettisonItem,
+  Respawn,
+  SetLockTarget,
+  SetMoveTarget,
+  Undock,
+} from "../sdk/index.js";
 
 // Entity kind numeric literals (match server-side component.Type*).
 const KIND_SHIP = 0;
@@ -62,7 +72,12 @@ export function setupInput(
       } else if (e.code === "Enter") {
         const text = chatInputEl.value.trim();
         if (text && state.connected && state.client) {
-          state.client.sendChat({ username: state.playerUsername, text });
+          state.inputSeq++;
+          state.client.send(new Chat({
+            sequence: state.inputSeq,
+            username: state.playerUsername,
+            text,
+          }));
         }
         state.chatMode = false;
         chatInputEl.style.display = "none";
@@ -82,7 +97,8 @@ export function setupInput(
 
     if (state.isDead && (e.code === "Space" || e.code === "Enter")) {
       if (state.connected && state.client) {
-        state.client.sendRespawnRequest({});
+        state.inputSeq++;
+        state.client.send(new Respawn({ sequence: state.inputSeq }));
       }
     }
 
@@ -166,11 +182,13 @@ export function setupInput(
     if (e.code === "KeyX" && !state.isDead) {
       if (state.isDocked) {
         if (state.connected && state.client) {
-          state.client.sendUndockRequest({});
+          state.inputSeq++;
+          state.client.send(new Undock({ sequence: state.inputSeq }));
         }
       } else if (!state.isDockingInProgress && isNearStation(state)) {
         if (state.connected && state.client) {
-          state.client.sendDockRequest({});
+          state.inputSeq++;
+          state.client.send(new Dock({ sequence: state.inputSeq }));
         }
       }
     }
@@ -277,28 +295,61 @@ export function setupInput(
   window.addEventListener("contextmenu", (e) => e.preventDefault());
 }
 
+// Per-tick input sender. Bundled CE_PLAYER_INPUT was decomposed in
+// Plan G into discrete typed messages (SetMoveTarget / SetLockTarget /
+// CastAbility / JettisonItem). Each piece sends only when its source
+// state changes — idle players send zero input frames per tick.
 export function sendInput(state: GameState): void {
   if (!state.connected || !state.client) return;
   if (state.isDead || state.chatMode || state.isDocked || state.cellMapOpen) return;
 
-  state.inputSeq++;
-  const jett = state.jettisonRequest;
-  state.jettisonRequest = 0;
-
-  const abilityCast = state.abilityPresses;
-  state.abilityPresses = 0;
-
+  // Movement: send on the tick the player issues a new click. Active=false
+  // is also dispatched once when the click is released.
   const mt = state.moveTarget;
-  const moveActive = mt.active;
-  if (mt.active) mt.active = false; // consume after sending (fire-and-forget)
+  if (mt.active) {
+    state.inputSeq++;
+    state.client.send(new SetMoveTarget({
+      sequence: state.inputSeq,
+      active: true,
+      x: mt.x,
+      y: mt.y,
+    }));
+    mt.active = false; // consume after sending (fire-and-forget)
+  }
 
-  state.client.sendPlayerInput({
-    sequence: state.inputSeq,
-    jettison: jett,
-    moveX: mt.x,
-    moveY: mt.y,
-    moveActive,
-    abilityCast,
-    lockTargetId: state.lockTargetId,
-  });
+  // Lock target: send on transition. lastSentLockTargetId mirrors the
+  // most recent value the server was told about.
+  if (state.lockTargetId !== state.lastSentLockTargetId) {
+    state.inputSeq++;
+    state.client.send(new SetLockTarget({
+      sequence: state.inputSeq,
+      targetNetID: state.lockTargetId,
+    }));
+    state.lastSentLockTargetId = state.lockTargetId;
+  }
+
+  // Ability presses: one CastAbility per pressed bit.
+  if (state.abilityPresses !== 0) {
+    const presses = state.abilityPresses;
+    state.abilityPresses = 0;
+    for (let slot = 0; slot < 8; slot++) {
+      if ((presses & (1 << slot)) === 0) continue;
+      state.inputSeq++;
+      state.client.send(new CastAbility({
+        sequence: state.inputSeq,
+        slot,
+      }));
+    }
+  }
+
+  // Jettison: discrete one-shot.
+  if (state.jettisonRequest !== 0) {
+    const itemID = state.jettisonRequest;
+    state.jettisonRequest = 0;
+    state.inputSeq++;
+    state.client.send(new JettisonItem({
+      sequence: state.inputSeq,
+      itemID,
+    }));
+  }
 }

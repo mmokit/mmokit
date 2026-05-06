@@ -60,6 +60,13 @@ func (c *captureSender) DrainOpInput(connID uint32) [][]byte {
 	return nil
 }
 
+func (c *captureSender) DrainClientInput(connID uint32) [][]byte {
+	if c.inner != nil {
+		return c.inner.DrainClientInput(connID)
+	}
+	return nil
+}
+
 // TestBinaryFrameWriter_TimestampsAreMonotonic drives two
 // BinaryFrameWriter.WriteFrame calls with monotonically-advancing
 // per-entity ProducedAtMs stamps (as ReplicationSystem supplies upstream

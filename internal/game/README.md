@@ -22,17 +22,37 @@ type GameWorld struct {
 | `PlayerEntities` | `connID → ecs.Entity` for alive players |
 | `NetIDToEntity` | `netID → ecs.Entity` rebuilt each tick by SpatialSystem |
 | `ConnToUsername` | `connID → username` for active connections |
-| `DeadPlayers` | Set of connIDs awaiting respawn |
-| `PendingDeaths` | Death notifications to send this tick |
-| `PendingLootDrops` | Cargo to spawn as loot crates after entity removal |
-| `PendingChat` | Chat messages to broadcast this tick |
+| `Queue` | Tick-queued game-side events (`PendingLootDrop`, etc.) drained in `postFlush` |
 | `PlayerDB` | In-memory persistent player data |
 
 **Key methods:**
 
 - `UsernameInUse(username) bool` — checks for duplicate logins
 - `SavePlayerState(connID, entity)` — persists position/inventory to PlayerDB
-- `MarkPlayerDeath(entity, killerNetID)` — records death, captures loot, queues removal
+
+## Death pipeline (post-Plan-E)
+
+Damage and death are typed-message verbs that ride the mmokit framework. There is no
+imperative `MarkPlayerDeath` / `MarkNPCDeath` API anymore.
+
+- **`ApplyDamage(target, amount, source)`** (`verb_damage.go`) mutates `Health.Current`
+  and writes `Health.LastDamagedByNetID`. The function is a thin wrapper around a
+  `Damage` typed message routed via `mmokit.Send` so cross-cell damage works without
+  any per-call routing logic.
+- **`deathObserver`** (`verb_death.go`, registered via `mmokit.OnTickEachAll[Health]`)
+  fires the `Killed{Killer}` typed message exactly once per entity per
+  drop-to-zero. Idempotence is enforced via `Health.DeathFired` so cross-cell handoff
+  during death never double-fires.
+- **`killedHandler`** runs on the dying entity's authoritative cell. It branches on
+  `PlayerConn` presence to dispatch `handlePlayerKilled` or `handleNPCKilled`,
+  routes per-currency `KillCredit` typed messages to the killer (cross-cell
+  aware via `mmokit.Send`), and finally calls `MarkForRemoval`. Non-currency loot
+  is enqueued as `PendingLootDrop` and spawned in `postFlush`.
+- **`killCreditHandler`** runs on the killer's authoritative cell. It credits the
+  player's bank, marks the player dirty, and pushes a `GSE_CURRENCY_UPDATE` event
+  to the killer's client. Registered via `mmokit.HandleAllInternal` — server-internal,
+  no AoI broadcast (clients receive the resulting `CurrencyUpdate` event, not the
+  `KillCredit` payload).
 
 ## Entity Kinds (`entity_kinds.go`)
 
@@ -69,12 +89,14 @@ These methods are called by the engine's game loop at specific points in the tic
 | `onConnect(connID)` | Adds to PendingConnections, logs |
 | `onDisconnect(connID)` | Saves player state, removes entity immediately, cleans up all maps |
 | `processPendingSessions()` | Processes pending sessions from entity transfers and coordinator-assigned players; transitions to Active |
-| `processDeaths()` | Sends PlayerDiedMsg to each dead player's client, moves them to DeadPlayers set |
-| `postFlush()` | Spawns loot crates from PendingLootDrops, processes respawn requests |
-| `clearTickState()` | Resets PendingDeaths slice |
+| `postFlush()` | Drains `PendingLootDrop` queue into spawned loot crates, processes respawn requests |
 | `getNetID(entity) (uint32, bool)` | Returns NetworkID for FlushRemovals callback |
 
 **Important:** `onDisconnect` removes the entity immediately (not through MarkForRemoval) and appends the netID to RemovedNetIDs directly. This ensures disconnected entities are cleaned up in the same tick.
+
+Death-cue and currency-credit propagation are owned by the typed-message verbs
+described in the **Death pipeline** section above — no per-tick fan-out from a
+`PendingDeaths` slice exists today.
 
 ## Admin Commands (`commands.go`)
 

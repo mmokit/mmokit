@@ -13,7 +13,6 @@ const (
 	MsgChat               MsgType = 4   // chat relay
 	MsgSpawnTransfer      MsgType = 5   // player spawn on another cell
 	MsgCrossCellAction    MsgType = 6   // cross-cell action request to authoritative cell
-	MsgActionResult       MsgType = 7   // cross-cell action result back to originator
 	MsgPlayerAssignment   MsgType = 8   // coordinator -> cell: player login routed
 	MsgSessionTransfer    MsgType = 12  // entity-less session transfer during split
 	MsgBorderFrame        MsgType = 100 // delta frame from one cell to a neighbor
@@ -103,7 +102,6 @@ type CellMessage struct {
 	Spawn        *SpawnTransfer
 	Assignment   *PlayerAssignment    // coordinator -> cell player assignment
 	Action       *CrossCellAction     // cross-cell action request
-	ActionResult *ActionResult        // cross-cell action result
 	Sessions     []SessionTransfer    // entity-less session transfers during split
 	BorderFrame  []byte               // encoded replication.Frame bytes for MsgBorderFrame
 	Handoff      *HandoffPayload      // for MsgHandoff

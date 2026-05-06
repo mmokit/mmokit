@@ -14,7 +14,7 @@ var ecsEntityType = reflect.TypeFor[ecs.Entity]()
 // ValidateComponentType panics if t contains any fields with unsupported types.
 // Call this at registration time to catch problems early.
 func ValidateComponentType(t reflect.Type) {
-	if t.Kind() == reflect.Ptr {
+	if t.Kind() == reflect.Pointer {
 		t = t.Elem()
 	}
 	if t.Kind() != reflect.Struct {
@@ -38,6 +38,12 @@ func validateStruct(t reflect.Type, path string) {
 }
 
 func validateType(t reflect.Type, path string) {
+	// Custom-codec-registered types are accepted regardless of their default
+	// reflective shape (e.g. mmokit.Entity contains a *Stage pointer the
+	// default validator would reject).
+	if LookupReflectCodec(t) != nil {
+		return
+	}
 	switch t.Kind() {
 	case reflect.Float32, reflect.Float64,
 		reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64,
@@ -57,7 +63,7 @@ func validateType(t reflect.Type, path string) {
 // Unexported fields and ecs.Entity fields are skipped.
 func ReflectMarshal(ptr any) []byte {
 	v := reflect.ValueOf(ptr)
-	if v.Kind() == reflect.Ptr {
+	if v.Kind() == reflect.Pointer {
 		v = v.Elem()
 	}
 	// Pre-calculate size to avoid repeated allocation.
@@ -67,14 +73,26 @@ func ReflectMarshal(ptr any) []byte {
 	return buf[:off]
 }
 
-// ReflectUnmarshal deserializes binary data into a struct pointer.
-// Unexported fields and ecs.Entity fields are left at zero value.
-func ReflectUnmarshal(data []byte, ptr any) {
+// ReflectUnmarshalOnStage decodes data into the struct ptr, threading stage
+// to any registered field codecs that need it. Use when the struct contains
+// types whose decode is stage-dependent (e.g. mmokit.Entity, which resolves
+// its local ECS handle via the stage's NetID index).
+func ReflectUnmarshalOnStage(stage *Stage, data []byte, ptr any) {
 	v := reflect.ValueOf(ptr)
-	if v.Kind() == reflect.Ptr {
+	if v.Kind() == reflect.Pointer {
 		v = v.Elem()
 	}
-	unmarshalStruct(data, 0, v)
+	unmarshalStructOnStage(stage, data, 0, v)
+}
+
+// ReflectUnmarshal deserializes binary data into a struct pointer.
+// Unexported fields and ecs.Entity fields are left at zero value.
+//
+// Preserves the no-stage call signature for callers that don't need stage
+// context (the existing transfer codec). Equivalent to
+// ReflectUnmarshalOnStage(nil, data, ptr).
+func ReflectUnmarshal(data []byte, ptr any) {
+	ReflectUnmarshalOnStage(nil, data, ptr)
 }
 
 func structSize(v reflect.Value) int {
@@ -83,6 +101,10 @@ func structSize(v reflect.Value) int {
 	for i := range t.NumField() {
 		f := t.Field(i)
 		if !f.IsExported() || f.Type == ecsEntityType {
+			continue
+		}
+		if codec := LookupReflectCodec(f.Type); codec != nil {
+			total += codec.Size()
 			continue
 		}
 		total += valueSize(v.Field(i))
@@ -129,6 +151,11 @@ func marshalStruct(buf []byte, off int, v reflect.Value) int {
 	for i := range t.NumField() {
 		f := t.Field(i)
 		if !f.IsExported() || f.Type == ecsEntityType {
+			continue
+		}
+		if codec := LookupReflectCodec(f.Type); codec != nil {
+			codec.Encode(buf[off:], v.Field(i))
+			off += codec.Size()
 			continue
 		}
 		off = marshalValue(buf, off, v.Field(i))
@@ -193,19 +220,24 @@ func marshalValue(buf []byte, off int, v reflect.Value) int {
 	}
 }
 
-func unmarshalStruct(data []byte, off int, v reflect.Value) int {
+func unmarshalStructOnStage(stage *Stage, data []byte, off int, v reflect.Value) int {
 	t := v.Type()
 	for i := range t.NumField() {
 		f := t.Field(i)
 		if !f.IsExported() || f.Type == ecsEntityType {
 			continue
 		}
-		off = unmarshalValue(data, off, v.Field(i))
+		if codec := LookupReflectCodec(f.Type); codec != nil {
+			codec.Decode(stage, data[off:], v.Field(i))
+			off += codec.Size()
+			continue
+		}
+		off = unmarshalValueOnStage(stage, data, off, v.Field(i))
 	}
 	return off
 }
 
-func unmarshalValue(data []byte, off int, v reflect.Value) int {
+func unmarshalValueOnStage(stage *Stage, data []byte, off int, v reflect.Value) int {
 	switch v.Kind() {
 	case reflect.Float32:
 		v.SetFloat(float64(math.Float32frombits(binary.LittleEndian.Uint32(data[off:]))))
@@ -247,11 +279,11 @@ func unmarshalValue(data []byte, off int, v reflect.Value) int {
 		return off + slen
 	case reflect.Array:
 		for i := range v.Len() {
-			off = unmarshalValue(data, off, v.Index(i))
+			off = unmarshalValueOnStage(stage, data, off, v.Index(i))
 		}
 		return off
 	case reflect.Struct:
-		return unmarshalStruct(data, off, v)
+		return unmarshalStructOnStage(stage, data, off, v)
 	default:
 		return off
 	}

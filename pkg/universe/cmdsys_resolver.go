@@ -137,7 +137,7 @@ func extractStringField(args any, name string) string {
 		return ""
 	}
 	rv := reflect.ValueOf(args)
-	if rv.Kind() == reflect.Ptr {
+	if rv.Kind() == reflect.Pointer {
 		rv = rv.Elem()
 	}
 	if rv.Kind() != reflect.Struct {
@@ -157,7 +157,7 @@ func extractUint32Field(args any, name string) uint32 {
 		return 0
 	}
 	rv := reflect.ValueOf(args)
-	if rv.Kind() == reflect.Ptr {
+	if rv.Kind() == reflect.Pointer {
 		rv = rv.Elem()
 	}
 	if rv.Kind() != reflect.Struct {

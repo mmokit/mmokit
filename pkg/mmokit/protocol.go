@@ -36,11 +36,13 @@ type OperationSchema struct {
 
 // ProtocolSchema is the complete machine-readable protocol description.
 type ProtocolSchema struct {
-	Game         string                     `json:"game"`
-	ClientEvents []engine.ClientEventSchema `json:"clientEvents"`
-	ServerEvents []ServerEventSchema        `json:"serverEvents"`
-	Entities     []system.EntitySchema      `json:"entities"`
-	Operations   []OperationSchema          `json:"operations,omitempty"`
+	Game             string                     `json:"game"`
+	ClientEvents     []engine.ClientEventSchema `json:"clientEvents"`
+	ServerEvents     []ServerEventSchema        `json:"serverEvents"`
+	Entities         []system.EntitySchema      `json:"entities"`
+	Operations       []OperationSchema          `json:"operations,omitempty"`
+	BroadcastTypes   []BroadcastTypeSchema      `json:"broadcast_types,omitempty"`
+	ClientInputTypes []ClientInputTypeSchema    `json:"client_input_types,omitempty"`
 }
 
 // Protocol collects the full client/server contract for a game.
@@ -209,6 +211,18 @@ func (p *Protocol) Schema() ProtocolSchema {
 			}
 		}
 	}
+	// Broadcast-eligible typed messages: every type registered via
+	// HandleAll[T] gets a schema entry here so sdkgen can emit a matching
+	// TS class + decoder. HandleAllInternal[T] types are excluded.
+	for _, t := range BroadcastTypes() {
+		ps.BroadcastTypes = append(ps.BroadcastTypes, BroadcastTypeOf(t))
+	}
+	// Client-input types: every type registered via HandleClient[T] gets a
+	// schema entry here so sdkgen can emit a matching TS class with an
+	// encode() instance method + a static typeID.
+	for _, t := range ClientInputTypes() {
+		ps.ClientInputTypes = append(ps.ClientInputTypes, ClientInputTypeOf(t))
+	}
 	// Final sort by code: InputRouter.Schema() iterates a map in random
 	// Go-map-order, so without this the generated TypeScript SDK methods
 	// would be reordered between successive --dump-schema runs, producing
@@ -225,23 +239,13 @@ func (p *Protocol) WriteSchema(w io.Writer) error {
 }
 
 // AssembleFromProcess hydrates the Protocol with runtime-discovered registries:
-// client events from the process's input bindings (registered via OnInput /
-// OnInputWith), operations from the OpRouter, and entity replicators from
-// any cell's EntityKindDefs.
+// operations from the OpRouter, and entity replicators from any cell's
+// EntityKindDefs. Client-input types (HandleClient[T]) are harvested
+// directly in Schema() via the global mmokit registry.
 //
 // Called by the engine's --dump-schema path after Build() has populated
 // every registry but before Start has begun the game loop.
 func (p *Protocol) AssembleFromProcess(proc *universe.Process) {
-	// Append OnInput / OnInputWith bindings to the client-event schema.
-	// Bindings on the process are the new source of truth; the legacy
-	// router path (kept for the migration window in Schema()) covers any
-	// handler still registered the old way.
-	for _, b := range proc.InputBindings() {
-		if b.ProtoName() == "" {
-			continue
-		}
-		p.clientEventsRegistry.AddSchemaEntry(b.Code(), b.ProtoName())
-	}
 	if op := proc.OpRouter(); op != nil {
 		p.operations = append(p.operations, fromOpsSchemas(op.Schema())...)
 	}

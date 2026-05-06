@@ -68,14 +68,6 @@ func RegisterEntityKinds(p *mmokit.Process) {
 	)
 }
 
-// RegisterGlobalTransferComponents registers the core components (Velocity,
-// Rotation) present on every entity. These are registered once per stage
-// rather than per-kind to avoid duplicate entries in the ReplicationRegistry.
-func RegisterGlobalTransferComponents(c *Components, reg *mmokit.ReplicationRegistry) {
-	mmokit.RegisterComponent(reg, c.Velocity)
-	mmokit.RegisterComponent(reg, c.Rotation)
-}
-
 // initEntityKinds populates per-stage state that depends on the running
 // GameWorld: the global transfer registrations (Velocity/Rotation) and the
 // process-wide via RegisterEntityKinds(coord) in GameSetup. Game-side
@@ -84,5 +76,8 @@ func RegisterGlobalTransferComponents(c *Components, reg *mmokit.ReplicationRegi
 // EntityRegistry that previously powered the legacy entity.add console
 // command was removed when the cluster-aware entity.spawn landed.
 func (gw *GameWorld) initEntityKinds() {
-	RegisterGlobalTransferComponents(gw.C, gw.ReplicationRegistry())
+	w := gw.Stage.ECSWorld()
+	reg := gw.ReplicationRegistry()
+	mmokit.RegisterComponent(reg, ecs.NewMap1[mmokit.Velocity](w))
+	mmokit.RegisterComponent(reg, ecs.NewMap1[mmokit.Rotation](w))
 }

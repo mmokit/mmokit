@@ -60,7 +60,7 @@ func schemaOf(v any, maxDepth int) (Schema, error) {
 	if t == nil {
 		return Schema{}, fmt.Errorf("cmdsys.SchemaOf: nil value")
 	}
-	if t.Kind() == reflect.Ptr {
+	if t.Kind() == reflect.Pointer {
 		t = t.Elem()
 	}
 	if t.Kind() != reflect.Struct {

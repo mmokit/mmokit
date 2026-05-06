@@ -3,8 +3,6 @@ package game
 import (
 	"math"
 
-	"github.com/mlange-42/ark/ecs"
-
 	gamecomp "github.com/zenion/mmoserver/internal/component"
 	"github.com/zenion/mmoserver/pkg/mmokit"
 )
@@ -36,11 +34,13 @@ func (s *MiningSystem) Update(dt float32) {
 	for e, b := range s.entities.Iter {
 		input, laser, pos, inv := b.Input, b.Laser, b.Pos, b.Inv
 
+		entity := mmokit.EntityFromECS(gw.Stage, e)
+
 		// Handle jettison — drop items into a loot crate
 		if input.JettisonItemID > 0 {
 			itemID := input.JettisonItemID
 			if inv.Items != nil && inv.Items[itemID] > 0 {
-				playerNetID := gw.C.NetworkID.Get(e).ID
+				playerNetID := entity.NetID()
 				qty := inv.Items[itemID]
 				gw.eng.Log.Log(CatEconomyMining, "player=%d jettisoned %d of item %d",
 					playerNetID, qty, itemID)
@@ -62,17 +62,19 @@ func (s *MiningSystem) Update(dt float32) {
 			}
 
 			// Validate target
-			if !gw.eng.ECS.Alive(laser.Target) || !gw.C.Minable.HasAll(laser.Target) {
+			targetE := mmokit.EntityFromECS(gw.Stage, laser.Target)
+			minable := mmokit.Get[gamecomp.Minable](targetE)
+			if !targetE.Alive() || minable == nil {
 				beam.Active = false
 				continue
 			}
 
 			// Range check
-			if !gw.C.Position.HasAll(laser.Target) {
+			targetPos := mmokit.Get[mmokit.Position](targetE)
+			if targetPos == nil {
 				beam.Active = false
 				continue
 			}
-			targetPos := gw.C.Position.Get(laser.Target)
 			dx := targetPos.X - pos.X
 			dy := targetPos.Y - pos.Y
 			dist := float32(math.Sqrt(float64(dx*dx + dy*dy)))
@@ -81,7 +83,6 @@ func (s *MiningSystem) Update(dt float32) {
 				continue
 			}
 
-			minable := gw.C.Minable.Get(laser.Target)
 			if minable.Remaining <= 0 {
 				beam.Active = false
 				continue
@@ -118,30 +119,27 @@ func (s *MiningSystem) Update(dt float32) {
 				continue
 			}
 
-			playerNetID := gw.C.NetworkID.Get(e).ID
+			playerNetID := entity.NetID()
 
-			if gw.C.Replica.HasAll(laser.Target) {
-				// Cross-cell mining: send action to authoritative node
-				s.sendCrossNodeMining(playerNetID, laser.Target, float32(added))
-				// Update local replica for immediate visual feedback
-				minable.Remaining -= float32(added)
-				gw.eng.Log.Log(CatEconomyMining, "player=%d cross-cell mining beam=%d amount=%d remaining=%.2f",
-					playerNetID, i, added, minable.Remaining)
-			} else {
-				minable.Remaining -= float32(added)
-				gw.eng.Log.Log(CatEconomyMining, "player=%d mining beam=%d amount=%d remaining=%.2f",
-					playerNetID, i, added, minable.Remaining)
+			// Resolve target as an mmokit.Entity. When local, target.Send
+			// dispatches synchronously and the handler decrements
+			// Minable.Remaining + marks for removal. When replica, Send
+			// routes the action to the authoritative cell; we still
+			// decrement the local replica copy for visual feedback.
+			asteroid := mmokit.EntityByNetID(gw.Stage, targetE.NetID())
 
-				// Mark depleted asteroid for removal
-				if minable.Remaining <= 0 {
-					gw.MarkForRemoval(laser.Target)
-					gw.eng.Log.Log(CatEconomyMining, "asteroid depleted")
-				}
+			if !asteroid.Local() {
+				minable.Remaining -= float32(added)
 			}
+
+			gw.MineExtract(entity, asteroid, uint8(i), float32(added))
+
+			gw.eng.Log.Log(CatEconomyMining, "player=%d mining beam=%d amount=%d remaining=%.2f",
+				playerNetID, i, added, minable.Remaining)
 		}
 
 		// Sync replicated active-mining state after beam updates.
-		gw.syncActiveMining(e, laser)
+		gw.syncActiveMining(entity, laser)
 	}
 
 	// Spawn loot crates for jettisoned cargo (after query iteration)
@@ -150,14 +148,3 @@ func (s *MiningSystem) Update(dt float32) {
 	}
 }
 
-func (s *MiningSystem) sendCrossNodeMining(casterNetID uint32, target ecs.Entity, amount float32) {
-	gw := s.World()
-	rep := gw.C.Replica.Get(target)
-	gw.Bridge().SendAction(mmokit.MeshCellID(rep.SourceCellID), &mmokit.CrossCellAction{
-		Type:         ActionMining,
-		TargetNetID:  rep.SourceNetID,
-		SourceNetID:  casterNetID,
-		SourceCellID: string(gw.CellID()),
-		Payload:      MarshalMiningAction(&MiningAction{Amount: amount}),
-	})
-}

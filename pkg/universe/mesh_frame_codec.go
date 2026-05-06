@@ -127,23 +127,6 @@ func encodeCellMessage(msg CellMessage, destCellID MeshCellID) (*meshpb.MeshFram
 			},
 		}
 
-	case MsgActionResult:
-		if msg.ActionResult == nil {
-			return nil, fmt.Errorf("encodeCellMessage: MsgActionResult payload is nil")
-		}
-		r := msg.ActionResult
-		frame.Msg = &meshpb.MeshFrame_ActionResult{
-			ActionResult: &meshpb.ActionResult{
-				FromCellId:  string(msg.FromCellID),
-				ActionType:  uint32(r.Type),
-				TargetNetId: r.TargetNetID,
-				SourceNetId: r.SourceNetID,
-				Success:     r.Success,
-				Payload:     r.Payload,
-				SideEffects: r.SideEffects,
-			},
-		}
-
 	case MsgPlayerAssignment:
 		if msg.Assignment == nil {
 			return nil, fmt.Errorf("encodeCellMessage: MsgPlayerAssignment payload is nil")
@@ -290,24 +273,6 @@ func decodeMeshFrame(frame *meshpb.MeshFrame) (CellMessage, error) {
 				SourceNetID:  ca.SourceNetId,
 				SourceCellID: ca.SourceCellId,
 				Payload:      ca.Payload,
-			},
-		}, nil
-
-	case *meshpb.MeshFrame_ActionResult:
-		if p.ActionResult == nil {
-			return CellMessage{}, fmt.Errorf("decodeMeshFrame: ActionResult payload is nil")
-		}
-		ar := p.ActionResult
-		return CellMessage{
-			Type:       MsgActionResult,
-			FromCellID: MeshCellID(ar.FromCellId),
-			ActionResult: &ActionResult{
-				Type:        ActionType(ar.ActionType),
-				TargetNetID: ar.TargetNetId,
-				SourceNetID: ar.SourceNetId,
-				Success:     ar.Success,
-				Payload:     ar.Payload,
-				SideEffects: ar.SideEffects,
 			},
 		}, nil
 

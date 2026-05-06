@@ -9,17 +9,12 @@ import "enginepb/engine.proto";
 // GAME-SPECIFIC EVENT CODES
 // ═══════════════════════════════════════════════
 
-// Client → Server event codes (game-specific, values 5+)
+// Client → Server event codes (game-specific). All input messages migrated
+// to mmokit.HandleClient[T] over the typed-input wire channel (0x02);
+// no codes remain. The enum is retained as a placeholder for future
+// non-typed-input game-specific client codes (none exist today).
 enum GameClientEventCode {
     GCE_UNKNOWN = 0;
-    GCE_INVENTORY_TRANSFER = 5;
-    GCE_BANK_REQUEST = 6;
-    GCE_EQUIP = 7;
-    GCE_DOCK = 8;
-    GCE_UNDOCK = 9;
-    GCE_LOOT_ITEM = 10;
-    GCE_LOOT_ALL = 11;
-    GCE_RESPAWN = 12;
 }
 
 // Server → Client event codes (game-specific, 100+ to avoid colliding with engine codes)
@@ -84,20 +79,6 @@ enum OperationCode {
 }
 
 // ═══════════════════════════════════════════════
-// GAME-SPECIFIC INPUT
-// ═══════════════════════════════════════════════
-
-message PlayerInputMsg {
-    uint32 sequence = 1;
-    uint32 jettison = 2;        // item ID to jettison (0 = none)
-    float move_x = 3;           // right-click destination X (world-absolute)
-    float move_y = 4;           // right-click destination Y (world-absolute)
-    bool move_active = 5;       // true when player issued a move command
-    uint32 ability_cast = 6;    // bitmask: bit 0=Q, 1=W, 2=E, 3=R, 4=D, 5=F
-    uint32 lock_target_id = 7;  // lock-on target network ID, 0 = none
-}
-
-// ═══════════════════════════════════════════════
 // INVENTORY & EQUIPMENT
 // ═══════════════════════════════════════════════
 
@@ -122,43 +103,6 @@ message EquipmentState {
 }
 
 // ═══════════════════════════════════════════════
-// GAME CLIENT EVENT PAYLOADS
-// ═══════════════════════════════════════════════
-
-message InventoryTransferMsg {
-    uint32 item_id = 1;
-    int32 quantity = 2;     // amount to transfer (0 = all)
-    bool deposit = 3;       // true = cargo->bank, false = bank->cargo
-}
-
-message BankRequestMsg {}
-
-message EquipRequestMsg {
-    uint32 item_id = 1;    // item to equip (0 = unequip)
-    EquipSlot slot = 2;    // which slot to affect
-    // target_bank: when docked, source/dest is the bank instead of cargo.
-    //   equip:   pull from bank; swapped-out item returns to bank
-    //   unequip: deposit slot item to bank instead of cargo
-    // Ignored for non-docked players (no bank access in flight).
-    bool target_bank = 3;
-}
-
-message DockRequestMsg {}
-
-message UndockRequestMsg {}
-
-message RespawnRequestMsg {}
-
-message LootItemMsg {
-    uint32 crate_net_id = 1;
-    uint32 item_id = 2;
-}
-
-message LootAllMsg {
-    uint32 crate_net_id = 1;
-}
-
-// ═══════════════════════════════════════════════
 // GAME SERVER EVENT PAYLOADS
 // ═══════════════════════════════════════════════
 
@@ -169,7 +113,15 @@ message WorldUpdateMsg {
     repeated uint32 removed_ids = 4;       // left AoI (no visual effect)
     repeated enginepb.ChatMsg chat_messages = 5;
     repeated uint32 killed_ids = 6;        // actually died/destroyed (play explosion)
-    repeated AbilityCastResultMsg ability_events = 7; // ability casts visible in AoI
+    repeated TypedEvent events = 7;        // AoI-filtered auto-broadcast events
+}
+
+// TypedEvent carries one auto-broadcast typed message for the client. type_id
+// is the framework's reflect-codec type ID; body is the reflect-codec
+// payload. Clients dispatch on type_id to a typed decoder.
+message TypedEvent {
+    uint32 type_id = 1;
+    bytes  body    = 2;
 }
 
 message EntityState {
@@ -303,16 +255,6 @@ message DockedMsg {}
 
 message PlayerDiedMsg {
     uint32 killer_id = 1; // network ID of who killed you, 0 if unknown
-}
-
-message AbilityCastResultMsg {
-    uint32 slot = 1;
-    bool success = 2;
-    string reason = 3;       // failure reason if !success
-    uint32 target_id = 4;    // target hit
-    float damage_dealt = 5;  // actual damage dealt
-    uint32 caster_id = 6;    // network ID of caster (for broadcast)
-    uint32 ability_type = 7;  // AbilityType enum from item.go (drives client VFX/SFX)
 }
 
 // === Map data ===

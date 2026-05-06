@@ -123,6 +123,19 @@ func (cm *ConnManager) DrainOpInput(connID uint32) [][]byte {
 	return t.DrainOpInput()
 }
 
+// DrainClientInput drains all queued typed client-input messages (channel 0x02)
+// for a connection. Frames are dispatched per-tick by the gateway-side
+// dispatchClientInput phase to mmokit.HandleClient handlers.
+func (cm *ConnManager) DrainClientInput(connID uint32) [][]byte {
+	cm.mu.RLock()
+	t := cm.conns[connID]
+	cm.mu.RUnlock()
+	if t == nil {
+		return nil
+	}
+	return t.DrainClientInput()
+}
+
 // ActiveConnIDs returns a snapshot of all active connection IDs.
 func (cm *ConnManager) ActiveConnIDs() []uint32 {
 	cm.mu.RLock()

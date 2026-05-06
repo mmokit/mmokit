@@ -47,20 +47,6 @@ func RegisterClientEvent[T any, P interface {
 	e.entries[entry.code] = entry
 }
 
-// AddSchemaEntry inserts a schema entry sourced from an OnInput binding.
-// Skipped if an explicit RegisterClientEvent[T] entry already exists for
-// the same code — explicit declarations win, since they may carry richer
-// metadata (e.g. enum-name capture) that bindings can't supply.
-func (e *ClientEvents) AddSchemaEntry(code uint32, protoName string) {
-	if _, exists := e.entries[code]; exists {
-		return
-	}
-	e.entries[code] = clientEventEntry{
-		code:      code,
-		protoName: protoName,
-	}
-}
-
 // Schema returns registered events sorted by code.
 func (e *ClientEvents) Schema() []engine.ClientEventSchema {
 	out := make([]engine.ClientEventSchema, 0, len(e.entries))

@@ -725,7 +725,7 @@ func (n *HostNetwork) routeInboundFrame(frame *meshpb.MeshFrame) error {
 			n.log.Log(CatMeshMsg, "[%s] ClientInput for unknown session gw=%s conn=%d, dropping", n.hostID, ci.GatewayId, ci.ConnId)
 			return nil
 		}
-		n.vcm.InjectInputWithEpoch(localID, ci.Data, ci.Epoch)
+		n.vcm.InjectChannelInputWithEpoch(localID, ci.Data, ci.Epoch, byte(ci.Channel))
 		return nil
 	}
 

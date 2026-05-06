@@ -40,7 +40,7 @@ type ShipBundle struct {
 // If s.Entity is already alive, this is a reconnection or cross-cell transfer —
 // reuse the existing entity instead of creating a new one.
 func (gw *GameWorld) SpawnPlayer(s *mmokit.PlayerSession) {
-	if s.Entity != (ecs.Entity{}) && gw.eng.ECS.Alive(s.Entity) {
+	if s.Entity != (ecs.Entity{}) && gw.Stage.ECSWorld().Alive(s.Entity) {
 		gw.reconnectPlayer(s)
 		return
 	}
@@ -98,49 +98,53 @@ func (gw *GameWorld) SpawnPlayer(s *mmokit.PlayerSession) {
 
 	br := boundingRadius(gw.Config.ShipWidth, gw.Config.ShipHeight)
 
-	entity := gw.SpawnEntity(
+	handle := gw.SpawnEntity(
 		mmokit.Position{X: x, Y: y},
 		mmokit.WithEntityKind(gamecomp.TypeShip),
 		mmokit.WithCollider(br),
 		mmokit.WithRotation(0),  // ShipDynamicsSystem reads Rotation for turn-rate steering
 		mmokit.WithComponents(), // auto-adds all registered ship components
 	)
+	entity := mmokit.EntityFromECS(gw.Stage, handle)
 
 	// Set collider shape details (SpawnEntity only sets radius)
-	col := gw.C.Collider.Get(entity)
-	col.Width = gw.Config.ShipWidth
-	col.Height = gw.Config.ShipHeight
-	col.Layer = gamecomp.LayerPlayer
-	col.Shape = mmokit.ShapeRect
+	if col := mmokit.Get[mmokit.Collider](entity); col != nil {
+		col.Width = gw.Config.ShipWidth
+		col.Height = gw.Config.ShipHeight
+		col.Layer = gamecomp.LayerPlayer
+		col.Shape = mmokit.ShapeRect
+	}
 
 	// Wire player connection
-	gw.C.PlayerConn.Add(entity, &mmokit.PlayerConn{ConnID: connID})
+	mmokit.Set(entity, mmokit.PlayerConn{ConnID: connID})
 
 	// Set pilot name for replication
-	gw.C.PilotName.Get(entity).Name = username
+	if pn := mmokit.Get[gamecomp.PilotName](entity); pn != nil {
+		pn.Name = username
+	}
 
 	// Set non-zero field values on auto-added components
-	*gw.C.ShipControl.Get(entity) = gamecomp.ShipControl{
+	mmokit.Set(entity, gamecomp.ShipControl{
 		Thrust:    gw.Config.ShipThrust,
 		TurnRate:  gw.Config.ShipTurnRate,
 		TurnAccel: gw.Config.ShipTurnAccel,
 		MaxSpeed:  gw.Config.MaxSpeed,
-	}
-	*gw.C.Health.Get(entity) = gamecomp.Health{Current: gw.Config.ShipHealth, Max: gw.Config.ShipHealth}
-	*gw.C.Shield.Get(entity) = gamecomp.Shield{Current: gw.Config.ShipShield, Max: gw.Config.ShipShield, RegenRate: gw.Config.ShieldRegenRate, RegenDelay: gw.Config.ShieldRegenDelay}
-	*gw.C.Inventory.Get(entity) = gamecomp.Inventory{Items: savedCargo, MaxMass: gw.Config.MaxCargo}
-	*gw.C.TargetLock.Get(entity) = gamecomp.TargetLock{
+	})
+	mmokit.Set(entity, gamecomp.Health{Current: gw.Config.ShipHealth, Max: gw.Config.ShipHealth})
+	mmokit.Set(entity, gamecomp.Shield{Current: gw.Config.ShipShield, Max: gw.Config.ShipShield, RegenRate: gw.Config.ShieldRegenRate, RegenDelay: gw.Config.ShieldRegenDelay})
+	mmokit.Set(entity, gamecomp.Inventory{Items: savedCargo, MaxMass: gw.Config.MaxCargo})
+	mmokit.Set(entity, gamecomp.TargetLock{
 		LockTime: gw.Config.LockOnTime,
 		Range:    gw.Config.LockOnRange,
-	}
-	*gw.C.Equipment.Get(entity) = equip
+	})
+	mmokit.Set(entity, equip)
 
 	// Apply equipment passive stats (shield max/regen, thrust/speed)
 	gw.ApplyEquipmentStats(entity)
 
-	s.Entity = entity
-	netID := gw.C.NetworkID.Get(entity).ID
-	sec := gw.C.CellCoord.Get(entity)
+	s.Entity = handle
+	netID := entity.NetID()
+	sec := mmokit.Get[mmokit.CellCoord](entity)
 	gw.eng.Log.Log(CatPlayerSpawn, "player spawned: conn=%d netID=%d pos=(%.0f,%.0f) equip=[w1=%d w2=%d sh=%d th=%d]",
 		connID, netID, x, y, equip.Weapon1, equip.Weapon2, equip.Shield, equip.Thruster)
 
@@ -190,24 +194,23 @@ func (gw *GameWorld) SpawnPlayer(s *mmokit.PlayerSession) {
 // (grace period reconnection). Updates the PlayerConn component with the
 // new connID and sends the client the spawn message so it knows its entity ID.
 func (gw *GameWorld) reconnectPlayer(s *mmokit.PlayerSession) {
-	entity := s.Entity
+	entity := mmokit.EntityFromECS(gw.Stage, s.Entity)
 	connID := s.ConnID
 
 	// Update PlayerConn with new connection ID
-	if gw.C.PlayerConn.HasAll(entity) {
-		gw.C.PlayerConn.Get(entity).ConnID = connID
+	if pc := mmokit.Get[mmokit.PlayerConn](entity); pc != nil {
+		pc.ConnID = connID
 	}
 
-	netID := gw.C.NetworkID.Get(entity).ID
-	pos := gw.C.Position.Get(entity)
-	sec := gw.C.CellCoord.Get(entity)
+	netID := entity.NetID()
+	pos := mmokit.Get[mmokit.Position](entity)
+	sec := mmokit.Get[mmokit.CellCoord](entity)
 
 	gw.eng.Log.Log(CatPlayerSpawn, "player reconnected: conn=%d netID=%d pos=(%.0f,%.0f)", connID, netID, pos.X, pos.Y)
 
 	// Read equipment for spawn message
 	var equip gamepb.EquipmentState
-	if gw.C.Equipment.HasAll(entity) {
-		eq := gw.C.Equipment.Get(entity)
+	if eq := mmokit.Get[gamecomp.Equipment](entity); eq != nil {
 		equip = gamepb.EquipmentState{
 			Weapon1:  eq.Weapon1,
 			Weapon2:  eq.Weapon2,

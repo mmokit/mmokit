@@ -1,6 +1,8 @@
 package game
 
 import (
+	"context"
+	"log"
 	"math/rand/v2"
 
 	"github.com/mlange-42/ark/ecs"
@@ -10,16 +12,94 @@ import (
 	"github.com/zenion/mmoserver/pkg/mmokit"
 )
 
-func (gw *GameWorld) processDeaths() {
-	for _, death := range mmokit.Drain[PlayerDeath](gw.Queue) {
-		gw.ServerEvents().Send(gw.eng.ConnMgr, death.ConnID, uint32(gamepb.GameServerEventCode_GSE_PLAYER_DIED), &gamepb.PlayerDiedMsg{
-			KillerId: death.KillerNetID,
-		})
+// Hooks returns the engine lifecycle hooks wired to this game world.
+// OnConnect and OnDisconnect are handled by PlayerManager; login processing is engine-internal.
+func (gw *GameWorld) Hooks() mmokit.Hooks {
+	return mmokit.Hooks{
+		PreFlush: func() {
+			gw.processDockCompletions()
+		},
+		PostFlush:      gw.postFlush,
+		ClearTickState: gw.clearTickState,
+		PostTick:       gw.postTick,
+	}
+}
 
-		// Move player from active to dead
-		session := gw.Players.ByConnID(death.ConnID)
-		if session != nil {
-			gw.Players.Transition(session, StateDead)
+// Init is called by the Process after all nodes are created and bridges are wired.
+// It sets up replication, transfer hooks, and post-spawn callbacks.
+func (gw *GameWorld) Init() {
+	gw.SetOnTransferReceived(func(entity ecs.Entity, frame *mmokit.TransferFrame) {
+		gw.FinishTransferSpawn(entity, frame)
+	})
+
+	gw.SetOnPlayerTransferReceived(func(entity ecs.Entity, frame *mmokit.TransferFrame) {
+		if s := gw.eng.Players.ByConnID(frame.ConnID); s != nil {
+			gw.WireTransferPlayer(entity, s)
+		}
+		if gw.PlayerSessions != nil {
+			gw.PlayerSessions.Set(frame.ConnID, frame.Username)
+		}
+
+		// Topology-transparent protocol: no SE_CELL_CHANGE is sent. The
+		// destination cell's ReplicationSystem will set the
+		// FRAME_FLAG_FRESH_SNAPSHOT bit on its first frame to this conn,
+		// causing the client's decoder to reset baselines and repopulate
+		// from the frame's Entered list — exactly like Valve Source's
+		// cl_fullupdate or Gaffer's "encoded relative to initial state"
+		// pattern. Clients never learn about cells, authority transfers,
+		// or server boundaries.
+		gw.ServerEvents().Send(gw.eng.ConnMgr, frame.ConnID, uint32(gamepb.GameServerEventCode_GSE_MAP_DATA), &gamepb.MapDataMsg{
+			Stations: gw.CollectStationMapData(),
+		})
+		// Topology / debug overlay is pushed reactively by the
+		// mmokit.NewDebugBroadcaster system (added in GameSetup) to any
+		// player whose DebugFlags carry the topology bit. No explicit
+		// per-connect send needed.
+	})
+
+	// OnPostSpawn is no longer needed for topology — see comment above.
+	gw.OnPostSpawn = nil
+}
+
+// Shutdown saves all connected players and flushes dirty data.
+// Call after the game loop has stopped.
+func (gw *GameWorld) Shutdown() {
+	gw.Players.ForEach(mmokit.StateActive, func(s *mmokit.PlayerSession) {
+		if gw.Stage.ECSWorld().Alive(s.Entity) {
+			gw.SavePlayerState(s)
+		}
+	})
+	n, err := gw.PlayerDB.FlushDirty(context.Background())
+	if err != nil {
+		log.Printf("shutdown: flush error: %v", err)
+	}
+	log.Printf("shutdown: saved %d players", n)
+}
+
+// postTick runs after each tick — periodic saves.
+// Bridge.PostSystems() is called by the Process's merged hooks.
+//
+// Snapshots every active player's live ECS state (position, cell, cargo,
+// equipment) into the PlayerRepo on each flush tick so an ungraceful crash
+// loses at most PersistFlushInterval seconds of gameplay. Without this,
+// SavePlayerState is only called on state transitions (disconnect, death,
+// dock, transfer, shutdown), so normal gameplay leaves positions stale in
+// the DB until the next transition. StateDocked sessions have no live
+// entity and their inventory/currency mutations already MarkDirty directly,
+// so they piggyback on FlushDirty without needing iteration here.
+func (gw *GameWorld) postTick() {
+	if gw.flushTicks > 0 && gw.eng.Tick%gw.flushTicks == 0 {
+		gw.Players.ForEach(mmokit.StateActive, func(s *mmokit.PlayerSession) {
+			if gw.Stage.ECSWorld().Alive(s.Entity) {
+				gw.SavePlayerState(s)
+			}
+		})
+		n, err := gw.PlayerDB.FlushDirty(context.Background())
+		if err != nil {
+			gw.eng.Log.Log(CatPersistFlush, "flush error: %v", err)
+		}
+		if n > 0 {
+			gw.eng.Log.Log(CatPersistFlush, "flushed %d dirty players", n)
 		}
 	}
 }
@@ -40,7 +120,8 @@ func (gw *GameWorld) processDockCompletions() {
 	for _, s := range completed {
 		ds := gw.dockingStates[s.Username]
 
-		if !gw.eng.ECS.Alive(s.Entity) {
+		entity := mmokit.EntityFromECS(gw.Stage, s.Entity)
+		if !entity.Alive() {
 			delete(gw.dockingStates, s.Username)
 			continue
 		}
@@ -63,22 +144,19 @@ func (gw *GameWorld) processDockCompletions() {
 		// what keeps WorldUpdateMsg flowing — tick counter, chat, and
 		// other ships' AoI deltas continue to reach the docked player so
 		// they "see" the world from the station hangar window.
-		entity := s.Entity
-		if gw.C.Position.HasAll(entity) {
-			pos := gw.C.Position.Get(entity)
+		if pos := mmokit.Get[mmokit.Position](entity); pos != nil {
 			pos.X = ds.StationX
 			pos.Y = ds.StationY
 		}
-		if gw.C.Velocity.HasAll(entity) {
-			vel := gw.C.Velocity.Get(entity)
+		if vel := mmokit.Get[mmokit.Velocity](entity); vel != nil {
 			vel.X = 0
 			vel.Y = 0
 		}
-		if gw.C.MoveTarget.HasAll(entity) {
-			gw.C.MoveTarget.Get(entity).Active = false
+		if mt := mmokit.Get[mmokit.MoveTarget](entity); mt != nil {
+			mt.Active = false
 		}
-		if !gw.C.Dormant.HasAll(entity) {
-			gw.C.Dormant.Add(entity, &mmokit.Dormant{})
+		if !mmokit.Has[mmokit.Dormant](entity) {
+			mmokit.Set(entity, mmokit.Dormant{})
 		}
 
 		// Notify the client AFTER server-side state is fully consistent.
@@ -104,22 +182,23 @@ func (gw *GameWorld) processUndocks() {
 		// station's collider, and sync pdata.Cargo back into the entity's
 		// Inventory (bank deposits/withdrawals while docked mutate pdata,
 		// not the entity directly).
-		entity := s.Entity
-		if !gw.eng.ECS.Alive(entity) {
+		entity := mmokit.EntityFromECS(gw.Stage, s.Entity)
+		if !entity.Alive() {
 			gw.eng.Log.Log(CatPlayerDock, "undock skipped: entity gone for conn=%d username=%s — falling back to spawn", req.ConnID, s.Username)
 			gw.Players.Transition(s, mmokit.StateActive)
 			continue
 		}
-		if gw.C.Dormant.HasAll(entity) {
-			gw.C.Dormant.Remove(entity)
+		// Remove Dormant via raw ECS (mmokit has no Remove primitive yet).
+		dormantMap := ecs.NewMap1[mmokit.Dormant](gw.Stage.ECSWorld())
+		if dormantMap.HasAll(s.Entity) {
+			dormantMap.Remove(s.Entity)
 		}
 
 		// Sync pdata.Cargo (which the bank UI mutates while docked) back
 		// into the entity's Inventory so the in-space ship reflects what
 		// the player did at the station.
 		pdata := gw.PlayerDB.GetOrCreate(s.Username)
-		if gw.C.Inventory.HasAll(entity) {
-			inv := gw.C.Inventory.Get(entity)
+		if inv := mmokit.Get[gamecomp.Inventory](entity); inv != nil {
 			inv.Items = make(map[uint32]int32, len(pdata.Cargo))
 			for id, qty := range pdata.Cargo {
 				if qty > 0 {
@@ -131,14 +210,12 @@ func (gw *GameWorld) processUndocks() {
 		// Reposition slightly off the station center so the ship undocks
 		// "next to" the station rather than embedded in it. Same jitter
 		// the new-player spawn uses (~17 unit ring).
-		if gw.C.Position.HasAll(entity) {
-			pos := gw.C.Position.Get(entity)
+		if pos := mmokit.Get[mmokit.Position](entity); pos != nil {
 			// Pull the saved station coords as the anchor.
 			pos.X = pdata.X + (rand.Float32()-0.5)*16.7
 			pos.Y = pdata.Y + (rand.Float32()-0.5)*16.7
 		}
-		if gw.C.Velocity.HasAll(entity) {
-			vel := gw.C.Velocity.Get(entity)
+		if vel := mmokit.Get[mmokit.Velocity](entity); vel != nil {
 			vel.X = 0
 			vel.Y = 0
 		}
@@ -150,12 +227,13 @@ func (gw *GameWorld) processUndocks() {
 }
 
 func (gw *GameWorld) GetNetID(entity ecs.Entity) (uint32, bool) {
+	e := mmokit.EntityFromECS(gw.Stage, entity)
 	// Ghost and Replica removals are silent — don't generate kill notifications
-	if gw.C.Ghost.HasAll(entity) || gw.C.Replica.HasAll(entity) {
+	if mmokit.Has[mmokit.Ghost](e) || mmokit.Has[mmokit.Replica](e) {
 		return 0, false
 	}
-	if gw.C.NetworkID.HasAll(entity) {
-		return gw.C.NetworkID.Get(entity).ID, true
+	if id := e.NetID(); id != 0 {
+		return id, true
 	}
 	return 0, false
 }
@@ -207,12 +285,12 @@ func (gw *GameWorld) clearTickState() {
 //
 // MUST close the query in all paths — ark v0.7.1 holds a world write-lock
 // for the duration of an open query, and a leaked lock causes the next
-// write-side operation (e.g. ECS.RemoveEntity in processDeaths) to panic
-// with "cannot modify a locked world". A previous version returned
+// write-side operation (e.g. ECS.RemoveEntity in any later removal path)
+// to panic with "cannot modify a locked world". A previous version returned
 // query.Next() directly without closing, which leaked the lock forever
 // any time the filter matched.
 func (gw *GameWorld) hasStation() bool {
-	filter := ecs.NewFilter1[gamecomp.Station](gw.eng.ECS)
+	filter := ecs.NewFilter1[gamecomp.Station](gw.Stage.ECSWorld())
 	query := filter.Query()
 	defer query.Close()
 	return query.Next()

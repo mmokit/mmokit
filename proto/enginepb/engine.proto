@@ -39,12 +39,14 @@ message OperationResponse {
 // ENGINE EVENT CODES
 // ═══════════════════════════════════════════════
 
-// Client → Server event codes (engine-level)
+// Client → Server event codes (engine-level). PLAYER_INPUT and CHAT
+// migrated to mmokit.HandleClient typed-input (channel 0x02) — they no
+// longer have engine event codes. The remaining codes service login,
+// liveness, and snapshot ack — none of which are HandleClient-eligible.
 enum ClientEventCode {
-    CE_PLAYER_INPUT = 0;
+    CE_UNKNOWN = 0;
     CE_PING = 1;
     CE_LOGIN = 2;
-    CE_CHAT = 3;
     CE_ACK_SNAPSHOT = 4;    // client ack: data = uint32 big-endian sequence number
 }
 

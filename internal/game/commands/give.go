@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/zenion/mmoserver/internal/game"
+	gamecomp "github.com/zenion/mmoserver/internal/component"
 	"github.com/zenion/mmoserver/internal/item"
 	"github.com/zenion/mmoserver/pkg/cmdsys"
 	"github.com/zenion/mmoserver/pkg/mmokit"
@@ -43,16 +44,16 @@ func registerGive(reg *cmdsys.Registry, coord *mmokit.Process) error {
 			target := mmokit.ResolvePlayerTarget(env, username)
 
 			if target.Online != nil && target.Stage != nil {
-				gw := gwForStage(coord, target.Stage)
-				if gw == nil {
+				if gw := gwForStage(coord, target.Stage); gw == nil {
 					return nil, fmt.Errorf("player.give: not a game-world cell")
 				}
 				return mmokit.CmdOnLoop(ctx, target.Stage.Engine(), func() (GiveResult, error) {
-					e := target.Online.Entity
-					if !gw.C.Inventory.HasAll(e) {
+					e := mmokit.EntityFromECS(target.Stage, target.Online.Entity)
+					inv := mmokit.Get[gamecomp.Inventory](e)
+					if inv == nil {
 						return GiveResult{}, fmt.Errorf("player has no inventory")
 					}
-					added := gw.C.Inventory.Get(e).AddItem(itemID, args.Qty)
+					added := inv.AddItem(itemID, args.Qty)
 					return GiveResult{
 						Target: username,
 						Item:   itemNameOrPlaceholder(itemID),

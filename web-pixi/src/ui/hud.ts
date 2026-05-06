@@ -1,4 +1,5 @@
 import type { ShipEntity } from "../../sdk/index.js";
+import { BankRequest, Equip, InventoryTransfer } from "../../sdk/index.js";
 import {
   ITEM_COLORS_CSS,
   DEFAULT_ITEM_COLOR,
@@ -258,11 +259,13 @@ function handleDrop(e: MouseEvent): void {
         isValidSlotForItem(dragSource.equipSlot, targetSlot) &&
         targetSlot
       ) {
-        cargoState.client.sendEquipRequest({
-          itemId: dragSource.itemId,
+        cargoState.inputSeq++;
+        cargoState.client.send(new Equip({
+          sequence: cargoState.inputSeq,
+          itemID: dragSource.itemId,
           slot: targetSlot,
           targetBank: false,
-        });
+        }));
       }
     } else if (bankPanelEl) {
       // Deposit cargo→bank. Shift = half, otherwise all.
@@ -272,14 +275,17 @@ function handleDrop(e: MouseEvent): void {
         0;
       if (cargoQty > 0) {
         const qty = e.shiftKey ? Math.floor(cargoQty / 2) : 0; // 0 = all
-        cargoState.client.sendInventoryTransfer({
-          itemId: dragSource.itemId,
+        cargoState.inputSeq++;
+        cargoState.client.send(new InventoryTransfer({
+          sequence: cargoState.inputSeq,
+          itemID: dragSource.itemId,
           quantity: qty,
           deposit: true,
-        });
+        }));
         setTimeout(() => {
           if (cargoState?.client && cargoState.bankPanelOpen) {
-            cargoState.client.sendBankRequest({});
+            cargoState.inputSeq++;
+            cargoState.client.send(new BankRequest({ sequence: cargoState.inputSeq }));
           }
         }, 100);
       }
@@ -296,25 +302,30 @@ function handleDrop(e: MouseEvent): void {
         isValidSlotForItem(def.equipSlot, targetSlot) &&
         targetSlot
       ) {
-        cargoState.client.sendEquipRequest({
-          itemId: dragSource.itemId,
+        cargoState.inputSeq++;
+        cargoState.client.send(new Equip({
+          sequence: cargoState.inputSeq,
+          itemID: dragSource.itemId,
           slot: targetSlot,
           targetBank: true,
-        });
+        }));
       }
     } else if (cargoPanelEl_) {
       // Withdraw bank→cargo. Shift = half, otherwise all.
       const bankQty = cargoState.bankItems.get(dragSource.itemId) ?? 0;
       if (bankQty > 0) {
         const qty = e.shiftKey ? Math.floor(bankQty / 2) : 0;
-        cargoState.client.sendInventoryTransfer({
-          itemId: dragSource.itemId,
+        cargoState.inputSeq++;
+        cargoState.client.send(new InventoryTransfer({
+          sequence: cargoState.inputSeq,
+          itemID: dragSource.itemId,
           quantity: qty,
           deposit: false,
-        });
+        }));
         setTimeout(() => {
           if (cargoState?.client && cargoState.bankPanelOpen) {
-            cargoState.client.sendBankRequest({});
+            cargoState.inputSeq++;
+            cargoState.client.send(new BankRequest({ sequence: cargoState.inputSeq }));
           }
         }, 100);
       }
@@ -324,18 +335,22 @@ function handleDrop(e: MouseEvent): void {
       // Drop on another equip slot is a no-op (no swap-with-other-slot).
     } else if (bankPanelEl) {
       // Unequip directly to bank.
-      cargoState.client.sendEquipRequest({
-        itemId: 0,
+      cargoState.inputSeq++;
+      cargoState.client.send(new Equip({
+        sequence: cargoState.inputSeq,
+        itemID: 0,
         slot: dragSource.equipSlot,
         targetBank: true,
-      });
+      }));
     } else if (cargoPanelEl_) {
       // Unequip to cargo.
-      cargoState.client.sendEquipRequest({
-        itemId: 0,
+      cargoState.inputSeq++;
+      cargoState.client.send(new Equip({
+        sequence: cargoState.inputSeq,
+        itemID: 0,
         slot: dragSource.equipSlot,
         targetBank: false,
-      });
+      }));
     }
   }
 
@@ -380,7 +395,13 @@ function setupCargoEvents(): void {
           slot = resolveWeaponSlot(cargoState);
         }
         if (itemId && slot) {
-          cargoState.client.sendEquipRequest({ itemId: itemId, slot: slot, targetBank: false });
+          cargoState.inputSeq++;
+          cargoState.client.send(new Equip({
+            sequence: cargoState.inputSeq,
+            itemID: itemId,
+            slot,
+            targetBank: false,
+          }));
         }
       }
       return;
@@ -456,7 +477,13 @@ function setupCargoEvents(): void {
       // Right-click: quick unequip
       const itemId = Number(slotEl.dataset.itemId);
       if (itemId) {
-        cargoState.client.sendEquipRequest({ itemId: 0, slot: slot, targetBank: false });
+        cargoState.inputSeq++;
+        cargoState.client.send(new Equip({
+          sequence: cargoState.inputSeq,
+          itemID: 0,
+          slot,
+          targetBank: false,
+        }));
       }
       return;
     }

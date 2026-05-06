@@ -1,6 +1,7 @@
 import type { MarketPriceLevel, MarketOrderEntry } from "@gen/gamepb/game_pb.js";
 import { ITEM_COLORS_CSS, DEFAULT_ITEM_COLOR } from "../constants";
 import { SETTLEMENT_CURRENCY_ID, type GameState } from "../state";
+import { BankRequest } from "../../sdk/index.js";
 
 function currencyName(): string {
   return currentState?.itemDefs.get(SETTLEMENT_CURRENCY_ID)?.name ?? "Currency";
@@ -137,7 +138,7 @@ async function createOrder(
         time: performance.now(),
       });
     }
-    state.client.sendBankRequest({});
+    state.inputSeq++; state.client.send(new BankRequest({ sequence: state.inputSeq }));
     await refreshOrderBook(state, itemId);
   } catch (_err) {
     /* ignore */
@@ -149,7 +150,7 @@ async function cancelOrder(state: GameState, orderId: bigint): Promise<void> {
   try {
     await state.client.sendMarketCancelOrder({ orderId });
     state.toasts.push({ text: "Order cancelled", time: performance.now() });
-    state.client.sendBankRequest({});
+    state.inputSeq++; state.client.send(new BankRequest({ sequence: state.inputSeq }));
     await refreshMyOrders(state);
   } catch (_err) {
     /* ignore */
@@ -180,7 +181,7 @@ async function instantTrade(
         time: performance.now(),
       });
     }
-    state.client.sendBankRequest({});
+    state.inputSeq++; state.client.send(new BankRequest({ sequence: state.inputSeq }));
     await refreshOrderBook(state, itemId);
   } catch (_err) {
     /* ignore */

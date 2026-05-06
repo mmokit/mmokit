@@ -67,13 +67,24 @@ func main() {
 		log.Fatalf("copy interp core: %v", err)
 	}
 
-	// Generate each file.
+	// Generate each file. broadcasts.ts is emitted only when the schema
+	// declares at least one broadcast-eligible type — games without
+	// HandleAll[T] registrations get no file.
 	files := map[string]func() string{
 		"transport.ts":     g.genTransport,
 		"entities.ts":      g.genEntities,
 		"delta-decoder.ts": g.genDeltaDecoder,
 		"client.ts":        g.genClient,
 		"index.ts":         g.genIndex,
+	}
+	if len(schema.BroadcastTypes) > 0 {
+		files["broadcasts.ts"] = g.genBroadcasts
+	}
+	// inputs.ts mirrors broadcasts.ts but for client-input messages —
+	// classes with encode() instead of static decode(). Emitted only when
+	// the schema declares HandleClient[T] registrations (Phase 6+).
+	if len(schema.ClientInputTypes) > 0 {
+		files["inputs.ts"] = g.genInputs
 	}
 	for name, fn := range files {
 		path := filepath.Join(*outDir, name)
@@ -101,11 +112,3 @@ func titleCase(s string) string {
 	return strings.ToUpper(s[:1]) + s[1:]
 }
 
-// snakeToTitle converts "move_target" to "MoveTarget".
-func snakeToTitle(s string) string {
-	parts := strings.Split(s, "_")
-	for i := range parts {
-		parts[i] = titleCase(parts[i])
-	}
-	return strings.Join(parts, "")
-}

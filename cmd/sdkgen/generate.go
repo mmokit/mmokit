@@ -33,6 +33,7 @@ func (g *Generator) genTransport() string {
 
 const CH_EVENT = 0x00;
 const CH_OPERATION = 0x01;
+const CH_CLIENT_INPUT = 0x02;
 
 export type MessageHandler = (data: Uint8Array) => void;
 
@@ -77,6 +78,24 @@ export class Transport {
     const frame = new Uint8Array(1 + data.length);
     frame[0] = CH_OPERATION;
     frame.set(data, 1);
+    this.ws.send(frame);
+  }
+
+  /**
+   * Send a typed client-input frame (mmokit.HandleClient registry).
+   * Wire layout: [byte 0x02][u32 typeID][u32 bodyLen][body bytes].
+   * Body is produced by the matching TS class's encode() instance method;
+   * the server resolves typeID back to the registered Go type and decodes
+   * the body via the same reflection codec used for broadcast events.
+   */
+  sendClientInput(typeID: number, body: Uint8Array): void {
+    if (!this.ws || this.ws.readyState !== WebSocket.OPEN) return;
+    const frame = new Uint8Array(1 + 4 + 4 + body.length);
+    const dv = new DataView(frame.buffer);
+    frame[0] = CH_CLIENT_INPUT;
+    dv.setUint32(1, typeID, true);
+    dv.setUint32(5, body.length, true);
+    frame.set(body, 9);
     this.ws.send(frame);
   }
 
@@ -578,6 +597,9 @@ func (g *Generator) genClient() string {
 	b.WriteString("import { Transport } from \"./transport.js\";\n")
 	fmt.Fprintf(&b, "import { %sDeltaDecoder } from \"./delta-decoder.js\";\n", gameName)
 	b.WriteString("import type { DeltaWorldUpdate } from \"./entities.js\";\n")
+	if len(g.schema.BroadcastTypes) > 0 {
+		b.WriteString("import { TypedDispatcher } from \"./broadcasts.js\";\n")
+	}
 
 	// Import envelope schemas from engine proto.
 	if len(g.schema.Operations) > 0 {
@@ -602,6 +624,11 @@ func (g *Generator) genClient() string {
 	fmt.Fprintf(&b, "  private decoder = new %sDeltaDecoder();\n", gameName)
 	b.WriteString("  private eventHandlers = new Map<number, ((data: Uint8Array) => void)[]>();\n")
 	b.WriteString("  private rawEventHandlers: ((code: number, data: Uint8Array) => void)[] = [];\n")
+	if len(g.schema.BroadcastTypes) > 0 {
+		b.WriteString("  /** Typed broadcast dispatcher — register handlers for AoI-filtered\n")
+		b.WriteString("   *  events emitted by the server's HandleAll[T] machinery. */\n")
+		b.WriteString("  readonly typedEvents = new TypedDispatcher();\n")
+	}
 	if len(g.schema.Operations) > 0 {
 		b.WriteString("  private pendingOps = new Map<number, { resolve: (data: Uint8Array) => void; reject: (err: Error) => void }>();\n")
 		b.WriteString("  private pushHandlers = new Map<number, ((data: Uint8Array) => void)[]>();\n")
@@ -611,6 +638,26 @@ func (g *Generator) genClient() string {
 
 	fmt.Fprintf(&b, "  constructor(private options: %sClientOptions) {\n", gameName)
 	b.WriteString("    this.transport = new Transport(options.url);\n")
+	// When broadcast types are present, the framework packs them into
+	// WorldUpdateMsg.events. Register an internal handler that decodes the
+	// envelope and fans events out through the typed dispatcher. Runs
+	// alongside any user-registered onWorldUpdate handler.
+	if wuEvent := findWorldUpdateEvent(g.schema); wuEvent != nil && len(g.schema.BroadcastTypes) > 0 {
+		wuMsg := g.resolveMsg(wuEvent.ProtoName)
+		if wuMsg != nil {
+			fmt.Fprintf(&b, "    this.on(%d, (data) => {\n", wuEvent.Code)
+			// Cast to the typed message — fromBinary's TS return type is a
+			// generic Message so we need the explicit type for the .events
+			// access. Same pattern used by handleEvent for ServerEvent.
+			fmt.Fprintf(&b, "      const wu = fromBinary(%s, data) as %s;\n", wuMsg.SchemaName, wuMsg.TypeName)
+			b.WriteString("      if (wu.events) {\n")
+			b.WriteString("        for (const evt of wu.events) {\n")
+			b.WriteString("          this.typedEvents.dispatch(evt.typeId, evt.body);\n")
+			b.WriteString("        }\n")
+			b.WriteString("      }\n")
+			b.WriteString("    });\n")
+		}
+	}
 	b.WriteString("  }\n\n")
 
 	// connect / disconnect / connected
@@ -666,6 +713,28 @@ func (g *Generator) genClient() string {
 	b.WriteString("  private sendEvent(code: number, data: Uint8Array): void {\n")
 	b.WriteString("    const evt = create(ClientEventSchema, { code, data });\n")
 	b.WriteString("    this.transport.sendEvent(toBinary(ClientEventSchema, evt));\n")
+	b.WriteString("  }\n\n")
+
+	// --- Typed client-input send ---
+	//
+	// Wire path: TS class instance → encode() body bytes → transport
+	// sendClientInput frames as [0x02][u32 typeID][u32 bodyLen][body].
+	// Server-side ReflectUnmarshalOnStage decodes the body back into
+	// the registered Go type and dispatches via mmokit.HandleClient.
+	//
+	// The TS-side type bound matches every class generated in inputs.ts:
+	// each has `static readonly typeID: number` and an `encode(): Uint8Array`
+	// instance method. This signature works whether or not inputs.ts was
+	// emitted (the server's HandleClient registry may be empty).
+	b.WriteString("  /** Send a typed client-input message (mmokit.HandleClient).\n")
+	b.WriteString("   *\n")
+	b.WriteString("   *  msg must be an instance of a class generated into inputs.ts —\n")
+	b.WriteString("   *  exposing static typeID and instance encode(): Uint8Array. The\n")
+	b.WriteString("   *  resulting wire frame is dispatched server-side to the matching\n")
+	b.WriteString("   *  HandleClient[T] handler. */\n")
+	b.WriteString("  send(msg: { encode(): Uint8Array }): void {\n")
+	b.WriteString("    const ctor = msg.constructor as unknown as { typeID: number };\n")
+	b.WriteString("    this.transport.sendClientInput(ctor.typeID, msg.encode());\n")
 	b.WriteString("  }\n\n")
 
 	// --- Client → Server send methods ---
@@ -887,6 +956,30 @@ func (g *Generator) genIndex() string {
 	b.WriteString("export * from \"./entities.js\";\n")
 	fmt.Fprintf(&b, "export { %sDeltaDecoder } from \"./delta-decoder.js\";\n", gameName)
 	b.WriteString("export { Transport } from \"./transport.js\";\n")
+	if len(g.schema.BroadcastTypes) > 0 {
+		// Re-export every generated broadcast class + the dispatcher so app
+		// code imports them via the SDK's public surface, not directly from
+		// the internal broadcasts.ts file.
+		var names []string
+		names = append(names, "TypedDispatcher")
+		for _, bt := range g.schema.BroadcastTypes {
+			names = append(names, broadcastClassName(bt.Name))
+		}
+		sort.Strings(names)
+		fmt.Fprintf(&b, "export { %s } from \"./broadcasts.js\";\n", strings.Join(names, ", "))
+	}
+	if len(g.schema.ClientInputTypes) > 0 {
+		// Re-export every generated client-input class so app code imports
+		// them via the SDK's public surface (e.g. `import { SetMoveTarget }
+		// from "@sdk"`) rather than reaching into the internal inputs.ts
+		// file directly.
+		var names []string
+		for _, ct := range g.schema.ClientInputTypes {
+			names = append(names, broadcastClassName(ct.Name))
+		}
+		sort.Strings(names)
+		fmt.Fprintf(&b, "export { %s } from \"./inputs.js\";\n", strings.Join(names, ", "))
+	}
 
 	// Re-export proto types that appear in the SDK's public method
 	// signatures — consumers should not have to reach into @gen/... for

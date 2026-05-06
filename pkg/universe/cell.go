@@ -369,17 +369,9 @@ func (c *Cell) processMessage(msg CellMessage) {
 			return
 		}
 		c.Log.Log(CatMeshAction, "[%s] cross-cell action from=%s type=%d targetNetID=%d", c.MeshID, msg.FromCellID, msg.Action.Type, msg.Action.TargetNetID)
-		result := c.World.HandleCrossCellAction(msg.Action)
-		if result != nil {
-			c.Bridge.SendActionResult(msg.FromCellID, result)
+		if !c.Stage.HandleEngineAction(msg.Action) {
+			c.Log.Log(CatMeshAction, "[%s] cross-cell action: unhandled type=%d from=%s (no engine handler)", c.MeshID, msg.Action.Type, msg.FromCellID)
 		}
-
-	case MsgActionResult:
-		if msg.ActionResult == nil {
-			return
-		}
-		c.Log.Log(CatMeshAction, "[%s] action result from=%s type=%d", c.MeshID, msg.FromCellID, msg.ActionResult.Type)
-		c.World.HandleActionResult(msg.ActionResult)
 
 	case MsgSessionTransfer:
 		for _, st := range msg.Sessions {

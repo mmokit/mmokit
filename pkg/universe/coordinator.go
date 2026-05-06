@@ -471,10 +471,13 @@ type Process struct {
 	// mmokit.RegisterKind[T]. Realized per-cell during createNode.
 	kindSpecs []kindSpec
 
-	// inputBindings collects mmokit.OnInput / OnInputWith registrations.
-	// Replayed per cell at createNode time. Source of truth for the
-	// input dispatcher's binding map and for schema export.
-	inputBindings []*engine.InputBinding
+	// stageInitHooks holds per-stage setup callbacks registered via
+	// Process.OnStageInit. Each hook fires once per Stage created by this
+	// Process — both initial cells from Build() and stages created later
+	// by dynamic partitioning (cell splits, host migrations). Used by
+	// mmokit's All-suffix wrappers (HandleAll, OnWorldTickAll, etc.) to
+	// auto-replay registrations onto every Stage.
+	stageInitHooks []func(*Stage)
 
 	// stateFactories holds per-stage state registrations from
 	// mmokit.AddState[T]. Each cell's Stage instantiates one *T at
@@ -832,6 +835,45 @@ func (c *Process) RegisterKindSpec(realize func(*Stage)) {
 func (c *Process) RealizeKindSpecs(stage *Stage) {
 	for _, spec := range c.kindSpecs {
 		spec.realize(stage)
+	}
+}
+
+// OnStageInit registers fn to fire once per Stage created by this Process —
+// initial cells from Build() and stages created later by cell splits or
+// host migrations. Use for per-stage setup like handler registration
+// (mmokit.Handle) and tick callbacks (mmokit.OnWorldTick) that must be
+// present on every cell.
+//
+// Mirrors RegisterKindSpec's auto-replay pattern but for non-kind setup.
+// Safe to call before or after Build() — if the Process already has
+// stages, fn fires immediately for each so the caller doesn't have to
+// worry about registration order. Future stages created by partitioning
+// fire their hooks at creation time (in createNode).
+func (c *Process) OnStageInit(fn func(*Stage)) {
+	c.stageInitHooks = append(c.stageInitHooks, fn)
+	// Catch up: fire fn against any cells that already exist.
+	// Holding c.mu prevents concurrent createNode/release from racing the
+	// snapshot; fn is invoked outside the lock to avoid surprising callers.
+	c.mu.RLock()
+	stages := make([]*Stage, 0, len(c.Cells))
+	for _, cell := range c.Cells {
+		if cell != nil && cell.Stage != nil {
+			stages = append(stages, cell.Stage)
+		}
+	}
+	c.mu.RUnlock()
+	for _, s := range stages {
+		fn(s)
+	}
+}
+
+// runStageInitHooks invokes every registered OnStageInit hook against
+// stage. Called from createNode immediately after kindSpec realization so
+// every cell-creation path (initial Build, split, migrate) shares one
+// fan-out site.
+func (c *Process) runStageInitHooks(stage *Stage) {
+	for _, fn := range c.stageInitHooks {
+		fn(stage)
 	}
 }
 
@@ -1312,22 +1354,6 @@ func (c *Process) CellByID(id MeshCellID) *Cell {
 	defer c.mu.RUnlock()
 	return c.Cells[id]
 }
-
-// AddInputBinding records a binding to be replayed on every cell at
-// createNode time. Called from mmokit.OnInput / OnInputWith. Duplicate
-// codes panic at registration.
-func (c *Process) AddInputBinding(b *engine.InputBinding) {
-	for _, existing := range c.inputBindings {
-		if existing.Code() == b.Code() {
-			panic(fmt.Sprintf("OnInput: duplicate handler for code %d", b.Code()))
-		}
-	}
-	c.inputBindings = append(c.inputBindings, b)
-}
-
-// InputBindings returns the current binding list (read-only).
-func (c *Process) InputBindings() []*engine.InputBinding { return c.inputBindings }
-
 
 // CommitLog returns the in-memory commit log (may be nil on bare coord
 // processes before Build). Used by ReplicationSystem blink-detector
@@ -1957,18 +1983,11 @@ func (c *Process) createNode(cell CellID, spatialBucketSize float32, owningHost 
 
 	base := NewStage(eng, cell, cfg.AoIRadius, nil)
 
-	// Wire the per-cell input dispatcher with the protobuf envelope parser
-	// (set globally by mmokit.init()) and the stage (passed opaquely so
-	// the engine doesn't import universe). Replay every binding registered
-	// on the process so splits and merges produce cells with consistent
-	// input handling automatically.
-	dispatcher := engine.NewInputDispatcher(eng)
-	dispatcher.SetParser(engine.DefaultEnvelopeParser)
-	dispatcher.SetStage(base)
-	eng.SetInputDispatcher(dispatcher)
-	for _, binding := range c.inputBindings {
-		dispatcher.AddBinding(binding)
-	}
+	// Wire the typed client-input dispatch path (channel 0x02;
+	// mmokit.HandleClient). All client-originated inputs flow through
+	// this path — the legacy OnInput / OnInputWith / InputBinding
+	// surface was deleted in Plan G Phase 7.
+	eng.SetClientInputTick(base.DispatchClientInput)
 	base.spatialGrid = spatial.NewHashGrid(spatialBucketSize)
 	if len(fromSplit) > 0 && fromSplit[0] {
 		base.fromSplit = true
@@ -2030,6 +2049,13 @@ func (c *Process) createNode(cell CellID, spatialBucketSize float32, owningHost 
 		spec.realize(base)
 	}
 
+	// Fire OnStageInit hooks against this stage. Runs after kindSpec
+	// realization so hooks can rely on EntityKindDefs being populated.
+	// Used by mmokit.HandleAll / OnWorldTickAll / etc. to auto-replay
+	// per-stage handler & tick registrations onto every Stage —
+	// initial Build, split-created, and migrate-created.
+	c.runStageInitHooks(base)
+
 	// Register the default entity-cleanup Action on the universal "leaving"
 	// transitions BEFORE the world factory runs. The factory's call to
 	// gw.Players.AddTransitions overrides these for games that need bespoke
@@ -2064,6 +2090,10 @@ func (c *Process) createNode(cell CellID, spatialBucketSize float32, owningHost 
 	} else {
 		world = base
 	}
+	// Make the world reachable from Stage.GameWorld() so game code can
+	// hop from an Entity back to its game-specific helpers without
+	// threading a *Process or *Cell pointer through every callsite.
+	base.SetGameWorld(world)
 
 	// Instantiate registered per-stage state. Runs after kind realization
 	// so factories can read the cell's EntityKindDefs if they need to,
@@ -2191,11 +2221,23 @@ func (c *Process) createNode(cell CellID, spatialBucketSize float32, owningHost 
 	)
 
 	gameHooks := world.Hooks()
+	tickDt := float32(1.0 / float32(platformCfg.TickRate))
 	mergedHooks := engine.Hooks{
 		OnConnect:    gameHooks.OnConnect,
 		OnDisconnect: gameHooks.OnDisconnect,
-		PreFlush:     gameHooks.PreFlush,
-		PostFlush:    gameHooks.PostFlush,
+		PreFlush: func() {
+			// Fire stage-registered per-tick callbacks (mmokit.OnWorldTick /
+			// OnTick / OnTickEach) right after systems run, before
+			// FlushRemovals — same window where game systems' Update
+			// observed the world.
+			for _, fn := range base.TickCallbacks() {
+				fn(tickDt)
+			}
+			if gameHooks.PreFlush != nil {
+				gameHooks.PreFlush()
+			}
+		},
+		PostFlush: gameHooks.PostFlush,
 		ClearTickState: func() {
 			if gameHooks.ClearTickState != nil {
 				gameHooks.ClearTickState()

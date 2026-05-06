@@ -1,6 +1,8 @@
 package game
 
 import (
+	"github.com/mlange-42/ark/ecs"
+
 	gamepb "github.com/zenion/mmoserver/gen/go/gamepb"
 	"github.com/zenion/mmoserver/pkg/mmokit"
 )
@@ -26,7 +28,6 @@ func WorldFactory(
 			CellY: rootCell.Y,
 		}, base.FromSplit())
 		gw.PlayerSessions = playerSessions
-		gw.sideEffectRegistry = buildSideEffectRegistry(gw)
 		return gw
 	}
 }
@@ -36,6 +37,15 @@ func WorldFactory(
 func GameSetup(coord *mmokit.Process) {
 	RegisterEntityKinds(coord)
 	RegisterInputs(coord)
+	RegisterDamageVerb(coord)
+	RegisterMiningVerb(coord)
+	RegisterStatusVerb(coord)
+	RegisterDeathVerbs(coord)
+	RegisterBeamToggleVerb(coord)
+	// Death observer: fires Killed exactly once per entity per Health drop-to-zero.
+	// Runs as the canonical lifecycle path post-Plan E — ApplyDamage no longer
+	// dispatches death directly.
+	mmokit.OnTickEachAll(coord, deathObserver)
 	registerPlayerJoin(coord)
 	// Reactive per-player debug-overlay broadcaster — sends SE_DEBUG_INFO
 	// (topology + AoI radius) to any active player whose DebugFlags
@@ -53,14 +63,7 @@ func GameSetup(coord *mmokit.Process) {
 	coord.AddSystem(mmokit.NewSystem(&WanderSystem{}))
 	coord.AddSystem(mmokit.NewPhysicsSystem())
 	coord.AddSystem(mmokit.NewLifetimeSystem())
-	coord.AddSystem(mmokit.NewSpatialSystemWith(func(gw *GameWorld) mmokit.SpatialHooks {
-		return mmokit.SpatialHooks{
-			PreTick: func() { clear(gw.NetIDToEntity) },
-			OnEntity: func(entity mmokit.Entity, _ mmokit.SpatialEntry) {
-				gw.NetIDToEntity[gw.C.NetworkID.Get(entity).ID] = entity
-			},
-		}
-	}))
+	coord.AddSystem(mmokit.NewSpatialSystem())
 	coord.AddSystem(mmokit.NewSystem(&CollisionSystem{}))
 	coord.AddSystem(mmokit.NewSystem(&ShieldRegenSystem{}))
 	coord.AddSystem(mmokit.NewSystem(&NetworkSystem{}))
@@ -87,7 +90,7 @@ func registerPlayerJoin(coord *mmokit.Process) {
 			gw.ServerEvents().Send(gw.eng.ConnMgr, s.ConnID,
 				uint32(gamepb.GameServerEventCode_GSE_PLAYER_DIED), &gamepb.PlayerDiedMsg{KillerId: 0})
 			gw.eng.Log.Log(CatPlayerSpawn, "reconnect-to-dead: conn=%d username=%s", s.ConnID, s.Username)
-		} else if s.Entity != (mmokit.Entity{}) && gw.eng.ECS.Alive(s.Entity) {
+		} else if s.Entity != (ecs.Entity{}) && gw.Stage.ECSWorld().Alive(s.Entity) {
 			// Entity preserved across grace period (Active / Docked / Docking).
 			gw.reconnectPlayer(s)
 			// State-specific welcome on reconnect into a non-Active state.

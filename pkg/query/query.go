@@ -193,7 +193,7 @@ func buildFields[T any](w *ecs.World) []fieldMeta {
 		if !f.IsExported() {
 			continue
 		}
-		if f.Type.Kind() != reflect.Ptr || f.Type.Elem().Kind() != reflect.Struct {
+		if f.Type.Kind() != reflect.Pointer || f.Type.Elem().Kind() != reflect.Struct {
 			panic("query.Query: field " + f.Name + " must be a pointer to a struct")
 		}
 		fields = append(fields, fieldMeta{

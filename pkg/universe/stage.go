@@ -4,6 +4,8 @@ import (
 	"encoding/binary"
 	"fmt"
 	"math"
+	"reflect"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -40,6 +42,7 @@ var MeshCategories = []string{
 	CatMeshCell, CatMeshAction, CatMeshMsg, CatMeshGrpc,
 	CatNetConn, CatNetTransport,
 	CatEngineLoop,
+	CatClientInput,
 }
 
 // StartupCategories are always enabled so server lifecycle is visible.
@@ -238,6 +241,51 @@ type Stage struct {
 	// paths so a failed serialize or ship doesn't strand a live donor
 	// with handoffs disabled.
 	drainingForMerge atomic.Bool
+
+	// dispatcher routes typed messages to registered handlers (mmokit.Handle /
+	// Entity.Send). Lazily initialized via Stage.Dispatcher().
+	dispatcher *MessageDispatcher
+
+	// broadcastQueue accumulates auto-broadcast events for end-of-tick
+	// AoI-filtered fanout. Populated by Stage.maybeBroadcast on the same-
+	// cell post-handler path, the cross-cell source pre-handler path, and
+	// the cross-cell dest post-handler path. Drained by the network /
+	// replication phase. Initialized in NewStage.
+	broadcastQueue *BroadcastQueue
+
+	// world is the GameWorld value produced by the world factory in
+	// Process.createNode. Stored here so game code can reach back from
+	// an Entity (via Entity.Stage().GameWorld()) to game-side helpers.
+	// nil for Stages built outside a Process (tests, stand-alone benchmarks)
+	// or before Process.createNode wires it.
+	world any
+
+	// tickCallbacks are invoked once per simulation tick by the loop driver
+	// (and by tests that call TickCallbacks() directly). Registered via
+	// RegisterTickCallback; backs mmokit.OnWorldTick / OnTick / OnTickEach.
+	// Guarded by tickCallbacksMu so off-loop registrations during init are
+	// race-safe with the loop driver iterating the slice.
+	tickCallbacksMu sync.Mutex
+	tickCallbacks   []func(dt float32)
+}
+
+// RegisterTickCallback adds fn to the per-tick callback list. Called by the
+// engine's game-loop adapter once per tick (before per-entity callbacks).
+// Safe to call from any goroutine — typically used at process startup.
+func (s *Stage) RegisterTickCallback(fn func(dt float32)) {
+	s.tickCallbacksMu.Lock()
+	defer s.tickCallbacksMu.Unlock()
+	s.tickCallbacks = append(s.tickCallbacks, fn)
+}
+
+// TickCallbacks returns a snapshot of the registered callbacks. Used by the
+// loop driver and tests that want to drive ticks manually.
+func (s *Stage) TickCallbacks() []func(dt float32) {
+	s.tickCallbacksMu.Lock()
+	defer s.tickCallbacksMu.Unlock()
+	out := make([]func(dt float32), len(s.tickCallbacks))
+	copy(out, s.tickCallbacks)
+	return out
 }
 
 // NewStage creates a Stage for use within a world factory.
@@ -285,6 +333,8 @@ func NewStage(eng *engine.Engine, cell CellID, aoiRadius float32, replRegistry *
 
 		spawner:        ecs.NewMap6[component.Position, component.Velocity, component.NetworkID, component.EntityKind, component.Collider, component.CellCoord](w),
 		replicaCreator: ecs.NewMap6[component.Position, component.Velocity, component.Rotation, component.Collider, component.NetworkID, component.EntityKind](w),
+
+		broadcastQueue: &BroadcastQueue{},
 	}
 
 	base.netIDIdx = newNetIDIndex()
@@ -322,6 +372,26 @@ func (b *Stage) LookupNetID(netID uint32) (ecs.Entity, EntityPresence, bool) {
 	return b.netIDIdx.Lookup(netID)
 }
 
+// RegisterLiveNetID adds (netID, handle) to the stage's local NetID index
+// as a Live presence. Used by tests; production code reaches the index via
+// the entity-spawn paths.
+func (b *Stage) RegisterLiveNetID(netID uint32, h ecs.Entity) {
+	if b.netIDIdx == nil {
+		return
+	}
+	b.netIDIdx.Enter(netID, h, PresenceLive)
+}
+
+// RegisterReplicaNetID adds (netID, handle) to the stage's local NetID index
+// as a Replica presence. Used by tests; production code reaches the index
+// via upsertBorderReplica during border-frame application.
+func (b *Stage) RegisterReplicaNetID(netID uint32, h ecs.Entity) {
+	if b.netIDIdx == nil {
+		return
+	}
+	b.netIDIdx.Enter(netID, h, PresenceReplica)
+}
+
 // SetDrainingForMerge toggles the drain-for-merge flag, which suspends
 // this cell's handoff_driver. Called by the MERGE executor at serialize
 // time (set=true) and on executor failure or abort (set=false).
@@ -346,6 +416,19 @@ func (b *Stage) Cell() CellID { return b.cell }
 
 // Process returns the coordinator that owns this node, or nil in single-node mode.
 func (b *Stage) Process() *Process { return b.coord }
+
+// GameWorld returns the world value produced by Config.World (or onInit) at
+// Stage construction. Returns nil if the Stage was built outside a Process
+// (tests, stand-alone benchmarks) or before Process.createNode wired it.
+// Used by game code that needs to reach back from Entity → game-specific
+// helpers; type-assert to the concrete game world type at the callsite.
+func (b *Stage) GameWorld() any { return b.world }
+
+// SetGameWorld stores the world value on the Stage. Called by
+// Process.createNode immediately after the world factory runs so
+// Stage.GameWorld() returns the same value installed on cell.World.
+// Game code never calls this directly.
+func (b *Stage) SetGameWorld(world any) { b.world = world }
 
 // Protocol returns the user-supplied Config.Protocol via the owning Process.
 // Game code retrieves the typed *mmokit.Protocol via mmokit.ProtocolOf.
@@ -645,9 +728,7 @@ func (b *Stage) UpdateCellBounds(cell CellID, cellSize float32) {
 		}
 	}
 }
-func (b *Stage) DispatchChat(string, string)                          {}
-func (b *Stage) HandleCrossCellAction(*CrossCellAction) *ActionResult { return nil }
-func (b *Stage) HandleActionResult(*ActionResult)                     {}
+func (b *Stage) DispatchChat(string, string) {}
 
 // ---------------------------------------------------------------------------
 // Transfer serialization
@@ -1560,4 +1641,144 @@ func (b *Stage) Init() {}
 func (b *Stage) StateByName(name string) (any, bool) {
 	v, ok := b.state[name]
 	return v, ok
+}
+
+// Dispatcher returns the per-Stage MessageDispatcher, lazily initialized.
+// Used by mmokit.Handle and mmokit.Send to route typed messages.
+func (s *Stage) Dispatcher() *MessageDispatcher {
+	if s.dispatcher == nil {
+		s.dispatcher = newMessageDispatcher(s)
+	}
+	return s.dispatcher
+}
+
+// BroadcastQueue returns this stage's per-tick auto-broadcast queue.
+// Producers (Stage.maybeBroadcast) push BroadcastEvents; the framework's
+// network/replication phase drains and AoI-filters per viewer at end-of-tick.
+func (s *Stage) BroadcastQueue() *BroadcastQueue { return s.broadcastQueue }
+
+// RouteTypedMessage delivers a typed message to the entity with targetNetID.
+// If the entity is local Live on this stage, the registered handler runs
+// synchronously. If the entity is a Replica, the message is wire-encoded and
+// shipped to the replica's source cell via the bridge; the handler runs there
+// when the frame arrives.
+//
+// Returns true if the message was dispatched (locally or remotely), false
+// if the entity is not known to this stage.
+func (s *Stage) RouteTypedMessage(targetNetID uint32, msgPtr any) bool {
+	h, presence, ok := s.LookupNetID(targetNetID)
+	if !ok {
+		return false
+	}
+	if presence == PresenceLive {
+		s.Dispatcher().Invoke(targetNetID, msgPtr)
+		// Same-cell post-handler push: handler may have populated result
+		// fields (e.g. Damage.Dealt), so we encode AFTER Invoke.
+		s.maybeBroadcast(targetNetID, msgPtr)
+		return true
+	}
+	// Replica — route to source cell.
+	if !s.replicaMap.HasAll(h) {
+		return false
+	}
+	rep := s.replicaMap.Get(h)
+	typeName := reflect.TypeOf(msgPtr).Elem().String()
+	payload := EncodeTypedMessage(typeName, msgPtr)
+	if s.bridge == nil {
+		return false
+	}
+	if _, isNoop := s.bridge.(NoopBridge); isNoop {
+		s.eng.Log.Log(CatMeshAction,
+			"[%s] RouteTypedMessage: dropping cross-cell %q to netID=%d (NoopBridge — no transport wired)",
+			s.cellID, typeName, rep.SourceNetID)
+		return false
+	}
+	s.bridge.SendAction(MeshCellID(rep.SourceCellID), &CrossCellAction{
+		Type:         ActionTypedMessage,
+		TargetNetID:  rep.SourceNetID,
+		SourceCellID: string(s.cellID),
+		Payload:      payload,
+	})
+	// Cross-cell source-cell pre-handler push: viewers near the caster on
+	// this cell see the broadcast even though the authoritative handler
+	// runs on the dest cell. Result fields (e.g. Dealt) carry their pre-
+	// handler values here — that's correct for the caster-local AoI.
+	s.maybeBroadcast(targetNetID, msgPtr)
+	return true
+}
+
+// HandleEngineAction processes engine-level cross-cell actions (currently
+// just ActionTypedMessage). Returns true if the action was consumed; the
+// caller falls back to game-defined handling if false.
+func (s *Stage) HandleEngineAction(action *CrossCellAction) bool {
+	if action == nil || action.Type != ActionTypedMessage {
+		return false
+	}
+	typeName, payload := SplitTypedMessage(action.Payload)
+	msgType := s.Dispatcher().MessageType(typeName)
+	if msgType == nil {
+		// No registered handler — drop. Logged by caller for visibility.
+		return true
+	}
+	msgPtr := reflect.New(msgType)
+	// Stage-aware decode so Entity fields resolve their handles via this
+	// stage's NetID index — without it Entity.Send / Entity.Get etc. on
+	// decoded fields would no-op.
+	DecodeTypedMessageOnStage(s, payload, msgPtr.Interface())
+	s.Dispatcher().Invoke(action.TargetNetID, msgPtr.Interface())
+	// Dest-cell post-handler push: the handler ran here authoritatively,
+	// result fields are populated, viewers near the target on this cell
+	// see the broadcast.
+	s.maybeBroadcast(action.TargetNetID, msgPtr.Interface())
+	return true
+}
+
+// maybeBroadcast pushes msgPtr to this stage's broadcast queue if:
+//
+//  1. The msg type is broadcast-eligible (registered via mmokit.HandleAll
+//     or RegisterBroadcastType; HandleAllInternal types are excluded).
+//  2. msgPtr has at least one anchor whose NetID resolves on this stage
+//     (avoids zero-recipient broadcasts on stages where no anchor entity
+//     is locally known — viewers on this cell can't see anything).
+//
+// Called twice for cross-cell sends (source pre-handler + dest post-handler);
+// once for same-cell sends. Hooks into the mmokit-side registry via the
+// BroadcastHooks indirection (init-populated by pkg/mmokit).
+func (s *Stage) maybeBroadcast(targetNetID uint32, msgPtr any) {
+	if BroadcastHooks.Eligible == nil ||
+		BroadcastHooks.TypeIDOf == nil ||
+		BroadcastHooks.ExtractAnchors == nil {
+		// Hooks not populated (test build without mmokit, or partial init).
+		return
+	}
+	t := reflect.TypeOf(msgPtr)
+	if t.Kind() == reflect.Pointer {
+		t = t.Elem()
+	}
+	if !BroadcastHooks.Eligible(t) {
+		return
+	}
+
+	anchors := BroadcastHooks.ExtractAnchors(msgPtr, targetNetID, s)
+	// Filter anchors to those resolvable on this stage. Replicas count —
+	// the AoI filter at drain time uses the local entity's position, which
+	// is whatever this cell knows for that NetID.
+	var localAnchors []uint32
+	for _, nid := range anchors {
+		if _, _, ok := s.LookupNetID(nid); ok {
+			localAnchors = append(localAnchors, nid)
+		}
+	}
+	if len(localAnchors) == 0 {
+		// No locally-resolvable anchors → no recipients on this stage.
+		// Skip the push and avoid a no-op broadcast.
+		return
+	}
+
+	body := ReflectMarshal(msgPtr)
+	s.broadcastQueue.Push(BroadcastEvent{
+		TypeID:  BroadcastHooks.TypeIDOf(t),
+		Body:    body,
+		Anchors: localAnchors,
+	})
 }

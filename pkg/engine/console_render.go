@@ -28,7 +28,7 @@ func renderResult(v any) string {
 		return fn(v)
 	}
 	rv := reflect.ValueOf(v)
-	if rv.Kind() == reflect.Ptr {
+	if rv.Kind() == reflect.Pointer {
 		rv = rv.Elem()
 	}
 	if rv.Kind() != reflect.Struct {
@@ -95,7 +95,7 @@ func renderSliceAsTable(sv reflect.Value) string {
 		return "  (empty)\n"
 	}
 	elemType := sv.Type().Elem()
-	if elemType.Kind() == reflect.Ptr {
+	if elemType.Kind() == reflect.Pointer {
 		elemType = elemType.Elem()
 	}
 	if elemType.Kind() != reflect.Struct {
@@ -117,7 +117,7 @@ func renderSliceAsTable(sv reflect.Value) string {
 	t := NewTable(headers...)
 	for i := range sv.Len() {
 		elem := sv.Index(i)
-		if elem.Kind() == reflect.Ptr {
+		if elem.Kind() == reflect.Pointer {
 			elem = elem.Elem()
 		}
 		row := make([]any, len(headers))

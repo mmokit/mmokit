@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 
+	gamecomp "github.com/zenion/mmoserver/internal/component"
 	"github.com/zenion/mmoserver/pkg/cmdsys"
 	"github.com/zenion/mmoserver/pkg/mmokit"
 )
@@ -33,19 +34,16 @@ func registerHeal(reg *cmdsys.Registry, coord *mmokit.Process) error {
 			if target.Online == nil || target.Stage == nil {
 				return nil, fmt.Errorf("player %q not online on this host", username)
 			}
-			gw := gwForStage(coord, target.Stage)
-			if gw == nil {
+			if gw := gwForStage(coord, target.Stage); gw == nil {
 				return nil, fmt.Errorf("player.heal: not a game-world cell")
 			}
 			return mmokit.CmdOnLoop(ctx, target.Stage.Engine(), func() (HealResult, error) {
-				e := target.Online.Entity
-				if gw.C.Health.HasAll(e) {
-					h := gw.C.Health.Get(e)
+				e := mmokit.EntityFromECS(target.Stage, target.Online.Entity)
+				if h := mmokit.Get[gamecomp.Health](e); h != nil {
 					h.Current = h.Max
 				}
-				if gw.C.Shield.HasAll(e) {
-					s := gw.C.Shield.Get(e)
-					s.Current = s.Max
+				if sh := mmokit.Get[gamecomp.Shield](e); sh != nil {
+					sh.Current = sh.Max
 				}
 				return HealResult{Target: username, OK: true}, nil
 			})

@@ -4,16 +4,19 @@ import (
 	"embed"
 	"log"
 
-	basicpb "github.com/zenion/mmoserver/gen/go/basicpb"
 	"github.com/zenion/mmoserver/pkg/mmokit"
 
 	"github.com/zenion/mmoserver/examples/4node-basic/services/echo"
 )
 
-// MoveDeps is the deps struct injected into the BCE_MOVE_TARGET handler.
-// MoveTarget is required — handler is silently skipped if absent.
-type MoveDeps struct {
-	MT *mmokit.MoveTarget
+// MoveTargetMsg is the click-to-move target update sent by the client and
+// dispatched to the HandleClient handler below. Mirrors the reflect-codec
+// wire layout in pkg/universe/reflect_marshal.go: fields encoded in source
+// order, little-endian, no padding.
+type MoveTargetMsg struct {
+	Sequence uint32
+	TargetX  float32
+	TargetY  float32
 }
 
 //go:embed all:web/dist
@@ -63,11 +66,16 @@ func main() {
 		log.Fatalf("4node-basic: register echo service: %v", err)
 	}
 
-	mmokit.OnInputWith[basicpb.MoveTargetMsg, MoveDeps](mmo, basicpb.ClientEventCode_BCE_MOVE_TARGET).
-		Active().
-		Do(func(p *mmokit.Player, msg *basicpb.MoveTargetMsg, c *MoveDeps) {
-			c.MT.SetTarget(msg.TargetX, msg.TargetY)
-		})
+	mmokit.HandleClient(mmo, func(player mmokit.Entity, msg *MoveTargetMsg) {
+		if mmokit.PlayerStateOf(player) != mmokit.StateActive {
+			return
+		}
+		mt := mmokit.Get[mmokit.MoveTarget](player)
+		if mt == nil {
+			return
+		}
+		mt.SetTarget(msg.TargetX, msg.TargetY)
+	})
 
 	mmo.AddSystem(mmokit.NewClickToMoveSystem())
 	mmo.AddSystem(mmokit.NewPhysicsSystem())

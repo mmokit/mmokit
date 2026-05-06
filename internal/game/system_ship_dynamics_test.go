@@ -16,7 +16,7 @@ import (
 type shipDynamicsTestFixture struct {
 	gw     *GameWorld
 	sys    *ShipDynamicsSystem
-	entity ecs.Entity
+	entity mmokit.Entity
 }
 
 func newShipDynamicsFixture(t *testing.T) *shipDynamicsTestFixture {
@@ -27,15 +27,18 @@ func newShipDynamicsFixture(t *testing.T) *shipDynamicsTestFixture {
 	// dynamics system still runs drag but at coeff=0 it's a no-op.
 	gw.Config.ShipDragCoeff = 0
 
-	mapper := ecs.NewMap5[
+	w := gw.Stage.ECSWorld()
+	mapper := ecs.NewMap6[
 		mmokit.Position,
 		mmokit.Velocity,
 		mmokit.Rotation,
 		gamecomp.ShipControl,
 		mmokit.MoveTarget,
-	](gw.eng.ECS)
+		mmokit.NetworkID,
+	](w)
 
-	entity := mapper.NewEntity(
+	const netID uint32 = 9000
+	handle := mapper.NewEntity(
 		&mmokit.Position{X: 0, Y: 0},
 		&mmokit.Velocity{X: 0, Y: 0},
 		&mmokit.Rotation{Angle: 0},
@@ -46,10 +49,13 @@ func newShipDynamicsFixture(t *testing.T) *shipDynamicsTestFixture {
 			MaxSpeed:  gw.Config.MaxSpeed,
 		},
 		&mmokit.MoveTarget{Active: false},
+		&mmokit.NetworkID{ID: netID},
 	)
+	gw.Stage.RegisterLiveNetID(netID, handle)
+	entity := mmokit.EntityFromECS(gw.Stage, handle)
 
 	sys := &ShipDynamicsSystem{}
-	mmokit.WireSystem(sys, gw.eng.ECS, gw.eng, gw)
+	mmokit.WireSystem(sys, w, gw.eng, gw)
 
 	return &shipDynamicsTestFixture{gw: gw, sys: sys, entity: entity}
 }
@@ -58,7 +64,7 @@ func newShipDynamicsFixture(t *testing.T) *shipDynamicsTestFixture {
 // from the entity's current position, expressed in local-cell coords
 // (CellX/Y = 0 so LocalX/Y are absolute in the test frame).
 func (f *shipDynamicsTestFixture) setTarget(localX, localY float32) {
-	mt := f.gw.C.MoveTarget.Get(f.entity)
+	mt := mmokit.Get[mmokit.MoveTarget](f.entity)
 	mt.Active = true
 	mt.CellX = 0
 	mt.CellY = 0
@@ -67,11 +73,11 @@ func (f *shipDynamicsTestFixture) setTarget(localX, localY float32) {
 }
 
 func (f *shipDynamicsTestFixture) ship() *gamecomp.ShipControl {
-	return f.gw.C.ShipControl.Get(f.entity)
+	return mmokit.Get[gamecomp.ShipControl](f.entity)
 }
 
 func (f *shipDynamicsTestFixture) rot() *mmokit.Rotation {
-	return f.gw.C.Rotation.Get(f.entity)
+	return mmokit.Get[mmokit.Rotation](f.entity)
 }
 
 // runTicks advances the system by n ticks of dt seconds each.

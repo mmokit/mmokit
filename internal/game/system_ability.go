@@ -5,7 +5,6 @@ import (
 
 	"github.com/mlange-42/ark/ecs"
 
-	gamepb "github.com/zenion/mmoserver/gen/go/gamepb"
 	gamecomp "github.com/zenion/mmoserver/internal/component"
 	"github.com/zenion/mmoserver/internal/item"
 	"github.com/zenion/mmoserver/pkg/mmokit"
@@ -56,10 +55,8 @@ func (s *AbilitySystem) Update(dt float32) {
 			continue
 		}
 
-		casterNetID := uint32(0)
-		if gw.C.NetworkID.HasAll(entity) {
-			casterNetID = gw.C.NetworkID.Get(entity).ID
-		}
+		casterE := mmokit.EntityFromECS(gw.Stage, entity)
+		casterNetID := casterE.NetID()
 
 		for slot := range uint8(gamecomp.AbilityCount) {
 			if input.AbilityCast&(1<<slot) == 0 {
@@ -82,7 +79,7 @@ func (s *AbilitySystem) Update(dt float32) {
 			// activation validates the target inside executeAbility.
 			isMiningToggle := params.Type == item.AbilityTypeMiningBeam
 			if slot <= gamecomp.AbilityR && !isMiningToggle {
-				if !lock.Locked || !gw.eng.ECS.Alive(lock.TargetEntity) {
+				if !lock.Locked || !gw.Stage.ECSWorld().Alive(lock.TargetEntity) {
 					continue
 				}
 				if params.Range > 0 && !s.inRange(entity, lock.TargetEntity, params.Range) {
@@ -148,121 +145,74 @@ func resolveAbilityParams(equip *gamecomp.Equipment, slot uint8) *item.AbilityPa
 func (s *AbilitySystem) executeAbility(action abilityAction) bool {
 	gw := s.World()
 	entity := action.caster
+	casterE := mmokit.EntityFromECS(gw.Stage, entity)
 
-	if !gw.eng.ECS.Alive(entity) {
+	if !casterE.Alive() {
 		return false
 	}
 
-	lock := gw.C.TargetLock.Get(entity)
+	lock := mmokit.Get[gamecomp.TargetLock](casterE)
 	params := action.params
 
-	var targetNetID uint32
-	var damageDealt float32
 	fired := true
-	sentCrossNode := false
 
 	switch params.Type {
 	// --- Hitscan damage abilities ---
 	case item.AbilityTypePulseLaser, item.AbilityTypePulseBarrage,
 		item.AbilityTypeRailShot, item.AbilityTypeIonOverload, item.AbilityTypePlasmaBolt:
-		if gw.eng.ECS.Alive(lock.TargetEntity) {
-			if s.isReplica(lock.TargetEntity) {
-				s.sendCrossNodeDamage(action.casterNetID, lock.TargetEntity, params.Damage, action.slot, uint8(params.Type))
-				sentCrossNode = true
-			} else {
-				damageDealt = gw.ApplyDamage(lock.TargetEntity, params.Damage, action.casterNetID)
-			}
-			targetNetID = lock.TargetNetID
+		target := mmokit.EntityByNetID(gw.Stage, lock.TargetNetID)
+		if target.Alive() {
+			caster := mmokit.EntityByNetID(gw.Stage, action.casterNetID)
+			gw.Damage(caster, target, params.Damage, 0, action.slot, uint8(params.Type))
 			gw.eng.Log.Log(CatCombatAbility, "ability %s: %d -> %d dmg=%.0f",
 				params.Name, action.casterNetID, lock.TargetNetID, params.Damage)
 		}
 
 	// --- Hitscan + bonus vs unshielded ---
 	case item.AbilityTypePiercingRound, item.AbilityTypePlasmaTorpedo:
-		if gw.eng.ECS.Alive(lock.TargetEntity) {
-			if s.isReplica(lock.TargetEntity) {
-				// Send base + bonus; authoritative node decides based on its own shield state
-				s.sendCrossNodeDamageWithBonus(action.casterNetID, lock.TargetEntity, params.Damage, params.BonusDamage, action.slot, uint8(params.Type))
-				sentCrossNode = true
-			} else {
-				damage := params.Damage
-				if gw.C.Shield.HasAll(lock.TargetEntity) {
-					shield := gw.C.Shield.Get(lock.TargetEntity)
-					if shield.Current <= 0 {
-						damage += params.BonusDamage
-					}
-				}
-				damageDealt = gw.ApplyDamage(lock.TargetEntity, damage, action.casterNetID)
-			}
-			targetNetID = lock.TargetNetID
+		target := mmokit.EntityByNetID(gw.Stage, lock.TargetNetID)
+		if target.Alive() {
+			caster := mmokit.EntityByNetID(gw.Stage, action.casterNetID)
+			gw.Damage(caster, target, params.Damage, params.BonusDamage, action.slot, uint8(params.Type))
 			gw.eng.Log.Log(CatCombatAbility, "ability %s: %d -> %d dmg=%.0f",
 				params.Name, action.casterNetID, lock.TargetNetID, params.Damage)
 		}
 
 	// --- DoT debuff ---
 	case item.AbilityTypeIonBurn:
-		if gw.eng.ECS.Alive(lock.TargetEntity) {
-			if s.isReplica(lock.TargetEntity) {
-				s.sendCrossNodeStatusEffect(action.casterNetID, lock.TargetEntity,
-					uint8(gamecomp.StatusIonBurn), action.slot, uint8(params.Type),
-					params.DotDuration, params.DotDPS)
-				sentCrossNode = true
-			} else if gw.C.StatusEffects.HasAll(lock.TargetEntity) {
-				se := gw.C.StatusEffects.Get(lock.TargetEntity)
-				se.Add(gamecomp.StatusEffect{
-					Type:     gamecomp.StatusIonBurn,
-					Duration: params.DotDuration,
-					Value:    params.DotDPS,
-					Source:   entity,
-				})
-			}
-			targetNetID = lock.TargetNetID
+		target := mmokit.EntityByNetID(gw.Stage, lock.TargetNetID)
+		if target.Alive() {
+			caster := mmokit.EntityByNetID(gw.Stage, action.casterNetID)
+			gw.ApplyStatus(caster, target, gamecomp.StatusIonBurn,
+				params.DotDuration, params.DotDPS, action.slot, uint8(params.Type))
 			gw.eng.Log.Log(CatCombatAbility, "ability %s: %d -> %d (%.1f dps for %.1fs)",
 				params.Name, action.casterNetID, lock.TargetNetID, params.DotDPS, params.DotDuration)
 		}
 
 	// --- Shield restore + Fortified buff ---
 	case item.AbilityTypeEmergencyShield, item.AbilityTypeHardenedShield:
-		if gw.C.StatusEffects.HasAll(entity) {
-			se := gw.C.StatusEffects.Get(entity)
-			regenPerSec := params.ShieldRestore / params.BuffDuration
-			se.Add(gamecomp.StatusEffect{
-				Type:     gamecomp.StatusShieldRegen,
-				Duration: params.BuffDuration,
-				Value:    regenPerSec,
-				Source:   entity,
-			})
-			se.Add(gamecomp.StatusEffect{
-				Type:     gamecomp.StatusFortified,
-				Duration: params.BuffDuration,
-				Value:    params.DmgReduction,
-				Source:   entity,
-			})
-		}
+		regenPerSec := params.ShieldRestore / params.BuffDuration
+		gw.ApplyStatus(casterE, casterE, gamecomp.StatusShieldRegen,
+			params.BuffDuration, regenPerSec, action.slot, uint8(params.Type))
+		gw.ApplyStatus(casterE, casterE, gamecomp.StatusFortified,
+			params.BuffDuration, params.DmgReduction, action.slot, uint8(params.Type))
 		gw.eng.Log.Log(CatCombatAbility, "ability %s: %d shield regen +%.1f/s for %.1fs",
-			params.Name, action.casterNetID, params.ShieldRestore/params.BuffDuration, params.BuffDuration)
+			params.Name, action.casterNetID, regenPerSec, params.BuffDuration)
 
 	// --- Speed boost ---
 	case item.AbilityTypeAfterburner, item.AbilityTypeMicroWarp:
-		if gw.C.StatusEffects.HasAll(entity) {
-			se := gw.C.StatusEffects.Get(entity)
-			se.Add(gamecomp.StatusEffect{
-				Type:     gamecomp.StatusAfterburner,
-				Duration: params.BoostDuration,
-				Value:    params.SpeedMult,
-				Source:   entity,
-			})
-		}
+		gw.ApplyStatus(casterE, casterE, gamecomp.StatusAfterburner,
+			params.BoostDuration, params.SpeedMult, action.slot, uint8(params.Type))
 		gw.eng.Log.Log(CatCombatAbility, "ability %s: %d speed x%.1f for %.1fs",
 			params.Name, action.casterNetID, params.SpeedMult, params.BoostDuration)
 
 	// --- Mining beam toggle ---
 	case item.AbilityTypeMiningBeam:
-		if !gw.C.MiningLaser.HasAll(entity) {
+		laser := mmokit.Get[gamecomp.MiningLaser](casterE)
+		if laser == nil {
 			fired = false
 			break
 		}
-		laser := gw.C.MiningLaser.Get(entity)
 		beamIdx := s.slotToBeamIndex(action.slot)
 
 		if laser.Beams[beamIdx].Active {
@@ -271,7 +221,8 @@ func (s *AbilitySystem) executeAbility(action abilityAction) bool {
 			gw.eng.Log.Log(CatEconomyMining, "mining beam off: %d beam=%d", action.casterNetID, beamIdx)
 		} else {
 			// Toggle on — require lock and validate target is minable
-			if !lock.Locked || !gw.eng.ECS.Alive(lock.TargetEntity) || !gw.C.Minable.HasAll(lock.TargetEntity) {
+			lockTarget := mmokit.EntityFromECS(gw.Stage, lock.TargetEntity)
+			if !lock.Locked || !lockTarget.Alive() || !mmokit.Has[gamecomp.Minable](lockTarget) {
 				fired = false
 				break
 			}
@@ -282,24 +233,35 @@ func (s *AbilitySystem) executeAbility(action abilityAction) bool {
 		}
 		// Sync replicated ActiveMining immediately so clients see the toggle
 		// on the same tick, without waiting for the next MiningSystem pass.
-		gw.syncActiveMining(entity, laser)
+		gw.syncActiveMining(casterE, laser)
+
+		// Press-pulse VFX broadcast (Plan G restoration). The handler is a
+		// no-op; the framework auto-broadcast IS the effect.
+		casterE.Send(&BeamToggle{
+			Caster: casterE,
+			Beam:   uint8(beamIdx),
+			Active: laser.Beams[beamIdx].Active,
+		})
 
 	// --- Extract pulse (mining burst) ---
 	case item.AbilityTypeExtractPulse:
-		if !gw.C.MiningLaser.HasAll(entity) || !gw.C.Inventory.HasAll(entity) {
+		laser := mmokit.Get[gamecomp.MiningLaser](casterE)
+		inv := mmokit.Get[gamecomp.Inventory](casterE)
+		if laser == nil || inv == nil {
 			fired = false
 			break
 		}
-		laser := gw.C.MiningLaser.Get(entity)
 		beamIdx := s.slotToBeamIndex(action.slot)
 		beam := &laser.Beams[beamIdx]
 
 		// Require active mining beam
-		if !beam.Active || !gw.eng.ECS.Alive(laser.Target) {
+		laserTarget := mmokit.EntityFromECS(gw.Stage, laser.Target)
+		if !beam.Active || !laserTarget.Alive() {
 			fired = false
 			break
 		}
-		if !gw.C.Minable.HasAll(laser.Target) {
+		minable := mmokit.Get[gamecomp.Minable](laserTarget)
+		if minable == nil {
 			fired = false
 			break
 		}
@@ -308,12 +270,10 @@ func (s *AbilitySystem) executeAbility(action abilityAction) bool {
 			fired = false
 			break
 		}
-		minable := gw.C.Minable.Get(laser.Target)
 		if minable.Remaining <= 0 {
 			fired = false
 			break
 		}
-		inv := gw.C.Inventory.Get(entity)
 		if inv.RemainingMass() <= 0 {
 			fired = false
 			break
@@ -334,36 +294,34 @@ func (s *AbilitySystem) executeAbility(action abilityAction) bool {
 		itemID := minable.ItemID
 		added := inv.AddItem(itemID, whole)
 
-		if s.isReplica(laser.Target) {
-			// Cross-cell mining: send action to authoritative node
-			s.sendCrossNodeMining(action.casterNetID, laser.Target, float32(added))
-			// Update local replica for immediate visual feedback
-			minable.Remaining -= float32(added)
-			sentCrossNode = true
-			gw.eng.Log.Log(CatEconomyMining, "extract pulse cross-cell: %d beam=%d amount=%d remaining=%.1f",
-				action.casterNetID, beamIdx, added, minable.Remaining)
-		} else {
-			minable.Remaining -= float32(added)
-			gw.eng.Log.Log(CatEconomyMining, "extract pulse: %d beam=%d amount=%d remaining=%.1f",
-				action.casterNetID, beamIdx, added, minable.Remaining)
+		// Resolve the asteroid target as an mmokit.Entity (NetID-based,
+		// cell-aware). When local, target.Send dispatches synchronously and
+		// the handler decrements Minable.Remaining + marks for removal.
+		// When the target is a replica, Send routes the action to the
+		// authoritative cell; we still decrement the local replica copy
+		// for immediate caster-side visual feedback.
+		asteroidNetID := laserTarget.NetID()
+		asteroid := mmokit.EntityByNetID(gw.Stage, asteroidNetID)
+		caster := mmokit.EntityByNetID(gw.Stage, action.casterNetID)
 
-			if minable.Remaining <= 0 {
-				gw.MarkForRemoval(laser.Target)
-				gw.eng.Log.Log(CatEconomyMining, "asteroid depleted by extract pulse")
-			}
+		if !asteroid.Local() {
+			// Replica: optimistic local decrement; handler runs on the
+			// authoritative cell and applies the canonical mutation there.
+			minable.Remaining -= float32(added)
 		}
+
+		gw.MineExtract(caster, asteroid, uint8(beamIdx), float32(added))
+
+		gw.eng.Log.Log(CatEconomyMining, "extract pulse: %d beam=%d amount=%d remaining=%.1f",
+			action.casterNetID, beamIdx, added, minable.Remaining)
 	}
 
-	if fired && !sentCrossNode {
-		mmokit.Enqueue(gw.Queue, &gamepb.AbilityCastResultMsg{
-			Slot:        uint32(action.slot),
-			Success:     true,
-			TargetId:    targetNetID,
-			DamageDealt: damageDealt,
-			CasterId:    action.casterNetID,
-			AbilityType: uint32(params.Type),
-		})
-	}
+	// Self-buffs (EmergencyShield, HardenedShield, Afterburner, MicroWarp)
+	// currently don't flow through a typed Send, so the framework
+	// auto-broadcast (Plan F Phase 2) does not fire for them. Migrating
+	// them to use ApplyStatus(caster, caster, ...) is follow-up work —
+	// see Plan F notes. MiningBeam toggle now broadcasts via BeamToggle
+	// (Plan G).
 	return fired
 }
 
@@ -376,63 +334,15 @@ func (s *AbilitySystem) slotToBeamIndex(slot uint8) int {
 	return 1
 }
 
-func (s *AbilitySystem) isReplica(entity ecs.Entity) bool {
-	return s.World().C.Replica.HasAll(entity)
-}
-
-func (s *AbilitySystem) sendCrossNodeDamage(casterNetID uint32, target ecs.Entity, damage float32, slot uint8, abilityType uint8) {
-	s.sendCrossNodeDamageWithBonus(casterNetID, target, damage, 0, slot, abilityType)
-}
-
-func (s *AbilitySystem) sendCrossNodeDamageWithBonus(casterNetID uint32, target ecs.Entity, damage, bonusDamage float32, slot uint8, abilityType uint8) {
-	gw := s.World()
-	rep := gw.C.Replica.Get(target)
-	gw.Bridge().SendAction(mmokit.MeshCellID(rep.SourceCellID), &mmokit.CrossCellAction{
-		Type:         ActionDamage,
-		TargetNetID:  rep.SourceNetID,
-		SourceNetID:  casterNetID,
-		SourceCellID: string(gw.CellID()),
-		Payload:      MarshalDamageAction(&DamageAction{Damage: damage, BonusDamage: bonusDamage, Slot: slot, AbilityType: abilityType}),
-	})
-}
-
-func (s *AbilitySystem) sendCrossNodeStatusEffect(casterNetID uint32, target ecs.Entity, effectType, slot, abilityType uint8, duration, value float32) {
-	gw := s.World()
-	rep := gw.C.Replica.Get(target)
-	gw.Bridge().SendAction(mmokit.MeshCellID(rep.SourceCellID), &mmokit.CrossCellAction{
-		Type:         ActionStatusEffect,
-		TargetNetID:  rep.SourceNetID,
-		SourceNetID:  casterNetID,
-		SourceCellID: string(gw.CellID()),
-		Payload: MarshalStatusEffectAction(&StatusEffectAction{
-			EffectType:  effectType,
-			Slot:        slot,
-			AbilityType: abilityType,
-			Duration:    duration,
-			Value:       value,
-		}),
-	})
-}
-
-func (s *AbilitySystem) sendCrossNodeMining(casterNetID uint32, target ecs.Entity, amount float32) {
-	gw := s.World()
-	rep := gw.C.Replica.Get(target)
-	gw.Bridge().SendAction(mmokit.MeshCellID(rep.SourceCellID), &mmokit.CrossCellAction{
-		Type:         ActionMining,
-		TargetNetID:  rep.SourceNetID,
-		SourceNetID:  casterNetID,
-		SourceCellID: string(gw.CellID()),
-		Payload:      MarshalMiningAction(&MiningAction{Amount: amount}),
-	})
-}
-
 func (s *AbilitySystem) inRange(caster, target ecs.Entity, abilityRange float32) bool {
 	gw := s.World()
-	if !gw.C.Position.HasAll(caster) || !gw.C.Position.HasAll(target) {
+	casterE := mmokit.EntityFromECS(gw.Stage, caster)
+	targetE := mmokit.EntityFromECS(gw.Stage, target)
+	casterPos := mmokit.Get[mmokit.Position](casterE)
+	targetPos := mmokit.Get[mmokit.Position](targetE)
+	if casterPos == nil || targetPos == nil {
 		return false
 	}
-	casterPos := gw.C.Position.Get(caster)
-	targetPos := gw.C.Position.Get(target)
 	dx := targetPos.X - casterPos.X
 	dy := targetPos.Y - casterPos.Y
 	dist := float32(math.Sqrt(float64(dx*dx + dy*dy)))

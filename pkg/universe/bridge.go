@@ -21,8 +21,6 @@ type Bridge interface {
 	RequestRespawn(connID uint32, username string)
 	// SendAction sends a cross-cell action to the authoritative cell for an entity.
 	SendAction(targetCellID MeshCellID, action *CrossCellAction)
-	// SendActionResult sends the result of a cross-cell action back to the originator.
-	SendActionResult(targetCellID MeshCellID, result *ActionResult)
 	// SendBorderFrame dispatches an encoded border replication frame to
 	// a neighbor cell. The encoded bytes are a pkg/replication.Frame.
 	// Lossy delivery: if the destination inbox is full (single-host) or
@@ -52,7 +50,6 @@ func (NoopBridge) OnPlayerTransfer(uint32, MeshCellID)            {}
 func (NoopBridge) RelayChatToOtherCells(string, string)           {}
 func (NoopBridge) RequestRespawn(uint32, string)                  {}
 func (NoopBridge) SendAction(MeshCellID, *CrossCellAction)        {}
-func (NoopBridge) SendActionResult(MeshCellID, *ActionResult)     {}
 func (NoopBridge) SendBorderFrame(MeshCellID, MeshCellID, []byte) {}
 func (NoopBridge) SendHandoff(MeshCellID, *HandoffPayload) bool   { return true }
 func (NoopBridge) SendForwardInput(MeshCellID, *ForwardInputPayload) {}

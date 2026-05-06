@@ -1,24 +1,26 @@
 package net
 
 import (
-	"sort"
+	"slices"
 	"testing"
 	"time"
 )
 
 // mockTransport implements Transport for testing.
 type mockTransport struct {
-	reliable   [][]byte
-	unreliable [][]byte
-	input      [][]byte
-	opInput    [][]byte
-	closed     bool
+	reliable    [][]byte
+	unreliable  [][]byte
+	input       [][]byte
+	opInput     [][]byte
+	clientInput [][]byte
+	closed      bool
 }
 
-func (m *mockTransport) SendReliable(data []byte)  { m.reliable = append(m.reliable, data) }
+func (m *mockTransport) SendReliable(data []byte)   { m.reliable = append(m.reliable, data) }
 func (m *mockTransport) SendUnreliable(data []byte) { m.unreliable = append(m.unreliable, data) }
 func (m *mockTransport) DrainInput() [][]byte       { r := m.input; m.input = nil; return r }
 func (m *mockTransport) DrainOpInput() [][]byte     { r := m.opInput; m.opInput = nil; return r }
+func (m *mockTransport) DrainClientInput() [][]byte { r := m.clientInput; m.clientInput = nil; return r }
 func (m *mockTransport) InjectInput(data []byte)    { m.input = append(m.input, data) }
 func (m *mockTransport) Close()                     { m.closed = true }
 
@@ -30,15 +32,6 @@ func drainEvent(t *testing.T, ch <-chan PlayerEvent) PlayerEvent {
 	case <-time.After(100 * time.Millisecond):
 		t.Fatal("expected event but channel was empty")
 		return PlayerEvent{}
-	}
-}
-
-func noEvent(t *testing.T, ch <-chan PlayerEvent) {
-	t.Helper()
-	select {
-	case evt := <-ch:
-		t.Fatalf("unexpected event: %+v", evt)
-	case <-time.After(50 * time.Millisecond):
 	}
 }
 
@@ -239,7 +232,7 @@ func TestConnManager_ActiveConnIDs(t *testing.T) {
 	id3 := cm.AddTransport(&mockTransport{})
 
 	ids := cm.ActiveConnIDs()
-	sort.Slice(ids, func(i, j int) bool { return ids[i] < ids[j] })
+	slices.Sort(ids)
 
 	if len(ids) != 3 {
 		t.Fatalf("expected 3 active IDs, got %d", len(ids))
@@ -250,7 +243,7 @@ func TestConnManager_ActiveConnIDs(t *testing.T) {
 
 	cm.Remove(id2)
 	ids = cm.ActiveConnIDs()
-	sort.Slice(ids, func(i, j int) bool { return ids[i] < ids[j] })
+	slices.Sort(ids)
 
 	if len(ids) != 2 {
 		t.Fatalf("expected 2 active IDs after removal, got %d", len(ids))

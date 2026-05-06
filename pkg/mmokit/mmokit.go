@@ -1,10 +1,6 @@
-// Package mmokit is a single-import facade for the MMO engine.
-// It re-exports types from all pkg/ sub-packages so that games (and the
-// internal game code) can use one import instead of 5-7 aliased ones.
-//
-// For ECS queries and custom systems, also import "github.com/mlange-42/ark/ecs"
-// since generic types like ecs.Map1[T] and ecs.Filter2[A,B] cannot be aliased.
 package mmokit
+
+// Package-level documentation lives in doc.go.
 
 import (
 	"context"
@@ -32,13 +28,6 @@ import (
 	"github.com/zenion/mmoserver/pkg/system"
 	"github.com/zenion/mmoserver/pkg/universe"
 )
-
-// ---------------------------------------------------------------------------
-// ECS
-// ---------------------------------------------------------------------------
-
-// Entity is a handle to an ECS entity in the Ark world.
-type Entity = ecs.Entity
 
 // ---------------------------------------------------------------------------
 // Components (pkg/component)
@@ -225,15 +214,6 @@ type StateTransition = engine.StateTransition
 // enters or exits a particular state.
 type StateCallbacks = engine.StateCallbacks
 
-// StateMask is a bitmask of PlayerState values (supports up to 32 states).
-// Internal — games use the .States(...) / .Active() builder methods on
-// InputBuilder rather than constructing masks directly.
-type StateMask = engine.StateMask
-
-// EnvelopeParser decodes raw bytes into (code uint32, payload []byte, error).
-// Internal — wired to ProtoEnvelopeParser by mmokit.init().
-type EnvelopeParser = engine.EnvelopeParser
-
 // ---------------------------------------------------------------------------
 // Universe (pkg/universe)
 // ---------------------------------------------------------------------------
@@ -301,6 +281,13 @@ type GameWorld = universe.GameWorld
 // Embed it in your game world struct to get working multi-node support out of the
 // box, including entity spawning, border replication, and cross-cell transfers.
 type Stage = universe.Stage
+
+// BroadcastEvent is one queued auto-broadcast event awaiting end-of-tick
+// dispatch. TypeID is the framework's reflect-codec type ID; Body is the
+// reflect-codec payload; Anchors are NetIDs whose positions drive the
+// AoI filter applied by the framework's network system at drain time.
+// See Stage.BroadcastQueue.
+type BroadcastEvent = universe.BroadcastEvent
 
 // WorldBase is a backward-compatibility alias for Stage. internal/game/ embeds
 // *mmokit.WorldBase; this alias keeps that compiling while the rename is in flight.
@@ -430,12 +417,8 @@ type TransferFrame = universe.TransferFrame
 type ComponentSlice = universe.ComponentSlice
 
 // CrossCellAction is a request sent to the authoritative node when a local entity
-// acts on a replica. The authoritative node processes it and returns an ActionResult.
+// acts on a replica. The authoritative node processes it.
 type CrossCellAction = universe.CrossCellAction
-
-// ActionResult is the response sent back to the originating node after a
-// CrossCellAction is processed, including success flag, payload, and side effects.
-type ActionResult = universe.ActionResult
 
 // ActionType is a game-defined uint16 identifier for a cross-cell action kind.
 type ActionType = universe.ActionType
@@ -453,20 +436,6 @@ type ComponentReplicator = universe.ComponentReplicator
 // mmokit.RegisterKind[T] from a typed component-bundle struct — game code
 // never constructs one directly.
 type EntityKindDef = universe.EntityKindDef
-
-// SideEffectCollector accumulates side effects during a cross-cell action execution.
-// Not thread-safe (only used on the game loop goroutine).
-type SideEffectCollector = universe.SideEffectCollector
-
-// SideEffectRegistry maps side effect types to their handlers on the receiving node.
-type SideEffectRegistry = universe.SideEffectRegistry
-
-// SideEffectHandler processes a single side effect type on the originating node
-// after receiving an ActionResult. The Handle closure captures typed game state.
-type SideEffectHandler = universe.SideEffectHandler
-
-// SideEffectType is a game-defined uint16 identifier for a side effect kind.
-type SideEffectType = universe.SideEffectType
 
 // ConsoleOpts provides game-specific console configuration for the Process.
 // All fields are optional (omit what your game doesn't need).
@@ -888,9 +857,6 @@ var (
 	// NewReplicationRegistry creates an empty registry for cross-cell component replication.
 	NewReplicationRegistry = universe.NewReplicationRegistry
 
-	// NewSideEffectRegistry creates an empty registry for cross-cell side effect handlers.
-	NewSideEffectRegistry = universe.NewSideEffectRegistry
-
 	// UnmarshalCollider deserializes a Collider from bytes.
 	UnmarshalCollider = universe.UnmarshalCollider
 
@@ -899,12 +865,6 @@ var (
 
 	// UnmarshalTransferFrame deserializes a TransferFrame from bytes.
 	UnmarshalTransferFrame = universe.UnmarshalTransferFrame
-
-	// MarshalSideEffects serializes a slice of side effects to bytes.
-	MarshalSideEffects = universe.MarshalSideEffects
-
-	// UnmarshalSideEffects deserializes side effects from bytes.
-	UnmarshalSideEffects = universe.UnmarshalSideEffects
 
 	// ParseCellID parses any of the supported cell-ID string formats
 	// (X_Y, dN_X_Y, cell_X_Y, cell_dN_X_Y) into a CellID.
@@ -1158,16 +1118,6 @@ func Peek[T any](q *engine.TickQueue) []T {
 	return engine.Peek[T](q)
 }
 
-// ProtoEnvelopeParser unmarshals an enginepb.ClientEvent envelope, returning
-// the event code and inner payload. Wired to engine.DefaultEnvelopeParser
-// by mmokit.init() so the per-cell input dispatcher can decode wire frames.
-func ProtoEnvelopeParser(raw []byte) (uint32, []byte, error) {
-	var evt enginepb.ClientEvent
-	if err := proto.Unmarshal(raw, &evt); err != nil {
-		return 0, nil, err
-	}
-	return evt.Code, evt.Data, nil
-}
 
 // NewNetworkSystem returns a SystemDef that creates a ReplicationSystem
 // with DefaultReplicationConfig pre-filled. Replicators are auto-discovered

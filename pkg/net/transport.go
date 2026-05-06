@@ -11,6 +11,10 @@ type Transport interface {
 	DrainInput() [][]byte
 	// DrainOpInput returns all queued operation messages (channel 0x01) and clears the queue.
 	DrainOpInput() [][]byte
+	// DrainClientInput returns all queued typed client-input messages
+	// (channel 0x02) and clears the queue. Frames are dispatched per-tick
+	// by the gateway path to mmokit.HandleClient handlers.
+	DrainClientInput() [][]byte
 	// InjectInput appends a message to the channel 0x00 input queue as if it
 	// had arrived from the client. Used by the inter-cell forwarding path to
 	// replay input on the destination cell after a handoff commit.
