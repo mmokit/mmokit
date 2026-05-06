@@ -1,5 +1,5 @@
 import type { ShipEntity } from "../../sdk/index.js";
-import { Equip, InventoryTransfer } from "../../sdk/index.js";
+import { EntityType, Equip, InventoryTransfer } from "../../sdk/index.js";
 import {
   ITEM_COLORS_CSS,
   DEFAULT_ITEM_COLOR,
@@ -10,8 +10,6 @@ import { SETTLEMENT_CURRENCY_ID, type GameState } from "../state";
 import { getCombat } from "../entity-accessors";
 import { ITEM_ABILITIES, type AbilityInfo } from "./ability-bar";
 import { needsRebuild } from "./memo";
-
-const KIND_STATION = 3;
 
 // Equipment slot constants (matches server EquipSlot enum for physical slots)
 const EQUIP_SLOT_WEAPON1 = 1;
@@ -697,7 +695,7 @@ export function updateStationPrompt(state: GameState): void {
 
   let nearStation = false;
   for (const [, ent] of state.entities) {
-    if (ent.current.entityType !== KIND_STATION) continue;
+    if (ent.current.entityType !== EntityType.Station) continue;
     const dx = myEntity.renderX - ent.renderX;
     const dy = myEntity.renderY - ent.renderY;
     if (Math.sqrt(dx * dx + dy * dy) < 400) {

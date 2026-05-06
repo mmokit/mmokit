@@ -68,10 +68,8 @@ export class Transport {
    * the server resolves typeID back to the registered Go type and decodes
    * the body via the same reflection codec used for broadcast events.
    *
-   * Plan 1 Phase 5 unified the typed-input channel with the event channel:
-   * inputs and broadcasts share 0x00 and disambiguate by typeID at the
-   * server-side dispatcher. Senders that still use 0x02 panic on the
-   * read pump.
+   * Inputs and server events both ride channel 0x00 — they're
+   * distinguished server-side by typeID via the typed dispatcher.
    */
   sendClientInput(typeID: number, body: Uint8Array): void {
     if (!this.ws || this.ws.readyState !== WebSocket.OPEN) return;

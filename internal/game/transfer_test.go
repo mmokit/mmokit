@@ -65,7 +65,7 @@ func TestFinishTransferSpawn_Asteroid(t *testing.T) {
 		&mmokit.Rotation{Angle: 1.0},
 		&mmokit.Collider{Radius: 2.0},
 		&mmokit.NetworkID{ID: 100},
-		&mmokit.EntityKind{Type: gamecomp.TypeAsteroid},
+		&mmokit.EntityKind{Type: gamecomp.KindAsteroid},
 	)
 	gw.Stage.RegisterLiveNetID(100, entity)
 	e := mmokit.EntityFromECS(gw.Stage, entity)
@@ -74,7 +74,7 @@ func TestFinishTransferSpawn_Asteroid(t *testing.T) {
 
 	frame := &mmokit.TransferFrame{
 		NetworkID:  100,
-		EntityType: gamecomp.TypeAsteroid,
+		EntityType: gamecomp.KindAsteroid,
 		CellX:      1,
 		CellY:      2,
 	}
@@ -110,7 +110,7 @@ func TestFinishTransferSpawn_Ship(t *testing.T) {
 		&mmokit.Rotation{Angle: 1.5},
 		&mmokit.Collider{Radius: 5},
 		&mmokit.NetworkID{ID: 200},
-		&mmokit.EntityKind{Type: gamecomp.TypeShip},
+		&mmokit.EntityKind{Type: gamecomp.KindShip},
 	)
 	gw.Stage.RegisterLiveNetID(200, entity)
 	e := mmokit.EntityFromECS(gw.Stage, entity)
@@ -127,7 +127,7 @@ func TestFinishTransferSpawn_Ship(t *testing.T) {
 
 	frame := &mmokit.TransferFrame{
 		NetworkID:  200,
-		EntityType: gamecomp.TypeShip,
+		EntityType: gamecomp.KindShip,
 		ConnID:     connID,
 		Username:   "testplayer",
 	}
@@ -193,7 +193,7 @@ func TestFinishTransferSpawn_LootCrate(t *testing.T) {
 		&mmokit.Rotation{},
 		&mmokit.Collider{Radius: 0.4},
 		&mmokit.NetworkID{ID: 300},
-		&mmokit.EntityKind{Type: gamecomp.TypeLootCrate},
+		&mmokit.EntityKind{Type: gamecomp.KindLootCrate},
 	)
 	gw.Stage.RegisterLiveNetID(300, entity)
 	e := mmokit.EntityFromECS(gw.Stage, entity)
@@ -208,7 +208,7 @@ func TestFinishTransferSpawn_LootCrate(t *testing.T) {
 
 	frame := &mmokit.TransferFrame{
 		NetworkID:  300,
-		EntityType: gamecomp.TypeLootCrate,
+		EntityType: gamecomp.KindLootCrate,
 	}
 
 	// Real transfer path auto-adds kind components before FinishTransferSpawn.
@@ -219,8 +219,8 @@ func TestFinishTransferSpawn_LootCrate(t *testing.T) {
 		t.Fatal("entity should be alive")
 	}
 	kind := mmokit.Get[mmokit.EntityKind](e)
-	if kind.Type != gamecomp.TypeLootCrate {
-		t.Errorf("EntityKind: got %d, want %d", kind.Type, gamecomp.TypeLootCrate)
+	if kind.Type != gamecomp.KindLootCrate {
+		t.Errorf("EntityKind: got %d, want %d", kind.Type, gamecomp.KindLootCrate)
 	}
 	lt := mmokit.Get[mmokit.Lifetime](e)
 	if lt == nil {

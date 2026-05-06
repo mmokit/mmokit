@@ -3,12 +3,7 @@ import { RESOURCE_COLORS_HEX } from "../constants";
 import type { GameState } from "../state";
 import { getAsteroid } from "../entity-accessors";
 import { zoom } from "../view";
-
-const KIND_SHIP = 0;
-const KIND_ASTEROID = 1;
-const KIND_STATION = 3;
-const KIND_LOOT_CRATE = 4;
-const KIND_NPC = 5;
+import { EntityType } from "../../sdk/index.js";
 
 // Fraction of the minimap occupied by the "what you can see on screen"
 // rectangle at max fit (so the long axis of the viewport reaches this
@@ -94,16 +89,16 @@ export class Minimap {
           .fill({ color: 0x00ff00, alpha: 1.0 });
       } else {
         switch (ent.current.entityType) {
-          case KIND_SHIP:
+          case EntityType.Ship:
             this.gfx.rect(ex - 2, ey - 2, 4, 4).fill({ color: 0x4488ff });
             break;
-          case KIND_ASTEROID: {
+          case EntityType.Asteroid: {
             const resColor = RESOURCE_COLORS_HEX[getAsteroid(ent)?.itemID ?? 0] ?? 0xaa8866;
             const dotSize = Math.max(2, Math.min((ent.current.radius || 0.7) * scale * 0.5, 4));
             this.gfx.circle(ex, ey, dotSize).fill({ color: resColor });
             break;
           }
-          case KIND_STATION:
+          case EntityType.Station:
             this.gfx
               .circle(ex, ey, 5)
               .stroke({ color: 0x88ff88, width: 1 });
@@ -111,10 +106,10 @@ export class Minimap {
               .circle(ex, ey, 2)
               .fill({ color: 0x88ff88 });
             break;
-          case KIND_LOOT_CRATE:
+          case EntityType.LootCrate:
             this.gfx.rect(ex - 2, ey - 2, 4, 4).fill({ color: 0xffdd00 });
             break;
-          case KIND_NPC:
+          case EntityType.NPC:
             this.gfx.rect(ex - 2, ey - 2, 4, 4).fill({ color: 0xff4444 });
             break;
         }

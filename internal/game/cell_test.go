@@ -45,7 +45,7 @@ func TestTickGhosts_Expiry(t *testing.T) {
 		&comp.Rotation{},
 		&comp.Collider{Radius: 1},
 		&comp.NetworkID{ID: 123},
-		&comp.EntityKind{Type: gamecomp.TypeShip},
+		&comp.EntityKind{Type: gamecomp.KindShip},
 	)
 	gw.Stage.RegisterLiveNetID(123, entity)
 	mmokit.Set(mmokit.EntityFromECS(gw.Stage, entity), comp.Ghost{})
@@ -74,7 +74,7 @@ func TestTickTransferCooldowns_Expiry(t *testing.T) {
 		&comp.Rotation{},
 		&comp.Collider{Radius: 1},
 		&comp.NetworkID{ID: 456},
-		&comp.EntityKind{Type: gamecomp.TypeShip},
+		&comp.EntityKind{Type: gamecomp.KindShip},
 	)
 	gw.Stage.RegisterLiveNetID(456, entity)
 	e := mmokit.EntityFromECS(gw.Stage, entity)

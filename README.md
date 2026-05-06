@@ -74,6 +74,4 @@ cd examples/4node-basic && just distributed  # 4-process tmux: coord + 2 hosts +
 Protobuf schemas live in `proto/`. Running `just proto` (or `buf generate`) produces:
 
 - `gen/go/enginepb/` — Go engine protocol
-- `gen/go/gamepb/` — Go game-specific messages
-- `gen/es/enginepb/` — TypeScript engine protocol (ES modules)
-- `gen/csharp/` — Unity client
+- `gen/go/meshpb/` — Go server-internal mesh protocol

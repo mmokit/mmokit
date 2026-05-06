@@ -15,7 +15,7 @@ import (
 func (gw *GameWorld) FinishTransferSpawn(handle ecs.Entity, frame *mmokit.TransferFrame) {
 	entity := mmokit.EntityFromECS(gw.Stage, handle)
 	switch frame.EntityType {
-	case gamecomp.TypeShip:
+	case gamecomp.KindShip:
 		// Override collider to match game config
 		if col := mmokit.Get[mmokit.Collider](entity); col != nil {
 			col.Radius = boundingRadius(gw.Config.ShipWidth, gw.Config.ShipHeight)
@@ -26,7 +26,7 @@ func (gw *GameWorld) FinishTransferSpawn(handle ecs.Entity, frame *mmokit.Transf
 		}
 		gw.ApplyEquipmentStats(entity)
 
-	case gamecomp.TypeNPC:
+	case gamecomp.KindNPC:
 		if col := mmokit.Get[mmokit.Collider](entity); col != nil {
 			col.Radius = boundingRadius(gw.Config.NpcWidth, gw.Config.NpcHeight)
 			col.Width = gw.Config.NpcWidth

@@ -20,9 +20,9 @@ The web test client is served at `http://localhost:8080` automatically.
 
 ## Architecture
 
-2D space MMORPG server in Go (`github.com/zenion/mmoserver`). Server-authoritative — the Unity client (and web canvas test client) are dumb renderers. Uses a decoupled engine (`pkg/`) with ECS, WebSocket + UDP transport, protobuf serialization, and multi-cell server meshing. Game logic lives in `internal/game/` where `GameWorld` embeds `*mmokit.Stage`.
+2D space MMORPG server in Go (`github.com/zenion/mmoserver`). Server-authoritative — the web client is a dumb renderer. Uses a decoupled engine (`pkg/`) with ECS, WebSocket + UDP transport, a typed reflection codec for the client-facing wire stack, and multi-cell server meshing. Game logic lives in `internal/game/` where `GameWorld` embeds `*mmokit.Stage`.
 
-The `pkg/` layer is a **generic, reusable 2D game engine** with zero imports from `internal/`. It may import `gen/go/enginepb/` (engine proto) but never game-specific protos (`gen/go/gamepb/`, `gen/go/basicpb/`, etc.).
+The `pkg/` layer is a **generic, reusable 2D game engine** with zero imports from `internal/`. The only protobuf in the codebase is `gen/go/meshpb/` (server-internal mesh data plane); client-facing wire frames are typed reflection-codec, not proto.
 
 ### Package Layout
 
@@ -316,15 +316,10 @@ Source of truth: proto files per package. Run `buf generate` (or `just proto`) t
 
 - `proto/enginepb/engine.proto` — generic engine protocol (envelopes, core events, base messages)
   - `gen/go/enginepb/` — Go (package `enginepb`, import as `enginepb "github.com/zenion/mmoserver/gen/go/enginepb"`)
-- `proto/gamepb/game.proto` — game-specific messages (imports engine.proto)
-  - `gen/go/gamepb/` — Go (package `gamepb`, import as `gamepb "github.com/zenion/mmoserver/gen/go/gamepb"`)
 - `proto/meshpb/mesh.proto` — server-internal mesh data plane: `MeshData` (bidi stream of `MeshFrame` envelopes carrying border frames, single-shot `Handoff` messages, and action traffic between hosts) and `MeshControl` (coordinator ↔ host control plane; carries the `CoordTimeSync` ClusterClock broadcast). Never consumed by clients.
   - `gen/go/meshpb/` — Go (package `meshpb`, import as `meshpb "github.com/zenion/mmoserver/gen/go/meshpb"`)
-- `gen/csharp/` — Unity client (Engine.cs + Game.cs)
-- `gen/es/enginepb/` + `gen/es/gamepb/` — Web client (ES modules via `@bufbuild/protobuf`)
 
-Engine event codes use `enginepb.ClientEventCode_CE_*` / `enginepb.ServerEventCode_SE_*` (values 0-15).
-Game event codes use `gamepb.GameClientEventCode_GCE_*` / `gamepb.GameServerEventCode_GSE_*` (values start at 100+ to avoid colliding with engine codes).
+Engine event codes use `enginepb.ClientEventCode_CE_*` / `enginepb.ServerEventCode_SE_*` (values 0-15). Game-specific event codes are declared as native Go consts in `internal/game/` (values start at 100+ to avoid colliding with engine codes); the web client receives them via the sdkgen-emitted TS SDK.
 
 ### Distributed Command System (`pkg/cmdsys/`)
 
@@ -382,7 +377,7 @@ All tunable game parameters are in `internal/game/config.go`. The `GameConfig` s
 
 ### Web Client
 
-`web-pixi/` — TypeScript/PixiJS game client built with Vite. Run via `just dev` during development. Uses protobuf for server communication. Interpolates between 20Hz server ticks for smooth rendering. Imports from `@gen/engine_pb.js` (engine types) and `@gen/game_pb.js` (game types).
+`web-pixi/` — TypeScript/PixiJS game client built with Vite. Run via `just dev` during development. Imports typed wire-format classes (events, operations, entity types) from the generated SDK at `web-pixi/sdk/`. Interpolates between 20Hz server ticks for smooth rendering.
 
 ### Debug Logging
 
@@ -420,7 +415,7 @@ cfg.Protocol = mmokit.NewProtocol("name").
 
 `SE_SERVER_CONFIG` and `SE_DELTA_WORLD_UPDATE` are auto-registered by `NewProtocol` — every game gets them for free.
 
-Engine intercepts the `--dump-schema` flag in `Process.Start` after `Build()` returns, calls `Protocol.AssembleFromProcess(*Process)` to harvest router/op/entity-kind metadata from the populated runtime registries, writes the JSON to stdout, and exits. Games never declare or handle `--dump-schema` themselves. The codegen produces a typed client class, entity interfaces, binary delta decoder, and WebSocket transport — all importing directly from `gen/es/` proto types.
+Engine intercepts the `--dump-schema` flag in `Process.Start` after `Build()` returns, calls `Protocol.AssembleFromProcess(*Process)` to harvest router/op/entity-kind metadata from the populated runtime registries, writes the JSON to stdout, and exits. Games never declare or handle `--dump-schema` themselves. The codegen produces a typed client class, entity interfaces, binary delta decoder, and WebSocket transport — all self-contained in the SDK output directory.
 
 ### Examples
 

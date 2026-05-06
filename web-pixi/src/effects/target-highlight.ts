@@ -3,11 +3,7 @@ import { RESOURCE_COLORS_HEX, RESOURCE_NAMES } from "../constants";
 import { px } from "../view";
 import type { GameState } from "../state";
 import { getAsteroid } from "../entity-accessors";
-
-const KIND_SHIP = 0;
-const KIND_ASTEROID = 1;
-const KIND_LOOT_CRATE = 4;
-const KIND_NPC = 5;
+import { EntityType } from "../../sdk/index.js";
 
 export class TargetHighlight {
   private container: Container;
@@ -49,14 +45,14 @@ export class TargetHighlight {
 
     this.ring.clear();
 
-    if (kind === KIND_SHIP || kind === KIND_NPC) {
+    if (kind === EntityType.Ship || kind === EntityType.NPC) {
       // Combat target — tight ring around hull
-      const color = kind === KIND_NPC ? 0xff4444 : 0x44aaff;
+      const color = kind === EntityType.NPC ? 0xff4444 : 0x44aaff;
       this.ring.circle(0, 0, tr).stroke({ color, width: px(2), alpha: 0.8 });
 
       this.label.visible = false;
       this.sublabel.visible = false;
-    } else if (kind === KIND_LOOT_CRATE) {
+    } else if (kind === EntityType.LootCrate) {
       // Yellow ring + inline item preview from the replicated inventory var-tail.
       this.ring.circle(0, 0, tr).stroke({ color: 0xffdd00, width: px(2), alpha: 0.8 });
       this.label.visible = true;
@@ -78,7 +74,7 @@ export class TargetHighlight {
       } else {
         this.sublabel.visible = false;
       }
-    } else if (kind === KIND_ASTEROID) {
+    } else if (kind === EntityType.Asteroid) {
       const asteroid = getAsteroid(tgt);
       const resType = asteroid?.itemID || 0;
       const resColor = RESOURCE_COLORS_HEX[resType] || 0xaa8866;

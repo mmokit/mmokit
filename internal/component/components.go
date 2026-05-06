@@ -2,7 +2,6 @@ package component
 
 import (
 	"github.com/mlange-42/ark/ecs"
-	gamepb "github.com/zenion/mmoserver/gen/go/gamepb"
 	"github.com/zenion/mmoserver/internal/item"
 )
 
@@ -12,13 +11,17 @@ const (
 	LayerTerrain uint8 = 2
 )
 
-// Entity types (derived from protobuf enums)
+// Entity kinds — wire byte that identifies an entity's kind on the
+// replication channel. Names match the second arg passed to
+// mmokit.RegisterKind in internal/game/entity_kinds.go; sdkgen emits a
+// matching TypeScript const block from the same kind registry, so the
+// authoritative source of truth is the RegisterKind call sites.
 const (
-	TypeShip      = uint8(gamepb.EntityType_ENTITY_TYPE_SHIP)
-	TypeAsteroid  = uint8(gamepb.EntityType_ENTITY_TYPE_ASTEROID)
-	TypeStation   = uint8(gamepb.EntityType_ENTITY_TYPE_STATION)
-	TypeLootCrate = uint8(gamepb.EntityType_ENTITY_TYPE_LOOT_CRATE)
-	TypeNPC       = uint8(gamepb.EntityType_ENTITY_TYPE_NPC)
+	KindShip      uint8 = iota // 0
+	KindAsteroid               // 1
+	KindStation                // 2
+	KindLootCrate              // 3
+	KindNPC                    // 4
 )
 
 // Health represents hit points.

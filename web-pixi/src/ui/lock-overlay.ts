@@ -1,6 +1,7 @@
 import { RESOURCE_COLORS_CSS, RESOURCE_NAMES } from "../constants";
 import type { GameState } from "../state";
 import { getCombat, getAsteroid, getShip } from "../entity-accessors";
+import { EntityType } from "../../sdk/index.js";
 
 let overlayEl: HTMLElement | null = null;
 let nameEl: HTMLElement | null = null;
@@ -159,7 +160,7 @@ export function updateLockOverlay(state: GameState): void {
 
   overlayEl.style.display = "block";
   const tgt = state.entities.get(state.lockTargetId)!;
-  const isAsteroid = tgt.current.entityType === 1; // ASTEROID
+  const isAsteroid = tgt.current.entityType === EntityType.Asteroid;
 
   // Lock status
   const progress = state.lockProgress;
@@ -192,7 +193,7 @@ export function updateLockOverlay(state: GameState): void {
     hpLabelEl!.style.color = resColor;
   } else {
     // Ship / NPC
-    const isNpc = tgt.current.entityType === 5; // NPC
+    const isNpc = tgt.current.entityType === EntityType.NPC;
     const shipData = getShip(tgt);
     const name = shipData?.name || (isNpc ? "NPC" : "Ship");
     nameEl!.textContent = name;

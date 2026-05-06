@@ -60,10 +60,10 @@ export interface AsteroidEntity {
   remaining: number;
 }
 
-/** Entity kind 3. */
+/** Entity kind 2. */
 export interface StationEntity {
   netID: number;
-  entityType: 3;
+  entityType: 2;
   /**
    * Cluster-clock stamp (Unix ms) from the authoritative producer at
    * the moment this state was emitted. Preserves the producer's
@@ -80,10 +80,10 @@ export interface StationEntity {
   height: number;
 }
 
-/** Entity kind 4. */
+/** Entity kind 3. */
 export interface LootCrateEntity {
   netID: number;
-  entityType: 4;
+  entityType: 3;
   /**
    * Cluster-clock stamp (Unix ms) from the authoritative producer at
    * the moment this state was emitted. Preserves the producer's
@@ -107,10 +107,10 @@ export interface LootCrateItemsItem {
   quantity: number;
 }
 
-/** Entity kind 5. */
+/** Entity kind 4. */
 export interface NPCEntity {
   netID: number;
-  entityType: 5;
+  entityType: 4;
   /**
    * Cluster-clock stamp (Unix ms) from the authoritative producer at
    * the moment this state was emitted. Preserves the producer's

@@ -11,8 +11,8 @@ import (
 	"syscall"
 	"time"
 
-	gamepb "github.com/zenion/mmoserver/gen/go/gamepb"
 	"github.com/zenion/mmoserver/internal/bot"
+	gamecomp "github.com/zenion/mmoserver/internal/component"
 )
 
 const (
@@ -189,7 +189,7 @@ func runMinerAI(ctx context.Context, b *bot.Bot, wg *sync.WaitGroup) {
 // pickRandomAsteroid picks a random asteroid with resources from all visible ones.
 func pickRandomAsteroid(b *bot.Bot) *bot.EntitySnapshot {
 	asteroids := b.FindAll(func(e *bot.EntitySnapshot) bool {
-		return e.Type == gamepb.EntityType_ENTITY_TYPE_ASTEROID && e.ResourceRemaining > 0
+		return e.Type == gamecomp.KindAsteroid && e.ResourceRemaining > 0
 	})
 	if len(asteroids) == 0 {
 		return nil

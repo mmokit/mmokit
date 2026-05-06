@@ -20,7 +20,7 @@ type LootCrateBundle struct {
 func (gw *GameWorld) SpawnLootCrate(x, y float32, items map[uint32]int32) {
 	handle := gw.SpawnEntity(
 		mmokit.Position{X: x, Y: y},
-		mmokit.WithEntityKind(gamecomp.TypeLootCrate),
+		mmokit.WithEntityKind(gamecomp.KindLootCrate),
 		mmokit.WithCollider(gw.Config.LootCrateRadius),
 		mmokit.WithComponents(),
 	)

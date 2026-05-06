@@ -8,14 +8,7 @@ import { createProjectileDisplay } from "./projectile";
 import { createStationDisplay } from "./station";
 import { createLootCrateDisplay } from "./loot-crate";
 import { createNpcDisplay } from "./npc";
-
-// Entity kind constants matching server-side component.Type* (see
-// internal/component/components.go).
-const KIND_SHIP = 0;
-const KIND_ASTEROID = 1;
-const KIND_STATION = 3;
-const KIND_LOOT_CRATE = 4;
-const KIND_NPC = 5;
+import { EntityType } from "../../sdk/index.js";
 
 export class EntityManager {
   private displayObjects = new Map<number, EntityDisplayObject>();
@@ -60,7 +53,7 @@ export class EntityManager {
       // Update position/rotation
       obj.container.position.set(ent.renderX, ent.renderY);
       // Loot crates handle their own rotation in update()
-      if (ent.current.entityType !== KIND_LOOT_CRATE) {
+      if (ent.current.entityType !== EntityType.LootCrate) {
         obj.container.rotation = ent.renderRot;
       }
 
@@ -72,17 +65,17 @@ export class EntityManager {
   private createDisplayObject(ent: ClientEntity): EntityDisplayObject {
     const e = ent.current;
     switch (e.entityType) {
-      case KIND_SHIP:
+      case EntityType.Ship:
         return createShipDisplay();
-      case KIND_ASTEROID: {
+      case EntityType.Asteroid: {
         const asteroid = getAsteroid(ent);
         return createAsteroidDisplay(asteroid?.itemID ?? 0, e.radius || 0.7);
       }
-      case KIND_STATION:
+      case EntityType.Station:
         return createStationDisplay(e.radius || 5);
-      case KIND_LOOT_CRATE:
+      case EntityType.LootCrate:
         return createLootCrateDisplay(e.radius || 0.4);
-      case KIND_NPC:
+      case EntityType.NPC:
         return createNpcDisplay();
     }
     // Unreachable for known SDK entity kinds — fall back to projectile-style dot.

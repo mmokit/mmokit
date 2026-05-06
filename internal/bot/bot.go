@@ -13,7 +13,7 @@ import (
 
 	"github.com/coder/websocket"
 
-	gamepb "github.com/zenion/mmoserver/gen/go/gamepb"
+	gamecomp "github.com/zenion/mmoserver/internal/component"
 	"github.com/zenion/mmoserver/internal/game"
 	"github.com/zenion/mmoserver/pkg/mmokit"
 	pkgnet "github.com/zenion/mmoserver/pkg/net"
@@ -360,7 +360,7 @@ func (b *Bot) FindNearest(pred func(*EntitySnapshot) bool) *EntitySnapshot {
 // FindNearestAsteroid finds the nearest asteroid with resources remaining.
 func (b *Bot) FindNearestAsteroid() *EntitySnapshot {
 	return b.FindNearest(func(e *EntitySnapshot) bool {
-		return e.Type == gamepb.EntityType_ENTITY_TYPE_ASTEROID && e.ResourceRemaining > 0
+		return e.Type == gamecomp.KindAsteroid && e.ResourceRemaining > 0
 	})
 }
 
@@ -383,7 +383,7 @@ func (b *Bot) FindAll(pred func(*EntitySnapshot) bool) []*EntitySnapshot {
 // FindNearestStation finds the nearest station entity.
 func (b *Bot) FindNearestStation() *EntitySnapshot {
 	return b.FindNearest(func(e *EntitySnapshot) bool {
-		return e.Type == gamepb.EntityType_ENTITY_TYPE_STATION
+		return e.Type == gamecomp.KindStation
 	})
 }
 

@@ -60,13 +60,13 @@ func (s *TargetLockSystem) Update(dt float32) {
 			// Only lock onto ships, NPCs, and asteroids
 			if kindComp := mmokit.Get[mmokit.EntityKind](targetE); kindComp != nil {
 				kind := kindComp.Type
-				if kind != gamecomp.TypeShip && kind != gamecomp.TypeNPC && kind != gamecomp.TypeAsteroid {
+				if kind != gamecomp.KindShip && kind != gamecomp.KindNPC && kind != gamecomp.KindAsteroid {
 					gw.eng.Log.Log(CatCombatLock, "lock: BREAK - target type %d not lockable", kind)
 					s.breakLock(lock)
 					continue
 				}
 				// Asteroids lock faster
-				if kind == gamecomp.TypeAsteroid {
+				if kind == gamecomp.KindAsteroid {
 					lock.LockTime = gw.Config.MiningLockTime
 				} else {
 					lock.LockTime = gw.Config.LockOnTime
