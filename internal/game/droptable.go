@@ -27,7 +27,7 @@ var NPCDropTables map[uint8]*DropTable
 // InitDropTables registers the default drop tables for NPC types.
 func InitDropTables() {
 	NPCDropTables = map[uint8]*DropTable{
-		component.TypeNPC: {
+		component.KindNPC: {
 			Name: "npc_default",
 			Entries: []DropEntry{
 				{

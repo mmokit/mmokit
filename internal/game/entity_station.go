@@ -30,7 +30,7 @@ const (
 func (gw *GameWorld) SpawnStation() {
 	handle := gw.SpawnEntity(
 		mmokit.Position{X: StationLocalX, Y: StationLocalY},
-		mmokit.WithEntityKind(gamecomp.TypeStation),
+		mmokit.WithEntityKind(gamecomp.KindStation),
 		mmokit.WithCollider(gw.Config.StationRadius),
 		mmokit.WithComponents(),
 	)

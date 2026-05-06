@@ -7,7 +7,7 @@ import (
 	"os"
 	"reflect"
 
-	gamepb "github.com/zenion/mmoserver/gen/go/gamepb"
+	gamecomp "github.com/zenion/mmoserver/internal/component"
 	"github.com/zenion/mmoserver/internal/game"
 	"github.com/zenion/mmoserver/pkg/mmokit"
 	pkguniverse "github.com/zenion/mmoserver/pkg/universe"
@@ -243,7 +243,7 @@ func (b *Bot) applyWorldDelta(body []byte) {
 	// adopt its ID if we don't have one yet.
 	if b.myEntityID == 0 {
 		for id, e := range ws.Entities {
-			if e.Type == gamepb.EntityType_ENTITY_TYPE_SHIP && e.PilotName == b.name {
+			if e.Type == gamecomp.KindShip && e.PilotName == b.name {
 				b.myEntityID = id
 				b.alive = true
 				select {

@@ -71,7 +71,7 @@ func (gw *GameWorld) spawnAsteroidWithItem(x, y float32, itemID uint32) {
 
 	handle := gw.SpawnEntity(
 		mmokit.Position{X: x, Y: y},
-		mmokit.WithEntityKind(gamecomp.TypeAsteroid),
+		mmokit.WithEntityKind(gamecomp.KindAsteroid),
 		mmokit.WithCollider(radius),
 		mmokit.WithRotation(rand.Float32()*2*math.Pi),
 		mmokit.WithComponents(),

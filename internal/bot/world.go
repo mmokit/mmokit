@@ -4,17 +4,8 @@ import (
 	"encoding/binary"
 	"math"
 
-	gamepb "github.com/zenion/mmoserver/gen/go/gamepb"
+	gamecomp "github.com/zenion/mmoserver/internal/component"
 	"github.com/zenion/mmoserver/pkg/quantize"
-)
-
-// Entity type constants (match internal/component and gamepb.EntityType).
-const (
-	typeShip      = uint8(gamepb.EntityType_ENTITY_TYPE_SHIP)
-	typeAsteroid  = uint8(gamepb.EntityType_ENTITY_TYPE_ASTEROID)
-	typeStation   = uint8(gamepb.EntityType_ENTITY_TYPE_STATION)
-	typeLootCrate = uint8(gamepb.EntityType_ENTITY_TYPE_LOOT_CRATE)
-	typeNPC       = uint8(gamepb.EntityType_ENTITY_TYPE_NPC)
 )
 
 // Quantization scales — must match server nethandler_shared.go.
@@ -55,7 +46,7 @@ type InventoryItem struct {
 // EntitySnapshot holds a single entity's state from a world update.
 type EntitySnapshot struct {
 	ID                uint32
-	Type              gamepb.EntityType
+	Type              uint8
 	PilotName         string
 	X, Y              float32
 	VX, VY            float32
@@ -123,15 +114,15 @@ func newDeltaDecoders() *deltaDecoders {
 
 func (d *deltaDecoders) forType(entityType uint8) *quantize.DeltaEncoder {
 	switch entityType {
-	case typeShip:
+	case gamecomp.KindShip:
 		return d.ship
-	case typeNPC:
+	case gamecomp.KindNPC:
 		return d.npc
-	case typeAsteroid:
+	case gamecomp.KindAsteroid:
 		return d.asteroid
-	case typeStation:
+	case gamecomp.KindStation:
 		return d.station
-	case typeLootCrate:
+	case gamecomp.KindLootCrate:
 		return d.lootCrate
 	default:
 		return nil
@@ -235,7 +226,7 @@ func decodeSnapshot(netID uint32, entityType uint8, snap []byte) *EntitySnapshot
 
 	es := &EntitySnapshot{
 		ID:               netID,
-		Type:             gamepb.EntityType(entityType),
+		Type:             entityType,
 		X:                x,
 		Y:                y,
 		VX:               vx,
@@ -247,14 +238,14 @@ func decodeSnapshot(netID uint32, entityType uint8, snap []byte) *EntitySnapshot
 	}
 
 	switch entityType {
-	case typeShip, typeNPC:
+	case gamecomp.KindShip, gamecomp.KindNPC:
 		// Combat fields: healthCur(2), healthMax(2), shieldCur(2), shieldMax(2)
 		es.Health = float32(r.Uint16())
 		es.MaxHealth = float32(r.Uint16())
 		es.Shield = float32(r.Uint16())
 		es.MaxShield = float32(r.Uint16())
 
-		if entityType == typeShip {
+		if entityType == gamecomp.KindShip {
 			// Mining: flags(1), miningTargetID(4), combatTargetID(4)
 			flags := r.Uint8()
 			es.MiningActive = flags != 0
@@ -263,11 +254,11 @@ func decodeSnapshot(netID uint32, entityType uint8, snap []byte) *EntitySnapshot
 			_ = r.Uint32() // combatTargetID
 		}
 
-	case typeAsteroid:
+	case gamecomp.KindAsteroid:
 		es.ItemID = r.Uint32()
 		es.ResourceRemaining = r.Float32()
 
-	case typeLootCrate:
+	case gamecomp.KindLootCrate:
 		if r.Remaining() >= 2 {
 			tailLen := int(r.Uint16())
 			if tailLen > 0 && r.Remaining() >= 1 {

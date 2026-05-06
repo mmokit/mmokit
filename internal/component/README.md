@@ -7,22 +7,21 @@ All ECS component types for the space MMO. These are pure data structs with no m
 Bitmask constants for filtering which entities can collide:
 
 ```text
-LayerPlayer     = 1
-LayerTerrain    = 2
-LayerProjectile = 4
+LayerPlayer  = 1
+LayerTerrain = 2
 ```
 
-The collision matrix (defined in DamageSystem) determines interactions:
+Players collide with Terrain (bounce).
 
-- Players collide with Terrain (bounce)
-- Projectiles collide with Players and Terrain (damage/remove)
+## Entity Kinds
 
-## Entity Types
-
-Derived from protobuf enums so client and server agree on values:
+Wire bytes that identify an entity's kind on the replication channel.
+Names match the second arg passed to `mmokit.RegisterKind` in
+`internal/game/entity_kinds.go`; sdkgen emits a matching TypeScript
+const block from the same kind registry.
 
 ```text
-TypeShip, TypeAsteroid, TypeProjectile, TypeStation, TypeLootCrate
+KindShip, KindAsteroid, KindStation, KindLootCrate, KindNPC
 ```
 
 ## Components
@@ -54,9 +53,6 @@ TypeShip, TypeAsteroid, TypeProjectile, TypeStation, TypeLootCrate
 |-----------|--------|-------------|
 | `Health` | `Current, Max float32` | Hit points |
 | `Shield` | `Current, Max, RegenRate, RegenDelay, DamageCooldown float32` | Shield with delayed regen |
-| `Weapon` | `Damage, FireRate, Speed, CooldownLeft float32` | Ship weapon stats |
-| `Projectile` | `Damage float32` | Marks entity as projectile |
-| `Owner` | `Entity ecs.Entity` | Links projectile to its creator |
 
 ### Ship
 

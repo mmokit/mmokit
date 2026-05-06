@@ -10,8 +10,8 @@ import (
 	"syscall"
 	"time"
 
-	gamepb "github.com/zenion/mmoserver/gen/go/gamepb"
 	"github.com/zenion/mmoserver/internal/bot"
+	gamecomp "github.com/zenion/mmoserver/internal/component"
 )
 
 func runDuel(addr string, count int) {
@@ -76,7 +76,7 @@ func runFighterAI(ctx context.Context, b *bot.Bot, wg *sync.WaitGroup) {
 
 		// Find nearest other ship
 		target := b.FindNearest(func(e *bot.EntitySnapshot) bool {
-			return e.Type == gamepb.EntityType_ENTITY_TYPE_SHIP && e.PilotName != b.Name()
+			return e.Type == gamecomp.KindShip && e.PilotName != b.Name()
 		})
 		if target == nil {
 			continue

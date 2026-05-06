@@ -98,7 +98,7 @@ func (gw *GameWorld) SpawnPlayer(s *mmokit.PlayerSession) {
 
 	handle := gw.SpawnEntity(
 		mmokit.Position{X: x, Y: y},
-		mmokit.WithEntityKind(gamecomp.TypeShip),
+		mmokit.WithEntityKind(gamecomp.KindShip),
 		mmokit.WithCollider(br),
 		mmokit.WithRotation(0),  // ShipDynamicsSystem reads Rotation for turn-rate steering
 		mmokit.WithComponents(), // auto-adds all registered ship components
