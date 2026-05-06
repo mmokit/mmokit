@@ -1,8 +1,4 @@
 import { defineConfig } from "vite";
-import path from "path";
-import { fileURLToPath } from "url";
-
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 export default defineConfig({
   server: {
@@ -25,9 +21,6 @@ export default defineConfig({
     },
   },
   resolve: {
-    alias: {
-      "@gen/game_pb.js": path.resolve(__dirname, "../gen/es/gamepb/game_pb.js"),
-    },
     dedupe: ["@bufbuild/protobuf"],
   },
 });

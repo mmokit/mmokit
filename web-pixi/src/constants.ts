@@ -1,4 +1,4 @@
-import { EntityType } from "@gen/game_pb.js";
+import { EntityType } from "../sdk/index.js";
 
 export const TICK_INTERVAL = 50; // 20Hz = 50ms
 export const CELL_SIZE = 8192; // must match pkg/coords CellSize
@@ -7,10 +7,9 @@ export const MAX_THRUSTER_PARTICLES = 20;
 export const TOAST_DURATION = 3000;
 
 export const ENTITY_COLORS: Record<number, number> = {
-  [EntityType.SHIP]: 0x44aaff,
-  [EntityType.ASTEROID]: 0xaa8866,
-  [EntityType.PROJECTILE]: 0xffff44,
-  [EntityType.STATION]: 0x88ff88,
+  [EntityType.Ship]: 0x44aaff,
+  [EntityType.Asteroid]: 0xaa8866,
+  [EntityType.Station]: 0x88ff88,
   [EntityType.NPC]: 0xff4444,
 };
 
