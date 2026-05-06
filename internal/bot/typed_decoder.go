@@ -3,6 +3,7 @@ package bot
 import (
 	"encoding/binary"
 	"log"
+	"os"
 	"reflect"
 
 	gamepb "github.com/zenion/mmoserver/gen/go/gamepb"
@@ -10,6 +11,11 @@ import (
 	"github.com/zenion/mmoserver/pkg/mmokit"
 	pkguniverse "github.com/zenion/mmoserver/pkg/universe"
 )
+
+// botDebug enables verbose per-frame logging when BOT_DEBUG=1 is set.
+// Off by default — bots run thousands of frames per second under load
+// tests and even per-tick logs flood quickly.
+var botDebug = os.Getenv("BOT_DEBUG") == "1"
 
 // typeID lookups for the events the bot consumes. Computed once per
 // process at package init from FNV-1a(reflect.Type.String()) — the
@@ -37,21 +43,32 @@ var (
 func (b *Bot) decodeTypedEventFrame(payload []byte) {
 	const headerLen = 8
 	off := 0
+	if botDebug {
+		dump := payload
+		if len(dump) > 64 {
+			dump = dump[:64]
+		}
+		log.Printf("[bot:%s] DEBUG event frame len=%d hex=% x", b.name, len(payload), dump)
+	}
 	for off+headerLen <= len(payload) {
 		typeID := binary.LittleEndian.Uint32(payload[off : off+4])
 		bodyLen := binary.LittleEndian.Uint32(payload[off+4 : off+8])
 		off += headerLen
 		if int(bodyLen) > len(payload)-off {
-			log.Printf("[bot:%s] typed-event frame truncated typeID=%#x bodyLen=%d remaining=%d",
-				b.name, typeID, bodyLen, len(payload)-off)
+			log.Printf("[bot:%s] typed-event frame truncated typeID=%#x bodyLen=%d remaining=%d totalLen=%d",
+				b.name, typeID, bodyLen, len(payload)-off, len(payload))
 			return
 		}
 		body := payload[off : off+int(bodyLen)]
 		off += int(bodyLen)
+		if botDebug {
+			log.Printf("[bot:%s] DEBUG entry typeID=%#x bodyLen=%d", b.name, typeID, bodyLen)
+		}
 		b.dispatchTypedEvent(typeID, body)
 	}
 	if off != len(payload) {
-		log.Printf("[bot:%s] typed-event frame trailing bytes: remaining=%d", b.name, len(payload)-off)
+		log.Printf("[bot:%s] typed-event frame trailing bytes: remaining=%d totalLen=%d",
+			b.name, len(payload)-off, len(payload))
 	}
 }
 
@@ -203,12 +220,22 @@ func (b *Bot) applyWorldDelta(body []byte) {
 	b.state.DestroyedIDs = ws.DestroyedIDs
 	b.state.ExitedIDs = ws.ExitedIDs
 
-	// Death-by-removal fallback: if our entity was removed and we
-	// haven't already received a typed PlayerDied, fire the deathCh
-	// so AIs that block on WaitForDeath unblock.
-	stillAlive := b.state.Entities[b.myEntityID] != nil
+	// Death-by-removal fallback: only fire dead when our entity ID
+	// appears in this frame's DestroyedIDs (or ExitedIDs). Don't infer
+	// death from absence — early frames may not include our ship at
+	// all (we just spawned), and a partial-decode failure leaves the
+	// state map empty. game.PlayerDied is the authoritative signal;
+	// this catches the case where the server cleans up the entity
+	// without sending PlayerDied.
 	wasAlive := b.alive
-	if !stillAlive {
+	removedSelf := false
+	for _, id := range ws.DestroyedIDs {
+		if id == b.myEntityID && b.myEntityID != 0 {
+			removedSelf = true
+			break
+		}
+	}
+	if removedSelf {
 		b.alive = false
 	}
 
@@ -234,8 +261,8 @@ func (b *Bot) applyWorldDelta(body []byte) {
 	snapshot := b.state
 	b.mu.Unlock()
 
-	if wasAlive && !stillAlive {
-		log.Printf("[bot:%s] entity gone from world, marking dead", b.name)
+	if wasAlive && removedSelf {
+		log.Printf("[bot:%s] entity removed from world, marking dead", b.name)
 		select {
 		case b.deathCh <- 0:
 		default:

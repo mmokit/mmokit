@@ -7,7 +7,7 @@ import (
 )
 
 func main() {
-	addr := flag.String("addr", "localhost:9000", "server UDP address")
+	addr := flag.String("addr", "localhost:8080", "server WebSocket address (host:port, http(s)://…, or ws(s)://…)")
 	scenario := flag.String("scenario", "duel", "scenario to run (duel, miners)")
 	count := flag.Int("count", 2, "number of bots to spawn")
 	flag.Parse()
