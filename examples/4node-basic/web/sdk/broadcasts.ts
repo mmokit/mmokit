@@ -4,6 +4,22 @@
 // in pkg/universe/reflect_marshal.go: fields encoded in source order,
 // little-endian, no padding. mmokit.Entity → 4-byte NetID.
 
+/** Broadcast-eligible event mmokit.CellChange (typeID 0x474e8b92). */
+export class CellChange {
+  static readonly typeID = 0x474e8b92;
+  cellX: number = 0;
+  cellY: number = 0;
+
+  static decode(buf: Uint8Array): CellChange {
+    const dv = new DataView(buf.buffer, buf.byteOffset, buf.byteLength);
+    let off = 0;
+    const m = new CellChange();
+    m.cellX = dv.getInt32(off, true); off += 4;
+    m.cellY = dv.getInt32(off, true); off += 4;
+    return m;
+  }
+}
+
 /** Broadcast-eligible event mmokit.DebugInfo (typeID 0x83f2dca1). */
 export class DebugInfo {
   static readonly typeID = 0x83f2dca1;

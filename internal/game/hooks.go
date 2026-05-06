@@ -39,7 +39,7 @@ func (gw *GameWorld) Init() {
 			gw.PlayerSessions.Set(frame.ConnID, frame.Username)
 		}
 
-		// Topology-transparent protocol: no SE_CELL_CHANGE is sent. The
+		// Topology-transparent protocol: no CellChange event is sent. The
 		// destination cell's ReplicationSystem will set the
 		// FRAME_FLAG_FRESH_SNAPSHOT bit on its first frame to this conn,
 		// causing the client's decoder to reset baselines and repopulate

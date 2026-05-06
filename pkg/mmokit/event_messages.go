@@ -74,6 +74,18 @@ type PlayerEntityAssigned struct {
 	WorldY      float32
 }
 
+// CellChange — informs the client that its authoritative entity has
+// migrated to a different cell. Reserved framework hint; emitted by games
+// that expose cell-coordinate state to clients. Replaces enginepb.CellChangeMsg
+// (SE_CELL_CHANGE). The mmoserver examples no longer emit this event —
+// the topology-transparent protocol handles cross-cell handoffs without a
+// dedicated client-visible message — but the type stays available for
+// games that want to surface cell coordinates.
+type CellChange struct {
+	CellX int32
+	CellY int32
+}
+
 // registerEngineTypedEvents registers each engine-level typed event
 // exactly once, regardless of how many Protocol instances the process
 // creates. NewProtocol calls this on every invocation; the sync.Once
@@ -84,6 +96,7 @@ func registerEngineTypedEvents() {
 		RegisterEvent[DebugInfo]()
 		RegisterEvent[WorldDelta]()
 		RegisterEvent[PlayerEntityAssigned]()
+		RegisterEvent[CellChange]()
 	})
 }
 

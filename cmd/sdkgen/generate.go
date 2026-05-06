@@ -730,10 +730,11 @@ func (g *Generator) genClient() string {
 	// Event dispatch.
 	//
 	// Channel 0x00 carries two coexisting wire formats. After Plan 1
-	// Phase 7 the proto-envelope path is retained only for the framework
-	// events that survived migration (SE_SERVER_CONFIG, SE_PLAYER_SPAWNED,
-	// SE_CELL_CHANGE); every game-specific server event rides the typed
-	// path:
+	// Phase 7 the proto-envelope path was retained for the surviving
+	// framework events; the protobuf-residue cleanup Phase 1 migrated
+	// SE_PLAYER_SPAWNED + SE_CELL_CHANGE to typed events, so only
+	// SE_SERVER_CONFIG remains on the legacy envelope. Every game-specific
+	// server event rides the typed path:
 	//
 	//   1. ServerEvent envelope (framework only): protobuf wire format.
 	//      The first byte is the field-1 varint tag for the `code` field
@@ -840,8 +841,9 @@ func (g *Generator) genClient() string {
 	// --- Server → Client receive methods ---
 	//
 	// Phase 7 retired every game-specific proto-envelope server event; only
-	// engine-level framework events (SE_SERVER_CONFIG, SE_PLAYER_SPAWNED,
-	// SE_CELL_CHANGE) ride this path now. Binary events (no ProtoName) are
+	// the SE_SERVER_CONFIG engine-level framework event rides this path now
+	// (SE_PLAYER_SPAWNED + SE_CELL_CHANGE migrated to typed events in the
+	// protobuf-residue cleanup Phase 1). Binary events (no ProtoName) are
 	// rendered as a typed-decoder method; proto events emit a fromBinary
 	// subscriber.
 	for _, se := range g.schema.ServerEvents {

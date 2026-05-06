@@ -13,11 +13,11 @@ import (
 // their proto payload types. After Plan 1 Phase 7 it is purely a schema
 // hint surface for the SDK generator — every game-specific server event
 // rides the typed reflection-codec channel via mmokit.RegisterEvent[T].
-// The framework events that retain a proto-envelope path
-// (SE_SERVER_CONFIG, SE_CELL_CHANGE) are emitted with makeEventFrame on
-// the universe / engine side, not through this registry. SE_PLAYER_SPAWNED
-// migrated to the typed PlayerEntityAssigned event in the protobuf-residue
-// cleanup Phase 1.
+// The single framework event that still rides a proto-envelope path
+// (SE_SERVER_CONFIG) is emitted with makeEventFrame on the engine side,
+// not through this registry. SE_PLAYER_SPAWNED + SE_CELL_CHANGE migrated
+// to typed PlayerEntityAssigned + CellChange events in the protobuf-
+// residue cleanup Phase 1.
 type ServerEvents struct {
 	entries map[uint32]serverEventEntry
 }
