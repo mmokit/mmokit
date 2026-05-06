@@ -1,6 +1,7 @@
 bin/
 /4node-basic
 /server
+/sdkgen
 
 # Architecture diagrams (local authoring artifacts — commit intentionally via git add FILE)
 docs/*.excalidraw
