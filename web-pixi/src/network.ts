@@ -13,7 +13,7 @@ import {
   type PlayerOwnStateMsg,
   type MapDataMsg,
   type CurrencyUpdateMsg,
-  type PlayerDiedMsg,
+  PlayerDied,
   type PongMsg,
   type LoginRejectedMsg,
   Damage,
@@ -252,10 +252,10 @@ export function connect(state: GameState, callbacks: NetworkCallbacks): void {
     callbacks.onSpawned();
   });
 
-  client.onPlayerDied((died: PlayerDiedMsg) => {
+  client.onPlayerDied((died: PlayerDied) => {
     state.isDead = true;
     state.deathTime = performance.now();
-    state.killerEntityId = died.killerId;
+    state.killerEntityId = died.killerID;
     state.targetId = 0;
     state.lockTargetId = 0;
     state.lockProgress = 0;

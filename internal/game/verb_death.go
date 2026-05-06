@@ -114,10 +114,8 @@ func (gw *GameWorld) handlePlayerKilled(target mmokit.Entity, killer mmokit.Enti
 
 	// ServerEvents may be nil in unit tests where the stage isn't bound to
 	// a Process. Production binds Process at coordinator-create time.
-	if events := gw.ServerEvents(); events != nil {
-		events.Send(gw.eng.ConnMgr, connID,
-			uint32(gamepb.GameServerEventCode_GSE_PLAYER_DIED),
-			&gamepb.PlayerDiedMsg{KillerId: killer.NetID()})
+	if gw.ServerEvents() != nil {
+		mmokit.SendEvent(gw.Stage, connID, &PlayerDied{KillerID: killer.NetID()})
 	}
 
 	if s := gw.Players.ByConnID(connID); s != nil {

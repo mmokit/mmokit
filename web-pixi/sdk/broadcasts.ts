@@ -116,6 +116,20 @@ export class Status {
   }
 }
 
+/** Broadcast-eligible event game.PlayerDied (typeID 0xef56f740). */
+export class PlayerDied {
+  static readonly typeID = 0xef56f740;
+  killerID: number = 0;
+
+  static decode(buf: Uint8Array): PlayerDied {
+    const dv = new DataView(buf.buffer, buf.byteOffset, buf.byteLength);
+    let off = 0;
+    const m = new PlayerDied();
+    m.killerID = dv.getUint32(off, true); off += 4;
+    return m;
+  }
+}
+
 /** Dispatches incoming TypedEvent (typeID + body bytes) to typed handlers. */
 export class TypedDispatcher {
   private handlers = new Map<number, (raw: Uint8Array) => void>();

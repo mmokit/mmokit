@@ -53,6 +53,7 @@ func main() {
 				enginepb.ServerEventCode_SE_WORLD_UPDATE, mmokit.WithEventName("worldUpdate"))
 			mmokit.RegisterServerEvent[gamepb.PlayerDiedMsg](e,
 				gamepb.GameServerEventCode_GSE_PLAYER_DIED)
+			mmokit.RegisterEvent[game.PlayerDied]()
 			// SE_PLAYER_OWN_STATE: engine code, game-specific payload (no engine default).
 			mmokit.RegisterServerEvent[gamepb.PlayerOwnStateMsg](e,
 				enginepb.ServerEventCode_SE_PLAYER_OWN_STATE)

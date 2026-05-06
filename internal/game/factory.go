@@ -87,8 +87,7 @@ func registerPlayerJoin(coord *mmokit.Process) {
 		// they explicitly press the respawn button. Send the death cue
 		// directly without going through SpawnPlayer.
 		if s.State == StateDead {
-			gw.ServerEvents().Send(gw.eng.ConnMgr, s.ConnID,
-				uint32(gamepb.GameServerEventCode_GSE_PLAYER_DIED), &gamepb.PlayerDiedMsg{KillerId: 0})
+			mmokit.SendEvent(gw.Stage, s.ConnID, &PlayerDied{KillerID: 0})
 			gw.eng.Log.Log(CatPlayerSpawn, "reconnect-to-dead: conn=%d username=%s", s.ConnID, s.Username)
 		} else if s.Entity != (ecs.Entity{}) && gw.Stage.ECSWorld().Alive(s.Entity) {
 			// Entity preserved across grace period (Active / Docked / Docking).
