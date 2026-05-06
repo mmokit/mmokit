@@ -2,7 +2,7 @@ import { ITEM_COLORS_CSS, DEFAULT_ITEM_COLOR } from "../constants";
 
 import { SETTLEMENT_CURRENCY_ID, type GameState } from "../state";
 import { needsRebuild, invalidate } from "./memo";
-import { BankRequest, InventoryTransfer } from "../../sdk/index.js";
+import { InventoryTransfer } from "../../sdk/index.js";
 
 let delegationSetup = false;
 let currentState: GameState | null = null;
@@ -45,8 +45,7 @@ function setupDelegation(): void {
 
     setTimeout(() => {
       if (currentState?.connected && currentState.client && currentState.bankPanelOpen) {
-        currentState.inputSeq++;
-        currentState.client.send(new BankRequest({ sequence: currentState.inputSeq }));
+        currentState.refreshBank();
       }
     }, 100);
   });

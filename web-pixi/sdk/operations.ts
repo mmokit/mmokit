@@ -5,6 +5,81 @@
 // Bodies use the reflect-codec layout from pkg/universe/reflect_marshal.go
 // (matches broadcasts.ts and inputs.ts).
 
+/** Broadcast-eligible event game.BankRequest (typeID 0xeaffc856). */
+export class BankRequest {
+  static readonly typeID = 0xeaffc856;
+  sequence: number = 0;
+
+  constructor(init?: Partial<BankRequest>) {
+    if (init) Object.assign(this, init);
+  }
+
+  static decode(buf: Uint8Array): BankRequest {
+    const dv = new DataView(buf.buffer, buf.byteOffset, buf.byteLength);
+    let off = 0;
+    const m = new BankRequest();
+    m.sequence = dv.getUint32(off, true); off += 4;
+    return m;
+  }
+
+  encode(): Uint8Array {
+    const buf = new Uint8Array(4);
+    const dv = new DataView(buf.buffer);
+    let off = 0;
+    dv.setUint32(off, this.sequence, true); off += 4;
+    return buf;
+  }
+}
+
+/** Broadcast-eligible event game.BankResponse (typeID 0xcef152aa). */
+export class BankResponse {
+  static readonly typeID = 0xcef152aa;
+  contents: { items: { itemID: number; quantity: number }[]; totalMass: number; maxMass: number; cargoItems: { itemID: number; quantity: number }[]; cargoMass: number; maxCargoMass: number; currencies: { currencyID: number; balance: number }[] } = { items: [], totalMass: 0, maxMass: 0, cargoItems: [], cargoMass: 0, maxCargoMass: 0, currencies: [] };
+  error: string = "";
+
+  static decode(buf: Uint8Array): BankResponse {
+    const dv = new DataView(buf.buffer, buf.byteOffset, buf.byteLength);
+    let off = 0;
+    const m = new BankResponse();
+    {
+      const sliceLen = dv.getUint16(off, true); off += 2;
+      for (let i = 0; i < sliceLen; i++) {
+        const item: { itemID: number; quantity: number } = { itemID: 0, quantity: 0 };
+            item.itemID = dv.getUint32(off, true); off += 4;
+            item.quantity = dv.getInt32(off, true); off += 4;
+        m.contents.items.push(item);
+      }
+    }
+    m.contents.totalMass = dv.getFloat32(off, true); off += 4;
+    m.contents.maxMass = dv.getFloat32(off, true); off += 4;
+    {
+      const sliceLen = dv.getUint16(off, true); off += 2;
+      for (let i = 0; i < sliceLen; i++) {
+        const item: { itemID: number; quantity: number } = { itemID: 0, quantity: 0 };
+            item.itemID = dv.getUint32(off, true); off += 4;
+            item.quantity = dv.getInt32(off, true); off += 4;
+        m.contents.cargoItems.push(item);
+      }
+    }
+    m.contents.cargoMass = dv.getFloat32(off, true); off += 4;
+    m.contents.maxCargoMass = dv.getFloat32(off, true); off += 4;
+    {
+      const sliceLen = dv.getUint16(off, true); off += 2;
+      for (let i = 0; i < sliceLen; i++) {
+        const item: { currencyID: number; balance: number } = { currencyID: 0, balance: 0 };
+            item.currencyID = dv.getUint32(off, true); off += 4;
+            item.balance = Number(dv.getBigInt64(off, true)); off += 8;
+        m.contents.currencies.push(item);
+      }
+    }
+    {
+      const sl = dv.getUint16(off, true); off += 2;
+      m.error = new TextDecoder().decode(buf.subarray(off, off + sl)); off += sl;
+    }
+    return m;
+  }
+}
+
 /** Broadcast-eligible event marketplace.MarketBrowseRequest (typeID 0xd952f5a1). */
 export class MarketBrowseRequest {
   static readonly typeID = 0xd952f5a1;

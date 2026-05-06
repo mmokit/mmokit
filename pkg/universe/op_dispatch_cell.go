@@ -73,6 +73,12 @@ func (p *Process) DispatchCellRoutedOp(
 	// runs on the loop goroutine. RunOnLoop's blocking variant would
 	// stall the poll goroutine for ~50ms (one tick) which would back up
 	// every other op for that connection.
+	// Stash the cell's Stage on the OpContext bag so handlers can reach
+	// it via OpContextStage(ctx) without threading another argument
+	// through the typed-op signature. See pkg/universe/op_dispatch_cell.go
+	// (this file) for the contract; pkg/mmokit re-exports the helper.
+	ctx.Bag().Store(opContextStageKey, cell.Stage)
+
 	queued := eng.SubmitLoopJob(func() error {
 		// Decode the request on the loop goroutine. We could decode
 		// off-loop and capture the *Req pointer, but reflection-based
@@ -123,6 +129,30 @@ func (p *Process) DispatchCellRoutedOp(
 	// frame once the handler runs.
 	_ = context.Background // placeholder for ctx-aware future variant
 	return nil
+}
+
+// opContextStageKeyType is a private type used as the bag key for the
+// OpContext-stashed *Stage so handler code can recover it via
+// OpContextStage(ctx). Using a unique unexported type avoids collisions
+// with any other key strings callers might try.
+type opContextStageKeyType struct{}
+
+var opContextStageKey = opContextStageKeyType{}
+
+// OpContextStage returns the *Stage stashed on the OpContext by
+// Process.DispatchCellRoutedOp. Returns nil when the OpContext was not
+// produced by the cell-routed dispatch path (e.g. RouteGatewayLocal ops,
+// tests). RoutePlayerCell handlers can rely on a non-nil return.
+func OpContextStage(ctx *ops.OpContext) *Stage {
+	if ctx == nil {
+		return nil
+	}
+	v, ok := ctx.Bag().Load(opContextStageKey)
+	if !ok {
+		return nil
+	}
+	stage, _ := v.(*Stage)
+	return stage
 }
 
 // findActiveUserCell looks up the active session's cell for username on

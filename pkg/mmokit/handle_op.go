@@ -5,6 +5,8 @@ import (
 	"reflect"
 	"sort"
 	"sync"
+
+	pkguniverse "github.com/zenion/mmoserver/pkg/universe"
 )
 
 // RouteKind classifies where a typed-op handler runs in the cluster.
@@ -95,9 +97,18 @@ var (
 // outbound 0x01 frame. A nil response (with a nil error) emits a frame
 // with an empty body.
 //
-// Panics on duplicate registration of the same Request type, or on a
-// typeID collision between two distinct types (collision should never
-// happen at codebase scale; rename one type if it does).
+// Re-registration of the same Request type with the same Kind +
+// Response type is idempotent (last-writer-wins on the handler closure)
+// so games can call RegisterOp from a setup function that runs many
+// times across tests without juggling reset boilerplate. Mirrors
+// HandleClient's idempotent behavior.
+//
+// Panics on:
+//   - Re-registration of a type with a different Kind or different
+//     Response type (genuine programmer error — the wire schema would
+//     change silently).
+//   - typeID collision between two distinct Request types (extremely
+//     unlikely at codebase scale; rename one type if it triggers).
 func RegisterOp[Req any, Res any](kind RouteKind, handler func(*OpContext, *Req) (*Res, error)) {
 	reqType := reflect.TypeFor[Req]()
 	resType := reflect.TypeFor[Res]()
@@ -106,12 +117,20 @@ func RegisterOp[Req any, Res any](kind RouteKind, handler func(*OpContext, *Req)
 
 	typedOpMu.Lock()
 	defer typedOpMu.Unlock()
-	if _, exists := typedOpSet[reqType]; exists {
-		panic(fmt.Sprintf("RegisterOp: request type %s already registered", reqType.String()))
-	}
-	if existing, ok := typedOps[reqID]; ok && existing.RequestType != reqType {
-		panic(fmt.Sprintf("RegisterOp: typeID collision between %s and %s (id=%#x)",
-			existing.RequestType.String(), reqType.String(), reqID))
+	if existing, ok := typedOps[reqID]; ok {
+		if existing.RequestType != reqType {
+			panic(fmt.Sprintf("RegisterOp: typeID collision between %s and %s (id=%#x)",
+				existing.RequestType.String(), reqType.String(), reqID))
+		}
+		if existing.Kind != kind || existing.ResponseType != resType {
+			panic(fmt.Sprintf("RegisterOp: %s re-registered with different shape "+
+				"(was kind=%s res=%s; now kind=%s res=%s)",
+				reqType.String(), existing.Kind, existing.ResponseType, kind, resType))
+		}
+		// Same type, same Kind, same Response — refresh the handler
+		// closure and return.
+		existing.Handler = handler
+		return
 	}
 	typedOps[reqID] = &TypedOpEntry{
 		Kind:           kind,
@@ -153,4 +172,15 @@ func ResetTypedOpRegistryForTest() {
 	defer typedOpMu.Unlock()
 	typedOps = map[uint32]*TypedOpEntry{}
 	typedOpSet = map[reflect.Type]struct{}{}
+}
+
+// OpContextStage returns the *Stage on which a RoutePlayerCell typed-op
+// handler is currently running. RoutePlayerCell handlers can rely on a
+// non-nil return; RouteGatewayLocal handlers (no cell context) get nil.
+//
+// Use this when a typed-op handler needs to access cell-level state
+// (entities, NetworkID map, broadcast helpers) without threading the
+// stage through the handler signature.
+func OpContextStage(ctx *OpContext) *Stage {
+	return pkguniverse.OpContextStage(ctx)
 }

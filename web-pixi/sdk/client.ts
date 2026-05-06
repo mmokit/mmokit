@@ -7,7 +7,7 @@ import { Transport } from "./transport.js";
 import { SpaceDeltaDecoder } from "./delta-decoder.js";
 import type { DeltaWorldUpdate } from "./entities.js";
 import { TypedDispatcher, BankContents, CurrencyUpdate, Docked, DockingState, EquipResult, MapData, PlayerDied, PlayerOwnState, PlayerSpawned, TransferResult, DebugInfo, LoginRejected, OperationError, Pong, WorldDelta } from "./broadcasts.js";
-import { MarketBrowseRequest, MarketCancelOrderRequest, MarketCreateOrderRequest, MarketInstantTradeRequest, MarketMyOrdersRequest, MarketMyOrdersResponse, MarketOrderBookResponse, MarketOrderResultResponse } from "./operations.js";
+import { BankRequest, BankResponse, MarketBrowseRequest, MarketCancelOrderRequest, MarketCreateOrderRequest, MarketInstantTradeRequest, MarketMyOrdersRequest, MarketMyOrdersResponse, MarketOrderBookResponse, MarketOrderResultResponse } from "./operations.js";
 import { ClientEventSchema, ServerEventSchema, type ServerEvent } from "@gen/enginepb/engine_pb.js";
 
 export interface SpaceClientOptions {
@@ -267,6 +267,11 @@ export class SpaceClient {
       this.pendingTypedOps.set(reqID, { resolve, reject, resCls });
       this.transport.sendRaw(frame);
     });
+  }
+
+  /** Typed op game.BankRequest → game.BankResponse (kind=player-cell). */
+  bank(req: BankRequest): Promise<BankResponse> {
+    return this.callOp<BankRequest, BankResponse>(req, BankResponse);
   }
 
   /** Typed op marketplace.MarketBrowseRequest → marketplace.MarketOrderBookResponse (kind=player-cell). */

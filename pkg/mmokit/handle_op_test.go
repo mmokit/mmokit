@@ -59,7 +59,45 @@ func TestRegisterOp_LookupByTypeID(t *testing.T) {
 	}
 }
 
-func TestRegisterOp_DuplicatePanics(t *testing.T) {
+func TestRegisterOp_SameShapeIsIdempotent(t *testing.T) {
+	// Re-registering the same Request type with the same Kind + Response
+	// type is allowed — last-writer-wins on the handler closure. Mirrors
+	// HandleClient's idempotent contract so games can call RegisterOp from
+	// setup functions that fire many times in tests without juggling
+	// reset boilerplate.
+	t.Cleanup(ResetTypedOpRegistryForTest)
+	ResetTypedOpRegistryForTest()
+
+	RegisterOp[tOpReq, tOpRes](RouteGatewayLocal,
+		func(_ *OpContext, _ *tOpReq) (*tOpRes, error) { return &tOpRes{Y: 1}, nil })
+	// Re-register: must NOT panic, and the second handler should win.
+	RegisterOp[tOpReq, tOpRes](RouteGatewayLocal,
+		func(_ *OpContext, _ *tOpReq) (*tOpRes, error) { return &tOpRes{Y: 99}, nil })
+
+	entry, ok := LookupTypedOp(TypeIDOf(reflect.TypeFor[tOpReq]()))
+	if !ok {
+		t.Fatal("entry missing after re-register")
+	}
+	// Invoke handler via reflection (same shape the dispatcher uses) and
+	// confirm the SECOND handler ran — last-writer-wins.
+	hv := reflect.ValueOf(entry.Handler)
+	results := hv.Call([]reflect.Value{
+		reflect.ValueOf(&OpContext{}), reflect.ValueOf(&tOpReq{}),
+	})
+	resPtr := results[0].Interface().(*tOpRes)
+	if resPtr.Y != 99 {
+		t.Errorf("re-register did not replace handler: got Y=%d, want 99", resPtr.Y)
+	}
+}
+
+type tOpRes2 struct {
+	Z int64
+}
+
+func TestRegisterOp_DifferentShapePanics(t *testing.T) {
+	// Re-registering the same Request type with a different Response
+	// type (or a different Kind) is a wire-schema-changing programmer
+	// error — must panic.
 	t.Cleanup(ResetTypedOpRegistryForTest)
 	ResetTypedOpRegistryForTest()
 
@@ -68,11 +106,11 @@ func TestRegisterOp_DuplicatePanics(t *testing.T) {
 
 	defer func() {
 		if r := recover(); r == nil {
-			t.Fatalf("expected panic on duplicate RegisterOp[tOpReq], got nil")
+			t.Fatal("expected panic on RegisterOp with different Response type")
 		}
 	}()
-	RegisterOp[tOpReq, tOpRes](RouteGatewayLocal,
-		func(_ *OpContext, _ *tOpReq) (*tOpRes, error) { return nil, nil })
+	RegisterOp[tOpReq, tOpRes2](RouteGatewayLocal,
+		func(_ *OpContext, _ *tOpReq) (*tOpRes2, error) { return nil, nil })
 }
 
 func TestOperationError_TypeIDStable(t *testing.T) {

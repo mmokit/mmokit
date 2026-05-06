@@ -7,24 +7,6 @@
 // SpaceClient.send(msg) wraps the encoded body in the [0x00][u32 typeID]
 // [u32 bodyLen][body] frame consumed by the server's HandleClient dispatch.
 
-/** Client-input message game.BankRequest (typeID 0xeaffc856). */
-export class BankRequest {
-  static readonly typeID = 0xeaffc856;
-  sequence: number = 0;
-
-  constructor(init?: Partial<BankRequest>) {
-    if (init) Object.assign(this, init);
-  }
-
-  encode(): Uint8Array {
-    const buf = new Uint8Array(4);
-    const dv = new DataView(buf.buffer);
-    let off = 0;
-    dv.setUint32(off, this.sequence, true); off += 4;
-    return buf;
-  }
-}
-
 /** Client-input message game.CastAbility (typeID 0x16eb7722). */
 export class CastAbility {
   static readonly typeID = 0x16eb7722;

@@ -112,6 +112,12 @@ export interface GameState {
   bankPanelOpen: boolean;
   currencyBalances: Record<number, number>;
 
+  // refreshBank fires the typed-op bank request and merges the response
+  // into state. Wired in network.ts.connect; UI code calls it instead of
+  // posting BankRequest as a fire-and-forget input. Initialized to a
+  // no-op so callers don't need to null-check before connect resolves.
+  refreshBank: () => void;
+
   // Loot popup
   lootCrateId: number; // net ID of crate whose popup is open (0 = closed)
   pendingLootCrateId: number; // net ID of crate we're moving toward (0 = none)
@@ -226,6 +232,7 @@ export function createInitialState(): GameState {
     dockedMaxCargoMass: 0,
     bankPanelOpen: false,
     currencyBalances: {},
+    refreshBank: () => {}, // wired by network.ts.connect
 
     lootCrateId: 0,
     pendingLootCrateId: 0,

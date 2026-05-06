@@ -130,10 +130,13 @@ func (b *Bot) WithdrawItem(itemID uint32, qty int32) {
 	}, true)
 }
 
-// RequestBank requests bank contents (reliable, typed).
+// RequestBank fires the typed-op bank request. Bot is fire-and-forget —
+// it does not correlate the response (the BankContents server event push
+// already updates client state in production; the bot only needs the
+// op invocation for load-test traffic).
 func (b *Bot) RequestBank() {
 	b.inputSeq++
-	b.sendTypedInput(&game.BankRequest{Sequence: b.inputSeq}, true)
+	b.sendTypedOp(&game.BankRequest{Sequence: b.inputSeq})
 }
 
 // sendEvent sends a legacy channel-0x00 ClientEvent. Used only for
@@ -159,6 +162,35 @@ func (b *Bot) sendEvent(code uint32, payload proto.Message, reliable bool) {
 	} else {
 		b.conn.SendUnreliable(frame)
 	}
+}
+
+// sendTypedOp marshals a typed-op Request via the reflection codec and
+// wraps it in the channel-0x01 typed-op wire frame:
+//
+//	[u8 0x01][u32 typeID][u64 request_id][u32 bodyLen][body bytes]
+//
+// Fire-and-forget: the response frame is dropped. Bots that need the
+// response should track pending requestIDs and decode the inbound frame
+// on the same channel — but for current load-test scope, the bot only
+// invokes ops to drive server traffic, not to consume their results.
+//
+// request_id increments via b.inputSeq cast to u64; collisions with the
+// inputSeq used by 0x00 typed inputs are harmless because the two
+// channels are decoded independently.
+func (b *Bot) sendTypedOp(msg any) {
+	t := reflect.TypeOf(msg)
+	if t.Kind() == reflect.Pointer {
+		t = t.Elem()
+	}
+	typeID := mmokit.TypeIDOf(t)
+	body := pkguniverse.ReflectMarshal(msg)
+	frame := make([]byte, 1+4+8+4+len(body))
+	frame[0] = pkgnet.ChannelOperation
+	binary.LittleEndian.PutUint32(frame[1:5], typeID)
+	binary.LittleEndian.PutUint64(frame[5:13], uint64(b.inputSeq))
+	binary.LittleEndian.PutUint32(frame[13:17], uint32(len(body)))
+	copy(frame[17:], body)
+	b.conn.SendReliable(frame)
 }
 
 // sendTypedInput marshals a HandleClient-eligible Go message via the

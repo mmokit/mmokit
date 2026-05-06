@@ -1,7 +1,6 @@
 import { ITEM_COLORS_CSS, DEFAULT_ITEM_COLOR } from "../constants";
 import { SETTLEMENT_CURRENCY_ID, type GameState } from "../state";
 import {
-  BankRequest,
   MarketBrowseRequest,
   MarketCreateOrderRequest,
   MarketCancelOrderRequest,
@@ -161,7 +160,7 @@ async function createOrder(
         time: performance.now(),
       });
     }
-    state.inputSeq++; state.client.send(new BankRequest({ sequence: state.inputSeq }));
+    state.refreshBank();
     await refreshOrderBook(state, itemId);
   } catch (_err) {
     /* ignore */
@@ -173,7 +172,7 @@ async function cancelOrder(state: GameState, orderId: number): Promise<void> {
   try {
     await state.client.marketCancelOrder(new MarketCancelOrderRequest({ orderID: orderId }));
     state.toasts.push({ text: "Order cancelled", time: performance.now() });
-    state.inputSeq++; state.client.send(new BankRequest({ sequence: state.inputSeq }));
+    state.refreshBank();
     await refreshMyOrders(state);
   } catch (_err) {
     /* ignore */
@@ -204,7 +203,7 @@ async function instantTrade(
         time: performance.now(),
       });
     }
-    state.inputSeq++; state.client.send(new BankRequest({ sequence: state.inputSeq }));
+    state.refreshBank();
     await refreshOrderBook(state, itemId);
   } catch (_err) {
     /* ignore */
