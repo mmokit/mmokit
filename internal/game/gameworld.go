@@ -22,10 +22,9 @@ type PendingTransfer struct {
 	Deposit bool // true = cargo->bank, false = bank->cargo
 }
 
-// PendingBankRequest records a request to view bank contents.
-type PendingBankRequest struct {
-	ConnID uint32
-}
+// (PendingBankRequest deleted — Plan 2 Phase 3 migrated BankRequest to
+// a typed-op served synchronously on the cell loop via
+// Process.DispatchCellRoutedOp.)
 
 // PendingEquipRequest records a request to equip or unequip an item.
 // TargetBank only matters while docked: when true, equip pulls from bank

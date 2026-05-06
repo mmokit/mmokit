@@ -14,11 +14,12 @@ import (
 	"embed"
 	"errors"
 	"fmt"
+	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/jackc/pgx/v5"
 
-	basicpb "github.com/zenion/mmoserver/gen/go/basicpb"
 	"github.com/zenion/mmoserver/pkg/mmokit"
 )
 
@@ -27,6 +28,15 @@ const logCat = "services:echo"
 //go:embed migrations/*.sql
 var migrationsFS embed.FS
 
+// liveService stores the running echo instance for the typed-op handler
+// closures. The handlers are registered at package-init via RegisterOp;
+// they call .Load() each invocation to pick up the live service pointer.
+// Nil until Service.Init runs (typed-op response is OperationError until
+// then).
+var liveService atomic.Pointer[Service]
+
+var registerOnce sync.Once
+
 // Service is the runtime instance of the echo demo service.
 type Service struct {
 	instanceID string
@@ -34,13 +44,13 @@ type Service struct {
 }
 
 // Kind is the registration descriptor passed to coord.RegisterService.
+//
+// OpCodes is empty: the three echo ops live on the typed-op channel
+// (mmokit.RegisterOp[Req, Res]) and route by request typeID rather than
+// per-kind code claims.
 var Kind = mmokit.ServiceKind{
-	Name: "echo",
-	OpCodes: mmokit.OpCodes(
-		basicpb.EchoOpCode_BOP_ECHO_PING,
-		basicpb.EchoOpCode_BOP_ECHO_PERSIST,
-		basicpb.EchoOpCode_BOP_ECHO_FETCH,
-	),
+	Name:    "echo",
+	OpCodes: nil,
 	Factory: func(ctx *mmokit.ServiceContext) mmokit.Service {
 		return &Service{
 			instanceID: ctx.InstanceID,
@@ -53,30 +63,34 @@ var Kind = mmokit.ServiceKind{
 	MigrationsRoot: "migrations",
 }
 
-// Init validates dependencies. The framework guarantees DB is non-nil
-// when RequiresDB=true, but we double-check defensively.
-func (s *Service) Init(ctx *mmokit.ServiceContext) error {
-	if ctx.DB == nil {
-		return errors.New("echo.Init: DB required (RequiresDB=true should have caught this)")
-	}
-	ctx.Logger.Log(logCat, "echo service initialized: instance=%s", s.instanceID)
-	return nil
+// init registers the typed-op handlers at package-load time so the
+// schema dump (--dump-schema) sees them before Service.Init runs. The
+// handler closures resolve the live *Service pointer at invocation time
+// via liveService.Load() — nil until Init populates it.
+func init() {
+	registerOnce.Do(registerTypedOps)
 }
 
-// RegisterOps wires the three handlers — ping, persist, fetch.
-func (s *Service) RegisterOps(router *mmokit.OpRouter) error {
-	mmokit.RegisterOp(router, basicpb.EchoOpCode_BOP_ECHO_PING, "echoPing",
-		func(opCtx *mmokit.OpContext, req *basicpb.EchoPingRequest) (*basicpb.EchoPingResponse, error) {
+func registerTypedOps() {
+	mmokit.RegisterOp[EchoPingRequest, EchoPingResponse](mmokit.RouteGatewayLocal,
+		func(opCtx *mmokit.OpContext, req *EchoPingRequest) (*EchoPingResponse, error) {
+			s := liveService.Load()
+			if s == nil {
+				return nil, errors.New("echo service not initialized")
+			}
 			s.ctx.Logger.Log(logCat, "ping: user=%s msg=%q", opCtx.Username, req.Msg)
-			return &basicpb.EchoPingResponse{
+			return &EchoPingResponse{
 				Msg:        fmt.Sprintf("Hello, %s! This is instance %s. You said: %s", opCtx.Username, s.instanceID, req.Msg),
-				InstanceId: s.instanceID,
+				InstanceID: s.instanceID,
 			}, nil
-		},
-	)
+		})
 
-	mmokit.RegisterOp(router, basicpb.EchoOpCode_BOP_ECHO_PERSIST, "echoPersist",
-		func(opCtx *mmokit.OpContext, req *basicpb.EchoPersistRequest) (*basicpb.EchoPersistResponse, error) {
+	mmokit.RegisterOp[EchoPersistRequest, EchoPersistResponse](mmokit.RouteGatewayLocal,
+		func(opCtx *mmokit.OpContext, req *EchoPersistRequest) (*EchoPersistResponse, error) {
+			s := liveService.Load()
+			if s == nil {
+				return nil, errors.New("echo service not initialized")
+			}
 			pool := s.ctx.DB.Pool()
 			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 			defer cancel()
@@ -90,12 +104,15 @@ func (s *Service) RegisterOps(router *mmokit.OpRouter) error {
 			}
 			s.ctx.Logger.Log(logCat, "persist: user=%s key=%s value_len=%d",
 				opCtx.Username, req.Key, len(req.Value))
-			return &basicpb.EchoPersistResponse{Ok: true, InstanceId: s.instanceID}, nil
-		},
-	)
+			return &EchoPersistResponse{OK: true, InstanceID: s.instanceID}, nil
+		})
 
-	mmokit.RegisterOp(router, basicpb.EchoOpCode_BOP_ECHO_FETCH, "echoFetch",
-		func(opCtx *mmokit.OpContext, req *basicpb.EchoFetchRequest) (*basicpb.EchoFetchResponse, error) {
+	mmokit.RegisterOp[EchoFetchRequest, EchoFetchResponse](mmokit.RouteGatewayLocal,
+		func(opCtx *mmokit.OpContext, req *EchoFetchRequest) (*EchoFetchResponse, error) {
+			s := liveService.Load()
+			if s == nil {
+				return nil, errors.New("echo service not initialized")
+			}
 			pool := s.ctx.DB.Pool()
 			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 			defer cancel()
@@ -106,24 +123,34 @@ func (s *Service) RegisterOps(router *mmokit.OpRouter) error {
 			if err := row.Scan(&value, &updatedAt); err != nil {
 				if errors.Is(err, pgx.ErrNoRows) {
 					s.ctx.Logger.Log(logCat, "fetch miss: user=%s key=%s", opCtx.Username, req.Key)
-					return &basicpb.EchoFetchResponse{InstanceId: s.instanceID}, nil
+					return &EchoFetchResponse{InstanceID: s.instanceID}, nil
 				}
 				return nil, fmt.Errorf("echo fetch: %w", err)
 			}
 			s.ctx.Logger.Log(logCat, "fetch: user=%s key=%s", opCtx.Username, req.Key)
-			return &basicpb.EchoFetchResponse{
+			return &EchoFetchResponse{
 				Value:      value,
 				FoundAtMs:  updatedAt.UnixMilli(),
-				InstanceId: s.instanceID,
+				InstanceID: s.instanceID,
 			}, nil
-		},
-	)
+		})
+}
+
+// Init validates dependencies and publishes the live service pointer
+// for the typed-op handlers (registered at package init).
+func (s *Service) Init(ctx *mmokit.ServiceContext) error {
+	if ctx.DB == nil {
+		return errors.New("echo.Init: DB required (RequiresDB=true should have caught this)")
+	}
+	liveService.Store(s)
+	s.ctx.Logger.Log(logCat, "echo service initialized: instance=%s", s.instanceID)
 	return nil
 }
 
-// Shutdown is a no-op — handlers are stateless and the underlying
-// pgx pool is owned by the engine, not the service.
+// Shutdown clears the live service pointer and lets handler invocations
+// fail fast with "not initialized" if any are still in flight.
 func (s *Service) Shutdown(_ context.Context) error {
+	liveService.CompareAndSwap(s, nil)
 	s.ctx.Logger.Log(logCat, "echo service shutting down: instance=%s", s.instanceID)
 	return nil
 }

@@ -6,7 +6,6 @@ import (
 	"net/netip"
 	"strings"
 
-	enginepb "github.com/zenion/mmoserver/gen/go/enginepb"
 	"github.com/zenion/mmoserver/pkg/ops"
 )
 
@@ -97,20 +96,20 @@ func httpStatusFromAuthError(err error) int {
 		return http.StatusInternalServerError
 	}
 	switch ae.Code {
-	case enginepb.AuthError_AUTH_ERROR_INVALID_CREDENTIALS,
-		enginepb.AuthError_AUTH_ERROR_USERNAME_INVALID,
-		enginepb.AuthError_AUTH_ERROR_PASSWORD_TOO_WEAK:
+	case AuthErrorInvalidCredentials,
+		AuthErrorUsernameInvalid,
+		AuthErrorPasswordTooWeak:
 		return http.StatusBadRequest
-	case enginepb.AuthError_AUTH_ERROR_USERNAME_TAKEN:
+	case AuthErrorUsernameTaken:
 		return http.StatusConflict
-	case enginepb.AuthError_AUTH_ERROR_ACCOUNT_LOCKED,
-		enginepb.AuthError_AUTH_ERROR_RATE_LIMITED:
+	case AuthErrorAccountLocked,
+		AuthErrorRateLimited:
 		return http.StatusTooManyRequests
-	case enginepb.AuthError_AUTH_ERROR_TOKEN_INVALID,
-		enginepb.AuthError_AUTH_ERROR_TOKEN_EXPIRED,
-		enginepb.AuthError_AUTH_ERROR_NOT_AUTHENTICATED,
-		enginepb.AuthError_AUTH_ERROR_MFA_REQUIRED,
-		enginepb.AuthError_AUTH_ERROR_MFA_INVALID:
+	case AuthErrorTokenInvalid,
+		AuthErrorTokenExpired,
+		AuthErrorNotAuthenticated,
+		AuthErrorMFARequired,
+		AuthErrorMFAInvalid:
 		return http.StatusUnauthorized
 	default:
 		return http.StatusInternalServerError
@@ -121,8 +120,8 @@ func httpStatusFromAuthError(err error) int {
 // HTTP-friendly error code is included alongside the AuthError enum
 // value so clients have a stable mapping.
 type authErrorJSON struct {
-	Code    enginepb.AuthError `json:"code"`
-	Message string             `json:"message"`
+	Code    AuthError `json:"code"`
+	Message string    `json:"message"`
 	// RetryAfterMs is non-zero on RATE_LIMITED and ACCOUNT_LOCKED.
 	RetryAfterMs int64 `json:"retry_after_ms,omitempty"`
 }
@@ -131,7 +130,7 @@ func authJSONFromError(err error) authErrorJSON {
 	ae, ok := err.(*authError)
 	if !ok {
 		return authErrorJSON{
-			Code: enginepb.AuthError_AUTH_ERROR_INTERNAL, Message: err.Error(),
+			Code: AuthErrorInternal, Message: err.Error(),
 		}
 	}
 	out := authErrorJSON{Code: ae.Code, Message: ae.Msg}
@@ -161,19 +160,19 @@ func (s *Service) httpLogin(w http.ResponseWriter, r *http.Request, opts HTTPOpt
 	var req loginRequestJSON
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		return http.StatusBadRequest, authErrorJSON{
-			Code: enginepb.AuthError_AUTH_ERROR_INTERNAL, Message: "bad request body",
+			Code: AuthErrorInternal, Message: "bad request body",
 		}, nil
 	}
 	opCtx := newHTTPOpCtx(r, s.opts.TrustedProxyHeader)
-	resp, err := s.handleLogin(opCtx, &enginepb.AuthLoginRequest{
-		Username: req.Username, Password: req.Password, MfaCode: req.MFACode,
+	resp, err := s.handleLogin(opCtx, &AuthLoginRequest{
+		Username: req.Username, Password: req.Password, MFACode: req.MFACode,
 	})
 	if err != nil {
 		return httpStatusFromAuthError(err), authJSONFromError(err), nil
 	}
 	setAuthCookie(w, opts, resp.SessionToken, s.opts.SessionTTL)
 	return http.StatusOK, loginResponseJSON{
-		UserID: resp.UserId, Username: resp.Username, ExpiresAtMs: resp.ExpiresAtMs,
+		UserID: resp.UserID, Username: resp.Username, ExpiresAtMs: resp.ExpiresAtMs,
 	}, nil
 }
 
@@ -190,11 +189,11 @@ func (s *Service) httpRegister(w http.ResponseWriter, r *http.Request, opts HTTP
 	var req registerRequestJSON
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		return http.StatusBadRequest, authErrorJSON{
-			Code: enginepb.AuthError_AUTH_ERROR_INTERNAL, Message: "bad request body",
+			Code: AuthErrorInternal, Message: "bad request body",
 		}, nil
 	}
 	opCtx := newHTTPOpCtx(r, s.opts.TrustedProxyHeader)
-	resp, err := s.handleRegister(opCtx, &enginepb.AuthRegisterRequest{
+	resp, err := s.handleRegister(opCtx, &AuthRegisterRequest{
 		Username: req.Username, Password: req.Password, Email: req.Email,
 	})
 	if err != nil {
@@ -202,7 +201,7 @@ func (s *Service) httpRegister(w http.ResponseWriter, r *http.Request, opts HTTP
 	}
 	setAuthCookie(w, opts, resp.SessionToken, s.opts.SessionTTL)
 	return http.StatusOK, loginResponseJSON{
-		UserID: resp.UserId, Username: resp.Username, ExpiresAtMs: resp.ExpiresAtMs,
+		UserID: resp.UserID, Username: resp.Username, ExpiresAtMs: resp.ExpiresAtMs,
 	}, nil
 }
 
@@ -224,7 +223,7 @@ func (s *Service) httpLogout(w http.ResponseWriter, r *http.Request, opts HTTPOp
 	}
 	opCtx := newHTTPOpCtx(r, s.opts.TrustedProxyHeader)
 	WithSessionToken(opCtx, tok)
-	if _, err := s.handleLogout(opCtx, &enginepb.AuthLogoutRequest{}); err != nil {
+	if _, err := s.handleLogout(opCtx, &AuthLogoutRequest{}); err != nil {
 		// Even on error we clear the cookie so the client returns to
 		// login. The audit row (or its absence) tracks the server
 		// state.
@@ -241,7 +240,7 @@ func (s *Service) httpRefresh(w http.ResponseWriter, r *http.Request, opts HTTPO
 	tok := httpSessionToken(r, opts)
 	if tok == "" {
 		return http.StatusUnauthorized, authErrorJSON{
-			Code:    enginepb.AuthError_AUTH_ERROR_NOT_AUTHENTICATED,
+			Code:    AuthErrorNotAuthenticated,
 			Message: "no session cookie",
 		}, nil
 	}
@@ -249,7 +248,7 @@ func (s *Service) httpRefresh(w http.ResponseWriter, r *http.Request, opts HTTPO
 	if err != nil {
 		clearAuthCookie(w, opts)
 		return http.StatusUnauthorized, authErrorJSON{
-			Code:    enginepb.AuthError_AUTH_ERROR_TOKEN_INVALID,
+			Code:    AuthErrorTokenInvalid,
 			Message: "invalid session",
 		}, nil
 	}
@@ -269,7 +268,7 @@ func (s *Service) httpMe(w http.ResponseWriter, r *http.Request, opts HTTPOpts) 
 	tok := httpSessionToken(r, opts)
 	if tok == "" {
 		return http.StatusUnauthorized, authErrorJSON{
-			Code:    enginepb.AuthError_AUTH_ERROR_NOT_AUTHENTICATED,
+			Code:    AuthErrorNotAuthenticated,
 			Message: "no session cookie",
 		}, nil
 	}
@@ -277,7 +276,7 @@ func (s *Service) httpMe(w http.ResponseWriter, r *http.Request, opts HTTPOpts) 
 	if err != nil {
 		clearAuthCookie(w, opts)
 		return http.StatusUnauthorized, authErrorJSON{
-			Code:    enginepb.AuthError_AUTH_ERROR_TOKEN_INVALID,
+			Code:    AuthErrorTokenInvalid,
 			Message: "invalid session",
 		}, nil
 	}
@@ -303,19 +302,19 @@ func (s *Service) httpChangePassword(w http.ResponseWriter, r *http.Request, opt
 	tok := httpSessionToken(r, opts)
 	if tok == "" {
 		return http.StatusUnauthorized, authErrorJSON{
-			Code:    enginepb.AuthError_AUTH_ERROR_NOT_AUTHENTICATED,
+			Code:    AuthErrorNotAuthenticated,
 			Message: "no session cookie",
 		}, nil
 	}
 	var req changePasswordRequestJSON
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		return http.StatusBadRequest, authErrorJSON{
-			Code: enginepb.AuthError_AUTH_ERROR_INTERNAL, Message: "bad request body",
+			Code: AuthErrorInternal, Message: "bad request body",
 		}, nil
 	}
 	opCtx := newHTTPOpCtx(r, s.opts.TrustedProxyHeader)
 	WithSessionToken(opCtx, tok)
-	if _, err := s.handleChangePassword(opCtx, &enginepb.AuthChangePasswordRequest{
+	if _, err := s.handleChangePassword(opCtx, &AuthChangePasswordRequest{
 		CurrentPassword: req.CurrentPassword, NewPassword: req.NewPassword,
 	}); err != nil {
 		return httpStatusFromAuthError(err), authJSONFromError(err), nil

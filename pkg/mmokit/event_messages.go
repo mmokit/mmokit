@@ -22,12 +22,6 @@ type Pong struct {
 	ServerTime int64 // server clock at the moment Pong was built
 }
 
-// LoginRejected — terminal login failure. The client should display the
-// reason and return to the login screen. Replaces enginepb.LoginRejectedMsg.
-type LoginRejected struct {
-	Reason string
-}
-
 // CellInfo — per-cell layout for debug overlays.
 // Replaces enginepb.CellInfo.
 type CellInfo struct {
@@ -78,7 +72,6 @@ type WorldDelta struct {
 func registerEngineTypedEvents() {
 	engineTypedEventsOnce.Do(func() {
 		RegisterEvent[Pong]()
-		RegisterEvent[LoginRejected]()
 		RegisterEvent[DebugInfo]()
 		RegisterEvent[WorldDelta]()
 	})

@@ -9,7 +9,6 @@ import (
 
 	"github.com/google/uuid"
 
-	enginepb "github.com/zenion/mmoserver/gen/go/enginepb"
 	"github.com/zenion/mmoserver/pkg/logger"
 	"github.com/zenion/mmoserver/pkg/ops"
 	"github.com/zenion/mmoserver/pkg/service"
@@ -305,9 +304,9 @@ func testOpCtx(ip string) *ops.OpContext {
 
 func TestLoginUnknownUserReturnsInvalidCredentials(t *testing.T) {
 	s, _ := newTestService(t)
-	_, err := s.handleLogin(testOpCtx("1.1.1.1"), &enginepb.AuthLoginRequest{Username: "ghost", Password: "x"})
+	_, err := s.handleLogin(testOpCtx("1.1.1.1"), &AuthLoginRequest{Username: "ghost", Password: "x"})
 	ae, ok := err.(*authError)
-	if !ok || ae.Code != enginepb.AuthError_AUTH_ERROR_INVALID_CREDENTIALS {
+	if !ok || ae.Code != AuthErrorInvalidCredentials {
 		t.Fatalf("want INVALID_CREDENTIALS, got %v", err)
 	}
 }
@@ -317,7 +316,7 @@ func TestLoginUnknownUserReturnsInvalidCredentials(t *testing.T) {
 func TestRegisterCreatesUserAndSession(t *testing.T) {
 	s, _ := newTestService(t)
 	opCtx := testOpCtx("1.1.1.1")
-	resp, err := s.handleRegister(opCtx, &enginepb.AuthRegisterRequest{Username: "Alice", Password: "hunter22"})
+	resp, err := s.handleRegister(opCtx, &AuthRegisterRequest{Username: "Alice", Password: "hunter22"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -327,7 +326,7 @@ func TestRegisterCreatesUserAndSession(t *testing.T) {
 	if resp.SessionToken == "" {
 		t.Fatal("no session token")
 	}
-	if _, err := s.handleLogin(opCtx, &enginepb.AuthLoginRequest{Username: "alice", Password: "hunter22"}); err != nil {
+	if _, err := s.handleLogin(opCtx, &AuthLoginRequest{Username: "alice", Password: "hunter22"}); err != nil {
 		t.Fatalf("login after register: %v", err)
 	}
 }
@@ -335,10 +334,10 @@ func TestRegisterCreatesUserAndSession(t *testing.T) {
 func TestRegisterDuplicateUsername(t *testing.T) {
 	s, _ := newTestService(t)
 	opCtx := testOpCtx("1.1.1.1")
-	_, _ = s.handleRegister(opCtx, &enginepb.AuthRegisterRequest{Username: "bob", Password: "hunter22"})
-	_, err := s.handleRegister(opCtx, &enginepb.AuthRegisterRequest{Username: "BOB", Password: "hunter22"})
+	_, _ = s.handleRegister(opCtx, &AuthRegisterRequest{Username: "bob", Password: "hunter22"})
+	_, err := s.handleRegister(opCtx, &AuthRegisterRequest{Username: "BOB", Password: "hunter22"})
 	ae, ok := err.(*authError)
-	if !ok || ae.Code != enginepb.AuthError_AUTH_ERROR_USERNAME_TAKEN {
+	if !ok || ae.Code != AuthErrorUsernameTaken {
 		t.Fatalf("want USERNAME_TAKEN, got %v", err)
 	}
 	if ae.Metadata == nil || ae.Metadata.Canonical != "bob" {
@@ -348,9 +347,9 @@ func TestRegisterDuplicateUsername(t *testing.T) {
 
 func TestRegisterPasswordTooWeak(t *testing.T) {
 	s, _ := newTestService(t)
-	_, err := s.handleRegister(testOpCtx("1.1.1.1"), &enginepb.AuthRegisterRequest{Username: "carol", Password: "short"})
+	_, err := s.handleRegister(testOpCtx("1.1.1.1"), &AuthRegisterRequest{Username: "carol", Password: "short"})
 	ae, ok := err.(*authError)
-	if !ok || ae.Code != enginepb.AuthError_AUTH_ERROR_PASSWORD_TOO_WEAK {
+	if !ok || ae.Code != AuthErrorPasswordTooWeak {
 		t.Fatalf("want PASSWORD_TOO_WEAK, got %v", err)
 	}
 }
@@ -360,15 +359,15 @@ func TestRegisterPasswordTooWeak(t *testing.T) {
 func TestValidateTokenReconnect(t *testing.T) {
 	s, _ := newTestService(t)
 	opCtx := testOpCtx("1.1.1.1")
-	reg, _ := s.handleRegister(opCtx, &enginepb.AuthRegisterRequest{Username: "evan", Password: "hunter22"})
+	reg, _ := s.handleRegister(opCtx, &AuthRegisterRequest{Username: "evan", Password: "hunter22"})
 
 	// Sleep briefly so the slid expiry is strictly greater than the issued expiry.
 	time.Sleep(2 * time.Millisecond)
-	resp, err := s.handleValidateToken(opCtx, &enginepb.AuthValidateTokenRequest{SessionToken: reg.SessionToken})
+	resp, err := s.handleValidateToken(opCtx, &AuthValidateTokenRequest{SessionToken: reg.SessionToken})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if resp.UserId != reg.UserId {
+	if resp.UserID != reg.UserID {
 		t.Fatalf("user mismatch")
 	}
 	if resp.ExpiresAtMs <= reg.ExpiresAtMs {
@@ -378,9 +377,9 @@ func TestValidateTokenReconnect(t *testing.T) {
 
 func TestValidateTokenInvalid(t *testing.T) {
 	s, _ := newTestService(t)
-	_, err := s.handleValidateToken(testOpCtx("1.1.1.1"), &enginepb.AuthValidateTokenRequest{SessionToken: "deadbeef"})
+	_, err := s.handleValidateToken(testOpCtx("1.1.1.1"), &AuthValidateTokenRequest{SessionToken: "deadbeef"})
 	ae, ok := err.(*authError)
-	if !ok || ae.Code != enginepb.AuthError_AUTH_ERROR_TOKEN_INVALID {
+	if !ok || ae.Code != AuthErrorTokenInvalid {
 		t.Fatalf("want TOKEN_INVALID, got %v", err)
 	}
 }
@@ -390,13 +389,13 @@ func TestValidateTokenInvalid(t *testing.T) {
 func TestLogoutRevokesSession(t *testing.T) {
 	s, _ := newTestService(t)
 	opCtx := testOpCtx("1.1.1.1")
-	reg, _ := s.handleRegister(opCtx, &enginepb.AuthRegisterRequest{Username: "fay", Password: "hunter22"})
+	reg, _ := s.handleRegister(opCtx, &AuthRegisterRequest{Username: "fay", Password: "hunter22"})
 	WithSessionToken(opCtx, reg.SessionToken)
 
-	if _, err := s.handleLogout(opCtx, &enginepb.AuthLogoutRequest{}); err != nil {
+	if _, err := s.handleLogout(opCtx, &AuthLogoutRequest{}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.handleValidateToken(opCtx, &enginepb.AuthValidateTokenRequest{SessionToken: reg.SessionToken}); err == nil {
+	if _, err := s.handleValidateToken(opCtx, &AuthValidateTokenRequest{SessionToken: reg.SessionToken}); err == nil {
 		t.Fatal("expected error after logout")
 	}
 }
@@ -406,19 +405,19 @@ func TestLogoutRevokesSession(t *testing.T) {
 func TestChangePasswordRevokesOtherSessions(t *testing.T) {
 	s, _ := newTestService(t)
 	opCtx := testOpCtx("1.1.1.1")
-	reg, _ := s.handleRegister(opCtx, &enginepb.AuthRegisterRequest{Username: "gail", Password: "hunter22"})
-	second, _ := s.handleLogin(opCtx, &enginepb.AuthLoginRequest{Username: "gail", Password: "hunter22"})
+	reg, _ := s.handleRegister(opCtx, &AuthRegisterRequest{Username: "gail", Password: "hunter22"})
+	second, _ := s.handleLogin(opCtx, &AuthLoginRequest{Username: "gail", Password: "hunter22"})
 
 	WithSessionToken(opCtx, reg.SessionToken)
-	if _, err := s.handleChangePassword(opCtx, &enginepb.AuthChangePasswordRequest{
+	if _, err := s.handleChangePassword(opCtx, &AuthChangePasswordRequest{
 		CurrentPassword: "hunter22", NewPassword: "newer-than-eight",
 	}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.handleValidateToken(opCtx, &enginepb.AuthValidateTokenRequest{SessionToken: reg.SessionToken}); err != nil {
+	if _, err := s.handleValidateToken(opCtx, &AuthValidateTokenRequest{SessionToken: reg.SessionToken}); err != nil {
 		t.Fatalf("current session should survive: %v", err)
 	}
-	if _, err := s.handleValidateToken(opCtx, &enginepb.AuthValidateTokenRequest{SessionToken: second.SessionToken}); err == nil {
+	if _, err := s.handleValidateToken(opCtx, &AuthValidateTokenRequest{SessionToken: second.SessionToken}); err == nil {
 		t.Fatal("second session should be revoked")
 	}
 }
@@ -426,13 +425,13 @@ func TestChangePasswordRevokesOtherSessions(t *testing.T) {
 func TestChangePasswordCurrentMismatch(t *testing.T) {
 	s, _ := newTestService(t)
 	opCtx := testOpCtx("1.1.1.1")
-	reg, _ := s.handleRegister(opCtx, &enginepb.AuthRegisterRequest{Username: "harry", Password: "hunter22"})
+	reg, _ := s.handleRegister(opCtx, &AuthRegisterRequest{Username: "harry", Password: "hunter22"})
 	WithSessionToken(opCtx, reg.SessionToken)
-	_, err := s.handleChangePassword(opCtx, &enginepb.AuthChangePasswordRequest{
+	_, err := s.handleChangePassword(opCtx, &AuthChangePasswordRequest{
 		CurrentPassword: "wrong", NewPassword: "newer-than-eight",
 	})
 	ae, ok := err.(*authError)
-	if !ok || ae.Code != enginepb.AuthError_AUTH_ERROR_INVALID_CREDENTIALS {
+	if !ok || ae.Code != AuthErrorInvalidCredentials {
 		t.Fatalf("want INVALID_CREDENTIALS, got %v", err)
 	}
 }

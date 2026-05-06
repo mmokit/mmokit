@@ -5,33 +5,20 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/zenion/mmoserver/pkg/ops"
 	"github.com/zenion/mmoserver/pkg/service"
 )
 
 // stubServiceImpl satisfies service.Service for tests that don't need real
-// behavior — it counts Init / RegisterOps / Shutdown calls and registers a
-// no-op handler per declared op code.
+// behavior — it counts Init / Shutdown calls. Op codes ride the typed-op
+// registry now (Plan 2 Phase 5), so no per-instance op wiring lives here.
 type stubServiceImpl struct {
-	codes        []uint32
-	initCalls    int
-	registerCalls int
+	codes         []uint32
+	initCalls     int
 	shutdownCalls int
 }
 
 func (s *stubServiceImpl) Init(*service.Context) error {
 	s.initCalls++
-	return nil
-}
-
-func (s *stubServiceImpl) RegisterOps(r *ops.Router) error {
-	s.registerCalls++
-	for _, code := range s.codes {
-		c := code
-		r.Register(c, func(*ops.OpContext, []byte) ([]byte, error) {
-			return []byte("ok"), nil
-		})
-	}
 	return nil
 }
 

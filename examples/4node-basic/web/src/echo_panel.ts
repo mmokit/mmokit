@@ -5,65 +5,14 @@
 // instance ID that handled the request, which makes hash-affinity
 // routing and cross-instance DB consistency visible at a glance.
 
-import { create, toBinary, fromBinary } from "@bufbuild/protobuf";
 import {
-  EchoPingRequestSchema,
-  EchoPingResponseSchema,
-  EchoPersistRequestSchema,
-  EchoPersistResponseSchema,
-  EchoFetchRequestSchema,
-  EchoFetchResponseSchema,
-  EchoOpCode,
-} from "@gen/basicpb/basic_pb.js";
-import type {
-  EchoPingResponse,
-  EchoPersistResponse,
-  EchoFetchResponse,
-} from "@gen/basicpb/basic_pb.js";
-import {
-  OperationRequestSchema,
-  OperationResponseSchema,
-} from "@gen/enginepb/engine_pb.js";
-import type { OperationResponse } from "@gen/enginepb/engine_pb.js";
-import type { Transport } from "../sdk/transport.js";
+  EchoPingRequest,
+  EchoPersistRequest,
+  EchoFetchRequest,
+} from "../sdk/operations.js";
+import type { BasicClient } from "../sdk/client.js";
 
-interface PendingRequest {
-  resolve: (data: Uint8Array) => void;
-  reject: (err: Error) => void;
-  timer: number;
-}
-
-export function mountEchoPanel(transport: Transport): void {
-  let nextRequestID = 1;
-  const pending = new Map<number, PendingRequest>();
-
-  // Wire OperationResponse handler. Resolves correlation by request_id.
-  transport.onOperation((payload) => {
-    const resp = fromBinary(OperationResponseSchema, payload) as OperationResponse;
-    const p = pending.get(resp.requestId);
-    if (!p) return;
-    pending.delete(resp.requestId);
-    clearTimeout(p.timer);
-    if (resp.returnCode !== 0) {
-      p.reject(new Error(resp.errorMsg || `op failed (code=${resp.returnCode})`));
-      return;
-    }
-    p.resolve(resp.data);
-  });
-
-  function sendOp(code: number, data: Uint8Array): Promise<Uint8Array> {
-    const requestId = nextRequestID++;
-    const env = create(OperationRequestSchema, { code, requestId, data });
-    transport.sendOperation(toBinary(OperationRequestSchema, env));
-    return new Promise((resolve, reject) => {
-      const timer = window.setTimeout(() => {
-        pending.delete(requestId);
-        reject(new Error("op timeout (5s)"));
-      }, 5000);
-      pending.set(requestId, { resolve, reject, timer });
-    });
-  }
-
+export function mountEchoPanel(client: BasicClient): void {
   // --- DOM ---
   const root = document.createElement("div");
   root.id = "echo-panel";
@@ -119,13 +68,8 @@ export function mountEchoPanel(transport: Transport): void {
     const msg = ($("#ep-ping") as HTMLInputElement).value;
     out("#ep-ping-out", "...", "#79c");
     try {
-      const req = create(EchoPingRequestSchema, { msg });
-      const respBytes = await sendOp(
-        EchoOpCode.BOP_ECHO_PING,
-        toBinary(EchoPingRequestSchema, req),
-      );
-      const resp = fromBinary(EchoPingResponseSchema, respBytes) as EchoPingResponse;
-      out("#ep-ping-out", `← msg="${resp.msg}" instance=${resp.instanceId}`);
+      const resp = await client.echoPing(new EchoPingRequest({ msg }));
+      out("#ep-ping-out", `← msg="${resp.msg}" instance=${resp.instanceID}`);
     } catch (e) {
       out("#ep-ping-out", `error: ${e instanceof Error ? e.message : String(e)}`, "#f88");
     }
@@ -136,13 +80,8 @@ export function mountEchoPanel(transport: Transport): void {
     const value = ($("#ep-val") as HTMLInputElement).value;
     out("#ep-persist-out", "...", "#79c");
     try {
-      const req = create(EchoPersistRequestSchema, { key, value });
-      const respBytes = await sendOp(
-        EchoOpCode.BOP_ECHO_PERSIST,
-        toBinary(EchoPersistRequestSchema, req),
-      );
-      const resp = fromBinary(EchoPersistResponseSchema, respBytes) as EchoPersistResponse;
-      out("#ep-persist-out", `← ok=${resp.ok} instance=${resp.instanceId}`);
+      const resp = await client.echoPersist(new EchoPersistRequest({ key, value }));
+      out("#ep-persist-out", `← ok=${resp.ok} instance=${resp.instanceID}`);
     } catch (e) {
       out("#ep-persist-out", `error: ${e instanceof Error ? e.message : String(e)}`, "#f88");
     }
@@ -152,14 +91,9 @@ export function mountEchoPanel(transport: Transport): void {
     const key = ($("#ep-fkey") as HTMLInputElement).value;
     out("#ep-fetch-out", "...", "#79c");
     try {
-      const req = create(EchoFetchRequestSchema, { key });
-      const respBytes = await sendOp(
-        EchoOpCode.BOP_ECHO_FETCH,
-        toBinary(EchoFetchRequestSchema, req),
-      );
-      const resp = fromBinary(EchoFetchResponseSchema, respBytes) as EchoFetchResponse;
+      const resp = await client.echoFetch(new EchoFetchRequest({ key }));
       const ts = resp.foundAtMs ? new Date(Number(resp.foundAtMs)).toISOString() : "(missing)";
-      out("#ep-fetch-out", `← value="${resp.value}" foundAt=${ts} instance=${resp.instanceId}`);
+      out("#ep-fetch-out", `← value="${resp.value}" foundAt=${ts} instance=${resp.instanceID}`);
     } catch (e) {
       out("#ep-fetch-out", `error: ${e instanceof Error ? e.message : String(e)}`, "#f88");
     }

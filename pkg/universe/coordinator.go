@@ -610,11 +610,14 @@ type Process struct {
 	// cycles to converge on the real offset.
 	ClusterClock *ClusterClock
 
-	// pendingAuthHookCodes is set by AddGatewayAuthHook (called from
+	// pendingAuthHook is set by InstallGatewayAuthHook (called from
 	// mmokit.RegisterAuthService at facade time) and consumed by Build
-	// after the Gateway is constructed. Nil when auth isn't registered
-	// or when the gateway hook has already been installed.
-	pendingAuthHookCodes []uint32
+	// after the Gateway is constructed. The struct is shared by reference:
+	// the typed-op auth handlers hold the same pointer and call
+	// NotifyXxx through it. The OnSuccess / OnLogout callbacks are filled
+	// in by Build (so they can close over the live *Gateway). Nil when
+	// auth isn't registered.
+	pendingAuthHook *auth.GatewayHook
 }
 
 // New creates a coordinator with the given Config.
@@ -720,19 +723,11 @@ func New(cfg Config) *Process {
 	c.serviceRouting = service.NewRoutingIndex()
 
 	// Auto-wire OpRouter for service-hosting processes that haven't
-	// supplied one. Service handlers register against this router; the
-	// gateway forwards channel-0x01 ops here for dispatch. Games with
-	// their own ops (cmd/server) keep using their preconstructed router;
-	// games without ops (4node-basic) get a working default for free.
+	// supplied one. The router exists primarily as the host for the typed-op
+	// dispatcher's poll goroutine and connection-manager handle.
 	if cfg.OpRouter == nil {
 		c.opsSessions = ops.NewPlayerSessions()
-		cfg.OpRouter = ops.NewRouter(
-			cfg.ConnManager,
-			c.opsSessions,
-			2, // worker count — same default cmd/server uses
-			defaultOpRequestParser,
-			defaultOpResponseFrameBuilder,
-		)
+		cfg.OpRouter = ops.NewRouter(cfg.ConnManager, c.opsSessions)
 		c.cfg = cfg
 	}
 
@@ -790,7 +785,6 @@ func (c *Process) registerAllBuiltins() {
 		registerClusterBuiltins,
 		registerLoadBuiltins,
 		registerCommitLogBuiltins,
-		registerServiceBuiltins,
 	} {
 		if err := fn(c.registry, c); err != nil {
 			log.Printf("coordinator: registerAllBuiltins: %v", err)
@@ -1128,53 +1122,29 @@ func (c *Process) AppendExtraMigrations(fsys fs.FS) {
 	c.cfg.ExtraMigrations = append(c.cfg.ExtraMigrations, fsys)
 }
 
-// AddGatewayAuthHook installs the auth-response interceptor on the
-// process's gateway and registers the OpRouter post-handle observer that
-// drives it. Called by mmokit.RegisterAuthService at startup. No-op when
-// the process doesn't have RoleGateway or has no gateway.
+// InstallGatewayAuthHook returns the *auth.GatewayHook the typed-op auth
+// handlers will notify after each successful op. The OnSuccess / OnLogout
+// callbacks are filled in by Build() once the gateway is constructed so
+// they can close over the live *Gateway. Called by
+// mmokit.RegisterAuthService at facade time.
 //
-// authOpCodes is the list of op codes the auth service handles. Each
-// becomes pre-auth-allowed on the OpRouter (so AUTH_LOGIN/AUTH_REGISTER/
-// AUTH_VALIDATE_TOKEN reach handlers without an established session).
-func (c *Process) AddGatewayAuthHook(authOpCodes []uint32) {
-	// Router-side wiring runs immediately: AllowPreAuth + post-handle
-	// observer for the auth response interception. This must happen at
-	// facade time so the router has the auth codes marked pre-auth before
-	// any client op arrives. The OpRouter is supplied via cfg at New()
-	// time so it exists here even though c.roles / c.gateway aren't set
-	// until Build().
-	router := c.cfg.OpRouter
-	if router == nil {
-		return
+// Returning the same pointer to subsequent callers is intentional — the
+// hook is a per-process singleton; auth handler closures capture this
+// pointer and call Notify* on it directly without round-tripping through
+// the legacy proto-op router's post-handle observer.
+func (c *Process) InstallGatewayAuthHook() *auth.GatewayHook {
+	if c.pendingAuthHook == nil {
+		c.pendingAuthHook = &auth.GatewayHook{Logger: c.Log}
 	}
-	authCodeSet := make(map[uint32]bool, len(authOpCodes))
-	for _, code := range authOpCodes {
-		authCodeSet[code] = true
-		router.AllowPreAuth(code)
-	}
-	// The post-handle hook closes over c.gateway, which is nil now but
-	// will be set during Build. The closure resolves it lazily — first
-	// auth response after gateway construction picks up the live pointer.
-	router.AddPostHandle(func(connID, opCode uint32, payload []byte) {
-		if !authCodeSet[opCode] {
-			return
-		}
-		gw := c.gateway
-		if gw == nil || gw.authHook == nil {
-			return // gateway not yet constructed or no hook installed
-		}
-		gw.authHook.ProcessResponse(connID, opCode, payload)
-	})
-	// Stash the hook factory; Build runs it after gateway construction.
-	c.pendingAuthHookCodes = authOpCodes
+	return c.pendingAuthHook
 }
 
-// installPendingAuthHook constructs the auth.GatewayHook against the now-
-// constructed Gateway and installs it. Called by Build() after the
-// gateway is wired. No-op if RegisterAuthService wasn't called or the
+// installPendingAuthHook fills in the GatewayHook's OnSuccess / OnLogout
+// callbacks against the now-constructed Gateway. Called by Build() after
+// the gateway is wired. No-op if RegisterAuthService wasn't called or the
 // process doesn't have RoleGateway.
 func (c *Process) installPendingAuthHook() {
-	if c.pendingAuthHookCodes == nil {
+	if c.pendingAuthHook == nil {
 		return
 	}
 	if !c.roles.Has(RoleGateway) {
@@ -1183,22 +1153,18 @@ func (c *Process) installPendingAuthHook() {
 	if c.gateway == nil {
 		return
 	}
-	hook := &auth.GatewayHook{
-		Logger: c.Log,
-		OnSuccess: func(connID uint32, userIDStr, username, token string, expiresAtMs int64) {
-			uid, err := uuid.Parse(userIDStr)
-			if err != nil {
-				c.Log.Log(CatNetConn, "gateway: auth: bad user_id %q: %v", userIDStr, err)
-				return
-			}
-			c.gateway.onAuthSuccess(connID, uid, username, token, expiresAtMs)
-		},
-		OnLogout: func(connID uint32) {
-			c.gateway.onAuthLogout(connID)
-		},
+	c.pendingAuthHook.OnSuccess = func(connID uint32, userIDStr, username, token string, expiresAtMs int64) {
+		uid, err := uuid.Parse(userIDStr)
+		if err != nil {
+			c.Log.Log(CatNetConn, "gateway: auth: bad user_id %q: %v", userIDStr, err)
+			return
+		}
+		c.gateway.onAuthSuccess(connID, uid, username, token, expiresAtMs)
 	}
-	c.gateway.installAuthHook(hook)
-	c.pendingAuthHookCodes = nil
+	c.pendingAuthHook.OnLogout = func(connID uint32) {
+		c.gateway.onAuthLogout(connID)
+	}
+	c.gateway.installAuthHook(c.pendingAuthHook)
 }
 
 // EntityHostForNetID returns the host ID owning the entity with the given
@@ -2350,6 +2316,15 @@ func (c *Process) Start(parent ...context.Context) {
 	// registered (just polls + ignores unknown codes). Starts after
 	// startServices so service handlers are already registered.
 	if c.cfg.OpRouter != nil && c.roles.Has(RoleGateway) {
+		// Plan 2: install the typed-op dispatcher. The router peeks the
+		// first byte of every drained 0x01 frame: 0x08 → legacy proto;
+		// otherwise → DispatchTypedOpInbound. The Process is passed as
+		// the CellOpRouter so RoutePlayerCell entries route through
+		// Process.DispatchCellRoutedOp (engine.RunOnLoop on the player's
+		// authoritative cell).
+		c.cfg.OpRouter.SetTypedOpHandler(func(payload []byte, ctx *ops.OpContext) []byte {
+			return DispatchTypedOpInbound(payload, ctx, c)
+		})
 		go c.cfg.OpRouter.Run(ctx)
 	}
 

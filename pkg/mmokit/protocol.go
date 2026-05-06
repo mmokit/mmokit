@@ -8,7 +8,6 @@ import (
 	"github.com/mlange-42/ark/ecs"
 	enginepb "github.com/zenion/mmoserver/gen/go/enginepb"
 	"github.com/zenion/mmoserver/pkg/engine"
-	"github.com/zenion/mmoserver/pkg/ops"
 	"github.com/zenion/mmoserver/pkg/system"
 	"github.com/zenion/mmoserver/pkg/universe"
 )
@@ -26,30 +25,23 @@ type ServerEventSchema struct {
 	ProtoName string `json:"protoName"` // fully qualified proto name; empty = custom binary
 }
 
-// OperationSchema describes one request/response operation for schema export.
-type OperationSchema struct {
-	Code          uint32 `json:"code"`
-	Name          string `json:"name"`
-	RequestProto  string `json:"requestProto"`
-	ResponseProto string `json:"responseProto"`
-}
-
 // ProtocolSchema is the complete machine-readable protocol description.
 type ProtocolSchema struct {
 	Game             string                     `json:"game"`
 	ClientEvents     []engine.ClientEventSchema `json:"clientEvents"`
 	ServerEvents     []ServerEventSchema        `json:"serverEvents"`
 	Entities         []system.EntitySchema      `json:"entities"`
-	Operations       []OperationSchema          `json:"operations,omitempty"`
 	BroadcastTypes   []BroadcastTypeSchema      `json:"broadcast_types,omitempty"`
 	ClientInputTypes []ClientInputTypeSchema    `json:"client_input_types,omitempty"`
 	// ServerEventTypes lists every type registered via mmokit.RegisterEvent[T].
 	// Wire layout mirrors broadcast types (reflection codec); sdkgen emits a
 	// TS class per entry plus a client.onXxx(handler) method that subscribes
-	// against the typed-event dispatcher. Empty until games migrate from the
-	// proto-based ServerEvents path to the typed RegisterEvent[T] path; until
-	// then sdkgen emits zero per-event code from this section.
+	// against the typed-event dispatcher.
 	ServerEventTypes []ServerEventTypeSchema `json:"server_event_types,omitempty"`
+	// Operations lists every RegisterOp[Req, Res any] registration. Sdkgen
+	// emits operations.ts (per-op Request + Response classes) plus a Promise
+	// correlator on the generated <Game>Client.
+	Operations []OperationSchema `json:"operations,omitempty"`
 }
 
 // ServerEventTypeSchema describes a typed server→client event registered via
@@ -59,12 +51,27 @@ type ProtocolSchema struct {
 // mirror of the broadcast classes, plus a client.onXxx(handler) wrapper.
 type ServerEventTypeSchema = BroadcastTypeSchema
 
+// OperationSchema describes one RegisterOp[Req, Res any] registration.
+// Both Request + Response use the same reflection-codec wire layout as
+// broadcasts/server-events/client-inputs (reuses BroadcastFieldSchema for
+// the per-field shape). Sdkgen consumes this section to emit operations.ts:
+// per-op Request class (with encode() instance method) + Response class
+// (with static decode), plus a client.<opName>(req): Promise<Res> wrapper.
+type OperationSchema struct {
+	Kind             string                 `json:"kind"` // "gateway-local" or "player-cell"
+	RequestTypeID    uint32                 `json:"request_type_id"`
+	RequestTypeName  string                 `json:"request_type_name"`
+	RequestFields    []BroadcastFieldSchema `json:"request_fields"`
+	ResponseTypeID   uint32                 `json:"response_type_id"`
+	ResponseTypeName string                 `json:"response_type_name"`
+	ResponseFields   []BroadcastFieldSchema `json:"response_fields"`
+}
+
 // Protocol collects the full client/server contract for a game.
 type Protocol struct {
 	game         string
 	clientEvents []engine.ClientEventSchema
 	serverEvents []ServerEventSchema
-	operations   []OperationSchema
 	entityNames  []entityNameEntry
 	replicators  *system.ReplicatorRegistry
 	// serverEventsRegistry holds the typed server-event registry when the
@@ -74,8 +81,9 @@ type Protocol struct {
 	serverEventsRegistry *ServerEvents
 	// clientEventsRegistry holds the typed client-event registry when the
 	// game uses Protocol.ClientEvents(fn) to declare events that bypass the
-	// runtime InputRouter (e.g. CE_LOGIN, CE_PING) or are registered via
-	// low-level router.Handle without proto-name capture.
+	// runtime InputRouter (e.g. CE_PING handled by the EventInterceptor)
+	// or are registered via low-level router.Handle without proto-name
+	// capture.
 	clientEventsRegistry *ClientEvents
 }
 
@@ -96,8 +104,8 @@ func NewProtocol(game string) *Protocol {
 	// Phase 7 the only proto-envelope events that survive are the bare
 	// framework hooks: SE_SERVER_CONFIG (sent inline before any cell
 	// exists), SE_CELL_CHANGE (reserved future hint), and the engine
-	// default SE_PLAYER_SPAWNED. Migrated events (Pong, LoginRejected,
-	// DebugInfo, WorldDelta) ride the typed registry below.
+	// default SE_PLAYER_SPAWNED. Migrated events (Pong, DebugInfo,
+	// WorldDelta) ride the typed registry below.
 	RegisterServerEvent[enginepb.ServerConfigMsg](p.serverEventsRegistry, enginepb.ServerEventCode_SE_SERVER_CONFIG)
 	RegisterServerEvent[enginepb.CellChangeMsg](p.serverEventsRegistry, enginepb.ServerEventCode_SE_CELL_CHANGE)
 	// Engine default for SE_PLAYER_SPAWNED is the bare SpawnedMsg sent by
@@ -170,16 +178,6 @@ func ServerEvent[C engine.EventCode](p *Protocol, code C, name string, protoName
 	})
 }
 
-// Operation registers a request/response operation.
-func Operation[C engine.EventCode](p *Protocol, code C, name string, requestProto, responseProto string) {
-	p.operations = append(p.operations, OperationSchema{
-		Code:          uint32(code),
-		Name:          name,
-		RequestProto:  requestProto,
-		ResponseProto: responseProto,
-	})
-}
-
 // SetReplicators wires in the ReplicatorRegistry for entity schema extraction.
 func (p *Protocol) SetReplicators(r *system.ReplicatorRegistry) {
 	p.replicators = r
@@ -208,7 +206,6 @@ func (p *Protocol) Schema() ProtocolSchema {
 		Game:         p.game,
 		ClientEvents: p.clientEvents,
 		ServerEvents: serverEvents,
-		Operations:   p.operations,
 	}
 	// Merge client events: registry entries (with typed proto names) take
 	// precedence. Router entries for codes already declared in the registry
@@ -247,6 +244,23 @@ func (p *Protocol) Schema() ProtocolSchema {
 	for _, t := range RegisteredServerEventTypes() {
 		ps.ServerEventTypes = append(ps.ServerEventTypes, BroadcastTypeOf(t))
 	}
+	// Operations: every RegisterOp[Req, Res any] entry exposes its
+	// request + response types here. Sdkgen emits operations.ts (per-op
+	// Request/Response classes) + a Promise correlator on the generated
+	// client. Wire layout reuses BroadcastTypeOf for both halves.
+	for _, e := range RegisteredTypedOps() {
+		reqType := BroadcastTypeOf(e.RequestType)
+		resType := BroadcastTypeOf(e.ResponseType)
+		ps.Operations = append(ps.Operations, OperationSchema{
+			Kind:             e.Kind.String(),
+			RequestTypeID:    TypeIDOf(e.RequestType),
+			RequestTypeName:  e.RequestType.String(),
+			RequestFields:    reqType.Fields,
+			ResponseTypeID:   e.ResponseTypeID,
+			ResponseTypeName: e.ResponseType.String(),
+			ResponseFields:   resType.Fields,
+		})
+	}
 	// Final sort by code: InputRouter.Schema() iterates a map in random
 	// Go-map-order, so without this the generated TypeScript SDK methods
 	// would be reordered between successive --dump-schema runs, producing
@@ -262,17 +276,14 @@ func (p *Protocol) WriteSchema(w io.Writer) error {
 	return enc.Encode(p.Schema())
 }
 
-// AssembleFromProcess hydrates the Protocol with runtime-discovered registries:
-// operations from the OpRouter, and entity replicators from any cell's
-// EntityKindDefs. Client-input types (HandleClient[T]) are harvested
-// directly in Schema() via the global mmokit registry.
+// AssembleFromProcess hydrates the Protocol with runtime-discovered
+// entity replicators from any cell's EntityKindDefs. Client-input types
+// (HandleClient[T]) and typed operations (RegisterOp[Req, Res]) are
+// harvested directly in Schema() via the global mmokit registry.
 //
 // Called by the engine's --dump-schema path after Build() has populated
 // every registry but before Start has begun the game loop.
 func (p *Protocol) AssembleFromProcess(proc *universe.Process) {
-	if op := proc.OpRouter(); op != nil {
-		p.operations = append(p.operations, fromOpsSchemas(op.Schema())...)
-	}
 	// Entity replicators: build from the first cell's EntityKindDefs against
 	// a throwaway ECS world. The dump path doesn't run the game loop, so the
 	// registry only needs schema metadata, not real entities.
@@ -290,14 +301,4 @@ func (p *Protocol) AssembleFromProcess(proc *universe.Process) {
 		p.SetReplicators(BuildReplicators(w, proc, defSlice...))
 		break
 	}
-}
-
-// fromOpsSchemas converts ops.OperationSchema to mmokit.OperationSchema. They
-// have identical layout but distinct Go types (ops can't import mmokit).
-func fromOpsSchemas(in []ops.OperationSchema) []OperationSchema {
-	out := make([]OperationSchema, len(in))
-	for i, s := range in {
-		out[i] = OperationSchema(s)
-	}
-	return out
 }

@@ -15,7 +15,6 @@ import {
   CurrencyUpdate,
   PlayerDied,
   Pong,
-  LoginRejected,
   DebugInfo,
   Damage,
   MineExtract,
@@ -278,10 +277,11 @@ export function connect(state: GameState, callbacks: NetworkCallbacks): void {
     state.myEntityId = 0;
   });
 
-  client.onLoginRejected((rejected: LoginRejected) => {
-    callbacks.onLoginRejected(rejected.reason || "Login rejected");
-    client.disconnect();
-  });
+  // Server-side login rejection used to ride a typed LoginRejected
+  // broadcast on channel 0x00; the auth subsystem now handles login
+  // failures inline at the HTTP /auth/* endpoints. The
+  // callbacks.onLoginRejected hook is still invoked from onClose below
+  // for transport-level disconnect + connection-lost UX.
 
   // --- World state ---
   // Per-tick entity-state delta arrives as a typed WorldDelta event (the
@@ -412,7 +412,12 @@ export function connect(state: GameState, callbacks: NetworkCallbacks): void {
   });
 
   // --- Bank / inventory ---
-  client.onBankContents((bank: BankContents) => {
+  // applyBankContents is shared between two delivery paths now:
+  //   1. onBankContents — out-of-band server-initiated pushes (admin
+  //      tools, future automated payouts, deposit/withdraw side effects).
+  //   2. The bank() typed-op response — see refreshBank below and the
+  //      consumers in ui/bank.ts / ui/market.ts / ui/hud.ts.
+  const applyBankContents = (bank: BankContents) => {
     for (const cur of bank.currencies) {
       state.currencyBalances[cur.currencyID] = Number(cur.balance);
     }
@@ -432,7 +437,28 @@ export function connect(state: GameState, callbacks: NetworkCallbacks): void {
     }
     state.dockedCargoMass = bank.cargoMass;
     state.dockedMaxCargoMass = bank.maxCargoMass;
-  });
+  };
+  client.onBankContents(applyBankContents);
+
+  // refreshBank is the typed-op replacement for the legacy fire-and-
+  // forget BankRequest input. Every former `client.send(new BankRequest(...))`
+  // site now calls state.refreshBank() instead — the typed-op promise
+  // returns BankResponse, applyBankContents merges it into state, and
+  // any handler error (rare — proximity check, etc.) is logged + ignored.
+  state.refreshBank = () => {
+    if (!state.connected) return;
+    state.inputSeq++;
+    void client.bank(new BankRequest({ sequence: state.inputSeq }))
+      .then((resp) => {
+        if (resp.error) {
+          // Server-side rejection (not near station, no entity, etc.) —
+          // silent for now; the UI's existing pollers retry on cadence.
+          return;
+        }
+        applyBankContents(resp.contents);
+      })
+      .catch(() => { /* disconnect race */ });
+  };
 
   client.onTransferResult((result: TransferResult) => {
     if (result.success) {
@@ -509,8 +535,7 @@ export function connect(state: GameState, callbacks: NetworkCallbacks): void {
     // pilots' AoI broadcasts skip it (we vanish from the system view),
     // but the docked player's own AoI still includes it so the HUD can
     // continue to read position/cell/equipment from state.entities.get(myEntityId).
-    state.inputSeq++;
-    client.send(new BankRequest({ sequence: state.inputSeq }));
+    state.refreshBank();
   });
 
   // --- Map / currency ---

@@ -85,21 +85,29 @@ func writeClientInputClass(b *strings.Builder, ct ClientInputTypeSchema) {
 	// size strings have to be UTF-8 encoded first to know their byte length.
 	// Other field sizes come straight from the schema's Size column.
 	b.WriteString("  encode(): Uint8Array {\n")
-	writeEncodeBody(b, ct)
+	writeReflectCodecEncode(b, ct)
 	b.WriteString("  }\n")
 	b.WriteString("}\n\n")
 }
 
-// writeEncodeBody writes the body of encode() — buffer sizing pass first
-// (any string fields are UTF-8 encoded into local consts so their .length
-// is known up-front), then the actual write pass into the allocated buffer.
+// writeReflectCodecEncode emits the body of an encode(): Uint8Array method
+// — buffer sizing pass first (any string fields are UTF-8 encoded into
+// local consts so their .length is known up-front), then the actual write
+// pass into the allocated buffer.
 //
 // Fixed-size-only types take the simpler fast path (size known at codegen
 // time, single allocation, no pre-encode).
-func writeEncodeBody(b *strings.Builder, ct ClientInputTypeSchema) {
+//
+// The wire layout is the reflect-codec from pkg/universe/reflect_marshal.go,
+// shared by client-input frames AND typed-op Request bodies. The caller
+// must wrap the emit with the surrounding `encode(): Uint8Array {` / `}`
+// or equivalent. operations.go's writeBroadcastClass(withEncode=true) call
+// path reuses this helper so both inputs.ts and operations.ts have one
+// source of truth for the encode emission.
+func writeReflectCodecEncode(b *strings.Builder, bt BroadcastTypeSchema) {
 	hasString := false
 	fixedSize := 0
-	for _, f := range ct.Fields {
+	for _, f := range bt.Fields {
 		if f.Encoding == "string" {
 			hasString = true
 		} else {
@@ -112,8 +120,8 @@ func writeEncodeBody(b *strings.Builder, ct ClientInputTypeSchema) {
 		fmt.Fprintf(b, "    const buf = new Uint8Array(%d);\n", fixedSize)
 		b.WriteString("    const dv = new DataView(buf.buffer);\n")
 		b.WriteString("    let off = 0;\n")
-		for _, f := range ct.Fields {
-			writeClientInputFieldEncode(b, f)
+		for _, f := range bt.Fields {
+			writeReflectCodecFieldEncode(b, f)
 		}
 		b.WriteString("    return buf;\n")
 		return
@@ -122,14 +130,14 @@ func writeEncodeBody(b *strings.Builder, ct ClientInputTypeSchema) {
 	// Variable-size path: pre-encode each string into a local const, sum
 	// total size from fixed-size fields + (2 + bytes.length) per string,
 	// then do the actual write pass.
-	for _, f := range ct.Fields {
+	for _, f := range bt.Fields {
 		if f.Encoding == "string" {
 			fmt.Fprintf(b, "    const _%s = new TextEncoder().encode(this.%s);\n", f.Name, f.Name)
 		}
 	}
 	// Size expression: fixed bytes + (2 + _<name>.length) per string.
 	parts := []string{fmt.Sprintf("%d", fixedSize)}
-	for _, f := range ct.Fields {
+	for _, f := range bt.Fields {
 		if f.Encoding == "string" {
 			parts = append(parts, fmt.Sprintf("2 + _%s.length", f.Name))
 		}
@@ -137,16 +145,16 @@ func writeEncodeBody(b *strings.Builder, ct ClientInputTypeSchema) {
 	fmt.Fprintf(b, "    const buf = new Uint8Array(%s);\n", strings.Join(parts, " + "))
 	b.WriteString("    const dv = new DataView(buf.buffer);\n")
 	b.WriteString("    let off = 0;\n")
-	for _, f := range ct.Fields {
-		writeClientInputFieldEncode(b, f)
+	for _, f := range bt.Fields {
+		writeReflectCodecFieldEncode(b, f)
 	}
 	b.WriteString("    return buf;\n")
 }
 
-// writeClientInputFieldEncode emits one encode line for a client-input field.
+// writeReflectCodecFieldEncode emits one encode line for a single field.
 // Each line writes the field's bytes via DataView (or buf.set for strings)
 // and advances `off`. Format mirrors reflect_marshal.marshalValue exactly.
-func writeClientInputFieldEncode(b *strings.Builder, f BroadcastFieldSchema) {
+func writeReflectCodecFieldEncode(b *strings.Builder, f BroadcastFieldSchema) {
 	switch f.Encoding {
 	case "f32":
 		fmt.Fprintf(b, "    dv.setFloat32(off, this.%s, true); off += 4;\n", f.Name)
@@ -178,11 +186,12 @@ func writeClientInputFieldEncode(b *strings.Builder, f BroadcastFieldSchema) {
 		fmt.Fprintf(b, "    dv.setUint8(off, this.%s ? 1 : 0); off += 1;\n", f.Name)
 	case "string":
 		// Matches reflect_marshal: 2-byte LE length prefix, then UTF-8 bytes.
-		// _<name> was pre-encoded by writeEncodeBody so we know its length
-		// before the size pass; here we just write the prefix + body bytes.
+		// _<name> was pre-encoded by writeReflectCodecEncode so we know its
+		// length before the size pass; here we just write the prefix + body
+		// bytes.
 		fmt.Fprintf(b, "    dv.setUint16(off, _%s.length, true); off += 2;\n", f.Name)
 		fmt.Fprintf(b, "    buf.set(_%s, off); off += _%s.length;\n", f.Name, f.Name)
 	default:
-		panic(fmt.Sprintf("sdkgen: unsupported client-input field encoding %q for field %q", f.Encoding, f.Name))
+		panic(fmt.Sprintf("sdkgen: unsupported reflect-codec field encoding %q for field %q", f.Encoding, f.Name))
 	}
 }

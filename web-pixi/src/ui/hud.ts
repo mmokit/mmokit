@@ -1,5 +1,5 @@
 import type { ShipEntity } from "../../sdk/index.js";
-import { BankRequest, Equip, InventoryTransfer } from "../../sdk/index.js";
+import { Equip, InventoryTransfer } from "../../sdk/index.js";
 import {
   ITEM_COLORS_CSS,
   DEFAULT_ITEM_COLOR,
@@ -284,8 +284,7 @@ function handleDrop(e: MouseEvent): void {
         }));
         setTimeout(() => {
           if (cargoState?.client && cargoState.bankPanelOpen) {
-            cargoState.inputSeq++;
-            cargoState.client.send(new BankRequest({ sequence: cargoState.inputSeq }));
+            cargoState.refreshBank();
           }
         }, 100);
       }
@@ -324,8 +323,7 @@ function handleDrop(e: MouseEvent): void {
         }));
         setTimeout(() => {
           if (cargoState?.client && cargoState.bankPanelOpen) {
-            cargoState.inputSeq++;
-            cargoState.client.send(new BankRequest({ sequence: cargoState.inputSeq }));
+            cargoState.refreshBank();
           }
         }, 100);
       }

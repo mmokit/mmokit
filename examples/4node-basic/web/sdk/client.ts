@@ -6,7 +6,8 @@ import type { CellChangeMsg, ServerConfigMsg, SpawnedMsg } from "@gen/enginepb/e
 import { Transport } from "./transport.js";
 import { BasicDeltaDecoder } from "./delta-decoder.js";
 import type { DeltaWorldUpdate } from "./entities.js";
-import { TypedDispatcher, DebugInfo, LoginRejected, Pong, WorldDelta } from "./broadcasts.js";
+import { TypedDispatcher, DebugInfo, OperationError, Pong, WorldDelta } from "./broadcasts.js";
+import { AuthChangePasswordRequest, AuthChangePasswordResponse, AuthLoginRequest, AuthLoginResponse, AuthLogoutRequest, AuthLogoutResponse, AuthRegisterRequest, AuthRegisterResponse, AuthValidateTokenRequest, AuthValidateTokenResponse, EchoFetchRequest, EchoFetchResponse, EchoPersistRequest, EchoPersistResponse, EchoPingRequest, EchoPingResponse } from "./operations.js";
 import { ClientEventSchema, ServerEventSchema, type ServerEvent } from "@gen/enginepb/engine_pb.js";
 
 export interface BasicClientOptions {
@@ -24,6 +25,8 @@ export class BasicClient {
   /** Typed broadcast dispatcher — register handlers for AoI-filtered
    *  events emitted by the server's HandleAll[T] machinery. */
   readonly typedEvents = new TypedDispatcher();
+  private pendingTypedOps = new Map<bigint, { resolve: (msg: any) => void; reject: (err: Error) => void; resCls: { typeID: number; decode(buf: Uint8Array): any } }>();
+  private nextTypedOpRequestID: bigint = 1n;
 
   constructor(private options: BasicClientOptions) {
     this.transport = new Transport(options.url);
@@ -36,9 +39,17 @@ export class BasicClient {
     if (this.options.onClose) ws.onclose = this.options.onClose;
     if (this.options.onError) ws.onerror = this.options.onError;
     this.transport.onEvent((payload) => this.handleEvent(payload));
+    this.transport.onOperation((payload) => this.handleOperation(payload));
   }
 
-  disconnect(): void { this.transport.close(); }
+  disconnect(): void {
+    // Reject any pending operations.
+    for (const pending of this.pendingTypedOps.values()) {
+      pending.reject(new Error("client disconnected"));
+    }
+    this.pendingTypedOps.clear();
+    this.transport.close();
+  }
   get connected(): boolean { return this.transport.connected; }
 
   /** Raw transport handle for advanced use (operations channel,
@@ -129,9 +140,9 @@ export class BasicClient {
     return this.typedEvents.on(DebugInfo, handler);
   }
 
-  /** Subscribe to typed server event mmokit.LoginRejected (typeID 0x62f41d81). */
-  onLoginRejected(handler: (msg: LoginRejected) => void): () => void {
-    return this.typedEvents.on(LoginRejected, handler);
+  /** Subscribe to typed server event mmokit.OperationError (typeID 0x3d88aecb). */
+  onOperationError(handler: (msg: OperationError) => void): () => void {
+    return this.typedEvents.on(OperationError, handler);
   }
 
   /** Subscribe to typed server event mmokit.Pong (typeID 0x8527c2fc). */
@@ -142,6 +153,99 @@ export class BasicClient {
   /** Subscribe to typed server event mmokit.WorldDelta (typeID 0x065b16f4). */
   onWorldDelta(handler: (msg: WorldDelta) => void): () => void {
     return this.typedEvents.on(WorldDelta, handler);
+  }
+
+  private handleOperation(payload: Uint8Array): void {
+    if (payload.length === 0) return;
+      // Typed-op response: [typeID:u32 LE][request_id:u64 LE][bodyLen:u32 LE][body].
+      if (payload.length < 16) {
+        console.warn(`typed-op frame: truncated header (len=${payload.length})`);
+        return;
+      }
+      const opDV = new DataView(payload.buffer, payload.byteOffset, payload.byteLength);
+      const resTypeID = opDV.getUint32(0, true);
+      const reqID = opDV.getBigUint64(4, true);
+      const bodyLen = opDV.getUint32(12, true);
+      if (16 + bodyLen > payload.length) {
+        console.warn(`typed-op frame: truncated body for typeID=0x${resTypeID.toString(16)}`);
+        return;
+      }
+      const body = payload.subarray(16, 16 + bodyLen);
+      const pending = this.pendingTypedOps.get(reqID);
+      if (!pending) {
+        console.warn(`typed-op response for unknown request_id ${reqID}`);
+        return;
+      }
+      this.pendingTypedOps.delete(reqID);
+      if (resTypeID === OperationError.typeID) {
+        const err = OperationError.decode(body);
+        pending.reject(new Error(`OperationError code=${err.code}: ${err.message}`));
+        return;
+      }
+      pending.resolve(pending.resCls.decode(body));
+    return;
+  }
+
+  /** Private helper: encode + send a typed-op request, return a
+   *  Promise that resolves with the decoded Response. */
+  private callOp<Req extends { encode(): Uint8Array }, Res>(
+    req: Req,
+    resCls: { typeID: number; decode(buf: Uint8Array): Res }
+  ): Promise<Res> {
+    const reqID = this.nextTypedOpRequestID++;
+    const reqTypeID = (req.constructor as unknown as { typeID: number }).typeID;
+    const body = req.encode();
+    const frame = new Uint8Array(1 + 4 + 8 + 4 + body.length);
+    const dv = new DataView(frame.buffer);
+    frame[0] = 0x01;
+    dv.setUint32(1, reqTypeID, true);
+    dv.setBigUint64(5, reqID, true);
+    dv.setUint32(13, body.length, true);
+    frame.set(body, 17);
+    return new Promise<Res>((resolve, reject) => {
+      this.pendingTypedOps.set(reqID, { resolve, reject, resCls });
+      this.transport.sendRaw(frame);
+    });
+  }
+
+  /** Typed op auth.AuthChangePasswordRequest → auth.AuthChangePasswordResponse (kind=gateway-local). */
+  authChangePassword(req: AuthChangePasswordRequest): Promise<AuthChangePasswordResponse> {
+    return this.callOp<AuthChangePasswordRequest, AuthChangePasswordResponse>(req, AuthChangePasswordResponse);
+  }
+
+  /** Typed op auth.AuthLoginRequest → auth.AuthLoginResponse (kind=gateway-local). */
+  authLogin(req: AuthLoginRequest): Promise<AuthLoginResponse> {
+    return this.callOp<AuthLoginRequest, AuthLoginResponse>(req, AuthLoginResponse);
+  }
+
+  /** Typed op auth.AuthLogoutRequest → auth.AuthLogoutResponse (kind=gateway-local). */
+  authLogout(req: AuthLogoutRequest): Promise<AuthLogoutResponse> {
+    return this.callOp<AuthLogoutRequest, AuthLogoutResponse>(req, AuthLogoutResponse);
+  }
+
+  /** Typed op auth.AuthRegisterRequest → auth.AuthRegisterResponse (kind=gateway-local). */
+  authRegister(req: AuthRegisterRequest): Promise<AuthRegisterResponse> {
+    return this.callOp<AuthRegisterRequest, AuthRegisterResponse>(req, AuthRegisterResponse);
+  }
+
+  /** Typed op auth.AuthValidateTokenRequest → auth.AuthValidateTokenResponse (kind=gateway-local). */
+  authValidateToken(req: AuthValidateTokenRequest): Promise<AuthValidateTokenResponse> {
+    return this.callOp<AuthValidateTokenRequest, AuthValidateTokenResponse>(req, AuthValidateTokenResponse);
+  }
+
+  /** Typed op echo.EchoFetchRequest → echo.EchoFetchResponse (kind=gateway-local). */
+  echoFetch(req: EchoFetchRequest): Promise<EchoFetchResponse> {
+    return this.callOp<EchoFetchRequest, EchoFetchResponse>(req, EchoFetchResponse);
+  }
+
+  /** Typed op echo.EchoPersistRequest → echo.EchoPersistResponse (kind=gateway-local). */
+  echoPersist(req: EchoPersistRequest): Promise<EchoPersistResponse> {
+    return this.callOp<EchoPersistRequest, EchoPersistResponse>(req, EchoPersistResponse);
+  }
+
+  /** Typed op echo.EchoPingRequest → echo.EchoPingResponse (kind=gateway-local). */
+  echoPing(req: EchoPingRequest): Promise<EchoPingResponse> {
+    return this.callOp<EchoPingRequest, EchoPingResponse>(req, EchoPingResponse);
   }
 
   /** Catch-all for unhandled server events. */

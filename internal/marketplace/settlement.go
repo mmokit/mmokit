@@ -5,9 +5,6 @@ import (
 	"fmt"
 	"time"
 
-	"google.golang.org/protobuf/proto"
-
-	gamepb "github.com/zenion/mmoserver/gen/go/gamepb"
 	"github.com/zenion/mmoserver/pkg/mmokit"
 	"github.com/zenion/mmoserver/pkg/persist"
 )
@@ -41,8 +38,10 @@ type Settlement struct {
 	log        *mmokit.Logger
 	market     persist.MarketRepository
 
-	// notify sends a push notification to an online player.
-	notify func(username string, code uint32, payload []byte)
+	// notify sends a typed trade-fill notification to an online player.
+	// Wired by the host process to mmokit.SendEvent against the cell stage
+	// for the player's connection.
+	notify func(username string, msg *MarketTradeNotification)
 }
 
 // NewSettlement creates a new settlement layer wrapping the given orderbook service.
@@ -53,7 +52,7 @@ func NewSettlement(
 	currencyID uint32,
 	log *mmokit.Logger,
 	market persist.MarketRepository,
-	notify func(username string, code uint32, payload []byte),
+	notify func(username string, msg *MarketTradeNotification),
 ) *Settlement {
 	return &Settlement{
 		ob:         ob,
@@ -553,18 +552,13 @@ func (st *Settlement) sendTradeNotification(username string, orderID uint64, ite
 	if st.notify == nil {
 		return
 	}
-	notif := &gamepb.MarketTradeNotification{
-		OrderId:        orderID,
-		ItemId:         itemID,
+	st.notify(username, &MarketTradeNotification{
+		OrderID:        orderID,
+		ItemID:         itemID,
 		FilledQty:      qty,
 		Price:          price,
 		YouSold:        youSold,
 		CurrencyChange: fluxChange,
-		CurrencyId:     st.currencyID,
-	}
-	data, err := proto.Marshal(notif)
-	if err != nil {
-		return
-	}
-	st.notify(username, uint32(gamepb.OperationCode_OP_MARKET_INSTANT_TRADE), data)
+		CurrencyID:     st.currencyID,
+	})
 }

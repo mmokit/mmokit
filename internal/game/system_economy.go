@@ -32,8 +32,10 @@ func (s *EconomySystem) Update(dt float32) {
 	// Process bank transfers
 	s.processTransfers(stationPositions, sellRange2)
 
-	// Process bank view requests
-	s.processBankRequests(stationPositions, sellRange2)
+	// (Bank view requests are now a typed-op — game.HandleBankRequest
+	// runs synchronously on the player's cell engine via the typed-op
+	// dispatcher, not via a per-tick queue drain. See op_bank.go.)
+	_ = sellRange2
 }
 
 func (s *EconomySystem) processTransfers(stationPositions []mmokit.Position, sellRange2 float64) {
@@ -191,34 +193,6 @@ func (s *EconomySystem) processDockedTransfer(t PendingTransfer, username string
 		gw.eng.Log.Log(CatEconomyBank, "bank withdraw (docked): player=%s item=%d qty=%d", username, t.ItemID, withdrawn)
 		s.sendTransferResult(t.ConnID, true, "", t.ItemID, withdrawn, false)
 		s.sendBankContents(t.ConnID, pdata)
-	}
-}
-
-func (s *EconomySystem) processBankRequests(stationPositions []mmokit.Position, sellRange2 float64) {
-	gw := s.World()
-	for _, req := range mmokit.Drain[PendingBankRequest](gw.Queue) {
-		sess := gw.Players.ByConnID(req.ConnID)
-		if sess == nil || sess.Username == "" {
-			continue
-		}
-
-		// Docked players skip entity/proximity check
-		if sess.State != StateDocked {
-			entity := mmokit.EntityFromECS(gw.Stage, sess.Entity)
-			if !entity.Alive() {
-				continue
-			}
-			pos := mmokit.Get[mmokit.Position](entity)
-			if pos == nil {
-				continue
-			}
-			if !s.nearStation(pos, stationPositions, sellRange2) {
-				continue
-			}
-		}
-
-		pdata := gw.PlayerDB.GetOrCreate(sess.Username)
-		s.sendBankContents(req.ConnID, pdata)
 	}
 }
 

@@ -6,7 +6,6 @@ import (
 	"sync"
 	"time"
 
-	enginepb "github.com/zenion/mmoserver/gen/go/enginepb"
 	"github.com/zenion/mmoserver/pkg/ops"
 	"github.com/zenion/mmoserver/pkg/service"
 )
@@ -56,20 +55,25 @@ func (s *Service) Init(ctx *service.Context) error {
 	return nil
 }
 
-// RegisterOps wires the five auth handlers into the process op router.
-// ops.Register panics on duplicate code; no error return.
-func (s *Service) RegisterOps(router *ops.Router) error {
-	ops.Register[enginepb.AuthLoginRequest, enginepb.AuthLoginResponse](
-		router, enginepb.AuthOpCode_AUTH_OPCODE_LOGIN, "authLogin", s.handleLogin)
-	ops.Register[enginepb.AuthRegisterRequest, enginepb.AuthRegisterResponse](
-		router, enginepb.AuthOpCode_AUTH_OPCODE_REGISTER, "authRegister", s.handleRegister)
-	ops.Register[enginepb.AuthValidateTokenRequest, enginepb.AuthValidateTokenResponse](
-		router, enginepb.AuthOpCode_AUTH_OPCODE_VALIDATE_TOKEN, "authValidateToken", s.handleValidateToken)
-	ops.Register[enginepb.AuthLogoutRequest, enginepb.AuthLogoutResponse](
-		router, enginepb.AuthOpCode_AUTH_OPCODE_LOGOUT, "authLogout", s.handleLogout)
-	ops.Register[enginepb.AuthChangePasswordRequest, enginepb.AuthChangePasswordResponse](
-		router, enginepb.AuthOpCode_AUTH_OPCODE_CHANGE_PASSWORD, "authChangePassword", s.handleChangePassword)
-	return nil
+// HandleLogin / HandleRegister / HandleValidateToken / HandleLogout /
+// HandleChangePassword expose the typed handlers to the mmokit facade
+// (pkg/mmokit/auth.go) so it can wire them into the typed-op registry
+// without depending on auth-internal symbol visibility. The handler
+// bodies live unchanged in handlers.go.
+func (s *Service) HandleLogin(opCtx *ops.OpContext, req *AuthLoginRequest) (*AuthLoginResponse, error) {
+	return s.handleLogin(opCtx, req)
+}
+func (s *Service) HandleRegister(opCtx *ops.OpContext, req *AuthRegisterRequest) (*AuthRegisterResponse, error) {
+	return s.handleRegister(opCtx, req)
+}
+func (s *Service) HandleValidateToken(opCtx *ops.OpContext, req *AuthValidateTokenRequest) (*AuthValidateTokenResponse, error) {
+	return s.handleValidateToken(opCtx, req)
+}
+func (s *Service) HandleLogout(opCtx *ops.OpContext, req *AuthLogoutRequest) (*AuthLogoutResponse, error) {
+	return s.handleLogout(opCtx, req)
+}
+func (s *Service) HandleChangePassword(opCtx *ops.OpContext, req *AuthChangePasswordRequest) (*AuthChangePasswordResponse, error) {
+	return s.handleChangePassword(opCtx, req)
 }
 
 func (s *Service) Shutdown(ctx context.Context) error {

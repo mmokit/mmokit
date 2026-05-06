@@ -61,84 +61,6 @@ export declare type ServerEvent = Message<"enginepb.ServerEvent"> & {
 export declare const ServerEventSchema: GenMessage<ServerEvent>;
 
 /**
- * @generated from message enginepb.OperationRequest
- */
-export declare type OperationRequest = Message<"enginepb.OperationRequest"> & {
-  /**
-   * OperationCode
-   *
-   * @generated from field: uint32 code = 1;
-   */
-  code: number;
-
-  /**
-   * client-assigned correlation ID, echoed in response
-   *
-   * @generated from field: uint32 request_id = 2;
-   */
-  requestId: number;
-
-  /**
-   * serialized op-specific request
-   *
-   * @generated from field: bytes data = 3;
-   */
-  data: Uint8Array;
-};
-
-/**
- * Describes the message enginepb.OperationRequest.
- * Use `create(OperationRequestSchema)` to create a new message.
- */
-export declare const OperationRequestSchema: GenMessage<OperationRequest>;
-
-/**
- * @generated from message enginepb.OperationResponse
- */
-export declare type OperationResponse = Message<"enginepb.OperationResponse"> & {
-  /**
-   * OperationCode (echoed from request)
-   *
-   * @generated from field: uint32 code = 1;
-   */
-  code: number;
-
-  /**
-   * correlation ID (echoed, 0 = server-pushed notification)
-   *
-   * @generated from field: uint32 request_id = 2;
-   */
-  requestId: number;
-
-  /**
-   * 0 = success, non-zero = error
-   *
-   * @generated from field: int32 return_code = 3;
-   */
-  returnCode: number;
-
-  /**
-   * human-readable error detail
-   *
-   * @generated from field: string error_msg = 4;
-   */
-  errorMsg: string;
-
-  /**
-   * serialized op-specific response
-   *
-   * @generated from field: bytes data = 5;
-   */
-  data: Uint8Array;
-};
-
-/**
- * Describes the message enginepb.OperationResponse.
- * Use `create(OperationResponseSchema)` to create a new message.
- */
-export declare const OperationResponseSchema: GenMessage<OperationResponse>;
-
-/**
  * @generated from message enginepb.PingMsg
  */
 export declare type PingMsg = Message<"enginepb.PingMsg"> & {
@@ -153,22 +75,6 @@ export declare type PingMsg = Message<"enginepb.PingMsg"> & {
  * Use `create(PingMsgSchema)` to create a new message.
  */
 export declare const PingMsgSchema: GenMessage<PingMsg>;
-
-/**
- * @generated from message enginepb.LoginMsg
- */
-export declare type LoginMsg = Message<"enginepb.LoginMsg"> & {
-  /**
-   * @generated from field: string username = 1;
-   */
-  username: string;
-};
-
-/**
- * Describes the message enginepb.LoginMsg.
- * Use `create(LoginMsgSchema)` to create a new message.
- */
-export declare const LoginMsgSchema: GenMessage<LoginMsg>;
 
 /**
  * @generated from message enginepb.CellChangeMsg
@@ -236,13 +142,13 @@ export declare type SpawnedMsg = Message<"enginepb.SpawnedMsg"> & {
 export declare const SpawnedMsgSchema: GenMessage<SpawnedMsg>;
 
 /**
- * Client → Server event codes (engine-level). PLAYER_INPUT and CHAT
- * migrated off the engine event surface — input rides typed
- * client-input frames (mmokit.HandleClient on channel 0x00 post
- * Plan 1 Phase 5), and chat moved to its own service. The remaining
- * codes service login + liveness, neither of which is HandleClient-
- * eligible (CE_LOGIN runs inline on the gateway pre-cell, CE_PING is
- * handled by the EventInterceptor on the read goroutine).
+ * Client → Server event codes (engine-level). PLAYER_INPUT, CHAT, and
+ * LOGIN have all migrated off the engine event surface — input rides
+ * typed client-input frames (mmokit.HandleClient on channel 0x00 post
+ * Plan 1 Phase 5), chat moved to its own service, and login is now an
+ * auth-channel typed op (AUTH_OPCODE_LOGIN in pkg/auth). The remaining
+ * code services liveness; CE_PING is handled by the EventInterceptor
+ * on the read goroutine, not via HandleClient.
  *
  * @generated from enum enginepb.ClientEventCode
  */
@@ -256,11 +162,6 @@ export enum ClientEventCode {
    * @generated from enum value: CE_PING = 1;
    */
   CE_PING = 1,
-
-  /**
-   * @generated from enum value: CE_LOGIN = 2;
-   */
-  CE_LOGIN = 2,
 }
 
 /**

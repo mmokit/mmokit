@@ -6,6 +6,7 @@ export type { AnyEntity, DeltaWorldUpdate } from "./entities.js";
 export * from "./entities.js";
 export { BasicDeltaDecoder } from "./delta-decoder.js";
 export { Transport } from "./transport.js";
-export { DebugInfo, LoginRejected, Pong, TypedDispatcher, WorldDelta } from "./broadcasts.js";
+export { DebugInfo, OperationError, Pong, TypedDispatcher, WorldDelta } from "./broadcasts.js";
 export { MoveTargetMsg } from "./inputs.js";
+export { AuthChangePasswordRequest, AuthChangePasswordResponse, AuthLoginRequest, AuthLoginResponse, AuthLogoutRequest, AuthLogoutResponse, AuthRegisterRequest, AuthRegisterResponse, AuthValidateTokenRequest, AuthValidateTokenResponse, EchoFetchRequest, EchoFetchResponse, EchoPersistRequest, EchoPersistResponse, EchoPingRequest, EchoPingResponse } from "./operations.js";
 export type { CellChangeMsg, ServerConfigMsg, SpawnedMsg } from "@gen/enginepb/engine_pb.js";

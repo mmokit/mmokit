@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
-	enginepb "github.com/zenion/mmoserver/gen/go/enginepb"
 	"github.com/zenion/mmoserver/pkg/service"
 )
 
@@ -90,16 +89,16 @@ func MigrationsFS() fs.FS {
 func Kind(opts ServiceOpts) service.Kind { return kindFor(opts) }
 
 // kindFor returns the service.Kind registration descriptor.
+//
+// OpCodes is empty: after Plan 2 Phase 5 the auth ops live on the typed-op
+// channel (mmokit.RegisterOp[Req, Res]) rather than the legacy code-keyed
+// proto-op router. Typed ops route by request typeID — there are no
+// per-kind code claims to announce in PeerList — so Kind.OpCodes carries
+// no entries for the auth kind.
 func kindFor(opts ServiceOpts) service.Kind {
 	return service.Kind{
-		Name: KindName,
-		OpCodes: []uint32{
-			uint32(enginepb.AuthOpCode_AUTH_OPCODE_LOGIN),
-			uint32(enginepb.AuthOpCode_AUTH_OPCODE_REGISTER),
-			uint32(enginepb.AuthOpCode_AUTH_OPCODE_VALIDATE_TOKEN),
-			uint32(enginepb.AuthOpCode_AUTH_OPCODE_LOGOUT),
-			uint32(enginepb.AuthOpCode_AUTH_OPCODE_CHANGE_PASSWORD),
-		},
+		Name:        KindName,
+		OpCodes:     nil,
 		Factory:     func(ctx *service.Context) service.Service { return newService(ctx, opts) },
 		RequiresDB:  opts.Repository == nil, // injected mock skips DB requirement
 		Description: "engine-tier identity service: argon2id passwords, opaque sliding-TTL session tokens, OIDC schema seam",

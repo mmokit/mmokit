@@ -37,7 +37,7 @@ func (g *Generator) genBroadcasts() string {
 	b.WriteString("// little-endian, no padding. mmokit.Entity → 4-byte NetID.\n\n")
 
 	for _, bt := range g.schema.BroadcastTypes {
-		writeBroadcastClass(&b, bt)
+		writeBroadcastClass(&b, bt, false)
 	}
 	// Typed server events (mmokit.RegisterEvent[T]) share the broadcast
 	// codec exactly; only the registration verb + dispatch direction differ.
@@ -73,7 +73,13 @@ func (g *Generator) genBroadcasts() string {
 // "Damage"). All fields are public + zero-initialized so callers can
 // construct + mutate without ceremony; the static decode allocates a new
 // instance and consumes the buffer in declaration order.
-func writeBroadcastClass(b *strings.Builder, bt BroadcastTypeSchema) {
+//
+// withEncode opts the class into an additional encode(): Uint8Array instance
+// method using writeReflectCodecEncode. Broadcasts and server-events pass
+// false (decode-only). Typed-op Request classes (operations.go) pass true
+// since the client needs to serialize the body before sending. Op Response
+// classes pass false (decode-only — server sends, client decodes).
+func writeBroadcastClass(b *strings.Builder, bt BroadcastTypeSchema, withEncode bool) {
 	className := broadcastClassName(bt.Name)
 
 	fmt.Fprintf(b, "/** Broadcast-eligible event %s (typeID 0x%08x). */\n", bt.Name, bt.TypeID)
@@ -83,6 +89,13 @@ func writeBroadcastClass(b *strings.Builder, bt BroadcastTypeSchema) {
 		fmt.Fprintf(b, "  %s: %s = %s;\n", f.Name, broadcastFieldTSType(f), broadcastFieldTSInit(f))
 	}
 	b.WriteString("\n")
+	if withEncode {
+		// Constructor for ergonomic field-init at the call site, mirroring
+		// inputs.ts: `client.marketBrowse(new MarketBrowseRequest({ ... }))`.
+		fmt.Fprintf(b, "  constructor(init?: Partial<%s>) {\n", className)
+		b.WriteString("    if (init) Object.assign(this, init);\n")
+		b.WriteString("  }\n\n")
+	}
 	fmt.Fprintf(b, "  static decode(buf: Uint8Array): %s {\n", className)
 	b.WriteString("    const dv = new DataView(buf.buffer, buf.byteOffset, buf.byteLength);\n")
 	b.WriteString("    let off = 0;\n")
@@ -92,6 +105,11 @@ func writeBroadcastClass(b *strings.Builder, bt BroadcastTypeSchema) {
 	}
 	b.WriteString("    return m;\n")
 	b.WriteString("  }\n")
+	if withEncode {
+		b.WriteString("\n  encode(): Uint8Array {\n")
+		writeReflectCodecEncode(b, bt)
+		b.WriteString("  }\n")
+	}
 	b.WriteString("}\n\n")
 }
 

@@ -9,7 +9,6 @@ import (
 	"sync"
 	"time"
 
-	enginepb "github.com/zenion/mmoserver/gen/go/enginepb"
 	gamepb "github.com/zenion/mmoserver/gen/go/gamepb"
 	"github.com/zenion/mmoserver/internal/game"
 	"github.com/zenion/mmoserver/pkg/net/udpclient"
@@ -111,8 +110,12 @@ func (b *Bot) Connect(addr string) error {
 	// Start recv loop before sending login
 	go b.recvLoop()
 
-	// Send login
-	b.sendEvent(uint32(enginepb.ClientEventCode_CE_LOGIN), &enginepb.LoginMsg{Username: b.name}, true)
+	// TODO(auth-op-migration): Login moved off the legacy CE_LOGIN
+	// envelope to pkg/auth's typed op channel (AUTH_OPCODE_LOGIN). The
+	// bot has no auth wiring yet, so Connect currently times out at the
+	// spawnCh wait below — same status as recvLoop's documented gap.
+	// Re-enable bot login once auth ops migrate to the typed RegisterOp
+	// shape (Plan 2 Phase 5).
 
 	// Wait for spawn
 	select {

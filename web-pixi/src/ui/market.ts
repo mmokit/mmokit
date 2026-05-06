@@ -1,7 +1,29 @@
-import type { MarketPriceLevel, MarketOrderEntry } from "@gen/gamepb/game_pb.js";
 import { ITEM_COLORS_CSS, DEFAULT_ITEM_COLOR } from "../constants";
 import { SETTLEMENT_CURRENCY_ID, type GameState } from "../state";
-import { BankRequest } from "../../sdk/index.js";
+import {
+  MarketBrowseRequest,
+  MarketCreateOrderRequest,
+  MarketCancelOrderRequest,
+  MarketMyOrdersRequest,
+  MarketInstantTradeRequest,
+} from "../../sdk/index.js";
+
+interface MarketPriceLevelLike {
+  price: number;
+  quantity: number;
+  orderCount: number;
+}
+
+interface MarketOrderEntryLike {
+  orderID: number;
+  itemID: number;
+  isBuy: boolean;
+  pricePerUnit: number;
+  quantity: number;
+  origQuantity: number;
+  createdAt: number;
+  expiresAt: number;
+}
 
 function currencyName(): string {
   return currentState?.itemDefs.get(SETTLEMENT_CURRENCY_ID)?.name ?? "Currency";
@@ -73,16 +95,16 @@ let lastMyOrdersJson = "";
 async function refreshOrderBook(state: GameState, itemId: number): Promise<void> {
   if (!state.client || !state.connected) return;
   try {
-    const book = await state.client.sendMarketBrowse({ itemId });
+    const book = await state.client.marketBrowse(new MarketBrowseRequest({ itemID: itemId }));
     state.marketOrderBook = {
-      itemId: book.itemId,
-      sellLevels: book.sellLevels.map((l: MarketPriceLevel) => ({
-        price: Number(l.price),
+      itemId: book.itemID,
+      sellLevels: book.sellLevels.map((l: MarketPriceLevelLike) => ({
+        price: l.price,
         quantity: l.quantity,
         orderCount: l.orderCount,
       })),
-      buyLevels: book.buyLevels.map((l: MarketPriceLevel) => ({
-        price: Number(l.price),
+      buyLevels: book.buyLevels.map((l: MarketPriceLevelLike) => ({
+        price: l.price,
         quantity: l.quantity,
         orderCount: l.orderCount,
       })),
@@ -95,16 +117,16 @@ async function refreshOrderBook(state: GameState, itemId: number): Promise<void>
 async function refreshMyOrders(state: GameState): Promise<void> {
   if (!state.client || !state.connected) return;
   try {
-    const resp = await state.client.sendMarketMyOrders({});
-    state.marketMyOrders = resp.orders.map((o: MarketOrderEntry) => ({
-      orderId: Number(o.orderId),
-      itemId: o.itemId,
+    const resp = await state.client.marketMyOrders(new MarketMyOrdersRequest());
+    state.marketMyOrders = resp.orders.map((o: MarketOrderEntryLike) => ({
+      orderId: o.orderID,
+      itemId: o.itemID,
       isBuy: o.isBuy,
-      pricePerUnit: Number(o.pricePerUnit),
+      pricePerUnit: o.pricePerUnit,
       quantity: o.quantity,
       origQuantity: o.origQuantity,
-      createdAt: Number(o.createdAt),
-      expiresAt: Number(o.expiresAt),
+      createdAt: o.createdAt,
+      expiresAt: o.expiresAt,
     }));
   } catch (_err) {
     /* ignore */
@@ -120,37 +142,37 @@ async function createOrder(
 ): Promise<void> {
   if (!state.client || !state.connected) return;
   try {
-    const result = await state.client.sendMarketCreateOrder({
-      itemId,
+    const result = await state.client.marketCreateOrder(new MarketCreateOrderRequest({
+      itemID: itemId,
       isBuy,
-      pricePerUnit: BigInt(price),
+      pricePerUnit: price,
       quantity: qty,
-    });
+    }));
     if (result.filledQty > 0) {
       state.toasts.push({
-        text: `Order filled: ${result.filledQty} @ avg ${Number(result.avgPrice)} ${currencyName()}`,
+        text: `Order filled: ${result.filledQty} @ avg ${result.avgPrice} ${currencyName()}`,
         time: performance.now(),
       });
     }
-    if (Number(result.orderId) > 0) {
+    if (result.orderID > 0) {
       state.toasts.push({
-        text: `Order #${Number(result.orderId)} placed`,
+        text: `Order #${result.orderID} placed`,
         time: performance.now(),
       });
     }
-    state.inputSeq++; state.client.send(new BankRequest({ sequence: state.inputSeq }));
+    state.refreshBank();
     await refreshOrderBook(state, itemId);
   } catch (_err) {
     /* ignore */
   }
 }
 
-async function cancelOrder(state: GameState, orderId: bigint): Promise<void> {
+async function cancelOrder(state: GameState, orderId: number): Promise<void> {
   if (!state.client || !state.connected) return;
   try {
-    await state.client.sendMarketCancelOrder({ orderId });
+    await state.client.marketCancelOrder(new MarketCancelOrderRequest({ orderID: orderId }));
     state.toasts.push({ text: "Order cancelled", time: performance.now() });
-    state.inputSeq++; state.client.send(new BankRequest({ sequence: state.inputSeq }));
+    state.refreshBank();
     await refreshMyOrders(state);
   } catch (_err) {
     /* ignore */
@@ -165,14 +187,14 @@ async function instantTrade(
 ): Promise<void> {
   if (!state.client || !state.connected) return;
   try {
-    const result = await state.client.sendMarketInstantTrade({
-      itemId,
+    const result = await state.client.marketInstantTrade(new MarketInstantTradeRequest({
+      itemID: itemId,
       isBuy,
       quantity: qty,
-    });
+    }));
     if (result.filledQty > 0) {
       state.toasts.push({
-        text: `Trade: ${result.filledQty} @ avg ${Number(result.avgPrice)} ${currencyName()}`,
+        text: `Trade: ${result.filledQty} @ avg ${result.avgPrice} ${currencyName()}`,
         time: performance.now(),
       });
     } else {
@@ -181,7 +203,7 @@ async function instantTrade(
         time: performance.now(),
       });
     }
-    state.inputSeq++; state.client.send(new BankRequest({ sequence: state.inputSeq }));
+    state.refreshBank();
     await refreshOrderBook(state, itemId);
   } catch (_err) {
     /* ignore */
@@ -387,7 +409,7 @@ function buildStructure(): void {
 
     // My orders: cancel
     if (target.dataset.cancelOrderId) {
-      void cancelOrder(state, BigInt(target.dataset.cancelOrderId));
+      void cancelOrder(state, Number(target.dataset.cancelOrderId));
       return;
     }
   });

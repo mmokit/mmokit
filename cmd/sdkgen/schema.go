@@ -42,13 +42,6 @@ type ServerEventSchema struct {
 	ProtoName string `json:"protoName"`
 }
 
-type OperationSchema struct {
-	Code          uint32 `json:"code"`
-	Name          string `json:"name"`
-	RequestProto  string `json:"requestProto"`
-	ResponseProto string `json:"responseProto"`
-}
-
 // BroadcastFieldSchema describes one field on a broadcast-eligible type.
 // JSON shape mirrors pkg/mmokit.BroadcastFieldSchema exactly.
 //
@@ -82,13 +75,27 @@ type ClientInputTypeSchema = BroadcastTypeSchema
 // with a static decode(buf) method + a client.onXxx(handler) wrapper.
 type ServerEventTypeSchema = BroadcastTypeSchema
 
+// OperationSchema describes one RegisterOp[Req, Res any] registration.
+// JSON shape mirrors pkg/mmokit.OperationSchema exactly. Both halves
+// reuse BroadcastFieldSchema (same reflect-codec wire layout as broadcasts/
+// server-events/client-inputs).
+type OperationSchema struct {
+	Kind             string                 `json:"kind"`
+	RequestTypeID    uint32                 `json:"request_type_id"`
+	RequestTypeName  string                 `json:"request_type_name"`
+	RequestFields    []BroadcastFieldSchema `json:"request_fields"`
+	ResponseTypeID   uint32                 `json:"response_type_id"`
+	ResponseTypeName string                 `json:"response_type_name"`
+	ResponseFields   []BroadcastFieldSchema `json:"response_fields"`
+}
+
 type ProtocolSchema struct {
-	Game             string                   `json:"game"`
-	ClientEvents     []ClientEventSchema      `json:"clientEvents"`
-	ServerEvents     []ServerEventSchema      `json:"serverEvents"`
-	Entities         []EntitySchema           `json:"entities"`
-	Operations       []OperationSchema        `json:"operations,omitempty"`
-	BroadcastTypes   []BroadcastTypeSchema    `json:"broadcast_types,omitempty"`
-	ClientInputTypes []ClientInputTypeSchema  `json:"client_input_types,omitempty"`
-	ServerEventTypes []ServerEventTypeSchema  `json:"server_event_types,omitempty"`
+	Game             string                  `json:"game"`
+	ClientEvents     []ClientEventSchema     `json:"clientEvents"`
+	ServerEvents     []ServerEventSchema     `json:"serverEvents"`
+	Entities         []EntitySchema          `json:"entities"`
+	BroadcastTypes   []BroadcastTypeSchema   `json:"broadcast_types,omitempty"`
+	ClientInputTypes []ClientInputTypeSchema `json:"client_input_types,omitempty"`
+	ServerEventTypes []ServerEventTypeSchema `json:"server_event_types,omitempty"`
+	Operations       []OperationSchema       `json:"operations,omitempty"`
 }

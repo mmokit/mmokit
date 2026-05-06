@@ -1,6 +1,6 @@
 # Events & Operations Channel Redesign
 
-**Status:** Plan 1 (events channel + chat decomm) **landed** 2026-05-06; Plan 2 (operations channel + login → operation) pending.
+**Status:** Plan 1 (events channel + chat decomm) **landed** 2026-05-06; Plan 2 (operations channel + auth op migration) **landed** 2026-05-06.
 **Date:** 2026-05-06
 **Author:** brainstormed via session
 **Supersedes parts of:** none — net-new framing for the post-Plan-G wire stack
@@ -21,11 +21,37 @@ What landed:
 - New foundation pieces: `mmokit.RegisterEvent[T]()`, `mmokit.SendEvent(stage, connID, msg)`, `pkguniverse.SendEventTyped`, `pkguniverse.BuildTypedEventFrameRaw`, `pkguniverse.DispatchInboundEventFrame`, slice + nested-struct support in the reflect codec, `bytes` fast-path codec for `[]byte` fields.
 
 Deferred to a follow-up branch (out of scope for Plan 1):
-- **Login (`CE_LOGIN` / `LoginMsg`)** — no production server-side handler exists; the bot at `internal/bot/bot.go:115` still sends `enginepb.LoginMsg` over the legacy code; real login flows through `pkg/auth` AUTH_LOGIN op-channel. Migrating just renames dead bytes. Will be addressed by Plan 2's Login → operation migration.
-- **`CE_PING` inbound** — handled inline by the gateway's `EventInterceptor` on the read goroutine; migrating requires either a parallel `ClientInputInterceptor` or extending the hook to disambiguate by typeID. Outbound `Pong` is already typed. Marked with TODO at `cmd/server/main.go:101`.
-- **Bot client (`internal/bot/`)** — recv loop is a no-op shell after Phase 7 (TODO carried forward). Bot rewire to typed events is a separate task; bot is a load-test tool, not on Plan 1's critical path.
+- **Login (`CE_LOGIN` / `LoginMsg`)** — Plan 2 Phase 4 (2026-05-06) cleaned up the dead Plan-1-deferred Login artifacts: deleted `enginepb.LoginMsg` + `CE_LOGIN`, the `mmokit.LoginRejected` typed event + registration, the `RegisterClientEvent[enginepb.LoginMsg]` schema-export entry in `cmd/server/main.go`, the bot's dead `b.sendEvent(CE_LOGIN, ...)` call (and now-orphaned `sendEvent` helper). Login already lives as the `AUTH_OPCODE_LOGIN` typed op in `pkg/auth/service.go`; migrating that and the other 4 auth ops from the legacy `ops.Register` proto-shape to the typed `mmokit.RegisterOp[Req, Res]` shape is Phase 5 work.
+- **`CE_PING` inbound** — handled inline by the gateway's `EventInterceptor` on the read goroutine; migrating requires either a parallel `ClientInputInterceptor` or extending the hook to disambiguate by typeID. Outbound `Pong` is already typed. Marked with TODO at `cmd/server/main.go`.
+- **Bot client (`internal/bot/`)** — recv loop is a no-op shell after Phase 7 (TODO carried forward); Connect now also times out at the spawn wait because login was deleted. Bot rewire to typed events + auth-op login is a separate task; bot is a load-test tool, not on Plan 1's critical path.
 
 Surviving framework events on the legacy `ServerEvent` envelope: `SE_PLAYER_SPAWNED` (engine default, used by `examples/simple` non-overriding games), `SE_CELL_CHANGE`, `SE_SERVER_CONFIG`. The dual decode path in client.ts (peek payload[0] === 0x08) is retained for these. Plan 2 may retire them.
+
+## Plan 2 outcomes (operations channel)
+
+Branch `feat/mmokit-operations-channel`, ~25 commits, ~120 files changed. All Go tests pass; both web-pixi and 4node-basic typecheck clean; `just build` succeeds end-to-end.
+
+What landed:
+- Channel `0x01` is now typed-op only — `[typeID:u32 LE][request_id:u64 LE][body_len:u32 LE][body]`. The legacy proto envelope (`OperationRequest`/`OperationResponse`) is retired.
+- Marketplace ops (Browse, CreateOrder, CancelOrder, MyOrders, InstantTrade) migrated to `mmokit.RegisterOp[Req, Res]` with `RoutePlayerCell` — typed Go structs in `internal/marketplace/typed_messages.go`.
+- Bank op migrated from a typed client-input on channel `0x00` to a typed op on `0x01` with response (deposit/withdraw is a request/response, not fire-and-forget).
+- Auth ops (Login, Register, ValidateToken, Logout, ChangePassword) migrated from the legacy `ops.Register` proto-shape to typed `mmokit.RegisterOp[Req, Res]` — registered globally at package init via `pkg/mmokit/auth.go::RegisterAuthService`. The auth `Service.RegisterOps` method is gone; the typed-op channel is the only registration surface.
+- Echo demo ops (Ping, Store, Fetch) migrated alongside.
+- Trade-fill push notification (`gamepb.MarketTradeNotification`) migrated to a typed event registered via `mmokit.RegisterEvent[marketplace.MarketTradeNotification]` and shipped on channel `0x00`. Push notifications are events, not op responses.
+- Legacy `pkg/ops.Router` shrunk from a code-keyed proto-op router with worker pool to a thin poll-loop + typed-op dispatcher. `Register`, `Schema`, `Invoke`, `OperationSchema`, `ParsedRequest`, `RequestParser`, `ResponseFrameBuilder`, `OperationHandler`, the worker pool, and `ProtoMessage` constraint all deleted.
+- `mmokit.RegisterProtoOp`, `mmokit.MakeOpResponse`, `mmokit.ParsedRequest`/`RequestParser`/`ResponseFrameBuilder` aliases all retired.
+- Admin console `service list/info/kinds/ops/call` builtins deleted along with their schema-introspection helpers (`builtins_service.go` + the `service-ops` / `service-call-args` completion sources). The framework-side `service.Service.RegisterOps` interface method retired (typed-op handlers register globally, not per-instance). `service.Context.SendEvent` retired (zero callers).
+- Proto deletions: `enginepb.OperationRequest`, `enginepb.OperationResponse`, every `enginepb.Auth*` proto type (login/register/validate/logout/change-password requests/responses, `AuthError` + `AuthOpCode` enums, `AuthErrorMetadata`), `proto/enginepb/auth.proto` whole-file delete, every `gamepb.Market*` request/response/PriceLevel/OrderEntry, `gamepb.MarketTradeNotification`, `gamepb.OperationCode` enum.
+- Schema rename: `mmokit.TypedOperationSchema` → `mmokit.OperationSchema`, `ProtocolSchema.TypedOperations` → `ProtocolSchema.Operations` (matches the legacy field's JSON tag, so SDK consumers see the same JSON key). `cmd/sdkgen` mirror rename. Sdkgen no longer emits the proto-shape op codepath (legacy `OperationRequestSchema` import + `handleOperation` dual-dispatch dropped).
+
+The Login → operation rescope: Plan 1 deferred Login as "needs to migrate to channel 0x01 as an operation, with request/response semantics". Plan 2 confirmed that's already done — Login was an op since `pkg/auth` landed; Phase 5A migrated the existing op from the proto-constrained `RegisterProtoOp` shape to the typed `RegisterOp[Req, Res]` shape alongside the other auth ops. The reverted `LoginMsg` + `LoginRejected` artifacts (the channel-0x00 push that the gateway used to send before Login was an op) were cleaned up in Phase 4.
+
+Plan 2 explicitly out of scope (carried forward):
+- The remaining proto-envelope server events on channel `0x00`: `SE_PLAYER_SPAWNED`, `SE_CELL_CHANGE`, `SE_SERVER_CONFIG`. The dual decode path in client.ts (peek `payload[0] === 0x08`) survives for these. A Plan 3 might retire them.
+- `CE_PING` inbound — still handled inline by the gateway's `EventInterceptor` on the read goroutine.
+- Bot client rewire (load-test tool, not on critical path).
+
+End state: zero protobuf bytes on any client-facing wire frame for the request/response operations channel. Schema export still emits `gen/go/{enginepb,gamepb,meshpb}` for the surviving framework-event proto types (`gamepb.EntityType` enum is still in active use for ECS entity-kind discrimination); `gen/csharp` mirrors the same.
 
 
 

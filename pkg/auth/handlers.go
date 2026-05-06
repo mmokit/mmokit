@@ -10,36 +10,35 @@ import (
 
 	"github.com/google/uuid"
 
-	enginepb "github.com/zenion/mmoserver/gen/go/enginepb"
 	"github.com/zenion/mmoserver/pkg/ops"
 )
 
 // authError is the typed error handlers return. The router maps it to the
 // AuthError code on the op envelope.
 type authError struct {
-	Code     enginepb.AuthError
+	Code     AuthError
 	Msg      string
-	Metadata *enginepb.AuthErrorMetadata
+	Metadata *AuthErrorMetadata
 }
 
 func (e *authError) Error() string { return e.Msg }
 
-func errorf(c enginepb.AuthError, f string, a ...any) error {
+func errorf(c AuthError, f string, a ...any) error {
 	return &authError{Code: c, Msg: fmt.Sprintf(f, a...)}
 }
 
-func errorWithRetry(c enginepb.AuthError, retry time.Duration, f string, a ...any) error {
+func errorWithRetry(c AuthError, retry time.Duration, f string, a ...any) error {
 	return &authError{
 		Code:     c,
 		Msg:      fmt.Sprintf(f, a...),
-		Metadata: &enginepb.AuthErrorMetadata{RetryAfterMs: retry.Milliseconds()},
+		Metadata: &AuthErrorMetadata{RetryAfterMs: retry.Milliseconds()},
 	}
 }
 
 func normalizeUsername(raw string) (string, error) {
 	name := strings.ToLower(strings.TrimSpace(raw))
 	if name == "" || len(name) > 32 {
-		return "", errorf(enginepb.AuthError_AUTH_ERROR_USERNAME_INVALID, "username invalid")
+		return "", errorf(AuthErrorUsernameInvalid, "username invalid")
 	}
 	return name, nil
 }
@@ -86,11 +85,11 @@ func (s *Service) audit(opCtx *ops.OpContext, event string, userID uuid.UUID, na
 
 // --- handleLogin ---
 
-func (s *Service) handleLogin(opCtx *ops.OpContext, req *enginepb.AuthLoginRequest) (*enginepb.AuthLoginResponse, error) {
+func (s *Service) handleLogin(opCtx *ops.OpContext, req *AuthLoginRequest) (*AuthLoginResponse, error) {
 	ip := opCtx.ClientIP
 	if locked, retry := s.rl.CheckAndCount(ip, false); locked {
 		s.audit(opCtx, "login_failure", uuid.Nil, req.Username, map[string]any{"reason": "ip_ratelimit"})
-		return nil, errorWithRetry(enginepb.AuthError_AUTH_ERROR_RATE_LIMITED, retry, "too many attempts")
+		return nil, errorWithRetry(AuthErrorRateLimited, retry, "too many attempts")
 	}
 
 	name, err := normalizeUsername(req.Username)
@@ -103,24 +102,24 @@ func (s *Service) handleLogin(opCtx *ops.OpContext, req *enginepb.AuthLoginReque
 	if err != nil {
 		if errors.Is(err, ErrUserNotFound) {
 			s.audit(opCtx, "login_failure", uuid.Nil, name, map[string]any{"reason": "no_such_user"})
-			return nil, errorf(enginepb.AuthError_AUTH_ERROR_INVALID_CREDENTIALS, "invalid credentials")
+			return nil, errorf(AuthErrorInvalidCredentials, "invalid credentials")
 		}
-		return nil, errorf(enginepb.AuthError_AUTH_ERROR_INTERNAL, "lookup: %v", err)
+		return nil, errorf(AuthErrorInternal, "lookup: %v", err)
 	}
 
 	if user.Status == "disabled" {
 		s.audit(opCtx, "login_failure", user.UserID, name, map[string]any{"reason": "disabled"})
-		return nil, errorf(enginepb.AuthError_AUTH_ERROR_ACCOUNT_LOCKED, "account disabled")
+		return nil, errorf(AuthErrorAccountLocked, "account disabled")
 	}
 	if !user.LockedUntil.IsZero() && user.LockedUntil.After(time.Now()) {
 		retry := time.Until(user.LockedUntil)
 		s.audit(opCtx, "login_failure", user.UserID, name, map[string]any{"reason": "account_locked"})
-		return nil, errorWithRetry(enginepb.AuthError_AUTH_ERROR_ACCOUNT_LOCKED, retry, "account locked")
+		return nil, errorWithRetry(AuthErrorAccountLocked, retry, "account locked")
 	}
 
 	pw, err := s.repo.GetPassword(ctx, user.UserID)
 	if err != nil {
-		return nil, errorf(enginepb.AuthError_AUTH_ERROR_INTERNAL, "password lookup: %v", err)
+		return nil, errorf(AuthErrorInternal, "password lookup: %v", err)
 	}
 	ok, err := VerifyPassword(req.Password, pw.PasswordHash)
 	if err != nil || !ok {
@@ -132,7 +131,7 @@ func (s *Service) handleLogin(opCtx *ops.OpContext, req *enginepb.AuthLoginReque
 				"failed_attempts": n, "locked_until": lockedUntil,
 			})
 		}
-		return nil, errorf(enginepb.AuthError_AUTH_ERROR_INVALID_CREDENTIALS, "invalid credentials")
+		return nil, errorf(AuthErrorInvalidCredentials, "invalid credentials")
 	}
 
 	// Re-hash if argon2id params have drifted from current defaults.
@@ -147,30 +146,30 @@ func (s *Service) handleLogin(opCtx *ops.OpContext, req *enginepb.AuthLoginReque
 
 	tok, hash, err := NewToken()
 	if err != nil {
-		return nil, errorf(enginepb.AuthError_AUTH_ERROR_INTERNAL, "token: %v", err)
+		return nil, errorf(AuthErrorInternal, "token: %v", err)
 	}
 	expires := time.Now().Add(s.opts.SessionTTL)
 	if err := s.repo.CreateSession(ctx, Session{
 		TokenHash: hash, UserID: user.UserID, ExpiresAt: expires,
 		ClientMeta: clientMeta(opCtx, ip),
 	}); err != nil {
-		return nil, errorf(enginepb.AuthError_AUTH_ERROR_INTERNAL, "session: %v", err)
+		return nil, errorf(AuthErrorInternal, "session: %v", err)
 	}
 
 	s.audit(opCtx, "login_success", user.UserID, name, nil)
 	s.ctx.Logger.Log(logCat, "login: user=%s ip=%s", name, ip)
-	return &enginepb.AuthLoginResponse{
-		UserId: user.UserID.String(), Username: user.Username,
+	return &AuthLoginResponse{
+		UserID: user.UserID.String(), Username: user.Username,
 		SessionToken: tok, ExpiresAtMs: expires.UnixMilli(),
 	}, nil
 }
 
 // --- handleRegister ---
 
-func (s *Service) handleRegister(opCtx *ops.OpContext, req *enginepb.AuthRegisterRequest) (*enginepb.AuthRegisterResponse, error) {
+func (s *Service) handleRegister(opCtx *ops.OpContext, req *AuthRegisterRequest) (*AuthRegisterResponse, error) {
 	ip := opCtx.ClientIP
 	if locked, retry := s.rl.CheckAndCount(ip, false); locked {
-		return nil, errorWithRetry(enginepb.AuthError_AUTH_ERROR_RATE_LIMITED, retry, "too many attempts")
+		return nil, errorWithRetry(AuthErrorRateLimited, retry, "too many attempts")
 	}
 
 	name, err := normalizeUsername(req.Username)
@@ -179,12 +178,12 @@ func (s *Service) handleRegister(opCtx *ops.OpContext, req *enginepb.AuthRegiste
 	}
 
 	if len(req.Password) < s.opts.PasswordMinLen {
-		return nil, errorf(enginepb.AuthError_AUTH_ERROR_PASSWORD_TOO_WEAK,
+		return nil, errorf(AuthErrorPasswordTooWeak,
 			"password must be at least %d chars", s.opts.PasswordMinLen)
 	}
 	hash, err := HashPassword(req.Password, s.opts.Argon2id)
 	if err != nil {
-		return nil, errorf(enginepb.AuthError_AUTH_ERROR_INTERNAL, "hash: %v", err)
+		return nil, errorf(AuthErrorInternal, "hash: %v", err)
 	}
 
 	ctx := context.Background()
@@ -192,12 +191,12 @@ func (s *Service) handleRegister(opCtx *ops.OpContext, req *enginepb.AuthRegiste
 	if err != nil {
 		if errors.Is(err, ErrUsernameTaken) {
 			return nil, &authError{
-				Code:     enginepb.AuthError_AUTH_ERROR_USERNAME_TAKEN,
+				Code:     AuthErrorUsernameTaken,
 				Msg:      "username taken",
-				Metadata: &enginepb.AuthErrorMetadata{Canonical: name},
+				Metadata: &AuthErrorMetadata{Canonical: name},
 			}
 		}
-		return nil, errorf(enginepb.AuthError_AUTH_ERROR_INTERNAL, "create: %v", err)
+		return nil, errorf(AuthErrorInternal, "create: %v", err)
 	}
 
 	s.rl.CheckAndCount(ip, true)
@@ -205,32 +204,32 @@ func (s *Service) handleRegister(opCtx *ops.OpContext, req *enginepb.AuthRegiste
 
 	tok, h, err := NewToken()
 	if err != nil {
-		return nil, errorf(enginepb.AuthError_AUTH_ERROR_INTERNAL, "token: %v", err)
+		return nil, errorf(AuthErrorInternal, "token: %v", err)
 	}
 	expires := time.Now().Add(s.opts.SessionTTL)
 	if err := s.repo.CreateSession(ctx, Session{
 		TokenHash: h, UserID: user.UserID, ExpiresAt: expires, ClientMeta: clientMeta(opCtx, ip),
 	}); err != nil {
-		return nil, errorf(enginepb.AuthError_AUTH_ERROR_INTERNAL, "session: %v", err)
+		return nil, errorf(AuthErrorInternal, "session: %v", err)
 	}
 
 	s.audit(opCtx, "register", user.UserID, name, nil)
 	s.ctx.Logger.Log(logCat, "register: user=%s ip=%s", name, ip)
-	return &enginepb.AuthRegisterResponse{
-		UserId: user.UserID.String(), Username: user.Username,
+	return &AuthRegisterResponse{
+		UserID: user.UserID.String(), Username: user.Username,
 		SessionToken: tok, ExpiresAtMs: expires.UnixMilli(),
 	}, nil
 }
 
 // --- handleValidateToken ---
 
-func (s *Service) handleValidateToken(opCtx *ops.OpContext, req *enginepb.AuthValidateTokenRequest) (*enginepb.AuthValidateTokenResponse, error) {
+func (s *Service) handleValidateToken(opCtx *ops.OpContext, req *AuthValidateTokenRequest) (*AuthValidateTokenResponse, error) {
 	ip := opCtx.ClientIP
 	if locked, retry := s.rl.CheckAndCount(ip, false); locked {
-		return nil, errorWithRetry(enginepb.AuthError_AUTH_ERROR_RATE_LIMITED, retry, "rate limited")
+		return nil, errorWithRetry(AuthErrorRateLimited, retry, "rate limited")
 	}
 	if req.SessionToken == "" {
-		return nil, errorf(enginepb.AuthError_AUTH_ERROR_TOKEN_INVALID, "empty token")
+		return nil, errorf(AuthErrorTokenInvalid, "empty token")
 	}
 
 	ctx := context.Background()
@@ -238,85 +237,85 @@ func (s *Service) handleValidateToken(opCtx *ops.OpContext, req *enginepb.AuthVa
 	sess, err := s.repo.GetSession(ctx, h)
 	if err != nil {
 		s.audit(opCtx, "token_validate_failure", uuid.Nil, "", map[string]any{"reason": "unknown"})
-		return nil, errorf(enginepb.AuthError_AUTH_ERROR_TOKEN_INVALID, "token unknown")
+		return nil, errorf(AuthErrorTokenInvalid, "token unknown")
 	}
 	if !sess.RevokedAt.IsZero() {
 		s.audit(opCtx, "token_validate_failure", sess.UserID, "", map[string]any{"reason": "revoked"})
-		return nil, errorf(enginepb.AuthError_AUTH_ERROR_TOKEN_INVALID, "token revoked")
+		return nil, errorf(AuthErrorTokenInvalid, "token revoked")
 	}
 	if time.Now().After(sess.ExpiresAt) {
 		s.audit(opCtx, "token_validate_failure", sess.UserID, "", map[string]any{"reason": "expired"})
-		return nil, errorf(enginepb.AuthError_AUTH_ERROR_TOKEN_EXPIRED, "token expired")
+		return nil, errorf(AuthErrorTokenExpired, "token expired")
 	}
 
 	user, err := s.repo.GetUserByID(ctx, sess.UserID)
 	if err != nil {
-		return nil, errorf(enginepb.AuthError_AUTH_ERROR_INTERNAL, "user lookup: %v", err)
+		return nil, errorf(AuthErrorInternal, "user lookup: %v", err)
 	}
 	if user.Status == "disabled" || (!user.LockedUntil.IsZero() && user.LockedUntil.After(time.Now())) {
-		return nil, errorf(enginepb.AuthError_AUTH_ERROR_ACCOUNT_LOCKED, "account not active")
+		return nil, errorf(AuthErrorAccountLocked, "account not active")
 	}
 
 	newExp := time.Now().Add(s.opts.SessionTTL)
 	_ = s.repo.SlideSession(ctx, h, newExp)
 	s.rl.CheckAndCount(ip, true)
-	return &enginepb.AuthValidateTokenResponse{
-		UserId: user.UserID.String(), Username: user.Username, ExpiresAtMs: newExp.UnixMilli(),
+	return &AuthValidateTokenResponse{
+		UserID: user.UserID.String(), Username: user.Username, ExpiresAtMs: newExp.UnixMilli(),
 	}, nil
 }
 
 // --- handleLogout ---
 
-func (s *Service) handleLogout(opCtx *ops.OpContext, _ *enginepb.AuthLogoutRequest) (*enginepb.AuthLogoutResponse, error) {
+func (s *Service) handleLogout(opCtx *ops.OpContext, _ *AuthLogoutRequest) (*AuthLogoutResponse, error) {
 	tok := SessionTokenFrom(opCtx)
 	if tok == "" {
-		return nil, errorf(enginepb.AuthError_AUTH_ERROR_NOT_AUTHENTICATED, "no bound session")
+		return nil, errorf(AuthErrorNotAuthenticated, "no bound session")
 	}
 	h := HashToken(tok)
 	ctx := context.Background()
 	sess, err := s.repo.GetSession(ctx, h)
 	if err != nil {
-		return &enginepb.AuthLogoutResponse{}, nil
+		return &AuthLogoutResponse{}, nil
 	}
 	_ = s.repo.RevokeSession(ctx, h)
 	s.audit(opCtx, "logout", sess.UserID, "", nil)
 	s.ctx.Logger.Log(logCat, "logout: user=%s", sess.UserID)
-	return &enginepb.AuthLogoutResponse{}, nil
+	return &AuthLogoutResponse{}, nil
 }
 
 // --- handleChangePassword ---
 
-func (s *Service) handleChangePassword(opCtx *ops.OpContext, req *enginepb.AuthChangePasswordRequest) (*enginepb.AuthChangePasswordResponse, error) {
+func (s *Service) handleChangePassword(opCtx *ops.OpContext, req *AuthChangePasswordRequest) (*AuthChangePasswordResponse, error) {
 	tok := SessionTokenFrom(opCtx)
 	if tok == "" {
-		return nil, errorf(enginepb.AuthError_AUTH_ERROR_NOT_AUTHENTICATED, "no bound session")
+		return nil, errorf(AuthErrorNotAuthenticated, "no bound session")
 	}
 	h := HashToken(tok)
 	ctx := context.Background()
 	sess, err := s.repo.GetSession(ctx, h)
 	if err != nil || !sess.RevokedAt.IsZero() {
-		return nil, errorf(enginepb.AuthError_AUTH_ERROR_NOT_AUTHENTICATED, "invalid session")
+		return nil, errorf(AuthErrorNotAuthenticated, "invalid session")
 	}
 	pw, err := s.repo.GetPassword(ctx, sess.UserID)
 	if err != nil {
-		return nil, errorf(enginepb.AuthError_AUTH_ERROR_INTERNAL, "password lookup: %v", err)
+		return nil, errorf(AuthErrorInternal, "password lookup: %v", err)
 	}
 	ok, _ := VerifyPassword(req.CurrentPassword, pw.PasswordHash)
 	if !ok {
-		return nil, errorf(enginepb.AuthError_AUTH_ERROR_INVALID_CREDENTIALS, "current password mismatch")
+		return nil, errorf(AuthErrorInvalidCredentials, "current password mismatch")
 	}
 	if len(req.NewPassword) < s.opts.PasswordMinLen {
-		return nil, errorf(enginepb.AuthError_AUTH_ERROR_PASSWORD_TOO_WEAK, "new password too short")
+		return nil, errorf(AuthErrorPasswordTooWeak, "new password too short")
 	}
 	newHash, err := HashPassword(req.NewPassword, s.opts.Argon2id)
 	if err != nil {
-		return nil, errorf(enginepb.AuthError_AUTH_ERROR_INTERNAL, "hash: %v", err)
+		return nil, errorf(AuthErrorInternal, "hash: %v", err)
 	}
 	if err := s.repo.UpdatePassword(ctx, sess.UserID, newHash); err != nil {
-		return nil, errorf(enginepb.AuthError_AUTH_ERROR_INTERNAL, "save: %v", err)
+		return nil, errorf(AuthErrorInternal, "save: %v", err)
 	}
 	n, _ := s.repo.RevokeAllSessionsExcept(ctx, sess.UserID, h)
 	s.audit(opCtx, "password_change", sess.UserID, "", map[string]any{"sessions_revoked": n})
 	s.ctx.Logger.Log(logCat, "password change: user=%s sessions_revoked=%d", sess.UserID, n)
-	return &enginepb.AuthChangePasswordResponse{}, nil
+	return &AuthChangePasswordResponse{}, nil
 }

@@ -1,8 +1,6 @@
 package service
 
 import (
-	"google.golang.org/protobuf/proto"
-
 	"github.com/zenion/mmoserver/pkg/logger"
 	"github.com/zenion/mmoserver/pkg/persist/postgres"
 )
@@ -32,13 +30,4 @@ type Context struct {
 	// Roles is the role set this process is running. Lets services
 	// inspect their colocation environment if needed.
 	Roles map[string]struct{}
-
-	// SendEvent forwards a server event to a connected client through
-	// the gateway path. Goes through the same mesh path as cell-
-	// originated events. Returns an error if the connection has gone
-	// away or the gateway role isn't available on this process.
-	//
-	// Game-side typed-event helpers may wrap this; raw uses build the
-	// proto message and pass the engine event-code constant.
-	SendEvent func(connID uint32, code uint16, msg proto.Message) error
 }

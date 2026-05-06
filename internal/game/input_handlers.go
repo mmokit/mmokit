@@ -183,21 +183,10 @@ func RegisterInputs(mmo *mmokit.Process) {
 		})
 	})
 
-	mmokit.HandleClient(mmo, func(player mmokit.Entity, msg *BankRequest) {
-		state := mmokit.PlayerStateOf(player)
-		if state != mmokit.StateActive && state != StateDocked {
-			return
-		}
-		gw := gameWorldOfEntity(player)
-		if gw == nil {
-			return
-		}
-		conn := mmokit.Get[mmokit.PlayerConn](player)
-		if conn == nil {
-			return
-		}
-		mmokit.Enqueue(gw.Queue, PendingBankRequest{ConnID: conn.ConnID})
-	})
+	// (BankRequest is a typed-op now — see op_bank.go: HandleBankRequest
+	// runs on the player's cell engine via Process.DispatchCellRoutedOp.
+	// The per-tick PendingBankRequest queue + EconomySystem.processBankRequests
+	// drain are deleted — typed-op delivery is synchronous within the loop.)
 
 	mmokit.HandleClient(mmo, func(player mmokit.Entity, msg *Equip) {
 		state := mmokit.PlayerStateOf(player)

@@ -60,10 +60,10 @@ type InventoryTransfer struct {
 	Deposit  bool  // true: cargo→bank; false: bank→cargo
 }
 
-// BankRequest — open the bank UI (returns BankContents via server event).
-type BankRequest struct {
-	Sequence uint32
-}
+// (BankRequest moved to a typed-op in op_bank.go — Plan 2 Phase 3.
+// Clients now call client.bankRequest(req) on channel 0x01 with
+// promise-based response correlation instead of the fire-and-forget
+// HandleClient[BankRequest] input.)
 
 // Equip — equip or unequip an item. ItemID=0 unequips the slot.
 // TargetBank=true (when docked) sources from / returns to the bank

@@ -39,18 +39,20 @@ export class DebugInfo {
   }
 }
 
-/** Broadcast-eligible event mmokit.LoginRejected (typeID 0x62f41d81). */
-export class LoginRejected {
-  static readonly typeID = 0x62f41d81;
-  reason: string = "";
+/** Broadcast-eligible event mmokit.OperationError (typeID 0x3d88aecb). */
+export class OperationError {
+  static readonly typeID = 0x3d88aecb;
+  code: number = 0;
+  message: string = "";
 
-  static decode(buf: Uint8Array): LoginRejected {
+  static decode(buf: Uint8Array): OperationError {
     const dv = new DataView(buf.buffer, buf.byteOffset, buf.byteLength);
     let off = 0;
-    const m = new LoginRejected();
+    const m = new OperationError();
+    m.code = dv.getUint32(off, true); off += 4;
     {
       const sl = dv.getUint16(off, true); off += 2;
-      m.reason = new TextDecoder().decode(buf.subarray(off, off + sl)); off += sl;
+      m.message = new TextDecoder().decode(buf.subarray(off, off + sl)); off += sl;
     }
     return m;
   }
