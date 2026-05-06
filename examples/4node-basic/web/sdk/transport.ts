@@ -50,6 +50,18 @@ export class Transport {
   }
 
   /**
+   * Send a fully-built frame as-is (no channel-byte prefix added). The
+   * caller is responsible for the entire wire layout including the channel
+   * byte. Used by the typed-op Promise correlator in <Game>Client, which
+   * builds the full [0x01][typeID][requestID][bodyLen][body] frame in one
+   * allocation rather than two.
+   */
+  sendRaw(frame: Uint8Array): void {
+    if (!this.ws || this.ws.readyState !== WebSocket.OPEN) return;
+    this.ws.send(frame);
+  }
+
+  /**
    * Send a typed client-input frame (mmokit.HandleClient registry).
    * Wire layout: [byte 0x00][u32 typeID][u32 bodyLen][body bytes].
    * Body is produced by the matching TS class's encode() instance method;

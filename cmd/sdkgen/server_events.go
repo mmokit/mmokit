@@ -44,8 +44,9 @@ import (
 func writeServerEventClasses(b *strings.Builder, types []ServerEventTypeSchema) {
 	for _, st := range types {
 		// Shape is identical to a broadcast class; reuse writeBroadcastClass
-		// to avoid duplicating the field-decode logic.
-		writeBroadcastClass(b, st)
+		// to avoid duplicating the field-decode logic. Server events are
+		// receive-only on the client, so withEncode=false.
+		writeBroadcastClass(b, st, false)
 	}
 }
 

@@ -8,7 +8,7 @@ import type { MarketMyOrdersResponse, MarketOrderBookResponse, MarketOrderResult
 import { Transport } from "./transport.js";
 import { SpaceDeltaDecoder } from "./delta-decoder.js";
 import type { DeltaWorldUpdate } from "./entities.js";
-import { TypedDispatcher, BankContents, CurrencyUpdate, Docked, DockingState, EquipResult, MapData, PlayerDied, PlayerOwnState, PlayerSpawned, TransferResult, DebugInfo, LoginRejected, Pong, WorldDelta } from "./broadcasts.js";
+import { TypedDispatcher, BankContents, CurrencyUpdate, Docked, DockingState, EquipResult, MapData, PlayerDied, PlayerOwnState, PlayerSpawned, TransferResult, DebugInfo, LoginRejected, OperationError, Pong, WorldDelta } from "./broadcasts.js";
 import { ClientEventSchema, ServerEventSchema, type ServerEvent, OperationRequestSchema, OperationResponseSchema, type OperationResponse } from "@gen/enginepb/engine_pb.js";
 
 export interface SpaceClientOptions {
@@ -203,6 +203,11 @@ export class SpaceClient {
     return this.typedEvents.on(LoginRejected, handler);
   }
 
+  /** Subscribe to typed server event mmokit.OperationError (typeID 0x3d88aecb). */
+  onOperationError(handler: (msg: OperationError) => void): () => void {
+    return this.typedEvents.on(OperationError, handler);
+  }
+
   /** Subscribe to typed server event mmokit.Pong (typeID 0x8527c2fc). */
   onPong(handler: (msg: Pong) => void): () => void {
     return this.typedEvents.on(Pong, handler);
@@ -214,6 +219,7 @@ export class SpaceClient {
   }
 
   private handleOperation(payload: Uint8Array): void {
+    if (payload.length === 0) return;
     const resp = fromBinary(OperationResponseSchema, payload) as OperationResponse;
     if (resp.requestId !== 0) {
       const pending = this.pendingOps.get(resp.requestId);

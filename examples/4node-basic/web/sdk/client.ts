@@ -6,7 +6,7 @@ import type { CellChangeMsg, ServerConfigMsg, SpawnedMsg } from "@gen/enginepb/e
 import { Transport } from "./transport.js";
 import { BasicDeltaDecoder } from "./delta-decoder.js";
 import type { DeltaWorldUpdate } from "./entities.js";
-import { TypedDispatcher, DebugInfo, LoginRejected, Pong, WorldDelta } from "./broadcasts.js";
+import { TypedDispatcher, DebugInfo, LoginRejected, OperationError, Pong, WorldDelta } from "./broadcasts.js";
 import { ClientEventSchema, ServerEventSchema, type ServerEvent } from "@gen/enginepb/engine_pb.js";
 
 export interface BasicClientOptions {
@@ -132,6 +132,11 @@ export class BasicClient {
   /** Subscribe to typed server event mmokit.LoginRejected (typeID 0x62f41d81). */
   onLoginRejected(handler: (msg: LoginRejected) => void): () => void {
     return this.typedEvents.on(LoginRejected, handler);
+  }
+
+  /** Subscribe to typed server event mmokit.OperationError (typeID 0x3d88aecb). */
+  onOperationError(handler: (msg: OperationError) => void): () => void {
+    return this.typedEvents.on(OperationError, handler);
   }
 
   /** Subscribe to typed server event mmokit.Pong (typeID 0x8527c2fc). */

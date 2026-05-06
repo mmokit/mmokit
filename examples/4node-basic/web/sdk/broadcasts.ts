@@ -56,6 +56,25 @@ export class LoginRejected {
   }
 }
 
+/** Broadcast-eligible event mmokit.OperationError (typeID 0x3d88aecb). */
+export class OperationError {
+  static readonly typeID = 0x3d88aecb;
+  code: number = 0;
+  message: string = "";
+
+  static decode(buf: Uint8Array): OperationError {
+    const dv = new DataView(buf.buffer, buf.byteOffset, buf.byteLength);
+    let off = 0;
+    const m = new OperationError();
+    m.code = dv.getUint32(off, true); off += 4;
+    {
+      const sl = dv.getUint16(off, true); off += 2;
+      m.message = new TextDecoder().decode(buf.subarray(off, off + sl)); off += sl;
+    }
+    return m;
+  }
+}
+
 /** Broadcast-eligible event mmokit.Pong (typeID 0x8527c2fc). */
 export class Pong {
   static readonly typeID = 0x8527c2fc;

@@ -90,6 +90,12 @@ func main() {
 	if len(schema.ClientInputTypes) > 0 {
 		files["inputs.ts"] = g.genInputs
 	}
+	// operations.ts holds RegisterOp[Req, Res] Request + Response classes
+	// (Phase 2 of the operations-channel plan). Empty until at least one
+	// game registers a typed op; until then no file is emitted.
+	if len(schema.TypedOperations) > 0 {
+		files["operations.ts"] = g.genOperations
+	}
 	for name, fn := range files {
 		path := filepath.Join(*outDir, name)
 		content := fn()
