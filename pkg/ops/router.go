@@ -87,7 +87,34 @@ type Router struct {
 	// in registration order, with the raw response payload. Used by the
 	// gateway's auth response interceptor.
 	postHandle []func(connID uint32, opCode uint32, payload []byte)
+
+	// typedOpHandler is the Plan 2 typed-op dispatcher. The router peeks
+	// the first byte of every drained 0x01 payload: 0x08 (protobuf
+	// field-1 tag for OperationRequest.code) → legacy proto path;
+	// anything else → typed-op handler. Nil leaves all frames on the
+	// legacy path. Wired by pkg/universe in the gateway role.
+	typedOpHandler TypedOpHandler
 }
+
+// TypedOpHandler is the Plan 2 inbound typed-op dispatcher. It consumes a
+// 0x01 payload (channel byte stripped), allocates the registered request
+// type, decodes the body, calls the handler, and returns the encoded
+// response frame (channel byte included). Returns nil for structurally
+// invalid frames.
+type TypedOpHandler func(payload []byte, ctx *OpContext) []byte
+
+// SetTypedOpHandler installs the typed-op dispatcher. Called once during
+// gateway wiring; nil unwires (the router falls back to the legacy
+// proto-op path for every frame).
+func (r *Router) SetTypedOpHandler(h TypedOpHandler) {
+	r.typedOpHandler = h
+}
+
+// legacyOpFirstByte is the first wire byte of a marshaled enginepb
+// OperationRequest: protobuf field 1 (code, varint) → tag = (1 << 3) | 0
+// = 0x08. Used by the router's poll loop to disambiguate legacy proto
+// frames from Plan 2 typed-op frames on the same 0x01 channel.
+const legacyOpFirstByte = 0x08
 
 // AllowPreAuth marks opCode as exempt from the unauthenticated-rejection
 // check. Idempotent.
@@ -262,6 +289,23 @@ func (r *Router) poll() {
 	for _, connID := range r.connMgr.ActiveConnIDs() {
 		msgs := r.connMgr.DrainOpInput(connID)
 		for _, raw := range msgs {
+			// Plan 2 disambiguation: legacy proto-op frames begin with
+			// 0x08 (the field-1 varint tag for OperationRequest.code);
+			// typed-op frames carry a [u32 typeID] header so their
+			// first byte is essentially random — anything except 0x08
+			// is dispatched through the typed-op handler.
+			if r.typedOpHandler != nil && (len(raw) == 0 || raw[0] != legacyOpFirstByte) {
+				username := r.sessions.Get(connID)
+				ctx := &OpContext{
+					ConnID:   connID,
+					Username: username,
+					ClientIP: parseClientIP(r.connMgr.RemoteAddrString(connID)),
+				}
+				if respFrame := r.typedOpHandler(raw, ctx); respFrame != nil {
+					r.connMgr.SendReliable(connID, respFrame)
+				}
+				continue
+			}
 			parsed, err := r.parser(raw)
 			if err != nil {
 				continue

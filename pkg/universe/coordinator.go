@@ -2350,6 +2350,12 @@ func (c *Process) Start(parent ...context.Context) {
 	// registered (just polls + ignores unknown codes). Starts after
 	// startServices so service handlers are already registered.
 	if c.cfg.OpRouter != nil && c.roles.Has(RoleGateway) {
+		// Plan 2: install the typed-op dispatcher. The router peeks the
+		// first byte of every drained 0x01 frame: 0x08 → legacy proto;
+		// otherwise → DispatchTypedOpInbound.
+		c.cfg.OpRouter.SetTypedOpHandler(func(payload []byte, ctx *ops.OpContext) []byte {
+			return DispatchTypedOpInbound(payload, ctx)
+		})
 		go c.cfg.OpRouter.Run(ctx)
 	}
 
