@@ -9,16 +9,15 @@ import (
 )
 
 // TestRegisterChatServerEvents_TypeIDsRegistered asserts that, after
-// chat.RegisterChatServerEvents() runs, every chat-emitted event type
-// is present in the mmokit server-event registry with a non-zero
-// typeID.
-//
-// (The plan referred to a hypothetical mmokit.TypeIDOfPtr helper; this
-// codebase exposes mmokit.TypeIDOf(reflect.Type) + LookupServerEventType
-// instead. The semantic is identical — go through the public registry
-// API to confirm registration.)
+// the mmokit chat facade registers every chat-emitted server event,
+// each event type is present in the mmokit server-event registry with
+// a non-zero typeID. The mmokit facade's registerChatServerEvents is
+// invoked by RegisterChatService; for this isolated test we exercise
+// the public API mmokit.RegisterChatServerEvents which is a thin
+// re-export that the chat package itself can no longer provide
+// without forming an import cycle.
 func TestRegisterChatServerEvents_TypeIDsRegistered(t *testing.T) {
-	chat.RegisterChatServerEvents()
+	mmokit.RegisterChatServerEvents()
 
 	for _, sample := range []any{
 		(*chat.ChatMessageEvent)(nil),

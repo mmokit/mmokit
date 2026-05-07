@@ -1,32 +1,10 @@
 package chat
 
-import (
-	"sync"
-
-	"github.com/zenion/mmoserver/pkg/mmokit"
-)
-
-var registerChatServerEventsOnce sync.Once
-
-// RegisterChatServerEvents registers every chat-emitted typed event so
-// the server-event codec can encode/decode by typeID and the SDK
-// generator can emit typed handlers. Idempotent. Called by Service.Init
-// and by tests directly.
-func RegisterChatServerEvents() {
-	registerChatServerEventsOnce.Do(func() {
-		mmokit.RegisterEvent[ChatMessageEvent]()
-		mmokit.RegisterEvent[ChatDMEvent]()
-		mmokit.RegisterEvent[ChatMemberJoinedEvent]()
-		mmokit.RegisterEvent[ChatMemberLeftEvent]()
-		mmokit.RegisterEvent[ChatMessageDeletedEvent]()
-		mmokit.RegisterEvent[ChatMutedEvent]()
-		mmokit.RegisterEvent[ChatUnmutedEvent]()
-		mmokit.RegisterEvent[ChatKickedEvent]()
-		mmokit.RegisterEvent[ChatBannedEvent]()
-		mmokit.RegisterEvent[ChatChannelUpdatedEvent]()
-		mmokit.RegisterEvent[ChatChannelGoneEvent]()
-		mmokit.RegisterEvent[ChatMemberRoleChangedEvent]()
-		mmokit.RegisterEvent[ChatRateLimitedEvent]()
-		mmokit.RegisterEvent[ChatChannelsHydratedEvent]()
-	})
-}
+// This file used to host RegisterChatServerEvents which called
+// mmokit.RegisterEvent for each chat-emitted server event. That
+// produced an import cycle once the mmokit facade started importing
+// pkg/services/chat. The registration moved to pkg/mmokit/chat.go
+// (registerChatServerEvents, called from RegisterChatService at
+// facade time). The chat service no longer needs to do it itself —
+// any process running RegisterChatService has the registry populated
+// before Build() so codec lookups during Init succeed.

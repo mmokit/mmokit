@@ -223,8 +223,10 @@ func (s *Service) Init(ctx *service.Context) error {
 	s.reapWG.Add(1)
 	go s.reapLoop()
 
-	// 6. Register typed server-event types so the codec knows them
-	RegisterChatServerEvents()
+	// Server-event types are registered by mmokit.RegisterChatService
+	// at facade time (before Build) — see pkg/mmokit/chat.go's
+	// registerChatServerEvents helper. By the time Init runs, the
+	// codec already knows every chat-emitted event type.
 
 	if s.opts.OnReady != nil {
 		s.opts.OnReady(s)
