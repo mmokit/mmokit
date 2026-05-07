@@ -11,6 +11,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/zenion/mmoserver/pkg/cmdsys"
+	"github.com/zenion/mmoserver/pkg/ops"
 	"github.com/zenion/mmoserver/pkg/services/auth"
 )
 
@@ -52,6 +53,34 @@ func NewServiceSlot() (set func(*Service), get ServiceProvider) {
 // identified by slug (info, delete, etc).
 type ChannelSlugArgs struct {
 	Slug string `cmd:"help=channel slug,complete=chat-channels"`
+}
+
+// ChannelCreateArgs creates a new system_all or system_predicate channel.
+// Custom channels are user-owned and created via the player op, not
+// console.
+type ChannelCreateArgs struct {
+	Slug  string `cmd:"help=new channel slug"`
+	Kind  string `cmd:"help=system_all|system_predicate|custom"`
+	Topic string `cmd:"optional,help=initial topic"`
+}
+
+// ChannelRenameArgs renames an existing channel.
+type ChannelRenameArgs struct {
+	Slug    string `cmd:"help=current channel slug"`
+	NewSlug string `cmd:"help=new channel slug"`
+}
+
+// ChannelTopicArgs sets a channel's topic line.
+type ChannelTopicArgs struct {
+	Slug  string `cmd:"help=channel slug"`
+	Topic string `cmd:"help=new topic text"`
+}
+
+// ChannelSlowModeArgs sets a channel's slow-mode (per-user min delay between
+// messages). Seconds is clamped to [0, 3600] server-side.
+type ChannelSlowModeArgs struct {
+	Slug    string `cmd:"help=channel slug"`
+	Seconds int32  `cmd:"help=slow-mode delay in seconds (0 = off, max 3600)"`
 }
 
 // ChannelInfoResult is the console-friendly mirror of ChannelInfo.
@@ -124,6 +153,72 @@ func RegisterConsoleCommands(reg *cmdsys.Registry, getSvc ServiceProvider, getAu
 		Args:        ChannelSlugArgs{},
 		Result:      ChannelInfoResult{},
 		Handler:     channelInfoHandler(getSvc),
+	})); err != nil {
+		return err
+	}
+
+	// --- Channel-mutation commands ---
+
+	if err := must(reg.Register(cmdsys.Command{
+		Verb:        "chat.channel.create",
+		Capability:  "chat.admin",
+		Description: "create a new system_all or system_predicate channel",
+		Examples: []string{
+			"chat channel create world system_all",
+			"chat channel create guild:alpha system_predicate \"Alpha guild\"",
+		},
+		Route:   cmdsys.RouteLocal,
+		Args:    ChannelCreateArgs{},
+		Result:  OKResult{},
+		Handler: channelCreateHandler(getSvc),
+	})); err != nil {
+		return err
+	}
+	if err := must(reg.Register(cmdsys.Command{
+		Verb:        "chat.channel.delete",
+		Capability:  "chat.admin",
+		Description: "force-delete a chat channel and all its memberships",
+		Examples:    []string{"chat channel delete trade"},
+		Route:       cmdsys.RouteLocal,
+		Args:        ChannelSlugArgs{},
+		Result:      OKResult{},
+		Handler:     channelDeleteHandler(getSvc),
+	})); err != nil {
+		return err
+	}
+	if err := must(reg.Register(cmdsys.Command{
+		Verb:        "chat.channel.rename",
+		Capability:  "chat.admin",
+		Description: "rename a chat channel (cannot rename system_all)",
+		Examples:    []string{"chat channel rename trade marketplace"},
+		Route:       cmdsys.RouteLocal,
+		Args:        ChannelRenameArgs{},
+		Result:      OKResult{},
+		Handler:     channelRenameHandler(getSvc),
+	})); err != nil {
+		return err
+	}
+	if err := must(reg.Register(cmdsys.Command{
+		Verb:        "chat.channel.topic",
+		Capability:  "chat.admin",
+		Description: "set a channel's topic",
+		Examples:    []string{"chat channel topic trade \"trade goods here\""},
+		Route:       cmdsys.RouteLocal,
+		Args:        ChannelTopicArgs{},
+		Result:      OKResult{},
+		Handler:     channelTopicHandler(getSvc),
+	})); err != nil {
+		return err
+	}
+	if err := must(reg.Register(cmdsys.Command{
+		Verb:        "chat.channel.slowmode",
+		Capability:  "chat.admin",
+		Description: "set per-user slow-mode (0 = off, max 3600)",
+		Examples:    []string{"chat channel slowmode trade 5"},
+		Route:       cmdsys.RouteLocal,
+		Args:        ChannelSlowModeArgs{},
+		Result:      OKResult{},
+		Handler:     channelSlowModeHandler(getSvc),
 	})); err != nil {
 		return err
 	}
@@ -283,12 +378,160 @@ func channelInfoOf(c Channel, memberCount int) ChannelInfo {
 
 // Sentinel placeholders to prevent "declared and not used" warnings on
 // helpers that are defined in this commit but only consumed by the
-// channel-mutation / membership / moderation / broadcast commits to follow.
-// Each subsequent commit removes the entry it now actually uses.
+// membership and moderation commits to follow. Removed as those commits
+// land.
 var (
-	_ = resolveOperatorConn
 	_ = resolveTargetUser
 	_ = errAuthRepoNotReady
 	_ = cmdCtx
-	_ = chatErrToError
 )
+
+// --- channel-mutation handlers ---
+
+func channelCreateHandler(getSvc ServiceProvider) cmdsys.HandlerFunc {
+	return func(_ context.Context, env *cmdsys.Env, raw any) (any, error) {
+		svc := getSvc()
+		if svc == nil {
+			return nil, errSvcNotReady()
+		}
+		args := raw.(ChannelCreateArgs)
+		kind := channelKindFromString(args.Kind)
+		if kind == ChannelKindUnspecified {
+			return nil, fmt.Errorf("invalid kind %q (use system_all|system_predicate|custom)", args.Kind)
+		}
+		if kind == ChannelKindCustom {
+			return nil, errors.New("custom channels are user-owned; use the in-game create op, not console")
+		}
+		connID, _, err := resolveOperatorConn(svc, env)
+		if err != nil {
+			return nil, err
+		}
+		resp, _ := svc.HandleRegisterChannel(&ops.OpContext{ConnID: connID}, &ChatRegisterChannelRequest{
+			Slug:  args.Slug,
+			Kind:  kind,
+			Topic: args.Topic,
+		})
+		if resp.ErrorCode != 0 {
+			return nil, chatErrToError(resp.ErrorCode, resp.ErrorMessage)
+		}
+		return OKResult{
+			OK:     true,
+			Detail: fmt.Sprintf("created channel %s (%s)", args.Slug, args.Kind),
+		}, nil
+	}
+}
+
+func channelDeleteHandler(getSvc ServiceProvider) cmdsys.HandlerFunc {
+	return func(_ context.Context, env *cmdsys.Env, raw any) (any, error) {
+		svc := getSvc()
+		if svc == nil {
+			return nil, errSvcNotReady()
+		}
+		args := raw.(ChannelSlugArgs)
+		chID, _, err := resolveChannelBySlug(svc, args.Slug)
+		if err != nil {
+			return nil, err
+		}
+		connID, _, err := resolveOperatorConn(svc, env)
+		if err != nil {
+			return nil, err
+		}
+		resp, _ := svc.HandleUnregisterChannel(&ops.OpContext{ConnID: connID}, &ChatUnregisterChannelRequest{
+			ChannelID: chID.String(),
+		})
+		if resp.ErrorCode != 0 {
+			return nil, chatErrToError(resp.ErrorCode, resp.ErrorMessage)
+		}
+		return OKResult{
+			OK:     true,
+			Detail: fmt.Sprintf("deleted channel %s", args.Slug),
+		}, nil
+	}
+}
+
+func channelRenameHandler(getSvc ServiceProvider) cmdsys.HandlerFunc {
+	return func(_ context.Context, env *cmdsys.Env, raw any) (any, error) {
+		svc := getSvc()
+		if svc == nil {
+			return nil, errSvcNotReady()
+		}
+		args := raw.(ChannelRenameArgs)
+		chID, _, err := resolveChannelBySlug(svc, args.Slug)
+		if err != nil {
+			return nil, err
+		}
+		connID, _, err := resolveOperatorConn(svc, env)
+		if err != nil {
+			return nil, err
+		}
+		resp, _ := svc.HandleRenameChannel(&ops.OpContext{ConnID: connID}, &ChatRenameChannelRequest{
+			ChannelID: chID.String(),
+			NewSlug:   args.NewSlug,
+		})
+		if resp.ErrorCode != 0 {
+			return nil, chatErrToError(resp.ErrorCode, resp.ErrorMessage)
+		}
+		return OKResult{
+			OK:     true,
+			Detail: fmt.Sprintf("renamed %s -> %s", args.Slug, args.NewSlug),
+		}, nil
+	}
+}
+
+func channelTopicHandler(getSvc ServiceProvider) cmdsys.HandlerFunc {
+	return func(_ context.Context, env *cmdsys.Env, raw any) (any, error) {
+		svc := getSvc()
+		if svc == nil {
+			return nil, errSvcNotReady()
+		}
+		args := raw.(ChannelTopicArgs)
+		chID, _, err := resolveChannelBySlug(svc, args.Slug)
+		if err != nil {
+			return nil, err
+		}
+		connID, _, err := resolveOperatorConn(svc, env)
+		if err != nil {
+			return nil, err
+		}
+		resp, _ := svc.HandleSetTopic(&ops.OpContext{ConnID: connID}, &ChatSetTopicRequest{
+			ChannelID: chID.String(),
+			Topic:     args.Topic,
+		})
+		if resp.ErrorCode != 0 {
+			return nil, chatErrToError(resp.ErrorCode, resp.ErrorMessage)
+		}
+		return OKResult{
+			OK:     true,
+			Detail: fmt.Sprintf("topic set on %s", args.Slug),
+		}, nil
+	}
+}
+
+func channelSlowModeHandler(getSvc ServiceProvider) cmdsys.HandlerFunc {
+	return func(_ context.Context, env *cmdsys.Env, raw any) (any, error) {
+		svc := getSvc()
+		if svc == nil {
+			return nil, errSvcNotReady()
+		}
+		args := raw.(ChannelSlowModeArgs)
+		chID, _, err := resolveChannelBySlug(svc, args.Slug)
+		if err != nil {
+			return nil, err
+		}
+		connID, _, err := resolveOperatorConn(svc, env)
+		if err != nil {
+			return nil, err
+		}
+		resp, _ := svc.HandleSetSlowMode(&ops.OpContext{ConnID: connID}, &ChatSetSlowModeRequest{
+			ChannelID: chID.String(),
+			Seconds:   args.Seconds,
+		})
+		if resp.ErrorCode != 0 {
+			return nil, chatErrToError(resp.ErrorCode, resp.ErrorMessage)
+		}
+		return OKResult{
+			OK:     true,
+			Detail: fmt.Sprintf("slow-mode set to %ds on %s", args.Seconds, args.Slug),
+		}, nil
+	}
+}

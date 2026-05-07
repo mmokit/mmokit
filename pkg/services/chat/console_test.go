@@ -152,6 +152,139 @@ func TestConsole_ChannelInfo_NotFound(t *testing.T) {
 	}
 }
 
+// --- Channel-mutation commands ---
+
+func TestConsole_ChannelCreate_AndInfo(t *testing.T) {
+	f := newConsoleFixture(t)
+	f.invokeOK(t, "chat.channel.create", chat.ChannelCreateArgs{
+		Slug:  "world",
+		Kind:  "system_all",
+		Topic: "global chat",
+	})
+	tr := f.invokeOK(t, "chat.channel.info", chat.ChannelSlugArgs{Slug: "world"})
+	info, ok := tr.Result.(chat.ChannelInfoResult)
+	if !ok {
+		t.Fatalf("result type %T", tr.Result)
+	}
+	if info.Slug != "world" {
+		t.Fatalf("slug=%q", info.Slug)
+	}
+	if info.Kind != "system_all" {
+		t.Fatalf("kind=%q", info.Kind)
+	}
+	if info.Topic != "global chat" {
+		t.Fatalf("topic=%q", info.Topic)
+	}
+}
+
+func TestConsole_ChannelCreate_RejectsCustom(t *testing.T) {
+	f := newConsoleFixture(t)
+	msg := f.invokeFail(t, "chat.channel.create", chat.ChannelCreateArgs{
+		Slug: "private", Kind: "custom",
+	})
+	if !strings.Contains(msg, "user-owned") && !strings.Contains(msg, "custom") {
+		t.Fatalf("expected refusal for custom kind, got %q", msg)
+	}
+}
+
+func TestConsole_ChannelRename(t *testing.T) {
+	f := newConsoleFixture(t)
+	f.invokeOK(t, "chat.channel.create", chat.ChannelCreateArgs{
+		Slug: "guild:alpha", Kind: "system_predicate",
+	})
+	f.invokeOK(t, "chat.channel.rename", chat.ChannelRenameArgs{
+		Slug: "guild:alpha", NewSlug: "guild:beta",
+	})
+	if _, ok := f.svc.ChannelIDBySlug("guild:beta"); !ok {
+		t.Fatal("expected guild:beta after rename")
+	}
+	if _, ok := f.svc.ChannelIDBySlug("guild:alpha"); ok {
+		t.Fatal("expected guild:alpha gone after rename")
+	}
+}
+
+func TestConsole_ChannelTopic_AndSlowMode(t *testing.T) {
+	f := newConsoleFixture(t)
+	f.invokeOK(t, "chat.channel.create", chat.ChannelCreateArgs{
+		Slug: "trade", Kind: "system_predicate",
+	})
+	f.invokeOK(t, "chat.channel.topic", chat.ChannelTopicArgs{
+		Slug: "trade", Topic: "buy/sell only",
+	})
+	f.invokeOK(t, "chat.channel.slowmode", chat.ChannelSlowModeArgs{
+		Slug: "trade", Seconds: 5,
+	})
+	id, _ := f.svc.ChannelIDBySlug("trade")
+	c, _ := f.svc.ChannelByID(id)
+	if c.Topic != "buy/sell only" {
+		t.Fatalf("topic=%q", c.Topic)
+	}
+	if c.SlowModeSeconds != 5 {
+		t.Fatalf("slowmode=%d", c.SlowModeSeconds)
+	}
+}
+
+func TestConsole_ChannelDelete(t *testing.T) {
+	f := newConsoleFixture(t)
+	f.invokeOK(t, "chat.channel.create", chat.ChannelCreateArgs{
+		Slug: "ephemeral", Kind: "system_predicate",
+	})
+	f.invokeOK(t, "chat.channel.delete", chat.ChannelSlugArgs{Slug: "ephemeral"})
+	if _, ok := f.svc.ChannelIDBySlug("ephemeral"); ok {
+		t.Fatal("expected channel gone after delete")
+	}
+}
+
+// --- Operator-online enforcement (required for mutation commands) ---
+
+func TestConsole_RequiresOperatorOnline(t *testing.T) {
+	chatRepo := chattest.NewMock()
+	authRepo := authtest.NewMock()
+	svc := chat.NewTestServiceWithAuth(t, chatRepo, authRepo, nil)
+
+	// Create the operator but DON'T mark them online in chat.
+	user, err := authRepo.CreateUser(context.Background(), auth.User{
+		Username: "operator",
+	}, "h")
+	if err != nil {
+		t.Fatalf("CreateUser: %v", err)
+	}
+	if err := authRepo.GrantCapability(context.Background(), auth.Capability{
+		UserID: user.UserID, Capability: "chat.admin", GrantedBy: uuid.Nil,
+	}); err != nil {
+		t.Fatalf("GrantCapability: %v", err)
+	}
+
+	reg := cmdsys.NewRegistry()
+	if err := chat.RegisterConsoleCommands(reg,
+		func() *chat.Service { return svc.Service },
+		func() auth.Repository { return authRepo },
+	); err != nil {
+		t.Fatalf("RegisterConsoleCommands: %v", err)
+	}
+	disp := cmdsys.NewDispatcher(cmdsys.DispatcherConfig{
+		Registry: reg,
+		Audit:    cmdsys.NoopAuditSink{},
+	})
+	t.Cleanup(func() { _ = disp.Close() })
+
+	caller := cmdsys.NewOperatorIdentity("offline-op")
+	caller.ID = user.UserID.String()
+
+	res, err := disp.Invoke(deadlineCtx(t), caller, "chat.channel.create",
+		chat.ChannelCreateArgs{Slug: "world", Kind: "system_all"})
+	if err == nil {
+		t.Fatal("expected handler error, got nil")
+	}
+	if !strings.Contains(strings.ToLower(err.Error()), "logged into") &&
+		!strings.Contains(strings.ToLower(err.Error()), "online") {
+		t.Fatalf("expected operator-online error, got %q", err.Error())
+	}
+	if len(res.PerTarget) != 1 || res.PerTarget[0].OK {
+		t.Fatal("expected failure when operator is not online in chat")
+	}
+}
+
 // --- Read-only commands work without the operator being online ---
 
 func TestConsole_ReadOnly_NoOperatorOnlineRequired(t *testing.T) {
