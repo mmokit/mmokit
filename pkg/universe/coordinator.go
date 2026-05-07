@@ -630,6 +630,31 @@ type Process struct {
 	// in by Build (so they can close over the live *Gateway). Nil when
 	// auth isn't registered.
 	pendingAuthHook *auth.GatewayHook
+
+	// chatHook is set by InstallChatHook (called from
+	// mmokit.RegisterChatService at facade time). The gateway's
+	// onAuthSuccess + handleDisconnect paths invoke OnSessionEnter /
+	// OnSessionLeave on the hook so the chat service can build presence
+	// + subscription state for each connection. Nil when chat isn't
+	// registered. The interface is duck-typed equivalent to
+	// pkg/services/chat.SessionHook — declaring it locally avoids a
+	// universe→chat import cycle.
+	chatHook ChatSessionHook
+}
+
+// ChatSessionHook is the gateway-side adapter that drives chat presence
+// after auth login/logout. The chat service registers an implementation
+// (via mmokit.RegisterChatService) by calling Process.InstallChatHook;
+// the gateway's onAuthSuccess + handleDisconnect paths then invoke the
+// callbacks so chat builds + tears down presence/subscription state.
+//
+// Declared locally in pkg/universe (rather than imported from
+// pkg/services/chat) to avoid a universe→chat import cycle.
+// pkg/services/chat.SessionHook is the same shape; either implementation
+// satisfies this interface.
+type ChatSessionHook interface {
+	OnSessionEnter(connID uint32, userID, username, gatewayID string)
+	OnSessionLeave(connID uint32, gatewayID string)
 }
 
 // New creates a coordinator with the given Config.
@@ -1158,6 +1183,19 @@ func (c *Process) InstallGatewayAuthHook() *auth.GatewayHook {
 		c.pendingAuthHook = &auth.GatewayHook{Logger: c.Log}
 	}
 	return c.pendingAuthHook
+}
+
+// InstallChatHook stores a ChatSessionHook implementation that the
+// gateway's onAuthSuccess + handleDisconnect paths invoke after every
+// successful login / logout to drive chat presence + subscription
+// bookkeeping. Called by mmokit.RegisterChatService at facade time
+// (before Build). Idempotent — last-writer-wins.
+//
+// Safe to call before or after Build. Embedded gateway dispatches
+// through Process.chatHook; standalone gateways (which don't carry
+// the chat service in-process) don't run the hook.
+func (c *Process) InstallChatHook(hook ChatSessionHook) {
+	c.chatHook = hook
 }
 
 // installPendingAuthHook fills in the GatewayHook's OnSuccess / OnLogout

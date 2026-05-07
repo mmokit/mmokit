@@ -353,6 +353,13 @@ func (g *Gateway) dispatchPostAuthAssignment(connID uint32, userID uuid.UUID, us
 	if g.coord != nil {
 		g.coord.registerAuthenticatedSession(userID, username, g.id, connID, sess.hostID, sess.cellID)
 	}
+
+	// Drive chat presence/subscription bookkeeping if the chat service
+	// is registered. Only fires in embedded mode — standalone gateways
+	// don't carry the chat service in-process.
+	if g.coord != nil && g.coord.chatHook != nil {
+		g.coord.chatHook.OnSessionEnter(connID, userID.String(), username, g.id)
+	}
 }
 
 // sendServerConfig writes the typed ServerConfig event with the cached
@@ -410,6 +417,13 @@ func (g *Gateway) handleDisconnect(evt net.PlayerEvent) {
 		if g.coord.opsSessions != nil {
 			g.coord.opsSessions.Remove(connID)
 		}
+	}
+
+	// Drop chat presence/subscription state if the chat service is
+	// registered. Idempotent — chat tolerates unknown connIDs. Embedded
+	// mode only; standalone gateways don't carry chat in-process.
+	if g.coord != nil && g.coord.chatHook != nil {
+		g.coord.chatHook.OnSessionLeave(connID, g.id)
 	}
 
 	if g.isLocalShortcut(sess.hostID) {
