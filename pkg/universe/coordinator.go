@@ -2414,7 +2414,18 @@ func (c *Process) Start(parent ...context.Context) {
 	// connection ownership; the run is harmless when no handlers are
 	// registered (just polls + ignores unknown codes). Starts after
 	// startServices so service handlers are already registered.
-	if c.cfg.OpRouter != nil && c.roles.Has(RoleGateway) {
+	//
+	// Skip the OpRouter when the gateway runs a per-conn pump
+	// (Gateway.runSessionPump). That pump drains the same opInput queue
+	// every 1ms and forks per-frame on RouteKind: RouteGatewayLocal ops
+	// dispatched inline, RoutePlayerCell ops forwarded to the player's
+	// host via MeshData. Running the OpRouter alongside the pump races
+	// the drain — the OpRouter's CellOpRouter path can't reach a remote
+	// cell (returns OperationError synchronously), so any RoutePlayerCell
+	// frame the OpRouter wins is lost. The pump's gate is g.hostNetwork
+	// != nil, so we mirror it here.
+	pumpOwnsDrain := c.gateway != nil && c.gateway.hostNetwork != nil
+	if c.cfg.OpRouter != nil && c.roles.Has(RoleGateway) && !pumpOwnsDrain {
 		// Install the typed-op dispatcher. Every drained 0x01 frame is a
 		// typed-op request; DispatchTypedOpInbound routes it via the
 		// matching RegisterOp handler. The Process is passed as the

@@ -93,7 +93,7 @@ func (r *Router) poll() {
 			ctx := &OpContext{
 				ConnID:   connID,
 				Username: username,
-				ClientIP: parseClientIP(r.connMgr.RemoteAddrString(connID)),
+				ClientIP: ParseClientIP(r.connMgr.RemoteAddrString(connID)),
 			}
 			if respFrame := r.typedOpHandler(raw, ctx); respFrame != nil {
 				r.connMgr.SendReliable(connID, respFrame)
@@ -114,10 +114,10 @@ func (r *Router) ConnIDForUsername(username string) uint32 {
 	return 0
 }
 
-// parseClientIP extracts a netip.Addr from a "host:port" or bare "host" address
+// ParseClientIP extracts a netip.Addr from a "host:port" or bare "host" address
 // string (as returned by net.ConnManager.RemoteAddrString). Returns the zero
 // value on any parse failure — callers must tolerate an invalid addr.
-func parseClientIP(addrStr string) netip.Addr {
+func ParseClientIP(addrStr string) netip.Addr {
 	if addrStr == "" {
 		return netip.Addr{}
 	}

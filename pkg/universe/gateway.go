@@ -35,10 +35,11 @@ import (
 	"github.com/google/uuid"
 
 	meshpb "github.com/zenion/mmoserver/gen/go/meshpb"
-	"github.com/zenion/mmoserver/pkg/services/auth"
 	"github.com/zenion/mmoserver/pkg/coords"
 	"github.com/zenion/mmoserver/pkg/logger"
 	"github.com/zenion/mmoserver/pkg/net"
+	"github.com/zenion/mmoserver/pkg/ops"
+	"github.com/zenion/mmoserver/pkg/services/auth"
 )
 
 // Gateway terminates WebSocket connections, gates ops on per-connection
@@ -157,6 +158,14 @@ func (g *Gateway) handleEvent(evt net.PlayerEvent) {
 		// (NaN, NaN) for one frame on every tick boundary.
 		g.sendServerConfig(evt.ConnID)
 		g.log.Log(CatNetConn, "gateway: conn %d connected (unauthenticated)", evt.ConnID)
+		// Start the per-conn pump immediately on processes that route via
+		// MeshData. The pump owns BOTH the pre-auth window (RouteGatewayLocal
+		// auth ops dispatched inline) AND post-auth forwarding. Embedded
+		// local-shortcut processes (g.hostNetwork == nil) keep using
+		// OpRouter — there's no MeshData hop to fork on.
+		if g.hostNetwork != nil {
+			go g.runSessionPump(evt.ConnID)
+		}
 		return
 	}
 	g.handleDisconnect(evt)
@@ -880,55 +889,176 @@ func (g *Gateway) dispatchPlayerAssignmentRemote(sess *localSession) error {
 	}
 	g.log.Log(CatNetConn, "gateway: conn=%d user=%s -> host=%s cell=%s (MeshData)", sess.connID, sess.username, sess.hostID, sess.cellID)
 
-	// Start the per-session pump goroutine to forward input from this client.
-	go g.runSessionPump(sess.connID)
+	// The per-conn pump was already started in handleEvent at connect time —
+	// it will pick up the freshly recorded session on its next tick and start
+	// forwarding RoutePlayerCell ops + event frames to the assigned host.
 	return nil
 }
 
-// runSessionPump is the per-session goroutine for standalone gateway mode.
-// It polls ConnManager for pending input from the client and forwards each
-// drained byte slice to the authoritative node via a MeshData ClientInput frame.
+// runSessionPump is the per-conn goroutine that owns the inbound drain on
+// gateways that route via MeshData (standalone gateway, coord+gateway-without-
+// host, embedded always-proxy). Started at connect time from handleEvent so
+// it covers BOTH pre-auth and post-auth traffic — the pre-auth window only
+// sees RouteGatewayLocal typed-ops (auth.* by construction), which the pump
+// dispatches inline; post-auth, RoutePlayerCell ops are forwarded to the
+// player's authoritative host via MeshData.
 //
-// The pump exits when:
-//   - The session is removed from g.sessions (client disconnected or transferred).
-//   - g.hostNetwork is nil or closed.
+// Forking on RouteKind inside the pump is what closes the race that
+// previously caused chat (RouteGatewayLocal) ops to be silently forwarded
+// to a host that doesn't run the chat service. Before the fork, the OpRouter
+// (5ms) and the pump (1ms) drained the same queue concurrently; the faster
+// pump wired everything to the host, so the local dispatch never ran. The
+// OpRouter is now skipped entirely on processes that own this pump (see
+// the gate at coordinator.go ~2417).
 //
-// In embedded mode isLocalShortcut returns true and the pump is never started.
-// 1ms poll is acceptable for now; channel-driven is a future optimisation.
-//
-// NOTE (T11): In embedded always-proxy mode (Config.GatewayMode == "always-proxy")
-// isLocalShortcut returns false, so the pump IS started for colocated sessions.
-// The pump requires g.hostNetwork to forward ClientInput frames; however
-// hostNetwork is currently only constructed in standalone (--mode=gateway) mode
-// (standalone). T11 must arrange hostNetwork construction for embedded always-proxy mode
-// before the integration test fixture will work end-to-end.
+// The pump exits when the underlying connection is gone (Get(connID)==nil),
+// regardless of session state — disconnect tears the conn down before the
+// session is reaped, so this is a strict superset of "session removed".
 func (g *Gateway) runSessionPump(connID uint32) {
 	ticker := time.NewTicker(1 * time.Millisecond)
 	defer ticker.Stop()
 
 	for range ticker.C {
-		sess := g.lookupSession(connID)
-		if sess == nil {
-			return // session removed
-		}
 		if g.hostNetwork == nil {
 			return
 		}
+		if g.connMgr.Get(connID) == nil {
+			return // connection closed
+		}
+		sess := g.lookupSession(connID) // may be nil pre-auth
 
 		// Plan 1 Phase 5 unified the typed client-input channel (0x02)
 		// with the event channel (0x00); Phase 7 then deleted the 0x02
 		// constant entirely. The gateway drains two queues: events
 		// (carries framework-level ServerEvent envelopes and typed-input
 		// frames) and ops.
-		g.forwardChannel(sess, connID, g.connMgr.DrainInput(connID), net.ChannelEvent, "event")
-		g.forwardChannel(sess, connID, g.connMgr.DrainOpInput(connID), net.ChannelOperation, "op")
+		//
+		// Events have no gateway-local route kind — every event frame is
+		// forwarded to the player's host. Skip when there's no session
+		// (pre-auth window): event frames before authentication have
+		// nowhere to go.
+		if sess != nil {
+			g.forwardChannel(sess, connID, g.connMgr.DrainInput(connID), net.ChannelEvent, "event")
+		} else {
+			// Drain anyway so frames don't accumulate; pre-auth event
+			// frames are not expected, but we don't want them to wedge
+			// the queue.
+			g.connMgr.DrainInput(connID)
+		}
+
+		// Op frames are forked on RouteKind — see processOpFrame.
+		for _, raw := range g.connMgr.DrainOpInput(connID) {
+			g.processOpFrame(connID, sess, raw)
+		}
+	}
+}
+
+// processOpFrame forks per-frame on the typed-op RouteKind. RouteGatewayLocal
+// ops are dispatched inline via DispatchTypedOpInbound and the response is
+// shipped back to the client over the WS reliable channel. Everything else
+// (RoutePlayerCell, unknown typeIDs) is forwarded to the player's host via
+// the existing MeshData ClientInput path so the cell can route it.
+//
+// Forwarding pre-auth requires a session — without one, RoutePlayerCell ops
+// have no destination. The ops registry rejects RouteGatewayLocal handlers
+// from being registered with stale typeIDs, so an unknown typeID pre-auth is
+// either a malformed frame or a misconfigured client; we drop with an
+// OperationError back to the client (best-effort) rather than silently
+// swallowing it.
+func (g *Gateway) processOpFrame(connID uint32, sess *localSession, raw []byte) {
+	typeID, _, _, decErr := DecodeTypedOpFrame(raw)
+	if decErr != nil {
+		// Structurally invalid frame: nothing we can do. The dispatcher
+		// would also drop it (no request_id to correlate an error).
+		g.log.Log(CatNetConn, "gateway: op decode conn=%d: %v", connID, decErr)
+		return
+	}
+
+	var kind uint8
+	var routeKnown bool
+	if TypedOpHooks.LookupTypedOp != nil {
+		k, _, _, _, _, ok := TypedOpHooks.LookupTypedOp(typeID)
+		if ok {
+			kind = k
+			routeKnown = true
+		}
+	}
+
+	if routeKnown && kind == TypedOpHooks.RouteGatewayLocal {
+		// Build OpContext with ConnID + Username + ClientIP, matching
+		// pkg/ops/router.go's poll() construction so handlers see the
+		// same context shape regardless of which drain path delivered
+		// the frame.
+		username := ""
+		if sess != nil {
+			username = sess.username
+		}
+		opCtx := &ops.OpContext{
+			ConnID:   connID,
+			Username: username,
+			ClientIP: ops.ParseClientIP(g.connMgr.RemoteAddrString(connID)),
+		}
+		// nil router: RouteGatewayLocal handlers don't use cell routing.
+		// DispatchTypedOpInbound returns the response frame with the
+		// channel byte (0x01) already prepended, suitable for direct
+		// SendReliable.
+		if respFrame := DispatchTypedOpInbound(raw, opCtx, nil); respFrame != nil {
+			g.connMgr.SendReliable(connID, respFrame)
+		}
+		return
+	}
+
+	// RoutePlayerCell or unknown typeID → forward to the host. Without
+	// a session, there's nowhere to forward; drop with a best-effort
+	// OperationError so the client sees a failure instead of hanging.
+	if sess == nil {
+		if respFrame := encodeTypedOpUnroutable(raw); respFrame != nil {
+			g.connMgr.SendReliable(connID, respFrame)
+		}
+		return
+	}
+	g.forwardOpFrame(sess, connID, raw)
+}
+
+// encodeTypedOpUnroutable builds an OperationError response correlated to
+// the request_id in raw. Used for op frames that arrive before authentication
+// completes (no session → no host to forward to). Returns nil when the
+// typed-op hooks aren't wired or the frame is structurally bad.
+func encodeTypedOpUnroutable(raw []byte) []byte {
+	_, requestID, _, err := DecodeTypedOpFrame(raw)
+	if err != nil {
+		return nil
+	}
+	return encodeOpErrorViaHooks(requestID, opErrorHandlerFailed,
+		"op requires an authenticated session")
+}
+
+// forwardOpFrame wraps a single op-channel payload in a MeshFrame.ClientInput
+// and ships it to the player's authoritative host. Extracted from
+// forwardChannel so the per-frame fork in processOpFrame can call it directly.
+func (g *Gateway) forwardOpFrame(sess *localSession, connID uint32, raw []byte) {
+	frame := &meshpb.MeshFrame{
+		Msg: &meshpb.MeshFrame_ClientInput{
+			ClientInput: &meshpb.ClientInput{
+				GatewayId: g.id,
+				ConnId:    connID,
+				Epoch:     sess.epoch,
+				Data:      raw,
+				Channel:   uint32(net.ChannelOperation),
+			},
+		},
+	}
+	if err := g.hostNetwork.SendOrdered(sess.hostID, frame); err != nil {
+		g.log.Log(CatNetConn, "gateway: ClientInput (op) forward conn=%d host=%s: %v", connID, sess.hostID, err)
 	}
 }
 
 // forwardChannel wraps each drained payload in a MeshFrame.ClientInput tagged
 // with its source wire channel and forwards to the authoritative host. The
 // channel tag lets the host dispatch into the matching per-session queue
-// without sniffing payload bytes.
+// without sniffing payload bytes. Op-channel forwarding now goes through
+// processOpFrame → forwardOpFrame; this function remains for the event
+// channel.
 func (g *Gateway) forwardChannel(sess *localSession, connID uint32, msgs [][]byte, channel byte, kind string) {
 	for _, raw := range msgs {
 		frame := &meshpb.MeshFrame{
