@@ -88,6 +88,72 @@ func (s *Service) HandleMuteUser(opCtx *ops.OpContext, req *ChatMuteUserRequest)
 	return &ChatMuteUserResponse{}, nil
 }
 
+// HandleUnmuteUser removes a mute (channel-scoped or global). Same
+// dual auth gate as HandleMuteUser: empty channel_id requires chat.admin,
+// non-empty requires canModerate.
+//
+// Idempotent: unmuting a user who isn't currently muted returns success
+// (operators don't want unmute-of-already-unmuted to fail).
+func (s *Service) HandleUnmuteUser(opCtx *ops.OpContext, req *ChatUnmuteUserRequest) (*ChatUnmuteUserResponse, error) {
+	if opCtx == nil {
+		return errResp[ChatUnmuteUserResponse](ChatErrorInternal, "missing op context", 0)
+	}
+	callerID := s.callerFromOpCtx(opCtx)
+	if callerID == uuid.Nil {
+		return errResp[ChatUnmuteUserResponse](ChatErrorPermissionDenied, "not online", 0)
+	}
+	targetID, err := uuid.Parse(req.UserID)
+	if err != nil {
+		return errResp[ChatUnmuteUserResponse](ChatErrorInternal, "invalid user_id", 0)
+	}
+
+	var chID uuid.UUID
+	if req.ChannelID == "" {
+		chID = MuteGlobalChannelID
+		if !s.hasGlobalAdmin(callerID) {
+			return errResp[ChatUnmuteUserResponse](ChatErrorPermissionDenied, "denied", 0)
+		}
+	} else {
+		parsed, err := uuid.Parse(req.ChannelID)
+		if err != nil {
+			return errResp[ChatUnmuteUserResponse](ChatErrorChannelNotFound, "invalid channel_id", 0)
+		}
+		chID = parsed
+		s.mu.RLock()
+		_, channelExists := s.channels[chID]
+		s.mu.RUnlock()
+		if !channelExists {
+			return errResp[ChatUnmuteUserResponse](ChatErrorChannelNotFound, "channel not found", 0)
+		}
+		if !s.canModerate(callerID, chID) {
+			return errResp[ChatUnmuteUserResponse](ChatErrorPermissionDenied, "denied", 0)
+		}
+	}
+
+	// Idempotent: ErrMuteNotFound from the repo is mapped to success.
+	if err := s.repo.DeleteMute(context.Background(), targetID, chID); err != nil && err != ErrMuteNotFound {
+		return errResp[ChatUnmuteUserResponse](ChatErrorInternal, "delete mute: "+err.Error(), 0)
+	}
+
+	s.mu.Lock()
+	delete(s.mutes, muteKey{targetID, chID})
+	targetConn, online := s.online[targetID]
+	send := s.sendEventFn
+	s.mu.Unlock()
+
+	if s.ctx != nil && s.ctx.Logger != nil {
+		s.ctx.Logger.Log(logCat, "unmute: user=%s channel=%s caller=%s",
+			targetID, chID, callerID)
+	}
+
+	if online && send != nil {
+		send(targetConn, &ChatUnmutedEvent{
+			ChannelID: chIDStringForGlobal(chID),
+		})
+	}
+	return &ChatUnmuteUserResponse{}, nil
+}
+
 // chIDStringForGlobal returns "" when chID is the MuteGlobalChannelID
 // sentinel; otherwise the canonical UUID string. Used to translate the
 // sentinel back to wire-form "empty = global" semantics.

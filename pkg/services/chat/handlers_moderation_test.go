@@ -202,6 +202,123 @@ func TestHandleMuteUser_RejectsZeroOrNegativeDuration(t *testing.T) {
 	}
 }
 
+// --- HandleUnmuteUser ---
+
+func TestHandleUnmuteUser_ChannelScoped_HappyPath(t *testing.T) {
+	chatRepo := chattest.NewMock()
+	authRepo := authtest.NewMock()
+	svc := chat.NewTestServiceWithAuth(t, chatRepo, authRepo, []chat.DefaultChannelDef{
+		{Slug: "world", Kind: chat.ChannelKindSystemAll},
+	})
+	chid := svc.MustChannelID("world")
+
+	gmUID := svc.MustOnlineFakeUser(101, "gm")
+	svc.MustAddMember(chid, gmUID, "admin")
+	aliceUID := svc.MustOnlineFakeUser(102, "alice")
+
+	// First mute alice via the handler.
+	if _, err := svc.HandleMuteUser(&ops.OpContext{ConnID: 101}, &chat.ChatMuteUserRequest{
+		UserID:     aliceUID.String(),
+		ChannelID:  chid.String(),
+		DurationMs: 60_000,
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	var sent []recordedEvent
+	svc.SetSendEventFn(func(c uint32, ev any) { sent = append(sent, recordedEvent{c, ev}) })
+
+	resp, err := svc.HandleUnmuteUser(&ops.OpContext{ConnID: 101}, &chat.ChatUnmuteUserRequest{
+		UserID:    aliceUID.String(),
+		ChannelID: chid.String(),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp.ErrorCode != 0 {
+		t.Fatalf("err: %s", resp.ErrorMessage)
+	}
+
+	// Mute is no longer active.
+	active, _ := svc.MuteCheck(aliceUID, chid)
+	if active {
+		t.Fatal("expected channel-scoped mute to be cleared")
+	}
+	// Subsequent send works.
+	sendResp, err := svc.HandleSend(&ops.OpContext{ConnID: 102}, &chat.ChatSendRequest{
+		ChannelID: chid.String(), Body: "hi",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if sendResp.ErrorCode != 0 {
+		t.Fatalf("expected unmuted send to succeed, got code=%d", sendResp.ErrorCode)
+	}
+
+	// Target received ChatUnmutedEvent.
+	gotEvent := false
+	for _, r := range sent {
+		ev, ok := r.Event.(*chat.ChatUnmutedEvent)
+		if !ok {
+			continue
+		}
+		if r.ConnID != 102 {
+			t.Fatalf("ChatUnmutedEvent should go to target connID=102, got %d", r.ConnID)
+		}
+		if ev.ChannelID != chid.String() {
+			t.Fatalf("event ChannelID=%q want %q", ev.ChannelID, chid.String())
+		}
+		gotEvent = true
+	}
+	if !gotEvent {
+		t.Fatal("expected ChatUnmutedEvent to alice")
+	}
+}
+
+func TestHandleUnmuteUser_IdempotentSuccessOnNoExistingMute(t *testing.T) {
+	chatRepo := chattest.NewMock()
+	authRepo := authtest.NewMock()
+	svc := chat.NewTestServiceWithAuth(t, chatRepo, authRepo, []chat.DefaultChannelDef{
+		{Slug: "world", Kind: chat.ChannelKindSystemAll},
+	})
+	chid := svc.MustChannelID("world")
+	gmUID := svc.MustOnlineFakeUser(101, "gm")
+	svc.MustAddMember(chid, gmUID, "admin")
+	aliceUID := uuid.New()
+
+	resp, err := svc.HandleUnmuteUser(&ops.OpContext{ConnID: 101}, &chat.ChatUnmuteUserRequest{
+		UserID:    aliceUID.String(),
+		ChannelID: chid.String(),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp.ErrorCode != 0 {
+		t.Fatalf("expected idempotent success on no-existing-mute, got code=%d msg=%s", resp.ErrorCode, resp.ErrorMessage)
+	}
+}
+
+func TestHandleUnmuteUser_Global_DeniedWithoutChatAdmin(t *testing.T) {
+	chatRepo := chattest.NewMock()
+	authRepo := authtest.NewMock()
+	svc := chat.NewTestServiceWithAuth(t, chatRepo, authRepo, []chat.DefaultChannelDef{
+		{Slug: "world", Kind: chat.ChannelKindSystemAll},
+	})
+
+	_ = svc.MustOnlineFakeUser(101, "alice") // no chat.admin
+
+	resp, err := svc.HandleUnmuteUser(&ops.OpContext{ConnID: 101}, &chat.ChatUnmuteUserRequest{
+		UserID:    uuid.NewString(),
+		ChannelID: "",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp.ErrorCode != uint32(chat.ChatErrorPermissionDenied) {
+		t.Fatalf("got code=%d want PermissionDenied", resp.ErrorCode)
+	}
+}
+
 // Ensure that re-reading mutes via the service post-handler, before
 // reaper kicks in, sees the row in the repo.
 func TestHandleMuteUser_PersistsToRepository(t *testing.T) {
