@@ -298,9 +298,7 @@ func (m *RepoMock) HasCapability(_ context.Context, userID uuid.UUID, capability
 func (m *RepoMock) GrantCapability(_ context.Context, c auth.Capability) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	if c.GrantedAt.IsZero() {
-		c.GrantedAt = time.Now()
-	}
+	c.GrantedAt = time.Now()
 	m.caps[capKey{c.UserID, c.Capability}] = c
 	return nil
 }

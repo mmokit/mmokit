@@ -212,20 +212,29 @@ func TestRepoCapabilities_GrantThenHas(t *testing.T) {
 func TestRepoCapabilities_RevokeAndList(t *testing.T) {
 	repo := openTestRepo(t)
 	ctx := context.Background()
-	u, _ := repo.CreateUser(ctx, auth.User{Username: "bob"}, "$argon2id$dummy")
+	u, err := repo.CreateUser(ctx, auth.User{Username: "bob"}, "$argon2id$dummy")
+	if err != nil {
+		t.Fatal(err)
+	}
 	for _, c := range []string{"chat.admin", "auth.admin"} {
 		if err := repo.GrantCapability(ctx, auth.Capability{UserID: u.UserID, Capability: c, GrantedBy: u.UserID}); err != nil {
 			t.Fatal(err)
 		}
 	}
-	caps, _ := repo.ListCapabilities(ctx, u.UserID)
+	caps, err := repo.ListCapabilities(ctx, u.UserID)
+	if err != nil {
+		t.Fatal(err)
+	}
 	if len(caps) != 2 {
 		t.Fatalf("got %d caps, want 2", len(caps))
 	}
 	if err := repo.RevokeCapability(ctx, u.UserID, "chat.admin"); err != nil {
 		t.Fatal(err)
 	}
-	caps, _ = repo.ListCapabilities(ctx, u.UserID)
+	caps, err = repo.ListCapabilities(ctx, u.UserID)
+	if err != nil {
+		t.Fatal(err)
+	}
 	if len(caps) != 1 {
 		t.Fatalf("got %d caps after revoke, want 1", len(caps))
 	}

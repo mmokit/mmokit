@@ -55,7 +55,11 @@ type Session struct {
 type Capability struct {
 	UserID     uuid.UUID
 	Capability string
+	// GrantedAt is set by the repository at the moment of grant or
+	// re-grant. Caller-supplied values are ignored — set this read-only.
 	GrantedAt  time.Time
+	// GrantedBy is the user_id that performed the grant. uuid.Nil is the
+	// accepted sentinel for system-originated grants (e.g., bootstrap-admin).
 	GrantedBy  uuid.UUID
 	ExpiresAt  time.Time // zero value = no expiry
 }

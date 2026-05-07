@@ -304,9 +304,7 @@ func (m *inMemRepo) HasCapability(_ context.Context, userID uuid.UUID, capabilit
 func (m *inMemRepo) GrantCapability(_ context.Context, c Capability) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	if c.GrantedAt.IsZero() {
-		c.GrantedAt = time.Now()
-	}
+	c.GrantedAt = time.Now()
 	m.caps[inMemCapKey{c.UserID, c.Capability}] = c
 	return nil
 }
