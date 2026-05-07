@@ -1198,6 +1198,12 @@ func (c *Process) InstallChatHook(hook ChatSessionHook) {
 	c.chatHook = hook
 }
 
+// ChatHook returns the currently-installed ChatSessionHook (or nil if
+// none has been registered). Exposed primarily for integration tests
+// that assert the mmokit facade's RegisterChatService wired the hook
+// without having to reach into Process internals.
+func (c *Process) ChatHook() ChatSessionHook { return c.chatHook }
+
 // installPendingAuthHook fills in the GatewayHook's OnSuccess / OnLogout
 // callbacks against the now-constructed Gateway. Called by Build() after
 // the gateway is wired. No-op if RegisterAuthService wasn't called or the
