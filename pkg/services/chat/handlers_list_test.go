@@ -3,6 +3,8 @@ package chat_test
 import (
 	"testing"
 
+	"github.com/google/uuid"
+
 	"github.com/zenion/mmoserver/pkg/ops"
 	"github.com/zenion/mmoserver/pkg/services/auth/authtest"
 	"github.com/zenion/mmoserver/pkg/services/chat"
@@ -93,5 +95,139 @@ func TestHandleListChannels_IncludesSystemPredicateMembership(t *testing.T) {
 	}
 	if !gotWorld || !got42 {
 		t.Fatalf("expected world+guild:42, got world=%v guild42=%v", gotWorld, got42)
+	}
+}
+
+// --- HandleListMembers ---
+
+func TestHandleListMembers_HappyPath_SystemAllReturnsOnline(t *testing.T) {
+	chatRepo := chattest.NewMock()
+	authRepo := authtest.NewMock()
+	svc := chat.NewTestServiceWithAuth(t, chatRepo, authRepo, []chat.DefaultChannelDef{
+		{Slug: "world", Kind: chat.ChannelKindSystemAll},
+	})
+	chid := svc.MustChannelID("world")
+
+	_ = svc.MustOnlineFakeUser(101, "alice")
+	_ = svc.MustOnlineFakeUser(102, "bob")
+	_ = svc.MustOnlineFakeUser(103, "carol")
+
+	resp, err := svc.HandleListMembers(&ops.OpContext{ConnID: 101}, &chat.ChatListMembersRequest{
+		ChannelID: chid.String(),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp.ErrorCode != 0 {
+		t.Fatalf("err: %s", resp.ErrorMessage)
+	}
+	if len(resp.Members) != 3 {
+		t.Fatalf("got %d members want 3: %#v", len(resp.Members), resp.Members)
+	}
+	gotAlice := false
+	gotBob := false
+	gotCarol := false
+	for _, m := range resp.Members {
+		if m.Role != "member" {
+			t.Fatalf("system_all member role=%q want member", m.Role)
+		}
+		switch m.Username {
+		case "alice":
+			gotAlice = true
+		case "bob":
+			gotBob = true
+		case "carol":
+			gotCarol = true
+		}
+	}
+	if !gotAlice || !gotBob || !gotCarol {
+		t.Fatalf("expected alice+bob+carol, got alice=%v bob=%v carol=%v", gotAlice, gotBob, gotCarol)
+	}
+}
+
+func TestHandleListMembers_HappyPath_CustomChannelReturnsFullList(t *testing.T) {
+	chatRepo := chattest.NewMock()
+	authRepo := authtest.NewMock()
+	svc := chat.NewTestServiceWithAuth(t, chatRepo, authRepo, []chat.DefaultChannelDef{
+		{Slug: "guild:alpha", Kind: chat.ChannelKindSystemPredicate},
+	})
+	chid := svc.MustChannelID("guild:alpha")
+
+	aliceUID := svc.MustOnlineFakeUser(101, "alice")
+	svc.MustAddMember(chid, aliceUID, "admin")
+	bobUID := svc.MustOnlineFakeUser(102, "bob")
+	svc.MustAddMember(chid, bobUID, "member")
+	// carol added but offline (no MustOnlineFakeUser).
+	carolUID := uuid.New()
+	svc.MustAddMember(chid, carolUID, "member")
+
+	resp, err := svc.HandleListMembers(&ops.OpContext{ConnID: 101}, &chat.ChatListMembersRequest{
+		ChannelID: chid.String(),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp.ErrorCode != 0 {
+		t.Fatalf("err: %s", resp.ErrorMessage)
+	}
+	if len(resp.Members) != 3 {
+		t.Fatalf("got %d members want 3: %#v", len(resp.Members), resp.Members)
+	}
+	gotAlice := false
+	gotBob := false
+	gotCarol := false
+	for _, m := range resp.Members {
+		switch m.UserID {
+		case aliceUID.String():
+			gotAlice = true
+			if m.Role != "admin" {
+				t.Fatalf("alice role=%q want admin", m.Role)
+			}
+			if m.Username != "alice" {
+				t.Fatalf("alice username=%q want alice", m.Username)
+			}
+		case bobUID.String():
+			gotBob = true
+			if m.Role != "member" {
+				t.Fatalf("bob role=%q want member", m.Role)
+			}
+			if m.Username != "bob" {
+				t.Fatalf("bob username=%q want bob", m.Username)
+			}
+		case carolUID.String():
+			gotCarol = true
+			if m.Role != "member" {
+				t.Fatalf("carol role=%q want member", m.Role)
+			}
+			// carol is offline — username is empty (acceptable for v1).
+			if m.Username != "" {
+				t.Fatalf("offline carol username=%q want empty", m.Username)
+			}
+		}
+	}
+	if !gotAlice || !gotBob || !gotCarol {
+		t.Fatalf("expected alice+bob+carol, got alice=%v bob=%v carol=%v", gotAlice, gotBob, gotCarol)
+	}
+}
+
+func TestHandleListMembers_NotAMemberOnCustom(t *testing.T) {
+	chatRepo := chattest.NewMock()
+	authRepo := authtest.NewMock()
+	svc := chat.NewTestServiceWithAuth(t, chatRepo, authRepo, []chat.DefaultChannelDef{
+		{Slug: "guild:alpha", Kind: chat.ChannelKindSystemPredicate},
+	})
+	chid := svc.MustChannelID("guild:alpha")
+
+	// alice is online but NOT a member of guild:alpha.
+	_ = svc.MustOnlineFakeUser(101, "alice")
+
+	resp, err := svc.HandleListMembers(&ops.OpContext{ConnID: 101}, &chat.ChatListMembersRequest{
+		ChannelID: chid.String(),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp.ErrorCode != uint32(chat.ChatErrorNotAMember) {
+		t.Fatalf("got code=%d want NotAMember", resp.ErrorCode)
 	}
 }
