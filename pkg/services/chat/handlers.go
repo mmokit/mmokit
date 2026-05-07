@@ -4,6 +4,7 @@ import (
 	"context"
 	"reflect"
 	"strings"
+	"time"
 
 	"github.com/google/uuid"
 
@@ -188,6 +189,119 @@ func (s *Service) HandleCreate(opCtx *ops.OpContext, req *ChatCreateRequest) (*C
 
 	// Creator is the only member at creation time → no fanout to others.
 	return &ChatCreateResponse{Channel: info}, nil
+}
+
+// HandleJoin adds the caller as a member of the named channel.
+//
+// Refuses on:
+//   - non-custom channel kind (system_all/system_predicate)
+//   - wrong password (when channel is password-protected)
+//   - active ban
+//   - MaxMembersPerCustomChannel reached
+func (s *Service) HandleJoin(opCtx *ops.OpContext, req *ChatJoinRequest) (*ChatJoinResponse, error) {
+	if opCtx == nil {
+		return errResp[ChatJoinResponse](ChatErrorInternal, "missing op context", 0)
+	}
+	s.mu.RLock()
+	callerID, online := s.connIndex[opCtx.ConnID]
+	s.mu.RUnlock()
+	if !online || callerID == uuid.Nil {
+		return errResp[ChatJoinResponse](ChatErrorPermissionDenied, "not online", 0)
+	}
+	connID := opCtx.ConnID
+
+	// Resolve channel by slug
+	s.mu.RLock()
+	chid, ok := s.bySlug[req.Slug]
+	if !ok {
+		s.mu.RUnlock()
+		return errResp[ChatJoinResponse](ChatErrorChannelNotFound, "channel not found", 0)
+	}
+	c, ok := s.channels[chid]
+	if !ok {
+		s.mu.RUnlock()
+		return errResp[ChatJoinResponse](ChatErrorChannelNotFound, "channel not found", 0)
+	}
+	// Custom-only — system channels are joined implicitly via SessionEnter.
+	if c.Kind != "custom" {
+		s.mu.RUnlock()
+		return errResp[ChatJoinResponse](ChatErrorPermissionDenied, "cannot join system channel", 0)
+	}
+	storedHash := c.PasswordHash
+	// Ban check (snapshotted under lock)
+	ban, banned := s.bans[banKey{chid, callerID}]
+	memberCount := len(s.membership[chid])
+	s.mu.RUnlock()
+
+	if banned && ban.BannedUntil.After(time.Now()) {
+		return errResp[ChatJoinResponse](ChatErrorBanned, "user is banned", 0)
+	}
+
+	// Password check (lock-free; argon2 is expensive)
+	if storedHash != "" {
+		ok, err := VerifyChannelPassword(req.Password, storedHash)
+		if err != nil || !ok {
+			return errResp[ChatJoinResponse](ChatErrorInvalidPassword, "invalid password", 0)
+		}
+	}
+
+	// Capacity check
+	if memberCount >= s.opts.MaxMembersPerCustomChannel {
+		return errResp[ChatJoinResponse](ChatErrorMaxMembersReached, "channel full", 0)
+	}
+
+	// Persist membership
+	if err := s.repo.AddOrUpdateMember(context.Background(), ChannelMember{
+		ChannelID: chid,
+		UserID:    callerID,
+		Role:      "member",
+	}); err != nil {
+		return errResp[ChatJoinResponse](ChatErrorInternal, "add member: "+err.Error(), 0)
+	}
+
+	// In-memory bookkeeping
+	s.mu.Lock()
+	if s.membership[chid] == nil {
+		s.membership[chid] = map[uuid.UUID]string{}
+	}
+	s.membership[chid][callerID] = "member"
+	if s.userChans[callerID] == nil {
+		s.userChans[callerID] = map[uuid.UUID]struct{}{}
+	}
+	s.userChans[callerID][chid] = struct{}{}
+	if s.subs[chid] == nil {
+		s.subs[chid] = map[uint32]struct{}{}
+	}
+	s.subs[chid][connID] = struct{}{}
+	username := s.usernames[callerID]
+	count := len(s.membership[chid])
+	info := channelInfoOfLocked(c, count)
+	// Snapshot fanout targets, excluding the joiner.
+	targets := make([]uint32, 0, len(s.subs[chid]))
+	for cid := range s.subs[chid] {
+		if cid != connID {
+			targets = append(targets, cid)
+		}
+	}
+	send := s.sendEventFn
+	s.mu.Unlock()
+
+	if s.ctx != nil && s.ctx.Logger != nil {
+		s.ctx.Logger.Log(logCat, "join: channel=%s user=%s username=%s", chid, callerID, username)
+	}
+
+	if send != nil {
+		ev := &ChatMemberJoinedEvent{
+			ChannelID: chid.String(),
+			UserID:    callerID.String(),
+			Username:  username,
+		}
+		for _, cid := range targets {
+			send(cid, ev)
+		}
+	}
+
+	return &ChatJoinResponse{Channel: info}, nil
 }
 
 // validateSlugFormat enforces [a-z0-9_-] only. Empty string is rejected

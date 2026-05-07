@@ -3,6 +3,7 @@ package chat
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/google/uuid"
 
@@ -71,6 +72,18 @@ func (t *TestService) OnlineCount() int {
 	t.mu.RLock()
 	defer t.mu.RUnlock()
 	return len(t.online)
+}
+
+// MustBanUser pre-populates the in-memory bans map for tests. Used by
+// HandleJoin tests that exercise the ban-check path without going
+// through the (Phase 9) HandleBan op.
+func (t *TestService) MustBanUser(channelID, userID uuid.UUID, until time.Time, reason string) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	t.bans[banKey{channelID, userID}] = banEntry{
+		BannedUntil: until,
+		Reason:      reason,
+	}
 }
 
 // FanoutTargets returns the connIDs that would receive a fanout to channelID.
