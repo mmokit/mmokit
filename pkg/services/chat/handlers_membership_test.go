@@ -342,3 +342,155 @@ func TestHandleRemoveMember_FanoutExcludesRemovedUser(t *testing.T) {
 		t.Fatalf("expected alice+carol got events, alice=%v carol=%v", gotAlice, gotCarol)
 	}
 }
+
+// --- HandleBulkSetMembers ---
+
+func TestHandleBulkSetMembers_HappyPath_ReplacesMembers(t *testing.T) {
+	chatRepo := chattest.NewMock()
+	authRepo := authtest.NewMock()
+	svc := chat.NewTestServiceWithAuth(t, chatRepo, authRepo, []chat.DefaultChannelDef{
+		{Slug: "council", Kind: chat.ChannelKindSystemPredicate},
+	})
+	chid := svc.MustChannelID("council")
+
+	aliceUID := svc.MustOnlineFakeUser(101, "alice")
+	svc.MustAddMember(chid, aliceUID, "admin")
+	bobUID := uuid.New()
+	svc.MustAddMember(chid, bobUID, "member")
+
+	// New set: alice + carol (bob departs).
+	carolUID := uuid.New()
+	resp, err := svc.HandleBulkSetMembers(&ops.OpContext{ConnID: 101}, &chat.ChatBulkSetMembersRequest{
+		ChannelID: chid.String(),
+		UserIDs:   []string{aliceUID.String(), carolUID.String()},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp.ErrorCode != 0 {
+		t.Fatalf("err: %s", resp.ErrorMessage)
+	}
+
+	mems, _ := chatRepo.ListMembers(context.Background(), chid)
+	if len(mems) != 2 {
+		t.Fatalf("got %d members, want 2", len(mems))
+	}
+	gotAlice := false
+	gotCarol := false
+	for _, m := range mems {
+		if m.UserID == aliceUID {
+			gotAlice = true
+		}
+		if m.UserID == carolUID {
+			gotCarol = true
+		}
+		if m.UserID == bobUID {
+			t.Fatal("bob should be removed by BulkSetMembers")
+		}
+	}
+	if !gotAlice || !gotCarol {
+		t.Fatalf("alice=%v carol=%v in repo", gotAlice, gotCarol)
+	}
+}
+
+func TestHandleBulkSetMembers_PermissionDeniedForNonAdmin(t *testing.T) {
+	chatRepo := chattest.NewMock()
+	authRepo := authtest.NewMock()
+	svc := chat.NewTestServiceWithAuth(t, chatRepo, authRepo, []chat.DefaultChannelDef{
+		{Slug: "council", Kind: chat.ChannelKindSystemPredicate},
+	})
+	chid := svc.MustChannelID("council")
+
+	_ = svc.MustOnlineFakeUser(101, "alice")
+	resp, err := svc.HandleBulkSetMembers(&ops.OpContext{ConnID: 101}, &chat.ChatBulkSetMembersRequest{
+		ChannelID: chid.String(),
+		UserIDs:   []string{uuid.NewString()},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp.ErrorCode != uint32(chat.ChatErrorPermissionDenied) {
+		t.Fatalf("got code=%d want PermissionDenied", resp.ErrorCode)
+	}
+}
+
+func TestHandleBulkSetMembers_FanoutForJoinersAndLeavers(t *testing.T) {
+	chatRepo := chattest.NewMock()
+	authRepo := authtest.NewMock()
+	svc := chat.NewTestServiceWithAuth(t, chatRepo, authRepo, []chat.DefaultChannelDef{
+		{Slug: "council", Kind: chat.ChannelKindSystemPredicate},
+	})
+	chid := svc.MustChannelID("council")
+
+	// Existing: alice (admin, conn 101), bob (member, conn 102).
+	aliceUID := svc.MustOnlineFakeUser(101, "alice")
+	svc.MustAddMember(chid, aliceUID, "admin")
+	bobUID := svc.MustOnlineFakeUser(102, "bob")
+	svc.MustAddMember(chid, bobUID, "member")
+	svc.MustSubscribe(chid, 101)
+	svc.MustSubscribe(chid, 102)
+
+	// New: alice + carol (online conn 103). Bob departs.
+	carolUID := svc.MustOnlineFakeUser(103, "carol")
+
+	var sent []recordedEvent
+	svc.SetSendEventFn(func(c uint32, ev any) { sent = append(sent, recordedEvent{c, ev}) })
+
+	resp, err := svc.HandleBulkSetMembers(&ops.OpContext{ConnID: 101}, &chat.ChatBulkSetMembersRequest{
+		ChannelID: chid.String(),
+		UserIDs:   []string{aliceUID.String(), carolUID.String()},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp.ErrorCode != 0 {
+		t.Fatalf("err: %s", resp.ErrorMessage)
+	}
+
+	// Expect ChatMemberJoinedEvent for carol — recipients = post-set
+	// subscribers minus carol's own conn = alice (101).
+	gotJoinedForCarolToAlice := false
+	for _, r := range sent {
+		ev, ok := r.Event.(*chat.ChatMemberJoinedEvent)
+		if !ok {
+			continue
+		}
+		if ev.UserID == carolUID.String() {
+			if r.ConnID == 103 {
+				t.Fatal("joiner should not receive own ChatMemberJoinedEvent")
+			}
+			if r.ConnID == 101 {
+				gotJoinedForCarolToAlice = true
+			}
+		}
+	}
+	if !gotJoinedForCarolToAlice {
+		t.Fatal("expected ChatMemberJoinedEvent for carol to alice")
+	}
+
+	// Expect ChatMemberLeftEvent for bob — recipients = post-set subscribers
+	// = alice (101) + carol (103). Bob's own conn (102) is no longer a sub.
+	gotLeftToAlice := false
+	gotLeftToCarol := false
+	for _, r := range sent {
+		ev, ok := r.Event.(*chat.ChatMemberLeftEvent)
+		if !ok {
+			continue
+		}
+		if ev.UserID != bobUID.String() {
+			continue
+		}
+		if r.ConnID == 102 {
+			t.Fatal("removed user's conn (bob) should not receive ChatMemberLeftEvent")
+		}
+		if r.ConnID == 101 {
+			gotLeftToAlice = true
+		}
+		if r.ConnID == 103 {
+			gotLeftToCarol = true
+		}
+	}
+	if !gotLeftToAlice || !gotLeftToCarol {
+		t.Fatalf("expected left events to alice+carol, alice=%v carol=%v", gotLeftToAlice, gotLeftToCarol)
+	}
+}
