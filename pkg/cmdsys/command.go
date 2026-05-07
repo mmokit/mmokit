@@ -20,15 +20,16 @@ var (
 type RouteKind uint8
 
 const (
-	RouteLocal        RouteKind = iota // handle on the current process
-	RouteCoordinator                   // dispatch to the coordinator
-	RouteAllHosts                      // fan-out to every host
-	RoutePlayerOwner                   // dispatch to the host owning the player
-	RouteEntityOwner                   // dispatch to the host owning the entity
-	RouteAllGateways                   // fan-out to every gateway
-	RouteSpecificHost                  // dispatch to a named host
-	RouteSpecificCell                  // dispatch to a named cell
-	RoutePlayerHomeOrOwner             // online → owner host; offline → DB-bearing host
+	RouteLocal             RouteKind = iota // handle on the current process
+	RouteCoordinator                        // dispatch to the coordinator
+	RouteAllHosts                           // fan-out to every host
+	RoutePlayerOwner                        // dispatch to the host owning the player
+	RouteEntityOwner                        // dispatch to the host owning the entity
+	RouteAllGateways                        // fan-out to every gateway
+	RouteSpecificHost                       // dispatch to a named host
+	RouteSpecificCell                       // dispatch to a named cell
+	RoutePlayerHomeOrOwner                  // online → owner host; offline → DB-bearing host
+	RouteService                            // dispatch to the host running a named service kind (Command.Service)
 )
 
 // String returns a human-readable name for the RouteKind used in JSON output.
@@ -52,6 +53,8 @@ func (r RouteKind) String() string {
 		return "specific_cell"
 	case RoutePlayerHomeOrOwner:
 		return "player_home_or_owner"
+	case RouteService:
+		return "service"
 	default:
 		return "unknown"
 	}
@@ -152,6 +155,12 @@ type Command struct {
 	// Examples are concrete invocations rendered under the EXAMPLES section
 	// of per-command help. Empty slice → no EXAMPLES section.
 	Examples []string
+
+	// Service is the service kind name used by RouteService routing. Required
+	// when Route == RouteService; ignored otherwise. e.g., "chat" or "auth".
+	// The route resolver uses this to look up the host running the named
+	// service via the cluster service registry.
+	Service string
 }
 
 // Result is the aggregate outcome of a Dispatcher.Invoke call.
