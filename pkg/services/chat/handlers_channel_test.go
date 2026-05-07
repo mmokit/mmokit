@@ -274,6 +274,132 @@ func TestHandleSetTopic_PermissionDeniedForNonAdmin(t *testing.T) {
 	}
 }
 
+// --- HandleSetSlowMode ---
+
+func TestHandleSetSlowMode_HappyPath(t *testing.T) {
+	chatRepo := chattest.NewMock()
+	authRepo := authtest.NewMock()
+	svc := chat.NewTestServiceWithAuth(t, chatRepo, authRepo, nil)
+
+	_ = svc.MustOnlineFakeUser(101, "alice")
+	create, err := svc.HandleCreate(&ops.OpContext{ConnID: 101}, &chat.ChatCreateRequest{Slug: "cool"})
+	if err != nil || create.ErrorCode != 0 {
+		t.Fatalf("create: %v %s", err, create.ErrorMessage)
+	}
+	chid, _ := uuid.Parse(create.Channel.ChannelID)
+
+	var sent []recordedEvent
+	svc.SetSendEventFn(func(c uint32, ev any) { sent = append(sent, recordedEvent{c, ev}) })
+
+	resp, err := svc.HandleSetSlowMode(&ops.OpContext{ConnID: 101}, &chat.ChatSetSlowModeRequest{
+		ChannelID: chid.String(),
+		Seconds:   10,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp.ErrorCode != 0 {
+		t.Fatalf("err: %s", resp.ErrorMessage)
+	}
+
+	stored, _ := chatRepo.GetChannelByID(context.Background(), chid)
+	if stored.SlowModeSeconds != 10 {
+		t.Fatalf("stored slow_mode=%d want 10", stored.SlowModeSeconds)
+	}
+
+	gotUpdated := false
+	for _, r := range sent {
+		ev, ok := r.Event.(*chat.ChatChannelUpdatedEvent)
+		if !ok {
+			continue
+		}
+		if r.ConnID == 101 && ev.Channel.SlowModeSeconds == 10 {
+			gotUpdated = true
+		}
+	}
+	if !gotUpdated {
+		t.Fatal("expected ChatChannelUpdatedEvent with slow_mode=10")
+	}
+}
+
+func TestHandleSetSlowMode_NegativeClampsToZero(t *testing.T) {
+	chatRepo := chattest.NewMock()
+	authRepo := authtest.NewMock()
+	svc := chat.NewTestServiceWithAuth(t, chatRepo, authRepo, nil)
+
+	_ = svc.MustOnlineFakeUser(101, "alice")
+	create, err := svc.HandleCreate(&ops.OpContext{ConnID: 101}, &chat.ChatCreateRequest{Slug: "cool"})
+	if err != nil || create.ErrorCode != 0 {
+		t.Fatalf("create: %v %s", err, create.ErrorMessage)
+	}
+	chid, _ := uuid.Parse(create.Channel.ChannelID)
+
+	resp, err := svc.HandleSetSlowMode(&ops.OpContext{ConnID: 101}, &chat.ChatSetSlowModeRequest{
+		ChannelID: chid.String(),
+		Seconds:   -5,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp.ErrorCode != 0 {
+		t.Fatalf("err: %s", resp.ErrorMessage)
+	}
+	stored, _ := chatRepo.GetChannelByID(context.Background(), chid)
+	if stored.SlowModeSeconds != 0 {
+		t.Fatalf("stored slow_mode=%d want 0", stored.SlowModeSeconds)
+	}
+}
+
+func TestHandleSetSlowMode_OverThresholdClampsTo3600(t *testing.T) {
+	chatRepo := chattest.NewMock()
+	authRepo := authtest.NewMock()
+	svc := chat.NewTestServiceWithAuth(t, chatRepo, authRepo, nil)
+
+	_ = svc.MustOnlineFakeUser(101, "alice")
+	create, err := svc.HandleCreate(&ops.OpContext{ConnID: 101}, &chat.ChatCreateRequest{Slug: "cool"})
+	if err != nil || create.ErrorCode != 0 {
+		t.Fatalf("create: %v %s", err, create.ErrorMessage)
+	}
+	chid, _ := uuid.Parse(create.Channel.ChannelID)
+
+	resp, err := svc.HandleSetSlowMode(&ops.OpContext{ConnID: 101}, &chat.ChatSetSlowModeRequest{
+		ChannelID: chid.String(),
+		Seconds:   10000,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp.ErrorCode != 0 {
+		t.Fatalf("err: %s", resp.ErrorMessage)
+	}
+	stored, _ := chatRepo.GetChannelByID(context.Background(), chid)
+	if stored.SlowModeSeconds != 3600 {
+		t.Fatalf("stored slow_mode=%d want 3600", stored.SlowModeSeconds)
+	}
+}
+
+func TestHandleSetSlowMode_PermissionDeniedForNonAdmin(t *testing.T) {
+	chatRepo := chattest.NewMock()
+	authRepo := authtest.NewMock()
+	svc := chat.NewTestServiceWithAuth(t, chatRepo, authRepo, []chat.DefaultChannelDef{
+		{Slug: "guild:alpha", Kind: chat.ChannelKindSystemPredicate},
+	})
+	chid := svc.MustChannelID("guild:alpha")
+
+	_ = svc.MustOnlineFakeUser(101, "alice")
+
+	resp, err := svc.HandleSetSlowMode(&ops.OpContext{ConnID: 101}, &chat.ChatSetSlowModeRequest{
+		ChannelID: chid.String(),
+		Seconds:   30,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp.ErrorCode != uint32(chat.ChatErrorPermissionDenied) {
+		t.Fatalf("got code=%d want PermissionDenied", resp.ErrorCode)
+	}
+}
+
 func TestHandleRenameChannel_RejectsSystemAll(t *testing.T) {
 	chatRepo := chattest.NewMock()
 	authRepo := authtest.NewMock()

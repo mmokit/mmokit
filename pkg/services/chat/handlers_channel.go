@@ -152,3 +152,62 @@ func (s *Service) HandleSetTopic(opCtx *ops.OpContext, req *ChatSetTopicRequest)
 	s.fanoutEvent(chID, &ChatChannelUpdatedEvent{Channel: info})
 	return &ChatSetTopicResponse{}, nil
 }
+
+// HandleSetSlowMode updates a channel's slow-mode duration. canModerate
+// gated. Seconds is clamped to [0, 3600]. Fans out ChatChannelUpdatedEvent
+// with the full updated ChannelInfo.
+func (s *Service) HandleSetSlowMode(opCtx *ops.OpContext, req *ChatSetSlowModeRequest) (*ChatSetSlowModeResponse, error) {
+	if opCtx == nil {
+		return errResp[ChatSetSlowModeResponse](ChatErrorInternal, "missing op context", 0)
+	}
+	callerID := s.callerFromOpCtx(opCtx)
+	if callerID == uuid.Nil {
+		return errResp[ChatSetSlowModeResponse](ChatErrorPermissionDenied, "not online", 0)
+	}
+	chID, err := uuid.Parse(req.ChannelID)
+	if err != nil {
+		return errResp[ChatSetSlowModeResponse](ChatErrorChannelNotFound, "invalid channel_id", 0)
+	}
+
+	s.mu.RLock()
+	c, ok := s.channels[chID]
+	s.mu.RUnlock()
+	if !ok {
+		return errResp[ChatSetSlowModeResponse](ChatErrorChannelNotFound, "channel not found", 0)
+	}
+	if !s.canModerate(callerID, chID) {
+		return errResp[ChatSetSlowModeResponse](ChatErrorPermissionDenied, "denied", 0)
+	}
+
+	// Clamp seconds to [0, 3600].
+	seconds := int(req.Seconds)
+	if seconds < 0 {
+		seconds = 0
+	}
+	if seconds > 3600 {
+		seconds = 3600
+	}
+
+	updated := c
+	updated.SlowModeSeconds = seconds
+	if err := s.repo.UpdateChannel(context.Background(), updated); err != nil {
+		if err == ErrChannelNotFound {
+			return errResp[ChatSetSlowModeResponse](ChatErrorChannelNotFound, "channel not found", 0)
+		}
+		return errResp[ChatSetSlowModeResponse](ChatErrorInternal, "update: "+err.Error(), 0)
+	}
+
+	s.mu.Lock()
+	s.channels[chID] = updated
+	memberCount := len(s.membership[chID])
+	info := channelInfoOfLocked(updated, memberCount)
+	s.mu.Unlock()
+
+	if s.ctx != nil && s.ctx.Logger != nil {
+		s.ctx.Logger.Log(logCat, "set_slow_mode: channel=%s caller=%s seconds=%d",
+			chID, callerID, seconds)
+	}
+
+	s.fanoutEvent(chID, &ChatChannelUpdatedEvent{Channel: info})
+	return &ChatSetSlowModeResponse{}, nil
+}
