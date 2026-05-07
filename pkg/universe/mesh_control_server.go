@@ -608,6 +608,41 @@ func (s *meshControlServer) handleGatewayControl(stream meshpb.MeshControl_Contr
 					go s.handleInboundResolveSpawn(gatewayID, req)
 				}
 
+			case *meshpb.HostMessage_ServiceAnnounce:
+				// Service framework: a gateway,service process announced an
+				// instance via its mesh-gateway control stream. Same handling
+				// as the host-stream case above — register + re-broadcast.
+				// Without this, services hosted on standalone-gateway processes
+				// never appear in coordServices and RouteService dispatch fails.
+				ann := v.ServiceAnnounce
+				if ann != nil && s.coord.coordServices != nil {
+					inst := service.CoordInstance{
+						Kind:       ann.GetKind(),
+						InstanceID: ann.GetInstanceId(),
+						HostID:     ann.GetHostId(),
+						OpCodes:    append([]uint32(nil), ann.GetOpCodes()...),
+						JoinedAt:   time.Now(),
+					}
+					if err := s.coord.coordServices.Register(inst); err != nil {
+						s.log.Log(CatMeshCell, "coordinator: ServiceAnnounce %q from gateway %s rejected: %v",
+							ann.GetInstanceId(), gatewayID, err)
+					} else {
+						s.log.Log(CatMeshCell, "coordinator: registered service %s/%s on %s via gateway %s (codes=%v)",
+							inst.Kind, inst.InstanceID, inst.HostID, gatewayID, inst.OpCodes)
+						s.coord.broadcastPeerListOnServiceChange()
+					}
+				}
+
+			case *meshpb.HostMessage_ServiceLeave:
+				// Service framework: instance going away on a gateway,service
+				// process. Same handling as the host-stream path.
+				lv := v.ServiceLeave
+				if lv != nil && s.coord.coordServices != nil {
+					s.coord.coordServices.Unregister(lv.GetInstanceId())
+					s.log.Log(CatMeshCell, "coordinator: unregistered service %q (gateway=%s)", lv.GetInstanceId(), gatewayID)
+					s.coord.broadcastPeerListOnServiceChange()
+				}
+
 			default:
 				s.log.Log(CatMeshMsg, "coordinator: gateway %s sent %T", gatewayID, msg.Msg)
 			}
