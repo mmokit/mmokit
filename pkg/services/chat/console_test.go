@@ -235,6 +235,49 @@ func TestConsole_ChannelDelete(t *testing.T) {
 	}
 }
 
+// --- Membership-mutation commands ---
+
+func TestConsole_AddRemoveMember(t *testing.T) {
+	f := newConsoleFixture(t)
+	f.invokeOK(t, "chat.channel.create", chat.ChannelCreateArgs{
+		Slug: "guild:alpha", Kind: "system_predicate",
+	})
+	// Create the target user in auth.
+	target, err := f.authRepo.CreateUser(context.Background(), auth.User{
+		Username: "alice",
+	}, "h")
+	if err != nil {
+		t.Fatalf("CreateUser: %v", err)
+	}
+	f.invokeOK(t, "chat.channel.addmember", chat.ChannelMemberArgs{
+		Slug: "guild:alpha", Username: "alice",
+	})
+	// Verify membership in the in-memory state.
+	chID, _ := f.svc.ChannelIDBySlug("guild:alpha")
+	if !f.svc.HasMember(chID, target.UserID) {
+		t.Fatal("alice not a member after addmember")
+	}
+	f.invokeOK(t, "chat.channel.removemember", chat.ChannelMemberRemoveArgs{
+		Slug: "guild:alpha", Username: "alice",
+	})
+	if f.svc.HasMember(chID, target.UserID) {
+		t.Fatal("alice still member after removemember")
+	}
+}
+
+func TestConsole_AddMember_UnknownUser(t *testing.T) {
+	f := newConsoleFixture(t)
+	f.invokeOK(t, "chat.channel.create", chat.ChannelCreateArgs{
+		Slug: "guild:alpha", Kind: "system_predicate",
+	})
+	msg := f.invokeFail(t, "chat.channel.addmember", chat.ChannelMemberArgs{
+		Slug: "guild:alpha", Username: "ghost",
+	})
+	if !strings.Contains(msg, "ghost") {
+		t.Fatalf("expected error mentioning ghost, got %q", msg)
+	}
+}
+
 // --- Operator-online enforcement (required for mutation commands) ---
 
 func TestConsole_RequiresOperatorOnline(t *testing.T) {

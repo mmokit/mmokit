@@ -83,6 +83,19 @@ type ChannelSlowModeArgs struct {
 	Seconds int32  `cmd:"help=slow-mode delay in seconds (0 = off, max 3600)"`
 }
 
+// ChannelMemberArgs adds/removes a member.
+type ChannelMemberArgs struct {
+	Slug     string `cmd:"help=channel slug"`
+	Username string `cmd:"help=target username,complete=players"`
+	Role     string `cmd:"optional,help=role (member|admin); default member"`
+}
+
+// ChannelMemberRemoveArgs removes a member; no role.
+type ChannelMemberRemoveArgs struct {
+	Slug     string `cmd:"help=channel slug"`
+	Username string `cmd:"help=target username,complete=players"`
+}
+
 // ChannelInfoResult is the console-friendly mirror of ChannelInfo.
 // Field ordering and types are stable for cmdsys schema generation.
 type ChannelInfoResult struct {
@@ -219,6 +232,33 @@ func RegisterConsoleCommands(reg *cmdsys.Registry, getSvc ServiceProvider, getAu
 		Args:        ChannelSlowModeArgs{},
 		Result:      OKResult{},
 		Handler:     channelSlowModeHandler(getSvc),
+	})); err != nil {
+		return err
+	}
+
+	// --- Membership-mutation commands ---
+
+	if err := must(reg.Register(cmdsys.Command{
+		Verb:        "chat.channel.addmember",
+		Capability:  "chat.admin",
+		Description: "add a user to a channel (default role: member)",
+		Examples:    []string{"chat channel addmember trade alice", "chat channel addmember trade bob admin"},
+		Route:       cmdsys.RouteLocal,
+		Args:        ChannelMemberArgs{},
+		Result:      OKResult{},
+		Handler:     channelAddMemberHandler(getSvc, getAuth),
+	})); err != nil {
+		return err
+	}
+	if err := must(reg.Register(cmdsys.Command{
+		Verb:        "chat.channel.removemember",
+		Capability:  "chat.admin",
+		Description: "remove a user from a channel",
+		Examples:    []string{"chat channel removemember trade alice"},
+		Route:       cmdsys.RouteLocal,
+		Args:        ChannelMemberRemoveArgs{},
+		Result:      OKResult{},
+		Handler:     channelRemoveMemberHandler(getSvc, getAuth),
 	})); err != nil {
 		return err
 	}
@@ -376,15 +416,92 @@ func channelInfoOf(c Channel, memberCount int) ChannelInfo {
 	}
 }
 
-// Sentinel placeholders to prevent "declared and not used" warnings on
-// helpers that are defined in this commit but only consumed by the
-// membership and moderation commits to follow. Removed as those commits
-// land.
-var (
-	_ = resolveTargetUser
-	_ = errAuthRepoNotReady
-	_ = cmdCtx
-)
+// --- membership-mutation handlers ---
+
+func channelAddMemberHandler(getSvc ServiceProvider, getAuth auth.RepoProvider) cmdsys.HandlerFunc {
+	return func(_ context.Context, env *cmdsys.Env, raw any) (any, error) {
+		svc := getSvc()
+		if svc == nil {
+			return nil, errSvcNotReady()
+		}
+		authRepo := getAuth()
+		if authRepo == nil {
+			return nil, errAuthRepoNotReady()
+		}
+		args := raw.(ChannelMemberArgs)
+		chID, _, err := resolveChannelBySlug(svc, args.Slug)
+		if err != nil {
+			return nil, err
+		}
+		ctx, cancel := cmdCtx()
+		defer cancel()
+		target, err := resolveTargetUser(ctx, authRepo, args.Username)
+		if err != nil {
+			return nil, err
+		}
+		connID, _, err := resolveOperatorConn(svc, env)
+		if err != nil {
+			return nil, err
+		}
+		resp, _ := svc.HandleAddMember(&ops.OpContext{ConnID: connID}, &ChatAddMemberRequest{
+			ChannelID: chID.String(),
+			UserID:    target.UserID.String(),
+			Role:      args.Role,
+		})
+		if resp.ErrorCode != 0 {
+			return nil, chatErrToError(resp.ErrorCode, resp.ErrorMessage)
+		}
+		role := args.Role
+		if role == "" {
+			role = "member"
+		}
+		return OKResult{
+			OK:       true,
+			Username: target.Username,
+			Detail:   fmt.Sprintf("added %s to %s as %s", target.Username, args.Slug, role),
+		}, nil
+	}
+}
+
+func channelRemoveMemberHandler(getSvc ServiceProvider, getAuth auth.RepoProvider) cmdsys.HandlerFunc {
+	return func(_ context.Context, env *cmdsys.Env, raw any) (any, error) {
+		svc := getSvc()
+		if svc == nil {
+			return nil, errSvcNotReady()
+		}
+		authRepo := getAuth()
+		if authRepo == nil {
+			return nil, errAuthRepoNotReady()
+		}
+		args := raw.(ChannelMemberRemoveArgs)
+		chID, _, err := resolveChannelBySlug(svc, args.Slug)
+		if err != nil {
+			return nil, err
+		}
+		ctx, cancel := cmdCtx()
+		defer cancel()
+		target, err := resolveTargetUser(ctx, authRepo, args.Username)
+		if err != nil {
+			return nil, err
+		}
+		connID, _, err := resolveOperatorConn(svc, env)
+		if err != nil {
+			return nil, err
+		}
+		resp, _ := svc.HandleRemoveMember(&ops.OpContext{ConnID: connID}, &ChatRemoveMemberRequest{
+			ChannelID: chID.String(),
+			UserID:    target.UserID.String(),
+		})
+		if resp.ErrorCode != 0 {
+			return nil, chatErrToError(resp.ErrorCode, resp.ErrorMessage)
+		}
+		return OKResult{
+			OK:       true,
+			Username: target.Username,
+			Detail:   fmt.Sprintf("removed %s from %s", target.Username, args.Slug),
+		}, nil
+	}
+}
 
 // --- channel-mutation handlers ---
 
