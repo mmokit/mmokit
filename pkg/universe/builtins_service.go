@@ -20,6 +20,7 @@ type serviceKindRow struct {
 	Kind    string
 	OpCount int
 	Routing string
+	Running bool // true when at least one live instance is registered cluster-wide
 }
 
 type serviceListResult struct {
@@ -219,10 +220,15 @@ func registerServiceBuiltins(reg *cmdsys.Registry, coord *Process) error {
 						routing = r
 					}
 				}
+				running := false
+				if coord != nil {
+					running = coord.HostForServiceKind(a.name) != ""
+				}
 				rows = append(rows, serviceKindRow{
 					Kind:    a.name,
 					OpCount: a.opCount,
 					Routing: routing,
+					Running: running,
 				})
 			}
 			sort.Slice(rows, func(i, j int) bool { return rows[i].Kind < rows[j].Kind })
