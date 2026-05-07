@@ -278,6 +278,92 @@ func TestConsole_AddMember_UnknownUser(t *testing.T) {
 	}
 }
 
+// --- Per-user moderation commands ---
+
+func TestConsole_UserMute_Global(t *testing.T) {
+	f := newConsoleFixture(t)
+	target, err := f.authRepo.CreateUser(context.Background(), auth.User{
+		Username: "alice",
+	}, "h")
+	if err != nil {
+		t.Fatalf("CreateUser: %v", err)
+	}
+	f.invokeOK(t, "chat.user.mute", chat.UserMuteArgs{
+		Username: "alice", Duration: "10m",
+	})
+	active, _ := f.svc.MuteCheck(target.UserID, chat.MuteGlobalChannelID)
+	if !active {
+		t.Fatal("alice should be globally muted")
+	}
+	f.invokeOK(t, "chat.user.unmute", chat.UserUnmuteArgs{Username: "alice"})
+	active, _ = f.svc.MuteCheck(target.UserID, chat.MuteGlobalChannelID)
+	if active {
+		t.Fatal("alice should be unmuted")
+	}
+}
+
+func TestConsole_UserMute_BadDuration(t *testing.T) {
+	f := newConsoleFixture(t)
+	_, err := f.authRepo.CreateUser(context.Background(), auth.User{
+		Username: "alice",
+	}, "h")
+	if err != nil {
+		t.Fatalf("CreateUser: %v", err)
+	}
+	msg := f.invokeFail(t, "chat.user.mute", chat.UserMuteArgs{
+		Username: "alice", Duration: "not-a-duration",
+	})
+	if !strings.Contains(msg, "duration") {
+		t.Fatalf("expected duration error, got %q", msg)
+	}
+}
+
+func TestConsole_UserKickAndBan(t *testing.T) {
+	f := newConsoleFixture(t)
+	f.invokeOK(t, "chat.channel.create", chat.ChannelCreateArgs{
+		Slug: "guild:alpha", Kind: "system_predicate",
+	})
+	target, err := f.authRepo.CreateUser(context.Background(), auth.User{
+		Username: "bob",
+	}, "h")
+	if err != nil {
+		t.Fatalf("CreateUser: %v", err)
+	}
+	f.invokeOK(t, "chat.channel.addmember", chat.ChannelMemberArgs{
+		Slug: "guild:alpha", Username: "bob",
+	})
+	chID, _ := f.svc.ChannelIDBySlug("guild:alpha")
+
+	// Kick — verify removed.
+	f.invokeOK(t, "chat.user.kick", chat.UserKickArgs{
+		Username: "bob", Channel: "guild:alpha",
+	})
+	if f.svc.HasMember(chID, target.UserID) {
+		t.Fatal("bob still a member after kick")
+	}
+
+	// Re-add then ban for 1h.
+	f.invokeOK(t, "chat.channel.addmember", chat.ChannelMemberArgs{
+		Slug: "guild:alpha", Username: "bob",
+	})
+	f.invokeOK(t, "chat.user.ban", chat.UserBanArgs{
+		Username: "bob", Channel: "guild:alpha", Duration: "1h",
+	})
+	active, _ := f.svc.BanCheck(target.UserID, chID)
+	if !active {
+		t.Fatal("bob should be banned after ban command")
+	}
+
+	// Unban.
+	f.invokeOK(t, "chat.user.unban", chat.UserUnbanArgs{
+		Username: "bob", Channel: "guild:alpha",
+	})
+	active, _ = f.svc.BanCheck(target.UserID, chID)
+	if active {
+		t.Fatal("bob should be unbanned after unban command")
+	}
+}
+
 // --- Operator-online enforcement (required for mutation commands) ---
 
 func TestConsole_RequiresOperatorOnline(t *testing.T) {

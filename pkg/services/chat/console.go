@@ -96,6 +96,38 @@ type ChannelMemberRemoveArgs struct {
 	Username string `cmd:"help=target username,complete=players"`
 }
 
+// UserMuteArgs mutes a user globally (Channel="") or per-channel.
+type UserMuteArgs struct {
+	Username string `cmd:"help=target username,complete=players"`
+	Duration string `cmd:"help=mute duration (e.g. 5m, 1h)"`
+	Channel  string `cmd:"optional,help=channel slug; empty = global mute"`
+}
+
+// UserUnmuteArgs unmutes globally or per-channel.
+type UserUnmuteArgs struct {
+	Username string `cmd:"help=target username,complete=players"`
+	Channel  string `cmd:"optional,help=channel slug; empty = clear global mute"`
+}
+
+// UserKickArgs kicks a user from a channel (no duration).
+type UserKickArgs struct {
+	Username string `cmd:"help=target username,complete=players"`
+	Channel  string `cmd:"help=channel slug"`
+}
+
+// UserBanArgs bans a user from a channel for a duration.
+type UserBanArgs struct {
+	Username string `cmd:"help=target username,complete=players"`
+	Channel  string `cmd:"help=channel slug"`
+	Duration string `cmd:"help=ban duration (e.g. 1h, 24h)"`
+}
+
+// UserUnbanArgs lifts a channel ban.
+type UserUnbanArgs struct {
+	Username string `cmd:"help=target username,complete=players"`
+	Channel  string `cmd:"help=channel slug"`
+}
+
 // ChannelInfoResult is the console-friendly mirror of ChannelInfo.
 // Field ordering and types are stable for cmdsys schema generation.
 type ChannelInfoResult struct {
@@ -259,6 +291,69 @@ func RegisterConsoleCommands(reg *cmdsys.Registry, getSvc ServiceProvider, getAu
 		Args:        ChannelMemberRemoveArgs{},
 		Result:      OKResult{},
 		Handler:     channelRemoveMemberHandler(getSvc, getAuth),
+	})); err != nil {
+		return err
+	}
+
+	// --- Per-user moderation commands ---
+
+	if err := must(reg.Register(cmdsys.Command{
+		Verb:        "chat.user.mute",
+		Capability:  "chat.admin",
+		Description: "mute a user globally (no channel) or in a specific channel",
+		Examples:    []string{"chat user mute alice 15m", "chat user mute alice 1h trade"},
+		Route:       cmdsys.RouteLocal,
+		Args:        UserMuteArgs{},
+		Result:      OKResult{},
+		Handler:     userMuteHandler(getSvc, getAuth),
+	})); err != nil {
+		return err
+	}
+	if err := must(reg.Register(cmdsys.Command{
+		Verb:        "chat.user.unmute",
+		Capability:  "chat.admin",
+		Description: "lift a global or per-channel mute",
+		Examples:    []string{"chat user unmute alice", "chat user unmute alice trade"},
+		Route:       cmdsys.RouteLocal,
+		Args:        UserUnmuteArgs{},
+		Result:      OKResult{},
+		Handler:     userUnmuteHandler(getSvc, getAuth),
+	})); err != nil {
+		return err
+	}
+	if err := must(reg.Register(cmdsys.Command{
+		Verb:        "chat.user.kick",
+		Capability:  "chat.admin",
+		Description: "kick a user from a channel (no duration)",
+		Examples:    []string{"chat user kick alice trade"},
+		Route:       cmdsys.RouteLocal,
+		Args:        UserKickArgs{},
+		Result:      OKResult{},
+		Handler:     userKickHandler(getSvc, getAuth),
+	})); err != nil {
+		return err
+	}
+	if err := must(reg.Register(cmdsys.Command{
+		Verb:        "chat.user.ban",
+		Capability:  "chat.admin",
+		Description: "ban a user from a channel for a duration",
+		Examples:    []string{"chat user ban alice trade 24h"},
+		Route:       cmdsys.RouteLocal,
+		Args:        UserBanArgs{},
+		Result:      OKResult{},
+		Handler:     userBanHandler(getSvc, getAuth),
+	})); err != nil {
+		return err
+	}
+	if err := must(reg.Register(cmdsys.Command{
+		Verb:        "chat.user.unban",
+		Capability:  "chat.admin",
+		Description: "lift a per-channel ban",
+		Examples:    []string{"chat user unban alice trade"},
+		Route:       cmdsys.RouteLocal,
+		Args:        UserUnbanArgs{},
+		Result:      OKResult{},
+		Handler:     userUnbanHandler(getSvc, getAuth),
 	})); err != nil {
 		return err
 	}
@@ -499,6 +594,240 @@ func channelRemoveMemberHandler(getSvc ServiceProvider, getAuth auth.RepoProvide
 			OK:       true,
 			Username: target.Username,
 			Detail:   fmt.Sprintf("removed %s from %s", target.Username, args.Slug),
+		}, nil
+	}
+}
+
+// --- per-user moderation handlers ---
+
+func userMuteHandler(getSvc ServiceProvider, getAuth auth.RepoProvider) cmdsys.HandlerFunc {
+	return func(_ context.Context, env *cmdsys.Env, raw any) (any, error) {
+		svc := getSvc()
+		if svc == nil {
+			return nil, errSvcNotReady()
+		}
+		authRepo := getAuth()
+		if authRepo == nil {
+			return nil, errAuthRepoNotReady()
+		}
+		args := raw.(UserMuteArgs)
+		dur, err := time.ParseDuration(args.Duration)
+		if err != nil {
+			return nil, fmt.Errorf("invalid duration %q: %w", args.Duration, err)
+		}
+		if dur <= 0 {
+			return nil, errors.New("duration must be positive")
+		}
+		ctx, cancel := cmdCtx()
+		defer cancel()
+		target, err := resolveTargetUser(ctx, authRepo, args.Username)
+		if err != nil {
+			return nil, err
+		}
+		var chIDStr string
+		var scope string
+		if args.Channel != "" {
+			id, _, err := resolveChannelBySlug(svc, args.Channel)
+			if err != nil {
+				return nil, err
+			}
+			chIDStr = id.String()
+			scope = "in " + args.Channel
+		} else {
+			scope = "globally"
+		}
+		connID, _, err := resolveOperatorConn(svc, env)
+		if err != nil {
+			return nil, err
+		}
+		resp, _ := svc.HandleMuteUser(&ops.OpContext{ConnID: connID}, &ChatMuteUserRequest{
+			UserID:     target.UserID.String(),
+			ChannelID:  chIDStr,
+			DurationMs: dur.Milliseconds(),
+		})
+		if resp.ErrorCode != 0 {
+			return nil, chatErrToError(resp.ErrorCode, resp.ErrorMessage)
+		}
+		return OKResult{
+			OK:       true,
+			Username: target.Username,
+			Detail:   fmt.Sprintf("muted %s %s for %s", target.Username, scope, dur),
+		}, nil
+	}
+}
+
+func userUnmuteHandler(getSvc ServiceProvider, getAuth auth.RepoProvider) cmdsys.HandlerFunc {
+	return func(_ context.Context, env *cmdsys.Env, raw any) (any, error) {
+		svc := getSvc()
+		if svc == nil {
+			return nil, errSvcNotReady()
+		}
+		authRepo := getAuth()
+		if authRepo == nil {
+			return nil, errAuthRepoNotReady()
+		}
+		args := raw.(UserUnmuteArgs)
+		ctx, cancel := cmdCtx()
+		defer cancel()
+		target, err := resolveTargetUser(ctx, authRepo, args.Username)
+		if err != nil {
+			return nil, err
+		}
+		var chIDStr string
+		var scope string
+		if args.Channel != "" {
+			id, _, err := resolveChannelBySlug(svc, args.Channel)
+			if err != nil {
+				return nil, err
+			}
+			chIDStr = id.String()
+			scope = "in " + args.Channel
+		} else {
+			scope = "globally"
+		}
+		connID, _, err := resolveOperatorConn(svc, env)
+		if err != nil {
+			return nil, err
+		}
+		resp, _ := svc.HandleUnmuteUser(&ops.OpContext{ConnID: connID}, &ChatUnmuteUserRequest{
+			UserID:    target.UserID.String(),
+			ChannelID: chIDStr,
+		})
+		if resp.ErrorCode != 0 {
+			return nil, chatErrToError(resp.ErrorCode, resp.ErrorMessage)
+		}
+		return OKResult{
+			OK:       true,
+			Username: target.Username,
+			Detail:   fmt.Sprintf("unmuted %s %s", target.Username, scope),
+		}, nil
+	}
+}
+
+func userKickHandler(getSvc ServiceProvider, getAuth auth.RepoProvider) cmdsys.HandlerFunc {
+	return func(_ context.Context, env *cmdsys.Env, raw any) (any, error) {
+		svc := getSvc()
+		if svc == nil {
+			return nil, errSvcNotReady()
+		}
+		authRepo := getAuth()
+		if authRepo == nil {
+			return nil, errAuthRepoNotReady()
+		}
+		args := raw.(UserKickArgs)
+		chID, _, err := resolveChannelBySlug(svc, args.Channel)
+		if err != nil {
+			return nil, err
+		}
+		ctx, cancel := cmdCtx()
+		defer cancel()
+		target, err := resolveTargetUser(ctx, authRepo, args.Username)
+		if err != nil {
+			return nil, err
+		}
+		connID, _, err := resolveOperatorConn(svc, env)
+		if err != nil {
+			return nil, err
+		}
+		resp, _ := svc.HandleKickFromChannel(&ops.OpContext{ConnID: connID}, &ChatKickRequest{
+			ChannelID: chID.String(),
+			UserID:    target.UserID.String(),
+		})
+		if resp.ErrorCode != 0 {
+			return nil, chatErrToError(resp.ErrorCode, resp.ErrorMessage)
+		}
+		return OKResult{
+			OK:       true,
+			Username: target.Username,
+			Detail:   fmt.Sprintf("kicked %s from %s", target.Username, args.Channel),
+		}, nil
+	}
+}
+
+func userBanHandler(getSvc ServiceProvider, getAuth auth.RepoProvider) cmdsys.HandlerFunc {
+	return func(_ context.Context, env *cmdsys.Env, raw any) (any, error) {
+		svc := getSvc()
+		if svc == nil {
+			return nil, errSvcNotReady()
+		}
+		authRepo := getAuth()
+		if authRepo == nil {
+			return nil, errAuthRepoNotReady()
+		}
+		args := raw.(UserBanArgs)
+		dur, err := time.ParseDuration(args.Duration)
+		if err != nil {
+			return nil, fmt.Errorf("invalid duration %q: %w", args.Duration, err)
+		}
+		if dur <= 0 {
+			return nil, errors.New("duration must be positive")
+		}
+		chID, _, err := resolveChannelBySlug(svc, args.Channel)
+		if err != nil {
+			return nil, err
+		}
+		ctx, cancel := cmdCtx()
+		defer cancel()
+		target, err := resolveTargetUser(ctx, authRepo, args.Username)
+		if err != nil {
+			return nil, err
+		}
+		connID, _, err := resolveOperatorConn(svc, env)
+		if err != nil {
+			return nil, err
+		}
+		resp, _ := svc.HandleBanFromChannel(&ops.OpContext{ConnID: connID}, &ChatBanRequest{
+			ChannelID:  chID.String(),
+			UserID:     target.UserID.String(),
+			DurationMs: dur.Milliseconds(),
+		})
+		if resp.ErrorCode != 0 {
+			return nil, chatErrToError(resp.ErrorCode, resp.ErrorMessage)
+		}
+		return OKResult{
+			OK:       true,
+			Username: target.Username,
+			Detail:   fmt.Sprintf("banned %s from %s for %s", target.Username, args.Channel, dur),
+		}, nil
+	}
+}
+
+func userUnbanHandler(getSvc ServiceProvider, getAuth auth.RepoProvider) cmdsys.HandlerFunc {
+	return func(_ context.Context, env *cmdsys.Env, raw any) (any, error) {
+		svc := getSvc()
+		if svc == nil {
+			return nil, errSvcNotReady()
+		}
+		authRepo := getAuth()
+		if authRepo == nil {
+			return nil, errAuthRepoNotReady()
+		}
+		args := raw.(UserUnbanArgs)
+		chID, _, err := resolveChannelBySlug(svc, args.Channel)
+		if err != nil {
+			return nil, err
+		}
+		ctx, cancel := cmdCtx()
+		defer cancel()
+		target, err := resolveTargetUser(ctx, authRepo, args.Username)
+		if err != nil {
+			return nil, err
+		}
+		connID, _, err := resolveOperatorConn(svc, env)
+		if err != nil {
+			return nil, err
+		}
+		resp, _ := svc.HandleUnbanFromChannel(&ops.OpContext{ConnID: connID}, &ChatUnbanRequest{
+			ChannelID: chID.String(),
+			UserID:    target.UserID.String(),
+		})
+		if resp.ErrorCode != 0 {
+			return nil, chatErrToError(resp.ErrorCode, resp.ErrorMessage)
+		}
+		return OKResult{
+			OK:       true,
+			Username: target.Username,
+			Detail:   fmt.Sprintf("unbanned %s from %s", target.Username, args.Channel),
 		}, nil
 	}
 }
