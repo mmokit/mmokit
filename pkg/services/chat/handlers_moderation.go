@@ -336,6 +336,53 @@ func (s *Service) HandleBanFromChannel(opCtx *ops.OpContext, req *ChatBanRequest
 	return &ChatBanResponse{}, nil
 }
 
+// HandleUnbanFromChannel clears a channel-scoped ban. canModerate gated.
+//
+// No fanout per the plan — unbanned users may rejoin via HandleJoin
+// when ready. Idempotent: ErrMemberNotFound from repo.ClearMemberBan
+// (e.g. row never existed) is mapped to success.
+func (s *Service) HandleUnbanFromChannel(opCtx *ops.OpContext, req *ChatUnbanRequest) (*ChatUnbanResponse, error) {
+	if opCtx == nil {
+		return errResp[ChatUnbanResponse](ChatErrorInternal, "missing op context", 0)
+	}
+	callerID := s.callerFromOpCtx(opCtx)
+	if callerID == uuid.Nil {
+		return errResp[ChatUnbanResponse](ChatErrorPermissionDenied, "not online", 0)
+	}
+	chID, err := uuid.Parse(req.ChannelID)
+	if err != nil {
+		return errResp[ChatUnbanResponse](ChatErrorChannelNotFound, "invalid channel_id", 0)
+	}
+	targetID, err := uuid.Parse(req.UserID)
+	if err != nil {
+		return errResp[ChatUnbanResponse](ChatErrorInternal, "invalid user_id", 0)
+	}
+	if !s.canModerate(callerID, chID) {
+		return errResp[ChatUnbanResponse](ChatErrorPermissionDenied, "denied", 0)
+	}
+
+	s.mu.RLock()
+	_, channelExists := s.channels[chID]
+	s.mu.RUnlock()
+	if !channelExists {
+		return errResp[ChatUnbanResponse](ChatErrorChannelNotFound, "channel not found", 0)
+	}
+
+	if err := s.repo.ClearMemberBan(context.Background(), chID, targetID); err != nil && err != ErrMemberNotFound {
+		return errResp[ChatUnbanResponse](ChatErrorInternal, "clear ban: "+err.Error(), 0)
+	}
+
+	s.mu.Lock()
+	delete(s.bans, banKey{chID, targetID})
+	s.mu.Unlock()
+
+	if s.ctx != nil && s.ctx.Logger != nil {
+		s.ctx.Logger.Log(logCat, "unban: channel=%s user=%s caller=%s",
+			chID, targetID, callerID)
+	}
+	return &ChatUnbanResponse{}, nil
+}
+
 // chIDStringForGlobal returns "" when chID is the MuteGlobalChannelID
 // sentinel; otherwise the canonical UUID string. Used to translate the
 // sentinel back to wire-form "empty = global" semantics.

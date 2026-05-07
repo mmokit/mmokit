@@ -600,6 +600,95 @@ func TestHandleBanFromChannel_PermissionDeniedForNonAdmin(t *testing.T) {
 	}
 }
 
+// --- HandleUnbanFromChannel ---
+
+func TestHandleUnbanFromChannel_HappyPath_AllowsRejoinAndSend(t *testing.T) {
+	chatRepo := chattest.NewMock()
+	authRepo := authtest.NewMock()
+	svc := chat.NewTestServiceWithAuth(t, chatRepo, authRepo, nil)
+
+	chid, err := svc.CreateChannelDirect("cool", chat.ChannelKindCustom)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	gmUID := svc.MustOnlineFakeUser(101, "gm")
+	svc.MustAddMember(chid, gmUID, "admin")
+	bobUID := svc.MustOnlineFakeUser(102, "bob")
+	svc.MustAddMember(chid, bobUID, "member")
+	svc.MustSubscribe(chid, 101)
+	svc.MustSubscribe(chid, 102)
+
+	// Ban bob.
+	if _, err := svc.HandleBanFromChannel(&ops.OpContext{ConnID: 101}, &chat.ChatBanRequest{
+		ChannelID:  chid.String(),
+		UserID:     bobUID.String(),
+		DurationMs: int64(time.Hour / time.Millisecond),
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	// Unban bob.
+	resp, err := svc.HandleUnbanFromChannel(&ops.OpContext{ConnID: 101}, &chat.ChatUnbanRequest{
+		ChannelID: chid.String(),
+		UserID:    bobUID.String(),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp.ErrorCode != 0 {
+		t.Fatalf("err: %s", resp.ErrorMessage)
+	}
+
+	active, _ := svc.BanCheck(bobUID, chid)
+	if active {
+		t.Fatal("expected ban cleared")
+	}
+
+	// Bob can rejoin.
+	joinResp, err := svc.HandleJoin(&ops.OpContext{ConnID: 102}, &chat.ChatJoinRequest{
+		Slug: "cool",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if joinResp.ErrorCode != 0 {
+		t.Fatalf("rejoin failed: %s", joinResp.ErrorMessage)
+	}
+
+	// Bob can send.
+	sendResp, err := svc.HandleSend(&ops.OpContext{ConnID: 102}, &chat.ChatSendRequest{
+		ChannelID: chid.String(), Body: "hi",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if sendResp.ErrorCode != 0 {
+		t.Fatalf("send after unban failed: code=%d msg=%s", sendResp.ErrorCode, sendResp.ErrorMessage)
+	}
+}
+
+func TestHandleUnbanFromChannel_PermissionDeniedForNonAdmin(t *testing.T) {
+	chatRepo := chattest.NewMock()
+	authRepo := authtest.NewMock()
+	svc := chat.NewTestServiceWithAuth(t, chatRepo, authRepo, []chat.DefaultChannelDef{
+		{Slug: "council", Kind: chat.ChannelKindSystemPredicate},
+	})
+	chid := svc.MustChannelID("council")
+
+	_ = svc.MustOnlineFakeUser(101, "alice")
+	resp, err := svc.HandleUnbanFromChannel(&ops.OpContext{ConnID: 101}, &chat.ChatUnbanRequest{
+		ChannelID: chid.String(),
+		UserID:    uuid.NewString(),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp.ErrorCode != uint32(chat.ChatErrorPermissionDenied) {
+		t.Fatalf("got code=%d want PermissionDenied", resp.ErrorCode)
+	}
+}
+
 // Ensure that re-reading mutes via the service post-handler, before
 // reaper kicks in, sees the row in the repo.
 func TestHandleMuteUser_PersistsToRepository(t *testing.T) {
