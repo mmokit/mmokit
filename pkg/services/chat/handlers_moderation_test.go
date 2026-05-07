@@ -319,6 +319,121 @@ func TestHandleUnmuteUser_Global_DeniedWithoutChatAdmin(t *testing.T) {
 	}
 }
 
+// --- HandleKickFromChannel ---
+
+func TestHandleKickFromChannel_HappyPath(t *testing.T) {
+	chatRepo := chattest.NewMock()
+	authRepo := authtest.NewMock()
+	svc := chat.NewTestServiceWithAuth(t, chatRepo, authRepo, []chat.DefaultChannelDef{
+		{Slug: "council", Kind: chat.ChannelKindSystemPredicate},
+	})
+	chid := svc.MustChannelID("council")
+
+	gmUID := svc.MustOnlineFakeUser(101, "gm")
+	svc.MustAddMember(chid, gmUID, "admin")
+	bobUID := svc.MustOnlineFakeUser(102, "bob")
+	svc.MustAddMember(chid, bobUID, "member")
+	carolUID := svc.MustOnlineFakeUser(103, "carol")
+	svc.MustAddMember(chid, carolUID, "member")
+	svc.MustSubscribe(chid, 101)
+	svc.MustSubscribe(chid, 102)
+	svc.MustSubscribe(chid, 103)
+
+	var sent []recordedEvent
+	svc.SetSendEventFn(func(c uint32, ev any) { sent = append(sent, recordedEvent{c, ev}) })
+
+	resp, err := svc.HandleKickFromChannel(&ops.OpContext{ConnID: 101}, &chat.ChatKickRequest{
+		ChannelID: chid.String(),
+		UserID:    bobUID.String(),
+		Reason:    "spam",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp.ErrorCode != 0 {
+		t.Fatalf("err: %s", resp.ErrorMessage)
+	}
+
+	// Bob's repo membership row gone.
+	mems, _ := chatRepo.ListMembers(context.Background(), chid)
+	for _, m := range mems {
+		if m.UserID == bobUID {
+			t.Fatal("bob still in repo after kick")
+		}
+	}
+
+	// Bob (102) receives ChatKickedEvent.
+	gotKicked := false
+	for _, r := range sent {
+		ev, ok := r.Event.(*chat.ChatKickedEvent)
+		if !ok {
+			continue
+		}
+		if r.ConnID != 102 {
+			t.Fatalf("ChatKickedEvent should go to bob's conn=102, got %d", r.ConnID)
+		}
+		if ev.ChannelID != chid.String() {
+			t.Fatalf("ChannelID=%q want %q", ev.ChannelID, chid.String())
+		}
+		if ev.Reason != "spam" {
+			t.Fatalf("Reason=%q want spam", ev.Reason)
+		}
+		gotKicked = true
+	}
+	if !gotKicked {
+		t.Fatal("expected ChatKickedEvent to bob")
+	}
+
+	// Remaining (gm 101, carol 103) receive ChatMemberLeftEvent. Bob (102) does not.
+	gotGM := false
+	gotCarol := false
+	for _, r := range sent {
+		ev, ok := r.Event.(*chat.ChatMemberLeftEvent)
+		if !ok {
+			continue
+		}
+		if ev.UserID != bobUID.String() {
+			continue
+		}
+		if r.ConnID == 102 {
+			t.Fatal("bob's own conn should not receive ChatMemberLeftEvent")
+		}
+		if r.ConnID == 101 {
+			gotGM = true
+		}
+		if r.ConnID == 103 {
+			gotCarol = true
+		}
+	}
+	if !gotGM || !gotCarol {
+		t.Fatalf("expected gm+carol got Left events, gm=%v carol=%v", gotGM, gotCarol)
+	}
+}
+
+func TestHandleKickFromChannel_PermissionDeniedForNonAdmin(t *testing.T) {
+	chatRepo := chattest.NewMock()
+	authRepo := authtest.NewMock()
+	svc := chat.NewTestServiceWithAuth(t, chatRepo, authRepo, []chat.DefaultChannelDef{
+		{Slug: "council", Kind: chat.ChannelKindSystemPredicate},
+	})
+	chid := svc.MustChannelID("council")
+
+	_ = svc.MustOnlineFakeUser(101, "alice") // not admin
+	bobUID := uuid.New()
+	svc.MustAddMember(chid, bobUID, "member")
+
+	resp, err := svc.HandleKickFromChannel(&ops.OpContext{ConnID: 101}, &chat.ChatKickRequest{
+		ChannelID: chid.String(),
+		UserID:    bobUID.String(),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp.ErrorCode != uint32(chat.ChatErrorPermissionDenied) {
+		t.Fatalf("got code=%d want PermissionDenied", resp.ErrorCode)
+	}
+}
+
 // Ensure that re-reading mutes via the service post-handler, before
 // reaper kicks in, sees the row in the repo.
 func TestHandleMuteUser_PersistsToRepository(t *testing.T) {

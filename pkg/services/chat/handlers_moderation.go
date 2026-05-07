@@ -154,6 +154,95 @@ func (s *Service) HandleUnmuteUser(opCtx *ops.OpContext, req *ChatUnmuteUserRequ
 	return &ChatUnmuteUserResponse{}, nil
 }
 
+// HandleKickFromChannel removes a member from a channel and notifies
+// both the kicked target (ChatKickedEvent) and remaining members
+// (ChatMemberLeftEvent). canModerate gated.
+//
+// Differs from HandleBanFromChannel: kick fully removes the membership
+// row (no tombstone). To reapply with a duration, use HandleBanFromChannel.
+func (s *Service) HandleKickFromChannel(opCtx *ops.OpContext, req *ChatKickRequest) (*ChatKickResponse, error) {
+	if opCtx == nil {
+		return errResp[ChatKickResponse](ChatErrorInternal, "missing op context", 0)
+	}
+	callerID := s.callerFromOpCtx(opCtx)
+	if callerID == uuid.Nil {
+		return errResp[ChatKickResponse](ChatErrorPermissionDenied, "not online", 0)
+	}
+	chID, err := uuid.Parse(req.ChannelID)
+	if err != nil {
+		return errResp[ChatKickResponse](ChatErrorChannelNotFound, "invalid channel_id", 0)
+	}
+	targetID, err := uuid.Parse(req.UserID)
+	if err != nil {
+		return errResp[ChatKickResponse](ChatErrorInternal, "invalid user_id", 0)
+	}
+	if !s.canModerate(callerID, chID) {
+		return errResp[ChatKickResponse](ChatErrorPermissionDenied, "denied", 0)
+	}
+
+	s.mu.RLock()
+	c, ok := s.channels[chID]
+	s.mu.RUnlock()
+	if !ok {
+		return errResp[ChatKickResponse](ChatErrorChannelNotFound, "channel not found", 0)
+	}
+	if c.Kind == "system_all" {
+		return errResp[ChatKickResponse](ChatErrorPermissionDenied, "cannot kick from system_all channel", 0)
+	}
+
+	if err := s.repo.RemoveMember(context.Background(), chID, targetID); err != nil && err != ErrMemberNotFound {
+		return errResp[ChatKickResponse](ChatErrorInternal, "remove member: "+err.Error(), 0)
+	}
+
+	// In-memory bookkeeping + snapshot fanout state.
+	s.mu.Lock()
+	if m := s.membership[chID]; m != nil {
+		delete(m, targetID)
+	}
+	if uc := s.userChans[targetID]; uc != nil {
+		delete(uc, chID)
+		if len(uc) == 0 {
+			delete(s.userChans, targetID)
+		}
+	}
+	targetConn, online := s.online[targetID]
+	if online {
+		if subs := s.subs[chID]; subs != nil {
+			delete(subs, targetConn)
+		}
+	}
+	// Remaining recipients of MemberLeftEvent (target's conn already removed).
+	leftTargets := make([]uint32, 0, len(s.subs[chID]))
+	for cid := range s.subs[chID] {
+		leftTargets = append(leftTargets, cid)
+	}
+	send := s.sendEventFn
+	s.mu.Unlock()
+
+	if s.ctx != nil && s.ctx.Logger != nil {
+		s.ctx.Logger.Log(logCat, "kick: channel=%s user=%s caller=%s reason=%q",
+			chID, targetID, callerID, req.Reason)
+	}
+
+	if send != nil {
+		if online {
+			send(targetConn, &ChatKickedEvent{
+				ChannelID: chID.String(),
+				ByUserID:  callerID.String(),
+				Reason:    req.Reason,
+			})
+		}
+		leftEv := &ChatMemberLeftEvent{
+			ChannelID: chID.String(),
+			UserID:    targetID.String(),
+		}
+		for _, cid := range leftTargets {
+			send(cid, leftEv)
+		}
+	}
+	return &ChatKickResponse{}, nil
+}
+
 // chIDStringForGlobal returns "" when chID is the MuteGlobalChannelID
 // sentinel; otherwise the canonical UUID string. Used to translate the
 // sentinel back to wire-form "empty = global" semantics.
