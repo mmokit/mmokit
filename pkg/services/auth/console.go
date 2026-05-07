@@ -488,20 +488,25 @@ func userGrantHandler(getRepo RepoProvider) cmdsys.HandlerFunc {
 		a := args.(CapabilityGrantArgs)
 		ctx, cancel := cmdCtx()
 		defer cancel()
-		name := strings.ToLower(strings.TrimSpace(a.Username))
+		name, err := normalizeUsername(a.Username)
+		if err != nil {
+			return nil, err
+		}
 		user, err := repo.GetUserByUsername(ctx, name)
 		if err != nil {
 			return nil, fmt.Errorf("user %q: %w", name, err)
 		}
 		grantedBy, _ := callerUserIDFromEnv(env)
-		if grantedBy == uuid.Nil {
-			grantedBy = user.UserID
-		}
+		// uuid.Nil here is intentional — represents a system-originated grant
+		// (per the Capability.GrantedBy convention from repo.go).
 		c := Capability{UserID: user.UserID, Capability: a.Capability, GrantedBy: grantedBy}
 		if a.Duration != "" {
 			d, err := time.ParseDuration(a.Duration)
 			if err != nil {
 				return nil, fmt.Errorf("invalid duration: %w", err)
+			}
+			if d <= 0 {
+				return nil, fmt.Errorf("duration must be positive")
 			}
 			c.ExpiresAt = time.Now().Add(d)
 		}
@@ -521,7 +526,11 @@ func userRevokeCapHandler(getRepo RepoProvider) cmdsys.HandlerFunc {
 		a := args.(CapabilityRevokeArgs)
 		ctx, cancel := cmdCtx()
 		defer cancel()
-		user, err := repo.GetUserByUsername(ctx, strings.ToLower(a.Username))
+		name, err := normalizeUsername(a.Username)
+		if err != nil {
+			return nil, err
+		}
+		user, err := repo.GetUserByUsername(ctx, name)
 		if err != nil {
 			return nil, err
 		}
@@ -541,7 +550,11 @@ func userCapabilitiesHandler(getRepo RepoProvider) cmdsys.HandlerFunc {
 		a := args.(UsernameArgs)
 		ctx, cancel := cmdCtx()
 		defer cancel()
-		user, err := repo.GetUserByUsername(ctx, strings.ToLower(a.Username))
+		name, err := normalizeUsername(a.Username)
+		if err != nil {
+			return nil, err
+		}
+		user, err := repo.GetUserByUsername(ctx, name)
 		if err != nil {
 			return nil, err
 		}
@@ -571,7 +584,11 @@ func bootstrapAdminHandler(getRepo RepoProvider, defaultBootstrapCaps []string) 
 		a := args.(BootstrapAdminArgs)
 		ctx, cancel := cmdCtx()
 		defer cancel()
-		user, err := repo.GetUserByUsername(ctx, strings.ToLower(a.Username))
+		name, err := normalizeUsername(a.Username)
+		if err != nil {
+			return nil, err
+		}
+		user, err := repo.GetUserByUsername(ctx, name)
 		if err != nil {
 			return nil, err
 		}
@@ -587,7 +604,7 @@ func bootstrapAdminHandler(getRepo RepoProvider, defaultBootstrapCaps []string) 
 		}
 		for _, capName := range defaultBootstrapCaps {
 			if err := repo.GrantCapability(ctx, Capability{
-				UserID: user.UserID, Capability: capName, GrantedBy: user.UserID,
+				UserID: user.UserID, Capability: capName, GrantedBy: uuid.Nil,
 			}); err != nil {
 				return nil, fmt.Errorf("grant %s: %w", capName, err)
 			}
