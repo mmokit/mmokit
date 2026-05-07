@@ -43,6 +43,22 @@ func (s *Service) HandleSend(opCtx *ops.OpContext, req *ChatSendRequest) (*ChatS
 	senderUsername := s.usernameForUserLocked(senderID)
 	s.mu.RUnlock()
 
+	// Static checks first (mute, ban) — no state mutation. Then the
+	// consume-on-success checks (rate-limit, slow-mode). Order matters:
+	// muted users must not consume rate-limit tokens.
+	if active, retry := s.muteCheck(senderID, chID); active {
+		return errResp[ChatSendResponse](ChatErrorMuted, "muted", retry.Milliseconds())
+	}
+	if active, retry := s.banCheck(senderID, chID); active {
+		return errResp[ChatSendResponse](ChatErrorBanned, "banned", retry.Milliseconds())
+	}
+	if ok, retry := s.rateLimitTake(senderID); !ok {
+		return errResp[ChatSendResponse](ChatErrorRateLimited, "rate limited", retry.Milliseconds())
+	}
+	if ok, retry := s.slowModeCheck(chID, senderID); !ok {
+		return errResp[ChatSendResponse](ChatErrorSlowMode, "slow mode active", retry.Milliseconds())
+	}
+
 	msgID, err := uuid.NewV7()
 	if err != nil {
 		return errResp[ChatSendResponse](ChatErrorInternal, "msg_id: "+err.Error(), 0)
@@ -414,6 +430,17 @@ func (s *Service) HandleSendDM(opCtx *ops.OpContext, req *ChatSendDMRequest) (*C
 
 	if !senderOnline || senderID == uuid.Nil {
 		return errResp[ChatSendDMResponse](ChatErrorPermissionDenied, "not online", 0)
+	}
+
+	// Global mute applies to DMs (channel-scoped mutes do not — DMs
+	// have no channel). Pass MuteGlobalChannelID for both args; the
+	// helper reads the global slot first.
+	if active, retry := s.muteCheck(senderID, MuteGlobalChannelID); active {
+		return errResp[ChatSendDMResponse](ChatErrorMuted, "muted", retry.Milliseconds())
+	}
+	// Rate limit (shared per-user bucket with channel sends).
+	if ok, retry := s.rateLimitTake(senderID); !ok {
+		return errResp[ChatSendDMResponse](ChatErrorRateLimited, "rate limited", retry.Milliseconds())
 	}
 
 	msgID, err := uuid.NewV7()
