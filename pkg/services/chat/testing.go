@@ -65,6 +65,14 @@ func (t *TestService) MustOnlineFakeUser(connID uint32, username string) uuid.UU
 	return uid
 }
 
+// OnlineCount returns the number of currently-online users (size of
+// the online map).
+func (t *TestService) OnlineCount() int {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+	return len(t.online)
+}
+
 // FanoutTargets returns the connIDs that would receive a fanout to channelID.
 func (t *TestService) FanoutTargets(channelID uuid.UUID) []uint32 {
 	t.mu.RLock()

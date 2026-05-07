@@ -57,6 +57,55 @@ type recordedEvent struct {
 	Event  any
 }
 
+func TestHandleSessionEnter_AddsToOnlineAndSendsHydration(t *testing.T) {
+	svc := chat.NewTestService(t, chattest.NewMock(), []chat.DefaultChannelDef{
+		{Slug: "world", Kind: chat.ChannelKindSystemAll, Topic: "World"},
+		{Slug: "help", Kind: chat.ChannelKindSystemAll, Topic: "Help"},
+	})
+
+	var recv []recordedEvent
+	svc.SetSendEventFn(func(connID uint32, ev any) {
+		recv = append(recv, recordedEvent{ConnID: connID, Event: ev})
+	})
+
+	resp, err := svc.HandleSessionEnter(nil, &chat.ChatSessionEnterRequest{
+		ConnID: 200, UserID: uuid.NewString(), Username: "alice", GatewayID: "gw-a",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp.ErrorCode != 0 {
+		t.Fatalf("err: %s", resp.ErrorMessage)
+	}
+	if got := svc.OnlineCount(); got != 1 {
+		t.Fatalf("online=%d, want 1", got)
+	}
+	if len(recv) != 1 {
+		t.Fatalf("expected 1 hydration event, got %d", len(recv))
+	}
+	if _, ok := recv[0].Event.(*chat.ChatChannelsHydratedEvent); !ok {
+		t.Fatalf("expected ChatChannelsHydratedEvent, got %T", recv[0].Event)
+	}
+}
+
+func TestHandleSessionLeave_RemovesFromOnline(t *testing.T) {
+	svc := chat.NewTestService(t, chattest.NewMock(), []chat.DefaultChannelDef{
+		{Slug: "world", Kind: chat.ChannelKindSystemAll, Topic: ""},
+	})
+	uid := uuid.NewString()
+	_, _ = svc.HandleSessionEnter(nil, &chat.ChatSessionEnterRequest{ConnID: 200, UserID: uid, Username: "alice", GatewayID: "gw-a"})
+	resp, err := svc.HandleSessionLeave(nil, &chat.ChatSessionLeaveRequest{ConnID: 200, GatewayID: "gw-a"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp.ErrorCode != 0 {
+		t.Fatalf("err: %s", resp.ErrorMessage)
+	}
+	if got := svc.OnlineCount(); got != 0 {
+		t.Fatalf("online=%d, want 0", got)
+	}
+}
+
 // Smoke that uuid still imports cleanly even if no test references it directly.
 var _ = uuid.Nil
 var _ = context.TODO
