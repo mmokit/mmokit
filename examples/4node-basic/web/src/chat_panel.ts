@@ -1,4 +1,5 @@
-// Chat demo panel. Toggled with the 'c' key.
+// Chat demo panel. Toggled with the backtick (`) key — works from anywhere
+// including inside the input. Esc inside the input also closes.
 //
 // Renders a tabbed chat UI in the top-right corner: one tab per joined
 // channel from ChatChannelsHydratedEvent + dynamically-created DM tabs
@@ -81,7 +82,7 @@ export function mountChatPanel(client: BasicClient): void {
   `;
   root.innerHTML = `
     <div style="display:flex;justify-content:space-between;align-items:center;padding:6px 8px;border-bottom:1px solid #335;">
-      <b style="color:#9cf">Chat (press 'c' to toggle)</b>
+      <b style="color:#9cf">Chat (press \` to toggle, Esc to close)</b>
       <button id="cp-close" style="background:none;color:#cce;border:1px solid #446;cursor:pointer;padding:0 6px;">×</button>
     </div>
     <div id="cp-tabs" style="display:flex;flex-wrap:wrap;gap:2px;padding:4px 6px;border-bottom:1px solid #335;background:#181b2a;"></div>
@@ -619,13 +620,21 @@ export function mountChatPanel(client: BasicClient): void {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
       sendBtn.click();
+    } else if (e.key === "Escape") {
+      // Esc inside the chat input closes the panel + restores focus to body.
+      e.preventDefault();
+      root.style.display = "none";
+      inputEl.blur();
     }
   });
 
-  // 'c' toggles the panel — only outside of input fields.
+  // Backtick (`) toggles the panel — works from anywhere, never conflicts
+  // with typing in inputs. (Pressing ` in the chat input still toggles
+  // because we listen at window level.) Use Esc inside the input to just
+  // close, which is the common workflow.
   window.addEventListener("keydown", (e) => {
-    if (e.key !== "c") return;
-    if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+    if (e.key !== "`") return;
+    e.preventDefault();
     root.style.display = root.style.display === "none" ? "flex" : "none";
     if (root.style.display === "flex") inputEl.focus();
   });
