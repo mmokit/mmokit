@@ -136,7 +136,7 @@ type Config struct {
 
 	// ExtraMigrations layers additional Postgres migration filesystems on
 	// top of the engine's built-in migrations. Engine migrations run first,
-	// then each entry is applied in slice order. Used by pkg/auth/ and
+	// then each entry is applied in slice order. Used by pkg/services/auth/ and
 	// similar packages to ship their own schema. Nil/empty means engine
 	// migrations only.
 	//

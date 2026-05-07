@@ -21,7 +21,7 @@ type AuthRepository = auth.Repository
 
 // DefaultAuthOpts returns sane defaults: 30d sliding session TTL, OWASP-2024
 // argon2id parameters, 5-attempt 15-minute account lockout, 90d audit retention.
-// See pkg/auth/kind.go for the full default set.
+// See pkg/services/auth/kind.go for the full default set.
 func DefaultAuthOpts() AuthOpts { return auth.DefaultServiceOpts() }
 
 // errAuthServiceNotReady is returned by every typed-op auth handler until

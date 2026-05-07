@@ -3,7 +3,7 @@
 // Gateway is the worker type responsible for terminating WebSocket
 // connections, holding per-connection authentication state, and proxying
 // client I/O to authoritative nodes via MeshData streams. Login itself
-// is now a regular service op (handled by pkg/auth); the gateway only
+// is now a regular service op (handled by pkg/services/auth); the gateway only
 // gates non-auth ops on authentication state and dispatches a
 // PlayerAssignment to the target cell after the auth response succeeds.
 //
@@ -135,7 +135,7 @@ type localSession struct {
 
 // handleEvent handles a net.PlayerEvent (connect or disconnect) from ConnManager.Events().
 // For connect events it sends the server-config tick rate; the connection
-// remains unauthenticated until pkg/auth completes a successful auth op.
+// remains unauthenticated until pkg/services/auth completes a successful auth op.
 // For disconnect events it delegates to handleDisconnect.
 func (g *Gateway) handleEvent(evt net.PlayerEvent) {
 	if evt.Connected {
@@ -154,7 +154,7 @@ func (g *Gateway) handleEvent(evt net.PlayerEvent) {
 	g.handleDisconnect(evt)
 }
 
-// installAuthHook registers the response interceptor used by pkg/auth.
+// installAuthHook registers the response interceptor used by pkg/services/auth.
 // Called by Process.AddGatewayAuthHook from the mmokit facade.
 func (g *Gateway) installAuthHook(h *auth.GatewayHook) {
 	g.authMu.Lock()

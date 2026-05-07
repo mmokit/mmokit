@@ -107,7 +107,7 @@ type AuditDigest struct {
 // the number of sessions actually closed. Called by auth.user.kick after
 // token revocation so a single command both invalidates future-use tokens
 // and drops the active connection — neither alone is a complete boot.
-// Implementation lives outside pkg/auth to avoid a universe import.
+// Implementation lives outside pkg/services/auth to avoid a universe import.
 type DisconnectFn func(ctx context.Context, env *cmdsys.Env, username string) (int, error)
 
 // RegisterConsoleCommands wires the auth.* command group into the cmdsys

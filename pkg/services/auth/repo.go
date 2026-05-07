@@ -61,8 +61,8 @@ type AuditEvent struct {
 	Metadata          map[string]any
 }
 
-// Repository abstracts persistence. Postgres impl: pkg/auth/postgres.
-// In-memory mock for tests: pkg/auth/authtest.
+// Repository abstracts persistence. Postgres impl: pkg/services/auth/postgres.
+// In-memory mock for tests: pkg/services/auth/authtest.
 type Repository interface {
 	// Users
 	CreateUser(ctx context.Context, u User, password string) (User, error)

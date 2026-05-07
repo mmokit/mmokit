@@ -12,7 +12,7 @@ import (
 // update its per-connection auth state.
 //
 // Separation of concerns: the gateway knows "the auth kind exists and may
-// want to inspect responses"; pkg/auth knows the typed message shapes.
+// want to inspect responses"; pkg/services/auth knows the typed message shapes.
 // Adding ops to auth never requires gateway changes.
 type GatewayHook struct {
 	Logger *logger.Logger

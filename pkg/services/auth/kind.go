@@ -18,8 +18,8 @@ type ServiceOpts struct {
 
 	// RepositoryFactory constructs the live Repository from a pgxpool.Pool.
 	// Set by the caller (mmokit.RegisterAuthService) to postgres.New so that
-	// pkg/auth does not need to import pkg/auth/postgres (which imports
-	// pkg/auth — a cycle). Ignored when Repository is non-nil.
+	// pkg/services/auth does not need to import pkg/services/auth/postgres (which imports
+	// pkg/services/auth — a cycle). Ignored when Repository is non-nil.
 	RepositoryFactory func(*pgxpool.Pool) Repository
 
 	SessionTTL     time.Duration
