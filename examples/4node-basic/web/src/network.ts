@@ -8,6 +8,7 @@ import { observeFrameStamps } from "./clockSync.js";
 import { updateEntityFromServer } from "./interpolation.js";
 import { pruneStaleOnFreshSnapshot } from "./reconcile.js";
 import { mountEchoPanel } from "./echo_panel.js";
+import { mountChatPanel } from "./chat_panel.js";
 import { presenceOf } from "./debug-presence.js";
 
 let showGameCallback: (() => void) | null = null;
@@ -36,6 +37,8 @@ export function connect(name: string): void {
     // Mount the echo demo panel once the session is authenticated.
     // Toggled with 'e'. Hidden by default.
     mountEchoPanel(client);
+    // Mount the chat demo panel. Toggled with 'c'. Hidden by default.
+    mountChatPanel(client);
   });
 
   client.onServerConfig((msg) => {
