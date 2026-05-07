@@ -304,6 +304,86 @@ func (s *Service) HandleJoin(opCtx *ops.OpContext, req *ChatJoinRequest) (*ChatJ
 	return &ChatJoinResponse{Channel: info}, nil
 }
 
+// HandleLeave removes the caller's membership from a custom or
+// system_predicate channel. SYSTEM_ALL channels reject because
+// per spec §15.3 they are mandatory in v1.
+func (s *Service) HandleLeave(opCtx *ops.OpContext, req *ChatLeaveRequest) (*ChatLeaveResponse, error) {
+	if opCtx == nil {
+		return errResp[ChatLeaveResponse](ChatErrorInternal, "missing op context", 0)
+	}
+	chid, err := uuid.Parse(req.ChannelID)
+	if err != nil {
+		return errResp[ChatLeaveResponse](ChatErrorChannelNotFound, "invalid channel_id", 0)
+	}
+	s.mu.RLock()
+	callerID, online := s.connIndex[opCtx.ConnID]
+	s.mu.RUnlock()
+	if !online || callerID == uuid.Nil {
+		return errResp[ChatLeaveResponse](ChatErrorPermissionDenied, "not online", 0)
+	}
+	connID := opCtx.ConnID
+
+	// Lookup channel + membership under a single RLock snapshot.
+	s.mu.RLock()
+	c, ok := s.channels[chid]
+	if !ok {
+		s.mu.RUnlock()
+		return errResp[ChatLeaveResponse](ChatErrorChannelNotFound, "channel not found", 0)
+	}
+	if c.Kind == "system_all" {
+		s.mu.RUnlock()
+		return errResp[ChatLeaveResponse](ChatErrorPermissionDenied, "cannot leave system channel", 0)
+	}
+	role := s.membership[chid][callerID]
+	s.mu.RUnlock()
+	if role == "" {
+		return errResp[ChatLeaveResponse](ChatErrorNotAMember, "not a member", 0)
+	}
+
+	// Persist removal
+	if err := s.repo.RemoveMember(context.Background(), chid, callerID); err != nil && err != ErrMemberNotFound {
+		return errResp[ChatLeaveResponse](ChatErrorInternal, "remove member: "+err.Error(), 0)
+	}
+
+	// In-memory bookkeeping + snapshot fanout targets (excluding leaver).
+	s.mu.Lock()
+	if m := s.membership[chid]; m != nil {
+		delete(m, callerID)
+	}
+	if uc := s.userChans[callerID]; uc != nil {
+		delete(uc, chid)
+		if len(uc) == 0 {
+			delete(s.userChans, callerID)
+		}
+	}
+	if subs := s.subs[chid]; subs != nil {
+		delete(subs, connID)
+	}
+	targets := make([]uint32, 0, len(s.subs[chid]))
+	for cid := range s.subs[chid] {
+		if cid != connID {
+			targets = append(targets, cid)
+		}
+	}
+	send := s.sendEventFn
+	s.mu.Unlock()
+
+	if s.ctx != nil && s.ctx.Logger != nil {
+		s.ctx.Logger.Log(logCat, "leave: channel=%s user=%s", chid, callerID)
+	}
+
+	if send != nil {
+		ev := &ChatMemberLeftEvent{
+			ChannelID: chid.String(),
+			UserID:    callerID.String(),
+		}
+		for _, cid := range targets {
+			send(cid, ev)
+		}
+	}
+	return &ChatLeaveResponse{}, nil
+}
+
 // validateSlugFormat enforces [a-z0-9_-] only. Empty string is rejected
 // at the call site.
 func validateSlugFormat(s string) bool {
