@@ -76,6 +76,14 @@ type Gateway struct {
 	// and cell Inbox. nil when standalone.
 	coord *Process
 
+	// process is the local *Process that owns this Gateway. Set in BOTH
+	// embedded and standalone build paths (in embedded mode it equals
+	// coord). Used to reach process-local infrastructure that exists in
+	// both modes — e.g. the cmdsys dispatcher and transport for service-
+	// routed commands arriving on the gateway control stream, and
+	// serviceRouting for PeerList-driven service announcement updates.
+	process *Process
+
 	// cfg points at the LOCAL Process's Config — set in BOTH embedded and
 	// standalone build paths. Used for late-bound config that gets populated
 	// after Build() (notably AuthResolver / AuthHTTPOpts, stamped by the auth

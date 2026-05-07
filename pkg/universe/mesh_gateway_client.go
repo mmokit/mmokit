@@ -310,8 +310,59 @@ func (c *meshGatewayClient) dispatch(msg *meshpb.CoordMessage) {
 			c.gw.spawnOrch.OnResponse(resp)
 		}
 
+	case *meshpb.CoordMessage_CommandRequest:
+		// Coordinator dispatched a cmdsys command to this gateway,service
+		// process. Execute against the local Process dispatcher and reply
+		// via HostMessage_CommandResponse on this same gateway control
+		// stream. Mirrors the host-side handler in mesh_control_client.go.
+		req := v.CommandRequest
+		if req != nil && c.gw.process != nil && c.gw.process.dispatcher != nil {
+			go c.handleInboundCommandRequest(req)
+		}
+
+	case *meshpb.CoordMessage_CommandResponse:
+		// Response to a CommandRequest this gateway sent earlier. Deliver
+		// to the local transport orchestrator so the waiting Invoke
+		// unblocks.
+		resp := v.CommandResponse
+		if resp != nil && c.gw.process != nil && c.gw.process.transport != nil {
+			c.gw.process.transport.orch.OnResponse(resp)
+		}
+
+	case *meshpb.CoordMessage_CommandCancel:
+		// Coordinator wants to cancel an in-flight handler on this gateway.
+		cc := v.CommandCancel
+		if cc != nil && c.gw.process != nil && c.gw.process.transport != nil {
+			c.gw.process.transport.orch.OnCancel(cc.RequestId)
+		}
+
 	default:
 		c.gw.log.Log(CatMeshMsg, "gateway: received %T (handler not wired)", v)
+	}
+}
+
+// handleInboundCommandRequest executes a CommandRequest that the
+// coordinator dispatched to this gateway,service process and replies
+// with a HostMessage_CommandResponse on this gateway's control stream.
+// Runs in a goroutine so the recv loop stays live.
+func (c *meshGatewayClient) handleInboundCommandRequest(req *meshpb.CommandRequest) {
+	ctx, cancel := context.WithDeadline(
+		context.Background(),
+		timeFromUnixNanos(req.DeadlineUnixNanos),
+	)
+	defer cancel()
+
+	// Use the gateway ID as the executing host identifier — it matches
+	// what was registered in coordServices via ServiceAnnounce (see
+	// localServiceHostID) so resp.TargetId stays consistent with the
+	// route the coordinator used to reach us.
+	hostID := c.gw.id
+	resp := executeCommandRequest(ctx, c.gw.process.dispatcher, hostID, req)
+	msg := &meshpb.HostMessage{
+		Msg: &meshpb.HostMessage_CommandResponse{CommandResponse: resp},
+	}
+	if err := c.send(msg); err != nil {
+		c.gw.log.Log(CatMeshMsg, "gateway: CommandResponse send failed: %v", err)
 	}
 }
 
@@ -328,8 +379,9 @@ func (c *meshGatewayClient) applyPeerList(pl *meshpb.PeerList) {
 	// Service framework: rebuild the gateway's routing index. Standalone
 	// gateways own the only RoutingIndex that actually drives op forwarding,
 	// so this call is critical — without it, services aren't reachable.
-	if c.gw.coord != nil {
-		c.gw.coord.applyServicesToRoutingIndex(pl.Services)
+	// Use process (always set) rather than coord (nil for standalone).
+	if c.gw.process != nil {
+		c.gw.process.applyServicesToRoutingIndex(pl.Services)
 	}
 
 	if c.gw.hostNetwork == nil {

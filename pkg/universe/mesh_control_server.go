@@ -643,6 +643,25 @@ func (s *meshControlServer) handleGatewayControl(stream meshpb.MeshControl_Contr
 					s.coord.broadcastPeerListOnServiceChange()
 				}
 
+			case *meshpb.HostMessage_CommandResponse:
+				// gateway,service replied to a CommandRequest the coord sent.
+				// Deliver to the in-flight orchestrator. Mirrors the host-stream
+				// handler so service-routed commands targeting a gateway,service
+				// process complete instead of timing out.
+				resp := v.CommandResponse
+				if resp != nil && s.coord.transport != nil {
+					s.coord.transport.orch.OnResponse(resp)
+				}
+
+			case *meshpb.HostMessage_CommandRequest:
+				// gateway → coord command (coord-routed verbs originating from a
+				// gateway,service process). Execute locally and send response
+				// back on this gateway's stream. Parity with the host-stream path.
+				req := v.CommandRequest
+				if req != nil && s.coord.dispatcher != nil {
+					go s.handleInboundCommandRequestFromGateway(gatewayID, req)
+				}
+
 			default:
 				s.log.Log(CatMeshMsg, "coordinator: gateway %s sent %T", gatewayID, msg.Msg)
 			}
@@ -712,6 +731,27 @@ func (s *meshControlServer) handleInboundCommandRequest(hostID string, req *mesh
 	}
 	if err := s.sendCoordMessageToHost(hostID, msg); err != nil {
 		s.log.Log(CatMeshMsg, "coordinator: CommandResponse to host %s failed: %v", hostID, err)
+	}
+}
+
+// handleInboundCommandRequestFromGateway is the gateway-stream parity of
+// handleInboundCommandRequest: executes a CommandRequest that arrived on a
+// gateway,service control stream and replies on that same gateway stream.
+// Runs in a goroutine so the recv loop stays live.
+func (s *meshControlServer) handleInboundCommandRequestFromGateway(gatewayID string, req *meshpb.CommandRequest) {
+	ctx, cancel := context.WithDeadline(
+		context.Background(),
+		timeFromUnixNanos(req.DeadlineUnixNanos),
+	)
+	defer cancel()
+
+	resp := executeCommandRequest(ctx, s.coord.dispatcher, gatewayID, req)
+	msg := &meshpb.CoordMessage{
+		CoordEpoch: s.coord.coordEpoch,
+		Msg:        &meshpb.CoordMessage_CommandResponse{CommandResponse: resp},
+	}
+	if err := s.sendCoordMessageToGateway(gatewayID, msg); err != nil {
+		s.log.Log(CatMeshMsg, "coordinator: CommandResponse to gateway %s failed: %v", gatewayID, err)
 	}
 }
 

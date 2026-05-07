@@ -1649,6 +1649,7 @@ func (c *Process) Build() {
 			connMgr:    c.ConnMgr,
 			log:        c.Log,
 			coord:      c,
+			process:    c,
 			cfg:        &c.cfg,
 			sessions:   make(map[uint32]*localSession),
 			authStates: make(map[uint32]connAuthState),
@@ -1900,6 +1901,7 @@ func (c *Process) buildStandaloneGateway() {
 		connMgr:      c.ConnMgr,
 		log:          c.Log,
 		coord:        nil, // standalone: no direct coordinator reference
+		process:      c,   // local process backref — always set, used for cmdsys dispatch + serviceRouting
 		cfg:          &c.cfg,
 		sessions:     make(map[uint32]*localSession),
 		authStates:   make(map[uint32]connAuthState),
