@@ -141,6 +141,9 @@ func (s *Service) HandleSessionLeave(_ *ops.OpContext, req *ChatSessionLeaveRequ
 	}
 	if g := s.gatewayConn[req.GatewayID]; g != nil {
 		delete(g, req.ConnID)
+		if len(g) == 0 {
+			delete(s.gatewayConn, req.GatewayID)
+		}
 	}
 	s.mu.Unlock()
 	return &ChatSessionLeaveResponse{}, nil
