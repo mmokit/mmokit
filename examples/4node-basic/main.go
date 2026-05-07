@@ -46,6 +46,16 @@ func main() {
 		log.Fatalf("4node-basic: RegisterAuthService: %v", err)
 	}
 
+	if err := mmokit.RegisterChatService(process, mmokit.ChatOpts{
+		DefaultChannels: []mmokit.DefaultChannelDef{
+			{Slug: "world", Kind: mmokit.ChannelKindSystemAll, Topic: "World chat"},
+			{Slug: "help", Kind: mmokit.ChannelKindSystemAll, Topic: "Help chat. Be patient."},
+			{Slug: "trade", Kind: mmokit.ChannelKindSystemAll, Topic: "Trade chat."},
+		},
+	}); err != nil {
+		log.Fatalf("4node-basic: RegisterChatService: %v", err)
+	}
+
 	mmokit.RegisterKind[PlayerComponents](process, KindPlayer, "Player")
 	mmokit.RegisterKind[BotComponents](process, KindBot, "Bot")
 

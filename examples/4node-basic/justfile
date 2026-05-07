@@ -59,7 +59,7 @@ echo-dev *ARGS: build-go
     tmux kill-session -t 4node-vite 2>/dev/null || true
     tmux new-session -d -s 4node-vite -c "{{root}}/examples/4node-basic/web" 'bun run dev'
     trap 'tmux kill-session -t 4node-vite 2>/dev/null' INT TERM EXIT
-    cd {{root}} && ./bin/4node-basic --web-dir=disabled --mode=all,service --services=echo '--postgres-url={{postgres_url}}' --dev-insecure-cookie {{ARGS}}
+    cd {{root}} && ./bin/4node-basic --web-dir=disabled --mode=all,service --services=echo,chat '--postgres-url={{postgres_url}}' --dev-insecure-cookie {{ARGS}}
 
 # Tmux session `basic-dist` with coord + 2 nodes + gateway panes, each
 # with its own interactive console. Logs mirror to log/distributed-basic
@@ -89,7 +89,7 @@ distributed: build
     tmux pipe-pane -t basic-dist -o "cat > $logdir/coordinator.log"
 
     tmux split-window -t basic-dist -c "{{root}}" \
-        "{{bin}} --mode=gateway,service --services=auth --coordinator-addr={{control_addr}} --gateway-id={{gateway_id}} --port={{gateway_port}} '--postgres-url={{postgres_url}}' --dev-insecure-cookie"
+        "{{bin}} --mode=gateway,service --services=auth,chat --coordinator-addr={{control_addr}} --gateway-id={{gateway_id}} --port={{gateway_port}} '--postgres-url={{postgres_url}}' --dev-insecure-cookie"
     tmux pipe-pane -t basic-dist -o "cat > $logdir/gateway.log"
     tmux select-layout -t basic-dist tiled
 
