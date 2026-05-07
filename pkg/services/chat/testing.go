@@ -103,6 +103,18 @@ func (t *TestService) MustChannelID(slug string) uuid.UUID {
 	return id
 }
 
+// MustSubscribe injects a connID into subs[channelID]. Used by tests
+// that need an existing member's conn to receive fanout but didn't go
+// through HandleSessionEnter.
+func (t *TestService) MustSubscribe(channelID uuid.UUID, connID uint32) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	if t.subs[channelID] == nil {
+		t.subs[channelID] = map[uint32]struct{}{}
+	}
+	t.subs[channelID][connID] = struct{}{}
+}
+
 // MustOnlineFakeUser inserts a fake user into the presence + subs maps.
 // Used by tests that don't go through ChatSessionEnter.
 func (t *TestService) MustOnlineFakeUser(connID uint32, username string) uuid.UUID {
