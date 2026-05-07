@@ -494,3 +494,126 @@ func TestHandleBulkSetMembers_FanoutForJoinersAndLeavers(t *testing.T) {
 		t.Fatalf("expected left events to alice+carol, alice=%v carol=%v", gotLeftToAlice, gotLeftToCarol)
 	}
 }
+
+// --- HandleSetMemberRole ---
+
+func TestHandleSetMemberRole_HappyPath_PromoteToAdmin(t *testing.T) {
+	chatRepo := chattest.NewMock()
+	authRepo := authtest.NewMock()
+	svc := chat.NewTestServiceWithAuth(t, chatRepo, authRepo, []chat.DefaultChannelDef{
+		{Slug: "council", Kind: chat.ChannelKindSystemPredicate},
+	})
+	chid := svc.MustChannelID("council")
+
+	aliceUID := svc.MustOnlineFakeUser(101, "alice")
+	svc.MustAddMember(chid, aliceUID, "admin")
+	bobUID := svc.MustOnlineFakeUser(102, "bob")
+	svc.MustAddMember(chid, bobUID, "member")
+
+	resp, err := svc.HandleSetMemberRole(&ops.OpContext{ConnID: 101}, &chat.ChatSetMemberRoleRequest{
+		ChannelID: chid.String(),
+		UserID:    bobUID.String(),
+		Role:      "admin",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp.ErrorCode != 0 {
+		t.Fatalf("err: %s", resp.ErrorMessage)
+	}
+
+	mems, _ := chatRepo.ListMembers(context.Background(), chid)
+	for _, m := range mems {
+		if m.UserID == bobUID && m.Role != "admin" {
+			t.Fatalf("bob role=%s want admin", m.Role)
+		}
+	}
+}
+
+func TestHandleSetMemberRole_PermissionDeniedForNonAdmin(t *testing.T) {
+	chatRepo := chattest.NewMock()
+	authRepo := authtest.NewMock()
+	svc := chat.NewTestServiceWithAuth(t, chatRepo, authRepo, []chat.DefaultChannelDef{
+		{Slug: "council", Kind: chat.ChannelKindSystemPredicate},
+	})
+	chid := svc.MustChannelID("council")
+
+	_ = svc.MustOnlineFakeUser(101, "alice") // not admin
+	bobUID := uuid.New()
+	svc.MustAddMember(chid, bobUID, "member")
+
+	resp, err := svc.HandleSetMemberRole(&ops.OpContext{ConnID: 101}, &chat.ChatSetMemberRoleRequest{
+		ChannelID: chid.String(),
+		UserID:    bobUID.String(),
+		Role:      "admin",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp.ErrorCode != uint32(chat.ChatErrorPermissionDenied) {
+		t.Fatalf("got code=%d want PermissionDenied", resp.ErrorCode)
+	}
+}
+
+func TestHandleSetMemberRole_FanoutIncludesTarget(t *testing.T) {
+	chatRepo := chattest.NewMock()
+	authRepo := authtest.NewMock()
+	svc := chat.NewTestServiceWithAuth(t, chatRepo, authRepo, []chat.DefaultChannelDef{
+		{Slug: "council", Kind: chat.ChannelKindSystemPredicate},
+	})
+	chid := svc.MustChannelID("council")
+
+	aliceUID := svc.MustOnlineFakeUser(101, "alice")
+	svc.MustAddMember(chid, aliceUID, "admin")
+	bobUID := svc.MustOnlineFakeUser(102, "bob")
+	svc.MustAddMember(chid, bobUID, "member")
+	carolUID := svc.MustOnlineFakeUser(103, "carol")
+	svc.MustAddMember(chid, carolUID, "member")
+	svc.MustSubscribe(chid, 101)
+	svc.MustSubscribe(chid, 102)
+	svc.MustSubscribe(chid, 103)
+
+	var sent []recordedEvent
+	svc.SetSendEventFn(func(c uint32, ev any) { sent = append(sent, recordedEvent{c, ev}) })
+
+	resp, err := svc.HandleSetMemberRole(&ops.OpContext{ConnID: 101}, &chat.ChatSetMemberRoleRequest{
+		ChannelID: chid.String(),
+		UserID:    bobUID.String(),
+		Role:      "admin",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp.ErrorCode != 0 {
+		t.Fatalf("err: %s", resp.ErrorMessage)
+	}
+
+	// Bob (target, conn 102) MUST receive the event — they need to know
+	// their role changed.
+	gotAlice := false
+	gotBob := false
+	gotCarol := false
+	for _, r := range sent {
+		ev, ok := r.Event.(*chat.ChatMemberRoleChangedEvent)
+		if !ok {
+			continue
+		}
+		if ev.UserID != bobUID.String() {
+			t.Fatalf("event UserID=%s want %s", ev.UserID, bobUID.String())
+		}
+		if ev.Role != "admin" {
+			t.Fatalf("event Role=%s want admin", ev.Role)
+		}
+		switch r.ConnID {
+		case 101:
+			gotAlice = true
+		case 102:
+			gotBob = true
+		case 103:
+			gotCarol = true
+		}
+	}
+	if !gotAlice || !gotBob || !gotCarol {
+		t.Fatalf("expected alice+bob+carol all got events, alice=%v bob=%v carol=%v", gotAlice, gotBob, gotCarol)
+	}
+}

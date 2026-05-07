@@ -359,3 +359,84 @@ func (s *Service) HandleBulkSetMembers(opCtx *ops.OpContext, req *ChatBulkSetMem
 	}
 	return &ChatBulkSetMembersResponse{}, nil
 }
+
+// HandleSetMemberRole changes the role of an existing member. Caller
+// must canModerate. Role must be "member" or "admin".
+//
+// Fans out ChatMemberRoleChangedEvent to all current channel
+// subscribers, INCLUDING the target — they need to know they were
+// promoted/demoted.
+func (s *Service) HandleSetMemberRole(opCtx *ops.OpContext, req *ChatSetMemberRoleRequest) (*ChatSetMemberRoleResponse, error) {
+	if opCtx == nil {
+		return errResp[ChatSetMemberRoleResponse](ChatErrorInternal, "missing op context", 0)
+	}
+	callerID := s.callerFromOpCtx(opCtx)
+	if callerID == uuid.Nil {
+		return errResp[ChatSetMemberRoleResponse](ChatErrorPermissionDenied, "not online", 0)
+	}
+	chID, err := uuid.Parse(req.ChannelID)
+	if err != nil {
+		return errResp[ChatSetMemberRoleResponse](ChatErrorChannelNotFound, "invalid channel_id", 0)
+	}
+	targetID, err := uuid.Parse(req.UserID)
+	if err != nil {
+		return errResp[ChatSetMemberRoleResponse](ChatErrorInternal, "invalid user_id", 0)
+	}
+	if !s.canModerate(callerID, chID) {
+		return errResp[ChatSetMemberRoleResponse](ChatErrorPermissionDenied, "denied", 0)
+	}
+	role := req.Role
+	if role != "member" && role != "admin" {
+		return errResp[ChatSetMemberRoleResponse](ChatErrorInternal, "invalid role (must be 'member' or 'admin')", 0)
+	}
+
+	s.mu.RLock()
+	_, channelExists := s.channels[chID]
+	curRole, isMember := s.membership[chID][targetID]
+	s.mu.RUnlock()
+	if !channelExists {
+		return errResp[ChatSetMemberRoleResponse](ChatErrorChannelNotFound, "channel not found", 0)
+	}
+	if !isMember {
+		return errResp[ChatSetMemberRoleResponse](ChatErrorNotAMember, "target is not a member", 0)
+	}
+	_ = curRole // currently informational; could short-circuit no-op
+
+	// Persist.
+	if err := s.repo.SetMemberRole(context.Background(), chID, targetID, role); err != nil {
+		if err == ErrMemberNotFound {
+			return errResp[ChatSetMemberRoleResponse](ChatErrorNotAMember, "target is not a member", 0)
+		}
+		return errResp[ChatSetMemberRoleResponse](ChatErrorInternal, "set role: "+err.Error(), 0)
+	}
+
+	// In-memory + snapshot fanout targets (all subscribers, INCLUDING target).
+	s.mu.Lock()
+	if s.membership[chID] == nil {
+		s.membership[chID] = map[uuid.UUID]string{}
+	}
+	s.membership[chID][targetID] = role
+	targets := make([]uint32, 0, len(s.subs[chID]))
+	for cid := range s.subs[chID] {
+		targets = append(targets, cid)
+	}
+	send := s.sendEventFn
+	s.mu.Unlock()
+
+	if s.ctx != nil && s.ctx.Logger != nil {
+		s.ctx.Logger.Log(logCat, "set_member_role: channel=%s user=%s role=%s caller=%s",
+			chID, targetID, role, callerID)
+	}
+
+	if send != nil {
+		ev := &ChatMemberRoleChangedEvent{
+			ChannelID: chID.String(),
+			UserID:    targetID.String(),
+			Role:      role,
+		}
+		for _, cid := range targets {
+			send(cid, ev)
+		}
+	}
+	return &ChatSetMemberRoleResponse{}, nil
+}
