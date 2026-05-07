@@ -26,6 +26,21 @@ type serviceListResult struct {
 	Services []serviceKindRow `cmd:"table"`
 }
 
+// ── service cluster (cluster-wide instance roster) ──────────────────────────
+
+type serviceClusterArgs struct{}
+
+type serviceClusterRow struct {
+	Kind       string
+	InstanceID string
+	HostID     string
+	OpCount    int
+}
+
+type serviceClusterResult struct {
+	Instances []serviceClusterRow `cmd:"table"`
+}
+
 // ── service ops (typed ops, optionally filtered) ────────────────────────────
 
 type serviceOpsArgs struct {
@@ -164,8 +179,6 @@ func printStructFields(sb *strings.Builder, t reflect.Type, indent string) {
 // ── registration ─────────────────────────────────────────────────────────────
 
 func registerServiceBuiltins(reg *cmdsys.Registry, coord *Process) error {
-	_ = coord // reserved for future RoutePlayerCell threading
-
 	if err := reg.Register(cmdsys.Command{
 		Verb:        "service.list",
 		Capability:  "service.list",
@@ -217,6 +230,47 @@ func registerServiceBuiltins(reg *cmdsys.Registry, coord *Process) error {
 		},
 	}); err != nil {
 		return fmt.Errorf("service.list: %w", err)
+	}
+
+	if err := reg.Register(cmdsys.Command{
+		Verb:        "service.cluster",
+		Capability:  "service.list",
+		Description: "list every service instance running anywhere in the cluster (coordinator-side roster)",
+		Examples:    []string{"service cluster"},
+		// Reads coord.coordServices directly — no remote dispatch needed
+		// because the coordinator holds the authoritative cluster-wide
+		// view. Non-coordinator processes return an empty result.
+		Route:  cmdsys.RouteLocal,
+		Args:   serviceClusterArgs{},
+		Result: serviceClusterResult{},
+		Handler: func(ctx context.Context, env *cmdsys.Env, raw any) (any, error) {
+			if coord == nil || coord.coordServices == nil {
+				// Not a coordinator process — surface an empty roster
+				// rather than erroring so the command is harmless to
+				// invoke from any pane.
+				return serviceClusterResult{}, nil
+			}
+			rows := make([]serviceClusterRow, 0)
+			for _, k := range coord.coordServices.Kinds() {
+				for _, inst := range coord.coordServices.InstancesOfKind(k) {
+					rows = append(rows, serviceClusterRow{
+						Kind:       inst.Kind,
+						InstanceID: inst.InstanceID,
+						HostID:     inst.HostID,
+						OpCount:    len(inst.OpCodes),
+					})
+				}
+			}
+			sort.Slice(rows, func(i, j int) bool {
+				if rows[i].Kind != rows[j].Kind {
+					return rows[i].Kind < rows[j].Kind
+				}
+				return rows[i].HostID < rows[j].HostID
+			})
+			return serviceClusterResult{Instances: rows}, nil
+		},
+	}); err != nil {
+		return fmt.Errorf("service.cluster: %w", err)
 	}
 
 	if err := reg.Register(cmdsys.Command{
