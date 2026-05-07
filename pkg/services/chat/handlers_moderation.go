@@ -426,6 +426,58 @@ func (s *Service) HandleDeleteMessage(opCtx *ops.OpContext, req *ChatDeleteMessa
 	return &ChatDeleteMessageResponse{}, nil
 }
 
+// HandleBroadcastSystem fans out a system message to a channel as a
+// ChatMessageEvent with SenderUserID="" (the convention for system
+// broadcasts). Requires global chat.admin (NOT canModerate) — channel
+// admins can't broadcast as the system.
+func (s *Service) HandleBroadcastSystem(opCtx *ops.OpContext, req *ChatBroadcastRequest) (*ChatBroadcastResponse, error) {
+	if opCtx == nil {
+		return errResp[ChatBroadcastResponse](ChatErrorInternal, "missing op context", 0)
+	}
+	callerID := s.callerFromOpCtx(opCtx)
+	if callerID == uuid.Nil {
+		return errResp[ChatBroadcastResponse](ChatErrorPermissionDenied, "not online", 0)
+	}
+	if !s.hasGlobalAdmin(callerID) {
+		return errResp[ChatBroadcastResponse](ChatErrorPermissionDenied, "denied", 0)
+	}
+
+	chID, err := uuid.Parse(req.ChannelID)
+	if err != nil {
+		return errResp[ChatBroadcastResponse](ChatErrorChannelNotFound, "invalid channel_id", 0)
+	}
+	s.mu.RLock()
+	_, exists := s.channels[chID]
+	s.mu.RUnlock()
+	if !exists {
+		return errResp[ChatBroadcastResponse](ChatErrorChannelNotFound, "channel not found", 0)
+	}
+	if len(req.Body) > s.opts.MaxMessageLen {
+		return errResp[ChatBroadcastResponse](ChatErrorPayloadTooLarge, "body exceeds max length", 0)
+	}
+
+	msgID, err := uuid.NewV7()
+	if err != nil {
+		return errResp[ChatBroadcastResponse](ChatErrorInternal, "msg_id: "+err.Error(), 0)
+	}
+	s.msgIDIndex.Put(msgID.String(), chID)
+
+	if s.ctx != nil && s.ctx.Logger != nil {
+		s.ctx.Logger.Log(logCat, "broadcast: channel=%s caller=%s body_len=%d",
+			chID, callerID, len(req.Body))
+	}
+
+	s.fanoutEvent(chID, &ChatMessageEvent{
+		MsgID:          msgID.String(),
+		ChannelID:      chID.String(),
+		SenderUserID:   "", // empty = system broadcast
+		SenderUsername: "",
+		Body:           req.Body,
+		SentAtMs:       timeNowMs(),
+	})
+	return &ChatBroadcastResponse{}, nil
+}
+
 // chIDStringForGlobal returns "" when chID is the MuteGlobalChannelID
 // sentinel; otherwise the canonical UUID string. Used to translate the
 // sentinel back to wire-form "empty = global" semantics.

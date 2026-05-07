@@ -840,6 +840,133 @@ func TestHandleDeleteMessage_PermissionDeniedForNonAdmin(t *testing.T) {
 	}
 }
 
+// --- HandleBroadcastSystem ---
+
+func TestHandleBroadcastSystem_HappyPath_FansOutWithEmptySender(t *testing.T) {
+	chatRepo := chattest.NewMock()
+	authRepo := authtest.NewMock()
+	svc := chat.NewTestServiceWithAuth(t, chatRepo, authRepo, []chat.DefaultChannelDef{
+		{Slug: "world", Kind: chat.ChannelKindSystemAll},
+	})
+	chid := svc.MustChannelID("world")
+
+	gmUID := svc.MustOnlineFakeUser(101, "gm")
+	mustGrantChatAdmin(t, authRepo, gmUID)
+	_ = svc.MustOnlineFakeUser(102, "bob")
+	_ = svc.MustOnlineFakeUser(103, "carol")
+
+	var sent []recordedEvent
+	svc.SetSendEventFn(func(c uint32, ev any) { sent = append(sent, recordedEvent{c, ev}) })
+
+	resp, err := svc.HandleBroadcastSystem(&ops.OpContext{ConnID: 101}, &chat.ChatBroadcastRequest{
+		ChannelID: chid.String(),
+		Body:      "Server going down in 5 minutes",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp.ErrorCode != 0 {
+		t.Fatalf("err: %s", resp.ErrorMessage)
+	}
+
+	count := 0
+	for _, r := range sent {
+		ev, ok := r.Event.(*chat.ChatMessageEvent)
+		if !ok {
+			continue
+		}
+		if ev.SenderUserID != "" {
+			t.Fatalf("system broadcast must have empty SenderUserID, got %q", ev.SenderUserID)
+		}
+		if ev.SenderUsername != "" {
+			t.Fatalf("system broadcast must have empty SenderUsername, got %q", ev.SenderUsername)
+		}
+		if ev.Body != "Server going down in 5 minutes" {
+			t.Fatalf("Body=%q", ev.Body)
+		}
+		count++
+	}
+	if count != 3 {
+		t.Fatalf("expected 3 fanout sends, got %d", count)
+	}
+}
+
+func TestHandleBroadcastSystem_PermissionDeniedWithoutChatAdmin(t *testing.T) {
+	chatRepo := chattest.NewMock()
+	authRepo := authtest.NewMock()
+	svc := chat.NewTestServiceWithAuth(t, chatRepo, authRepo, []chat.DefaultChannelDef{
+		{Slug: "world", Kind: chat.ChannelKindSystemAll},
+	})
+	chid := svc.MustChannelID("world")
+
+	// No chat.admin granted.
+	_ = svc.MustOnlineFakeUser(101, "alice")
+
+	resp, err := svc.HandleBroadcastSystem(&ops.OpContext{ConnID: 101}, &chat.ChatBroadcastRequest{
+		ChannelID: chid.String(),
+		Body:      "hi",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp.ErrorCode != uint32(chat.ChatErrorPermissionDenied) {
+		t.Fatalf("got code=%d want PermissionDenied", resp.ErrorCode)
+	}
+}
+
+func TestHandleBroadcastSystem_PermissionDeniedForChannelAdminOnly(t *testing.T) {
+	// Channel-admin role does NOT grant the right to system-broadcast —
+	// only chat.admin does. Verifies the gate is hasGlobalAdmin, not
+	// canModerate.
+	chatRepo := chattest.NewMock()
+	authRepo := authtest.NewMock()
+	svc := chat.NewTestServiceWithAuth(t, chatRepo, authRepo, []chat.DefaultChannelDef{
+		{Slug: "council", Kind: chat.ChannelKindSystemPredicate},
+	})
+	chid := svc.MustChannelID("council")
+
+	caUID := svc.MustOnlineFakeUser(101, "ca")
+	svc.MustAddMember(chid, caUID, "admin") // channel admin only
+
+	resp, err := svc.HandleBroadcastSystem(&ops.OpContext{ConnID: 101}, &chat.ChatBroadcastRequest{
+		ChannelID: chid.String(),
+		Body:      "hi",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp.ErrorCode != uint32(chat.ChatErrorPermissionDenied) {
+		t.Fatalf("channel admin should be denied broadcast: got code=%d", resp.ErrorCode)
+	}
+}
+
+func TestHandleBroadcastSystem_BodyTooLarge(t *testing.T) {
+	chatRepo := chattest.NewMock()
+	authRepo := authtest.NewMock()
+	svc := chat.NewTestServiceWithAuth(t, chatRepo, authRepo, []chat.DefaultChannelDef{
+		{Slug: "world", Kind: chat.ChannelKindSystemAll},
+	})
+	chid := svc.MustChannelID("world")
+
+	gmUID := svc.MustOnlineFakeUser(101, "gm")
+	mustGrantChatAdmin(t, authRepo, gmUID)
+
+	body := make([]byte, 600) // default MaxMessageLen=500
+	for i := range body {
+		body[i] = 'x'
+	}
+	resp, err := svc.HandleBroadcastSystem(&ops.OpContext{ConnID: 101}, &chat.ChatBroadcastRequest{
+		ChannelID: chid.String(),
+		Body:      string(body),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp.ErrorCode != uint32(chat.ChatErrorPayloadTooLarge) {
+		t.Fatalf("got code=%d want PayloadTooLarge", resp.ErrorCode)
+	}
+}
+
 // Ensure that re-reading mutes via the service post-handler, before
 // reaper kicks in, sees the row in the repo.
 func TestHandleMuteUser_PersistsToRepository(t *testing.T) {
