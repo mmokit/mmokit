@@ -384,6 +384,69 @@ func (s *Service) HandleLeave(opCtx *ops.OpContext, req *ChatLeaveRequest) (*Cha
 	return &ChatLeaveResponse{}, nil
 }
 
+// HandleSendDM delivers a DM to recipient_user_id. If recipient is offline,
+// the message is dropped silently per spec §8 (success returned with the
+// allocated msg_id, but no fanout — not even sender echo, since there is
+// no recipient to deliver to).
+//
+// When recipient is online, the DM event is sent to the recipient AND
+// echoed back to the sender (so multi-window clients see their own sends).
+func (s *Service) HandleSendDM(opCtx *ops.OpContext, req *ChatSendDMRequest) (*ChatSendDMResponse, error) {
+	if opCtx == nil {
+		return errResp[ChatSendDMResponse](ChatErrorInternal, "missing op context", 0)
+	}
+	if len(req.Body) > s.opts.MaxMessageLen {
+		return errResp[ChatSendDMResponse](ChatErrorPayloadTooLarge, "body exceeds max length", 0)
+	}
+	recipientID, err := uuid.Parse(req.RecipientUserID)
+	if err != nil {
+		return errResp[ChatSendDMResponse](ChatErrorInternal, "invalid recipient_user_id", 0)
+	}
+
+	// Snapshot sender + recipient state under one RLock.
+	s.mu.RLock()
+	senderID, senderOnline := s.connIndex[opCtx.ConnID]
+	senderConnID := opCtx.ConnID
+	senderUsername := s.usernames[senderID]
+	recipientConnID, recipientOnline := s.online[recipientID]
+	send := s.sendEventFn
+	s.mu.RUnlock()
+
+	if !senderOnline || senderID == uuid.Nil {
+		return errResp[ChatSendDMResponse](ChatErrorPermissionDenied, "not online", 0)
+	}
+
+	msgID, err := uuid.NewV7()
+	if err != nil {
+		return errResp[ChatSendDMResponse](ChatErrorInternal, "msg_id: "+err.Error(), 0)
+	}
+	now := timeNowMs()
+
+	if s.ctx != nil && s.ctx.Logger != nil {
+		s.ctx.Logger.Log(logCat, "dm: sender=%s recipient=%s online=%v body_len=%d",
+			senderID, recipientID, recipientOnline, len(req.Body))
+	}
+
+	// Spec §8: if recipient is offline, drop silently — no fanout (not
+	// even echo). Still allocate + return msg_id for symmetry.
+	if !recipientOnline {
+		return &ChatSendDMResponse{MsgID: msgID.String(), SentAtMs: now}, nil
+	}
+
+	if send != nil {
+		ev := &ChatDMEvent{
+			MsgID:          msgID.String(),
+			SenderUserID:   senderID.String(),
+			SenderUsername: senderUsername,
+			Body:           req.Body,
+			SentAtMs:       now,
+		}
+		send(recipientConnID, ev)
+		send(senderConnID, ev) // echo to sender so multi-window clients see own sends
+	}
+	return &ChatSendDMResponse{MsgID: msgID.String(), SentAtMs: now}, nil
+}
+
 // validateSlugFormat enforces [a-z0-9_-] only. Empty string is rejected
 // at the call site.
 func validateSlugFormat(s string) bool {
