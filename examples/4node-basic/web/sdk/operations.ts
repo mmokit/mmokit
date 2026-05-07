@@ -349,6 +349,1521 @@ export class AuthValidateTokenResponse {
   }
 }
 
+/** Broadcast-eligible event chat.ChatAddMemberRequest (typeID 0xed966a67). */
+export class ChatAddMemberRequest {
+  static readonly typeID = 0xed966a67;
+  channelID: string = "";
+  userID: string = "";
+  role: string = "";
+
+  constructor(init?: Partial<ChatAddMemberRequest>) {
+    if (init) Object.assign(this, init);
+  }
+
+  static decode(buf: Uint8Array): ChatAddMemberRequest {
+    const dv = new DataView(buf.buffer, buf.byteOffset, buf.byteLength);
+    let off = 0;
+    const m = new ChatAddMemberRequest();
+    {
+      const sl = dv.getUint16(off, true); off += 2;
+      m.channelID = new TextDecoder().decode(buf.subarray(off, off + sl)); off += sl;
+    }
+    {
+      const sl = dv.getUint16(off, true); off += 2;
+      m.userID = new TextDecoder().decode(buf.subarray(off, off + sl)); off += sl;
+    }
+    {
+      const sl = dv.getUint16(off, true); off += 2;
+      m.role = new TextDecoder().decode(buf.subarray(off, off + sl)); off += sl;
+    }
+    return m;
+  }
+
+  encode(): Uint8Array {
+    const _channelID = new TextEncoder().encode(this.channelID);
+    const _userID = new TextEncoder().encode(this.userID);
+    const _role = new TextEncoder().encode(this.role);
+    const buf = new Uint8Array(0 + 2 + _channelID.length + 2 + _userID.length + 2 + _role.length);
+    const dv = new DataView(buf.buffer);
+    let off = 0;
+    dv.setUint16(off, _channelID.length, true); off += 2;
+    buf.set(_channelID, off); off += _channelID.length;
+    dv.setUint16(off, _userID.length, true); off += 2;
+    buf.set(_userID, off); off += _userID.length;
+    dv.setUint16(off, _role.length, true); off += 2;
+    buf.set(_role, off); off += _role.length;
+    return buf;
+  }
+}
+
+/** Broadcast-eligible event chat.ChatAddMemberResponse (typeID 0x624c25fd). */
+export class ChatAddMemberResponse {
+  static readonly typeID = 0x624c25fd;
+  errorBlock: { errorCode: number; errorMessage: string; retryAfterMs: number } = { errorCode: 0, errorMessage: "", retryAfterMs: 0 };
+
+  static decode(buf: Uint8Array): ChatAddMemberResponse {
+    const dv = new DataView(buf.buffer, buf.byteOffset, buf.byteLength);
+    let off = 0;
+    const m = new ChatAddMemberResponse();
+    m.errorBlock.errorCode = dv.getUint32(off, true); off += 4;
+    {
+      const sl = dv.getUint16(off, true); off += 2;
+      m.errorBlock.errorMessage = new TextDecoder().decode(buf.subarray(off, off + sl)); off += sl;
+    }
+    m.errorBlock.retryAfterMs = Number(dv.getBigInt64(off, true)); off += 8;
+    return m;
+  }
+}
+
+/** Broadcast-eligible event chat.ChatBanRequest (typeID 0xe8c33a3f). */
+export class ChatBanRequest {
+  static readonly typeID = 0xe8c33a3f;
+  channelID: string = "";
+  userID: string = "";
+  durationMs: number = 0;
+  reason: string = "";
+
+  constructor(init?: Partial<ChatBanRequest>) {
+    if (init) Object.assign(this, init);
+  }
+
+  static decode(buf: Uint8Array): ChatBanRequest {
+    const dv = new DataView(buf.buffer, buf.byteOffset, buf.byteLength);
+    let off = 0;
+    const m = new ChatBanRequest();
+    {
+      const sl = dv.getUint16(off, true); off += 2;
+      m.channelID = new TextDecoder().decode(buf.subarray(off, off + sl)); off += sl;
+    }
+    {
+      const sl = dv.getUint16(off, true); off += 2;
+      m.userID = new TextDecoder().decode(buf.subarray(off, off + sl)); off += sl;
+    }
+    m.durationMs = Number(dv.getBigInt64(off, true)); off += 8;
+    {
+      const sl = dv.getUint16(off, true); off += 2;
+      m.reason = new TextDecoder().decode(buf.subarray(off, off + sl)); off += sl;
+    }
+    return m;
+  }
+
+  encode(): Uint8Array {
+    const _channelID = new TextEncoder().encode(this.channelID);
+    const _userID = new TextEncoder().encode(this.userID);
+    const _reason = new TextEncoder().encode(this.reason);
+    const buf = new Uint8Array(8 + 2 + _channelID.length + 2 + _userID.length + 2 + _reason.length);
+    const dv = new DataView(buf.buffer);
+    let off = 0;
+    dv.setUint16(off, _channelID.length, true); off += 2;
+    buf.set(_channelID, off); off += _channelID.length;
+    dv.setUint16(off, _userID.length, true); off += 2;
+    buf.set(_userID, off); off += _userID.length;
+    dv.setBigInt64(off, BigInt(this.durationMs), true); off += 8;
+    dv.setUint16(off, _reason.length, true); off += 2;
+    buf.set(_reason, off); off += _reason.length;
+    return buf;
+  }
+}
+
+/** Broadcast-eligible event chat.ChatBanResponse (typeID 0x19c553c5). */
+export class ChatBanResponse {
+  static readonly typeID = 0x19c553c5;
+  errorBlock: { errorCode: number; errorMessage: string; retryAfterMs: number } = { errorCode: 0, errorMessage: "", retryAfterMs: 0 };
+
+  static decode(buf: Uint8Array): ChatBanResponse {
+    const dv = new DataView(buf.buffer, buf.byteOffset, buf.byteLength);
+    let off = 0;
+    const m = new ChatBanResponse();
+    m.errorBlock.errorCode = dv.getUint32(off, true); off += 4;
+    {
+      const sl = dv.getUint16(off, true); off += 2;
+      m.errorBlock.errorMessage = new TextDecoder().decode(buf.subarray(off, off + sl)); off += sl;
+    }
+    m.errorBlock.retryAfterMs = Number(dv.getBigInt64(off, true)); off += 8;
+    return m;
+  }
+}
+
+/** Broadcast-eligible event chat.ChatBroadcastRequest (typeID 0x97ec7401). */
+export class ChatBroadcastRequest {
+  static readonly typeID = 0x97ec7401;
+  channelID: string = "";
+  body: string = "";
+
+  constructor(init?: Partial<ChatBroadcastRequest>) {
+    if (init) Object.assign(this, init);
+  }
+
+  static decode(buf: Uint8Array): ChatBroadcastRequest {
+    const dv = new DataView(buf.buffer, buf.byteOffset, buf.byteLength);
+    let off = 0;
+    const m = new ChatBroadcastRequest();
+    {
+      const sl = dv.getUint16(off, true); off += 2;
+      m.channelID = new TextDecoder().decode(buf.subarray(off, off + sl)); off += sl;
+    }
+    {
+      const sl = dv.getUint16(off, true); off += 2;
+      m.body = new TextDecoder().decode(buf.subarray(off, off + sl)); off += sl;
+    }
+    return m;
+  }
+
+  encode(): Uint8Array {
+    const _channelID = new TextEncoder().encode(this.channelID);
+    const _body = new TextEncoder().encode(this.body);
+    const buf = new Uint8Array(0 + 2 + _channelID.length + 2 + _body.length);
+    const dv = new DataView(buf.buffer);
+    let off = 0;
+    dv.setUint16(off, _channelID.length, true); off += 2;
+    buf.set(_channelID, off); off += _channelID.length;
+    dv.setUint16(off, _body.length, true); off += 2;
+    buf.set(_body, off); off += _body.length;
+    return buf;
+  }
+}
+
+/** Broadcast-eligible event chat.ChatBroadcastResponse (typeID 0xb751ee7f). */
+export class ChatBroadcastResponse {
+  static readonly typeID = 0xb751ee7f;
+  errorBlock: { errorCode: number; errorMessage: string; retryAfterMs: number } = { errorCode: 0, errorMessage: "", retryAfterMs: 0 };
+
+  static decode(buf: Uint8Array): ChatBroadcastResponse {
+    const dv = new DataView(buf.buffer, buf.byteOffset, buf.byteLength);
+    let off = 0;
+    const m = new ChatBroadcastResponse();
+    m.errorBlock.errorCode = dv.getUint32(off, true); off += 4;
+    {
+      const sl = dv.getUint16(off, true); off += 2;
+      m.errorBlock.errorMessage = new TextDecoder().decode(buf.subarray(off, off + sl)); off += sl;
+    }
+    m.errorBlock.retryAfterMs = Number(dv.getBigInt64(off, true)); off += 8;
+    return m;
+  }
+}
+
+/** Broadcast-eligible event chat.ChatBulkSetMembersRequest (typeID 0x20a7a9e7). */
+export class ChatBulkSetMembersRequest {
+  static readonly typeID = 0x20a7a9e7;
+  channelID: string = "";
+  userIDs: string[] = [];
+
+  constructor(init?: Partial<ChatBulkSetMembersRequest>) {
+    if (init) Object.assign(this, init);
+  }
+
+  static decode(buf: Uint8Array): ChatBulkSetMembersRequest {
+    const dv = new DataView(buf.buffer, buf.byteOffset, buf.byteLength);
+    let off = 0;
+    const m = new ChatBulkSetMembersRequest();
+    {
+      const sl = dv.getUint16(off, true); off += 2;
+      m.channelID = new TextDecoder().decode(buf.subarray(off, off + sl)); off += sl;
+    }
+    {
+      const sliceLen = dv.getUint16(off, true); off += 2;
+      for (let i = 0; i < sliceLen; i++) {
+        const item: string = "";
+        let v: string = "";
+    {
+      const sl = dv.getUint16(off, true); off += 2;
+              v = new TextDecoder().decode(buf.subarray(off, off + sl)); off += sl;
+    }
+        m.userIDs.push(v);
+      }
+    }
+    return m;
+  }
+
+  encode(): Uint8Array {
+    const _channelID = new TextEncoder().encode(this.channelID);
+    const _userIDs_items: Uint8Array[] = this.userIDs.map(s => new TextEncoder().encode(s));
+    const buf = new Uint8Array(0 + 2 + _channelID.length + 2 + _userIDs_items.reduce((acc, b) => acc + 2 + b.length, 0));
+    const dv = new DataView(buf.buffer);
+    let off = 0;
+    dv.setUint16(off, _channelID.length, true); off += 2;
+    buf.set(_channelID, off); off += _channelID.length;
+    dv.setUint16(off, this.userIDs.length, true); off += 2;
+    for (const _b of _userIDs_items) {
+      dv.setUint16(off, _b.length, true); off += 2;
+      buf.set(_b, off); off += _b.length;
+    }
+    return buf;
+  }
+}
+
+/** Broadcast-eligible event chat.ChatBulkSetMembersResponse (typeID 0x46731c7d). */
+export class ChatBulkSetMembersResponse {
+  static readonly typeID = 0x46731c7d;
+  errorBlock: { errorCode: number; errorMessage: string; retryAfterMs: number } = { errorCode: 0, errorMessage: "", retryAfterMs: 0 };
+
+  static decode(buf: Uint8Array): ChatBulkSetMembersResponse {
+    const dv = new DataView(buf.buffer, buf.byteOffset, buf.byteLength);
+    let off = 0;
+    const m = new ChatBulkSetMembersResponse();
+    m.errorBlock.errorCode = dv.getUint32(off, true); off += 4;
+    {
+      const sl = dv.getUint16(off, true); off += 2;
+      m.errorBlock.errorMessage = new TextDecoder().decode(buf.subarray(off, off + sl)); off += sl;
+    }
+    m.errorBlock.retryAfterMs = Number(dv.getBigInt64(off, true)); off += 8;
+    return m;
+  }
+}
+
+/** Broadcast-eligible event chat.ChatCreateRequest (typeID 0xc2c77aa6). */
+export class ChatCreateRequest {
+  static readonly typeID = 0xc2c77aa6;
+  slug: string = "";
+  password: string = "";
+  topic: string = "";
+
+  constructor(init?: Partial<ChatCreateRequest>) {
+    if (init) Object.assign(this, init);
+  }
+
+  static decode(buf: Uint8Array): ChatCreateRequest {
+    const dv = new DataView(buf.buffer, buf.byteOffset, buf.byteLength);
+    let off = 0;
+    const m = new ChatCreateRequest();
+    {
+      const sl = dv.getUint16(off, true); off += 2;
+      m.slug = new TextDecoder().decode(buf.subarray(off, off + sl)); off += sl;
+    }
+    {
+      const sl = dv.getUint16(off, true); off += 2;
+      m.password = new TextDecoder().decode(buf.subarray(off, off + sl)); off += sl;
+    }
+    {
+      const sl = dv.getUint16(off, true); off += 2;
+      m.topic = new TextDecoder().decode(buf.subarray(off, off + sl)); off += sl;
+    }
+    return m;
+  }
+
+  encode(): Uint8Array {
+    const _slug = new TextEncoder().encode(this.slug);
+    const _password = new TextEncoder().encode(this.password);
+    const _topic = new TextEncoder().encode(this.topic);
+    const buf = new Uint8Array(0 + 2 + _slug.length + 2 + _password.length + 2 + _topic.length);
+    const dv = new DataView(buf.buffer);
+    let off = 0;
+    dv.setUint16(off, _slug.length, true); off += 2;
+    buf.set(_slug, off); off += _slug.length;
+    dv.setUint16(off, _password.length, true); off += 2;
+    buf.set(_password, off); off += _password.length;
+    dv.setUint16(off, _topic.length, true); off += 2;
+    buf.set(_topic, off); off += _topic.length;
+    return buf;
+  }
+}
+
+/** Broadcast-eligible event chat.ChatCreateResponse (typeID 0xdfec79fa). */
+export class ChatCreateResponse {
+  static readonly typeID = 0xdfec79fa;
+  channel: { channelID: string; slug: string; kind: number; topic: string; slowModeSeconds: number; ownerUserID: string; memberCount: number; hasPassword: boolean } = { channelID: "", slug: "", kind: 0, topic: "", slowModeSeconds: 0, ownerUserID: "", memberCount: 0, hasPassword: false };
+  errorBlock: { errorCode: number; errorMessage: string; retryAfterMs: number } = { errorCode: 0, errorMessage: "", retryAfterMs: 0 };
+
+  static decode(buf: Uint8Array): ChatCreateResponse {
+    const dv = new DataView(buf.buffer, buf.byteOffset, buf.byteLength);
+    let off = 0;
+    const m = new ChatCreateResponse();
+    {
+      const sl = dv.getUint16(off, true); off += 2;
+      m.channel.channelID = new TextDecoder().decode(buf.subarray(off, off + sl)); off += sl;
+    }
+    {
+      const sl = dv.getUint16(off, true); off += 2;
+      m.channel.slug = new TextDecoder().decode(buf.subarray(off, off + sl)); off += sl;
+    }
+    m.channel.kind = dv.getUint32(off, true); off += 4;
+    {
+      const sl = dv.getUint16(off, true); off += 2;
+      m.channel.topic = new TextDecoder().decode(buf.subarray(off, off + sl)); off += sl;
+    }
+    m.channel.slowModeSeconds = dv.getInt32(off, true); off += 4;
+    {
+      const sl = dv.getUint16(off, true); off += 2;
+      m.channel.ownerUserID = new TextDecoder().decode(buf.subarray(off, off + sl)); off += sl;
+    }
+    m.channel.memberCount = dv.getInt32(off, true); off += 4;
+    m.channel.hasPassword = dv.getUint8(off) !== 0; off += 1;
+    m.errorBlock.errorCode = dv.getUint32(off, true); off += 4;
+    {
+      const sl = dv.getUint16(off, true); off += 2;
+      m.errorBlock.errorMessage = new TextDecoder().decode(buf.subarray(off, off + sl)); off += sl;
+    }
+    m.errorBlock.retryAfterMs = Number(dv.getBigInt64(off, true)); off += 8;
+    return m;
+  }
+}
+
+/** Broadcast-eligible event chat.ChatDeleteMessageRequest (typeID 0xfaf33f02). */
+export class ChatDeleteMessageRequest {
+  static readonly typeID = 0xfaf33f02;
+  msgID: string = "";
+  channelID: string = "";
+
+  constructor(init?: Partial<ChatDeleteMessageRequest>) {
+    if (init) Object.assign(this, init);
+  }
+
+  static decode(buf: Uint8Array): ChatDeleteMessageRequest {
+    const dv = new DataView(buf.buffer, buf.byteOffset, buf.byteLength);
+    let off = 0;
+    const m = new ChatDeleteMessageRequest();
+    {
+      const sl = dv.getUint16(off, true); off += 2;
+      m.msgID = new TextDecoder().decode(buf.subarray(off, off + sl)); off += sl;
+    }
+    {
+      const sl = dv.getUint16(off, true); off += 2;
+      m.channelID = new TextDecoder().decode(buf.subarray(off, off + sl)); off += sl;
+    }
+    return m;
+  }
+
+  encode(): Uint8Array {
+    const _msgID = new TextEncoder().encode(this.msgID);
+    const _channelID = new TextEncoder().encode(this.channelID);
+    const buf = new Uint8Array(0 + 2 + _msgID.length + 2 + _channelID.length);
+    const dv = new DataView(buf.buffer);
+    let off = 0;
+    dv.setUint16(off, _msgID.length, true); off += 2;
+    buf.set(_msgID, off); off += _msgID.length;
+    dv.setUint16(off, _channelID.length, true); off += 2;
+    buf.set(_channelID, off); off += _channelID.length;
+    return buf;
+  }
+}
+
+/** Broadcast-eligible event chat.ChatDeleteMessageResponse (typeID 0x9fbc146e). */
+export class ChatDeleteMessageResponse {
+  static readonly typeID = 0x9fbc146e;
+  errorBlock: { errorCode: number; errorMessage: string; retryAfterMs: number } = { errorCode: 0, errorMessage: "", retryAfterMs: 0 };
+
+  static decode(buf: Uint8Array): ChatDeleteMessageResponse {
+    const dv = new DataView(buf.buffer, buf.byteOffset, buf.byteLength);
+    let off = 0;
+    const m = new ChatDeleteMessageResponse();
+    m.errorBlock.errorCode = dv.getUint32(off, true); off += 4;
+    {
+      const sl = dv.getUint16(off, true); off += 2;
+      m.errorBlock.errorMessage = new TextDecoder().decode(buf.subarray(off, off + sl)); off += sl;
+    }
+    m.errorBlock.retryAfterMs = Number(dv.getBigInt64(off, true)); off += 8;
+    return m;
+  }
+}
+
+/** Broadcast-eligible event chat.ChatJoinRequest (typeID 0x20e85112). */
+export class ChatJoinRequest {
+  static readonly typeID = 0x20e85112;
+  slug: string = "";
+  password: string = "";
+
+  constructor(init?: Partial<ChatJoinRequest>) {
+    if (init) Object.assign(this, init);
+  }
+
+  static decode(buf: Uint8Array): ChatJoinRequest {
+    const dv = new DataView(buf.buffer, buf.byteOffset, buf.byteLength);
+    let off = 0;
+    const m = new ChatJoinRequest();
+    {
+      const sl = dv.getUint16(off, true); off += 2;
+      m.slug = new TextDecoder().decode(buf.subarray(off, off + sl)); off += sl;
+    }
+    {
+      const sl = dv.getUint16(off, true); off += 2;
+      m.password = new TextDecoder().decode(buf.subarray(off, off + sl)); off += sl;
+    }
+    return m;
+  }
+
+  encode(): Uint8Array {
+    const _slug = new TextEncoder().encode(this.slug);
+    const _password = new TextEncoder().encode(this.password);
+    const buf = new Uint8Array(0 + 2 + _slug.length + 2 + _password.length);
+    const dv = new DataView(buf.buffer);
+    let off = 0;
+    dv.setUint16(off, _slug.length, true); off += 2;
+    buf.set(_slug, off); off += _slug.length;
+    dv.setUint16(off, _password.length, true); off += 2;
+    buf.set(_password, off); off += _password.length;
+    return buf;
+  }
+}
+
+/** Broadcast-eligible event chat.ChatJoinResponse (typeID 0x7a1f2cbe). */
+export class ChatJoinResponse {
+  static readonly typeID = 0x7a1f2cbe;
+  channel: { channelID: string; slug: string; kind: number; topic: string; slowModeSeconds: number; ownerUserID: string; memberCount: number; hasPassword: boolean } = { channelID: "", slug: "", kind: 0, topic: "", slowModeSeconds: 0, ownerUserID: "", memberCount: 0, hasPassword: false };
+  errorBlock: { errorCode: number; errorMessage: string; retryAfterMs: number } = { errorCode: 0, errorMessage: "", retryAfterMs: 0 };
+
+  static decode(buf: Uint8Array): ChatJoinResponse {
+    const dv = new DataView(buf.buffer, buf.byteOffset, buf.byteLength);
+    let off = 0;
+    const m = new ChatJoinResponse();
+    {
+      const sl = dv.getUint16(off, true); off += 2;
+      m.channel.channelID = new TextDecoder().decode(buf.subarray(off, off + sl)); off += sl;
+    }
+    {
+      const sl = dv.getUint16(off, true); off += 2;
+      m.channel.slug = new TextDecoder().decode(buf.subarray(off, off + sl)); off += sl;
+    }
+    m.channel.kind = dv.getUint32(off, true); off += 4;
+    {
+      const sl = dv.getUint16(off, true); off += 2;
+      m.channel.topic = new TextDecoder().decode(buf.subarray(off, off + sl)); off += sl;
+    }
+    m.channel.slowModeSeconds = dv.getInt32(off, true); off += 4;
+    {
+      const sl = dv.getUint16(off, true); off += 2;
+      m.channel.ownerUserID = new TextDecoder().decode(buf.subarray(off, off + sl)); off += sl;
+    }
+    m.channel.memberCount = dv.getInt32(off, true); off += 4;
+    m.channel.hasPassword = dv.getUint8(off) !== 0; off += 1;
+    m.errorBlock.errorCode = dv.getUint32(off, true); off += 4;
+    {
+      const sl = dv.getUint16(off, true); off += 2;
+      m.errorBlock.errorMessage = new TextDecoder().decode(buf.subarray(off, off + sl)); off += sl;
+    }
+    m.errorBlock.retryAfterMs = Number(dv.getBigInt64(off, true)); off += 8;
+    return m;
+  }
+}
+
+/** Broadcast-eligible event chat.ChatKickRequest (typeID 0x4b70da94). */
+export class ChatKickRequest {
+  static readonly typeID = 0x4b70da94;
+  channelID: string = "";
+  userID: string = "";
+  reason: string = "";
+
+  constructor(init?: Partial<ChatKickRequest>) {
+    if (init) Object.assign(this, init);
+  }
+
+  static decode(buf: Uint8Array): ChatKickRequest {
+    const dv = new DataView(buf.buffer, buf.byteOffset, buf.byteLength);
+    let off = 0;
+    const m = new ChatKickRequest();
+    {
+      const sl = dv.getUint16(off, true); off += 2;
+      m.channelID = new TextDecoder().decode(buf.subarray(off, off + sl)); off += sl;
+    }
+    {
+      const sl = dv.getUint16(off, true); off += 2;
+      m.userID = new TextDecoder().decode(buf.subarray(off, off + sl)); off += sl;
+    }
+    {
+      const sl = dv.getUint16(off, true); off += 2;
+      m.reason = new TextDecoder().decode(buf.subarray(off, off + sl)); off += sl;
+    }
+    return m;
+  }
+
+  encode(): Uint8Array {
+    const _channelID = new TextEncoder().encode(this.channelID);
+    const _userID = new TextEncoder().encode(this.userID);
+    const _reason = new TextEncoder().encode(this.reason);
+    const buf = new Uint8Array(0 + 2 + _channelID.length + 2 + _userID.length + 2 + _reason.length);
+    const dv = new DataView(buf.buffer);
+    let off = 0;
+    dv.setUint16(off, _channelID.length, true); off += 2;
+    buf.set(_channelID, off); off += _channelID.length;
+    dv.setUint16(off, _userID.length, true); off += 2;
+    buf.set(_userID, off); off += _userID.length;
+    dv.setUint16(off, _reason.length, true); off += 2;
+    buf.set(_reason, off); off += _reason.length;
+    return buf;
+  }
+}
+
+/** Broadcast-eligible event chat.ChatKickResponse (typeID 0x0a536278). */
+export class ChatKickResponse {
+  static readonly typeID = 0xa536278;
+  errorBlock: { errorCode: number; errorMessage: string; retryAfterMs: number } = { errorCode: 0, errorMessage: "", retryAfterMs: 0 };
+
+  static decode(buf: Uint8Array): ChatKickResponse {
+    const dv = new DataView(buf.buffer, buf.byteOffset, buf.byteLength);
+    let off = 0;
+    const m = new ChatKickResponse();
+    m.errorBlock.errorCode = dv.getUint32(off, true); off += 4;
+    {
+      const sl = dv.getUint16(off, true); off += 2;
+      m.errorBlock.errorMessage = new TextDecoder().decode(buf.subarray(off, off + sl)); off += sl;
+    }
+    m.errorBlock.retryAfterMs = Number(dv.getBigInt64(off, true)); off += 8;
+    return m;
+  }
+}
+
+/** Broadcast-eligible event chat.ChatLeaveRequest (typeID 0x8b7786cd). */
+export class ChatLeaveRequest {
+  static readonly typeID = 0x8b7786cd;
+  channelID: string = "";
+
+  constructor(init?: Partial<ChatLeaveRequest>) {
+    if (init) Object.assign(this, init);
+  }
+
+  static decode(buf: Uint8Array): ChatLeaveRequest {
+    const dv = new DataView(buf.buffer, buf.byteOffset, buf.byteLength);
+    let off = 0;
+    const m = new ChatLeaveRequest();
+    {
+      const sl = dv.getUint16(off, true); off += 2;
+      m.channelID = new TextDecoder().decode(buf.subarray(off, off + sl)); off += sl;
+    }
+    return m;
+  }
+
+  encode(): Uint8Array {
+    const _channelID = new TextEncoder().encode(this.channelID);
+    const buf = new Uint8Array(0 + 2 + _channelID.length);
+    const dv = new DataView(buf.buffer);
+    let off = 0;
+    dv.setUint16(off, _channelID.length, true); off += 2;
+    buf.set(_channelID, off); off += _channelID.length;
+    return buf;
+  }
+}
+
+/** Broadcast-eligible event chat.ChatLeaveResponse (typeID 0x70758233). */
+export class ChatLeaveResponse {
+  static readonly typeID = 0x70758233;
+  errorBlock: { errorCode: number; errorMessage: string; retryAfterMs: number } = { errorCode: 0, errorMessage: "", retryAfterMs: 0 };
+
+  static decode(buf: Uint8Array): ChatLeaveResponse {
+    const dv = new DataView(buf.buffer, buf.byteOffset, buf.byteLength);
+    let off = 0;
+    const m = new ChatLeaveResponse();
+    m.errorBlock.errorCode = dv.getUint32(off, true); off += 4;
+    {
+      const sl = dv.getUint16(off, true); off += 2;
+      m.errorBlock.errorMessage = new TextDecoder().decode(buf.subarray(off, off + sl)); off += sl;
+    }
+    m.errorBlock.retryAfterMs = Number(dv.getBigInt64(off, true)); off += 8;
+    return m;
+  }
+}
+
+/** Broadcast-eligible event chat.ChatListChannelsRequest (typeID 0xd3cabf3a). */
+export class ChatListChannelsRequest {
+  static readonly typeID = 0xd3cabf3a;
+
+  constructor(init?: Partial<ChatListChannelsRequest>) {
+    if (init) Object.assign(this, init);
+  }
+
+  static decode(buf: Uint8Array): ChatListChannelsRequest {
+    const dv = new DataView(buf.buffer, buf.byteOffset, buf.byteLength);
+    let off = 0;
+    const m = new ChatListChannelsRequest();
+    return m;
+  }
+
+  encode(): Uint8Array {
+    const buf = new Uint8Array(0);
+    const dv = new DataView(buf.buffer);
+    let off = 0;
+    return buf;
+  }
+}
+
+/** Broadcast-eligible event chat.ChatListChannelsResponse (typeID 0x88146bd6). */
+export class ChatListChannelsResponse {
+  static readonly typeID = 0x88146bd6;
+  channels: { channelID: string; slug: string; kind: number; topic: string; slowModeSeconds: number; ownerUserID: string; memberCount: number; hasPassword: boolean }[] = [];
+  errorBlock: { errorCode: number; errorMessage: string; retryAfterMs: number } = { errorCode: 0, errorMessage: "", retryAfterMs: 0 };
+
+  static decode(buf: Uint8Array): ChatListChannelsResponse {
+    const dv = new DataView(buf.buffer, buf.byteOffset, buf.byteLength);
+    let off = 0;
+    const m = new ChatListChannelsResponse();
+    {
+      const sliceLen = dv.getUint16(off, true); off += 2;
+      for (let i = 0; i < sliceLen; i++) {
+        const item: { channelID: string; slug: string; kind: number; topic: string; slowModeSeconds: number; ownerUserID: string; memberCount: number; hasPassword: boolean } = { channelID: "", slug: "", kind: 0, topic: "", slowModeSeconds: 0, ownerUserID: "", memberCount: 0, hasPassword: false };
+    {
+      const sl = dv.getUint16(off, true); off += 2;
+              item.channelID = new TextDecoder().decode(buf.subarray(off, off + sl)); off += sl;
+    }
+    {
+      const sl = dv.getUint16(off, true); off += 2;
+              item.slug = new TextDecoder().decode(buf.subarray(off, off + sl)); off += sl;
+    }
+            item.kind = dv.getUint32(off, true); off += 4;
+    {
+      const sl = dv.getUint16(off, true); off += 2;
+              item.topic = new TextDecoder().decode(buf.subarray(off, off + sl)); off += sl;
+    }
+            item.slowModeSeconds = dv.getInt32(off, true); off += 4;
+    {
+      const sl = dv.getUint16(off, true); off += 2;
+              item.ownerUserID = new TextDecoder().decode(buf.subarray(off, off + sl)); off += sl;
+    }
+            item.memberCount = dv.getInt32(off, true); off += 4;
+            item.hasPassword = dv.getUint8(off) !== 0; off += 1;
+        m.channels.push(item);
+      }
+    }
+    m.errorBlock.errorCode = dv.getUint32(off, true); off += 4;
+    {
+      const sl = dv.getUint16(off, true); off += 2;
+      m.errorBlock.errorMessage = new TextDecoder().decode(buf.subarray(off, off + sl)); off += sl;
+    }
+    m.errorBlock.retryAfterMs = Number(dv.getBigInt64(off, true)); off += 8;
+    return m;
+  }
+}
+
+/** Broadcast-eligible event chat.ChatListMembersRequest (typeID 0x86dfc279). */
+export class ChatListMembersRequest {
+  static readonly typeID = 0x86dfc279;
+  channelID: string = "";
+
+  constructor(init?: Partial<ChatListMembersRequest>) {
+    if (init) Object.assign(this, init);
+  }
+
+  static decode(buf: Uint8Array): ChatListMembersRequest {
+    const dv = new DataView(buf.buffer, buf.byteOffset, buf.byteLength);
+    let off = 0;
+    const m = new ChatListMembersRequest();
+    {
+      const sl = dv.getUint16(off, true); off += 2;
+      m.channelID = new TextDecoder().decode(buf.subarray(off, off + sl)); off += sl;
+    }
+    return m;
+  }
+
+  encode(): Uint8Array {
+    const _channelID = new TextEncoder().encode(this.channelID);
+    const buf = new Uint8Array(0 + 2 + _channelID.length);
+    const dv = new DataView(buf.buffer);
+    let off = 0;
+    dv.setUint16(off, _channelID.length, true); off += 2;
+    buf.set(_channelID, off); off += _channelID.length;
+    return buf;
+  }
+}
+
+/** Broadcast-eligible event chat.ChatListMembersResponse (typeID 0x4878d3e7). */
+export class ChatListMembersResponse {
+  static readonly typeID = 0x4878d3e7;
+  members: { userID: string; username: string; role: string; joinedAtMs: number }[] = [];
+  errorBlock: { errorCode: number; errorMessage: string; retryAfterMs: number } = { errorCode: 0, errorMessage: "", retryAfterMs: 0 };
+
+  static decode(buf: Uint8Array): ChatListMembersResponse {
+    const dv = new DataView(buf.buffer, buf.byteOffset, buf.byteLength);
+    let off = 0;
+    const m = new ChatListMembersResponse();
+    {
+      const sliceLen = dv.getUint16(off, true); off += 2;
+      for (let i = 0; i < sliceLen; i++) {
+        const item: { userID: string; username: string; role: string; joinedAtMs: number } = { userID: "", username: "", role: "", joinedAtMs: 0 };
+    {
+      const sl = dv.getUint16(off, true); off += 2;
+              item.userID = new TextDecoder().decode(buf.subarray(off, off + sl)); off += sl;
+    }
+    {
+      const sl = dv.getUint16(off, true); off += 2;
+              item.username = new TextDecoder().decode(buf.subarray(off, off + sl)); off += sl;
+    }
+    {
+      const sl = dv.getUint16(off, true); off += 2;
+              item.role = new TextDecoder().decode(buf.subarray(off, off + sl)); off += sl;
+    }
+            item.joinedAtMs = Number(dv.getBigInt64(off, true)); off += 8;
+        m.members.push(item);
+      }
+    }
+    m.errorBlock.errorCode = dv.getUint32(off, true); off += 4;
+    {
+      const sl = dv.getUint16(off, true); off += 2;
+      m.errorBlock.errorMessage = new TextDecoder().decode(buf.subarray(off, off + sl)); off += sl;
+    }
+    m.errorBlock.retryAfterMs = Number(dv.getBigInt64(off, true)); off += 8;
+    return m;
+  }
+}
+
+/** Broadcast-eligible event chat.ChatMuteUserRequest (typeID 0x6882970c). */
+export class ChatMuteUserRequest {
+  static readonly typeID = 0x6882970c;
+  userID: string = "";
+  channelID: string = "";
+  durationMs: number = 0;
+  reason: string = "";
+
+  constructor(init?: Partial<ChatMuteUserRequest>) {
+    if (init) Object.assign(this, init);
+  }
+
+  static decode(buf: Uint8Array): ChatMuteUserRequest {
+    const dv = new DataView(buf.buffer, buf.byteOffset, buf.byteLength);
+    let off = 0;
+    const m = new ChatMuteUserRequest();
+    {
+      const sl = dv.getUint16(off, true); off += 2;
+      m.userID = new TextDecoder().decode(buf.subarray(off, off + sl)); off += sl;
+    }
+    {
+      const sl = dv.getUint16(off, true); off += 2;
+      m.channelID = new TextDecoder().decode(buf.subarray(off, off + sl)); off += sl;
+    }
+    m.durationMs = Number(dv.getBigInt64(off, true)); off += 8;
+    {
+      const sl = dv.getUint16(off, true); off += 2;
+      m.reason = new TextDecoder().decode(buf.subarray(off, off + sl)); off += sl;
+    }
+    return m;
+  }
+
+  encode(): Uint8Array {
+    const _userID = new TextEncoder().encode(this.userID);
+    const _channelID = new TextEncoder().encode(this.channelID);
+    const _reason = new TextEncoder().encode(this.reason);
+    const buf = new Uint8Array(8 + 2 + _userID.length + 2 + _channelID.length + 2 + _reason.length);
+    const dv = new DataView(buf.buffer);
+    let off = 0;
+    dv.setUint16(off, _userID.length, true); off += 2;
+    buf.set(_userID, off); off += _userID.length;
+    dv.setUint16(off, _channelID.length, true); off += 2;
+    buf.set(_channelID, off); off += _channelID.length;
+    dv.setBigInt64(off, BigInt(this.durationMs), true); off += 8;
+    dv.setUint16(off, _reason.length, true); off += 2;
+    buf.set(_reason, off); off += _reason.length;
+    return buf;
+  }
+}
+
+/** Broadcast-eligible event chat.ChatMuteUserResponse (typeID 0x895e0220). */
+export class ChatMuteUserResponse {
+  static readonly typeID = 0x895e0220;
+  errorBlock: { errorCode: number; errorMessage: string; retryAfterMs: number } = { errorCode: 0, errorMessage: "", retryAfterMs: 0 };
+
+  static decode(buf: Uint8Array): ChatMuteUserResponse {
+    const dv = new DataView(buf.buffer, buf.byteOffset, buf.byteLength);
+    let off = 0;
+    const m = new ChatMuteUserResponse();
+    m.errorBlock.errorCode = dv.getUint32(off, true); off += 4;
+    {
+      const sl = dv.getUint16(off, true); off += 2;
+      m.errorBlock.errorMessage = new TextDecoder().decode(buf.subarray(off, off + sl)); off += sl;
+    }
+    m.errorBlock.retryAfterMs = Number(dv.getBigInt64(off, true)); off += 8;
+    return m;
+  }
+}
+
+/** Broadcast-eligible event chat.ChatRegisterChannelRequest (typeID 0xa1c6e370). */
+export class ChatRegisterChannelRequest {
+  static readonly typeID = 0xa1c6e370;
+  slug: string = "";
+  kind: number = 0;
+  topic: string = "";
+  slowModeSeconds: number = 0;
+  password: string = "";
+
+  constructor(init?: Partial<ChatRegisterChannelRequest>) {
+    if (init) Object.assign(this, init);
+  }
+
+  static decode(buf: Uint8Array): ChatRegisterChannelRequest {
+    const dv = new DataView(buf.buffer, buf.byteOffset, buf.byteLength);
+    let off = 0;
+    const m = new ChatRegisterChannelRequest();
+    {
+      const sl = dv.getUint16(off, true); off += 2;
+      m.slug = new TextDecoder().decode(buf.subarray(off, off + sl)); off += sl;
+    }
+    m.kind = dv.getUint32(off, true); off += 4;
+    {
+      const sl = dv.getUint16(off, true); off += 2;
+      m.topic = new TextDecoder().decode(buf.subarray(off, off + sl)); off += sl;
+    }
+    m.slowModeSeconds = dv.getInt32(off, true); off += 4;
+    {
+      const sl = dv.getUint16(off, true); off += 2;
+      m.password = new TextDecoder().decode(buf.subarray(off, off + sl)); off += sl;
+    }
+    return m;
+  }
+
+  encode(): Uint8Array {
+    const _slug = new TextEncoder().encode(this.slug);
+    const _topic = new TextEncoder().encode(this.topic);
+    const _password = new TextEncoder().encode(this.password);
+    const buf = new Uint8Array(8 + 2 + _slug.length + 2 + _topic.length + 2 + _password.length);
+    const dv = new DataView(buf.buffer);
+    let off = 0;
+    dv.setUint16(off, _slug.length, true); off += 2;
+    buf.set(_slug, off); off += _slug.length;
+    dv.setUint32(off, this.kind, true); off += 4;
+    dv.setUint16(off, _topic.length, true); off += 2;
+    buf.set(_topic, off); off += _topic.length;
+    dv.setInt32(off, this.slowModeSeconds, true); off += 4;
+    dv.setUint16(off, _password.length, true); off += 2;
+    buf.set(_password, off); off += _password.length;
+    return buf;
+  }
+}
+
+/** Broadcast-eligible event chat.ChatRegisterChannelResponse (typeID 0x0aa811bc). */
+export class ChatRegisterChannelResponse {
+  static readonly typeID = 0xaa811bc;
+  channel: { channelID: string; slug: string; kind: number; topic: string; slowModeSeconds: number; ownerUserID: string; memberCount: number; hasPassword: boolean } = { channelID: "", slug: "", kind: 0, topic: "", slowModeSeconds: 0, ownerUserID: "", memberCount: 0, hasPassword: false };
+  errorBlock: { errorCode: number; errorMessage: string; retryAfterMs: number } = { errorCode: 0, errorMessage: "", retryAfterMs: 0 };
+
+  static decode(buf: Uint8Array): ChatRegisterChannelResponse {
+    const dv = new DataView(buf.buffer, buf.byteOffset, buf.byteLength);
+    let off = 0;
+    const m = new ChatRegisterChannelResponse();
+    {
+      const sl = dv.getUint16(off, true); off += 2;
+      m.channel.channelID = new TextDecoder().decode(buf.subarray(off, off + sl)); off += sl;
+    }
+    {
+      const sl = dv.getUint16(off, true); off += 2;
+      m.channel.slug = new TextDecoder().decode(buf.subarray(off, off + sl)); off += sl;
+    }
+    m.channel.kind = dv.getUint32(off, true); off += 4;
+    {
+      const sl = dv.getUint16(off, true); off += 2;
+      m.channel.topic = new TextDecoder().decode(buf.subarray(off, off + sl)); off += sl;
+    }
+    m.channel.slowModeSeconds = dv.getInt32(off, true); off += 4;
+    {
+      const sl = dv.getUint16(off, true); off += 2;
+      m.channel.ownerUserID = new TextDecoder().decode(buf.subarray(off, off + sl)); off += sl;
+    }
+    m.channel.memberCount = dv.getInt32(off, true); off += 4;
+    m.channel.hasPassword = dv.getUint8(off) !== 0; off += 1;
+    m.errorBlock.errorCode = dv.getUint32(off, true); off += 4;
+    {
+      const sl = dv.getUint16(off, true); off += 2;
+      m.errorBlock.errorMessage = new TextDecoder().decode(buf.subarray(off, off + sl)); off += sl;
+    }
+    m.errorBlock.retryAfterMs = Number(dv.getBigInt64(off, true)); off += 8;
+    return m;
+  }
+}
+
+/** Broadcast-eligible event chat.ChatRemoveMemberRequest (typeID 0x99feaeb0). */
+export class ChatRemoveMemberRequest {
+  static readonly typeID = 0x99feaeb0;
+  channelID: string = "";
+  userID: string = "";
+
+  constructor(init?: Partial<ChatRemoveMemberRequest>) {
+    if (init) Object.assign(this, init);
+  }
+
+  static decode(buf: Uint8Array): ChatRemoveMemberRequest {
+    const dv = new DataView(buf.buffer, buf.byteOffset, buf.byteLength);
+    let off = 0;
+    const m = new ChatRemoveMemberRequest();
+    {
+      const sl = dv.getUint16(off, true); off += 2;
+      m.channelID = new TextDecoder().decode(buf.subarray(off, off + sl)); off += sl;
+    }
+    {
+      const sl = dv.getUint16(off, true); off += 2;
+      m.userID = new TextDecoder().decode(buf.subarray(off, off + sl)); off += sl;
+    }
+    return m;
+  }
+
+  encode(): Uint8Array {
+    const _channelID = new TextEncoder().encode(this.channelID);
+    const _userID = new TextEncoder().encode(this.userID);
+    const buf = new Uint8Array(0 + 2 + _channelID.length + 2 + _userID.length);
+    const dv = new DataView(buf.buffer);
+    let off = 0;
+    dv.setUint16(off, _channelID.length, true); off += 2;
+    buf.set(_channelID, off); off += _channelID.length;
+    dv.setUint16(off, _userID.length, true); off += 2;
+    buf.set(_userID, off); off += _userID.length;
+    return buf;
+  }
+}
+
+/** Broadcast-eligible event chat.ChatRemoveMemberResponse (typeID 0x8cf6a6fc). */
+export class ChatRemoveMemberResponse {
+  static readonly typeID = 0x8cf6a6fc;
+  errorBlock: { errorCode: number; errorMessage: string; retryAfterMs: number } = { errorCode: 0, errorMessage: "", retryAfterMs: 0 };
+
+  static decode(buf: Uint8Array): ChatRemoveMemberResponse {
+    const dv = new DataView(buf.buffer, buf.byteOffset, buf.byteLength);
+    let off = 0;
+    const m = new ChatRemoveMemberResponse();
+    m.errorBlock.errorCode = dv.getUint32(off, true); off += 4;
+    {
+      const sl = dv.getUint16(off, true); off += 2;
+      m.errorBlock.errorMessage = new TextDecoder().decode(buf.subarray(off, off + sl)); off += sl;
+    }
+    m.errorBlock.retryAfterMs = Number(dv.getBigInt64(off, true)); off += 8;
+    return m;
+  }
+}
+
+/** Broadcast-eligible event chat.ChatRenameChannelRequest (typeID 0x8078b9f3). */
+export class ChatRenameChannelRequest {
+  static readonly typeID = 0x8078b9f3;
+  channelID: string = "";
+  newSlug: string = "";
+
+  constructor(init?: Partial<ChatRenameChannelRequest>) {
+    if (init) Object.assign(this, init);
+  }
+
+  static decode(buf: Uint8Array): ChatRenameChannelRequest {
+    const dv = new DataView(buf.buffer, buf.byteOffset, buf.byteLength);
+    let off = 0;
+    const m = new ChatRenameChannelRequest();
+    {
+      const sl = dv.getUint16(off, true); off += 2;
+      m.channelID = new TextDecoder().decode(buf.subarray(off, off + sl)); off += sl;
+    }
+    {
+      const sl = dv.getUint16(off, true); off += 2;
+      m.newSlug = new TextDecoder().decode(buf.subarray(off, off + sl)); off += sl;
+    }
+    return m;
+  }
+
+  encode(): Uint8Array {
+    const _channelID = new TextEncoder().encode(this.channelID);
+    const _newSlug = new TextEncoder().encode(this.newSlug);
+    const buf = new Uint8Array(0 + 2 + _channelID.length + 2 + _newSlug.length);
+    const dv = new DataView(buf.buffer);
+    let off = 0;
+    dv.setUint16(off, _channelID.length, true); off += 2;
+    buf.set(_channelID, off); off += _channelID.length;
+    dv.setUint16(off, _newSlug.length, true); off += 2;
+    buf.set(_newSlug, off); off += _newSlug.length;
+    return buf;
+  }
+}
+
+/** Broadcast-eligible event chat.ChatRenameChannelResponse (typeID 0xc0cea621). */
+export class ChatRenameChannelResponse {
+  static readonly typeID = 0xc0cea621;
+  channel: { channelID: string; slug: string; kind: number; topic: string; slowModeSeconds: number; ownerUserID: string; memberCount: number; hasPassword: boolean } = { channelID: "", slug: "", kind: 0, topic: "", slowModeSeconds: 0, ownerUserID: "", memberCount: 0, hasPassword: false };
+  errorBlock: { errorCode: number; errorMessage: string; retryAfterMs: number } = { errorCode: 0, errorMessage: "", retryAfterMs: 0 };
+
+  static decode(buf: Uint8Array): ChatRenameChannelResponse {
+    const dv = new DataView(buf.buffer, buf.byteOffset, buf.byteLength);
+    let off = 0;
+    const m = new ChatRenameChannelResponse();
+    {
+      const sl = dv.getUint16(off, true); off += 2;
+      m.channel.channelID = new TextDecoder().decode(buf.subarray(off, off + sl)); off += sl;
+    }
+    {
+      const sl = dv.getUint16(off, true); off += 2;
+      m.channel.slug = new TextDecoder().decode(buf.subarray(off, off + sl)); off += sl;
+    }
+    m.channel.kind = dv.getUint32(off, true); off += 4;
+    {
+      const sl = dv.getUint16(off, true); off += 2;
+      m.channel.topic = new TextDecoder().decode(buf.subarray(off, off + sl)); off += sl;
+    }
+    m.channel.slowModeSeconds = dv.getInt32(off, true); off += 4;
+    {
+      const sl = dv.getUint16(off, true); off += 2;
+      m.channel.ownerUserID = new TextDecoder().decode(buf.subarray(off, off + sl)); off += sl;
+    }
+    m.channel.memberCount = dv.getInt32(off, true); off += 4;
+    m.channel.hasPassword = dv.getUint8(off) !== 0; off += 1;
+    m.errorBlock.errorCode = dv.getUint32(off, true); off += 4;
+    {
+      const sl = dv.getUint16(off, true); off += 2;
+      m.errorBlock.errorMessage = new TextDecoder().decode(buf.subarray(off, off + sl)); off += sl;
+    }
+    m.errorBlock.retryAfterMs = Number(dv.getBigInt64(off, true)); off += 8;
+    return m;
+  }
+}
+
+/** Broadcast-eligible event chat.ChatSendDMRequest (typeID 0xebded159). */
+export class ChatSendDMRequest {
+  static readonly typeID = 0xebded159;
+  recipientUserID: string = "";
+  body: string = "";
+
+  constructor(init?: Partial<ChatSendDMRequest>) {
+    if (init) Object.assign(this, init);
+  }
+
+  static decode(buf: Uint8Array): ChatSendDMRequest {
+    const dv = new DataView(buf.buffer, buf.byteOffset, buf.byteLength);
+    let off = 0;
+    const m = new ChatSendDMRequest();
+    {
+      const sl = dv.getUint16(off, true); off += 2;
+      m.recipientUserID = new TextDecoder().decode(buf.subarray(off, off + sl)); off += sl;
+    }
+    {
+      const sl = dv.getUint16(off, true); off += 2;
+      m.body = new TextDecoder().decode(buf.subarray(off, off + sl)); off += sl;
+    }
+    return m;
+  }
+
+  encode(): Uint8Array {
+    const _recipientUserID = new TextEncoder().encode(this.recipientUserID);
+    const _body = new TextEncoder().encode(this.body);
+    const buf = new Uint8Array(0 + 2 + _recipientUserID.length + 2 + _body.length);
+    const dv = new DataView(buf.buffer);
+    let off = 0;
+    dv.setUint16(off, _recipientUserID.length, true); off += 2;
+    buf.set(_recipientUserID, off); off += _recipientUserID.length;
+    dv.setUint16(off, _body.length, true); off += 2;
+    buf.set(_body, off); off += _body.length;
+    return buf;
+  }
+}
+
+/** Broadcast-eligible event chat.ChatSendDMResponse (typeID 0x63833a47). */
+export class ChatSendDMResponse {
+  static readonly typeID = 0x63833a47;
+  msgID: string = "";
+  sentAtMs: number = 0;
+  errorBlock: { errorCode: number; errorMessage: string; retryAfterMs: number } = { errorCode: 0, errorMessage: "", retryAfterMs: 0 };
+
+  static decode(buf: Uint8Array): ChatSendDMResponse {
+    const dv = new DataView(buf.buffer, buf.byteOffset, buf.byteLength);
+    let off = 0;
+    const m = new ChatSendDMResponse();
+    {
+      const sl = dv.getUint16(off, true); off += 2;
+      m.msgID = new TextDecoder().decode(buf.subarray(off, off + sl)); off += sl;
+    }
+    m.sentAtMs = Number(dv.getBigInt64(off, true)); off += 8;
+    m.errorBlock.errorCode = dv.getUint32(off, true); off += 4;
+    {
+      const sl = dv.getUint16(off, true); off += 2;
+      m.errorBlock.errorMessage = new TextDecoder().decode(buf.subarray(off, off + sl)); off += sl;
+    }
+    m.errorBlock.retryAfterMs = Number(dv.getBigInt64(off, true)); off += 8;
+    return m;
+  }
+}
+
+/** Broadcast-eligible event chat.ChatSendRequest (typeID 0x01951acc). */
+export class ChatSendRequest {
+  static readonly typeID = 0x1951acc;
+  channelID: string = "";
+  body: string = "";
+
+  constructor(init?: Partial<ChatSendRequest>) {
+    if (init) Object.assign(this, init);
+  }
+
+  static decode(buf: Uint8Array): ChatSendRequest {
+    const dv = new DataView(buf.buffer, buf.byteOffset, buf.byteLength);
+    let off = 0;
+    const m = new ChatSendRequest();
+    {
+      const sl = dv.getUint16(off, true); off += 2;
+      m.channelID = new TextDecoder().decode(buf.subarray(off, off + sl)); off += sl;
+    }
+    {
+      const sl = dv.getUint16(off, true); off += 2;
+      m.body = new TextDecoder().decode(buf.subarray(off, off + sl)); off += sl;
+    }
+    return m;
+  }
+
+  encode(): Uint8Array {
+    const _channelID = new TextEncoder().encode(this.channelID);
+    const _body = new TextEncoder().encode(this.body);
+    const buf = new Uint8Array(0 + 2 + _channelID.length + 2 + _body.length);
+    const dv = new DataView(buf.buffer);
+    let off = 0;
+    dv.setUint16(off, _channelID.length, true); off += 2;
+    buf.set(_channelID, off); off += _channelID.length;
+    dv.setUint16(off, _body.length, true); off += 2;
+    buf.set(_body, off); off += _body.length;
+    return buf;
+  }
+}
+
+/** Broadcast-eligible event chat.ChatSendResponse (typeID 0xf03c19e0). */
+export class ChatSendResponse {
+  static readonly typeID = 0xf03c19e0;
+  msgID: string = "";
+  sentAtMs: number = 0;
+  errorBlock: { errorCode: number; errorMessage: string; retryAfterMs: number } = { errorCode: 0, errorMessage: "", retryAfterMs: 0 };
+
+  static decode(buf: Uint8Array): ChatSendResponse {
+    const dv = new DataView(buf.buffer, buf.byteOffset, buf.byteLength);
+    let off = 0;
+    const m = new ChatSendResponse();
+    {
+      const sl = dv.getUint16(off, true); off += 2;
+      m.msgID = new TextDecoder().decode(buf.subarray(off, off + sl)); off += sl;
+    }
+    m.sentAtMs = Number(dv.getBigInt64(off, true)); off += 8;
+    m.errorBlock.errorCode = dv.getUint32(off, true); off += 4;
+    {
+      const sl = dv.getUint16(off, true); off += 2;
+      m.errorBlock.errorMessage = new TextDecoder().decode(buf.subarray(off, off + sl)); off += sl;
+    }
+    m.errorBlock.retryAfterMs = Number(dv.getBigInt64(off, true)); off += 8;
+    return m;
+  }
+}
+
+/** Broadcast-eligible event chat.ChatSetMemberRoleRequest (typeID 0x19c8ecbe). */
+export class ChatSetMemberRoleRequest {
+  static readonly typeID = 0x19c8ecbe;
+  channelID: string = "";
+  userID: string = "";
+  role: string = "";
+
+  constructor(init?: Partial<ChatSetMemberRoleRequest>) {
+    if (init) Object.assign(this, init);
+  }
+
+  static decode(buf: Uint8Array): ChatSetMemberRoleRequest {
+    const dv = new DataView(buf.buffer, buf.byteOffset, buf.byteLength);
+    let off = 0;
+    const m = new ChatSetMemberRoleRequest();
+    {
+      const sl = dv.getUint16(off, true); off += 2;
+      m.channelID = new TextDecoder().decode(buf.subarray(off, off + sl)); off += sl;
+    }
+    {
+      const sl = dv.getUint16(off, true); off += 2;
+      m.userID = new TextDecoder().decode(buf.subarray(off, off + sl)); off += sl;
+    }
+    {
+      const sl = dv.getUint16(off, true); off += 2;
+      m.role = new TextDecoder().decode(buf.subarray(off, off + sl)); off += sl;
+    }
+    return m;
+  }
+
+  encode(): Uint8Array {
+    const _channelID = new TextEncoder().encode(this.channelID);
+    const _userID = new TextEncoder().encode(this.userID);
+    const _role = new TextEncoder().encode(this.role);
+    const buf = new Uint8Array(0 + 2 + _channelID.length + 2 + _userID.length + 2 + _role.length);
+    const dv = new DataView(buf.buffer);
+    let off = 0;
+    dv.setUint16(off, _channelID.length, true); off += 2;
+    buf.set(_channelID, off); off += _channelID.length;
+    dv.setUint16(off, _userID.length, true); off += 2;
+    buf.set(_userID, off); off += _userID.length;
+    dv.setUint16(off, _role.length, true); off += 2;
+    buf.set(_role, off); off += _role.length;
+    return buf;
+  }
+}
+
+/** Broadcast-eligible event chat.ChatSetMemberRoleResponse (typeID 0xd9276682). */
+export class ChatSetMemberRoleResponse {
+  static readonly typeID = 0xd9276682;
+  errorBlock: { errorCode: number; errorMessage: string; retryAfterMs: number } = { errorCode: 0, errorMessage: "", retryAfterMs: 0 };
+
+  static decode(buf: Uint8Array): ChatSetMemberRoleResponse {
+    const dv = new DataView(buf.buffer, buf.byteOffset, buf.byteLength);
+    let off = 0;
+    const m = new ChatSetMemberRoleResponse();
+    m.errorBlock.errorCode = dv.getUint32(off, true); off += 4;
+    {
+      const sl = dv.getUint16(off, true); off += 2;
+      m.errorBlock.errorMessage = new TextDecoder().decode(buf.subarray(off, off + sl)); off += sl;
+    }
+    m.errorBlock.retryAfterMs = Number(dv.getBigInt64(off, true)); off += 8;
+    return m;
+  }
+}
+
+/** Broadcast-eligible event chat.ChatSetSlowModeRequest (typeID 0xc9113c22). */
+export class ChatSetSlowModeRequest {
+  static readonly typeID = 0xc9113c22;
+  channelID: string = "";
+  seconds: number = 0;
+
+  constructor(init?: Partial<ChatSetSlowModeRequest>) {
+    if (init) Object.assign(this, init);
+  }
+
+  static decode(buf: Uint8Array): ChatSetSlowModeRequest {
+    const dv = new DataView(buf.buffer, buf.byteOffset, buf.byteLength);
+    let off = 0;
+    const m = new ChatSetSlowModeRequest();
+    {
+      const sl = dv.getUint16(off, true); off += 2;
+      m.channelID = new TextDecoder().decode(buf.subarray(off, off + sl)); off += sl;
+    }
+    m.seconds = dv.getInt32(off, true); off += 4;
+    return m;
+  }
+
+  encode(): Uint8Array {
+    const _channelID = new TextEncoder().encode(this.channelID);
+    const buf = new Uint8Array(4 + 2 + _channelID.length);
+    const dv = new DataView(buf.buffer);
+    let off = 0;
+    dv.setUint16(off, _channelID.length, true); off += 2;
+    buf.set(_channelID, off); off += _channelID.length;
+    dv.setInt32(off, this.seconds, true); off += 4;
+    return buf;
+  }
+}
+
+/** Broadcast-eligible event chat.ChatSetSlowModeResponse (typeID 0xccb3ab0e). */
+export class ChatSetSlowModeResponse {
+  static readonly typeID = 0xccb3ab0e;
+  errorBlock: { errorCode: number; errorMessage: string; retryAfterMs: number } = { errorCode: 0, errorMessage: "", retryAfterMs: 0 };
+
+  static decode(buf: Uint8Array): ChatSetSlowModeResponse {
+    const dv = new DataView(buf.buffer, buf.byteOffset, buf.byteLength);
+    let off = 0;
+    const m = new ChatSetSlowModeResponse();
+    m.errorBlock.errorCode = dv.getUint32(off, true); off += 4;
+    {
+      const sl = dv.getUint16(off, true); off += 2;
+      m.errorBlock.errorMessage = new TextDecoder().decode(buf.subarray(off, off + sl)); off += sl;
+    }
+    m.errorBlock.retryAfterMs = Number(dv.getBigInt64(off, true)); off += 8;
+    return m;
+  }
+}
+
+/** Broadcast-eligible event chat.ChatSetTopicRequest (typeID 0x7438ef37). */
+export class ChatSetTopicRequest {
+  static readonly typeID = 0x7438ef37;
+  channelID: string = "";
+  topic: string = "";
+
+  constructor(init?: Partial<ChatSetTopicRequest>) {
+    if (init) Object.assign(this, init);
+  }
+
+  static decode(buf: Uint8Array): ChatSetTopicRequest {
+    const dv = new DataView(buf.buffer, buf.byteOffset, buf.byteLength);
+    let off = 0;
+    const m = new ChatSetTopicRequest();
+    {
+      const sl = dv.getUint16(off, true); off += 2;
+      m.channelID = new TextDecoder().decode(buf.subarray(off, off + sl)); off += sl;
+    }
+    {
+      const sl = dv.getUint16(off, true); off += 2;
+      m.topic = new TextDecoder().decode(buf.subarray(off, off + sl)); off += sl;
+    }
+    return m;
+  }
+
+  encode(): Uint8Array {
+    const _channelID = new TextEncoder().encode(this.channelID);
+    const _topic = new TextEncoder().encode(this.topic);
+    const buf = new Uint8Array(0 + 2 + _channelID.length + 2 + _topic.length);
+    const dv = new DataView(buf.buffer);
+    let off = 0;
+    dv.setUint16(off, _channelID.length, true); off += 2;
+    buf.set(_channelID, off); off += _channelID.length;
+    dv.setUint16(off, _topic.length, true); off += 2;
+    buf.set(_topic, off); off += _topic.length;
+    return buf;
+  }
+}
+
+/** Broadcast-eligible event chat.ChatSetTopicResponse (typeID 0x54e45f8d). */
+export class ChatSetTopicResponse {
+  static readonly typeID = 0x54e45f8d;
+  errorBlock: { errorCode: number; errorMessage: string; retryAfterMs: number } = { errorCode: 0, errorMessage: "", retryAfterMs: 0 };
+
+  static decode(buf: Uint8Array): ChatSetTopicResponse {
+    const dv = new DataView(buf.buffer, buf.byteOffset, buf.byteLength);
+    let off = 0;
+    const m = new ChatSetTopicResponse();
+    m.errorBlock.errorCode = dv.getUint32(off, true); off += 4;
+    {
+      const sl = dv.getUint16(off, true); off += 2;
+      m.errorBlock.errorMessage = new TextDecoder().decode(buf.subarray(off, off + sl)); off += sl;
+    }
+    m.errorBlock.retryAfterMs = Number(dv.getBigInt64(off, true)); off += 8;
+    return m;
+  }
+}
+
+/** Broadcast-eligible event chat.ChatUnbanRequest (typeID 0xe704b3b4). */
+export class ChatUnbanRequest {
+  static readonly typeID = 0xe704b3b4;
+  channelID: string = "";
+  userID: string = "";
+
+  constructor(init?: Partial<ChatUnbanRequest>) {
+    if (init) Object.assign(this, init);
+  }
+
+  static decode(buf: Uint8Array): ChatUnbanRequest {
+    const dv = new DataView(buf.buffer, buf.byteOffset, buf.byteLength);
+    let off = 0;
+    const m = new ChatUnbanRequest();
+    {
+      const sl = dv.getUint16(off, true); off += 2;
+      m.channelID = new TextDecoder().decode(buf.subarray(off, off + sl)); off += sl;
+    }
+    {
+      const sl = dv.getUint16(off, true); off += 2;
+      m.userID = new TextDecoder().decode(buf.subarray(off, off + sl)); off += sl;
+    }
+    return m;
+  }
+
+  encode(): Uint8Array {
+    const _channelID = new TextEncoder().encode(this.channelID);
+    const _userID = new TextEncoder().encode(this.userID);
+    const buf = new Uint8Array(0 + 2 + _channelID.length + 2 + _userID.length);
+    const dv = new DataView(buf.buffer);
+    let off = 0;
+    dv.setUint16(off, _channelID.length, true); off += 2;
+    buf.set(_channelID, off); off += _channelID.length;
+    dv.setUint16(off, _userID.length, true); off += 2;
+    buf.set(_userID, off); off += _userID.length;
+    return buf;
+  }
+}
+
+/** Broadcast-eligible event chat.ChatUnbanResponse (typeID 0x59091918). */
+export class ChatUnbanResponse {
+  static readonly typeID = 0x59091918;
+  errorBlock: { errorCode: number; errorMessage: string; retryAfterMs: number } = { errorCode: 0, errorMessage: "", retryAfterMs: 0 };
+
+  static decode(buf: Uint8Array): ChatUnbanResponse {
+    const dv = new DataView(buf.buffer, buf.byteOffset, buf.byteLength);
+    let off = 0;
+    const m = new ChatUnbanResponse();
+    m.errorBlock.errorCode = dv.getUint32(off, true); off += 4;
+    {
+      const sl = dv.getUint16(off, true); off += 2;
+      m.errorBlock.errorMessage = new TextDecoder().decode(buf.subarray(off, off + sl)); off += sl;
+    }
+    m.errorBlock.retryAfterMs = Number(dv.getBigInt64(off, true)); off += 8;
+    return m;
+  }
+}
+
+/** Broadcast-eligible event chat.ChatUnmuteUserRequest (typeID 0xb9d7eaad). */
+export class ChatUnmuteUserRequest {
+  static readonly typeID = 0xb9d7eaad;
+  userID: string = "";
+  channelID: string = "";
+
+  constructor(init?: Partial<ChatUnmuteUserRequest>) {
+    if (init) Object.assign(this, init);
+  }
+
+  static decode(buf: Uint8Array): ChatUnmuteUserRequest {
+    const dv = new DataView(buf.buffer, buf.byteOffset, buf.byteLength);
+    let off = 0;
+    const m = new ChatUnmuteUserRequest();
+    {
+      const sl = dv.getUint16(off, true); off += 2;
+      m.userID = new TextDecoder().decode(buf.subarray(off, off + sl)); off += sl;
+    }
+    {
+      const sl = dv.getUint16(off, true); off += 2;
+      m.channelID = new TextDecoder().decode(buf.subarray(off, off + sl)); off += sl;
+    }
+    return m;
+  }
+
+  encode(): Uint8Array {
+    const _userID = new TextEncoder().encode(this.userID);
+    const _channelID = new TextEncoder().encode(this.channelID);
+    const buf = new Uint8Array(0 + 2 + _userID.length + 2 + _channelID.length);
+    const dv = new DataView(buf.buffer);
+    let off = 0;
+    dv.setUint16(off, _userID.length, true); off += 2;
+    buf.set(_userID, off); off += _userID.length;
+    dv.setUint16(off, _channelID.length, true); off += 2;
+    buf.set(_channelID, off); off += _channelID.length;
+    return buf;
+  }
+}
+
+/** Broadcast-eligible event chat.ChatUnmuteUserResponse (typeID 0x36fee793). */
+export class ChatUnmuteUserResponse {
+  static readonly typeID = 0x36fee793;
+  errorBlock: { errorCode: number; errorMessage: string; retryAfterMs: number } = { errorCode: 0, errorMessage: "", retryAfterMs: 0 };
+
+  static decode(buf: Uint8Array): ChatUnmuteUserResponse {
+    const dv = new DataView(buf.buffer, buf.byteOffset, buf.byteLength);
+    let off = 0;
+    const m = new ChatUnmuteUserResponse();
+    m.errorBlock.errorCode = dv.getUint32(off, true); off += 4;
+    {
+      const sl = dv.getUint16(off, true); off += 2;
+      m.errorBlock.errorMessage = new TextDecoder().decode(buf.subarray(off, off + sl)); off += sl;
+    }
+    m.errorBlock.retryAfterMs = Number(dv.getBigInt64(off, true)); off += 8;
+    return m;
+  }
+}
+
+/** Broadcast-eligible event chat.ChatUnregisterChannelRequest (typeID 0x1eff9c73). */
+export class ChatUnregisterChannelRequest {
+  static readonly typeID = 0x1eff9c73;
+  channelID: string = "";
+
+  constructor(init?: Partial<ChatUnregisterChannelRequest>) {
+    if (init) Object.assign(this, init);
+  }
+
+  static decode(buf: Uint8Array): ChatUnregisterChannelRequest {
+    const dv = new DataView(buf.buffer, buf.byteOffset, buf.byteLength);
+    let off = 0;
+    const m = new ChatUnregisterChannelRequest();
+    {
+      const sl = dv.getUint16(off, true); off += 2;
+      m.channelID = new TextDecoder().decode(buf.subarray(off, off + sl)); off += sl;
+    }
+    return m;
+  }
+
+  encode(): Uint8Array {
+    const _channelID = new TextEncoder().encode(this.channelID);
+    const buf = new Uint8Array(0 + 2 + _channelID.length);
+    const dv = new DataView(buf.buffer);
+    let off = 0;
+    dv.setUint16(off, _channelID.length, true); off += 2;
+    buf.set(_channelID, off); off += _channelID.length;
+    return buf;
+  }
+}
+
+/** Broadcast-eligible event chat.ChatUnregisterChannelResponse (typeID 0xcf2535a1). */
+export class ChatUnregisterChannelResponse {
+  static readonly typeID = 0xcf2535a1;
+  errorBlock: { errorCode: number; errorMessage: string; retryAfterMs: number } = { errorCode: 0, errorMessage: "", retryAfterMs: 0 };
+
+  static decode(buf: Uint8Array): ChatUnregisterChannelResponse {
+    const dv = new DataView(buf.buffer, buf.byteOffset, buf.byteLength);
+    let off = 0;
+    const m = new ChatUnregisterChannelResponse();
+    m.errorBlock.errorCode = dv.getUint32(off, true); off += 4;
+    {
+      const sl = dv.getUint16(off, true); off += 2;
+      m.errorBlock.errorMessage = new TextDecoder().decode(buf.subarray(off, off + sl)); off += sl;
+    }
+    m.errorBlock.retryAfterMs = Number(dv.getBigInt64(off, true)); off += 8;
+    return m;
+  }
+}
+
 /** Broadcast-eligible event echo.EchoFetchRequest (typeID 0x946ec7be). */
 export class EchoFetchRequest {
   static readonly typeID = 0x946ec7be;

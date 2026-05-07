@@ -2,8 +2,8 @@
 
 import { Transport } from "./transport.js";
 import { BasicDeltaDecoder } from "./delta-decoder.js";
-import { TypedDispatcher, CellChange, DebugInfo, OperationError, PlayerEntityAssigned, Pong, ServerConfig, WorldDelta } from "./broadcasts.js";
-import { AuthChangePasswordRequest, AuthChangePasswordResponse, AuthLoginRequest, AuthLoginResponse, AuthLogoutRequest, AuthLogoutResponse, AuthRegisterRequest, AuthRegisterResponse, AuthValidateTokenRequest, AuthValidateTokenResponse, EchoFetchRequest, EchoFetchResponse, EchoPersistRequest, EchoPersistResponse, EchoPingRequest, EchoPingResponse } from "./operations.js";
+import { TypedDispatcher, ChatBannedEvent, ChatChannelGoneEvent, ChatChannelUpdatedEvent, ChatChannelsHydratedEvent, ChatDMEvent, ChatKickedEvent, ChatMemberJoinedEvent, ChatMemberLeftEvent, ChatMemberRoleChangedEvent, ChatMessageDeletedEvent, ChatMessageEvent, ChatMutedEvent, ChatRateLimitedEvent, ChatUnmutedEvent, CellChange, DebugInfo, OperationError, PlayerEntityAssigned, Pong, ServerConfig, WorldDelta } from "./broadcasts.js";
+import { AuthChangePasswordRequest, AuthChangePasswordResponse, AuthLoginRequest, AuthLoginResponse, AuthLogoutRequest, AuthLogoutResponse, AuthRegisterRequest, AuthRegisterResponse, AuthValidateTokenRequest, AuthValidateTokenResponse, ChatAddMemberRequest, ChatAddMemberResponse, ChatBanRequest, ChatBanResponse, ChatBroadcastRequest, ChatBroadcastResponse, ChatBulkSetMembersRequest, ChatBulkSetMembersResponse, ChatCreateRequest, ChatCreateResponse, ChatDeleteMessageRequest, ChatDeleteMessageResponse, ChatJoinRequest, ChatJoinResponse, ChatKickRequest, ChatKickResponse, ChatLeaveRequest, ChatLeaveResponse, ChatListChannelsRequest, ChatListChannelsResponse, ChatListMembersRequest, ChatListMembersResponse, ChatMuteUserRequest, ChatMuteUserResponse, ChatRegisterChannelRequest, ChatRegisterChannelResponse, ChatRemoveMemberRequest, ChatRemoveMemberResponse, ChatRenameChannelRequest, ChatRenameChannelResponse, ChatSendDMRequest, ChatSendDMResponse, ChatSendRequest, ChatSendResponse, ChatSetMemberRoleRequest, ChatSetMemberRoleResponse, ChatSetSlowModeRequest, ChatSetSlowModeResponse, ChatSetTopicRequest, ChatSetTopicResponse, ChatUnbanRequest, ChatUnbanResponse, ChatUnmuteUserRequest, ChatUnmuteUserResponse, ChatUnregisterChannelRequest, ChatUnregisterChannelResponse, EchoFetchRequest, EchoFetchResponse, EchoPersistRequest, EchoPersistResponse, EchoPingRequest, EchoPingResponse } from "./operations.js";
 
 export interface BasicClientOptions {
   url: string;
@@ -77,6 +77,76 @@ export class BasicClient {
   send(msg: { encode(): Uint8Array }): void {
     const ctor = msg.constructor as unknown as { typeID: number };
     this.transport.sendClientInput(ctor.typeID, msg.encode());
+  }
+
+  /** Subscribe to typed server event chat.ChatBannedEvent (typeID 0xf9fe667f). */
+  onChatBannedEvent(handler: (msg: ChatBannedEvent) => void): () => void {
+    return this.typedEvents.on(ChatBannedEvent, handler);
+  }
+
+  /** Subscribe to typed server event chat.ChatChannelGoneEvent (typeID 0x74d67ad5). */
+  onChatChannelGoneEvent(handler: (msg: ChatChannelGoneEvent) => void): () => void {
+    return this.typedEvents.on(ChatChannelGoneEvent, handler);
+  }
+
+  /** Subscribe to typed server event chat.ChatChannelUpdatedEvent (typeID 0x03481835). */
+  onChatChannelUpdatedEvent(handler: (msg: ChatChannelUpdatedEvent) => void): () => void {
+    return this.typedEvents.on(ChatChannelUpdatedEvent, handler);
+  }
+
+  /** Subscribe to typed server event chat.ChatChannelsHydratedEvent (typeID 0xa70de1b8). */
+  onChatChannelsHydratedEvent(handler: (msg: ChatChannelsHydratedEvent) => void): () => void {
+    return this.typedEvents.on(ChatChannelsHydratedEvent, handler);
+  }
+
+  /** Subscribe to typed server event chat.ChatDMEvent (typeID 0x62aa45c2). */
+  onChatDMEvent(handler: (msg: ChatDMEvent) => void): () => void {
+    return this.typedEvents.on(ChatDMEvent, handler);
+  }
+
+  /** Subscribe to typed server event chat.ChatKickedEvent (typeID 0x87e2fcc6). */
+  onChatKickedEvent(handler: (msg: ChatKickedEvent) => void): () => void {
+    return this.typedEvents.on(ChatKickedEvent, handler);
+  }
+
+  /** Subscribe to typed server event chat.ChatMemberJoinedEvent (typeID 0x2ccc8a4a). */
+  onChatMemberJoinedEvent(handler: (msg: ChatMemberJoinedEvent) => void): () => void {
+    return this.typedEvents.on(ChatMemberJoinedEvent, handler);
+  }
+
+  /** Subscribe to typed server event chat.ChatMemberLeftEvent (typeID 0xf1bee142). */
+  onChatMemberLeftEvent(handler: (msg: ChatMemberLeftEvent) => void): () => void {
+    return this.typedEvents.on(ChatMemberLeftEvent, handler);
+  }
+
+  /** Subscribe to typed server event chat.ChatMemberRoleChangedEvent (typeID 0x1da61d0b). */
+  onChatMemberRoleChangedEvent(handler: (msg: ChatMemberRoleChangedEvent) => void): () => void {
+    return this.typedEvents.on(ChatMemberRoleChangedEvent, handler);
+  }
+
+  /** Subscribe to typed server event chat.ChatMessageDeletedEvent (typeID 0x8b8245df). */
+  onChatMessageDeletedEvent(handler: (msg: ChatMessageDeletedEvent) => void): () => void {
+    return this.typedEvents.on(ChatMessageDeletedEvent, handler);
+  }
+
+  /** Subscribe to typed server event chat.ChatMessageEvent (typeID 0xbe1d1360). */
+  onChatMessageEvent(handler: (msg: ChatMessageEvent) => void): () => void {
+    return this.typedEvents.on(ChatMessageEvent, handler);
+  }
+
+  /** Subscribe to typed server event chat.ChatMutedEvent (typeID 0xfd6c9d54). */
+  onChatMutedEvent(handler: (msg: ChatMutedEvent) => void): () => void {
+    return this.typedEvents.on(ChatMutedEvent, handler);
+  }
+
+  /** Subscribe to typed server event chat.ChatRateLimitedEvent (typeID 0x48eeebed). */
+  onChatRateLimitedEvent(handler: (msg: ChatRateLimitedEvent) => void): () => void {
+    return this.typedEvents.on(ChatRateLimitedEvent, handler);
+  }
+
+  /** Subscribe to typed server event chat.ChatUnmutedEvent (typeID 0xf8dbe7d3). */
+  onChatUnmutedEvent(handler: (msg: ChatUnmutedEvent) => void): () => void {
+    return this.typedEvents.on(ChatUnmutedEvent, handler);
   }
 
   /** Subscribe to typed server event mmokit.CellChange (typeID 0x474e8b92). */
@@ -190,6 +260,121 @@ export class BasicClient {
   /** Typed op auth.AuthValidateTokenRequest → auth.AuthValidateTokenResponse (kind=gateway-local). */
   authValidateToken(req: AuthValidateTokenRequest): Promise<AuthValidateTokenResponse> {
     return this.callOp<AuthValidateTokenRequest, AuthValidateTokenResponse>(req, AuthValidateTokenResponse);
+  }
+
+  /** Typed op chat.ChatAddMemberRequest → chat.ChatAddMemberResponse (kind=gateway-local). */
+  chatAddMember(req: ChatAddMemberRequest): Promise<ChatAddMemberResponse> {
+    return this.callOp<ChatAddMemberRequest, ChatAddMemberResponse>(req, ChatAddMemberResponse);
+  }
+
+  /** Typed op chat.ChatBanRequest → chat.ChatBanResponse (kind=gateway-local). */
+  chatBan(req: ChatBanRequest): Promise<ChatBanResponse> {
+    return this.callOp<ChatBanRequest, ChatBanResponse>(req, ChatBanResponse);
+  }
+
+  /** Typed op chat.ChatBroadcastRequest → chat.ChatBroadcastResponse (kind=gateway-local). */
+  chatBroadcast(req: ChatBroadcastRequest): Promise<ChatBroadcastResponse> {
+    return this.callOp<ChatBroadcastRequest, ChatBroadcastResponse>(req, ChatBroadcastResponse);
+  }
+
+  /** Typed op chat.ChatBulkSetMembersRequest → chat.ChatBulkSetMembersResponse (kind=gateway-local). */
+  chatBulkSetMembers(req: ChatBulkSetMembersRequest): Promise<ChatBulkSetMembersResponse> {
+    return this.callOp<ChatBulkSetMembersRequest, ChatBulkSetMembersResponse>(req, ChatBulkSetMembersResponse);
+  }
+
+  /** Typed op chat.ChatCreateRequest → chat.ChatCreateResponse (kind=gateway-local). */
+  chatCreate(req: ChatCreateRequest): Promise<ChatCreateResponse> {
+    return this.callOp<ChatCreateRequest, ChatCreateResponse>(req, ChatCreateResponse);
+  }
+
+  /** Typed op chat.ChatDeleteMessageRequest → chat.ChatDeleteMessageResponse (kind=gateway-local). */
+  chatDeleteMessage(req: ChatDeleteMessageRequest): Promise<ChatDeleteMessageResponse> {
+    return this.callOp<ChatDeleteMessageRequest, ChatDeleteMessageResponse>(req, ChatDeleteMessageResponse);
+  }
+
+  /** Typed op chat.ChatJoinRequest → chat.ChatJoinResponse (kind=gateway-local). */
+  chatJoin(req: ChatJoinRequest): Promise<ChatJoinResponse> {
+    return this.callOp<ChatJoinRequest, ChatJoinResponse>(req, ChatJoinResponse);
+  }
+
+  /** Typed op chat.ChatKickRequest → chat.ChatKickResponse (kind=gateway-local). */
+  chatKick(req: ChatKickRequest): Promise<ChatKickResponse> {
+    return this.callOp<ChatKickRequest, ChatKickResponse>(req, ChatKickResponse);
+  }
+
+  /** Typed op chat.ChatLeaveRequest → chat.ChatLeaveResponse (kind=gateway-local). */
+  chatLeave(req: ChatLeaveRequest): Promise<ChatLeaveResponse> {
+    return this.callOp<ChatLeaveRequest, ChatLeaveResponse>(req, ChatLeaveResponse);
+  }
+
+  /** Typed op chat.ChatListChannelsRequest → chat.ChatListChannelsResponse (kind=gateway-local). */
+  chatListChannels(req: ChatListChannelsRequest): Promise<ChatListChannelsResponse> {
+    return this.callOp<ChatListChannelsRequest, ChatListChannelsResponse>(req, ChatListChannelsResponse);
+  }
+
+  /** Typed op chat.ChatListMembersRequest → chat.ChatListMembersResponse (kind=gateway-local). */
+  chatListMembers(req: ChatListMembersRequest): Promise<ChatListMembersResponse> {
+    return this.callOp<ChatListMembersRequest, ChatListMembersResponse>(req, ChatListMembersResponse);
+  }
+
+  /** Typed op chat.ChatMuteUserRequest → chat.ChatMuteUserResponse (kind=gateway-local). */
+  chatMuteUser(req: ChatMuteUserRequest): Promise<ChatMuteUserResponse> {
+    return this.callOp<ChatMuteUserRequest, ChatMuteUserResponse>(req, ChatMuteUserResponse);
+  }
+
+  /** Typed op chat.ChatRegisterChannelRequest → chat.ChatRegisterChannelResponse (kind=gateway-local). */
+  chatRegisterChannel(req: ChatRegisterChannelRequest): Promise<ChatRegisterChannelResponse> {
+    return this.callOp<ChatRegisterChannelRequest, ChatRegisterChannelResponse>(req, ChatRegisterChannelResponse);
+  }
+
+  /** Typed op chat.ChatRemoveMemberRequest → chat.ChatRemoveMemberResponse (kind=gateway-local). */
+  chatRemoveMember(req: ChatRemoveMemberRequest): Promise<ChatRemoveMemberResponse> {
+    return this.callOp<ChatRemoveMemberRequest, ChatRemoveMemberResponse>(req, ChatRemoveMemberResponse);
+  }
+
+  /** Typed op chat.ChatRenameChannelRequest → chat.ChatRenameChannelResponse (kind=gateway-local). */
+  chatRenameChannel(req: ChatRenameChannelRequest): Promise<ChatRenameChannelResponse> {
+    return this.callOp<ChatRenameChannelRequest, ChatRenameChannelResponse>(req, ChatRenameChannelResponse);
+  }
+
+  /** Typed op chat.ChatSendDMRequest → chat.ChatSendDMResponse (kind=gateway-local). */
+  chatSendDM(req: ChatSendDMRequest): Promise<ChatSendDMResponse> {
+    return this.callOp<ChatSendDMRequest, ChatSendDMResponse>(req, ChatSendDMResponse);
+  }
+
+  /** Typed op chat.ChatSendRequest → chat.ChatSendResponse (kind=gateway-local). */
+  chatSend(req: ChatSendRequest): Promise<ChatSendResponse> {
+    return this.callOp<ChatSendRequest, ChatSendResponse>(req, ChatSendResponse);
+  }
+
+  /** Typed op chat.ChatSetMemberRoleRequest → chat.ChatSetMemberRoleResponse (kind=gateway-local). */
+  chatSetMemberRole(req: ChatSetMemberRoleRequest): Promise<ChatSetMemberRoleResponse> {
+    return this.callOp<ChatSetMemberRoleRequest, ChatSetMemberRoleResponse>(req, ChatSetMemberRoleResponse);
+  }
+
+  /** Typed op chat.ChatSetSlowModeRequest → chat.ChatSetSlowModeResponse (kind=gateway-local). */
+  chatSetSlowMode(req: ChatSetSlowModeRequest): Promise<ChatSetSlowModeResponse> {
+    return this.callOp<ChatSetSlowModeRequest, ChatSetSlowModeResponse>(req, ChatSetSlowModeResponse);
+  }
+
+  /** Typed op chat.ChatSetTopicRequest → chat.ChatSetTopicResponse (kind=gateway-local). */
+  chatSetTopic(req: ChatSetTopicRequest): Promise<ChatSetTopicResponse> {
+    return this.callOp<ChatSetTopicRequest, ChatSetTopicResponse>(req, ChatSetTopicResponse);
+  }
+
+  /** Typed op chat.ChatUnbanRequest → chat.ChatUnbanResponse (kind=gateway-local). */
+  chatUnban(req: ChatUnbanRequest): Promise<ChatUnbanResponse> {
+    return this.callOp<ChatUnbanRequest, ChatUnbanResponse>(req, ChatUnbanResponse);
+  }
+
+  /** Typed op chat.ChatUnmuteUserRequest → chat.ChatUnmuteUserResponse (kind=gateway-local). */
+  chatUnmuteUser(req: ChatUnmuteUserRequest): Promise<ChatUnmuteUserResponse> {
+    return this.callOp<ChatUnmuteUserRequest, ChatUnmuteUserResponse>(req, ChatUnmuteUserResponse);
+  }
+
+  /** Typed op chat.ChatUnregisterChannelRequest → chat.ChatUnregisterChannelResponse (kind=gateway-local). */
+  chatUnregisterChannel(req: ChatUnregisterChannelRequest): Promise<ChatUnregisterChannelResponse> {
+    return this.callOp<ChatUnregisterChannelRequest, ChatUnregisterChannelResponse>(req, ChatUnregisterChannelResponse);
   }
 
   /** Typed op echo.EchoFetchRequest → echo.EchoFetchResponse (kind=gateway-local). */

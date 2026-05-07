@@ -4,6 +4,383 @@
 // in pkg/universe/reflect_marshal.go: fields encoded in source order,
 // little-endian, no padding. mmokit.Entity → 4-byte NetID.
 
+/** Broadcast-eligible event chat.ChatBannedEvent (typeID 0xf9fe667f). */
+export class ChatBannedEvent {
+  static readonly typeID = 0xf9fe667f;
+  channelID: string = "";
+  byUserID: string = "";
+  untilMs: number = 0;
+  reason: string = "";
+
+  static decode(buf: Uint8Array): ChatBannedEvent {
+    const dv = new DataView(buf.buffer, buf.byteOffset, buf.byteLength);
+    let off = 0;
+    const m = new ChatBannedEvent();
+    {
+      const sl = dv.getUint16(off, true); off += 2;
+      m.channelID = new TextDecoder().decode(buf.subarray(off, off + sl)); off += sl;
+    }
+    {
+      const sl = dv.getUint16(off, true); off += 2;
+      m.byUserID = new TextDecoder().decode(buf.subarray(off, off + sl)); off += sl;
+    }
+    m.untilMs = Number(dv.getBigInt64(off, true)); off += 8;
+    {
+      const sl = dv.getUint16(off, true); off += 2;
+      m.reason = new TextDecoder().decode(buf.subarray(off, off + sl)); off += sl;
+    }
+    return m;
+  }
+}
+
+/** Broadcast-eligible event chat.ChatChannelGoneEvent (typeID 0x74d67ad5). */
+export class ChatChannelGoneEvent {
+  static readonly typeID = 0x74d67ad5;
+  channelID: string = "";
+
+  static decode(buf: Uint8Array): ChatChannelGoneEvent {
+    const dv = new DataView(buf.buffer, buf.byteOffset, buf.byteLength);
+    let off = 0;
+    const m = new ChatChannelGoneEvent();
+    {
+      const sl = dv.getUint16(off, true); off += 2;
+      m.channelID = new TextDecoder().decode(buf.subarray(off, off + sl)); off += sl;
+    }
+    return m;
+  }
+}
+
+/** Broadcast-eligible event chat.ChatChannelUpdatedEvent (typeID 0x03481835). */
+export class ChatChannelUpdatedEvent {
+  static readonly typeID = 0x3481835;
+  channel: { channelID: string; slug: string; kind: number; topic: string; slowModeSeconds: number; ownerUserID: string; memberCount: number; hasPassword: boolean } = { channelID: "", slug: "", kind: 0, topic: "", slowModeSeconds: 0, ownerUserID: "", memberCount: 0, hasPassword: false };
+
+  static decode(buf: Uint8Array): ChatChannelUpdatedEvent {
+    const dv = new DataView(buf.buffer, buf.byteOffset, buf.byteLength);
+    let off = 0;
+    const m = new ChatChannelUpdatedEvent();
+    {
+      const sl = dv.getUint16(off, true); off += 2;
+      m.channel.channelID = new TextDecoder().decode(buf.subarray(off, off + sl)); off += sl;
+    }
+    {
+      const sl = dv.getUint16(off, true); off += 2;
+      m.channel.slug = new TextDecoder().decode(buf.subarray(off, off + sl)); off += sl;
+    }
+    m.channel.kind = dv.getUint32(off, true); off += 4;
+    {
+      const sl = dv.getUint16(off, true); off += 2;
+      m.channel.topic = new TextDecoder().decode(buf.subarray(off, off + sl)); off += sl;
+    }
+    m.channel.slowModeSeconds = dv.getInt32(off, true); off += 4;
+    {
+      const sl = dv.getUint16(off, true); off += 2;
+      m.channel.ownerUserID = new TextDecoder().decode(buf.subarray(off, off + sl)); off += sl;
+    }
+    m.channel.memberCount = dv.getInt32(off, true); off += 4;
+    m.channel.hasPassword = dv.getUint8(off) !== 0; off += 1;
+    return m;
+  }
+}
+
+/** Broadcast-eligible event chat.ChatChannelsHydratedEvent (typeID 0xa70de1b8). */
+export class ChatChannelsHydratedEvent {
+  static readonly typeID = 0xa70de1b8;
+  channels: { channelID: string; slug: string; kind: number; topic: string; slowModeSeconds: number; ownerUserID: string; memberCount: number; hasPassword: boolean }[] = [];
+
+  static decode(buf: Uint8Array): ChatChannelsHydratedEvent {
+    const dv = new DataView(buf.buffer, buf.byteOffset, buf.byteLength);
+    let off = 0;
+    const m = new ChatChannelsHydratedEvent();
+    {
+      const sliceLen = dv.getUint16(off, true); off += 2;
+      for (let i = 0; i < sliceLen; i++) {
+        const item: { channelID: string; slug: string; kind: number; topic: string; slowModeSeconds: number; ownerUserID: string; memberCount: number; hasPassword: boolean } = { channelID: "", slug: "", kind: 0, topic: "", slowModeSeconds: 0, ownerUserID: "", memberCount: 0, hasPassword: false };
+    {
+      const sl = dv.getUint16(off, true); off += 2;
+              item.channelID = new TextDecoder().decode(buf.subarray(off, off + sl)); off += sl;
+    }
+    {
+      const sl = dv.getUint16(off, true); off += 2;
+              item.slug = new TextDecoder().decode(buf.subarray(off, off + sl)); off += sl;
+    }
+            item.kind = dv.getUint32(off, true); off += 4;
+    {
+      const sl = dv.getUint16(off, true); off += 2;
+              item.topic = new TextDecoder().decode(buf.subarray(off, off + sl)); off += sl;
+    }
+            item.slowModeSeconds = dv.getInt32(off, true); off += 4;
+    {
+      const sl = dv.getUint16(off, true); off += 2;
+              item.ownerUserID = new TextDecoder().decode(buf.subarray(off, off + sl)); off += sl;
+    }
+            item.memberCount = dv.getInt32(off, true); off += 4;
+            item.hasPassword = dv.getUint8(off) !== 0; off += 1;
+        m.channels.push(item);
+      }
+    }
+    return m;
+  }
+}
+
+/** Broadcast-eligible event chat.ChatDMEvent (typeID 0x62aa45c2). */
+export class ChatDMEvent {
+  static readonly typeID = 0x62aa45c2;
+  msgID: string = "";
+  senderUserID: string = "";
+  senderUsername: string = "";
+  body: string = "";
+  sentAtMs: number = 0;
+
+  static decode(buf: Uint8Array): ChatDMEvent {
+    const dv = new DataView(buf.buffer, buf.byteOffset, buf.byteLength);
+    let off = 0;
+    const m = new ChatDMEvent();
+    {
+      const sl = dv.getUint16(off, true); off += 2;
+      m.msgID = new TextDecoder().decode(buf.subarray(off, off + sl)); off += sl;
+    }
+    {
+      const sl = dv.getUint16(off, true); off += 2;
+      m.senderUserID = new TextDecoder().decode(buf.subarray(off, off + sl)); off += sl;
+    }
+    {
+      const sl = dv.getUint16(off, true); off += 2;
+      m.senderUsername = new TextDecoder().decode(buf.subarray(off, off + sl)); off += sl;
+    }
+    {
+      const sl = dv.getUint16(off, true); off += 2;
+      m.body = new TextDecoder().decode(buf.subarray(off, off + sl)); off += sl;
+    }
+    m.sentAtMs = Number(dv.getBigInt64(off, true)); off += 8;
+    return m;
+  }
+}
+
+/** Broadcast-eligible event chat.ChatKickedEvent (typeID 0x87e2fcc6). */
+export class ChatKickedEvent {
+  static readonly typeID = 0x87e2fcc6;
+  channelID: string = "";
+  byUserID: string = "";
+  reason: string = "";
+
+  static decode(buf: Uint8Array): ChatKickedEvent {
+    const dv = new DataView(buf.buffer, buf.byteOffset, buf.byteLength);
+    let off = 0;
+    const m = new ChatKickedEvent();
+    {
+      const sl = dv.getUint16(off, true); off += 2;
+      m.channelID = new TextDecoder().decode(buf.subarray(off, off + sl)); off += sl;
+    }
+    {
+      const sl = dv.getUint16(off, true); off += 2;
+      m.byUserID = new TextDecoder().decode(buf.subarray(off, off + sl)); off += sl;
+    }
+    {
+      const sl = dv.getUint16(off, true); off += 2;
+      m.reason = new TextDecoder().decode(buf.subarray(off, off + sl)); off += sl;
+    }
+    return m;
+  }
+}
+
+/** Broadcast-eligible event chat.ChatMemberJoinedEvent (typeID 0x2ccc8a4a). */
+export class ChatMemberJoinedEvent {
+  static readonly typeID = 0x2ccc8a4a;
+  channelID: string = "";
+  userID: string = "";
+  username: string = "";
+
+  static decode(buf: Uint8Array): ChatMemberJoinedEvent {
+    const dv = new DataView(buf.buffer, buf.byteOffset, buf.byteLength);
+    let off = 0;
+    const m = new ChatMemberJoinedEvent();
+    {
+      const sl = dv.getUint16(off, true); off += 2;
+      m.channelID = new TextDecoder().decode(buf.subarray(off, off + sl)); off += sl;
+    }
+    {
+      const sl = dv.getUint16(off, true); off += 2;
+      m.userID = new TextDecoder().decode(buf.subarray(off, off + sl)); off += sl;
+    }
+    {
+      const sl = dv.getUint16(off, true); off += 2;
+      m.username = new TextDecoder().decode(buf.subarray(off, off + sl)); off += sl;
+    }
+    return m;
+  }
+}
+
+/** Broadcast-eligible event chat.ChatMemberLeftEvent (typeID 0xf1bee142). */
+export class ChatMemberLeftEvent {
+  static readonly typeID = 0xf1bee142;
+  channelID: string = "";
+  userID: string = "";
+
+  static decode(buf: Uint8Array): ChatMemberLeftEvent {
+    const dv = new DataView(buf.buffer, buf.byteOffset, buf.byteLength);
+    let off = 0;
+    const m = new ChatMemberLeftEvent();
+    {
+      const sl = dv.getUint16(off, true); off += 2;
+      m.channelID = new TextDecoder().decode(buf.subarray(off, off + sl)); off += sl;
+    }
+    {
+      const sl = dv.getUint16(off, true); off += 2;
+      m.userID = new TextDecoder().decode(buf.subarray(off, off + sl)); off += sl;
+    }
+    return m;
+  }
+}
+
+/** Broadcast-eligible event chat.ChatMemberRoleChangedEvent (typeID 0x1da61d0b). */
+export class ChatMemberRoleChangedEvent {
+  static readonly typeID = 0x1da61d0b;
+  channelID: string = "";
+  userID: string = "";
+  role: string = "";
+
+  static decode(buf: Uint8Array): ChatMemberRoleChangedEvent {
+    const dv = new DataView(buf.buffer, buf.byteOffset, buf.byteLength);
+    let off = 0;
+    const m = new ChatMemberRoleChangedEvent();
+    {
+      const sl = dv.getUint16(off, true); off += 2;
+      m.channelID = new TextDecoder().decode(buf.subarray(off, off + sl)); off += sl;
+    }
+    {
+      const sl = dv.getUint16(off, true); off += 2;
+      m.userID = new TextDecoder().decode(buf.subarray(off, off + sl)); off += sl;
+    }
+    {
+      const sl = dv.getUint16(off, true); off += 2;
+      m.role = new TextDecoder().decode(buf.subarray(off, off + sl)); off += sl;
+    }
+    return m;
+  }
+}
+
+/** Broadcast-eligible event chat.ChatMessageDeletedEvent (typeID 0x8b8245df). */
+export class ChatMessageDeletedEvent {
+  static readonly typeID = 0x8b8245df;
+  msgID: string = "";
+  channelID: string = "";
+  deletedByUserID: string = "";
+
+  static decode(buf: Uint8Array): ChatMessageDeletedEvent {
+    const dv = new DataView(buf.buffer, buf.byteOffset, buf.byteLength);
+    let off = 0;
+    const m = new ChatMessageDeletedEvent();
+    {
+      const sl = dv.getUint16(off, true); off += 2;
+      m.msgID = new TextDecoder().decode(buf.subarray(off, off + sl)); off += sl;
+    }
+    {
+      const sl = dv.getUint16(off, true); off += 2;
+      m.channelID = new TextDecoder().decode(buf.subarray(off, off + sl)); off += sl;
+    }
+    {
+      const sl = dv.getUint16(off, true); off += 2;
+      m.deletedByUserID = new TextDecoder().decode(buf.subarray(off, off + sl)); off += sl;
+    }
+    return m;
+  }
+}
+
+/** Broadcast-eligible event chat.ChatMessageEvent (typeID 0xbe1d1360). */
+export class ChatMessageEvent {
+  static readonly typeID = 0xbe1d1360;
+  msgID: string = "";
+  channelID: string = "";
+  senderUserID: string = "";
+  senderUsername: string = "";
+  body: string = "";
+  sentAtMs: number = 0;
+
+  static decode(buf: Uint8Array): ChatMessageEvent {
+    const dv = new DataView(buf.buffer, buf.byteOffset, buf.byteLength);
+    let off = 0;
+    const m = new ChatMessageEvent();
+    {
+      const sl = dv.getUint16(off, true); off += 2;
+      m.msgID = new TextDecoder().decode(buf.subarray(off, off + sl)); off += sl;
+    }
+    {
+      const sl = dv.getUint16(off, true); off += 2;
+      m.channelID = new TextDecoder().decode(buf.subarray(off, off + sl)); off += sl;
+    }
+    {
+      const sl = dv.getUint16(off, true); off += 2;
+      m.senderUserID = new TextDecoder().decode(buf.subarray(off, off + sl)); off += sl;
+    }
+    {
+      const sl = dv.getUint16(off, true); off += 2;
+      m.senderUsername = new TextDecoder().decode(buf.subarray(off, off + sl)); off += sl;
+    }
+    {
+      const sl = dv.getUint16(off, true); off += 2;
+      m.body = new TextDecoder().decode(buf.subarray(off, off + sl)); off += sl;
+    }
+    m.sentAtMs = Number(dv.getBigInt64(off, true)); off += 8;
+    return m;
+  }
+}
+
+/** Broadcast-eligible event chat.ChatMutedEvent (typeID 0xfd6c9d54). */
+export class ChatMutedEvent {
+  static readonly typeID = 0xfd6c9d54;
+  channelID: string = "";
+  untilMs: number = 0;
+  reason: string = "";
+
+  static decode(buf: Uint8Array): ChatMutedEvent {
+    const dv = new DataView(buf.buffer, buf.byteOffset, buf.byteLength);
+    let off = 0;
+    const m = new ChatMutedEvent();
+    {
+      const sl = dv.getUint16(off, true); off += 2;
+      m.channelID = new TextDecoder().decode(buf.subarray(off, off + sl)); off += sl;
+    }
+    m.untilMs = Number(dv.getBigInt64(off, true)); off += 8;
+    {
+      const sl = dv.getUint16(off, true); off += 2;
+      m.reason = new TextDecoder().decode(buf.subarray(off, off + sl)); off += sl;
+    }
+    return m;
+  }
+}
+
+/** Broadcast-eligible event chat.ChatRateLimitedEvent (typeID 0x48eeebed). */
+export class ChatRateLimitedEvent {
+  static readonly typeID = 0x48eeebed;
+  retryAfterMs: number = 0;
+
+  static decode(buf: Uint8Array): ChatRateLimitedEvent {
+    const dv = new DataView(buf.buffer, buf.byteOffset, buf.byteLength);
+    let off = 0;
+    const m = new ChatRateLimitedEvent();
+    m.retryAfterMs = Number(dv.getBigInt64(off, true)); off += 8;
+    return m;
+  }
+}
+
+/** Broadcast-eligible event chat.ChatUnmutedEvent (typeID 0xf8dbe7d3). */
+export class ChatUnmutedEvent {
+  static readonly typeID = 0xf8dbe7d3;
+  channelID: string = "";
+
+  static decode(buf: Uint8Array): ChatUnmutedEvent {
+    const dv = new DataView(buf.buffer, buf.byteOffset, buf.byteLength);
+    let off = 0;
+    const m = new ChatUnmutedEvent();
+    {
+      const sl = dv.getUint16(off, true); off += 2;
+      m.channelID = new TextDecoder().decode(buf.subarray(off, off + sl)); off += sl;
+    }
+    return m;
+  }
+}
+
 /** Broadcast-eligible event mmokit.CellChange (typeID 0x474e8b92). */
 export class CellChange {
   static readonly typeID = 0x474e8b92;
