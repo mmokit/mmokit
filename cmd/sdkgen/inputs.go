@@ -105,17 +105,17 @@ func writeClientInputClass(b *strings.Builder, ct ClientInputTypeSchema) {
 // path reuses this helper so both inputs.ts and operations.ts have one
 // source of truth for the encode emission.
 func writeReflectCodecEncode(b *strings.Builder, bt BroadcastTypeSchema) {
-	hasString := false
+	hasVar := false
 	fixedSize := 0
 	for _, f := range bt.Fields {
-		if f.Encoding == "string" {
-			hasString = true
+		if isVariableSizeField(f) {
+			hasVar = true
 		} else {
 			fixedSize += f.Size
 		}
 	}
 
-	if !hasString {
+	if !hasVar {
 		// Fast path: every field is fixed-size, total known at codegen time.
 		fmt.Fprintf(b, "    const buf = new Uint8Array(%d);\n", fixedSize)
 		b.WriteString("    const dv = new DataView(buf.buffer);\n")
@@ -127,19 +127,32 @@ func writeReflectCodecEncode(b *strings.Builder, bt BroadcastTypeSchema) {
 		return
 	}
 
-	// Variable-size path: pre-encode each string into a local const, sum
-	// total size from fixed-size fields + (2 + bytes.length) per string,
-	// then do the actual write pass.
+	// Variable-size path: pre-encode each string into a local const so we
+	// know its length up-front; sum total size from fixed-size fields +
+	// (2 + bytes.length) per string + per-element size for slices.
 	for _, f := range bt.Fields {
 		if f.Encoding == "string" {
 			fmt.Fprintf(b, "    const _%s = new TextEncoder().encode(this.%s);\n", f.Name, f.Name)
 		}
 	}
-	// Size expression: fixed bytes + (2 + _<name>.length) per string.
+	// Slice items that are strings need element-level pre-encoding too.
+	// Emit a helper local `_<name>_items` array containing pre-encoded
+	// Uint8Arrays for each string element so the size pass and write
+	// pass agree on lengths.
+	for _, f := range bt.Fields {
+		if f.Encoding == "slice" && f.Item != nil && f.Item.Encoding == "string" {
+			fmt.Fprintf(b, "    const _%s_items: Uint8Array[] = this.%s.map(s => new TextEncoder().encode(s));\n", f.Name, f.Name)
+		}
+	}
+
+	// Size expression: fixed bytes + per-string + per-slice contributions.
 	parts := []string{fmt.Sprintf("%d", fixedSize)}
 	for _, f := range bt.Fields {
-		if f.Encoding == "string" {
+		switch {
+		case f.Encoding == "string":
 			parts = append(parts, fmt.Sprintf("2 + _%s.length", f.Name))
+		case f.Encoding == "slice":
+			parts = append(parts, sliceSizeExpr(f))
 		}
 	}
 	fmt.Fprintf(b, "    const buf = new Uint8Array(%s);\n", strings.Join(parts, " + "))
@@ -149,6 +162,40 @@ func writeReflectCodecEncode(b *strings.Builder, bt BroadcastTypeSchema) {
 		writeReflectCodecFieldEncode(b, f)
 	}
 	b.WriteString("    return buf;\n")
+}
+
+// isVariableSizeField returns true when the field's wire size depends on
+// runtime data (string length, slice element count, or string-bearing
+// slice elements).
+func isVariableSizeField(f BroadcastFieldSchema) bool {
+	switch f.Encoding {
+	case "string", "slice", "bytes":
+		return true
+	}
+	return false
+}
+
+// sliceSizeExpr returns a TypeScript expression evaluating to the total
+// byte size of the slice (including the 2-byte length prefix). Used in
+// the buffer-sizing pass before writeReflectCodecFieldEncode actually
+// emits the slice loop.
+func sliceSizeExpr(f BroadcastFieldSchema) string {
+	if f.Item == nil {
+		panic(fmt.Sprintf("sdkgen: slice field %q missing item schema", f.Name))
+	}
+	switch f.Item.Encoding {
+	case "string":
+		// 2 (slice len) + sum(2 + element bytes) per pre-encoded item.
+		return fmt.Sprintf("2 + _%s_items.reduce((acc, b) => acc + 2 + b.length, 0)", f.Name)
+	case "f32", "f64",
+		"u8", "u16", "u32", "u64",
+		"i8", "i16", "i32", "i64",
+		"bool", "entity":
+		// Fixed-stride scalars: 2 (slice len) + N * itemSize.
+		return fmt.Sprintf("2 + this.%s.length * %d", f.Name, f.Item.Size)
+	default:
+		panic(fmt.Sprintf("sdkgen: unsupported slice item encoding %q for field %q", f.Item.Encoding, f.Name))
+	}
 }
 
 // writeReflectCodecFieldEncode emits one encode line for a single field.
@@ -191,7 +238,53 @@ func writeReflectCodecFieldEncode(b *strings.Builder, f BroadcastFieldSchema) {
 		// bytes.
 		fmt.Fprintf(b, "    dv.setUint16(off, _%s.length, true); off += 2;\n", f.Name)
 		fmt.Fprintf(b, "    buf.set(_%s, off); off += _%s.length;\n", f.Name, f.Name)
+	case "slice":
+		// Matches reflect_marshal: 2-byte LE length prefix, then N elements.
+		// String elements were pre-encoded into _<name>_items by
+		// writeReflectCodecEncode so we know each item's length up-front.
+		writeReflectCodecSliceEncode(b, f)
 	default:
 		panic(fmt.Sprintf("sdkgen: unsupported reflect-codec field encoding %q for field %q", f.Encoding, f.Name))
+	}
+}
+
+// writeReflectCodecSliceEncode emits the loop that writes a slice's
+// length prefix + elements. Mirrors reflect_marshal's slice path:
+// [u16 len][elem0]...[elemN-1].
+func writeReflectCodecSliceEncode(b *strings.Builder, f BroadcastFieldSchema) {
+	if f.Item == nil {
+		panic(fmt.Sprintf("sdkgen: slice field %q missing item schema", f.Name))
+	}
+	fmt.Fprintf(b, "    dv.setUint16(off, this.%s.length, true); off += 2;\n", f.Name)
+	switch f.Item.Encoding {
+	case "string":
+		fmt.Fprintf(b, "    for (const _b of _%s_items) {\n", f.Name)
+		b.WriteString("      dv.setUint16(off, _b.length, true); off += 2;\n")
+		b.WriteString("      buf.set(_b, off); off += _b.length;\n")
+		b.WriteString("    }\n")
+	case "f32":
+		fmt.Fprintf(b, "    for (const _v of this.%s) { dv.setFloat32(off, _v, true); off += 4; }\n", f.Name)
+	case "f64":
+		fmt.Fprintf(b, "    for (const _v of this.%s) { dv.setFloat64(off, _v, true); off += 8; }\n", f.Name)
+	case "u8":
+		fmt.Fprintf(b, "    for (const _v of this.%s) { dv.setUint8(off, _v); off += 1; }\n", f.Name)
+	case "u16":
+		fmt.Fprintf(b, "    for (const _v of this.%s) { dv.setUint16(off, _v, true); off += 2; }\n", f.Name)
+	case "u32", "entity":
+		fmt.Fprintf(b, "    for (const _v of this.%s) { dv.setUint32(off, _v, true); off += 4; }\n", f.Name)
+	case "u64":
+		fmt.Fprintf(b, "    for (const _v of this.%s) { dv.setBigUint64(off, BigInt(_v), true); off += 8; }\n", f.Name)
+	case "i8":
+		fmt.Fprintf(b, "    for (const _v of this.%s) { dv.setInt8(off, _v); off += 1; }\n", f.Name)
+	case "i16":
+		fmt.Fprintf(b, "    for (const _v of this.%s) { dv.setInt16(off, _v, true); off += 2; }\n", f.Name)
+	case "i32":
+		fmt.Fprintf(b, "    for (const _v of this.%s) { dv.setInt32(off, _v, true); off += 4; }\n", f.Name)
+	case "i64":
+		fmt.Fprintf(b, "    for (const _v of this.%s) { dv.setBigInt64(off, BigInt(_v), true); off += 8; }\n", f.Name)
+	case "bool":
+		fmt.Fprintf(b, "    for (const _v of this.%s) { dv.setUint8(off, _v ? 1 : 0); off += 1; }\n", f.Name)
+	default:
+		panic(fmt.Sprintf("sdkgen: unsupported slice item encoding %q for field %q", f.Item.Encoding, f.Name))
 	}
 }
