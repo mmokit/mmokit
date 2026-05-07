@@ -30,15 +30,20 @@ export function connect(name: string): void {
     onError: () => setStatus("connection error"),
   });
 
+  // Mount the chat panel BEFORE connect so its server-event handlers
+  // (especially onChatChannelsHydratedEvent) are registered before the
+  // gateway's chat hook fires post-auth. Otherwise the hydration event
+  // arrives before the client subscribes and silently drops in the
+  // typed-event dispatcher.
+  mountChatPanel(client);
+
   client.onPlayerEntityAssigned((msg: PlayerEntityAssigned) => {
     state.playerNetID = msg.entityNetID;
     setStatus("");
     showGameCallback?.();
-    // Mount the echo demo panel once the session is authenticated.
-    // Toggled with 'e'. Hidden by default.
+    // Echo demo panel needs the player entity for some demo scenarios;
+    // mount on spawn. Toggled with 'e'. Hidden by default.
     mountEchoPanel(client);
-    // Mount the chat demo panel. Toggled with 'c'. Hidden by default.
-    mountChatPanel(client);
   });
 
   client.onServerConfig((msg) => {
