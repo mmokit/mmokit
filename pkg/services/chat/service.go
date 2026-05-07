@@ -33,6 +33,7 @@ type Service struct {
 	mutes       map[muteKey]Mute
 	online      map[uuid.UUID]uint32              // userID → connID
 	connIndex   map[uint32]uuid.UUID              // connID → userID
+	usernames   map[uuid.UUID]string              // userID → username (cached at session-enter)
 	gatewayConn map[string]map[uint32]struct{}    // gatewayID → connIDs
 	subs        map[uuid.UUID]map[uint32]struct{} // channelID → connIDs
 
@@ -40,6 +41,11 @@ type Service struct {
 	slowMode    map[slowModeKey]time.Time
 
 	msgIDIndex *msgIDTTLMap
+
+	// sendEventFn is set by the mmokit facade to the gateway's per-conn
+	// typed-event sender (e.g. process.SendTypedEvent). Lifted from the
+	// gateway after Init via OnReady. nil in unit tests.
+	sendEventFn func(connID uint32, event any)
 
 	reapCh chan struct{}
 	reapWG sync.WaitGroup
@@ -85,6 +91,7 @@ func (s *Service) Init(ctx *service.Context) error {
 	s.mutes = map[muteKey]Mute{}
 	s.online = map[uuid.UUID]uint32{}
 	s.connIndex = map[uint32]uuid.UUID{}
+	s.usernames = map[uuid.UUID]string{}
 	s.gatewayConn = map[string]map[uint32]struct{}{}
 	s.subs = map[uuid.UUID]map[uint32]struct{}{}
 	s.rateBuckets = map[uuid.UUID]*tokenBucket{}
@@ -266,6 +273,14 @@ func (s *Service) reapOnce() {
 		}
 	}
 	s.mu.Unlock()
+}
+
+// SetSendEventFn wires the per-conn typed-event sender. Called by
+// mmokit.RegisterChatService from OnReady.
+func (s *Service) SetSendEventFn(fn func(connID uint32, event any)) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.sendEventFn = fn
 }
 
 var _ service.Service = (*Service)(nil)
