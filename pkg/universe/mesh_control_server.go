@@ -782,13 +782,29 @@ func (s *meshControlServer) broadcastCoordTimeSync() {
 // stream. Returns an error if there is no stream for the host or the
 // Send call fails. Uses a per-stream mutex because grpc-go server
 // streams are not safe for concurrent Send.
+//
+// Falls back to the gateway control stream when no host stream is found
+// for the same identifier. This handles gateway,service processes that
+// announce services with the gateway's ID — RouteService dispatch then
+// targets that ID, but the only live control stream for it is the
+// gateway-stream, not a host-stream. Cheap and unambiguous: gatewayID
+// and hostID never legitimately collide on the same coord, so the
+// fallback is a no-op when both maps are populated correctly.
 func (s *meshControlServer) sendCoordMessageToHost(hostID string, msg *meshpb.CoordMessage) error {
 	s.mu.RLock()
 	stream := s.streams[hostID]
 	smu := s.streamMu[hostID]
+	if stream == nil {
+		// Fallback: try gateway control streams. A gateway,service process
+		// registers via the gateway control stream and announces services
+		// keyed on its gatewayID, so service-routed commands targeting
+		// that ID need to traverse this stream.
+		stream = s.gatewayStreams[hostID]
+		smu = s.gatewayMu[hostID]
+	}
 	s.mu.RUnlock()
 	if stream == nil || smu == nil {
-		return fmt.Errorf("no control stream for host %q", hostID)
+		return fmt.Errorf("no control stream for host or gateway %q", hostID)
 	}
 	smu.Lock()
 	defer smu.Unlock()
