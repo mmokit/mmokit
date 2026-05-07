@@ -3,7 +3,6 @@ package chattest
 
 import (
 	"context"
-	"errors"
 	"sort"
 	"sync"
 	"time"
@@ -317,6 +316,3 @@ func (m *RepoMock) ClearExpiredBans(_ context.Context) (int, error) {
 	}
 	return n, nil
 }
-
-// errors-wrapper passthroughs for symmetry with the postgres impl
-var _ = errors.New

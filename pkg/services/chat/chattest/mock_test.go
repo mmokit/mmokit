@@ -2,6 +2,7 @@ package chattest_test
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 
@@ -41,6 +42,17 @@ func TestRepoMock_BulkSetMembersReplacesAll(t *testing.T) {
 	mems, _ = m.ListMembers(ctx, c.ChannelID)
 	if len(mems) != 1 {
 		t.Fatalf("got %d after replace, want 1", len(mems))
+	}
+}
+
+func TestRepoMock_UpdateChannelRejectsSlugCollision(t *testing.T) {
+	m := chattest.NewMock()
+	ctx := context.Background()
+	a, _ := m.UpsertChannel(ctx, chat.Channel{Slug: "alpha", Kind: "custom"})
+	_, _ = m.UpsertChannel(ctx, chat.Channel{Slug: "beta", Kind: "custom"})
+	a.Slug = "beta"
+	if err := m.UpdateChannel(ctx, a); !errors.Is(err, chat.ErrChannelSlugInUse) {
+		t.Fatalf("expected ErrChannelSlugInUse, got %v", err)
 	}
 }
 

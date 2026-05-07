@@ -4,6 +4,7 @@ package postgres_test
 
 import (
 	"context"
+	"errors"
 	"os"
 	"testing"
 	"time"
@@ -73,6 +74,18 @@ func TestPgRepo_BulkSetMembers_Replaces(t *testing.T) {
 	mems, _ := repo.ListMembers(ctx, c.ChannelID)
 	if len(mems) != 1 {
 		t.Fatalf("got %d, want 1", len(mems))
+	}
+}
+
+func TestPgRepo_UpdateChannelRejectsSlugCollision(t *testing.T) {
+	repo, cleanup := openTestRepo(t)
+	defer cleanup()
+	ctx := context.Background()
+	a, _ := repo.UpsertChannel(ctx, chat.Channel{Slug: "alpha", Kind: "custom"})
+	_, _ = repo.UpsertChannel(ctx, chat.Channel{Slug: "beta", Kind: "custom"})
+	a.Slug = "beta"
+	if err := repo.UpdateChannel(ctx, a); !errors.Is(err, chat.ErrChannelSlugInUse) {
+		t.Fatalf("expected ErrChannelSlugInUse, got %v", err)
 	}
 }
 

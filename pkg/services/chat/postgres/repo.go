@@ -8,6 +8,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/zenion/mmoserver/pkg/services/chat"
@@ -114,6 +115,10 @@ func (r *pgRepo) UpdateChannel(ctx context.Context, c chat.Channel) error {
 		c.ChannelID, c.Slug, c.Kind, c.Topic, c.SlowModeSeconds,
 		c.PasswordHash, c.OwnerUserID)
 	if err != nil {
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
+			return chat.ErrChannelSlugInUse
+		}
 		return err
 	}
 	if tag.RowsAffected() == 0 {
@@ -186,9 +191,7 @@ func (r *pgRepo) ListAllMembers(ctx context.Context) ([]chat.ChannelMember, erro
 
 func (r *pgRepo) scanMembers(ctx context.Context, where string, args ...any) ([]chat.ChannelMember, error) {
 	q := `SELECT channel_id, user_id, role, joined_at,
-		COALESCE(banned_until, 'epoch'::timestamptz),
-		COALESCE(banned_by, '00000000-0000-0000-0000-000000000000'::uuid),
-		COALESCE(banned_reason, '')
+		banned_until, banned_by, banned_reason
 		FROM chat_channel_members ` + where
 	rows, err := r.pool.Query(ctx, q, args...)
 	if err != nil {
@@ -198,13 +201,21 @@ func (r *pgRepo) scanMembers(ctx context.Context, where string, args ...any) ([]
 	var out []chat.ChannelMember
 	for rows.Next() {
 		var m chat.ChannelMember
+		var bannedUntil *time.Time
+		var bannedBy *uuid.UUID
+		var bannedReason *string
 		if err := rows.Scan(&m.ChannelID, &m.UserID, &m.Role, &m.JoinedAt,
-			&m.BannedUntil, &m.BannedBy, &m.BannedReason); err != nil {
+			&bannedUntil, &bannedBy, &bannedReason); err != nil {
 			return nil, err
 		}
-		// Treat 'epoch' sentinel as zero time
-		if m.BannedUntil.Year() <= 1970 {
-			m.BannedUntil = time.Time{}
+		if bannedUntil != nil {
+			m.BannedUntil = *bannedUntil
+		}
+		if bannedBy != nil {
+			m.BannedBy = *bannedBy
+		}
+		if bannedReason != nil {
+			m.BannedReason = *bannedReason
 		}
 		out = append(out, m)
 	}
