@@ -99,3 +99,56 @@ func (s *Service) HandleRenameChannel(opCtx *ops.OpContext, req *ChatRenameChann
 	s.fanoutEvent(chID, &ChatChannelUpdatedEvent{Channel: info})
 	return &ChatRenameChannelResponse{Channel: info}, nil
 }
+
+// HandleSetTopic updates a channel's topic. canModerate gated.
+// Topic length is capped at MaxTopicLen. Fans out ChatChannelUpdatedEvent
+// with the full updated ChannelInfo.
+func (s *Service) HandleSetTopic(opCtx *ops.OpContext, req *ChatSetTopicRequest) (*ChatSetTopicResponse, error) {
+	if opCtx == nil {
+		return errResp[ChatSetTopicResponse](ChatErrorInternal, "missing op context", 0)
+	}
+	callerID := s.callerFromOpCtx(opCtx)
+	if callerID == uuid.Nil {
+		return errResp[ChatSetTopicResponse](ChatErrorPermissionDenied, "not online", 0)
+	}
+	chID, err := uuid.Parse(req.ChannelID)
+	if err != nil {
+		return errResp[ChatSetTopicResponse](ChatErrorChannelNotFound, "invalid channel_id", 0)
+	}
+
+	s.mu.RLock()
+	c, ok := s.channels[chID]
+	s.mu.RUnlock()
+	if !ok {
+		return errResp[ChatSetTopicResponse](ChatErrorChannelNotFound, "channel not found", 0)
+	}
+	if !s.canModerate(callerID, chID) {
+		return errResp[ChatSetTopicResponse](ChatErrorPermissionDenied, "denied", 0)
+	}
+	if len(req.Topic) > s.opts.MaxTopicLen {
+		return errResp[ChatSetTopicResponse](ChatErrorPayloadTooLarge, "topic exceeds max length", 0)
+	}
+
+	updated := c
+	updated.Topic = req.Topic
+	if err := s.repo.UpdateChannel(context.Background(), updated); err != nil {
+		if err == ErrChannelNotFound {
+			return errResp[ChatSetTopicResponse](ChatErrorChannelNotFound, "channel not found", 0)
+		}
+		return errResp[ChatSetTopicResponse](ChatErrorInternal, "update: "+err.Error(), 0)
+	}
+
+	s.mu.Lock()
+	s.channels[chID] = updated
+	memberCount := len(s.membership[chID])
+	info := channelInfoOfLocked(updated, memberCount)
+	s.mu.Unlock()
+
+	if s.ctx != nil && s.ctx.Logger != nil {
+		s.ctx.Logger.Log(logCat, "set_topic: channel=%s caller=%s topic_len=%d",
+			chID, callerID, len(req.Topic))
+	}
+
+	s.fanoutEvent(chID, &ChatChannelUpdatedEvent{Channel: info})
+	return &ChatSetTopicResponse{}, nil
+}

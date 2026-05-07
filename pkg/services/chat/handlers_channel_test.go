@@ -174,6 +174,106 @@ func TestHandleRenameChannel_BadFormatReturnsReservedSlug(t *testing.T) {
 	}
 }
 
+// --- HandleSetTopic ---
+
+func TestHandleSetTopic_HappyPath(t *testing.T) {
+	chatRepo := chattest.NewMock()
+	authRepo := authtest.NewMock()
+	svc := chat.NewTestServiceWithAuth(t, chatRepo, authRepo, nil)
+
+	_ = svc.MustOnlineFakeUser(101, "alice")
+	create, err := svc.HandleCreate(&ops.OpContext{ConnID: 101}, &chat.ChatCreateRequest{
+		Slug: "cool", Topic: "old topic",
+	})
+	if err != nil || create.ErrorCode != 0 {
+		t.Fatalf("create: %v %s", err, create.ErrorMessage)
+	}
+	chid, _ := uuid.Parse(create.Channel.ChannelID)
+
+	var sent []recordedEvent
+	svc.SetSendEventFn(func(c uint32, ev any) { sent = append(sent, recordedEvent{c, ev}) })
+
+	resp, err := svc.HandleSetTopic(&ops.OpContext{ConnID: 101}, &chat.ChatSetTopicRequest{
+		ChannelID: chid.String(),
+		Topic:     "new topic",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp.ErrorCode != 0 {
+		t.Fatalf("err: %s", resp.ErrorMessage)
+	}
+
+	stored, _ := chatRepo.GetChannelByID(context.Background(), chid)
+	if stored.Topic != "new topic" {
+		t.Fatalf("stored topic=%q want %q", stored.Topic, "new topic")
+	}
+
+	gotUpdated := false
+	for _, r := range sent {
+		ev, ok := r.Event.(*chat.ChatChannelUpdatedEvent)
+		if !ok {
+			continue
+		}
+		if r.ConnID == 101 && ev.Channel.Topic == "new topic" {
+			gotUpdated = true
+		}
+	}
+	if !gotUpdated {
+		t.Fatal("expected ChatChannelUpdatedEvent with new topic")
+	}
+}
+
+func TestHandleSetTopic_TooLongReturnsPayloadTooLarge(t *testing.T) {
+	chatRepo := chattest.NewMock()
+	authRepo := authtest.NewMock()
+	svc := chat.NewTestServiceWithAuth(t, chatRepo, authRepo, nil)
+
+	_ = svc.MustOnlineFakeUser(101, "alice")
+	create, err := svc.HandleCreate(&ops.OpContext{ConnID: 101}, &chat.ChatCreateRequest{Slug: "cool"})
+	if err != nil || create.ErrorCode != 0 {
+		t.Fatalf("create: %v %s", err, create.ErrorMessage)
+	}
+
+	// MaxTopicLen default is 200.
+	long := make([]byte, 500)
+	for i := range long {
+		long[i] = 'x'
+	}
+	resp, err := svc.HandleSetTopic(&ops.OpContext{ConnID: 101}, &chat.ChatSetTopicRequest{
+		ChannelID: create.Channel.ChannelID,
+		Topic:     string(long),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp.ErrorCode != uint32(chat.ChatErrorPayloadTooLarge) {
+		t.Fatalf("got code=%d want PayloadTooLarge", resp.ErrorCode)
+	}
+}
+
+func TestHandleSetTopic_PermissionDeniedForNonAdmin(t *testing.T) {
+	chatRepo := chattest.NewMock()
+	authRepo := authtest.NewMock()
+	svc := chat.NewTestServiceWithAuth(t, chatRepo, authRepo, []chat.DefaultChannelDef{
+		{Slug: "guild:alpha", Kind: chat.ChannelKindSystemPredicate},
+	})
+	chid := svc.MustChannelID("guild:alpha")
+
+	_ = svc.MustOnlineFakeUser(101, "alice")
+
+	resp, err := svc.HandleSetTopic(&ops.OpContext{ConnID: 101}, &chat.ChatSetTopicRequest{
+		ChannelID: chid.String(),
+		Topic:     "new",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp.ErrorCode != uint32(chat.ChatErrorPermissionDenied) {
+		t.Fatalf("got code=%d want PermissionDenied", resp.ErrorCode)
+	}
+}
+
 func TestHandleRenameChannel_RejectsSystemAll(t *testing.T) {
 	chatRepo := chattest.NewMock()
 	authRepo := authtest.NewMock()
