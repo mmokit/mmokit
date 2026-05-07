@@ -74,8 +74,9 @@ func (s *Service) HandleSend(opCtx *ops.OpContext, req *ChatSendRequest) (*ChatS
 		Body:           req.Body,
 		SentAtMs:       now,
 	}
+
 	s.fanoutEvent(chID, ev)
-	_ = c // future: per-channel logging
+	_ = c
 
 	return &ChatSendResponse{MsgID: msgID.String(), SentAtMs: now}, nil
 }
@@ -535,10 +536,6 @@ func (s *Service) HandleSessionEnter(_ *ops.OpContext, req *ChatSessionEnterRequ
 	// (deferred to membership-aware tests in Phase 7; simple single-conn
 	// hydration alone is sufficient for v1 SYSTEM_ALL).
 
-	if s.ctx != nil && s.ctx.Logger != nil {
-		s.ctx.Logger.Log(logCat, "session enter: conn=%d user=%s username=%s gateway=%s hydration=%d (channels=%d sendFn=%v)",
-			req.ConnID, uid, req.Username, req.GatewayID, len(hydration), len(s.channels), s.sendEventFn != nil)
-	}
 	s.fanoutToOne(req.ConnID, &ChatChannelsHydratedEvent{Channels: hydration})
 	return &ChatSessionEnterResponse{}, nil
 }
