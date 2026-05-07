@@ -689,6 +689,157 @@ func TestHandleUnbanFromChannel_PermissionDeniedForNonAdmin(t *testing.T) {
 	}
 }
 
+// --- HandleDeleteMessage ---
+
+func TestHandleDeleteMessage_HappyPath_FansOutToMembers(t *testing.T) {
+	chatRepo := chattest.NewMock()
+	authRepo := authtest.NewMock()
+	svc := chat.NewTestServiceWithAuth(t, chatRepo, authRepo, []chat.DefaultChannelDef{
+		{Slug: "world", Kind: chat.ChannelKindSystemAll},
+	})
+	chid := svc.MustChannelID("world")
+
+	gmUID := svc.MustOnlineFakeUser(101, "gm")
+	svc.MustAddMember(chid, gmUID, "admin")
+	bobUID := svc.MustOnlineFakeUser(102, "bob")
+	carolUID := svc.MustOnlineFakeUser(103, "carol")
+	_ = bobUID
+	_ = carolUID
+
+	// Bob sends a message → produces a msg_id we can later delete.
+	sendResp, err := svc.HandleSend(&ops.OpContext{ConnID: 102}, &chat.ChatSendRequest{
+		ChannelID: chid.String(), Body: "delete me",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if sendResp.ErrorCode != 0 {
+		t.Fatalf("send: %s", sendResp.ErrorMessage)
+	}
+
+	var sent []recordedEvent
+	svc.SetSendEventFn(func(c uint32, ev any) { sent = append(sent, recordedEvent{c, ev}) })
+
+	resp, err := svc.HandleDeleteMessage(&ops.OpContext{ConnID: 101}, &chat.ChatDeleteMessageRequest{
+		MsgID:     sendResp.MsgID,
+		ChannelID: chid.String(),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp.ErrorCode != 0 {
+		t.Fatalf("err: %s", resp.ErrorMessage)
+	}
+
+	// All online users (system_all) should receive ChatMessageDeletedEvent.
+	count := 0
+	for _, r := range sent {
+		ev, ok := r.Event.(*chat.ChatMessageDeletedEvent)
+		if !ok {
+			continue
+		}
+		if ev.MsgID != sendResp.MsgID {
+			t.Fatalf("MsgID=%q want %q", ev.MsgID, sendResp.MsgID)
+		}
+		if ev.DeletedByUserID != gmUID.String() {
+			t.Fatalf("DeletedByUserID=%q want %q", ev.DeletedByUserID, gmUID.String())
+		}
+		count++
+	}
+	if count != 3 {
+		t.Fatalf("expected 3 fanout sends, got %d", count)
+	}
+}
+
+func TestHandleDeleteMessage_UnknownMsgID(t *testing.T) {
+	chatRepo := chattest.NewMock()
+	authRepo := authtest.NewMock()
+	svc := chat.NewTestServiceWithAuth(t, chatRepo, authRepo, []chat.DefaultChannelDef{
+		{Slug: "world", Kind: chat.ChannelKindSystemAll},
+	})
+	chid := svc.MustChannelID("world")
+	gmUID := svc.MustOnlineFakeUser(101, "gm")
+	svc.MustAddMember(chid, gmUID, "admin")
+
+	resp, err := svc.HandleDeleteMessage(&ops.OpContext{ConnID: 101}, &chat.ChatDeleteMessageRequest{
+		MsgID:     uuid.NewString(), // never-seen
+		ChannelID: chid.String(),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp.ErrorCode != uint32(chat.ChatErrorMessageUnknown) {
+		t.Fatalf("got code=%d want MessageUnknown", resp.ErrorCode)
+	}
+}
+
+func TestHandleDeleteMessage_ChannelMismatch(t *testing.T) {
+	chatRepo := chattest.NewMock()
+	authRepo := authtest.NewMock()
+	svc := chat.NewTestServiceWithAuth(t, chatRepo, authRepo, []chat.DefaultChannelDef{
+		{Slug: "world", Kind: chat.ChannelKindSystemAll},
+		{Slug: "help", Kind: chat.ChannelKindSystemAll},
+	})
+	world := svc.MustChannelID("world")
+	help := svc.MustChannelID("help")
+
+	gmUID := svc.MustOnlineFakeUser(101, "gm")
+	svc.MustAddMember(world, gmUID, "admin")
+	bobUID := svc.MustOnlineFakeUser(102, "bob")
+	_ = bobUID
+
+	// Bob sends to "world".
+	sendResp, err := svc.HandleSend(&ops.OpContext{ConnID: 102}, &chat.ChatSendRequest{
+		ChannelID: world.String(), Body: "hi",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// GM tries to delete it claiming the message is from "help".
+	resp, err := svc.HandleDeleteMessage(&ops.OpContext{ConnID: 101}, &chat.ChatDeleteMessageRequest{
+		MsgID:     sendResp.MsgID,
+		ChannelID: help.String(),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp.ErrorCode != uint32(chat.ChatErrorMessageUnknown) {
+		t.Fatalf("got code=%d want MessageUnknown for channel mismatch", resp.ErrorCode)
+	}
+}
+
+func TestHandleDeleteMessage_PermissionDeniedForNonAdmin(t *testing.T) {
+	chatRepo := chattest.NewMock()
+	authRepo := authtest.NewMock()
+	svc := chat.NewTestServiceWithAuth(t, chatRepo, authRepo, []chat.DefaultChannelDef{
+		{Slug: "world", Kind: chat.ChannelKindSystemAll},
+	})
+	chid := svc.MustChannelID("world")
+
+	bobUID := svc.MustOnlineFakeUser(102, "bob")
+	_ = bobUID
+	sendResp, err := svc.HandleSend(&ops.OpContext{ConnID: 102}, &chat.ChatSendRequest{
+		ChannelID: chid.String(), Body: "hi",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Carol (no admin role) tries to delete bob's message.
+	_ = svc.MustOnlineFakeUser(103, "carol")
+	resp, err := svc.HandleDeleteMessage(&ops.OpContext{ConnID: 103}, &chat.ChatDeleteMessageRequest{
+		MsgID:     sendResp.MsgID,
+		ChannelID: chid.String(),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp.ErrorCode != uint32(chat.ChatErrorPermissionDenied) {
+		t.Fatalf("got code=%d want PermissionDenied", resp.ErrorCode)
+	}
+}
+
 // Ensure that re-reading mutes via the service post-handler, before
 // reaper kicks in, sees the row in the repo.
 func TestHandleMuteUser_PersistsToRepository(t *testing.T) {

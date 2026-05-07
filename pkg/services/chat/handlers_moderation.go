@@ -383,6 +383,49 @@ func (s *Service) HandleUnbanFromChannel(opCtx *ops.OpContext, req *ChatUnbanReq
 	return &ChatUnbanResponse{}, nil
 }
 
+// HandleDeleteMessage deletes a previously-sent channel message.
+// canModerate-gated; the channel is resolved via the msg_id index.
+//
+// RAM-only — no DB write. Sends ChatMessageDeletedEvent to all current
+// channel members (lets clients clear the message from their view).
+//
+// Returns ChatErrorMessageUnknown for an expired/unknown msg_id, or for
+// a request whose channel_id doesn't match the indexed channel for that
+// msg_id (defends against forging deletes by guessing msg_ids).
+func (s *Service) HandleDeleteMessage(opCtx *ops.OpContext, req *ChatDeleteMessageRequest) (*ChatDeleteMessageResponse, error) {
+	if opCtx == nil {
+		return errResp[ChatDeleteMessageResponse](ChatErrorInternal, "missing op context", 0)
+	}
+	callerID := s.callerFromOpCtx(opCtx)
+	if callerID == uuid.Nil {
+		return errResp[ChatDeleteMessageResponse](ChatErrorPermissionDenied, "not online", 0)
+	}
+
+	expectedChID, ok := s.msgIDIndex.Get(req.MsgID)
+	if !ok {
+		return errResp[ChatDeleteMessageResponse](ChatErrorMessageUnknown, "message id unknown or expired", 0)
+	}
+	parsedChID, err := uuid.Parse(req.ChannelID)
+	if err != nil || parsedChID != expectedChID {
+		return errResp[ChatDeleteMessageResponse](ChatErrorMessageUnknown, "channel mismatch", 0)
+	}
+	if !s.canModerate(callerID, parsedChID) {
+		return errResp[ChatDeleteMessageResponse](ChatErrorPermissionDenied, "denied", 0)
+	}
+
+	if s.ctx != nil && s.ctx.Logger != nil {
+		s.ctx.Logger.Log(logCat, "delete_message: msg_id=%s channel=%s caller=%s",
+			req.MsgID, parsedChID, callerID)
+	}
+
+	s.fanoutEvent(parsedChID, &ChatMessageDeletedEvent{
+		MsgID:           req.MsgID,
+		ChannelID:       parsedChID.String(),
+		DeletedByUserID: callerID.String(),
+	})
+	return &ChatDeleteMessageResponse{}, nil
+}
+
 // chIDStringForGlobal returns "" when chID is the MuteGlobalChannelID
 // sentinel; otherwise the canonical UUID string. Used to translate the
 // sentinel back to wire-form "empty = global" semantics.
