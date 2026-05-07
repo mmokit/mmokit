@@ -94,3 +94,110 @@ func TestHandleRegisterChannel_RejectsCustomKind(t *testing.T) {
 		t.Fatal("expected error for CUSTOM kind on RegisterChannel")
 	}
 }
+
+// --- HandleUnregisterChannel ---
+
+func TestHandleUnregisterChannel_HappyPath(t *testing.T) {
+	chatRepo := chattest.NewMock()
+	authRepo := authtest.NewMock()
+	svc := chat.NewTestServiceWithAuth(t, chatRepo, authRepo, []chat.DefaultChannelDef{
+		{Slug: "guild:alpha", Kind: chat.ChannelKindSystemPredicate},
+	})
+	chid := svc.MustChannelID("guild:alpha")
+
+	adminUID := svc.MustOnlineFakeUser(101, "admin")
+	_ = authRepo.GrantCapability(context.Background(), auth.Capability{
+		UserID: adminUID, Capability: "chat.admin",
+	})
+
+	resp, err := svc.HandleUnregisterChannel(&ops.OpContext{ConnID: 101}, &chat.ChatUnregisterChannelRequest{
+		ChannelID: chid.String(),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp.ErrorCode != 0 {
+		t.Fatalf("err: %s", resp.ErrorMessage)
+	}
+
+	if _, err := chatRepo.GetChannelByID(context.Background(), chid); err != chat.ErrChannelNotFound {
+		t.Fatalf("expected ErrChannelNotFound, got %v", err)
+	}
+}
+
+func TestHandleUnregisterChannel_PermissionDenied(t *testing.T) {
+	chatRepo := chattest.NewMock()
+	authRepo := authtest.NewMock()
+	svc := chat.NewTestServiceWithAuth(t, chatRepo, authRepo, []chat.DefaultChannelDef{
+		{Slug: "guild:alpha", Kind: chat.ChannelKindSystemPredicate},
+	})
+	chid := svc.MustChannelID("guild:alpha")
+
+	_ = svc.MustOnlineFakeUser(101, "alice") // no chat.admin
+
+	resp, err := svc.HandleUnregisterChannel(&ops.OpContext{ConnID: 101}, &chat.ChatUnregisterChannelRequest{
+		ChannelID: chid.String(),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp.ErrorCode != uint32(chat.ChatErrorPermissionDenied) {
+		t.Fatalf("got code=%d want PermissionDenied", resp.ErrorCode)
+	}
+}
+
+func TestHandleUnregisterChannel_FanoutChannelGoneEventToSubscribers(t *testing.T) {
+	chatRepo := chattest.NewMock()
+	authRepo := authtest.NewMock()
+	svc := chat.NewTestServiceWithAuth(t, chatRepo, authRepo, []chat.DefaultChannelDef{
+		{Slug: "guild:alpha", Kind: chat.ChannelKindSystemPredicate},
+	})
+	chid := svc.MustChannelID("guild:alpha")
+
+	adminUID := svc.MustOnlineFakeUser(101, "admin")
+	_ = authRepo.GrantCapability(context.Background(), auth.Capability{
+		UserID: adminUID, Capability: "chat.admin",
+	})
+
+	bobUID := svc.MustOnlineFakeUser(102, "bob")
+	svc.MustAddMember(chid, bobUID, "member")
+	svc.MustSubscribe(chid, 102)
+
+	carolUID := svc.MustOnlineFakeUser(103, "carol")
+	svc.MustAddMember(chid, carolUID, "member")
+	svc.MustSubscribe(chid, 103)
+
+	var sent []recordedEvent
+	svc.SetSendEventFn(func(c uint32, ev any) { sent = append(sent, recordedEvent{c, ev}) })
+
+	resp, err := svc.HandleUnregisterChannel(&ops.OpContext{ConnID: 101}, &chat.ChatUnregisterChannelRequest{
+		ChannelID: chid.String(),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp.ErrorCode != 0 {
+		t.Fatalf("err: %s", resp.ErrorMessage)
+	}
+
+	gotBob := false
+	gotCarol := false
+	for _, r := range sent {
+		ev, ok := r.Event.(*chat.ChatChannelGoneEvent)
+		if !ok {
+			continue
+		}
+		if ev.ChannelID != chid.String() {
+			t.Fatalf("event channel=%s want %s", ev.ChannelID, chid.String())
+		}
+		if r.ConnID == 102 {
+			gotBob = true
+		}
+		if r.ConnID == 103 {
+			gotCarol = true
+		}
+	}
+	if !gotBob || !gotCarol {
+		t.Fatalf("expected bob+carol got ChatChannelGoneEvent, bob=%v carol=%v", gotBob, gotCarol)
+	}
+}

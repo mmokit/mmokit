@@ -97,6 +97,91 @@ func (s *Service) HandleRegisterChannel(opCtx *ops.OpContext, req *ChatRegisterC
 	return &ChatRegisterChannelResponse{Channel: info}, nil
 }
 
+// HandleUnregisterChannel deletes a channel and cascades all its
+// memberships in the repo. In-memory state is cleared, including
+// userChans entries pointing at this channel.
+//
+// Authorization: requires the global "chat.admin" capability.
+//
+// Fans out ChatChannelGoneEvent to all current subscribers BEFORE
+// clearing subs (so the message reaches them).
+func (s *Service) HandleUnregisterChannel(opCtx *ops.OpContext, req *ChatUnregisterChannelRequest) (*ChatUnregisterChannelResponse, error) {
+	if opCtx == nil {
+		return errResp[ChatUnregisterChannelResponse](ChatErrorInternal, "missing op context", 0)
+	}
+	callerID := s.callerFromOpCtx(opCtx)
+	if callerID == uuid.Nil {
+		return errResp[ChatUnregisterChannelResponse](ChatErrorPermissionDenied, "not online", 0)
+	}
+	if !s.hasGlobalAdmin(callerID) {
+		return errResp[ChatUnregisterChannelResponse](ChatErrorPermissionDenied, "denied", 0)
+	}
+
+	chID, err := uuid.Parse(req.ChannelID)
+	if err != nil {
+		return errResp[ChatUnregisterChannelResponse](ChatErrorChannelNotFound, "invalid channel_id", 0)
+	}
+
+	s.mu.RLock()
+	c, ok := s.channels[chID]
+	s.mu.RUnlock()
+	if !ok {
+		return errResp[ChatUnregisterChannelResponse](ChatErrorChannelNotFound, "channel not found", 0)
+	}
+
+	// Persist deletion (cascades chat_channel_members rows on the FK).
+	if err := s.repo.DeleteChannel(context.Background(), chID); err != nil && err != ErrChannelNotFound {
+		return errResp[ChatUnregisterChannelResponse](ChatErrorInternal, "delete: "+err.Error(), 0)
+	}
+
+	// Snapshot fanout targets BEFORE clearing subs. For SYSTEM_ALL the
+	// fanout target set is the full online[] map (every connected user).
+	s.mu.Lock()
+	var targets []uint32
+	if c.Kind == "system_all" {
+		targets = make([]uint32, 0, len(s.online))
+		for _, conn := range s.online {
+			targets = append(targets, conn)
+		}
+	} else {
+		targets = make([]uint32, 0, len(s.subs[chID]))
+		for cid := range s.subs[chID] {
+			targets = append(targets, cid)
+		}
+	}
+
+	// Clear in-memory state.
+	delete(s.channels, chID)
+	delete(s.bySlug, c.Slug)
+	if oldMembers := s.membership[chID]; oldMembers != nil {
+		for uid := range oldMembers {
+			if uc := s.userChans[uid]; uc != nil {
+				delete(uc, chID)
+				if len(uc) == 0 {
+					delete(s.userChans, uid)
+				}
+			}
+		}
+		delete(s.membership, chID)
+	}
+	delete(s.subs, chID)
+	send := s.sendEventFn
+	s.mu.Unlock()
+
+	if s.ctx != nil && s.ctx.Logger != nil {
+		s.ctx.Logger.Log(logCat, "unregister_channel: channel=%s slug=%s caller=%s",
+			chID, c.Slug, callerID)
+	}
+
+	if send != nil {
+		ev := &ChatChannelGoneEvent{ChannelID: chID.String()}
+		for _, cid := range targets {
+			send(cid, ev)
+		}
+	}
+	return &ChatUnregisterChannelResponse{}, nil
+}
+
 // validateSystemSlugFormat permits a single colon plus the standard
 // charset; used for system slugs like "guild:foo" or "party:abc123".
 func validateSystemSlugFormat(s string) bool {
