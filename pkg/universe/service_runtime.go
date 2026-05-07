@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/google/uuid"
+
 	meshpb "github.com/zenion/mmoserver/gen/go/meshpb"
 	"github.com/zenion/mmoserver/pkg/persist/postgres"
 	"github.com/zenion/mmoserver/pkg/service"
@@ -123,8 +125,14 @@ func (c *Process) startServices(ctx context.Context) error {
 		return fmt.Errorf("startServices: %w", err)
 	}
 
-	for i, k := range kinds {
-		instanceID := fmt.Sprintf("%s-%s-%d", hostID, k.Name, i)
+	for _, k := range kinds {
+		// Instance IDs are host-independent: a service migrating between
+		// hosts keeps its identity stable in coord-side audit logs even
+		// though its CoordInstance.HostID changes. Format: "<kind>-<uuid>"
+		// — the kind prefix keeps human grep-ability, the UUID guarantees
+		// global uniqueness across multi-host setups (where two hosts may
+		// run instances of the same kind simultaneously).
+		instanceID := fmt.Sprintf("%s-%s", k.Name, uuid.NewString()[:8])
 		svcCtx := c.serviceContext(k.Name, instanceID)
 
 		svc := k.Factory(svcCtx)
