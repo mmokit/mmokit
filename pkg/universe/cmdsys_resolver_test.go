@@ -64,18 +64,19 @@ func TestResolve_PlayerHomeOrOwner_Offline_NoDBHost(t *testing.T) {
 	}
 }
 
-func TestResolve_Service_NoneRegistered_FallsBackToLocal(t *testing.T) {
+func TestResolve_Service_NoneRegistered_ReturnsError(t *testing.T) {
+	// When no instance of the requested service kind is registered anywhere
+	// the resolver must surface an error instead of silently falling back to
+	// local execution. The previous fall-back masked real misconfigurations
+	// (e.g. ServiceAnnounce never reached the coordinator) because the local
+	// stub handler then returned an opaque "service not initialized" error.
 	c := &Process{
 		Cells:        map[MeshCellID]*Cell{},
 		hostRegistry: NewHostRegistry(logger.New()),
 	}
 	r := newMeshRouteResolver(c)
-	got, err := r.Resolve(cmdsys.RouteService, "chat.channel.list", struct{}{}, "chat")
-	if err != nil {
-		t.Fatalf("Resolve: %v", err)
-	}
-	if len(got) != 1 || got[0].Kind != cmdsys.RouteLocal {
-		t.Fatalf("Resolve(no-instance) = %+v, want one RouteLocal target", got)
+	if _, err := r.Resolve(cmdsys.RouteService, "chat.channel.list", struct{}{}, "chat"); err == nil {
+		t.Fatalf("Resolve(no-instance) should return an error so missing-instance is visible")
 	}
 }
 

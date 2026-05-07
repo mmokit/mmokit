@@ -131,19 +131,25 @@ func (r *meshRouteResolver) Resolve(route cmdsys.RouteKind, verb string, args an
 			return nil, fmt.Errorf("%w: RouteService used without Command.Service set (verb=%s)", ErrRouteMissingField, verb)
 		}
 		hostID := r.coord.HostForServiceKind(service)
-		if hostID == "" {
-			// No live instance registered. Fall back to local execution —
-			// works for single-process mode where the service runs in
-			// this same process. If the service isn't running here either,
-			// the local handler will return its own "service not
-			// initialized" error which is still informative for operators.
-			return []cmdsys.Target{{Kind: cmdsys.RouteLocal, ID: "local"}}, nil
+		if hostID != "" {
+			// Found a hosting host. Dispatch via the same wire path as
+			// RouteSpecificHost; the meshControlTransport short-circuits
+			// to InvokeLocal when the host happens to be colocated with
+			// this process (single-process / `all` preset).
+			return []cmdsys.Target{{Kind: cmdsys.RouteSpecificHost, ID: hostID}}, nil
 		}
-		// Found a hosting host. Dispatch via the same wire path as
-		// RouteSpecificHost; the meshControlTransport short-circuits to
-		// InvokeLocal when the host happens to be colocated with this
-		// process.
-		return []cmdsys.Target{{Kind: cmdsys.RouteSpecificHost, ID: hostID}}, nil
+		// No live instance registered anywhere we can see. Two sub-cases:
+		//   (a) coordinator process with empty roster — genuinely no
+		//       service-host running this kind in the cluster.
+		//   (b) non-coordinator process with no PeerList yet — same
+		//       observable condition; without a route target we can't
+		//       dispatch.
+		// Surface a clear error rather than silently falling back to
+		// RouteLocal; the previous fall-back masked real misconfigurations
+		// (e.g. ServiceAnnounce never reached coord) by routing to a
+		// stub local handler that then errored with "service not
+		// initialized."
+		return nil, fmt.Errorf("cmdsys: no live instance of service kind %q (verb=%s); check --services= and that the service-host has registered with the coordinator", service, verb)
 
 	default:
 		return nil, cmdsys.ErrNotYetWired
