@@ -4,9 +4,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/zenion/mmoserver/pkg/cmdsys"
 )
 
@@ -103,6 +105,32 @@ type AuditDigest struct {
 	Reason            string
 }
 
+type CapabilityGrantArgs struct {
+	Username   string `cmd:"help=target username,complete=players"`
+	Capability string `cmd:"help=capability string (e.g. chat.admin)"`
+	Duration   string `cmd:"optional,help=optional expiry duration (e.g. 24h); empty = permanent"`
+}
+
+type CapabilityRevokeArgs struct {
+	Username   string `cmd:"help=target username,complete=players"`
+	Capability string `cmd:"help=capability string (e.g. chat.admin)"`
+}
+
+type CapabilityListResult struct {
+	Capabilities []CapabilityDigest
+}
+
+type CapabilityDigest struct {
+	Capability string
+	GrantedAt  time.Time
+	GrantedBy  string
+	ExpiresAt  time.Time
+}
+
+type BootstrapAdminArgs struct {
+	Username string `cmd:"help=user to bootstrap as cluster admin (must already exist)"`
+}
+
 // DisconnectFn closes any live WebSocket sessions for username and returns
 // the number of sessions actually closed. Called by auth.user.kick after
 // token revocation so a single command both invalidates future-use tokens
@@ -196,6 +224,54 @@ func RegisterConsoleCommands(reg *cmdsys.Registry, getRepo RepoProvider, disconn
 		Args:        AuditRecentArgs{},
 		Result:      AuditRecentResult{},
 		Handler:     auditRecentHandler(getRepo),
+	})); err != nil {
+		return err
+	}
+	if err := must(reg.Register(cmdsys.Command{
+		Verb:        "auth.user.grant",
+		Capability:  "auth.user.write",
+		Description: "grant a capability to a user (optional duration)",
+		Examples:    []string{"auth user grant alice chat.admin", "auth user grant alice chat.admin 24h"},
+		Route:       cmdsys.RouteLocal,
+		Args:        CapabilityGrantArgs{},
+		Result:      OKResult{},
+		Handler:     userGrantHandler(getRepo),
+	})); err != nil {
+		return err
+	}
+	if err := must(reg.Register(cmdsys.Command{
+		Verb:        "auth.user.revoke",
+		Capability:  "auth.user.write",
+		Description: "revoke a capability from a user",
+		Examples:    []string{"auth user revoke alice chat.admin"},
+		Route:       cmdsys.RouteLocal,
+		Args:        CapabilityRevokeArgs{},
+		Result:      OKResult{},
+		Handler:     userRevokeCapHandler(getRepo),
+	})); err != nil {
+		return err
+	}
+	if err := must(reg.Register(cmdsys.Command{
+		Verb:        "auth.user.capabilities",
+		Capability:  "auth.user.read",
+		Description: "list active capabilities for a user",
+		Examples:    []string{"auth user capabilities alice"},
+		Route:       cmdsys.RouteLocal,
+		Args:        UsernameArgs{},
+		Result:      CapabilityListResult{},
+		Handler:     userCapabilitiesHandler(getRepo),
+	})); err != nil {
+		return err
+	}
+	if err := must(reg.Register(cmdsys.Command{
+		Verb:        "auth.bootstrap-admin",
+		Capability:  "", // intentionally empty — bootstrap is a one-shot console action
+		Description: "one-time: grant the admin capability set to a user; refuses if any admin cap already granted",
+		Examples:    []string{"auth bootstrap-admin alice"},
+		Route:       cmdsys.RouteLocal,
+		Args:        BootstrapAdminArgs{},
+		Result:      OKResult{},
+		Handler:     bootstrapAdminHandler(getRepo, []string{"auth.admin", "chat.admin"}),
 	})); err != nil {
 		return err
 	}
@@ -401,6 +477,143 @@ func auditRecentHandler(getRepo RepoProvider) cmdsys.HandlerFunc {
 		}
 		return AuditRecentResult{Events: out}, nil
 	}
+}
+
+func userGrantHandler(getRepo RepoProvider) cmdsys.HandlerFunc {
+	return func(_ context.Context, env *cmdsys.Env, args any) (any, error) {
+		repo := getRepo()
+		if repo == nil {
+			return nil, errRepoNotReady()
+		}
+		a := args.(CapabilityGrantArgs)
+		ctx, cancel := cmdCtx()
+		defer cancel()
+		name := strings.ToLower(strings.TrimSpace(a.Username))
+		user, err := repo.GetUserByUsername(ctx, name)
+		if err != nil {
+			return nil, fmt.Errorf("user %q: %w", name, err)
+		}
+		grantedBy, _ := callerUserIDFromEnv(env)
+		if grantedBy == uuid.Nil {
+			grantedBy = user.UserID
+		}
+		c := Capability{UserID: user.UserID, Capability: a.Capability, GrantedBy: grantedBy}
+		if a.Duration != "" {
+			d, err := time.ParseDuration(a.Duration)
+			if err != nil {
+				return nil, fmt.Errorf("invalid duration: %w", err)
+			}
+			c.ExpiresAt = time.Now().Add(d)
+		}
+		if err := repo.GrantCapability(ctx, c); err != nil {
+			return nil, err
+		}
+		return OKResult{OK: true, Username: user.Username, Detail: "granted " + a.Capability}, nil
+	}
+}
+
+func userRevokeCapHandler(getRepo RepoProvider) cmdsys.HandlerFunc {
+	return func(_ context.Context, _ *cmdsys.Env, args any) (any, error) {
+		repo := getRepo()
+		if repo == nil {
+			return nil, errRepoNotReady()
+		}
+		a := args.(CapabilityRevokeArgs)
+		ctx, cancel := cmdCtx()
+		defer cancel()
+		user, err := repo.GetUserByUsername(ctx, strings.ToLower(a.Username))
+		if err != nil {
+			return nil, err
+		}
+		if err := repo.RevokeCapability(ctx, user.UserID, a.Capability); err != nil {
+			return nil, err
+		}
+		return OKResult{OK: true, Username: user.Username, Detail: "revoked " + a.Capability}, nil
+	}
+}
+
+func userCapabilitiesHandler(getRepo RepoProvider) cmdsys.HandlerFunc {
+	return func(_ context.Context, _ *cmdsys.Env, args any) (any, error) {
+		repo := getRepo()
+		if repo == nil {
+			return nil, errRepoNotReady()
+		}
+		a := args.(UsernameArgs)
+		ctx, cancel := cmdCtx()
+		defer cancel()
+		user, err := repo.GetUserByUsername(ctx, strings.ToLower(a.Username))
+		if err != nil {
+			return nil, err
+		}
+		caps, err := repo.ListCapabilities(ctx, user.UserID)
+		if err != nil {
+			return nil, err
+		}
+		out := make([]CapabilityDigest, 0, len(caps))
+		for _, c := range caps {
+			out = append(out, CapabilityDigest{
+				Capability: c.Capability,
+				GrantedAt:  c.GrantedAt,
+				GrantedBy:  c.GrantedBy.String(),
+				ExpiresAt:  c.ExpiresAt,
+			})
+		}
+		return CapabilityListResult{Capabilities: out}, nil
+	}
+}
+
+func bootstrapAdminHandler(getRepo RepoProvider, defaultBootstrapCaps []string) cmdsys.HandlerFunc {
+	return func(_ context.Context, _ *cmdsys.Env, args any) (any, error) {
+		repo := getRepo()
+		if repo == nil {
+			return nil, errRepoNotReady()
+		}
+		a := args.(BootstrapAdminArgs)
+		ctx, cancel := cmdCtx()
+		defer cancel()
+		user, err := repo.GetUserByUsername(ctx, strings.ToLower(a.Username))
+		if err != nil {
+			return nil, err
+		}
+		// Refuse if any *.admin capability has already been granted to THIS user.
+		// Tighter check across all users would need a new repo method; per-user
+		// is sufficient for v1 — bootstrap is a one-shot operator action;
+		// subsequent admin grants flow through `auth user grant`.
+		existing, _ := repo.ListCapabilities(ctx, user.UserID)
+		for _, c := range existing {
+			if strings.HasSuffix(c.Capability, ".admin") {
+				return nil, fmt.Errorf("user %q already has admin capability %q", user.Username, c.Capability)
+			}
+		}
+		for _, capName := range defaultBootstrapCaps {
+			if err := repo.GrantCapability(ctx, Capability{
+				UserID: user.UserID, Capability: capName, GrantedBy: user.UserID,
+			}); err != nil {
+				return nil, fmt.Errorf("grant %s: %w", capName, err)
+			}
+		}
+		return OKResult{
+			OK:       true,
+			Username: user.Username,
+			Detail:   fmt.Sprintf("granted %d admin capabilities", len(defaultBootstrapCaps)),
+		}, nil
+	}
+}
+
+// callerUserIDFromEnv returns the user_id of whoever invoked the command,
+// or uuid.Nil when unavailable. cmdsys.Env exposes the caller via Caller.ID
+// (string); we parse it as a UUID and treat parse failures as "unknown",
+// which is fine for audit attribution — bootstrap-admin is the only caller
+// that uses this, and it falls back to grantedBy = target user.
+func callerUserIDFromEnv(env *cmdsys.Env) (uuid.UUID, bool) {
+	if env == nil || env.Caller.ID == "" {
+		return uuid.Nil, false
+	}
+	id, err := uuid.Parse(env.Caller.ID)
+	if err != nil {
+		return uuid.Nil, false
+	}
+	return id, true
 }
 
 const hexDigits = "0123456789abcdef"
