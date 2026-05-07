@@ -2,6 +2,7 @@ package universe
 
 import (
 	"errors"
+	"fmt"
 	"reflect"
 
 	"github.com/zenion/mmoserver/pkg/cmdsys"
@@ -26,8 +27,10 @@ func newMeshRouteResolver(coord *Process) *meshRouteResolver {
 // Resolve maps a RouteKind to a slice of Targets using live coordinator state.
 // Context-sensitive routes (RoutePlayerOwner, RouteEntityOwner,
 // RouteSpecificHost, RouteSpecificCell) extract the target identifier
-// from args by field name via reflection.
-func (r *meshRouteResolver) Resolve(route cmdsys.RouteKind, verb string, args any) ([]cmdsys.Target, error) {
+// from args by field name via reflection. RouteService maps the service
+// kind name (passed as `service`) to the hosting host via the cluster
+// service registry.
+func (r *meshRouteResolver) Resolve(route cmdsys.RouteKind, verb string, args any, service string) ([]cmdsys.Target, error) {
 	switch route {
 	case cmdsys.RouteLocal:
 		return []cmdsys.Target{{Kind: cmdsys.RouteLocal, ID: "local"}}, nil
@@ -122,6 +125,25 @@ func (r *meshRouteResolver) Resolve(route cmdsys.RouteKind, verb string, args an
 			return nil, ErrRouteNoOwner
 		}
 		return []cmdsys.Target{{Kind: cmdsys.RouteSpecificCell, ID: hostID}}, nil
+
+	case cmdsys.RouteService:
+		if service == "" {
+			return nil, fmt.Errorf("%w: RouteService used without Command.Service set (verb=%s)", ErrRouteMissingField, verb)
+		}
+		hostID := r.coord.HostForServiceKind(service)
+		if hostID == "" {
+			// No live instance registered. Fall back to local execution —
+			// works for single-process mode where the service runs in
+			// this same process. If the service isn't running here either,
+			// the local handler will return its own "service not
+			// initialized" error which is still informative for operators.
+			return []cmdsys.Target{{Kind: cmdsys.RouteLocal, ID: "local"}}, nil
+		}
+		// Found a hosting host. Dispatch via the same wire path as
+		// RouteSpecificHost; the meshControlTransport short-circuits to
+		// InvokeLocal when the host happens to be colocated with this
+		// process.
+		return []cmdsys.Target{{Kind: cmdsys.RouteSpecificHost, ID: hostID}}, nil
 
 	default:
 		return nil, cmdsys.ErrNotYetWired

@@ -205,7 +205,7 @@ func addCellToCoord(t *testing.T, coord *Process, cellID, hostID string) {
 // Used in perf frontend tests where all cells are colocated in-process.
 type allLocalResolver struct{}
 
-func (allLocalResolver) Resolve(_ cmdsys.RouteKind, _ string, _ any) ([]cmdsys.Target, error) {
+func (allLocalResolver) Resolve(_ cmdsys.RouteKind, _ string, _ any, _ string) ([]cmdsys.Target, error) {
 	return []cmdsys.Target{{Kind: cmdsys.RouteLocal, ID: "local"}}, nil
 }
 

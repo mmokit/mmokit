@@ -964,6 +964,38 @@ func (c *Process) RegisterService(k service.Kind) error {
 	return c.services.Register(k)
 }
 
+// HostForServiceKind returns the host_id of a live instance for the
+// named service kind, or "" when no instance is registered. Used by
+// cmdsys's RouteService route resolver to dispatch service-scoped
+// console commands (e.g. chat.*, auth.*) to whichever process is
+// hosting that service in the cluster.
+//
+// Resolution order:
+//  1. Coordinator-side roster (coordServices) — present on processes
+//     bearing RoleCoordinator. Authoritative cluster-wide view.
+//  2. Gateway/host-side cached routing index (serviceRouting) — the
+//     PeerList-driven mirror used on standalone gateways and remote
+//     hosts. Lets a non-coordinator process resolve service routes
+//     too (e.g. when admin commands originate from a gateway pane).
+//
+// First live instance wins; multi-instance kinds get an arbitrary but
+// stable pick. Returns "" if no instance of `name` is live anywhere.
+func (c *Process) HostForServiceKind(name string) string {
+	if c.coordServices != nil {
+		insts := c.coordServices.InstancesOfKind(name)
+		if len(insts) > 0 {
+			return insts[0].HostID
+		}
+	}
+	if c.serviceRouting != nil {
+		insts := c.serviceRouting.InstancesOfKind(name)
+		if len(insts) > 0 {
+			return insts[0].HostID
+		}
+	}
+	return ""
+}
+
 // notifySessionActive is called when a player transitions to active on a host.
 // Thread-safe — called from host game loops.
 func (c *Process) notifySessionActive(username, hostID string, cellID MeshCellID) {
