@@ -74,6 +74,57 @@ func newService(ctx *service.Context, opts ServiceOpts) service.Service {
 // Repository returns the live Repository for the mmokit facade's console wiring.
 func (s *Service) Repository() Repository { return s.repo }
 
+// ChannelIDBySlug returns the channel_id for a slug. Used by console handlers
+// that need to translate operator-typed slugs into UUIDs before dispatching
+// to Handle* methods. Reads under RLock — safe for concurrent use.
+func (s *Service) ChannelIDBySlug(slug string) (uuid.UUID, bool) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	id, ok := s.bySlug[slug]
+	return id, ok
+}
+
+// ChannelByID returns a snapshot of the in-memory Channel row for id, or
+// the zero value + false when not found. Used by console handlers (e.g.
+// chat.channel.info) for read-only inspection.
+func (s *Service) ChannelByID(id uuid.UUID) (Channel, bool) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	c, ok := s.channels[id]
+	return c, ok
+}
+
+// ListChannelsSnapshot returns a snapshot copy of all in-memory channels,
+// in unspecified order. Used by chat.channel.list (cluster-wide list).
+func (s *Service) ListChannelsSnapshot() []Channel {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	out := make([]Channel, 0, len(s.channels))
+	for _, c := range s.channels {
+		out = append(out, c)
+	}
+	return out
+}
+
+// MemberCountForChannel returns the current explicit-member count for a
+// channel (0 for SYSTEM_ALL — implicit membership). Used alongside
+// ChannelByID to populate ChannelInfoResult for console handlers.
+func (s *Service) MemberCountForChannel(id uuid.UUID) int {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return len(s.membership[id])
+}
+
+// OnlineConnIDForUser returns the connID for a user if they are currently
+// online, plus a found bool. Used by console handlers to synthesize an
+// OpContext targeting an operator who is also a logged-in player.
+func (s *Service) OnlineConnIDForUser(userID uuid.UUID) (uint32, bool) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	connID, ok := s.online[userID]
+	return connID, ok
+}
+
 func (s *Service) Init(ctx *service.Context) error {
 	s.ctx = ctx
 	if s.opts.Repository != nil {

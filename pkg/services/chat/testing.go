@@ -129,6 +129,27 @@ func (t *TestService) MustOnlineFakeUser(connID uint32, username string) uuid.UU
 	return uid
 }
 
+// MustOnlineExistingUser places the given user_id online under connID. Used
+// by tests that need the chat-side presence to match an auth user that's
+// already been created (e.g. operator wiring for console handler tests).
+func (t *TestService) MustOnlineExistingUser(connID uint32, userID uuid.UUID, username string) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	t.online[userID] = connID
+	t.connIndex[connID] = userID
+	t.usernames[userID] = username
+}
+
+// HasMember returns true iff userID is in the explicit-membership map for
+// channelID. Used by console-handler tests to verify add/remove member
+// state changes without exposing internal maps.
+func (t *TestService) HasMember(channelID, userID uuid.UUID) bool {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+	_, ok := t.membership[channelID][userID]
+	return ok
+}
+
 // OnlineCount returns the number of currently-online users (size of
 // the online map).
 func (t *TestService) OnlineCount() int {
