@@ -216,3 +216,129 @@ func TestHandleAddMember_FanoutToExistingMembersExcludingNew(t *testing.T) {
 		t.Fatalf("expected alice+carol both got events, alice=%v carol=%v", gotAlice, gotCarol)
 	}
 }
+
+// --- HandleRemoveMember ---
+
+func TestHandleRemoveMember_HappyPath_AdminCallerSucceeds(t *testing.T) {
+	chatRepo := chattest.NewMock()
+	authRepo := authtest.NewMock()
+	svc := chat.NewTestServiceWithAuth(t, chatRepo, authRepo, []chat.DefaultChannelDef{
+		{Slug: "council", Kind: chat.ChannelKindSystemPredicate},
+	})
+	chid := svc.MustChannelID("council")
+
+	aliceUID := svc.MustOnlineFakeUser(101, "alice")
+	svc.MustAddMember(chid, aliceUID, "admin")
+	bobUID := svc.MustOnlineFakeUser(102, "bob")
+	svc.MustAddMember(chid, bobUID, "member")
+	svc.MustSubscribe(chid, 101)
+	svc.MustSubscribe(chid, 102)
+
+	resp, err := svc.HandleRemoveMember(&ops.OpContext{ConnID: 101}, &chat.ChatRemoveMemberRequest{
+		ChannelID: chid.String(),
+		UserID:    bobUID.String(),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp.ErrorCode != 0 {
+		t.Fatalf("err: %s", resp.ErrorMessage)
+	}
+
+	mems, _ := chatRepo.ListMembers(context.Background(), chid)
+	for _, m := range mems {
+		if m.UserID == bobUID {
+			t.Fatal("bob still in repo member list after RemoveMember")
+		}
+	}
+
+	// In-memory: bob's conn dropped from subs[chid].
+	for _, c := range svc.FanoutTargets(chid) {
+		if c == 102 {
+			t.Fatal("bob's conn still in subs after RemoveMember")
+		}
+	}
+}
+
+func TestHandleRemoveMember_PermissionDeniedForNonAdmin(t *testing.T) {
+	chatRepo := chattest.NewMock()
+	authRepo := authtest.NewMock()
+	svc := chat.NewTestServiceWithAuth(t, chatRepo, authRepo, []chat.DefaultChannelDef{
+		{Slug: "council", Kind: chat.ChannelKindSystemPredicate},
+	})
+	chid := svc.MustChannelID("council")
+
+	_ = svc.MustOnlineFakeUser(101, "alice") // not an admin
+	bobUID := uuid.New()
+	svc.MustAddMember(chid, bobUID, "member")
+
+	resp, err := svc.HandleRemoveMember(&ops.OpContext{ConnID: 101}, &chat.ChatRemoveMemberRequest{
+		ChannelID: chid.String(),
+		UserID:    bobUID.String(),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp.ErrorCode != uint32(chat.ChatErrorPermissionDenied) {
+		t.Fatalf("got code=%d want PermissionDenied", resp.ErrorCode)
+	}
+}
+
+func TestHandleRemoveMember_FanoutExcludesRemovedUser(t *testing.T) {
+	chatRepo := chattest.NewMock()
+	authRepo := authtest.NewMock()
+	svc := chat.NewTestServiceWithAuth(t, chatRepo, authRepo, []chat.DefaultChannelDef{
+		{Slug: "council", Kind: chat.ChannelKindSystemPredicate},
+	})
+	chid := svc.MustChannelID("council")
+
+	aliceUID := svc.MustOnlineFakeUser(101, "alice")
+	svc.MustAddMember(chid, aliceUID, "admin")
+	bobUID := svc.MustOnlineFakeUser(102, "bob")
+	svc.MustAddMember(chid, bobUID, "member")
+	carolUID := svc.MustOnlineFakeUser(103, "carol")
+	svc.MustAddMember(chid, carolUID, "member")
+	svc.MustSubscribe(chid, 101)
+	svc.MustSubscribe(chid, 102)
+	svc.MustSubscribe(chid, 103)
+
+	var sent []recordedEvent
+	svc.SetSendEventFn(func(c uint32, ev any) { sent = append(sent, recordedEvent{c, ev}) })
+
+	resp, err := svc.HandleRemoveMember(&ops.OpContext{ConnID: 101}, &chat.ChatRemoveMemberRequest{
+		ChannelID: chid.String(),
+		UserID:    bobUID.String(),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp.ErrorCode != 0 {
+		t.Fatalf("err: %s", resp.ErrorMessage)
+	}
+
+	// Bob (the removed user, conn 102) should NOT receive the fanout.
+	// Alice (101) + carol (103) should.
+	gotAlice := false
+	gotCarol := false
+	for _, r := range sent {
+		ev, ok := r.Event.(*chat.ChatMemberLeftEvent)
+		if !ok {
+			continue
+		}
+		if r.ConnID == 102 {
+			t.Fatal("removed user's conn should not receive ChatMemberLeftEvent")
+		}
+		if ev.UserID != bobUID.String() {
+			t.Fatalf("event UserID=%s want %s", ev.UserID, bobUID.String())
+		}
+		if r.ConnID == 101 {
+			gotAlice = true
+		}
+		if r.ConnID == 103 {
+			gotCarol = true
+		}
+	}
+	if !gotAlice || !gotCarol {
+		t.Fatalf("expected alice+carol got events, alice=%v carol=%v", gotAlice, gotCarol)
+	}
+}
