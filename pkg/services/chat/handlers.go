@@ -1,7 +1,9 @@
 package chat
 
 import (
+	"context"
 	"reflect"
+	"strings"
 
 	"github.com/google/uuid"
 
@@ -68,6 +70,138 @@ func (s *Service) HandleSend(opCtx *ops.OpContext, req *ChatSendRequest) (*ChatS
 // Caller MUST hold s.mu (R or W).
 func (s *Service) usernameForUserLocked(userID uuid.UUID) string {
 	return s.usernames[userID]
+}
+
+// HandleCreate registers a new user-owned custom channel. Caller becomes
+// the channel admin and is auto-subscribed.
+//
+// Sender identity is resolved from opCtx.ConnID via connIndex; the caller
+// must therefore have a live ChatSessionEnter (i.e. be online) before
+// invoking this op.
+func (s *Service) HandleCreate(opCtx *ops.OpContext, req *ChatCreateRequest) (*ChatCreateResponse, error) {
+	// Resolve caller from connID
+	if opCtx == nil {
+		return errResp[ChatCreateResponse](ChatErrorInternal, "missing op context", 0)
+	}
+	s.mu.RLock()
+	callerID, online := s.connIndex[opCtx.ConnID]
+	callerConnID := opCtx.ConnID
+	s.mu.RUnlock()
+	if !online || callerID == uuid.Nil {
+		return errResp[ChatCreateResponse](ChatErrorPermissionDenied, "not online", 0)
+	}
+
+	// Validate slug
+	slug := req.Slug
+	if slug == "" {
+		return errResp[ChatCreateResponse](ChatErrorReservedSlug, "empty slug", 0)
+	}
+	if len(slug) > s.opts.MaxChannelSlugLen {
+		return errResp[ChatCreateResponse](ChatErrorReservedSlug, "slug exceeds max length", 0)
+	}
+	if !validateSlugFormat(slug) {
+		return errResp[ChatCreateResponse](ChatErrorReservedSlug, "slug must match [a-z0-9_-]", 0)
+	}
+	for _, prefix := range s.opts.ReservedSlugPrefixes {
+		if strings.HasPrefix(slug, prefix) {
+			return errResp[ChatCreateResponse](ChatErrorReservedSlug, "slug uses reserved prefix", 0)
+		}
+	}
+
+	// Validate password length (when present)
+	if req.Password != "" && len(req.Password) < s.opts.MinChannelPasswordLen {
+		return errResp[ChatCreateResponse](ChatErrorInvalidPassword, "password too short", 0)
+	}
+
+	// Enforce MaxChannelsPerUser (count current custom channels owned by caller)
+	s.mu.RLock()
+	owned := 0
+	for _, c := range s.channels {
+		if c.Kind == "custom" && c.OwnerUserID == callerID {
+			owned++
+		}
+	}
+	s.mu.RUnlock()
+	if owned >= s.opts.MaxChannelsPerUser {
+		return errResp[ChatCreateResponse](ChatErrorMaxChannelsReached, "max channels reached", 0)
+	}
+
+	// Hash password (if present)
+	var passwordHash string
+	if req.Password != "" {
+		h, err := HashChannelPassword(req.Password)
+		if err != nil {
+			return errResp[ChatCreateResponse](ChatErrorInternal, "hash: "+err.Error(), 0)
+		}
+		passwordHash = h
+	}
+
+	// Persist channel
+	c := Channel{
+		Slug:         slug,
+		Kind:         "custom",
+		Topic:        req.Topic,
+		PasswordHash: passwordHash,
+		OwnerUserID:  callerID,
+	}
+	stored, err := s.repo.UpsertChannel(context.Background(), c)
+	if err != nil {
+		if err == ErrChannelSlugInUse {
+			return errResp[ChatCreateResponse](ChatErrorSlugInUse, "slug already in use", 0)
+		}
+		return errResp[ChatCreateResponse](ChatErrorInternal, "upsert: "+err.Error(), 0)
+	}
+
+	// Persist creator as admin member
+	if err := s.repo.AddOrUpdateMember(context.Background(), ChannelMember{
+		ChannelID: stored.ChannelID,
+		UserID:    callerID,
+		Role:      "admin",
+	}); err != nil {
+		return errResp[ChatCreateResponse](ChatErrorInternal, "add member: "+err.Error(), 0)
+	}
+
+	// In-memory bookkeeping
+	s.mu.Lock()
+	s.channels[stored.ChannelID] = stored
+	s.bySlug[stored.Slug] = stored.ChannelID
+	if s.membership[stored.ChannelID] == nil {
+		s.membership[stored.ChannelID] = map[uuid.UUID]string{}
+	}
+	s.membership[stored.ChannelID][callerID] = "admin"
+	if s.userChans[callerID] == nil {
+		s.userChans[callerID] = map[uuid.UUID]struct{}{}
+	}
+	s.userChans[callerID][stored.ChannelID] = struct{}{}
+	if s.subs[stored.ChannelID] == nil {
+		s.subs[stored.ChannelID] = map[uint32]struct{}{}
+	}
+	s.subs[stored.ChannelID][callerConnID] = struct{}{}
+	memberCount := len(s.membership[stored.ChannelID])
+	info := channelInfoOfLocked(stored, memberCount)
+	s.mu.Unlock()
+
+	if s.ctx != nil && s.ctx.Logger != nil {
+		s.ctx.Logger.Log(logCat, "create: channel=%s slug=%s owner=%s has_password=%v",
+			stored.ChannelID, stored.Slug, callerID, passwordHash != "")
+	}
+
+	// Creator is the only member at creation time → no fanout to others.
+	return &ChatCreateResponse{Channel: info}, nil
+}
+
+// validateSlugFormat enforces [a-z0-9_-] only. Empty string is rejected
+// at the call site.
+func validateSlugFormat(s string) bool {
+	if s == "" {
+		return false
+	}
+	for _, r := range s {
+		if !((r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') || r == '_' || r == '-') {
+			return false
+		}
+	}
+	return true
 }
 
 // HandleSessionEnter is invoked by the gateway after successful auth.
