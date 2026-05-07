@@ -330,6 +330,18 @@ type Config struct {
 	// gateway uses CookieName at WS-upgrade time to read the session
 	// cookie. Stamped by mmokit.RegisterAuthService.
 	AuthHTTPOpts auth.HTTPOpts
+
+	// AnonymousAuth, when true, makes the gateway synthesize a session
+	// for every WebSocket upgrade — random user_id, "anon-<connID>"
+	// username, no token. The downstream pipeline (PlayerAssignment →
+	// cell → OnPlayerJoin) runs unchanged, so examples and demos can
+	// skip the entire auth/registration flow with one bool.
+	//
+	// IMPORTANT: only honored when AuthResolver is nil — registering
+	// auth via mmokit.RegisterAuthService disables this fallback so
+	// production games can never accidentally route around login. For
+	// dev/example use only.
+	AnonymousAuth bool
 }
 
 // IsRemoteHost reports whether the given role set represents a remote host —

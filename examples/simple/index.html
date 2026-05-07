@@ -1,0 +1,226 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>mmokit — sine wave</title>
+<style>
+  html, body {
+    margin: 0;
+    padding: 0;
+    height: 100%;
+    background: radial-gradient(ellipse at center, #11151f 0%, #060810 100%);
+    color: #e6e8ee;
+    font: 13px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace;
+    overflow: hidden;
+  }
+  #canvas { display: block; width: 100vw; height: 100vh; }
+  #info {
+    position: fixed;
+    top: 14px;
+    left: 16px;
+    padding: 10px 14px;
+    background: rgba(0, 0, 0, 0.5);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    border-radius: 8px;
+    pointer-events: none;
+    backdrop-filter: blur(6px);
+  }
+  #info h1 {
+    margin: 0 0 6px 0;
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: #9aa4ba;
+  }
+  #info .row { display: flex; justify-content: space-between; gap: 16px; }
+  #info .lbl { color: #8d97a8; }
+  #info .val { color: #d6deec; font-variant-numeric: tabular-nums; }
+  #info .ok  { color: #7eea9d; }
+  #info .err { color: #ea7e7e; }
+</style>
+</head>
+<body>
+<canvas id="canvas"></canvas>
+<div id="info">
+  <h1>mmokit / sine wave</h1>
+  <div class="row"><span class="lbl">socket</span> <span class="val" id="conn">connecting…</span></div>
+  <div class="row"><span class="lbl">entities</span> <span class="val" id="count">—</span></div>
+  <div class="row"><span class="lbl">tick Hz</span> <span class="val" id="rate">—</span></div>
+  <div class="row"><span class="lbl">render fps</span> <span class="val" id="fps">—</span></div>
+</div>
+<script>
+const canvas = document.getElementById('canvas');
+const ctx = canvas.getContext('2d');
+const countEl = document.getElementById('count');
+const rateEl = document.getElementById('rate');
+const fpsEl = document.getElementById('fps');
+const connEl = document.getElementById('conn');
+
+let dpr = window.devicePixelRatio || 1;
+function resize() {
+  dpr = window.devicePixelRatio || 1;
+  canvas.width = innerWidth * dpr;
+  canvas.height = innerHeight * dpr;
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+}
+addEventListener('resize', resize);
+resize();
+
+// FNV-1a (32-bit) — matches Go's hash/fnv New32a, used by mmokit
+// to derive a stable typeID from reflect.Type.String().
+function fnv32a(s) {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < s.length; i++) {
+    h ^= s.charCodeAt(i);
+    h = Math.imul(h, 0x01000193) >>> 0;
+  }
+  return h;
+}
+// reflect.Type.String() form: "<package name>.<type name>"
+const WAVE_TYPE_ID = fnv32a('main.WaveStateMsg');
+
+// Two-snapshot interpolator: keep prev + latest server tick, render at
+// (now - RENDER_DELAY) so the bracketing pair is always available.
+const RENDER_DELAY = 60;
+let prev = null;
+let next = null;
+let ticks = 0;
+let frames = 0;
+let lastRateUpdate = performance.now();
+
+function decodeWaveFrame(view, off, bodyEnd) {
+  const count = view.getUint16(off, true); off += 2;
+  const positions = new Array(count);
+  for (let i = 0; i < count; i++) {
+    const x = view.getFloat32(off, true); off += 4;
+    const y = view.getFloat32(off, true); off += 4;
+    positions[i] = { x, y };
+  }
+  // off should equal bodyEnd at this point for a well-formed frame.
+  return positions;
+}
+
+// Decode a 0x00 typed-event frame. Layout per event:
+//   [u32 typeID][u32 body_len][body...]
+// Multiple events can be packed into one frame.
+function handleFrame(buf) {
+  const view = new DataView(buf);
+  if (view.byteLength < 1) return;
+  const channel = view.getUint8(0);
+  if (channel !== 0x00) return;
+  let off = 1;
+  while (off + 8 <= view.byteLength) {
+    const typeID = view.getUint32(off, true); off += 4;
+    const bodyLen = view.getUint32(off, true); off += 4;
+    const bodyEnd = off + bodyLen;
+    if (typeID === WAVE_TYPE_ID) {
+      const positions = decodeWaveFrame(view, off, bodyEnd);
+      const t = performance.now();
+      if (next) prev = next;
+      next = { t, samples: positions };
+      ticks++;
+    }
+    // Unknown types (e.g. ServerConfig) are skipped via bodyLen.
+    off = bodyEnd;
+  }
+}
+
+function connect() {
+  const url = (location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/ws';
+  const ws = new WebSocket(url);
+  ws.binaryType = 'arraybuffer';
+  ws.onopen = () => { connEl.textContent = 'open'; connEl.className = 'val ok'; };
+  ws.onmessage = (e) => handleFrame(e.data);
+  ws.onclose = () => {
+    connEl.textContent = 'closed — retrying';
+    connEl.className = 'val err';
+    setTimeout(connect, 1000);
+  };
+  ws.onerror = () => { /* close handler reconnects */ };
+}
+connect();
+
+setInterval(() => {
+  const now = performance.now();
+  const elapsed = (now - lastRateUpdate) / 1000;
+  rateEl.textContent = (ticks / elapsed).toFixed(1);
+  fpsEl.textContent = (frames / elapsed).toFixed(0);
+  ticks = 0;
+  frames = 0;
+  lastRateUpdate = now;
+}, 1000);
+
+function currentSamples() {
+  if (!next) return [];
+  if (!prev) return next.samples;
+  const span = next.t - prev.t;
+  if (span <= 0) return next.samples;
+  let a = (performance.now() - RENDER_DELAY - prev.t) / span;
+  if (a < 0) a = 0;
+  if (a > 1.4) a = 1.4;
+  const n = Math.min(prev.samples.length, next.samples.length);
+  const out = new Array(n);
+  for (let i = 0; i < n; i++) {
+    const p = prev.samples[i];
+    const q = next.samples[i];
+    out[i] = { x: p.x + (q.x - p.x) * a, y: p.y + (q.y - p.y) * a };
+  }
+  return out;
+}
+
+const WORLD_X_MIN = 0;
+const WORLD_X_MAX = 1200;
+function project(s, w, h) {
+  const padX = 80;
+  const sx = (w - 2 * padX) / (WORLD_X_MAX - WORLD_X_MIN);
+  const cy = h / 2;
+  return {
+    px: padX + (s.x - WORLD_X_MIN) * sx,
+    py: cy + s.y * sx,
+    radius: Math.max(4, sx * 4),
+  };
+}
+
+function draw() {
+  frames++;
+  const w = innerWidth, h = innerHeight;
+  ctx.fillStyle = 'rgba(6, 8, 16, 0.18)';
+  ctx.fillRect(0, 0, w, h);
+
+  const samples = currentSamples();
+  if (!samples.length) {
+    requestAnimationFrame(draw);
+    return;
+  }
+
+  ctx.beginPath();
+  for (let i = 0; i < samples.length; i++) {
+    const p = project(samples[i], w, h);
+    if (i === 0) ctx.moveTo(p.px, p.py);
+    else ctx.lineTo(p.px, p.py);
+  }
+  ctx.strokeStyle = 'rgba(120, 180, 255, 0.18)';
+  ctx.lineWidth = 1;
+  ctx.stroke();
+
+  for (const s of samples) {
+    const p = project(s, w, h);
+    const t = (s.x - WORLD_X_MIN) / (WORLD_X_MAX - WORLD_X_MIN);
+    const hue = 200 + t * 160;
+    ctx.fillStyle = `hsl(${hue}, 80%, 62%)`;
+    ctx.shadowColor = `hsla(${hue}, 90%, 60%, 0.6)`;
+    ctx.shadowBlur = 16;
+    ctx.beginPath();
+    ctx.arc(p.px, p.py, p.radius, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.shadowBlur = 0;
+
+  countEl.textContent = samples.length;
+  requestAnimationFrame(draw);
+}
+draw();
+</script>
+</body>
+</html>

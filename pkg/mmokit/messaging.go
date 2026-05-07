@@ -74,6 +74,22 @@ func BuildTypedEventFrame[T any](msg *T) []byte {
 	return pkguniverse.BuildTypedEventFrameRaw(msg)
 }
 
+// SendEventToAll builds the typed-event frame for msg once and writes it
+// to every PlayerSession on eng that is in StateActive. Use for per-tick
+// world snapshots and other broadcasts where every active player sees the
+// same payload — calling SendEvent in a loop would re-marshal once per
+// recipient. T must be registered via RegisterEvent[T].
+//
+// Usage from a system:
+//
+//	mmokit.SendEventToAll(s.Engine(), &WorldSnapshot{...})
+func SendEventToAll[T any](eng *Engine, msg *T) {
+	frame := BuildTypedEventFrame(msg)
+	eng.Players.ForEach(StateActive, func(sess *PlayerSession) {
+		eng.ConnMgr.SendReliable(sess.ConnID, frame)
+	})
+}
+
 // Send delivers msg to the entity. If the entity is local on its stage, the
 // registered handler runs synchronously before Send returns. If the entity
 // is a replica (lives elsewhere), Send is fire-and-forget — the handler runs

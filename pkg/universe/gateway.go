@@ -215,8 +215,18 @@ func (g *Gateway) onAuthSuccess(connID uint32, userID uuid.UUID, username, token
 // or the cookie is invalid, the connection upgrades unauthenticated;
 // the web client's /auth/me or /auth/login round-trip will clear
 // any stale cookie.
+//
+// Config.AnonymousAuth is the dev/example escape hatch: when no
+// AuthResolver is registered, the gateway synthesizes a fresh session
+// per upgrade so OnPlayerJoin fires without any login plumbing.
 func (g *Gateway) onWSUpgrade(uc net.UpgradeContext) {
-	if g.cfg == nil || g.cfg.AuthResolver == nil {
+	if g.cfg == nil {
+		return
+	}
+	if g.cfg.AuthResolver == nil {
+		if g.cfg.AnonymousAuth {
+			g.onAuthSuccess(uc.ConnID, uuid.New(), fmt.Sprintf("anon-%d", uc.ConnID), "", 0)
+		}
 		return
 	}
 	opts := g.cfg.AuthHTTPOpts
