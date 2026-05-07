@@ -149,6 +149,74 @@ func (t *TestService) MustBanUser(channelID, userID uuid.UUID, until time.Time, 
 	}
 }
 
+// RateLimitTake invokes the private rateLimitTake helper for tests.
+func (t *TestService) RateLimitTake(userID uuid.UUID) (bool, time.Duration) {
+	return t.rateLimitTake(userID)
+}
+
+// SlowModeCheck invokes the private slowModeCheck helper for tests.
+func (t *TestService) SlowModeCheck(channelID, userID uuid.UUID) (bool, time.Duration) {
+	return t.slowModeCheck(channelID, userID)
+}
+
+// MuteCheck invokes the private muteCheck helper for tests.
+func (t *TestService) MuteCheck(userID, channelID uuid.UUID) (bool, time.Duration) {
+	return t.muteCheck(userID, channelID)
+}
+
+// BanCheck invokes the private banCheck helper for tests.
+func (t *TestService) BanCheck(userID, channelID uuid.UUID) (bool, time.Duration) {
+	return t.banCheck(userID, channelID)
+}
+
+// SetChannelSlowMode mutates the in-memory Channel.SlowModeSeconds for
+// tests that need to exercise slow-mode gating without going through
+// the SetSlowMode op.
+func (t *TestService) SetChannelSlowMode(channelID uuid.UUID, seconds int32) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	c, ok := t.channels[channelID]
+	if !ok {
+		panic("test: unknown channel")
+	}
+	c.SlowModeSeconds = int(seconds)
+	t.channels[channelID] = c
+}
+
+// CreateChannelDirect inserts a channel directly into the in-memory
+// state (and the repo) without going through HandleCreate. Returns the
+// allocated channelID.
+func (t *TestService) CreateChannelDirect(slug string, kind ChannelKind) (uuid.UUID, error) {
+	c := Channel{Slug: slug, Kind: channelKindToString(kind)}
+	stored, err := t.repo.UpsertChannel(context.Background(), c)
+	if err != nil {
+		return uuid.Nil, err
+	}
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	t.channels[stored.ChannelID] = stored
+	t.bySlug[stored.Slug] = stored.ChannelID
+	if t.subs[stored.ChannelID] == nil {
+		t.subs[stored.ChannelID] = map[uint32]struct{}{}
+	}
+	if stored.Kind != "system_all" && t.membership[stored.ChannelID] == nil {
+		t.membership[stored.ChannelID] = map[uuid.UUID]string{}
+	}
+	return stored.ChannelID, nil
+}
+
+// MustMute pre-populates the in-memory mutes map for tests. Pass
+// MuteGlobalChannelID for a global mute.
+func (t *TestService) MustMute(userID, channelID uuid.UUID, until time.Time) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	t.mutes[muteKey{userID, channelID}] = Mute{
+		UserID:    userID,
+		ChannelID: channelID,
+		ExpiresAt: until,
+	}
+}
+
 // FanoutTargets returns the connIDs that would receive a fanout to channelID.
 func (t *TestService) FanoutTargets(channelID uuid.UUID) []uint32 {
 	t.mu.RLock()
