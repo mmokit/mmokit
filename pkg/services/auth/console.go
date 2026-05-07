@@ -81,7 +81,7 @@ type OKResult struct {
 }
 
 type SessionsListResult struct {
-	Sessions []SessionDigest
+	Sessions []SessionDigest `cmd:"table"`
 }
 
 type SessionDigest struct {
@@ -93,7 +93,7 @@ type SessionDigest struct {
 }
 
 type AuditRecentResult struct {
-	Events []AuditDigest
+	Events []AuditDigest `cmd:"table"`
 }
 
 type AuditDigest struct {
@@ -117,7 +117,7 @@ type CapabilityRevokeArgs struct {
 }
 
 type CapabilityListResult struct {
-	Capabilities []CapabilityDigest
+	Capabilities []CapabilityDigest `cmd:"table"`
 }
 
 type CapabilityDigest struct {

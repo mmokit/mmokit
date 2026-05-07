@@ -155,7 +155,7 @@ type ChannelInfoResult struct {
 
 // ChannelListResult is the result of chat.channel.list.
 type ChannelListResult struct {
-	Channels []ChannelInfoResult
+	Channels []ChannelInfoResult `cmd:"table"`
 }
 
 // OKResult is the standard success-with-detail result for mutating console
