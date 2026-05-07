@@ -103,3 +103,53 @@ func TestFindOpByShortName_Match(t *testing.T) {
 		t.Errorf("findOpByShortName(nope) should miss")
 	}
 }
+
+// TestServiceKindOf covers the package-prefix extraction used by
+// `service list` to group typed ops by service kind.
+func TestServiceKindOf(t *testing.T) {
+	// Local types live in package `universe` — Type.String() yields
+	// "universe.authLoginRequest", so the extracted kind is "universe".
+	got := serviceKindOf(reflect.TypeFor[authLoginRequest]())
+	if got != "universe" {
+		t.Errorf("serviceKindOf(local type) = %q, want %q", got, "universe")
+	}
+
+	// Pointer types are reported as "*pkg.Name" — LastIndex still finds
+	// the dot, so the prefix is "*universe" (acceptable; nothing in the
+	// real registry is a pointer-to-Request anyway).
+	got = serviceKindOf(reflect.TypeFor[*authLoginRequest]())
+	if !strings.Contains(got, "universe") {
+		t.Errorf("serviceKindOf(pointer) = %q, want substring %q", got, "universe")
+	}
+
+	// Builtin (no package) — empty.
+	got = serviceKindOf(reflect.TypeFor[int]())
+	if got != "" {
+		t.Errorf("serviceKindOf(int) = %q, want empty", got)
+	}
+}
+
+// TestRoutingString covers the small helper that emits the routing
+// label. Prefers e.KindName when populated (the live path); falls back
+// to the uint8 lookup when KindName is empty.
+func TestRoutingString(t *testing.T) {
+	// Live path: KindName already populated by mmokit.init.
+	if got := routingString(0, "gateway-local"); got != "gateway-local" {
+		t.Errorf("routingString(_, gateway-local) = %q", got)
+	}
+	if got := routingString(1, "player-cell"); got != "player-cell" {
+		t.Errorf("routingString(_, player-cell) = %q", got)
+	}
+
+	// Empty-KindName fallback: relies on TypedOpHooks.RouteGatewayLocal.
+	prev := TypedOpHooks.RouteGatewayLocal
+	TypedOpHooks.RouteGatewayLocal = 0
+	t.Cleanup(func() { TypedOpHooks.RouteGatewayLocal = prev })
+
+	if got := routingString(0, ""); got != "gateway-local" {
+		t.Errorf("routingString(0, empty) = %q, want gateway-local", got)
+	}
+	if got := routingString(99, ""); got != "unknown" {
+		t.Errorf("routingString(99, empty) = %q, want unknown", got)
+	}
+}

@@ -12,19 +12,36 @@ import (
 	"github.com/zenion/mmoserver/pkg/ops"
 )
 
-// ── service list ─────────────────────────────────────────────────────────────
+// ── service list (service kinds, aggregated) ────────────────────────────────
 
 type serviceListArgs struct{}
 
-type serviceListRow struct {
+type serviceKindRow struct {
+	Kind    string
+	OpCount int
+	Routing string
+}
+
+type serviceListResult struct {
+	Services []serviceKindRow `cmd:"table"`
+}
+
+// ── service ops (typed ops, optionally filtered) ────────────────────────────
+
+type serviceOpsArgs struct {
+	Kind string `cmd:"optional,help=filter to one service kind (e.g. chat); empty = all"`
+}
+
+type serviceOpsRow struct {
 	Op       string
 	Kind     string
+	Routing  string
 	Request  string
 	Response string
 }
 
-type serviceListResult struct {
-	Ops []serviceListRow `cmd:"table"`
+type serviceOpsResult struct {
+	Ops []serviceOpsRow `cmd:"table"`
 }
 
 // ── service info ─────────────────────────────────────────────────────────────
@@ -53,7 +70,7 @@ type serviceCallResult struct {
 // opShortName derives a friendly handle for a typed-op request type.
 // reflect.Type.String() returns "pkg.RequestName" — strip the package
 // prefix and the conventional "Request" suffix, then lowercase the first
-// letter so `service list` matches what the SDK names the method.
+// letter so `service ops` matches what the SDK names the method.
 //
 // Examples:
 //
@@ -75,6 +92,38 @@ func opShortName(t reflect.Type) string {
 	r := []rune(name)
 	r[0] = []rune(strings.ToLower(string(r[0])))[0]
 	return string(r)
+}
+
+// serviceKindOf derives the service kind name from a typed-op request
+// type by extracting the package prefix from reflect.Type.String().
+// "auth.AuthLoginRequest" -> "auth", "chat.ChatSendRequest" -> "chat".
+// The typed-op registry tracks routing kind (RouteKind) but not service
+// kind, so the package convention (one Go package per service) is the
+// natural grouping axis. Returns "" when the type is not package-prefixed
+// (e.g. an unnamed type used in tests).
+func serviceKindOf(t reflect.Type) string {
+	name := t.String()
+	dot := strings.LastIndex(name, ".")
+	if dot <= 0 {
+		return ""
+	}
+	return name[:dot]
+}
+
+// routingString turns a TypedOpInfo.Kind (uint8 mirror of mmokit.RouteKind)
+// into a human-readable routing label. Falls back to e.KindName when the
+// hooks already populated it (the fast path — mmokit's init copies
+// RouteKind.String() into KindName at registration time).
+func routingString(kind uint8, kindName string) string {
+	if kindName != "" {
+		return kindName
+	}
+	switch kind {
+	case TypedOpHooks.RouteGatewayLocal:
+		return "gateway-local"
+	default:
+		return "unknown"
+	}
 }
 
 // findOpByShortName returns the registry row whose request type maps to
@@ -120,7 +169,7 @@ func registerServiceBuiltins(reg *cmdsys.Registry, coord *Process) error {
 	if err := reg.Register(cmdsys.Command{
 		Verb:        "service.list",
 		Capability:  "service.list",
-		Description: "list every registered typed op (request/response types and route kind)",
+		Description: "list registered service kinds with op counts and routing summary",
 		Route:       cmdsys.RouteLocal,
 		Args:        serviceListArgs{},
 		Result:      serviceListResult{},
@@ -129,20 +178,86 @@ func registerServiceBuiltins(reg *cmdsys.Registry, coord *Process) error {
 				return serviceListResult{}, nil
 			}
 			entries := TypedOpHooks.ListTypedOps()
-			rows := make([]serviceListRow, 0, len(entries))
+
+			type kindAgg struct {
+				name     string
+				opCount  int
+				routings map[string]struct{}
+			}
+			agg := map[string]*kindAgg{}
 			for _, e := range entries {
-				rows = append(rows, serviceListRow{
+				kind := serviceKindOf(e.RequestType)
+				if kind == "" {
+					kind = "(unknown)"
+				}
+				a, ok := agg[kind]
+				if !ok {
+					a = &kindAgg{name: kind, routings: map[string]struct{}{}}
+					agg[kind] = a
+				}
+				a.opCount++
+				a.routings[routingString(e.Kind, e.KindName)] = struct{}{}
+			}
+			rows := make([]serviceKindRow, 0, len(agg))
+			for _, a := range agg {
+				routing := "mixed"
+				if len(a.routings) == 1 {
+					for r := range a.routings {
+						routing = r
+					}
+				}
+				rows = append(rows, serviceKindRow{
+					Kind:    a.name,
+					OpCount: a.opCount,
+					Routing: routing,
+				})
+			}
+			sort.Slice(rows, func(i, j int) bool { return rows[i].Kind < rows[j].Kind })
+			return serviceListResult{Services: rows}, nil
+		},
+	}); err != nil {
+		return fmt.Errorf("service.list: %w", err)
+	}
+
+	if err := reg.Register(cmdsys.Command{
+		Verb:        "service.ops",
+		Capability:  "service.list",
+		Description: "list typed ops (optionally filtered by service kind)",
+		Examples:    []string{"service ops", "service ops chat"},
+		Route:       cmdsys.RouteLocal,
+		Args:        serviceOpsArgs{},
+		Result:      serviceOpsResult{},
+		Handler: func(ctx context.Context, env *cmdsys.Env, raw any) (any, error) {
+			args := raw.(serviceOpsArgs)
+			if TypedOpHooks.ListTypedOps == nil {
+				return serviceOpsResult{}, nil
+			}
+			entries := TypedOpHooks.ListTypedOps()
+			kindFilter := strings.TrimSpace(args.Kind)
+			rows := make([]serviceOpsRow, 0, len(entries))
+			for _, e := range entries {
+				svcKind := serviceKindOf(e.RequestType)
+				if kindFilter != "" && svcKind != kindFilter {
+					continue
+				}
+				rows = append(rows, serviceOpsRow{
 					Op:       opShortName(e.RequestType),
-					Kind:     e.KindName,
+					Kind:     svcKind,
+					Routing:  routingString(e.Kind, e.KindName),
 					Request:  e.RequestType.String(),
 					Response: e.ResponseType.String(),
 				})
 			}
-			sort.Slice(rows, func(i, j int) bool { return rows[i].Op < rows[j].Op })
-			return serviceListResult{Ops: rows}, nil
+			sort.Slice(rows, func(i, j int) bool {
+				if rows[i].Kind != rows[j].Kind {
+					return rows[i].Kind < rows[j].Kind
+				}
+				return rows[i].Op < rows[j].Op
+			})
+			return serviceOpsResult{Ops: rows}, nil
 		},
 	}); err != nil {
-		return fmt.Errorf("service.list: %w", err)
+		return fmt.Errorf("service.ops: %w", err)
 	}
 
 	if err := reg.Register(cmdsys.Command{
@@ -156,11 +271,11 @@ func registerServiceBuiltins(reg *cmdsys.Registry, coord *Process) error {
 			args := raw.(serviceInfoArgs)
 			name := strings.TrimSpace(args.OpName)
 			if name == "" {
-				return nil, fmt.Errorf("op name is required (try `service list`)")
+				return nil, fmt.Errorf("op name is required (try `service ops`)")
 			}
 			e, ok := findOpByShortName(name)
 			if !ok {
-				return nil, fmt.Errorf("unknown op %q (try `service list`)", name)
+				return nil, fmt.Errorf("unknown op %q (try `service ops`)", name)
 			}
 			var sb strings.Builder
 			fmt.Fprintf(&sb, "  Op:       %s\n", opShortName(e.RequestType))
@@ -189,11 +304,11 @@ func registerServiceBuiltins(reg *cmdsys.Registry, coord *Process) error {
 			args := raw.(serviceCallArgs)
 			name := strings.TrimSpace(args.OpName)
 			if name == "" {
-				return nil, fmt.Errorf("op name is required (try `service list`)")
+				return nil, fmt.Errorf("op name is required (try `service ops`)")
 			}
 			e, ok := findOpByShortName(name)
 			if !ok {
-				return nil, fmt.Errorf("unknown op %q (try `service list`)", name)
+				return nil, fmt.Errorf("unknown op %q (try `service ops`)", name)
 			}
 
 			// RoutePlayerCell handlers need a real player session — the
