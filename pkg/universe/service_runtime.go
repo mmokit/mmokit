@@ -81,11 +81,22 @@ func (c *Process) serviceDBStore() *postgres.Store {
 
 // localServiceHostID returns the stable host identifier this process
 // uses when announcing services. For most setups this is c.cfg.HostID;
-// for in-process all-roles dev servers it falls back to "local" so
-// auto-generated instance IDs stay readable.
+// for gateway,service processes (no --host-id) it falls back to the
+// gateway's own identifier so service announces are uniquely keyed and
+// the coordinator can route service-bound commands back through the
+// gateway control stream. In-process all-roles dev servers without
+// either ID fall back to "local" so auto-generated instance IDs stay
+// readable.
 func (c *Process) localServiceHostID() string {
 	if c.cfg.HostID != "" {
 		return c.cfg.HostID
+	}
+	// Gateway,service mode: no --host-id, but the gateway has its own
+	// identifier. Use it so service announces are uniquely keyed and the
+	// coord can route service-bound commands back through the gateway
+	// control stream.
+	if c.gateway != nil && c.gateway.id != "" {
+		return c.gateway.id
 	}
 	return "local"
 }
