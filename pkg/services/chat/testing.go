@@ -9,6 +9,7 @@ import (
 
 	"github.com/zenion/mmoserver/pkg/logger"
 	"github.com/zenion/mmoserver/pkg/service"
+	"github.com/zenion/mmoserver/pkg/services/auth"
 )
 
 // TestService wraps *Service with helpers for unit tests. Not part of
@@ -39,6 +40,56 @@ func NewTestService(t *testing.T, repo Repository, defaults []DefaultChannelDef)
 	}
 	t.Cleanup(func() { _ = svc.Shutdown(context.Background()) })
 	return &TestService{Service: svc}
+}
+
+// NewTestServiceWithAuth builds a chat Service with both an in-memory
+// chat repository and an in-memory auth repository wired in. Used by
+// authorization-aware tests that need to grant capabilities or check
+// the canModerate path. Tests construct chattest.NewMock() and
+// authtest.NewMock() in their _test package and pass them in to avoid
+// an import cycle.
+func NewTestServiceWithAuth(t *testing.T, repo Repository, authRepo auth.Repository, defaults []DefaultChannelDef) *TestService {
+	t.Helper()
+	opts := DefaultServiceOpts()
+	opts.Repository = repo
+	opts.AuthRepoProvider = func() auth.Repository { return authRepo }
+	opts.DefaultChannels = defaults
+	ctx := &service.Context{
+		KindName:   "chat",
+		InstanceID: "test",
+		Logger:     logger.New(),
+		Roles:      map[string]struct{}{"service": {}},
+	}
+	svc := &Service{ctx: ctx, opts: opts}
+	if err := svc.Init(ctx); err != nil {
+		t.Fatalf("svc.Init: %v", err)
+	}
+	t.Cleanup(func() { _ = svc.Shutdown(context.Background()) })
+	return &TestService{Service: svc}
+}
+
+// MustAddMember directly inserts a (channel, user, role) into the
+// in-memory membership map + repo. Panics on error. Used by tests that
+// don't go through HandleJoin (e.g. authorization tests that need a
+// pre-existing admin role on a channel).
+func (t *TestService) MustAddMember(channelID, userID uuid.UUID, role string) {
+	if err := t.repo.AddOrUpdateMember(context.Background(), ChannelMember{
+		ChannelID: channelID,
+		UserID:    userID,
+		Role:      role,
+	}); err != nil {
+		panic(err)
+	}
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	if t.membership[channelID] == nil {
+		t.membership[channelID] = map[uuid.UUID]string{}
+	}
+	t.membership[channelID][userID] = role
+	if t.userChans[userID] == nil {
+		t.userChans[userID] = map[uuid.UUID]struct{}{}
+	}
+	t.userChans[userID][channelID] = struct{}{}
 }
 
 // MustChannelID resolves a slug or panics.
