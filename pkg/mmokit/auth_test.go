@@ -3,7 +3,7 @@ package mmokit_test
 import (
 	"testing"
 
-	"github.com/zenion/mmoserver/pkg/auth/authtest"
+	"github.com/zenion/mmoserver/pkg/services/auth/authtest"
 	"github.com/zenion/mmoserver/pkg/mmokit"
 	"github.com/zenion/mmoserver/pkg/universe"
 )

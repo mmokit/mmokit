@@ -10,7 +10,7 @@ import (
 	"github.com/zenion/mmoserver/internal/game"
 	gamecommands "github.com/zenion/mmoserver/internal/game/commands"
 	"github.com/zenion/mmoserver/internal/marketplace"
-	"github.com/zenion/mmoserver/pkg/auth"
+	"github.com/zenion/mmoserver/pkg/services/auth"
 	"github.com/zenion/mmoserver/pkg/coords"
 	"github.com/zenion/mmoserver/pkg/mmokit"
 	webpixi "github.com/zenion/mmoserver/web-pixi"

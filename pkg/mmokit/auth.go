@@ -7,8 +7,8 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"github.com/zenion/mmoserver/pkg/auth"
-	authpg "github.com/zenion/mmoserver/pkg/auth/postgres"
+	"github.com/zenion/mmoserver/pkg/services/auth"
+	authpg "github.com/zenion/mmoserver/pkg/services/auth/postgres"
 	"github.com/zenion/mmoserver/pkg/universe"
 )
 

@@ -35,7 +35,7 @@ import (
 	"github.com/google/uuid"
 
 	meshpb "github.com/zenion/mmoserver/gen/go/meshpb"
-	"github.com/zenion/mmoserver/pkg/auth"
+	"github.com/zenion/mmoserver/pkg/services/auth"
 	"github.com/zenion/mmoserver/pkg/coords"
 	"github.com/zenion/mmoserver/pkg/logger"
 	"github.com/zenion/mmoserver/pkg/net"

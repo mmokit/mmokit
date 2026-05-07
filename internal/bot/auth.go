@@ -9,7 +9,7 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/zenion/mmoserver/pkg/auth"
+	"github.com/zenion/mmoserver/pkg/services/auth"
 )
 
 // devPassword is the fixed password every bot registers / logs in with.

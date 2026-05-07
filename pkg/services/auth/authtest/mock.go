@@ -8,7 +8,7 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/zenion/mmoserver/pkg/auth"
+	"github.com/zenion/mmoserver/pkg/services/auth"
 )
 
 type RepoMock struct {

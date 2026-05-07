@@ -24,7 +24,7 @@ import (
 	"google.golang.org/grpc/keepalive"
 
 	meshpb "github.com/zenion/mmoserver/gen/go/meshpb"
-	"github.com/zenion/mmoserver/pkg/auth"
+	"github.com/zenion/mmoserver/pkg/services/auth"
 	"github.com/zenion/mmoserver/pkg/cmdsys"
 	"github.com/zenion/mmoserver/pkg/component"
 	"github.com/zenion/mmoserver/pkg/coords"

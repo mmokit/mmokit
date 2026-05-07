@@ -13,7 +13,7 @@ import (
 
 	persistpg "github.com/zenion/mmoserver/pkg/persist/postgres"
 
-	"github.com/zenion/mmoserver/pkg/auth"
+	"github.com/zenion/mmoserver/pkg/services/auth"
 )
 
 // openTestRepo opens a Repo backed by the test Postgres instance.

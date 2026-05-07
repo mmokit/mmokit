@@ -12,7 +12,7 @@ import (
 
 	"github.com/coder/websocket"
 
-	"github.com/zenion/mmoserver/pkg/auth/authtest"
+	"github.com/zenion/mmoserver/pkg/services/auth/authtest"
 	"github.com/zenion/mmoserver/pkg/mmokit"
 )
 
