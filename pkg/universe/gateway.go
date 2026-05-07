@@ -363,10 +363,12 @@ func (g *Gateway) dispatchPostAuthAssignment(connID uint32, userID uuid.UUID, us
 	}
 
 	// Drive chat presence/subscription bookkeeping if the chat service
-	// is registered. Only fires in embedded mode — standalone gateways
-	// don't carry the chat service in-process.
-	if g.coord != nil && g.coord.chatHook != nil {
-		g.coord.chatHook.OnSessionEnter(connID, userID.String(), username, g.id)
+	// is registered. Use g.process (set in both embedded and standalone
+	// build paths) rather than g.coord (nil for standalone gateways).
+	// On a standalone gateway,service process the chat service is local;
+	// on a coord+gateway colocated process the same path applies.
+	if g.process != nil && g.process.chatHook != nil {
+		g.process.chatHook.OnSessionEnter(connID, userID.String(), username, g.id)
 	}
 }
 
@@ -428,10 +430,11 @@ func (g *Gateway) handleDisconnect(evt net.PlayerEvent) {
 	}
 
 	// Drop chat presence/subscription state if the chat service is
-	// registered. Idempotent — chat tolerates unknown connIDs. Embedded
-	// mode only; standalone gateways don't carry chat in-process.
-	if g.coord != nil && g.coord.chatHook != nil {
-		g.coord.chatHook.OnSessionLeave(connID, g.id)
+	// registered. Idempotent — chat tolerates unknown connIDs. Use
+	// g.process (set in both embedded and standalone paths) so this
+	// fires on standalone gateway,service processes too.
+	if g.process != nil && g.process.chatHook != nil {
+		g.process.chatHook.OnSessionLeave(connID, g.id)
 	}
 
 	if g.isLocalShortcut(sess.hostID) {
