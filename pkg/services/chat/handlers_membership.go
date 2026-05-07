@@ -45,6 +45,7 @@ func (s *Service) HandleAddMember(opCtx *ops.OpContext, req *ChatAddMemberReques
 
 	s.mu.RLock()
 	c, ok := s.channels[chID]
+	prevRole, wasAlreadyMember := s.membership[chID][targetID]
 	s.mu.RUnlock()
 	if !ok {
 		return errResp[ChatAddMemberResponse](ChatErrorChannelNotFound, "channel not found", 0)
@@ -62,8 +63,7 @@ func (s *Service) HandleAddMember(opCtx *ops.OpContext, req *ChatAddMemberReques
 		return errResp[ChatAddMemberResponse](ChatErrorInternal, "add member: "+err.Error(), 0)
 	}
 
-	// In-memory bookkeeping + snapshot fanout targets (existing members,
-	// excluding the new one).
+	// In-memory bookkeeping + snapshot fanout targets.
 	s.mu.Lock()
 	if s.membership[chID] == nil {
 		s.membership[chID] = map[uuid.UUID]string{}
@@ -96,16 +96,42 @@ func (s *Service) HandleAddMember(opCtx *ops.OpContext, req *ChatAddMemberReques
 			chID, targetID, role, callerID)
 	}
 
-	if send != nil {
-		ev := &ChatMemberJoinedEvent{
-			ChannelID: chID.String(),
-			UserID:    targetID.String(),
-			Username:  username,
+	// Fanout decision based on idempotency:
+	// - Not a member → ChatMemberJoinedEvent to existing members (excluding new member)
+	// - Already member, same role → silent (no event)
+	// - Already member, role changed → ChatMemberRoleChangedEvent to all members (including target)
+	if !wasAlreadyMember {
+		if send != nil {
+			ev := &ChatMemberJoinedEvent{
+				ChannelID: chID.String(),
+				UserID:    targetID.String(),
+				Username:  username,
+			}
+			for _, cid := range targets {
+				send(cid, ev)
+			}
 		}
-		for _, cid := range targets {
-			send(cid, ev)
+	} else if prevRole != role {
+		if send != nil {
+			// Role changed — fanout to all channel members (including target).
+			allTargets := make([]uint32, 0, len(s.subs[chID]))
+			s.mu.RLock()
+			for cid := range s.subs[chID] {
+				allTargets = append(allTargets, cid)
+			}
+			s.mu.RUnlock()
+			ev := &ChatMemberRoleChangedEvent{
+				ChannelID: chID.String(),
+				UserID:    targetID.String(),
+				Role:      role,
+			}
+			for _, cid := range allTargets {
+				send(cid, ev)
+			}
 		}
 	}
+	// else: re-add of same role; no event (silent no-op)
+
 	return &ChatAddMemberResponse{}, nil
 }
 

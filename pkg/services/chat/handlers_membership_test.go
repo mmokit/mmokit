@@ -617,3 +617,116 @@ func TestHandleSetMemberRole_FanoutIncludesTarget(t *testing.T) {
 		t.Fatalf("expected alice+bob+carol all got events, alice=%v bob=%v carol=%v", gotAlice, gotBob, gotCarol)
 	}
 }
+
+// --- Idempotency Tests ---
+
+func TestHandleAddMember_IdempotentReAddSendsNoEvent(t *testing.T) {
+	chatRepo := chattest.NewMock()
+	authRepo := authtest.NewMock()
+	svc := chat.NewTestServiceWithAuth(t, chatRepo, authRepo, []chat.DefaultChannelDef{
+		{Slug: "council", Kind: chat.ChannelKindSystemPredicate},
+	})
+	chid := svc.MustChannelID("council")
+
+	// Setup: admin caller and existing member.
+	adminUID := svc.MustOnlineFakeUser(101, "admin")
+	svc.MustAddMember(chid, adminUID, "admin")
+	targetUID := svc.MustOnlineFakeUser(102, "target")
+	svc.MustAddMember(chid, targetUID, "member")
+	svc.MustSubscribe(chid, 101)
+	svc.MustSubscribe(chid, 102)
+
+	// Grant admin caller chat.admin capability.
+	if err := authRepo.GrantCapability(context.Background(), auth.Capability{
+		UserID:     adminUID,
+		Capability: "chat.admin",
+		GrantedBy:  adminUID,
+	}); err != nil {
+		t.Fatalf("GrantCapability: %v", err)
+	}
+
+	var sent []recordedEvent
+	svc.SetSendEventFn(func(c uint32, ev any) { sent = append(sent, recordedEvent{c, ev}) })
+
+	// Re-add the target with the same role.
+	resp, err := svc.HandleAddMember(&ops.OpContext{ConnID: 101},
+		&chat.ChatAddMemberRequest{ChannelID: chid.String(), UserID: targetUID.String(), Role: "member"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp.ErrorCode != 0 {
+		t.Fatalf("err: %s", resp.ErrorMessage)
+	}
+
+	// Assert no ChatMemberJoinedEvent fired.
+	for _, r := range sent {
+		if _, ok := r.Event.(*chat.ChatMemberJoinedEvent); ok {
+			t.Errorf("got spurious ChatMemberJoinedEvent on idempotent re-add")
+		}
+	}
+}
+
+func TestHandleAddMember_RoleChangeEmitsRoleChangedEvent(t *testing.T) {
+	chatRepo := chattest.NewMock()
+	authRepo := authtest.NewMock()
+	svc := chat.NewTestServiceWithAuth(t, chatRepo, authRepo, []chat.DefaultChannelDef{
+		{Slug: "council", Kind: chat.ChannelKindSystemPredicate},
+	})
+	chid := svc.MustChannelID("council")
+
+	// Setup: admin caller and existing member.
+	adminUID := svc.MustOnlineFakeUser(101, "admin")
+	svc.MustAddMember(chid, adminUID, "admin")
+	targetUID := svc.MustOnlineFakeUser(102, "target")
+	svc.MustAddMember(chid, targetUID, "member")
+	svc.MustSubscribe(chid, 101)
+	svc.MustSubscribe(chid, 102)
+
+	// Grant admin caller chat.admin capability.
+	if err := authRepo.GrantCapability(context.Background(), auth.Capability{
+		UserID:     adminUID,
+		Capability: "chat.admin",
+		GrantedBy:  adminUID,
+	}); err != nil {
+		t.Fatalf("GrantCapability: %v", err)
+	}
+
+	var sent []recordedEvent
+	svc.SetSendEventFn(func(c uint32, ev any) { sent = append(sent, recordedEvent{c, ev}) })
+
+	// Re-add the target with a role change (member → admin).
+	resp, err := svc.HandleAddMember(&ops.OpContext{ConnID: 101},
+		&chat.ChatAddMemberRequest{ChannelID: chid.String(), UserID: targetUID.String(), Role: "admin"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp.ErrorCode != 0 {
+		t.Fatalf("err: %s", resp.ErrorMessage)
+	}
+
+	// Assert ChatMemberRoleChangedEvent fired to all members (including target).
+	gotRoleChanged := false
+	gotToAdmin := false
+	gotToTarget := false
+	for _, r := range sent {
+		ev, ok := r.Event.(*chat.ChatMemberRoleChangedEvent)
+		if !ok {
+			continue
+		}
+		if ev.UserID == targetUID.String() && ev.Role == "admin" {
+			gotRoleChanged = true
+			if r.ConnID == 101 {
+				gotToAdmin = true
+			}
+			if r.ConnID == 102 {
+				gotToTarget = true
+			}
+		}
+	}
+	if !gotRoleChanged {
+		t.Fatalf("expected ChatMemberRoleChangedEvent for target's role change")
+	}
+	if !gotToAdmin || !gotToTarget {
+		t.Fatalf("expected event to both admin and target, gotToAdmin=%v gotToTarget=%v", gotToAdmin, gotToTarget)
+	}
+}
