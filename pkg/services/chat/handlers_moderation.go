@@ -243,6 +243,99 @@ func (s *Service) HandleKickFromChannel(opCtx *ops.OpContext, req *ChatKickReque
 	return &ChatKickResponse{}, nil
 }
 
+// HandleBanFromChannel sets a tombstoned-membership ban on a target
+// for a given duration. canModerate gated.
+//
+// Differs from kick: ban PRESERVES the membership row but stamps
+// banned_until/by/reason; the row is consulted on subsequent join/send
+// attempts. The target's conn is unsubscribed from subs while banned
+// so they stop receiving channel traffic. Fans out ChatBannedEvent to
+// the target + ChatMemberLeftEvent to remaining members.
+func (s *Service) HandleBanFromChannel(opCtx *ops.OpContext, req *ChatBanRequest) (*ChatBanResponse, error) {
+	if opCtx == nil {
+		return errResp[ChatBanResponse](ChatErrorInternal, "missing op context", 0)
+	}
+	callerID := s.callerFromOpCtx(opCtx)
+	if callerID == uuid.Nil {
+		return errResp[ChatBanResponse](ChatErrorPermissionDenied, "not online", 0)
+	}
+	chID, err := uuid.Parse(req.ChannelID)
+	if err != nil {
+		return errResp[ChatBanResponse](ChatErrorChannelNotFound, "invalid channel_id", 0)
+	}
+	targetID, err := uuid.Parse(req.UserID)
+	if err != nil {
+		return errResp[ChatBanResponse](ChatErrorInternal, "invalid user_id", 0)
+	}
+	if req.DurationMs <= 0 {
+		return errResp[ChatBanResponse](ChatErrorInternal, "duration must be positive", 0)
+	}
+	if !s.canModerate(callerID, chID) {
+		return errResp[ChatBanResponse](ChatErrorPermissionDenied, "denied", 0)
+	}
+
+	s.mu.RLock()
+	c, ok := s.channels[chID]
+	s.mu.RUnlock()
+	if !ok {
+		return errResp[ChatBanResponse](ChatErrorChannelNotFound, "channel not found", 0)
+	}
+	if c.Kind == "system_all" {
+		return errResp[ChatBanResponse](ChatErrorPermissionDenied, "cannot ban from system_all channel", 0)
+	}
+
+	until := time.Now().Add(time.Duration(req.DurationMs) * time.Millisecond)
+	if err := s.repo.SetMemberBan(context.Background(), chID, targetID, callerID, until, req.Reason); err != nil {
+		return errResp[ChatBanResponse](ChatErrorInternal, "set ban: "+err.Error(), 0)
+	}
+
+	// In-memory bookkeeping: install ban entry; drop target's conn from
+	// subs so the banned user stops receiving traffic. Membership row is
+	// left in place (tombstoned) per spec.
+	s.mu.Lock()
+	s.bans[banKey{chID, targetID}] = banEntry{
+		BannedUntil: until,
+		BannedBy:    callerID,
+		Reason:      req.Reason,
+	}
+	targetConn, online := s.online[targetID]
+	if online {
+		if subs := s.subs[chID]; subs != nil {
+			delete(subs, targetConn)
+		}
+	}
+	leftTargets := make([]uint32, 0, len(s.subs[chID]))
+	for cid := range s.subs[chID] {
+		leftTargets = append(leftTargets, cid)
+	}
+	send := s.sendEventFn
+	s.mu.Unlock()
+
+	if s.ctx != nil && s.ctx.Logger != nil {
+		s.ctx.Logger.Log(logCat, "ban: channel=%s user=%s caller=%s duration_ms=%d reason=%q",
+			chID, targetID, callerID, req.DurationMs, req.Reason)
+	}
+
+	if send != nil {
+		if online {
+			send(targetConn, &ChatBannedEvent{
+				ChannelID: chID.String(),
+				ByUserID:  callerID.String(),
+				UntilMs:   until.UnixMilli(),
+				Reason:    req.Reason,
+			})
+		}
+		leftEv := &ChatMemberLeftEvent{
+			ChannelID: chID.String(),
+			UserID:    targetID.String(),
+		}
+		for _, cid := range leftTargets {
+			send(cid, leftEv)
+		}
+	}
+	return &ChatBanResponse{}, nil
+}
+
 // chIDStringForGlobal returns "" when chID is the MuteGlobalChannelID
 // sentinel; otherwise the canonical UUID string. Used to translate the
 // sentinel back to wire-form "empty = global" semantics.
