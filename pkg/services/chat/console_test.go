@@ -364,6 +364,36 @@ func TestConsole_UserKickAndBan(t *testing.T) {
 	}
 }
 
+// --- Broadcast / msg.delete ---
+
+func TestConsole_Broadcast(t *testing.T) {
+	f := newConsoleFixture(t)
+	f.invokeOK(t, "chat.channel.create", chat.ChannelCreateArgs{
+		Slug: "world", Kind: "system_all",
+	})
+	f.invokeOK(t, "chat.broadcast", chat.BroadcastArgs{
+		Channel: "world", Body: "server restarting in 5 minutes",
+	})
+	// No assertion on fanout (no event sink wired in tests); the absence
+	// of an error is the contract — the handler accepted the message and
+	// dispatched without service-side validation tripping.
+}
+
+func TestConsole_MsgDelete_Unknown(t *testing.T) {
+	f := newConsoleFixture(t)
+	f.invokeOK(t, "chat.channel.create", chat.ChannelCreateArgs{
+		Slug: "world", Kind: "system_all",
+	})
+	// Attempt to delete a msg_id that was never indexed → unknown.
+	msg := f.invokeFail(t, "chat.msg.delete", chat.MsgDeleteArgs{
+		MsgID: "0190abcd-0000-7000-8000-000000000000", Channel: "world",
+	})
+	if !strings.Contains(strings.ToLower(msg), "unknown") &&
+		!strings.Contains(strings.ToLower(msg), "expired") {
+		t.Fatalf("expected unknown-message error, got %q", msg)
+	}
+}
+
 // --- Operator-online enforcement (required for mutation commands) ---
 
 func TestConsole_RequiresOperatorOnline(t *testing.T) {

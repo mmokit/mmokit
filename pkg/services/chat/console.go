@@ -128,6 +128,18 @@ type UserUnbanArgs struct {
 	Channel  string `cmd:"help=channel slug"`
 }
 
+// BroadcastArgs sends a system-authored message to a channel.
+type BroadcastArgs struct {
+	Channel string `cmd:"help=channel slug"`
+	Body    string `cmd:"help=message body"`
+}
+
+// MsgDeleteArgs removes a previously-sent message from clients' views.
+type MsgDeleteArgs struct {
+	MsgID   string `cmd:"help=message UUID"`
+	Channel string `cmd:"help=channel slug"`
+}
+
 // ChannelInfoResult is the console-friendly mirror of ChannelInfo.
 // Field ordering and types are stable for cmdsys schema generation.
 type ChannelInfoResult struct {
@@ -354,6 +366,33 @@ func RegisterConsoleCommands(reg *cmdsys.Registry, getSvc ServiceProvider, getAu
 		Args:        UserUnbanArgs{},
 		Result:      OKResult{},
 		Handler:     userUnbanHandler(getSvc, getAuth),
+	})); err != nil {
+		return err
+	}
+
+	// --- Cluster-wide moderation commands ---
+
+	if err := must(reg.Register(cmdsys.Command{
+		Verb:        "chat.broadcast",
+		Capability:  "chat.admin",
+		Description: "broadcast a system message to a channel (sender shown as system)",
+		Examples:    []string{"chat broadcast world \"server restarting in 5 minutes\""},
+		Route:       cmdsys.RouteLocal,
+		Args:        BroadcastArgs{},
+		Result:      OKResult{},
+		Handler:     broadcastHandler(getSvc),
+	})); err != nil {
+		return err
+	}
+	if err := must(reg.Register(cmdsys.Command{
+		Verb:        "chat.msg.delete",
+		Capability:  "chat.admin",
+		Description: "delete a previously-sent channel message from clients' views",
+		Examples:    []string{"chat msg delete 0190abcd-... trade"},
+		Route:       cmdsys.RouteLocal,
+		Args:        MsgDeleteArgs{},
+		Result:      OKResult{},
+		Handler:     msgDeleteHandler(getSvc),
 	})); err != nil {
 		return err
 	}
@@ -828,6 +867,66 @@ func userUnbanHandler(getSvc ServiceProvider, getAuth auth.RepoProvider) cmdsys.
 			OK:       true,
 			Username: target.Username,
 			Detail:   fmt.Sprintf("unbanned %s from %s", target.Username, args.Channel),
+		}, nil
+	}
+}
+
+// --- broadcast / msg.delete handlers ---
+
+func broadcastHandler(getSvc ServiceProvider) cmdsys.HandlerFunc {
+	return func(_ context.Context, env *cmdsys.Env, raw any) (any, error) {
+		svc := getSvc()
+		if svc == nil {
+			return nil, errSvcNotReady()
+		}
+		args := raw.(BroadcastArgs)
+		chID, _, err := resolveChannelBySlug(svc, args.Channel)
+		if err != nil {
+			return nil, err
+		}
+		connID, _, err := resolveOperatorConn(svc, env)
+		if err != nil {
+			return nil, err
+		}
+		resp, _ := svc.HandleBroadcastSystem(&ops.OpContext{ConnID: connID}, &ChatBroadcastRequest{
+			ChannelID: chID.String(),
+			Body:      args.Body,
+		})
+		if resp.ErrorCode != 0 {
+			return nil, chatErrToError(resp.ErrorCode, resp.ErrorMessage)
+		}
+		return OKResult{
+			OK:     true,
+			Detail: fmt.Sprintf("broadcast to %s (%d bytes)", args.Channel, len(args.Body)),
+		}, nil
+	}
+}
+
+func msgDeleteHandler(getSvc ServiceProvider) cmdsys.HandlerFunc {
+	return func(_ context.Context, env *cmdsys.Env, raw any) (any, error) {
+		svc := getSvc()
+		if svc == nil {
+			return nil, errSvcNotReady()
+		}
+		args := raw.(MsgDeleteArgs)
+		chID, _, err := resolveChannelBySlug(svc, args.Channel)
+		if err != nil {
+			return nil, err
+		}
+		connID, _, err := resolveOperatorConn(svc, env)
+		if err != nil {
+			return nil, err
+		}
+		resp, _ := svc.HandleDeleteMessage(&ops.OpContext{ConnID: connID}, &ChatDeleteMessageRequest{
+			MsgID:     args.MsgID,
+			ChannelID: chID.String(),
+		})
+		if resp.ErrorCode != 0 {
+			return nil, chatErrToError(resp.ErrorCode, resp.ErrorMessage)
+		}
+		return OKResult{
+			OK:     true,
+			Detail: fmt.Sprintf("deleted msg %s in %s", args.MsgID, args.Channel),
 		}, nil
 	}
 }
