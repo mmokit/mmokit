@@ -26,19 +26,19 @@ type serviceListResult struct {
 	Services []serviceKindRow `cmd:"table"`
 }
 
-// ── service cluster (cluster-wide instance roster) ──────────────────────────
+// ── service instances (cluster-wide instance roster) ───────────────────────
 
-type serviceClusterArgs struct{}
+type serviceInstancesArgs struct{}
 
-type serviceClusterRow struct {
+type serviceInstanceRow struct {
 	Kind       string
 	InstanceID string
 	HostID     string
 	OpCount    int
 }
 
-type serviceClusterResult struct {
-	Instances []serviceClusterRow `cmd:"table"`
+type serviceInstancesResult struct {
+	Instances []serviceInstanceRow `cmd:"table"`
 }
 
 // ── service ops (typed ops, optionally filtered) ────────────────────────────
@@ -233,27 +233,27 @@ func registerServiceBuiltins(reg *cmdsys.Registry, coord *Process) error {
 	}
 
 	if err := reg.Register(cmdsys.Command{
-		Verb:        "service.cluster",
+		Verb:        "service.instances",
 		Capability:  "service.list",
 		Description: "list every service instance running anywhere in the cluster (coordinator-side roster)",
-		Examples:    []string{"service cluster"},
+		Examples:    []string{"service instances"},
 		// Reads coord.coordServices directly — no remote dispatch needed
 		// because the coordinator holds the authoritative cluster-wide
 		// view. Non-coordinator processes return an empty result.
 		Route:  cmdsys.RouteLocal,
-		Args:   serviceClusterArgs{},
-		Result: serviceClusterResult{},
+		Args:   serviceInstancesArgs{},
+		Result: serviceInstancesResult{},
 		Handler: func(ctx context.Context, env *cmdsys.Env, raw any) (any, error) {
 			if coord == nil || coord.coordServices == nil {
 				// Not a coordinator process — surface an empty roster
 				// rather than erroring so the command is harmless to
 				// invoke from any pane.
-				return serviceClusterResult{}, nil
+				return serviceInstancesResult{}, nil
 			}
-			rows := make([]serviceClusterRow, 0)
+			rows := make([]serviceInstanceRow, 0)
 			for _, k := range coord.coordServices.Kinds() {
 				for _, inst := range coord.coordServices.InstancesOfKind(k) {
-					rows = append(rows, serviceClusterRow{
+					rows = append(rows, serviceInstanceRow{
 						Kind:       inst.Kind,
 						InstanceID: inst.InstanceID,
 						HostID:     inst.HostID,
@@ -267,10 +267,10 @@ func registerServiceBuiltins(reg *cmdsys.Registry, coord *Process) error {
 				}
 				return rows[i].HostID < rows[j].HostID
 			})
-			return serviceClusterResult{Instances: rows}, nil
+			return serviceInstancesResult{Instances: rows}, nil
 		},
 	}); err != nil {
-		return fmt.Errorf("service.cluster: %w", err)
+		return fmt.Errorf("service.instances: %w", err)
 	}
 
 	if err := reg.Register(cmdsys.Command{
