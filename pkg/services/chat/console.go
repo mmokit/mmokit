@@ -185,7 +185,7 @@ func RegisterConsoleCommands(reg *cmdsys.Registry, getSvc ServiceProvider, getAu
 		}
 		return nil
 	}
-	_ = getAuth // wired in subsequent commits (resolves usernames → auth.User)
+
 
 	// --- Read-only commands (no operator-online check needed) ---
 
