@@ -11,9 +11,10 @@ import (
 
 // Errors returned by Repository implementations.
 var (
-	ErrUserNotFound    = errors.New("auth: user not found")
-	ErrUsernameTaken   = errors.New("auth: username taken")
-	ErrSessionNotFound = errors.New("auth: session not found")
+	ErrUserNotFound       = errors.New("auth: user not found")
+	ErrUsernameTaken      = errors.New("auth: username taken")
+	ErrSessionNotFound    = errors.New("auth: session not found")
+	ErrCapabilityNotFound = errors.New("auth: capability grant not found")
 )
 
 // User is the canonical identity record. Mirrors auth_users.
@@ -48,6 +49,15 @@ type Session struct {
 	LastUsedAt time.Time
 	RevokedAt  time.Time  // zero value = not revoked
 	ClientMeta map[string]string  // ip, ua, gateway_id
+}
+
+// Capability is a single granted capability row. Mirrors auth_capabilities.
+type Capability struct {
+	UserID     uuid.UUID
+	Capability string
+	GrantedAt  time.Time
+	GrantedBy  uuid.UUID
+	ExpiresAt  time.Time // zero value = no expiry
 }
 
 // AuditEvent mirrors auth_audit_log row inputs.
@@ -93,4 +103,10 @@ type Repository interface {
 	// Audit
 	Audit(ctx context.Context, ev AuditEvent) error
 	RecentAudit(ctx context.Context, userID uuid.UUID, limit int) ([]AuditEvent, error)
+
+	// Capabilities
+	HasCapability(ctx context.Context, userID uuid.UUID, capability string) (bool, error)
+	GrantCapability(ctx context.Context, c Capability) error
+	RevokeCapability(ctx context.Context, userID uuid.UUID, capability string) error
+	ListCapabilities(ctx context.Context, userID uuid.UUID) ([]Capability, error)
 }

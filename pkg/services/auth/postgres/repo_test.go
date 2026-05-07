@@ -42,7 +42,7 @@ func openTestPool(t *testing.T) *pgxpool.Pool {
 
 	pool := store.Pool()
 	if _, err := pool.Exec(ctx,
-		`TRUNCATE auth_audit_log, auth_sessions, auth_identities, auth_passwords, auth_users`,
+		`TRUNCATE auth_capabilities, auth_audit_log, auth_sessions, auth_identities, auth_passwords, auth_users`,
 	); err != nil {
 		t.Fatalf("truncate auth tables: %v", err)
 	}
@@ -181,5 +181,70 @@ func TestIncrementAndLockout(t *testing.T) {
 	}
 	if got.FailedAttempts != 0 {
 		t.Fatalf("FailedAttempts after reset = %d, want 0", got.FailedAttempts)
+	}
+}
+
+func TestRepoCapabilities_GrantThenHas(t *testing.T) {
+	repo := openTestRepo(t)
+	ctx := context.Background()
+	user, err := repo.CreateUser(ctx, auth.User{Username: "alice"}, "$argon2id$dummy")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if has, _ := repo.HasCapability(ctx, user.UserID, "chat.admin"); has {
+		t.Fatal("HasCapability=true before grant")
+	}
+	if err := repo.GrantCapability(ctx, auth.Capability{
+		UserID: user.UserID, Capability: "chat.admin", GrantedBy: user.UserID,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	has, err := repo.HasCapability(ctx, user.UserID, "chat.admin")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !has {
+		t.Fatal("HasCapability=false after grant")
+	}
+}
+
+func TestRepoCapabilities_RevokeAndList(t *testing.T) {
+	repo := openTestRepo(t)
+	ctx := context.Background()
+	u, _ := repo.CreateUser(ctx, auth.User{Username: "bob"}, "$argon2id$dummy")
+	for _, c := range []string{"chat.admin", "auth.admin"} {
+		if err := repo.GrantCapability(ctx, auth.Capability{UserID: u.UserID, Capability: c, GrantedBy: u.UserID}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	caps, _ := repo.ListCapabilities(ctx, u.UserID)
+	if len(caps) != 2 {
+		t.Fatalf("got %d caps, want 2", len(caps))
+	}
+	if err := repo.RevokeCapability(ctx, u.UserID, "chat.admin"); err != nil {
+		t.Fatal(err)
+	}
+	caps, _ = repo.ListCapabilities(ctx, u.UserID)
+	if len(caps) != 1 {
+		t.Fatalf("got %d caps after revoke, want 1", len(caps))
+	}
+	if has, _ := repo.HasCapability(ctx, u.UserID, "chat.admin"); has {
+		t.Fatal("HasCapability=true after revoke")
+	}
+}
+
+func TestRepoCapabilities_ExpiredGrantNotPresent(t *testing.T) {
+	repo := openTestRepo(t)
+	ctx := context.Background()
+	u, _ := repo.CreateUser(ctx, auth.User{Username: "carol"}, "$argon2id$dummy")
+	if err := repo.GrantCapability(ctx, auth.Capability{
+		UserID: u.UserID, Capability: "chat.admin", GrantedBy: u.UserID,
+		ExpiresAt: time.Now().Add(-time.Hour), // already expired
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if has, _ := repo.HasCapability(ctx, u.UserID, "chat.admin"); has {
+		t.Fatal("HasCapability=true for expired grant")
 	}
 }

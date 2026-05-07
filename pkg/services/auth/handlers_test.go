@@ -3,6 +3,7 @@ package auth
 import (
 	"context"
 	"net/netip"
+	"sort"
 	"sync"
 	"testing"
 	"time"
@@ -14,6 +15,11 @@ import (
 	"github.com/zenion/mmoserver/pkg/service"
 )
 
+type inMemCapKey struct {
+	UserID     uuid.UUID
+	Capability string
+}
+
 // inMemRepo is a local in-memory Repository for handler tests. It mirrors
 // authtest.RepoMock but lives in package auth so we avoid the import cycle
 // (authtest imports auth; package auth tests cannot import authtest).
@@ -24,6 +30,7 @@ type inMemRepo struct {
 	passwords map[uuid.UUID]PasswordCredential
 	sessions  map[string]Session // keyed by string(tokenHash)
 	audit     []AuditEvent
+	caps      map[inMemCapKey]Capability
 }
 
 func newInMemRepo() *inMemRepo {
@@ -32,6 +39,7 @@ func newInMemRepo() *inMemRepo {
 		byName:    map[string]uuid.UUID{},
 		passwords: map[uuid.UUID]PasswordCredential{},
 		sessions:  map[string]Session{},
+		caps:      map[inMemCapKey]Capability{},
 	}
 }
 
@@ -277,6 +285,58 @@ func (m *inMemRepo) RecentAudit(_ context.Context, id uuid.UUID, limit int) ([]A
 			out = append(out, m.audit[i])
 		}
 	}
+	return out, nil
+}
+
+func (m *inMemRepo) HasCapability(_ context.Context, userID uuid.UUID, capability string) (bool, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	c, ok := m.caps[inMemCapKey{userID, capability}]
+	if !ok {
+		return false, nil
+	}
+	if !c.ExpiresAt.IsZero() && c.ExpiresAt.Before(time.Now()) {
+		return false, nil
+	}
+	return true, nil
+}
+
+func (m *inMemRepo) GrantCapability(_ context.Context, c Capability) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if c.GrantedAt.IsZero() {
+		c.GrantedAt = time.Now()
+	}
+	m.caps[inMemCapKey{c.UserID, c.Capability}] = c
+	return nil
+}
+
+func (m *inMemRepo) RevokeCapability(_ context.Context, userID uuid.UUID, capability string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	k := inMemCapKey{userID, capability}
+	if _, ok := m.caps[k]; !ok {
+		return ErrCapabilityNotFound
+	}
+	delete(m.caps, k)
+	return nil
+}
+
+func (m *inMemRepo) ListCapabilities(_ context.Context, userID uuid.UUID) ([]Capability, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	now := time.Now()
+	var out []Capability
+	for k, c := range m.caps {
+		if k.UserID != userID {
+			continue
+		}
+		if !c.ExpiresAt.IsZero() && c.ExpiresAt.Before(now) {
+			continue
+		}
+		out = append(out, c)
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].Capability < out[j].Capability })
 	return out, nil
 }
 

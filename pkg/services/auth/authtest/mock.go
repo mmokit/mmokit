@@ -3,6 +3,7 @@ package authtest
 
 import (
 	"context"
+	"sort"
 	"sync"
 	"time"
 
@@ -11,6 +12,11 @@ import (
 	"github.com/zenion/mmoserver/pkg/services/auth"
 )
 
+type capKey struct {
+	UserID     uuid.UUID
+	Capability string
+}
+
 type RepoMock struct {
 	mu        sync.Mutex
 	users     map[uuid.UUID]auth.User
@@ -18,6 +24,7 @@ type RepoMock struct {
 	passwords map[uuid.UUID]auth.PasswordCredential
 	sessions  map[string]auth.Session // keyed by string(tokenHash)
 	audit     []auth.AuditEvent
+	caps      map[capKey]auth.Capability
 }
 
 func NewMock() *RepoMock {
@@ -26,6 +33,7 @@ func NewMock() *RepoMock {
 		byName:    map[string]uuid.UUID{},
 		passwords: map[uuid.UUID]auth.PasswordCredential{},
 		sessions:  map[string]auth.Session{},
+		caps:      map[capKey]auth.Capability{},
 	}
 }
 
@@ -271,6 +279,58 @@ func (m *RepoMock) RecentAudit(_ context.Context, id uuid.UUID, limit int) ([]au
 			out = append(out, m.audit[i])
 		}
 	}
+	return out, nil
+}
+
+func (m *RepoMock) HasCapability(_ context.Context, userID uuid.UUID, capability string) (bool, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	c, ok := m.caps[capKey{userID, capability}]
+	if !ok {
+		return false, nil
+	}
+	if !c.ExpiresAt.IsZero() && c.ExpiresAt.Before(time.Now()) {
+		return false, nil
+	}
+	return true, nil
+}
+
+func (m *RepoMock) GrantCapability(_ context.Context, c auth.Capability) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if c.GrantedAt.IsZero() {
+		c.GrantedAt = time.Now()
+	}
+	m.caps[capKey{c.UserID, c.Capability}] = c
+	return nil
+}
+
+func (m *RepoMock) RevokeCapability(_ context.Context, userID uuid.UUID, capability string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	k := capKey{userID, capability}
+	if _, ok := m.caps[k]; !ok {
+		return auth.ErrCapabilityNotFound
+	}
+	delete(m.caps, k)
+	return nil
+}
+
+func (m *RepoMock) ListCapabilities(_ context.Context, userID uuid.UUID) ([]auth.Capability, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	now := time.Now()
+	var out []auth.Capability
+	for k, c := range m.caps {
+		if k.UserID != userID {
+			continue
+		}
+		if !c.ExpiresAt.IsZero() && c.ExpiresAt.Before(now) {
+			continue
+		}
+		out = append(out, c)
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].Capability < out[j].Capability })
 	return out, nil
 }
 

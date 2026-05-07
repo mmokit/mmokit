@@ -333,6 +333,72 @@ func (r *Repo) RecentAudit(ctx context.Context, id uuid.UUID, limit int) ([]auth
 }
 
 // ---------------------------------------------------------------------------
+// Capability methods
+// ---------------------------------------------------------------------------
+
+func (r *Repo) HasCapability(ctx context.Context, userID uuid.UUID, capability string) (bool, error) {
+	var exists bool
+	err := r.pool.QueryRow(ctx, `
+		SELECT EXISTS(
+		  SELECT 1 FROM auth_capabilities
+		   WHERE user_id = $1 AND capability = $2
+		     AND (expires_at IS NULL OR expires_at > NOW())
+		)`, userID, capability).Scan(&exists)
+	return exists, err
+}
+
+func (r *Repo) GrantCapability(ctx context.Context, c auth.Capability) error {
+	var expires any
+	if !c.ExpiresAt.IsZero() {
+		expires = c.ExpiresAt
+	}
+	_, err := r.pool.Exec(ctx, `
+		INSERT INTO auth_capabilities (user_id, capability, granted_by, expires_at)
+		VALUES ($1, $2, $3, $4)
+		ON CONFLICT (user_id, capability) DO UPDATE
+		  SET granted_at = NOW(), granted_by = EXCLUDED.granted_by, expires_at = EXCLUDED.expires_at`,
+		c.UserID, c.Capability, c.GrantedBy, expires)
+	return err
+}
+
+func (r *Repo) RevokeCapability(ctx context.Context, userID uuid.UUID, capability string) error {
+	tag, err := r.pool.Exec(ctx, `DELETE FROM auth_capabilities WHERE user_id=$1 AND capability=$2`, userID, capability)
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() == 0 {
+		return auth.ErrCapabilityNotFound
+	}
+	return nil
+}
+
+func (r *Repo) ListCapabilities(ctx context.Context, userID uuid.UUID) ([]auth.Capability, error) {
+	rows, err := r.pool.Query(ctx, `
+		SELECT user_id, capability, granted_at, granted_by, expires_at
+		  FROM auth_capabilities
+		 WHERE user_id=$1
+		   AND (expires_at IS NULL OR expires_at > NOW())
+		 ORDER BY capability`, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []auth.Capability
+	for rows.Next() {
+		var c auth.Capability
+		var exp *time.Time
+		if err := rows.Scan(&c.UserID, &c.Capability, &c.GrantedAt, &c.GrantedBy, &exp); err != nil {
+			return nil, err
+		}
+		if exp != nil {
+			c.ExpiresAt = *exp
+		}
+		out = append(out, c)
+	}
+	return out, rows.Err()
+}
+
+// ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
