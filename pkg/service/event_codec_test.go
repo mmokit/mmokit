@@ -33,3 +33,19 @@ func TestEventCodec_LookupMiss(t *testing.T) {
 		t.Fatal("expected miss")
 	}
 }
+
+func TestEventCodec_FrameworkEventsRegistered(t *testing.T) {
+	for _, name := range []string{
+		"github.com/zenion/mmoserver/pkg/service.SessionEnterEvent",
+		"github.com/zenion/mmoserver/pkg/service.SessionLeaveEvent",
+		"github.com/zenion/mmoserver/pkg/service.AuthLoginSucceededEvent",
+		"github.com/zenion/mmoserver/pkg/service.AuthLogoutEvent",
+		"github.com/zenion/mmoserver/pkg/service.AuthRegisteredEvent",
+		"github.com/zenion/mmoserver/pkg/service.PlayerSpawnedEvent",
+		"github.com/zenion/mmoserver/pkg/service.PlayerDespawnedEvent",
+	} {
+		if _, ok := service.LookupEventType(name); !ok {
+			t.Errorf("framework event %s not registered", name)
+		}
+	}
+}
