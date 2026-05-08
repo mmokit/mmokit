@@ -180,6 +180,31 @@ func (g *Gateway) installAuthHook(h *auth.GatewayHook) {
 	g.authMu.Unlock()
 }
 
+// subscribeToAuthEvents wires the bus subscribers that today's
+// pendingAuthHook callbacks fire. Called from coordinator.Build after
+// the bus is constructed and the gateway is wired. The subscribers run
+// synchronously inline on Publish (process-local Phase 1 contract) so
+// authStates[connID] is populated BEFORE the typed-op response leaves
+// the gateway.
+//
+// Mirrors the body of the previous installPendingAuthHook closures.
+func (g *Gateway) subscribeToAuthEvents(bus *service.Bus) {
+	if bus == nil {
+		return
+	}
+	service.Subscribe(bus, func(ev service.AuthLoginSucceededEvent) {
+		uid, err := uuid.Parse(ev.UserID)
+		if err != nil {
+			g.log.Log(CatNetConn, "gateway: AuthLoginSucceededEvent: bad user_id %q: %v", ev.UserID, err)
+			return
+		}
+		g.onAuthSuccess(ev.ConnID, uid, ev.Username, ev.SessionToken, ev.ExpiresAtMs)
+	})
+	service.Subscribe(bus, func(ev service.AuthLogoutEvent) {
+		g.onAuthLogout(ev.ConnID)
+	})
+}
+
 // isAuthenticated reports whether connID is in the authenticated set.
 func (g *Gateway) isAuthenticated(connID uint32) bool {
 	g.authMu.Lock()

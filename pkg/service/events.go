@@ -48,6 +48,7 @@ type AuthLoginSucceededEvent struct {
 	UserID       string
 	Username     string
 	SessionToken string // populated on AUTH_LOGIN / AUTH_REGISTER; empty on validate
+	ExpiresAtMs  int64  // when the session token expires; 0 means "no change" (validate-token can populate from prior session if known)
 	ConnID       uint32
 	GatewayID    string
 }
