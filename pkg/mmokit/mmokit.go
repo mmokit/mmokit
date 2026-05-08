@@ -676,7 +676,6 @@ type ClickToMoveSystem = system.ClickToMoveSystem
 // DirectionMoveSystem moves entities using DirectionInput at MoveParams.MaxSpeed.
 type DirectionMoveSystem = system.DirectionMoveSystem
 
-// SpatialHooks provides optional per-tick callbacks for game-specific spatial logic.
 // NewSpatialSystem returns a SystemDef for the standard spatial grid update
 // with no game-specific hooks. Queries Position+Collider+NetworkID, reads Rotation
 // if present, registers/updates entities in the HashGrid each tick.
