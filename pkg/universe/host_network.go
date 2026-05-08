@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"reflect"
 	"sync"
 	"time"
 
@@ -17,6 +18,7 @@ import (
 
 	meshpb "github.com/zenion/mmoserver/gen/go/meshpb"
 	"github.com/zenion/mmoserver/pkg/logger"
+	"github.com/zenion/mmoserver/pkg/service"
 )
 
 // Tunables — exported as package-level constants so tests can reference
@@ -858,6 +860,12 @@ func (n *HostNetwork) routeInboundFrame(frame *meshpb.MeshFrame) error {
 		// Fall through to decodeMeshFrame below with the rewritten connID.
 	}
 
+	// ── ServiceEvent: typed event from a remote process's Bus.Publish ────
+	if se := frame.GetServiceEvent(); se != nil {
+		n.deliverServiceEvent(se)
+		return nil
+	}
+
 	// ── All other variants: decode + deliver to destination cell ──────────
 	msg, err := decodeMeshFrame(frame)
 	if err != nil {
@@ -877,4 +885,30 @@ func (n *HostNetwork) routeInboundFrame(frame *meshpb.MeshFrame) error {
 		n.log.Log(CatMeshMsg, "[%s] inbox full for %s, dropping %v", n.hostID, destCellID, msg.Type)
 	}
 	return nil
+}
+
+// deliverServiceEvent decodes a wire ServiceEvent into a Go value via the
+// service event-type registry and re-enters the local Bus dispatch path.
+// Self-echo (sourceProcessID == this process's ID) is dropped defensively.
+func (n *HostNetwork) deliverServiceEvent(se *meshpb.ServiceEvent) {
+	if n.coord == nil || n.coord.bus == nil {
+		return
+	}
+	if se.GetSourceProcessId() == n.coord.processID() {
+		return
+	}
+	typ, ok := service.LookupEventType(se.GetTypeName())
+	if !ok {
+		// Type not registered locally — coord routed to us erroneously
+		// (we never subscribed) OR a binary skew between publisher and
+		// subscriber. Drop with a log.
+		n.log.Log(CatServicesBus, "[%s] ServiceEvent unknown type %q from %s, dropping",
+			n.hostID, se.GetTypeName(), se.GetSourceProcessId())
+		return
+	}
+	instance := reflect.New(typ).Interface()
+	ReflectUnmarshal(se.GetPayload(), instance)
+	// Dereference: instance is *T, we want T to enter the Bus.
+	val := reflect.ValueOf(instance).Elem().Interface()
+	service.PublishAny(n.coord.bus, typ, val)
 }

@@ -2,8 +2,10 @@ package universe
 
 import (
 	"reflect"
+	"sync/atomic"
 	"testing"
 
+	meshpb "github.com/zenion/mmoserver/gen/go/meshpb"
 	"github.com/zenion/mmoserver/pkg/service"
 )
 
@@ -102,8 +104,9 @@ func TestBroadcastPeerList_PopulatesLocalBusRoutingCache(t *testing.T) {
 
 // tinyDispatchEvent is a payload type for the dispatch smoke test —
 // declared at package level so service.RegisterEventType can introspect
-// it before the Bus dispatch path tries to resolve its name.
-type tinyDispatchEvent struct{ N int }
+// it before the Bus dispatch path tries to resolve its name. Field type
+// is int32 so ReflectMarshal (no platform-int codec) can serialize it.
+type tinyDispatchEvent struct{ N int32 }
 
 func TestProcess_DispatchServiceEvent_NoPeers_NoCrash(t *testing.T) {
 	p := New(Config{Headless: true, Mode: "all", CellsX: 1, CellsY: 1, ControlListen: "127.0.0.1:0"})
@@ -117,4 +120,40 @@ func TestProcess_DispatchServiceEvent_NoPeers_NoCrash(t *testing.T) {
 	// confirms no panic / no nil deref through the new glue.
 	service.RegisterEventType[tinyDispatchEvent]()
 	service.Publish(p.bus, tinyDispatchEvent{N: 1})
+}
+
+func TestDeliverServiceEvent_DecodesAndRepublishesLocally(t *testing.T) {
+	p := New(Config{Headless: true, Mode: "all", CellsX: 1, CellsY: 1, ControlListen: "127.0.0.1:0"})
+	p.Build()
+	defer p.Shutdown()
+
+	// Subscribe a handler so we can detect the redispatch.
+	service.RegisterEventType[tinyDispatchEvent]()
+	var got int32
+	service.Subscribe(p.bus, func(ev tinyDispatchEvent) {
+		atomic.AddInt32(&got, ev.N)
+	})
+
+	// Build a wire ServiceEvent as if it had arrived from a peer.
+	payload := ReflectMarshal(&tinyDispatchEvent{N: 7})
+	se := &meshpb.ServiceEvent{
+		SourceProcessId: "remote-peer", // not us — must not be self-echo-skipped
+		TypeName:        "github.com/zenion/mmoserver/pkg/universe.tinyDispatchEvent",
+		Payload:         payload,
+		Sequence:        1,
+	}
+
+	// In `all` mode without TestHosts, the colocated host doesn't allocate
+	// a HostNetwork (cell I/O is direct). Synthesize a minimal HostNetwork
+	// bound to the live Process so deliverServiceEvent can walk n.coord.bus.
+	hn := &HostNetwork{
+		hostID: "test-host",
+		log:    p.Log,
+		coord:  p,
+	}
+	hn.deliverServiceEvent(se)
+
+	if g := atomic.LoadInt32(&got); g != 7 {
+		t.Fatalf("local subscriber not invoked: got=%d want=7", g)
+	}
 }

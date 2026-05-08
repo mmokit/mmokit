@@ -1,6 +1,9 @@
 package service
 
-import "sync"
+import (
+	"reflect"
+	"sync"
+)
 
 // RemotePublishCall describes one Bus event that needs to be fanned out
 // to remote subscribers. Universe-side code installs a RemotePublishFunc
@@ -94,6 +97,15 @@ func (b *Bus) SubscribedTypeNames() []string {
 	}
 	sortStrings(out)
 	return out
+}
+
+// PublishAny is the type-erased entry point used by the wire receive
+// path. typ MUST be the concrete reflect.Type of ev (no interface
+// values). Local subscribers fire synchronously; no remote fan-out
+// (re-broadcast loops are prevented at this layer — the publisher's
+// dispatch path already handled remote delivery).
+func PublishAny(b *Bus, typ reflect.Type, ev any) {
+	publishAny(b, typ, ev)
 }
 
 // nextSeq returns a monotonic per-Bus sequence number for ServiceEvent.sequence.

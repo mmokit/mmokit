@@ -307,6 +307,12 @@ func decodeMeshFrame(frame *meshpb.MeshFrame) (CellMessage, error) {
 			},
 		}, nil
 
+	case *meshpb.MeshFrame_ServiceEvent:
+		// ServiceEvent is handled inline by routeInboundFrame and never
+		// falls through to decodeMeshFrame. Reaching this branch is a
+		// programmer bug, not a wire-level error.
+		return CellMessage{}, fmt.Errorf("decodeMeshFrame: ServiceEvent must be handled inline by routeInboundFrame")
+
 	default:
 		return CellMessage{}, fmt.Errorf("decodeMeshFrame: unknown oneof variant %T", frame.Msg)
 	}
