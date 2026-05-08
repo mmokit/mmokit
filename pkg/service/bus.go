@@ -16,6 +16,9 @@ type Bus struct {
 	mu          sync.RWMutex
 	handlers    map[reflect.Type][]*handlerSlot
 	panicLogger PanicLogger
+
+	// Phase 3 fields (see bus_remote.go).
+	remoteState
 }
 
 // Unsubscribe removes a registered handler. Idempotent; safe to call from
@@ -58,10 +61,12 @@ func Subscribe[T any](b *Bus, handler func(T)) Unsubscribe {
 	b.mu.Lock()
 	b.handlers[typ] = append(b.handlers[typ], slot)
 	b.mu.Unlock()
+	b.notifySubscriptionChanged()
 	return func() {
 		b.mu.Lock()
 		slot.dead = true
 		b.mu.Unlock()
+		b.notifySubscriptionChanged()
 	}
 }
 
@@ -71,7 +76,13 @@ func Subscribe[T any](b *Bus, handler func(T)) Unsubscribe {
 // panicking handlers should set GODEBUG=panicnil=1 or wrap their
 // handler explicitly.
 func Publish[T any](b *Bus, ev T) {
-	publishAny(b, reflect.TypeFor[T](), ev)
+	typ := reflect.TypeFor[T]()
+	publishAny(b, typ, ev)
+	name := typeName(typ)
+	peers := b.peerIDsExceptSelf(name)
+	if len(peers) > 0 {
+		b.notifyRemote(name, peers, ev)
+	}
 }
 
 // PublishLocal is identical to Publish in Phase 1. Phase 3 will diverge:
