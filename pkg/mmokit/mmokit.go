@@ -19,9 +19,9 @@ import (
 	"github.com/zenion/mmoserver/pkg/orderbook"
 	"github.com/zenion/mmoserver/pkg/persist"
 	"github.com/zenion/mmoserver/pkg/persist/postgres"
+	"github.com/zenion/mmoserver/pkg/replication"
 	"github.com/zenion/mmoserver/pkg/service"
 	"github.com/zenion/mmoserver/pkg/spatial"
-	"github.com/zenion/mmoserver/pkg/replication"
 	"github.com/zenion/mmoserver/pkg/system"
 	"github.com/zenion/mmoserver/pkg/universe"
 )
@@ -95,11 +95,6 @@ type Engine = engine.Engine
 // System is the interface all game systems implement. Call Update(dt) each tick.
 // Embed SystemBase for automatic dependency injection via SetDeps/Init.
 type System = engine.System
-
-// SystemBase is the generic base for all systems. Embed it with the game's
-// typed world: `mmokit.SystemBase[*MyWorld]`. Engine-side systems that don't
-// need world methods use `mmokit.SystemBase[any]`.
-type SystemBase[W any] = engine.SystemBase[W]
 
 // SystemDef pairs a name with a System for registration and profiling.
 type SystemDef = engine.SystemDef
@@ -555,10 +550,10 @@ type CommandEnv = cmdsys.Env
 type CommandRouteKind = cmdsys.RouteKind
 
 const (
-	RouteLocal         = cmdsys.RouteLocal
-	RouteAllHosts      = cmdsys.RouteAllHosts
-	RouteSpecificCell  = cmdsys.RouteSpecificCell
-	RoutePlayerOwner   = cmdsys.RoutePlayerOwner
+	RouteLocal        = cmdsys.RouteLocal
+	RouteAllHosts     = cmdsys.RouteAllHosts
+	RouteSpecificCell = cmdsys.RouteSpecificCell
+	RoutePlayerOwner  = cmdsys.RoutePlayerOwner
 )
 
 // CmdOnLoop is the ergonomic helper for cmdsys handlers that need ECS
@@ -1063,8 +1058,8 @@ func WithPreMarshal[T any](fn func(*T)) universe.ComponentOption {
 // about registration order. At most one var-tail binding is allowed per entity;
 // AutoReplicator will panic if there are more.
 func BuildReplicators(w *ecs.World, coord *universe.Process, defs ...universe.EntityKindDef) *system.ReplicatorRegistry {
-	velScale := float32(2000)  // matches universe.New default
-	sizeScale := float32(500)  // matches universe.New default
+	velScale := float32(2000) // matches universe.New default
+	sizeScale := float32(500) // matches universe.New default
 	if coord != nil {
 		velScale = coord.Cfg().VelQuantScale
 		sizeScale = coord.Cfg().SizeQuantScale
@@ -1106,7 +1101,6 @@ func Drain[T any](q *engine.TickQueue) []T {
 func Peek[T any](q *engine.TickQueue) []T {
 	return engine.Peek[T](q)
 }
-
 
 // NewNetworkSystem returns a SystemDef that creates a ReplicationSystem
 // with DefaultReplicationConfig pre-filled. Replicators are auto-discovered
