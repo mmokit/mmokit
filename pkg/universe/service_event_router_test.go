@@ -51,3 +51,17 @@ func TestServiceEventRouter_EmptyTypeNamesRemoves(t *testing.T) {
 		t.Fatalf("empty typeNames should remove process")
 	}
 }
+
+func TestProcess_HasServiceEventRouterAfterNew(t *testing.T) {
+	p := New(Config{Headless: true, Mode: "all", CellsX: 1, CellsY: 1})
+	if p.serviceEventRouter == nil {
+		t.Fatal("Process.serviceEventRouter is nil after New")
+	}
+	// Sanity: router behaves correctly when called via the same path the
+	// recv-loop uses (UpdateProcess with hostID + type names).
+	p.serviceEventRouter.UpdateProcess("host-1", []string{"some.Event"})
+	got := p.serviceEventRouter.Snapshot()
+	if len(got["some.Event"]) != 1 || got["some.Event"][0] != "host-1" {
+		t.Fatalf("router not updated via recv-path call: %v", got)
+	}
+}

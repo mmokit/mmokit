@@ -616,6 +616,13 @@ type Process struct {
 	// Phase 1 fan-out is process-local only. Phase 3 will plumb a
 	// peer-mesh dispatch callback so Publish[T] reaches remote subscribers.
 	bus *service.Bus
+
+	// serviceEventRouter is the coord-internal routing table for the
+	// service event bus. Populated by ServiceEventSubscribe messages
+	// from every process; snapshotted into PeerList.event_routing.
+	// Non-nil on every Process — cheap to allocate and avoids nil-checks
+	// in test paths that don't go through Build's role-set decisioning.
+	serviceEventRouter *serviceEventRouter
 }
 
 // processIDFromConfig derives a stable per-process identifier used by the
@@ -691,17 +698,18 @@ func New(cfg Config) *Process {
 	}
 
 	c := &Process{
-		Cells:         make(map[MeshCellID]*Cell),
-		CellOwner:     make(map[CellID]MeshCellID),
-		Hosts:         make(map[string]*Host),
-		hostExecutors: make(map[string]*cellTransferExecutor),
-		ConnMgr:       cfg.ConnManager,
-		Log:           cfg.Logger,
-		players:       make(map[string]*PlayerLocation),
-		sessionRoutes: newSessionRoutes(),
-		cfg:           cfg,
-		coordEpoch:    uint64(time.Now().UnixNano()),
-		bus:           service.NewBus(processIDFromConfig(cfg)),
+		Cells:              make(map[MeshCellID]*Cell),
+		CellOwner:          make(map[CellID]MeshCellID),
+		Hosts:              make(map[string]*Host),
+		hostExecutors:      make(map[string]*cellTransferExecutor),
+		ConnMgr:            cfg.ConnManager,
+		Log:                cfg.Logger,
+		players:            make(map[string]*PlayerLocation),
+		sessionRoutes:      newSessionRoutes(),
+		cfg:                cfg,
+		coordEpoch:         uint64(time.Now().UnixNano()),
+		bus:                service.NewBus(processIDFromConfig(cfg)),
+		serviceEventRouter: newServiceEventRouter(),
 	}
 	c.invariantMode = cfg.InvariantMode
 	c.strictNetIDIndex = cfg.StrictNetIDIndex

@@ -345,6 +345,20 @@ func (s *meshControlServer) handleHostControl(stream meshpb.MeshControl_ControlS
 					s.coord.broadcastPeerListOnServiceChange()
 				}
 
+			case *meshpb.HostMessage_ServiceEventSubscribe:
+				// Service event bus: a remote process announced its complete
+				// type-set. Whole-set replace; empty drops the entry.
+				sub := v.ServiceEventSubscribe
+				if sub != nil && s.coord.serviceEventRouter != nil {
+					s.coord.serviceEventRouter.UpdateProcess(hostID, sub.GetTypeNames())
+					s.log.Log(CatServicesBus, "coordinator: %s subscribes to %d types: %v",
+						hostID, len(sub.GetTypeNames()), sub.GetTypeNames())
+					// Rebroadcast PeerList so every process learns the new
+					// routing table entry. Re-uses the existing service-
+					// change broadcast path.
+					s.coord.broadcastPeerListOnServiceChange()
+				}
+
 			default:
 				s.log.Log(CatMeshMsg, "coordinator: host %s sent %T", hostID, msg.Msg)
 			}
