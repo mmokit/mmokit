@@ -116,3 +116,20 @@ func TestOnStageInit_LateRegistrationCatchesUp(t *testing.T) {
 		t.Fatalf("late OnStageInit caught up on %d stages, want 2", seen)
 	}
 }
+
+// TestProcess_BusPresentInServiceContext verifies that Process.bus is
+// constructed in New() and that serviceContext() injects it into every
+// *service.Context handed to a kind's Init.
+func TestProcess_BusPresentInServiceContext(t *testing.T) {
+	p := New(Config{Headless: true, Mode: "all", CellsX: 1, CellsY: 1})
+	if p.bus == nil {
+		t.Fatal("Process.bus is nil after New")
+	}
+	ctx := p.serviceContext("test-kind", "test-instance")
+	if ctx.Bus == nil {
+		t.Fatal("service.Context.Bus is nil — serviceContext did not inject p.bus")
+	}
+	if ctx.Bus != p.bus {
+		t.Fatal("service.Context.Bus is not the same *Bus held by Process")
+	}
+}

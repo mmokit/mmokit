@@ -627,6 +627,14 @@ type Process struct {
 	// pkg/services/chat.SessionHook — declaring it locally avoids a
 	// universe→chat import cycle.
 	chatHook ChatSessionHook
+
+	// bus is the per-process typed pub/sub bus shared by every service
+	// instance running on this Process. Initialized in New(); injected
+	// into service.Context.Bus by serviceContext().
+	//
+	// Phase 1 fan-out is process-local only. Phase 3 will plumb a
+	// peer-mesh dispatch callback so Publish[T] reaches remote subscribers.
+	bus *service.Bus
 }
 
 // ChatSessionHook is the gateway-side adapter that drives chat presence
@@ -642,6 +650,19 @@ type Process struct {
 type ChatSessionHook interface {
 	OnSessionEnter(connID uint32, userID, username, gatewayID string)
 	OnSessionLeave(connID uint32, gatewayID string)
+}
+
+// processIDFromConfig derives a stable per-process identifier used by the
+// service.Bus for self-echo skip + diagnostics. Empty defaults to "local"
+// for in-process dev servers.
+func processIDFromConfig(cfg Config) string {
+	if cfg.HostID != "" {
+		return cfg.HostID
+	}
+	if cfg.GatewayID != "" {
+		return cfg.GatewayID
+	}
+	return "local"
 }
 
 // New creates a coordinator with the given Config.
@@ -714,6 +735,7 @@ func New(cfg Config) *Process {
 		sessionRoutes: newSessionRoutes(),
 		cfg:           cfg,
 		coordEpoch:    uint64(time.Now().UnixNano()),
+		bus:           service.NewBus(processIDFromConfig(cfg)),
 	}
 	c.invariantMode = cfg.InvariantMode
 	c.strictNetIDIndex = cfg.StrictNetIDIndex

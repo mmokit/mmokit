@@ -71,6 +71,7 @@ func (c *Process) serviceContext(kindName, instanceID string) *service.Context {
 		Logger:     c.Log,
 		DB:         c.serviceDBStore(),
 		Roles:      map[string]struct{}(c.roles),
+		Bus:        c.bus,
 	}
 }
 

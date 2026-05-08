@@ -30,4 +30,12 @@ type Context struct {
 	// Roles is the role set this process is running. Lets services
 	// inspect their colocation environment if needed.
 	Roles map[string]struct{}
+
+	// Bus is the per-process typed pub/sub bus. Services subscribe to
+	// framework events and to sibling-service events here at Init time.
+	// See pkg/service/bus.go.
+	//
+	// Always non-nil — Process.Build constructs the Bus before any
+	// service.Context is built.
+	Bus *Bus
 }
