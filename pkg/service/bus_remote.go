@@ -117,8 +117,13 @@ func (b *Bus) nextSeq() uint64 {
 }
 
 // peerIDsExceptSelf returns the routing-cache entry for typeName minus
-// b.processID. Returns nil if there are no remote subscribers.
+// b.processID. Returns nil if there are no remote subscribers OR if the
+// type is not wire-eligible (a process-local-only event has no
+// cross-process delivery, even when remote subscribers exist).
 func (b *Bus) peerIDsExceptSelf(typeName string) []string {
+	if !IsWireEligible(typeName) {
+		return nil
+	}
 	b.remoteMu.RLock()
 	all := b.routingCache[typeName]
 	self := b.processID

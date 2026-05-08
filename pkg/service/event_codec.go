@@ -75,3 +75,47 @@ func LookupEventType(name string) (reflect.Type, bool) {
 	t, ok := eventTypes[name]
 	return t, ok
 }
+
+var (
+	wireMu          sync.RWMutex
+	wireEligibleSet = map[string]struct{}{}
+)
+
+// RegisterWireEvent declares that event type T is safe to ship across
+// processes via the service bus's MeshData fan-out. Events default to
+// process-local-only — Bus.Publish[T] will fan out to remote subscribers
+// only when T has been registered as wire-eligible here.
+//
+// **Use deliberately.** Wire-eligible events are visible to every
+// service on every process that subscribes to them. Events carrying
+// bearer credentials, PII, or any value that should not leave the
+// authoring process must NOT be wire-eligible. (See spec §14.4 for the
+// long-term plan: per-event capability gating; until that lands,
+// "deliberate opt-in" is the gate.)
+//
+// Calling RegisterWireEvent[T]() also implies RegisterEventType[T]() —
+// the type is registered in the codec registry first if it wasn't
+// already, so cross-process receivers can decode it.
+//
+// Idempotent for the same T.
+func RegisterWireEvent[T any]() {
+	RegisterEventType[T]() // idempotent — guarantees codec entry
+	name := EventTypeName[T]()
+	wireMu.Lock()
+	defer wireMu.Unlock()
+	wireEligibleSet[name] = struct{}{}
+}
+
+// IsWireEligible reports whether the type with the given canonical name
+// is registered as wire-eligible (i.e. safe for cross-process fan-out).
+//
+// Bus.peerIDsExceptSelf consults this before returning peer IDs so that
+// a Publish for a non-wire-eligible type with remote subscribers in the
+// routing cache silently drops the remote fan-out — same behavior as
+// "no remote subscribers."
+func IsWireEligible(name string) bool {
+	wireMu.RLock()
+	defer wireMu.RUnlock()
+	_, ok := wireEligibleSet[name]
+	return ok
+}

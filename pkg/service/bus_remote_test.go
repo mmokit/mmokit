@@ -10,7 +10,7 @@ import (
 
 type remoteEvent struct{ Tag int }
 
-func init() { service.RegisterEventType[remoteEvent]() }
+func init() { service.RegisterWireEvent[remoteEvent]() }
 
 func TestBus_RemotePublishCallback_FiresAfterLocalDispatch(t *testing.T) {
 	b := service.NewBus("proc-A")
@@ -61,6 +61,27 @@ func TestBus_PublishLocal_SkipsRemote(t *testing.T) {
 	service.PublishLocal(b, remoteEvent{Tag: 1})
 	if atomic.LoadInt32(&remoteCalled) != 0 {
 		t.Fatalf("PublishLocal must not invoke RemotePublish")
+	}
+}
+
+type localOnlyEvent struct{ Tag int }
+
+func init() { service.RegisterEventType[localOnlyEvent]() } // local-only — NOT wire-eligible
+
+func TestBus_NonWireEvent_SuppressesRemoteFanout(t *testing.T) {
+	b := service.NewBus("proc-A")
+	var remoteCalled int32
+	b.SetRemotePublish(func(call service.RemotePublishCall) { atomic.AddInt32(&remoteCalled, 1) })
+
+	// Routing cache claims proc-B subscribes — but the type is local-only,
+	// so the fan-out must NOT fire.
+	b.SetRoutingCache(map[string][]string{
+		"github.com/zenion/mmoserver/pkg/service_test.localOnlyEvent": {"proc-B"},
+	})
+
+	service.Publish(b, localOnlyEvent{Tag: 1})
+	if atomic.LoadInt32(&remoteCalled) != 0 {
+		t.Fatalf("non-wire-eligible Publish leaked to remote dispatch (called %d times)", atomic.LoadInt32(&remoteCalled))
 	}
 }
 
