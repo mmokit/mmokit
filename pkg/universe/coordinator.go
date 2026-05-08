@@ -1408,14 +1408,14 @@ func (c *Process) Build() {
 	if hasServiceKinds && !hasServiceRole {
 		panic(fmt.Errorf("coordinator: --services=%v is set but RoleService is missing — add 'service' to --mode (or use --mode=all)", cfg.ServiceKinds))
 	}
-	// v1 limitation: services share the gateway's OpRouter (op codes
-	// dispatch by code-match, no cross-process forwarding). Standalone
-	// service-host processes (RoleService alone) are deferred — they'd
-	// need a VCM-equivalent to receive ClientInput frames. Warn only
+	// Typed-op routing (RouteGatewayLocal) requires the gateway colocated
+	// with the service kind. Pure-RoleService processes can host the
+	// service event bus end-to-end (Phase 3) but the gateway-local op
+	// router won't fan out to remote services in this mode. Warn only
 	// when --services= actually names something to instantiate, so
 	// `--mode=all` on a default dev-server doesn't spam.
 	if hasServiceRole && hasServiceKinds && !roles.Has(RoleGateway) {
-		c.Log.Log(CatMeshCell, "service: WARNING — RoleService without RoleGateway is not yet supported (v1 limitation); ops will not route to service handlers. Add 'gateway' to --mode for colocated service hosting.")
+		c.Log.Log(CatMeshCell, "service: --mode=service without gateway: typed-op handlers will not route from clients (RouteGatewayLocal needs the gateway colocated), but the service event bus IS reachable from publishers (Phase 3)")
 	}
 	// Run registry-level validation regardless of role: registrations must
 	// be internally consistent even on processes that don't host services
@@ -1545,6 +1545,17 @@ func (c *Process) Build() {
 	// This branch only runs when RoleGateway is set without RoleCoordinator.
 	if c.isStandaloneGateway() {
 		c.buildStandaloneGateway()
+	}
+
+	// Pure --mode=service process: open a HostNetwork listener so
+	// publishers (gateways, hosts, other service-hosts) can reach this
+	// process for direct ServiceEvent dispatch. No cells, no client WS
+	// listener — the listener exists solely as a peer-mesh endpoint.
+	// The MeshControl client registers us with coord so we appear in
+	// PeerList.hosts and receive PeerList broadcasts (and so the bus
+	// can ship ServiceEventSubscribe over the wire).
+	if roles.Has(RoleService) && !roles.Has(RoleHost) && !roles.Has(RoleGateway) && !roles.Has(RoleCoordinator) {
+		c.buildServiceHost()
 	}
 
 	// RoleGateway (embedded): coordinator is present; create an in-process
@@ -1788,6 +1799,45 @@ func (c *Process) buildRemoteHost() {
 	host.executor = c.hostExecutors[hostID]
 	host.vcm = c.vcm
 	host.coord = c
+}
+
+// buildServiceHost wires a pure --mode=service process that dials a remote
+// coordinator. Mirrors buildRemoteHost minus the cell-bearing setup
+// (no executor, no VCM, no netID allocator) — the host exists solely as
+// a MeshData listener so publishers can dispatch ServiceEvents directly,
+// and as a MeshControl peer so coord includes it in PeerList broadcasts
+// and routes ServiceEventSubscribe announcements through it.
+func (c *Process) buildServiceHost() {
+	cfg := c.cfg
+
+	if cfg.CoordinatorAddr == "" {
+		panic("coordinator: --mode=service requires --coordinator-addr=HOST:PORT")
+	}
+
+	hostID := cfg.HostID
+	if hostID == "" {
+		hostID = "service-" + uuid.NewString()[:8]
+	}
+
+	host := NewHost(hostID)
+	host.Log = c.Log
+	host.coord = c
+	c.Hosts[hostID] = host
+
+	hn, err := NewHostNetwork(host, ":0", c.Log, c.cfg.ShutdownGracePeriod)
+	if err != nil {
+		panic(fmt.Errorf("coordinator: service-host NewHostNetwork: %w", err))
+	}
+	host.Network = hn
+	hn.SetCoord(c)
+
+	c.controlClient = newMeshControlClient(c, hostID, cfg.CoordinatorAddr)
+	c.Control.controlClient = c.controlClient
+	// Start never errors — the reconnect loop spawns in the background
+	// and handles dial failures via exponential backoff.
+	_ = c.controlClient.Start(context.Background())
+
+	c.Log.Log(CatMeshCell, "service-host %q listening on %s -> coordinator %s", hostID, hn.Addr(), cfg.CoordinatorAddr)
 }
 
 // buildStandaloneGateway wires a standalone gateway that dials a remote
