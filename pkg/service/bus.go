@@ -2,6 +2,7 @@ package service
 
 import (
 	"reflect"
+	"runtime/debug"
 	"sync"
 )
 
@@ -12,8 +13,9 @@ import (
 type Bus struct {
 	processID string
 
-	mu       sync.RWMutex
-	handlers map[reflect.Type][]*handlerSlot
+	mu          sync.RWMutex
+	handlers    map[reflect.Type][]*handlerSlot
+	panicLogger PanicLogger
 }
 
 // Unsubscribe removes a registered handler. Idempotent; safe to call from
@@ -69,13 +71,13 @@ func Subscribe[T any](b *Bus, handler func(T)) Unsubscribe {
 // panicking handlers should set GODEBUG=panicnil=1 or wrap their
 // handler explicitly.
 func Publish[T any](b *Bus, ev T) {
-	publishAny(b, reflect.TypeOf(ev), ev)
+	publishAny(b, reflect.TypeFor[T](), ev)
 }
 
 // PublishLocal is identical to Publish in Phase 1. Phase 3 will diverge:
 // Publish fans out to remote subscribers, PublishLocal does not.
 func PublishLocal[T any](b *Bus, ev T) {
-	publishAny(b, reflect.TypeOf(ev), ev)
+	publishAny(b, reflect.TypeFor[T](), ev)
 }
 
 // publishAny is the type-erased dispatch core, shared by Publish and
@@ -93,13 +95,37 @@ func publishAny(b *Bus, typ reflect.Type, ev any) {
 	}
 	b.mu.RUnlock()
 	for _, s := range live {
-		invokeHandler(s.fn, ev)
+		invokeHandler(b, typ, s.fn, ev)
 	}
 }
 
-func invokeHandler(fn func(any), ev any) {
+// PanicLogger receives diagnostic info when a handler panics. The Bus
+// recovers panics so one bad subscriber can't poison sibling handlers,
+// but a vanished panic is undebuggable in production. Universe wires
+// this to log under "services:bus" with a stack trace.
+type PanicLogger func(typeName, processID string, panicValue any, stack []byte)
+
+// SetPanicLogger installs a diagnostic callback for panics caught by the
+// Bus's per-handler recover. nil disables logging (panics are still
+// recovered; they just leave no trace).
+func (b *Bus) SetPanicLogger(fn PanicLogger) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	b.panicLogger = fn
+}
+
+func invokeHandler(b *Bus, typ reflect.Type, fn func(any), ev any) {
 	defer func() {
-		_ = recover() // swallow handler panics; callers verify behavior via side-effects in tests
+		r := recover()
+		if r == nil {
+			return
+		}
+		b.mu.RLock()
+		log := b.panicLogger
+		b.mu.RUnlock()
+		if log != nil {
+			log(typ.String(), b.processID, r, debug.Stack())
+		}
 	}()
 	fn(ev)
 }

@@ -134,18 +134,24 @@ func (s *Service) Init(ctx *service.Context) error {
 	//
 	// Bus is always non-nil per service.Context contract.
 	service.Subscribe(ctx.Bus, func(ev service.SessionEnterEvent) {
-		_, _ = s.HandleSessionEnter(nil, &ChatSessionEnterRequest{
+		if _, err := s.HandleSessionEnter(nil, &ChatSessionEnterRequest{
 			ConnID:    ev.ConnID,
 			UserID:    ev.UserID,
 			Username:  ev.Username,
 			GatewayID: ev.GatewayID,
-		})
+		}); err != nil {
+			s.ctx.Logger.Log(logCat, "SessionEnter handler failed: conn=%d user=%q gw=%q: %v",
+				ev.ConnID, ev.UserID, ev.GatewayID, err)
+		}
 	})
 	service.Subscribe(ctx.Bus, func(ev service.SessionLeaveEvent) {
-		_, _ = s.HandleSessionLeave(nil, &ChatSessionLeaveRequest{
+		if _, err := s.HandleSessionLeave(nil, &ChatSessionLeaveRequest{
 			ConnID:    ev.ConnID,
 			GatewayID: ev.GatewayID,
-		})
+		}); err != nil {
+			s.ctx.Logger.Log(logCat, "SessionLeave handler failed: conn=%d gw=%q: %v",
+				ev.ConnID, ev.GatewayID, err)
+		}
 	})
 
 	if s.opts.Repository != nil {

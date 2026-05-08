@@ -735,6 +735,14 @@ func New(cfg Config) *Process {
 	}
 	c.Log.RegisterCategories(EventCategories...)
 
+	// Wire the bus's panic-recovery diagnostic into the logger so
+	// panicking handlers leave a stack trace under "services:bus" rather
+	// than silently vanishing.
+	c.bus.SetPanicLogger(func(typeName, processID string, panicValue any, stack []byte) {
+		c.Log.Log(CatServicesBus, "handler panic: type=%s proc=%s panic=%v\n%s",
+			typeName, processID, panicValue, stack)
+	})
+
 	// Service framework: process-local Kind catalog and gateway-side
 	// routing index initialized for every process — both are cheap and
 	// every process either registers kinds (RoleService) or applies
