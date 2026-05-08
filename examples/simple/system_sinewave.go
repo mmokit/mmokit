@@ -33,13 +33,19 @@ type SineWaveSystem struct {
 }
 
 const (
-	waveAmp    = 220.0  // peak vertical excursion
-	waveFreqHz = 0.6    // temporal frequency
-	waveSpread = 0.012  // radians per pixel of X — controls wavelength
+	waveAmp    = 220.0 // peak vertical excursion
+	waveFreqHz = 0.6   // temporal frequency
+	waveSpread = 0.012 // radians per pixel of X — controls wavelength
 )
 
 func (s *SineWaveSystem) Init() {
 	s.entities.With(mmokit.IncludeAll())
+	const count = 60
+	const span = 1200.0
+	for i := range count {
+		x := float32(i) * (span / float32(count-1))
+		s.Stage().SpawnEntity(mmokit.Position{X: x, Y: 0})
+	}
 }
 
 func (s *SineWaveSystem) Update(dt float32) {

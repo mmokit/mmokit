@@ -30,7 +30,6 @@ func main() {
 		Protocol:      mmokit.NewProtocol("simple"),
 	})
 
-	process.AddSystem(mmokit.NewSystem(&FieldSpawnerSystem{}))
 	process.AddSystem(mmokit.NewSystem(&SineWaveSystem{}))
 
 	process.Start()
