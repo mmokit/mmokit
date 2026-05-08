@@ -1333,6 +1333,18 @@ func (c *Process) ConnManager() *net.ConnManager {
 	return c.ConnMgr
 }
 
+// GatewayID returns the stable identifier of the local gateway, or "" if
+// this process doesn't run RoleGateway. Used by service handlers (auth,
+// chat, etc.) to stamp the GatewayID field on bus events when the
+// publisher and gateway share a process. Safe to call after Build();
+// before Build() the gateway is unwired and "" is returned.
+func (c *Process) GatewayID() string {
+	if c.gateway == nil {
+		return ""
+	}
+	return c.gateway.id
+}
+
 // Roles returns the parsed role set for this Process. Populated by
 // Build() from Config.Mode via ParseRoles. Safe to call after Build().
 func (c *Process) Roles() Roles {

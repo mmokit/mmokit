@@ -7,6 +7,7 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/zenion/mmoserver/pkg/service"
 	"github.com/zenion/mmoserver/pkg/services/auth"
 	authpg "github.com/zenion/mmoserver/pkg/services/auth/postgres"
 	"github.com/zenion/mmoserver/pkg/universe"
@@ -112,6 +113,22 @@ func RegisterAuthService(p *universe.Process, opts AuthOpts) error {
 				return nil, err
 			}
 			hook.NotifyLoginSuccess(opCtx.ConnID, resp)
+			// Phase 2 additive: publish AuthLoginSucceededEvent on the
+			// per-process bus alongside the legacy hook. No subscriber is
+			// wired yet (Task 5 wires the gateway subscribe + drops the
+			// legacy hook in one atomic commit), so this has no observable
+			// effect today. The nil-guard tolerates fixture tests that
+			// bypass Process.New (Bus is constructed in New, not Build).
+			if bus := liveService.Bus(); bus != nil {
+				service.Publish(bus, service.AuthLoginSucceededEvent{
+					UserID:       resp.UserID,
+					Username:     resp.Username,
+					SessionToken: resp.SessionToken,
+					ExpiresAtMs:  resp.ExpiresAtMs,
+					ConnID:       opCtx.ConnID,
+					GatewayID:    p.GatewayID(),
+				})
+			}
 			return resp, nil
 		})
 	RegisterOp[auth.AuthRegisterRequest, auth.AuthRegisterResponse](RouteGatewayLocal,
@@ -124,6 +141,24 @@ func RegisterAuthService(p *universe.Process, opts AuthOpts) error {
 				return nil, err
 			}
 			hook.NotifyRegisterSuccess(opCtx.ConnID, resp)
+			// Phase 2 additive: register also logs the user in, so emit
+			// BOTH AuthLoginSucceededEvent (for session-state services like
+			// the gateway's authStates map) AND AuthRegisteredEvent (for
+			// first-login-only services like welcome packs / achievements).
+			if bus := liveService.Bus(); bus != nil {
+				service.Publish(bus, service.AuthLoginSucceededEvent{
+					UserID:       resp.UserID,
+					Username:     resp.Username,
+					SessionToken: resp.SessionToken,
+					ExpiresAtMs:  resp.ExpiresAtMs,
+					ConnID:       opCtx.ConnID,
+					GatewayID:    p.GatewayID(),
+				})
+				service.Publish(bus, service.AuthRegisteredEvent{
+					UserID:   resp.UserID,
+					Username: resp.Username,
+				})
+			}
 			return resp, nil
 		})
 	RegisterOp[auth.AuthValidateTokenRequest, auth.AuthValidateTokenResponse](RouteGatewayLocal,
@@ -136,6 +171,20 @@ func RegisterAuthService(p *universe.Process, opts AuthOpts) error {
 				return nil, err
 			}
 			hook.NotifyValidateTokenSuccess(opCtx.ConnID, resp)
+			// Phase 2 additive: validate-token doesn't mint a new token —
+			// the client already has one — so SessionToken is intentionally
+			// empty. The gateway subscriber preserves its cached
+			// request-side token via the same convention the legacy
+			// NotifyValidateTokenSuccess uses.
+			if bus := liveService.Bus(); bus != nil {
+				service.Publish(bus, service.AuthLoginSucceededEvent{
+					UserID:      resp.UserID,
+					Username:    resp.Username,
+					ExpiresAtMs: resp.ExpiresAtMs,
+					ConnID:      opCtx.ConnID,
+					GatewayID:   p.GatewayID(),
+				})
+			}
 			return resp, nil
 		})
 	RegisterOp[auth.AuthLogoutRequest, auth.AuthLogoutResponse](RouteGatewayLocal,
@@ -148,6 +197,17 @@ func RegisterAuthService(p *universe.Process, opts AuthOpts) error {
 				return nil, err
 			}
 			hook.NotifyLogoutSuccess(opCtx.ConnID)
+			// Phase 2 additive: AuthLogoutResponse does not carry
+			// UserID / Username — the auth handler intentionally omits them
+			// (the response is one-shot ack). Subscribers (gateway
+			// authStates lookup) resolve identity from their per-conn cache
+			// keyed by ConnID + GatewayID.
+			if bus := liveService.Bus(); bus != nil {
+				service.Publish(bus, service.AuthLogoutEvent{
+					ConnID:    opCtx.ConnID,
+					GatewayID: p.GatewayID(),
+				})
+			}
 			return resp, nil
 		})
 	RegisterOp[auth.AuthChangePasswordRequest, auth.AuthChangePasswordResponse](RouteGatewayLocal,
