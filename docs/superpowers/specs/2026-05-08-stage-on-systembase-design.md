@@ -20,7 +20,7 @@ After this design, every game system trivially gets `*Stage` access, typed game 
 ## Goals
 
 - A game system embeds `mmokit.SystemBase` (no generic) and gets `s.Stage()` access for free.
-- Typed per-cell game state attaches to a system declaratively via `mmokit.StateRef[T]` field discovery — same shape as the existing `mmokit.Query[T]` pattern.
+- Typed per-cell game state is fetched explicitly via `mmokit.State[T](s.Stage())` and cached in each system's `Init()` (three lines per system that needs it). An automatic field-discovery pattern (`mmokit.StateRef[T]` embedding `*T`) was prototyped but abandoned — Go disallows embedding a pointer to a type parameter, so the cleanest version of the marker pattern was unimplementable.
 - Bootstrap (one-shot per-cell setup) is a system's `Init()`. No Config-level lifecycle hook.
 - `Config.OnInit`, `Config.World`, the `*onInitWorld` wrapper, the `GameWorld`/`BoundaryWorld` interfaces, the `W` type parameter on both `engine.SystemBase` and `mmokit.SystemBase`, and the `WorldOf[T]`/`WorldOfCell[T]` helpers are all deleted in lockstep.
 - Default no-op `Update(dt)` so systems that only need `Init()` can omit `Update` entirely.
@@ -70,14 +70,18 @@ func (s *FieldSpawnerSystem) Init() {
 ```go
 type CombatSystem struct {
     mmokit.SystemBase
-    Game    mmokit.StateRef[GameWorld]
+    gw      *GameWorld
     targets mmokit.Query[struct{ Health *Health }]
+}
+
+func (s *CombatSystem) Init() {
+    s.gw = mmokit.State[GameWorld](s.Stage())
 }
 
 func (s *CombatSystem) Update(dt float32) {
     for e, b := range s.targets {
         if b.Health.HP <= 0 {
-            delete(s.Game.PlayerEntities, /*...*/)
+            delete(s.gw.PlayerEntities, /*...*/)
             s.Stage().MarkForRemoval(e)
         }
     }
@@ -100,7 +104,7 @@ mmo.Start()
 Three things to notice:
 - `mmokit.SystemBase` is no longer parameterized (no `[W]`, no `[*Stage]`, no `[any]`).
 - `s.Stage()` is always available, regardless of what the system needs.
-- Typed state plugs in via `mmokit.StateRef[T]` field — declarative, type-safe, autocomplete-friendly. No tags, no `Init()` boilerplate.
+- Typed state is cached by the system in `Init()` via `mmokit.State[T]` — three lines of declaration boilerplate, then direct field access (`s.gw.X`) at every callsite. (An earlier draft of this design considered an automatic field-discovery pattern via a `StateRef[T]` marker type that embeds `*T`, but Go disallows embedding a pointer to a type parameter — so the explicit `Init()` cache is the cleanest available alternative.)
 
 ### 2. Type-level changes
 
@@ -133,8 +137,7 @@ Added: a default no-op `Update(dt float32)` so Update becomes optional via embed
 ```go
 type SystemBase struct {
     engine.SystemBase
-    stage     *universe.Stage
-    stateRefs []stateBuildable // populated in BindStateFields
+    stage *universe.Stage
 }
 
 func (b *SystemBase) Stage() *universe.Stage { return b.stage }
@@ -142,41 +145,11 @@ func (b *SystemBase) Stage() *universe.Stage { return b.stage }
 // InitStage is called by the universe framework after SetDeps.
 // Game code should never call this directly.
 func (b *SystemBase) InitStage(s *universe.Stage) { b.stage = s }
-
-// BindStateFields discovers StateRef[T] fields on the outer system struct
-// via reflection and populates each by looking up its T against the AddState
-// registry on the stage. Called by the framework after InitStage.
-func (b *SystemBase) BindStateFields(outer any) {
-    v := reflect.ValueOf(outer).Elem()
-    for i := 0; i < v.NumField(); i++ {
-        fp := unsafe.Pointer(v.Field(i).UnsafeAddr())
-        field := reflect.NewAt(v.Type().Field(i).Type, fp).Interface()
-        if sb, ok := field.(stateBuildable); ok {
-            sb.buildFromStage(b.stage)
-            b.stateRefs = append(b.stateRefs, sb)
-        }
-    }
-}
 ```
 
-**`pkg/mmokit/state.go` — `StateRef[T]` field marker:**
-```go
-type StateRef[T any] struct {
-    *T
-}
+The wrapper has exactly one responsibility: own the per-cell `*Stage` and surface it. State plugins are looked up explicitly via `mmokit.State[T](s.Stage())` and cached in each system's `Init()`. (The earlier `StateRef[T]` field-marker design was abandoned because Go disallows embedding a pointer to a type parameter — `s.Game.X` field promotion would have required `type StateRef[T any] struct { *T }`, which the language rejects.)
 
-// stateBuildable is satisfied only by *StateRef[T] in pkg/mmokit (unexported
-// method). Same locked-down pattern as queryBuildable.
-type stateBuildable interface {
-    buildFromStage(s *universe.Stage)
-}
-
-func (r *StateRef[T]) buildFromStage(s *universe.Stage) {
-    r.T = State[T](s) // panics if T was never registered via AddState
-}
-```
-
-`mmokit.State[T](stage)` (the existing free-function lookup) stays, for callers without a `SystemBase` (lifecycle hooks, command handlers).
+`mmokit.State[T](stage)` (the existing free-function lookup) remains the canonical typed-state accessor — used both by systems (`Init()` cache) and by lifecycle hooks / command handlers.
 
 **`pkg/universe/stage.go` — Stage loses its world field/accessors:**
 - Field removed: `world any`
@@ -185,7 +158,7 @@ func (r *StateRef[T]) buildFromStage(s *universe.Stage) {
 **Interfaces deleted:**
 - `universe.GameWorld` (the per-game contract)
 - `universe.BoundaryWorld` (vestigial after W-removal — Stage is the only implementor and the interface only existed to fill the type parameter)
-- `mmokit.WorldOf[T]` and `mmokit.WorldOfCell[T]` helpers (replaced by `mmokit.State[T]`)
+- `mmokit.WorldOf[T]` and `mmokit.WorldOfCell[T]` helpers — already gone in the 2026-04-27 migration; `mmokit.State[T]` is the typed-state accessor going forward
 
 ### 3. Universe wiring
 
@@ -227,9 +200,6 @@ for _, def := range c.systemDefs {
     if si, ok := sys.(stageInjectable); ok {
         si.InitStage(base) // mmokit.SystemBase only
     }
-    if sf, ok := sys.(stateFieldBinder); ok {
-        sf.BindStateFields(sys) // mmokit.SystemBase only
-    }
     if qb, ok := sys.(queryBinder); ok {
         qb.BindQueries(sys)
     }
@@ -245,14 +215,11 @@ type depsInjectable interface {
 type stageInjectable interface {
     InitStage(s *Stage)
 }
-type stateFieldBinder interface {
-    BindStateFields(outer any)
-}
 ```
 
-`engine.SystemBase` satisfies the first. `mmokit.SystemBase` satisfies all three. Universe checks each interface independently — engine-layer systems quietly skip the stage and state-binding steps.
+`engine.SystemBase` satisfies the first. `mmokit.SystemBase` satisfies both. Universe checks each interface independently — engine-layer systems quietly skip the stage step.
 
-**Wiring order matters:** `SetDeps` → `InitStage` → `BindStateFields` → `BindQueries`. State binding must run after `InitStage` (it reads `b.stage`) and before `BindQueries` (so `Init()` can read both state and queries).
+**Wiring order:** `SetDeps` → `InitStage` → `BindQueries`. `InitStage` runs before `BindQueries` so a system's `Init()` can use both `s.Stage()` and its declared queries; `Init()` is also where each system caches `mmokit.State[T](s.Stage())` for any typed plugin state it needs.
 
 **`Cell` struct (`pkg/universe/cell.go`)** loses its `World GameWorld` field. All `cell.World.X` callers become `cell.Stage.X` (Stage already has every method `GameWorld` exposed).
 
@@ -295,7 +262,7 @@ Comprehensive list of what gets ripped out:
 - `coordinator_test.go`: `TestConfigOnInitRunsOnceAfterConstruction` and the mutual-exclusion panic test (replaced by `TestSystemInitRunsOnceAfterConstruction`)
 - `partition_test.go`, `roles_test.go`, `auth_cookie_e2e_test.go` and other tests using `Config.OnInit`/`Config.World`: migrate to a one-shot bootstrap system or delete the no-op closure if scaffolding only.
 
-**Net diff:** ~250 lines of typed-world plumbing, wrappers, mutual-exclusion checks, and the full `GameWorld`/`BoundaryWorld` interface contracts → replaced by three new methods (`mmokit.SystemBase.Stage`, `InitStage`, `BindStateFields`) and one new marker type (`mmokit.StateRef[T]`). Plus the default `Update` no-op.
+**Net diff:** ~250 lines of typed-world plumbing, wrappers, mutual-exclusion checks, and the full `GameWorld`/`BoundaryWorld` interface contracts → replaced by two new methods on the `mmokit.SystemBase` wrapper (`Stage()`, `InitStage()`) plus the default `Update(dt)` no-op on `engine.SystemBase`.
 
 ### 6. Migration impact
 
@@ -324,10 +291,10 @@ Comprehensive list of what gets ripped out:
 
 **~13 game systems (`system_*.go`):**
 - Type change: `mmokit.SystemBase[*GameWorld]` → `mmokit.SystemBase` everywhere.
-- Add `Game mmokit.StateRef[GameWorld]` field on each system that needs game state. The framework auto-populates via `BindStateFields`; no `Init()` boilerplate.
+- Add a private `gw *GameWorld` field on each system that needs game state, plus an `Init()` method that caches it: `s.gw = mmokit.State[GameWorld](s.Stage())`.
 - All call sites:
   - `s.World().X` where X is a **Stage method** (e.g. `Spawn`, `MarkForRemoval`, `SendEvent`) → `s.Stage().X`
-  - `s.World().X` where X is a **GameWorld field** (e.g. `PlayerEntities`, `PlayerDB`, `Config`) → `s.Game.X` (field promotion via embedded `*GameWorld`)
+  - `s.World().X` where X is a **GameWorld field** (e.g. `PlayerEntities`, `PlayerDB`, `Config`) → `s.gw.X` (direct access via the cached pointer set in `Init()`)
 
 This is mechanical. The implementation plan drives the rewrite with two pre-built lists — every Stage method name, every GameWorld field name — and dispatches each callsite by name match. No free-form sed.
 
@@ -344,11 +311,10 @@ This is mechanical. The implementation plan drives the rewrite with two pre-buil
 ## Implementation surface
 
 New code in `pkg/mmokit/`:
-- `system.go` (~40 lines): wrapper struct over `engine.SystemBase`, with `Stage()`, `InitStage()`, and `BindStateFields()`.
-- `state.go` additions (~25 lines): `StateRef[T]` marker type, `stateBuildable` interface, `buildFromStage` method.
+- `system.go` (~25 lines): wrapper struct over `engine.SystemBase`, with `Stage()` and `InitStage()`.
 
 New tests:
-- `pkg/mmokit/state_test.go`: `StateRef[T]` discovery + population, panic-when-T-not-registered.
+- `pkg/mmokit/system_test.go`: `Stage()` injection round-trip.
 - `pkg/engine/system_test.go`: `TestSystemBase_DefaultUpdateIsNoop`.
 - `pkg/universe/coordinator_test.go`: `TestSystemInitRunsOnceAfterConstruction` (replaces the deleted OnInit test).
 
@@ -361,13 +327,15 @@ Modified code:
 
 ## Tradeoffs
 
-**Compile-time → startup-time check shift.** `SystemBase[*GameWorld]` gives a compiler error if you typo the world type. `mmokit.StateRef[GameWorld]` gives a panic at process start (during `BindStateFields`) if `GameWorld` was never registered with `AddState`. Both are programmer errors, not runtime conditions, but the failure surface moves from compile to first-construction.
+**Compile-time → startup-time check shift.** `SystemBase[*GameWorld]` gives a compiler error if you typo the world type. `mmokit.State[GameWorld](s.Stage())` (called inside `Init()`) gives a panic at first cell construction if `GameWorld` was never registered with `AddState`. Both are programmer errors, not runtime conditions, but the failure surface moves from compile to first-construction.
 
 **No phased migration.** Callers update in lockstep. Solo-dev / no-backward-compat repo, so the cost is acceptable and matches the project's existing posture.
 
-**Reflection at the boundary.** `BindStateFields` walks struct fields via reflection — same shape as the existing `BindQueries` mechanism, accepted as established. Reflection runs once per system per cell construction; not in hot paths.
+**Three lines of `Init()` boilerplate per system that needs typed state.** A field declaration, an `Init()` method, and a `mmokit.State[T]` lookup. Across `internal/game`'s 13 systems that's ~40 lines of pure declaration. Acceptable because it keeps the *use* sites — hundreds of `s.gw.X` accesses across those 13 files — clean and direct.
 
-**Tag-driven field discovery considered and rejected.** A struct tag (`mmokit:"state"`) was an earlier design candidate. Rejected: the tag is always the same string on every state field (pure noise), it gives the IDE no type information for autocomplete, and a typo is silent until runtime. Marker-type discovery via `StateRef[T]` is type-driven, autocomplete-friendly, and mirrors the established `Query[T]` pattern.
+**Field-discovery via marker type considered and rejected.** A `StateRef[T]` marker (analogous to `mmokit.Query[T]`) was prototyped but abandoned: Go disallows embedding a pointer to a type parameter (`type StateRef[T any] struct { *T }` fails with `embedded field type cannot be a (pointer to a) type parameter`). The closest workable shape (`StateRef[T]{ Val *T }` or with a `Get()` accessor) forces every callsite to write `s.Game.Val.X` or `s.Game.Get().X`, paying an ergonomic cost at hundreds of usage sites to save three lines of declaration per system. The cost-benefit pointed back at explicit `Init()` caching.
+
+**Tag-driven field discovery considered and rejected.** A struct tag (`mmokit:"state"`) was also considered. Rejected: the tag is always the same string on every state field (pure noise), it gives the IDE no type information for autocomplete, and a typo is silent until runtime.
 
 ## Risks
 

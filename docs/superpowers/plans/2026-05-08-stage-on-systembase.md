@@ -2,9 +2,9 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Collapse mmokit's typed-world plumbing (`Config.OnInit`, `Config.World`, `*onInitWorld` wrapper, `GameWorld`/`BoundaryWorld` interfaces, `W` type parameter on `SystemBase`) so every game system embeds non-generic `mmokit.SystemBase`, gets `s.Stage()` for free, and declares typed state via the `mmokit.StateRef[T]` field marker (mirroring `mmokit.Query[T]`).
+**Goal:** Collapse mmokit's typed-world plumbing (`Config.OnInit`, `Config.World`, `*onInitWorld` wrapper, `GameWorld`/`BoundaryWorld` interfaces, `W` type parameter on `SystemBase`) so every game system embeds non-generic `mmokit.SystemBase` and gets `s.Stage()` for free. Per-cell typed game state is fetched explicitly via the existing `mmokit.State[T](stage)` accessor and cached in each system's `Init()`.
 
-**Architecture:** Two-layer split. `pkg/engine.SystemBase` becomes a non-generic concrete type with default no-op `Update`. `pkg/mmokit.SystemBase` becomes a wrapper struct (was a type alias) that embeds `engine.SystemBase`, holds a `*universe.Stage`, and discovers `StateRef[T]` fields via reflection — same shape as `BindQueries`. Universe wiring calls `SetDeps` → `InitStage` → `BindStateFields` → `BindQueries` in order.
+**Architecture:** Two-layer split. `pkg/engine.SystemBase` becomes a non-generic concrete type with default no-op `Update`. `pkg/mmokit.SystemBase` becomes a wrapper struct (was a type alias) that embeds `engine.SystemBase` and holds a `*universe.Stage`. Universe wiring calls `SetDeps` → `InitStage` → `BindQueries` in order.
 
 **Tech Stack:** Go 1.23+, ark v0.7.1 (ECS), reflect for field discovery, no external deps.
 
@@ -15,15 +15,13 @@
 ## File Structure
 
 **New files:**
-- `pkg/mmokit/system.go` — wrapper `SystemBase` struct, `Stage()`, `InitStage()`, `BindStateFields()`.
-- `pkg/mmokit/system_test.go` — tests for the wrapper, stage injection, state-field discovery.
+- `pkg/mmokit/system.go` — wrapper `SystemBase` struct, `Stage()`, `InitStage()`.
+- `pkg/mmokit/system_test.go` — tests for the wrapper and stage injection.
 - `examples/simple/system_field_spawner.go` — replaces the deleted `Config.OnInit` body.
 
 **Heavily modified:**
 - `pkg/engine/system.go` — drop `[W]` generic, drop `World()`/`GameWorld()`, simplify `SetDeps`, add default `Update`.
 - `pkg/engine/system_test.go` — drop typed-world tests, adapt remaining tests.
-- `pkg/mmokit/state.go` — add `StateRef[T]` marker type and `stateBuildable` interface.
-- `pkg/mmokit/state_test.go` — add `StateRef[T]` discovery tests.
 - `pkg/mmokit/mmokit.go` — drop the `SystemBase[W any] = engine.SystemBase[W]` alias.
 - `pkg/universe/coordinator.go` — rewire system construction loop, delete `Config.OnInit` field, `Config.World` field, the `*onInitWorld` wrapper, the world-creation block, the `BoundaryWorld` type-check.
 - `pkg/universe/host.go` — drop `onInit`/`worldFactory` fields and propagation.
@@ -37,7 +35,7 @@
 - `examples/4node-basic/system_bots.go` — `[*mmokit.Stage]` → `(none)`, `s.World()` → `s.Stage()`.
 - `internal/game/gameworld.go` — stop embedding `*Stage`, add unexported `stage *mmokit.Stage` field, set by `AddState` factory.
 - `internal/game/factory.go` — `Config.World = ...` → `mmokit.AddState(mmo, NewGameWorldState)`.
-- `internal/game/system_*.go` (~13 files) — `mmokit.SystemBase[*GameWorld]` → `mmokit.SystemBase`, add `Game mmokit.StateRef[GameWorld]` field, rewrite all `s.World().X` callsites by category (Stage method vs GameWorld field).
+- `internal/game/system_*.go` (~13 files) — `mmokit.SystemBase[*GameWorld]` → `mmokit.SystemBase`, add private `gw *GameWorld` field plus an `Init()` method that caches `mmokit.State[GameWorld](s.Stage())`, rewrite all `s.World().X` callsites by category (Stage method vs GameWorld field).
 
 ---
 
@@ -47,7 +45,7 @@ These two lists drive the mechanical rewrite of `s.World().X` callsites in `inte
 
 **Stage-method list** (callsite `s.World().X` → `s.Stage().X`): every public method on `*universe.Stage` per `pkg/universe/stage.go` — e.g. `Spawn`, `SpawnAtLocation`, `SpawnPlayer`, `SpawnFromTransfer`, `SerializeEntity`, `MarkForRemoval`, `SendEvent`, `Cell`, `CellID`, `CellSize`, `Bridge`, `Engine`, `LookupNetID`, `RegisterLiveNetID`, `RegisterReplicaNetID`, `IsGhost`, `SetDrainingForMerge`, `IsDrainingForMerge`, `Process`, `UpdateCellBounds`, `RegisterTickCallback`, `TickCallbacks`, `ECS`, `Now`, etc.
 
-**GameWorld-field list** (callsite `s.World().X` → `s.Game.X`): every exported field on `internal/game.GameWorld` per `gameworld.go:77` — e.g. `Config`, `Spatial`, `FullRefreshInterval`, `Queue`, `Players`, `PlayerDB`, etc., plus unexported `eng` (used as `gw.eng.Log` — becomes `s.Game.eng.Log`).
+**GameWorld-field list** (callsite `s.World().X` → `s.gw.X`): every exported field on `internal/game.GameWorld` per `gameworld.go:77` — e.g. `Config`, `Spatial`, `FullRefreshInterval`, `Queue`, `Players`, `PlayerDB`, etc., plus unexported `eng` (used as `gw.eng.Log` — becomes `s.gw.eng.Log`). Each system declares a private `gw *GameWorld` field and caches it in `Init()` via `s.gw = mmokit.State[GameWorld](s.Stage())` — see Task 21.
 
 **Disambiguation rule**: a field always wins over a same-named method (Go would accept either via promotion, but we're standardizing on the explicit access path). If a name appears in both lists, treat it as field access.
 
@@ -55,118 +53,13 @@ These two lists drive the mechanical rewrite of `s.World().X` callsites in `inte
 
 ## Phase A — Foundation (additive, no callers broken yet)
 
-### Task 1: Add `StateRef[T]` marker type to pkg/mmokit/state.go
+### Task 1: ~~Add `StateRef[T]` marker type~~ — REMOVED
 
-**Files:**
-- Modify: `pkg/mmokit/state.go`
-- Test: `pkg/mmokit/state_test.go`
+**Skip this task entirely.** Originally added a `StateRef[T]` marker type for declarative field-discovery of per-stage state. Go disallows embedding a pointer to a type parameter (`type StateRef[T any] struct { *T }` fails with `embedded field type cannot be a (pointer to a) type parameter`), which kills the only ergonomic version of that pattern.
 
-- [ ] **Step 1: Append the marker type and discovery interface to `pkg/mmokit/state.go`** (after the existing `State[T]` function)
+The replacement: each system declares a private `gw *GameWorld` field and caches the lookup in `Init()` via `s.gw = mmokit.State[GameWorld](s.Stage())`. Three lines of boilerplate per system, but direct `s.gw.X` access at every callsite — see Task 21's revised migration pattern. No new public API needed in `pkg/mmokit`.
 
-```go
-// StateRef[T] is a field-marker for declaring a per-system reference to a
-// state value previously registered via AddState[T]. Embed it in a struct
-// embedding mmokit.SystemBase; the framework discovers and populates it via
-// reflection during cell wiring. After wiring, T's exported fields and
-// methods are accessible directly via Go field promotion (e.g.
-// s.Game.PlayerEntities works because *T is embedded).
-//
-// Same discovery shape as mmokit.Query[T].
-type StateRef[T any] struct {
-	*T
-}
-
-// stateBuildable is the discovery interface for StateRef[T]. The unexported
-// method confines satisfaction to types defined in pkg/mmokit — only
-// *StateRef[T] qualifies; nobody else can accidentally implement a fake.
-//
-// Same defensive pattern as queryBuildable in pkg/engine.
-type stateBuildable interface {
-	buildFromStage(s *universe.Stage)
-}
-
-// buildFromStage looks up State[T] on the stage and assigns the resulting
-// pointer to the embedded *T. Panics if T was never registered with AddState
-// (programmer error, surfaced at first cell construction).
-func (r *StateRef[T]) buildFromStage(s *universe.Stage) {
-	r.T = State[T](s)
-}
-```
-
-- [ ] **Step 2: Verify package compiles**
-
-Run: `go vet ./pkg/mmokit/...`
-Expected: no errors.
-
-- [ ] **Step 3: Add a unit test that builds a StateRef[T] on a real stage**
-
-Append to `pkg/mmokit/state_test.go`:
-
-```go
-type stateRefTestState struct{ Counter int }
-
-func TestStateRef_BuildFromStage(t *testing.T) {
-	mmo := New(Config{
-		CellsX: 1, CellsY: 1, CellSize: 1000, TickRate: 20, AoIRadius: 100,
-		Headless: true,
-	})
-	AddState(mmo, func(*universe.Stage) *stateRefTestState {
-		return &stateRefTestState{Counter: 42}
-	})
-	mmo.Build()
-	t.Cleanup(mmo.Shutdown)
-
-	var stage *universe.Stage
-	for _, c := range mmo.Cells {
-		stage = c.Stage
-		break
-	}
-
-	var ref StateRef[stateRefTestState]
-	ref.buildFromStage(stage)
-	if ref.T == nil {
-		t.Fatal("StateRef.buildFromStage did not populate the embedded pointer")
-	}
-	if ref.Counter != 42 {
-		t.Errorf("expected Counter=42 via field promotion, got %d", ref.Counter)
-	}
-}
-
-func TestStateRef_PanicsForUnregisteredT(t *testing.T) {
-	mmo := New(Config{
-		CellsX: 1, CellsY: 1, CellSize: 1000, TickRate: 20, AoIRadius: 100,
-		Headless: true,
-	})
-	mmo.Build()
-	t.Cleanup(mmo.Shutdown)
-
-	var stage *universe.Stage
-	for _, c := range mmo.Cells {
-		stage = c.Stage
-		break
-	}
-
-	defer func() {
-		if r := recover(); r == nil {
-			t.Fatal("expected panic for unregistered state type")
-		}
-	}()
-	var ref StateRef[stateRefTestState]
-	ref.buildFromStage(stage) // no AddState — must panic
-}
-```
-
-- [ ] **Step 4: Run the new tests**
-
-Run: `go test ./pkg/mmokit/ -run TestStateRef -v`
-Expected: PASS for both `TestStateRef_BuildFromStage` and `TestStateRef_PanicsForUnregisteredT`.
-
-- [ ] **Step 5: Commit**
-
-```bash
-git add pkg/mmokit/state.go pkg/mmokit/state_test.go
-git commit -m "feat(mmokit): add StateRef[T] marker type for declarative state field discovery"
-```
+**Action:** No code change. Move directly to Task 2.
 
 ---
 
@@ -207,7 +100,7 @@ type System interface {
 // query-field discovery via BindQueries.
 //
 // Game-side systems should embed mmokit.SystemBase, which wraps this base
-// and additionally exposes Stage() and StateRef[T] field discovery.
+// and additionally exposes Stage() (per-cell *universe.Stage accessor).
 type SystemBase struct {
 	ecsWorld *ecs.World
 	eng      *Engine
@@ -437,15 +330,13 @@ import (
 //   - engine.SystemBase methods (ECSWorld, Engine, Init, default Update,
 //     BindQueries, BuildQueries, SetDeps)
 //   - Stage() — direct access to the per-cell *universe.Stage
-//   - automatic StateRef[T] field discovery via BindStateFields
 //
 // Replaces the previous generic mmokit.SystemBase[W] alias. Game systems no
-// longer parameterize on a typed game world; typed game state is declared
-// per-system via mmokit.StateRef[T] fields and registered via AddState[T].
+// longer parameterize on a typed game world; typed per-cell state is fetched
+// explicitly via mmokit.State[T](s.Stage()) and cached in each system's Init().
 type SystemBase struct {
 	engine.SystemBase
-	stage     *universe.Stage
-	stateRefs []stateBuildable
+	stage *universe.Stage
 }
 
 // Stage returns the per-cell stage this system is wired to. Available
@@ -456,33 +347,9 @@ func (b *SystemBase) Stage() *universe.Stage { return b.stage }
 // InitStage is called by the universe framework after SetDeps. Game code
 // must not call this directly — the framework owns stage lifecycle.
 func (b *SystemBase) InitStage(s *universe.Stage) { b.stage = s }
-
-// BindStateFields discovers StateRef[T] fields on the outer system struct
-// via reflection and populates each by looking up State[T] against the
-// stage's AddState registry. Called by the framework after InitStage.
-//
-// Same defensive pattern as engine.SystemBase.BindQueries: only the outer
-// struct's own fields are walked; the embedded SystemBase fields are
-// skipped. Panics with a clear message if a registered StateRef references
-// a T that was never registered with AddState (programmer error).
-func (b *SystemBase) BindStateFields(outer any) {
-	v := reflect.ValueOf(outer)
-	if v.Kind() != reflect.Pointer || v.Elem().Kind() != reflect.Struct {
-		panic("mmokit.SystemBase: BindStateFields requires *Struct")
-	}
-	v = v.Elem()
-	t := v.Type()
-	for i := 0; i < t.NumField(); i++ {
-		ft := t.Field(i)
-		fp := unsafe.Pointer(v.Field(i).UnsafeAddr())
-		field := reflect.NewAt(ft.Type, fp).Interface()
-		if sb, ok := field.(stateBuildable); ok {
-			sb.buildFromStage(b.stage)
-			b.stateRefs = append(b.stateRefs, sb)
-		}
-	}
-}
 ```
+
+Note: `pkg/mmokit/system.go` does not need to import `reflect` or `unsafe` — those were only required by the abandoned `BindStateFields` field-discovery prototype.
 
 - [ ] **Step 2: Verify pkg/mmokit compiles** (universe wiring not yet updated — pkg/universe will still fail; this checkpoint only proves mmokit's new types are syntactically OK)
 
@@ -493,7 +360,7 @@ Expected: no errors. (May fail because the alias `mmokit.SystemBase[W]` in mmoki
 
 ```bash
 git add pkg/mmokit/system.go
-git commit -m "feat(mmokit): add SystemBase wrapper with Stage() and StateRef discovery"
+git commit -m "feat(mmokit): add SystemBase wrapper with Stage() accessor"
 ```
 
 ### Task 6: Remove the SystemBase[W] type alias from pkg/mmokit/mmokit.go
@@ -662,21 +529,26 @@ func TestSystemBase_StageInjection(t *testing.T) {
 	}
 }
 
-// TestSystemBase_BindStateFields: a system declaring a StateRef[T] field
-// has its embedded *T populated by BindStateFields after InitStage.
-type bindStateFieldsTestState struct{ Tag string }
-type bindStateFieldsTestSystem struct {
+// TestSystemBase_StateLookupCache: the canonical pattern for game systems —
+// cache mmokit.State[T] in Init() and access state directly via the cached
+// pointer.
+type cacheTestState struct{ Tag string }
+type cacheTestSystem struct {
 	SystemBase
-	S StateRef[bindStateFieldsTestState]
+	gw *cacheTestState
 }
 
-func TestSystemBase_BindStateFields(t *testing.T) {
+func (s *cacheTestSystem) Init() {
+	s.gw = State[cacheTestState](s.Stage())
+}
+
+func TestSystemBase_StateLookupCache(t *testing.T) {
 	mmo := New(Config{
 		CellsX: 1, CellsY: 1, CellSize: 1000, TickRate: 20, AoIRadius: 100,
 		Headless: true,
 	})
-	AddState(mmo, func(*universe.Stage) *bindStateFieldsTestState {
-		return &bindStateFieldsTestState{Tag: "ok"}
+	AddState(mmo, func(*universe.Stage) *cacheTestState {
+		return &cacheTestState{Tag: "ok"}
 	})
 	mmo.Build()
 	t.Cleanup(mmo.Shutdown)
@@ -687,62 +559,29 @@ func TestSystemBase_BindStateFields(t *testing.T) {
 		break
 	}
 
-	s := &bindStateFieldsTestSystem{}
+	s := &cacheTestSystem{}
 	s.InitStage(stage)
-	s.BindStateFields(s)
+	s.Init()
 
-	if s.S.T == nil {
-		t.Fatal("BindStateFields did not populate StateRef.T")
+	if s.gw == nil {
+		t.Fatal("Init() did not populate s.gw")
 	}
-	if s.S.Tag != "ok" {
-		t.Errorf("expected Tag=\"ok\" via field promotion, got %q", s.S.Tag)
+	if s.gw.Tag != "ok" {
+		t.Errorf("expected Tag=\"ok\", got %q", s.gw.Tag)
 	}
-}
-
-// TestSystemBase_BindStateFields_PanicsForUnregisteredT: if a system declares
-// StateRef[X] but X was never registered with AddState, BindStateFields
-// panics with a clear message.
-type unregisteredStateTestState struct{}
-type unregisteredStateSystem struct {
-	SystemBase
-	S StateRef[unregisteredStateTestState]
-}
-
-func TestSystemBase_BindStateFields_PanicsForUnregisteredT(t *testing.T) {
-	mmo := New(Config{
-		CellsX: 1, CellsY: 1, CellSize: 1000, TickRate: 20, AoIRadius: 100,
-		Headless: true,
-	})
-	mmo.Build()
-	t.Cleanup(mmo.Shutdown)
-
-	var stage *universe.Stage
-	for _, c := range mmo.Cells {
-		stage = c.Stage
-		break
-	}
-
-	s := &unregisteredStateSystem{}
-	s.InitStage(stage)
-	defer func() {
-		if r := recover(); r == nil {
-			t.Fatal("expected panic for unregistered T")
-		}
-	}()
-	s.BindStateFields(s)
 }
 ```
 
 - [ ] **Step 2: Run the new tests**
 
-Run: `go test ./pkg/mmokit/ -run 'TestSystemBase_(StageInjection|BindStateFields)' -v`
-Expected: PASS for all three. (Test runs `mmo.Build()` and pulls a stage from the cells map, so `pkg/universe` must compile — if Phase D hasn't landed yet, this test will fail at link time. In that case defer this task to after Phase D and verify here.)
+Run: `go test ./pkg/mmokit/ -run 'TestSystemBase_(StageInjection|StateLookupCache)' -v`
+Expected: PASS for both. (Test runs `mmo.Build()` and pulls a stage from the cells map, so `pkg/universe` must compile — if Phase D hasn't landed yet, this test will fail at link time. In that case defer this task to after Phase D and verify here.)
 
 - [ ] **Step 3: Commit**
 
 ```bash
 git add pkg/mmokit/system_test.go
-git commit -m "test(mmokit): SystemBase Stage() injection and StateRef discovery"
+git commit -m "test(mmokit): SystemBase Stage() injection and State[T] caching"
 ```
 
 ---
@@ -996,13 +835,6 @@ for i, def := range c.systemDefs {
         si.InitStage(base)
     }
 
-    type stateFieldBinder interface {
-        BindStateFields(outer any)
-    }
-    if sf, ok := sys.(stateFieldBinder); ok {
-        sf.BindStateFields(sys)
-    }
-
     type queryBinder interface {
         BindQueries(outer any)
     }
@@ -1080,7 +912,7 @@ Expected: no output.
 
 ```bash
 git add pkg/universe/coordinator.go
-git commit -m "refactor(universe): rewire system construction to InitStage + BindStateFields"
+git commit -m "refactor(universe): rewire system construction to two-arg SetDeps + InitStage"
 ```
 
 ### Task 13: Drop Cell.World field from pkg/universe/cell.go and update references
@@ -1387,7 +1219,7 @@ awk '/type GameWorld struct/,/^}$/' internal/game/gameworld.go \
   | sort -u
 ```
 
-Capture the output (uppercase = exported field, lowercase = unexported field). These are the names that `s.World().X` callsites map to `s.Game.X`.
+Capture the output (uppercase = exported field, lowercase = unexported field). These are the names that `s.World().X` callsites map to `s.gw.X`.
 
 - [ ] **Step 3: Write the lists to a reference file**
 
@@ -1399,11 +1231,11 @@ Create `docs/superpowers/plans/2026-05-08-stage-on-systembase-migration-lists.md
 ## Stage methods (callsite -> s.Stage().X)
 [paste list from Step 1]
 
-## GameWorld fields (callsite -> s.Game.X)
+## GameWorld fields (callsite -> s.gw.X)
 [paste list from Step 2]
 
 ## Disambiguation
-If a name appears in both lists, treat as field access (s.Game.X).
+If a name appears in both lists, treat as field access (s.gw.X).
 ```
 
 - [ ] **Step 4: Commit the reference**
@@ -1634,19 +1466,24 @@ Replace `mmokit.SystemBase[*GameWorld]` → `mmokit.SystemBase`.
 sed -i 's/mmokit\.SystemBase\[\*GameWorld\]/mmokit.SystemBase/g' internal/game/system_*.go
 ```
 
-- [ ] **Step 3: For each file, add a `Game mmokit.StateRef[GameWorld]` field**
+- [ ] **Step 3: For each file, add a `gw *GameWorld` field and an `Init()` method**
 
-For each system struct, immediately after the embedded `mmokit.SystemBase`, add:
+For each system struct, add a private `gw *GameWorld` field immediately after the embedded `mmokit.SystemBase`. Then add (or extend the existing) `Init()` method to cache the lookup once per cell:
+
 ```go
-Game mmokit.StateRef[GameWorld]
+func (s *EconomySystem) Init() {
+    s.gw = mmokit.State[GameWorld](s.Stage())
+}
 ```
 
-This must be done manually per file (sed cannot reliably insert after the embed; field placement matters for readability).
+If a system already has an `Init()` (e.g. for query configuration), prepend the `s.gw = ...` assignment as the first statement.
+
+This must be done manually per file (sed cannot reliably insert after the embed; field placement matters for readability, and `Init()` may need merging with existing code).
 
 Example before:
 ```go
 type EconomySystem struct {
-    mmokit.SystemBase
+    mmokit.SystemBase[*GameWorld]
     stations mmokit.Query[struct {
         Station *gamecomp.Station
         Pos     *mmokit.Position
@@ -1658,11 +1495,15 @@ After:
 ```go
 type EconomySystem struct {
     mmokit.SystemBase
-    Game     mmokit.StateRef[GameWorld]
+    gw       *GameWorld
     stations mmokit.Query[struct {
         Station *gamecomp.Station
         Pos     *mmokit.Position
     }]
+}
+
+func (s *EconomySystem) Init() {
+    s.gw = mmokit.State[GameWorld](s.Stage())
 }
 ```
 
@@ -1670,8 +1511,8 @@ type EconomySystem struct {
 
 For each callsite, dispatch using the migration reference lists (Task 18):
 - If X is a **Stage method** → `s.Stage().X`
-- If X is a **GameWorld field** → `s.Game.X`
-- If `gw := s.World()` is captured locally, replace with `gw := s.Game` and adjust subsequent `gw.X` accesses by category. (Note: `gw` is now a `StateRef[GameWorld]`, but field/method promotion still resolves `gw.PlayerEntities`, `gw.PlayerDB`, etc. transparently.)
+- If X is a **GameWorld field** → `s.gw.X`
+- If `gw := s.World()` is captured locally, drop the local assignment entirely and use `s.gw` directly throughout the function. (`s.gw` is exactly `*GameWorld`, so `s.gw.PlayerEntities`, `s.gw.PlayerDB`, etc. work as plain field access.)
 
 Run a search-and-categorize pass:
 ```bash
@@ -1680,7 +1521,7 @@ grep -rn 's\.World()\.\|gw\.' internal/game/system_*.go | wc -l
 
 This produces the working list. Process each file individually, dispatching by name match against the lists from Task 18. **Do NOT use free-form sed for this step** — the disambiguation rule (field-wins-over-method) requires per-callsite judgement.
 
-Special note for the `gw.eng.Log` pattern (unexported field on GameWorld): becomes `s.Game.eng.Log` (since `eng` is unexported on GameWorld but accessible within the `internal/game` package).
+Special note for the `gw.eng.Log` pattern (unexported field on GameWorld): becomes `s.gw.eng.Log` (since `eng` is unexported on GameWorld but accessible within the `internal/game` package).
 
 - [ ] **Step 5: Verify internal/game compiles**
 
@@ -1691,7 +1532,7 @@ Expected: no errors. If errors point to specific missed callsites, fix them with
 
 ```bash
 git add internal/game/system_*.go
-git commit -m "refactor(game): migrate ~13 systems to mmokit.SystemBase + StateRef[GameWorld]"
+git commit -m "refactor(game): migrate ~13 systems to mmokit.SystemBase + Init() state cache"
 ```
 
 ### Task 22: Migrate OnPlayerJoin / OnPlayerLeave hooks (if needed)
@@ -1784,7 +1625,7 @@ Audit `CLAUDE.md` for any mentions of:
 - `mmokit.WorldOf[T]` / `mmokit.WorldOfCell[T]`
 - `GameWorld` interface
 
-Update those sections to reflect the new API (Stage(), StateRef[T], AddState[T] flow).
+Update those sections to reflect the new API (Stage(), AddState[T]/State[T] flow, no W parameter).
 
 - [ ] **Step 8: Final commit**
 
@@ -1794,7 +1635,7 @@ git commit -m "$(cat <<'EOF'
 docs(claude): update for Stage on SystemBase API
 
 Reflects the C-full migration: Config.OnInit/Config.World gone, mmokit.SystemBase
-non-generic with Stage() accessor, typed state via StateRef[T] + AddState[T].
+non-generic with Stage() accessor, typed state via AddState[T]/State[T].
 
 Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>
 EOF
@@ -1807,7 +1648,7 @@ EOF
 
 - [ ] Every spec section maps to ≥1 task.
 - [ ] No "TODO" / "TBD" / "fill in" / "similar to Task N" placeholders.
-- [ ] All function signatures are stable across tasks (`SetDeps(w, eng)` everywhere; `InitStage(s *Stage)` everywhere; `BindStateFields(outer any)` everywhere).
+- [ ] All function signatures are stable across tasks (`SetDeps(w, eng)` everywhere; `InitStage(s *Stage)` everywhere).
 - [ ] All file paths are absolute (rooted at repo).
 - [ ] Each task ends in a commit.
 - [ ] Verification commands per task are concrete.
