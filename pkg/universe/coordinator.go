@@ -609,15 +609,6 @@ type Process struct {
 	// cycles to converge on the real offset.
 	ClusterClock *ClusterClock
 
-	// pendingAuthHook is set by InstallGatewayAuthHook (called from
-	// mmokit.RegisterAuthService at facade time) and consumed by Build
-	// after the Gateway is constructed. The struct is shared by reference:
-	// the typed-op auth handlers hold the same pointer and call
-	// NotifyXxx through it. The OnSuccess / OnLogout callbacks are filled
-	// in by Build (so they can close over the live *Gateway). Nil when
-	// auth isn't registered.
-	pendingAuthHook *auth.GatewayHook
-
 	// bus is the per-process typed pub/sub bus shared by every service
 	// instance running on this Process. Initialized in New(); injected
 	// into service.Context.Bus by serviceContext().
@@ -1192,51 +1183,6 @@ func (c *Process) AppendExtraMigrations(fsys fs.FS) {
 	c.cfg.ExtraMigrations = append(c.cfg.ExtraMigrations, fsys)
 }
 
-// InstallGatewayAuthHook returns the *auth.GatewayHook the typed-op auth
-// handlers will notify after each successful op. The OnSuccess / OnLogout
-// callbacks are filled in by Build() once the gateway is constructed so
-// they can close over the live *Gateway. Called by
-// mmokit.RegisterAuthService at facade time.
-//
-// Returning the same pointer to subsequent callers is intentional — the
-// hook is a per-process singleton; auth handler closures capture this
-// pointer and call Notify* on it directly without round-tripping through
-// the legacy proto-op router's post-handle observer.
-func (c *Process) InstallGatewayAuthHook() *auth.GatewayHook {
-	if c.pendingAuthHook == nil {
-		c.pendingAuthHook = &auth.GatewayHook{Logger: c.Log}
-	}
-	return c.pendingAuthHook
-}
-
-// installPendingAuthHook fills in the GatewayHook's OnSuccess / OnLogout
-// callbacks against the now-constructed Gateway. Called by Build() after
-// the gateway is wired. No-op if RegisterAuthService wasn't called or the
-// process doesn't have RoleGateway.
-func (c *Process) installPendingAuthHook() {
-	if c.pendingAuthHook == nil {
-		return
-	}
-	if !c.roles.Has(RoleGateway) {
-		return
-	}
-	if c.gateway == nil {
-		return
-	}
-	c.pendingAuthHook.OnSuccess = func(connID uint32, userIDStr, username, token string, expiresAtMs int64) {
-		uid, err := uuid.Parse(userIDStr)
-		if err != nil {
-			c.Log.Log(CatNetConn, "gateway: auth: bad user_id %q: %v", userIDStr, err)
-			return
-		}
-		c.gateway.onAuthSuccess(connID, uid, username, token, expiresAtMs)
-	}
-	c.pendingAuthHook.OnLogout = func(connID uint32) {
-		c.gateway.onAuthLogout(connID)
-	}
-	c.gateway.installAuthHook(c.pendingAuthHook)
-}
-
 // EntityHostForNetID returns the host ID owning the entity with the given
 // network ID. Walks all local cells in all local hosts. For multi-process
 // clusters this only resolves entities on the same process; remote entities
@@ -1662,7 +1608,6 @@ func (c *Process) Build() {
 		}
 		// Now that the gateway exists, subscribe it to the bus so it
 		// observes auth login/logout events and populates authStates.
-		// Replaces the legacy installPendingAuthHook path (Phase 2 cutover).
 		if c.gateway != nil && c.bus != nil {
 			c.gateway.subscribeToAuthEvents(c.bus)
 		}

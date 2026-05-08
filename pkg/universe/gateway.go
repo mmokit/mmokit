@@ -106,14 +106,13 @@ type Gateway struct {
 	sessionRoutes *sessionRoutes
 	httpServer    *http.Server
 
-	// authMu guards authStates + authHook.
+	// authMu guards authStates.
 	authMu     sync.Mutex
 	authStates map[uint32]connAuthState
-	authHook   *auth.GatewayHook
 }
 
 // connAuthState is the gateway's authoritative per-connection auth record.
-// Populated by the auth-response interceptor (auth.GatewayHook) once an
+// Populated by the bus subscriber (subscribeToAuthEvents) once an
 // AUTH_LOGIN / AUTH_REGISTER / AUTH_VALIDATE_TOKEN response succeeds.
 type connAuthState struct {
 	authenticated bool
@@ -172,22 +171,11 @@ func (g *Gateway) handleEvent(evt net.PlayerEvent) {
 	g.handleDisconnect(evt)
 }
 
-// installAuthHook registers the response interceptor used by pkg/services/auth.
-// Called by Process.AddGatewayAuthHook from the mmokit facade.
-func (g *Gateway) installAuthHook(h *auth.GatewayHook) {
-	g.authMu.Lock()
-	g.authHook = h
-	g.authMu.Unlock()
-}
-
-// subscribeToAuthEvents wires the bus subscribers that today's
-// pendingAuthHook callbacks fire. Called from coordinator.Build after
-// the bus is constructed and the gateway is wired. The subscribers run
-// synchronously inline on Publish (process-local Phase 1 contract) so
-// authStates[connID] is populated BEFORE the typed-op response leaves
-// the gateway.
-//
-// Mirrors the body of the previous installPendingAuthHook closures.
+// subscribeToAuthEvents wires the bus subscribers that observe auth
+// login/logout events. Called from coordinator.Build after the bus is
+// constructed and the gateway is wired. The subscribers run synchronously
+// inline on Publish (process-local Phase 1 contract) so authStates[connID]
+// is populated BEFORE the typed-op response leaves the gateway.
 func (g *Gateway) subscribeToAuthEvents(bus *service.Bus) {
 	if bus == nil {
 		return
@@ -228,9 +216,10 @@ func (g *Gateway) clearAuthState(connID uint32) {
 	delete(g.authStates, connID)
 }
 
-// onAuthSuccess is the callback wired through auth.GatewayHook.OnSuccess.
-// It commits the per-connection auth record and then dispatches the
-// downstream PlayerAssignment to the appropriate cell.
+// onAuthSuccess is invoked when an AuthLoginSucceededEvent fires on the bus
+// (or synchronously from onWSUpgrade for cookie-based reattach). It commits
+// the per-connection auth record and then dispatches the downstream
+// PlayerAssignment to the appropriate cell.
 func (g *Gateway) onAuthSuccess(connID uint32, userID uuid.UUID, username, token string, expiresAtMs int64) {
 	g.authMu.Lock()
 	prev := g.authStates[connID]
