@@ -65,3 +65,20 @@ func TestProcess_HasServiceEventRouterAfterNew(t *testing.T) {
 		t.Fatalf("router not updated via recv-path call: %v", got)
 	}
 }
+
+func TestBuildPeerList_IncludesEventRouting(t *testing.T) {
+	p := New(Config{Headless: true, Mode: "all", CellsX: 1, CellsY: 1, ControlListen: "127.0.0.1:0"})
+	p.Build()
+	p.serviceEventRouter.UpdateProcess("host-1", []string{"foo.Event", "bar.Event"})
+	p.serviceEventRouter.UpdateProcess("host-2", []string{"foo.Event"})
+	pl := p.assignmentEngine.buildPeerList().GetPeerList()
+	if pl.GetEventRouting() == nil {
+		t.Fatal("EventRouting not populated")
+	}
+	if got := pl.GetEventRouting()["foo.Event"]; got == nil || len(got.GetProcessIds()) != 2 {
+		t.Fatalf("foo.Event routing: %v", got)
+	}
+	if got := pl.GetEventRouting()["bar.Event"]; got == nil || len(got.GetProcessIds()) != 1 {
+		t.Fatalf("bar.Event routing: %v", got)
+	}
+}

@@ -457,14 +457,23 @@ func (e *assignmentEngine) buildPeerList() *meshpb.CoordMessage {
 			})
 		}
 	}
+	var eventRouting map[string]*meshpb.ProcessList
+	if e.coord.serviceEventRouter != nil {
+		snap := e.coord.serviceEventRouter.Snapshot()
+		eventRouting = make(map[string]*meshpb.ProcessList, len(snap))
+		for typeName, procs := range snap {
+			eventRouting[typeName] = &meshpb.ProcessList{ProcessIds: procs}
+		}
+	}
 	return &meshpb.CoordMessage{
 		CoordEpoch: e.coord.coordEpoch,
 		Msg: &meshpb.CoordMessage_PeerList{
 			PeerList: &meshpb.PeerList{
-				Hosts:    hostRecs,
-				Cells:    ownership,
-				Gateways: gwRecs,
-				Services: svcRecs,
+				Hosts:        hostRecs,
+				Cells:        ownership,
+				Gateways:     gwRecs,
+				Services:     svcRecs,
+				EventRouting: eventRouting,
 			},
 		},
 	}
