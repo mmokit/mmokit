@@ -677,8 +677,6 @@ type ClickToMoveSystem = system.ClickToMoveSystem
 type DirectionMoveSystem = system.DirectionMoveSystem
 
 // SpatialHooks provides optional per-tick callbacks for game-specific spatial logic.
-type SpatialHooks = system.SpatialHooks
-
 // NewSpatialSystem returns a SystemDef for the standard spatial grid update
 // with no game-specific hooks. Queries Position+Collider+NetworkID, reads Rotation
 // if present, registers/updates entities in the HashGrid each tick.
@@ -687,27 +685,25 @@ type SpatialHooks = system.SpatialHooks
 func NewSpatialSystem() SystemDef {
 	return SystemDef{
 		Name:    "Spatial",
-		Factory: func() engine.System { return &system.SpatialSystem{} },
+		Factory: func() engine.System { return &SpatialSystem{} },
 	}
 }
 
-// NewSpatialSystemWith returns a SystemDef with game-specific hooks.
-// The hooks function runs at Init time with the typed game world and returns
+// NewSpatialSystemWith returns a SystemDef with stage-aware hooks.
+// The hooks function runs at Init time with the cell's *Stage and returns
 // per-tick callbacks (PreTick, OnEntity, PostTick).
 //
-//	mmo.AddSystem(mmokit.NewSpatialSystemWith(func(gw *MyWorld) mmokit.SpatialHooks {
+//	mmo.AddSystem(mmokit.NewSpatialSystemWith(func(stage *mmokit.Stage) mmokit.SpatialHooks {
 //	    return mmokit.SpatialHooks{
 //	        OnEntity: func(entity ecs.Entity, entry mmokit.SpatialEntry) { ... },
 //	    }
 //	}))
-func NewSpatialSystemWith[W any](hooks func(gw W) SpatialHooks) SystemDef {
+func NewSpatialSystemWith(hooks func(stage *Stage) SpatialHooks) SystemDef {
 	return SystemDef{
 		Name: "Spatial",
 		Factory: func() engine.System {
-			sys := &system.SpatialSystem{}
-			sys.SetInitHook(func(gw any) system.SpatialHooks {
-				return hooks(gw.(W))
-			})
+			sys := &SpatialSystem{}
+			sys.SetInitHook(hooks)
 			return sys
 		},
 	}

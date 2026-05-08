@@ -1,12 +1,12 @@
-package system
+package mmokit
 
 import (
 	"github.com/mlange-42/ark/ecs"
 
 	"github.com/zenion/mmoserver/pkg/component"
-	"github.com/zenion/mmoserver/pkg/engine"
 	"github.com/zenion/mmoserver/pkg/query"
 	"github.com/zenion/mmoserver/pkg/spatial"
+	"github.com/zenion/mmoserver/pkg/universe"
 )
 
 // SpatialHooks provides optional per-tick callbacks for game-specific spatial logic.
@@ -19,7 +19,7 @@ type SpatialHooks struct {
 // SpatialSystem updates the spatial hash grid each tick by querying all entities
 // with Position + Collider + NetworkID. Rotation is read if present.
 type SpatialSystem struct {
-	engine.SystemBase[any]
+	SystemBase
 	grid     *spatial.HashGrid
 	entities query.Query[struct {
 		Pos *component.Position
@@ -28,22 +28,19 @@ type SpatialSystem struct {
 		Rot *component.Rotation `ecs:"optional"`
 	}]
 	hooks    SpatialHooks
-	initHook func(gw any) SpatialHooks
+	initHook func(stage *universe.Stage) SpatialHooks
 }
 
 // SetInitHook sets a function that runs during Init to produce per-tick hooks.
-func (s *SpatialSystem) SetInitHook(fn func(gw any) SpatialHooks) {
+func (s *SpatialSystem) SetInitHook(fn func(stage *universe.Stage) SpatialHooks) {
 	s.initHook = fn
 }
 
 func (s *SpatialSystem) Init() {
 	s.entities.With(query.IncludeAll())
-
-	if sp, ok := s.GameWorld().(interface{ SpatialGrid() *spatial.HashGrid }); ok {
-		s.grid = sp.SpatialGrid()
-	}
+	s.grid = s.Stage().SpatialGrid()
 	if s.initHook != nil {
-		s.hooks = s.initHook(s.GameWorld())
+		s.hooks = s.initHook(s.Stage())
 	}
 }
 
