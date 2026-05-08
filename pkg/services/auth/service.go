@@ -20,6 +20,12 @@ type Service struct {
 	rl     *IPRateLimiter
 	reapCh chan struct{}
 	reapWG sync.WaitGroup
+
+	// bus is captured from ctx.Bus at Init time. The mmokit facade's
+	// typed-op handler wrappers reach it via Bus() to publish typed
+	// AuthLoginSucceededEvent / AuthLogoutEvent / AuthRegisteredEvent
+	// values after each successful auth handler returns.
+	bus *service.Bus
 }
 
 func newService(ctx *service.Context, opts ServiceOpts) service.Service {
@@ -30,7 +36,15 @@ func newService(ctx *service.Context, opts ServiceOpts) service.Service {
 // to wire the console-command repo provider after Init.
 func (s *Service) Repository() Repository { return s.repo }
 
+// Bus returns the per-process service bus this auth instance was wired
+// onto. Used by the mmokit facade to publish typed Auth*Event values
+// from typed-op handler wrappers. Returns nil before Init.
+func (s *Service) Bus() *service.Bus {
+	return s.bus
+}
+
 func (s *Service) Init(ctx *service.Context) error {
+	s.bus = ctx.Bus
 	if s.opts.Repository != nil {
 		s.repo = s.opts.Repository
 	} else {
