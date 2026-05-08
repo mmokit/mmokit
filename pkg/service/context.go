@@ -35,7 +35,7 @@ type Context struct {
 	// framework events and to sibling-service events here at Init time.
 	// See pkg/service/bus.go.
 	//
-	// Always non-nil — Process.Build constructs the Bus before any
+	// Always non-nil — Process.New constructs the Bus before any
 	// service.Context is built.
 	Bus *Bus
 }
