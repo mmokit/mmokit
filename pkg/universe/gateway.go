@@ -385,10 +385,6 @@ func (g *Gateway) dispatchPostAuthAssignment(connID uint32, userID uuid.UUID, us
 			GatewayID: g.id,
 		})
 	}
-	// chatHook path (legacy) — deleted in Task 9 of this phase.
-	if g.process != nil && g.process.chatHook != nil {
-		g.process.chatHook.OnSessionEnter(connID, userID.String(), username, g.id)
-	}
 }
 
 // sendServerConfig writes the typed ServerConfig event with the cached
@@ -461,10 +457,6 @@ func (g *Gateway) handleDisconnect(evt net.PlayerEvent) {
 			UserID:    userIDStr,
 			GatewayID: g.id,
 		})
-	}
-	// chatHook path (legacy) — deleted in Task 9 of this phase.
-	if g.process != nil && g.process.chatHook != nil {
-		g.process.chatHook.OnSessionLeave(connID, g.id)
 	}
 
 	if g.isLocalShortcut(sess.hostID) {

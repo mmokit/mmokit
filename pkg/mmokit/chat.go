@@ -144,18 +144,13 @@ func RegisterChatService(p *pkguniverse.Process, opts ChatOpts) error {
 	// before Build() runs, so any later send path can resolve typeIDs.
 	RegisterChatServerEvents()
 
-	// Install the gateway session hook so login/logout drives chat
-	// presence + subscription state. Both methods dispatch into the
-	// live service; before Init resolves they no-op.
-	p.InstallChatHook(&chatSessionHookImpl{getSvc: getSvc})
-
 	// Register all 23 typed-op chat handlers. All RouteGatewayLocal —
 	// chat doesn't need cell-routed dispatch (no ECS access, no per-
 	// player cell affinity). HandleSessionEnter / HandleSessionLeave
 	// are intentionally NOT registered as wire-accessible ops: they
-	// represent gateway-internal presence transitions and are driven
-	// by the chat session hook above. Exposing them on the wire
-	// would let clients forge presence.
+	// represent gateway-internal presence transitions driven by the
+	// service.Bus subscription wired in chat.Service.Init. Exposing
+	// them on the wire would let clients forge presence.
 	registerChatTypedOps(getSvc)
 
 	// Auto-include "chat" in cfg.ServiceKinds when this process WILL
@@ -203,47 +198,15 @@ func RegisterChatServiceWithMock(p *pkguniverse.Process, repo ChatRepository, au
 	return RegisterChatService(p, opts)
 }
 
-// chatSessionHookImpl satisfies pkguniverse.ChatSessionHook and dispatches
-// every login / logout event to the live *chat.Service. Before Init has
-// resolved (live service nil), both callbacks no-op so out-of-order
-// startup doesn't panic.
-type chatSessionHookImpl struct {
-	getSvc chat.ServiceProvider
-}
-
-func (h *chatSessionHookImpl) OnSessionEnter(connID uint32, userID, username, gatewayID string) {
-	svc := h.getSvc()
-	if svc == nil {
-		return
-	}
-	_, _ = svc.HandleSessionEnter(nil, &chat.ChatSessionEnterRequest{
-		ConnID:    connID,
-		UserID:    userID,
-		Username:  username,
-		GatewayID: gatewayID,
-	})
-}
-
-func (h *chatSessionHookImpl) OnSessionLeave(connID uint32, gatewayID string) {
-	svc := h.getSvc()
-	if svc == nil {
-		return
-	}
-	_, _ = svc.HandleSessionLeave(nil, &chat.ChatSessionLeaveRequest{
-		ConnID:    connID,
-		GatewayID: gatewayID,
-	})
-}
-
 // registerChatTypedOps wires every chat Handle* method into the typed-op
 // registry. All entries are RouteGatewayLocal — chat handlers run inline
 // on the gateway with no cell forwarding. The closures resolve the live
 // service via getSvc so registration can happen before Service.Init.
 //
 // HandleSessionEnter / HandleSessionLeave are intentionally NOT registered
-// here — those are driven by the gateway hook (see InstallChatHook) and
-// must not be exposed on the wire (clients forging presence would be a
-// trust hole).
+// here — those are driven by service.Bus subscriptions wired in
+// chat.Service.Init and must not be exposed on the wire (clients forging
+// presence would be a trust hole).
 func registerChatTypedOps(getSvc chat.ServiceProvider) {
 	// --- Player ops ---
 	RegisterOp[chat.ChatSendRequest, chat.ChatSendResponse](RouteGatewayLocal,

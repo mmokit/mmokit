@@ -618,16 +618,6 @@ type Process struct {
 	// auth isn't registered.
 	pendingAuthHook *auth.GatewayHook
 
-	// chatHook is set by InstallChatHook (called from
-	// mmokit.RegisterChatService at facade time). The gateway's
-	// onAuthSuccess + handleDisconnect paths invoke OnSessionEnter /
-	// OnSessionLeave on the hook so the chat service can build presence
-	// + subscription state for each connection. Nil when chat isn't
-	// registered. The interface is duck-typed equivalent to
-	// pkg/services/chat.SessionHook — declaring it locally avoids a
-	// universe→chat import cycle.
-	chatHook ChatSessionHook
-
 	// bus is the per-process typed pub/sub bus shared by every service
 	// instance running on this Process. Initialized in New(); injected
 	// into service.Context.Bus by serviceContext().
@@ -635,21 +625,6 @@ type Process struct {
 	// Phase 1 fan-out is process-local only. Phase 3 will plumb a
 	// peer-mesh dispatch callback so Publish[T] reaches remote subscribers.
 	bus *service.Bus
-}
-
-// ChatSessionHook is the gateway-side adapter that drives chat presence
-// after auth login/logout. The chat service registers an implementation
-// (via mmokit.RegisterChatService) by calling Process.InstallChatHook;
-// the gateway's onAuthSuccess + handleDisconnect paths then invoke the
-// callbacks so chat builds + tears down presence/subscription state.
-//
-// Declared locally in pkg/universe (rather than imported from
-// pkg/services/chat) to avoid a universe→chat import cycle.
-// pkg/services/chat.SessionHook is the same shape; either implementation
-// satisfies this interface.
-type ChatSessionHook interface {
-	OnSessionEnter(connID uint32, userID, username, gatewayID string)
-	OnSessionLeave(connID uint32, gatewayID string)
 }
 
 // processIDFromConfig derives a stable per-process identifier used by the
@@ -1225,25 +1200,6 @@ func (c *Process) InstallGatewayAuthHook() *auth.GatewayHook {
 	}
 	return c.pendingAuthHook
 }
-
-// InstallChatHook stores a ChatSessionHook implementation that the
-// gateway's onAuthSuccess + handleDisconnect paths invoke after every
-// successful login / logout to drive chat presence + subscription
-// bookkeeping. Called by mmokit.RegisterChatService at facade time
-// (before Build). Idempotent — last-writer-wins.
-//
-// Safe to call before or after Build. Embedded gateway dispatches
-// through Process.chatHook; standalone gateways (which don't carry
-// the chat service in-process) don't run the hook.
-func (c *Process) InstallChatHook(hook ChatSessionHook) {
-	c.chatHook = hook
-}
-
-// ChatHook returns the currently-installed ChatSessionHook (or nil if
-// none has been registered). Exposed primarily for integration tests
-// that assert the mmokit facade's RegisterChatService wired the hook
-// without having to reach into Process internals.
-func (c *Process) ChatHook() ChatSessionHook { return c.chatHook }
 
 // installPendingAuthHook fills in the GatewayHook's OnSuccess / OnLogout
 // callbacks against the now-constructed Gateway. Called by Build() after
