@@ -511,6 +511,17 @@ func (c *meshControlClient) applyPeerList(pl *meshpb.PeerList) {
 	// announced services so this host's gateway-style routing decisions
 	// stay current. No-op when serviceRouting is nil.
 	c.coord.applyServicesToRoutingIndex(pl.Services)
+
+	// Apply event-bus routing table from PeerList. Whole-map replace —
+	// coord's snapshot is authoritative. The cache is read on every
+	// service.Publish to resolve remote subscribers.
+	if c.coord != nil && c.coord.bus != nil {
+		table := make(map[string][]string, len(pl.GetEventRouting()))
+		for typeName, procs := range pl.GetEventRouting() {
+			table[typeName] = append([]string(nil), procs.GetProcessIds()...)
+		}
+		c.coord.bus.SetRoutingCache(table)
+	}
 	c.coord.mu.Lock()
 	// Snapshot the local cell set under the same lock so we can reconcile
 	// neighbors after release. Can't call reconcileCellNeighbors here

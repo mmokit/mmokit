@@ -82,3 +82,18 @@ func TestBuildPeerList_IncludesEventRouting(t *testing.T) {
 		t.Fatalf("bar.Event routing: %v", got)
 	}
 }
+
+func TestBroadcastPeerList_PopulatesLocalBusRoutingCache(t *testing.T) {
+	p := New(Config{Headless: true, Mode: "all", CellsX: 1, CellsY: 1, ControlListen: "127.0.0.1:0"})
+	p.Build()
+	defer p.Shutdown()
+	p.serviceEventRouter.UpdateProcess("host-1", []string{"foo.Event"})
+
+	// Trigger a broadcast, which is also the path that updates the local cache.
+	p.assignmentEngine.broadcastPeerList()
+
+	got := p.bus.RoutingCacheSnapshot()
+	if len(got["foo.Event"]) != 1 || got["foo.Event"][0] != "host-1" {
+		t.Fatalf("local bus cache not refreshed: %v", got)
+	}
+}

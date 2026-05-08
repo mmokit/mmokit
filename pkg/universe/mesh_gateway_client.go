@@ -384,6 +384,17 @@ func (c *meshGatewayClient) applyPeerList(pl *meshpb.PeerList) {
 		c.gw.process.applyServicesToRoutingIndex(pl.Services)
 	}
 
+	// Apply event-bus routing table from PeerList. Whole-map replace —
+	// coord's snapshot is authoritative. The cache is read on every
+	// service.Publish to resolve remote subscribers.
+	if c.gw.process != nil && c.gw.process.bus != nil {
+		table := make(map[string][]string, len(pl.GetEventRouting()))
+		for typeName, procs := range pl.GetEventRouting() {
+			table[typeName] = append([]string(nil), procs.GetProcessIds()...)
+		}
+		c.gw.process.bus.SetRoutingCache(table)
+	}
+
 	if c.gw.hostNetwork == nil {
 		c.gw.log.Log(CatMeshCell, "gateway: PeerList received but no hostNetwork (standalone mode not fully wired)")
 		return

@@ -516,6 +516,17 @@ func (e *assignmentEngine) broadcastPeerList() {
 	// level broadcast (which the coordinator process doesn't receive).
 	e.coord.applyServicesToRoutingIndex(msg.GetPeerList().GetServices())
 
+	// Same path the wire receivers take in mesh_control_client.applyPeerList:
+	// the coord process must also see its own routing table so locally-hosted
+	// services can publish through the bus to remote subscribers.
+	if e.coord.bus != nil && msg.GetPeerList() != nil {
+		table := make(map[string][]string, len(msg.GetPeerList().GetEventRouting()))
+		for typeName, procs := range msg.GetPeerList().GetEventRouting() {
+			table[typeName] = append([]string(nil), procs.GetProcessIds()...)
+		}
+		e.coord.bus.SetRoutingCache(table)
+	}
+
 	// Also broadcast to all registered/live gateways so their cached topology stays fresh.
 	if e.coord.gatewayRegistry != nil {
 		gwSent := 0
