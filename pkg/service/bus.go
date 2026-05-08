@@ -49,7 +49,7 @@ func Subscribe[T any](b *Bus, handler func(T)) Unsubscribe {
 		// T is an interface or untyped nil — Subscribe[interface{}] is
 		// disallowed. The Bus is type-keyed; an interface key would
 		// match every event.
-		panic("service.Subscribe: T must be a concrete struct type")
+		panic("service.Subscribe: T must be a concrete type, not an interface")
 	}
 	slot := &handlerSlot{
 		fn: func(v any) { handler(v.(T)) },
@@ -100,7 +100,7 @@ func publishAny(b *Bus, typ reflect.Type, ev any) {
 
 func invokeHandler(fn func(any), ev any) {
 	defer func() {
-		_ = recover() // swallow; tests exercising panic-recovery assert via separate goroutine state
+		_ = recover() // swallow handler panics; callers verify behavior via side-effects in tests
 	}()
 	fn(ev)
 }
