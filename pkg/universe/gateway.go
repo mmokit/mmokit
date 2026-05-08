@@ -384,6 +384,8 @@ func (g *Gateway) dispatchPostAuthAssignment(connID uint32, userID uuid.UUID, us
 			Username:  username,
 			GatewayID: g.id,
 		})
+		g.log.Log(CatServicesBus, "publish SessionEnterEvent conn=%d user=%s gw=%s",
+			connID, username, g.id)
 	}
 }
 
@@ -457,6 +459,8 @@ func (g *Gateway) handleDisconnect(evt net.PlayerEvent) {
 			UserID:    userIDStr,
 			GatewayID: g.id,
 		})
+		g.log.Log(CatServicesBus, "publish SessionLeaveEvent conn=%d gw=%s",
+			connID, g.id)
 	}
 
 	if g.isLocalShortcut(sess.hostID) {

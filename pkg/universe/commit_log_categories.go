@@ -11,11 +11,12 @@ const (
 	CatEventsHost        = "events:host"
 	CatEventsSession     = "events:session"
 	CatEventsReplication = "events:replication"
+	CatServicesBus       = "services:bus"
 )
 
 // EventCategories is the full set, for RegisterCategories.
 var EventCategories = []string{
 	CatEventsSplit, CatEventsMerge, CatEventsMigrate,
 	CatEventsInvariant, CatEventsHost, CatEventsSession,
-	CatEventsReplication,
+	CatEventsReplication, CatServicesBus,
 }
