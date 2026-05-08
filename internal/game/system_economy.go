@@ -9,11 +9,16 @@ import (
 // EconomySystem handles manual loot crate pickup, bank transfers (deposit/withdraw),
 // and selling bank items for currency.
 type EconomySystem struct {
-	mmokit.SystemBase[*GameWorld]
+	mmokit.SystemBase
+	gw       *GameWorld
 	stations mmokit.Query[struct {
 		Station *gamecomp.Station
 		Pos     *mmokit.Position
 	}]
+}
+
+func (s *EconomySystem) Init() {
+	s.gw = mmokit.State[GameWorld](s.Stage())
 }
 
 func (s *EconomySystem) Update(dt float32) {
@@ -39,7 +44,7 @@ func (s *EconomySystem) Update(dt float32) {
 }
 
 func (s *EconomySystem) processTransfers(stationPositions []mmokit.Position, sellRange2 float64) {
-	gw := s.World()
+	gw := s.gw
 	for _, t := range mmokit.Drain[PendingTransfer](gw.Queue) {
 		sess := gw.Players.ByConnID(t.ConnID)
 		if sess == nil || sess.Username == "" {
@@ -54,7 +59,7 @@ func (s *EconomySystem) processTransfers(stationPositions []mmokit.Position, sel
 			continue
 		}
 
-		entity := mmokit.EntityFromECS(gw.Stage, sess.Entity)
+		entity := mmokit.EntityFromECS(gw.stage, sess.Entity)
 		if !entity.Alive() {
 			continue
 		}
@@ -130,7 +135,7 @@ func (s *EconomySystem) processTransfers(stationPositions []mmokit.Position, sel
 
 // processDockedTransfer handles cargo<->bank transfers for docked players using PlayerDB.
 func (s *EconomySystem) processDockedTransfer(t PendingTransfer, username string, pdata *PlayerData) {
-	gw := s.World()
+	gw := s.gw
 	if pdata.Cargo == nil {
 		pdata.Cargo = make(map[uint32]int32)
 	}
@@ -197,7 +202,7 @@ func (s *EconomySystem) processDockedTransfer(t PendingTransfer, username string
 }
 
 func (s *EconomySystem) stationRange2() float64 {
-	r := float64(s.World().Config.SellRange)
+	r := float64(s.gw.Config.SellRange)
 	return r * r
 }
 
@@ -213,8 +218,8 @@ func (s *EconomySystem) nearStation(pos *mmokit.Position, stations []mmokit.Posi
 }
 
 func (s *EconomySystem) sendTransferResult(connID uint32, success bool, reason string, itemID uint32, qty int32, deposit bool) {
-	gw := s.World()
-	mmokit.SendEvent(gw.Stage, connID, &TransferResult{
+	gw := s.gw
+	mmokit.SendEvent(gw.stage, connID, &TransferResult{
 		Success:  success,
 		Reason:   reason,
 		ItemID:   itemID,
@@ -224,7 +229,7 @@ func (s *EconomySystem) sendTransferResult(connID uint32, success bool, reason s
 }
 
 func (s *EconomySystem) sendBankContents(connID uint32, pdata *PlayerData) {
-	s.World().SendBankContents(connID, pdata)
+	s.gw.SendBankContents(connID, pdata)
 }
 
 // SendBankContents emits a typed BankContents event to one connection,
@@ -250,7 +255,7 @@ func (gw *GameWorld) SendBankContents(connID uint32, pdata *PlayerData) {
 			currencies = append(currencies, CurrencyBalance{CurrencyID: curID, Balance: bal})
 		}
 	}
-	mmokit.SendEvent(gw.Stage, connID, &BankContents{
+	mmokit.SendEvent(gw.stage, connID, &BankContents{
 		Items:        items,
 		TotalMass:    pdata.BankTotalMass(),
 		MaxMass:      gw.Config.BankMaxMass,
@@ -262,7 +267,7 @@ func (gw *GameWorld) SendBankContents(connID uint32, pdata *PlayerData) {
 }
 
 func (s *EconomySystem) processLootItems() {
-	gw := s.World()
+	gw := s.gw
 	pickupRange2 := float64(gw.Config.LootPickupRange) * float64(gw.Config.LootPickupRange)
 
 	for _, req := range mmokit.Drain[PendingLootItem](gw.Queue) {
@@ -270,7 +275,7 @@ func (s *EconomySystem) processLootItems() {
 		if sess == nil || sess.State != mmokit.StateActive {
 			continue
 		}
-		entity := mmokit.EntityFromECS(gw.Stage, sess.Entity)
+		entity := mmokit.EntityFromECS(gw.stage, sess.Entity)
 		if !entity.Alive() {
 			continue
 		}
@@ -280,7 +285,7 @@ func (s *EconomySystem) processLootItems() {
 			continue
 		}
 
-		crateE := mmokit.EntityByNetID(gw.Stage, req.CrateNetID)
+		crateE := mmokit.EntityByNetID(gw.stage, req.CrateNetID)
 		if !crateE.Alive() || !mmokit.Has[gamecomp.LootCrate](crateE) {
 			continue
 		}
@@ -318,7 +323,7 @@ func (s *EconomySystem) processLootItems() {
 }
 
 func (s *EconomySystem) processLootAlls() {
-	gw := s.World()
+	gw := s.gw
 	pickupRange2 := float64(gw.Config.LootPickupRange) * float64(gw.Config.LootPickupRange)
 
 	for _, req := range mmokit.Drain[PendingLootAll](gw.Queue) {
@@ -326,7 +331,7 @@ func (s *EconomySystem) processLootAlls() {
 		if sess == nil || sess.State != mmokit.StateActive {
 			continue
 		}
-		entity := mmokit.EntityFromECS(gw.Stage, sess.Entity)
+		entity := mmokit.EntityFromECS(gw.stage, sess.Entity)
 		if !entity.Alive() {
 			continue
 		}
@@ -336,7 +341,7 @@ func (s *EconomySystem) processLootAlls() {
 			continue
 		}
 
-		crateE := mmokit.EntityByNetID(gw.Stage, req.CrateNetID)
+		crateE := mmokit.EntityByNetID(gw.stage, req.CrateNetID)
 		if !crateE.Alive() || !mmokit.Has[gamecomp.LootCrate](crateE) {
 			continue
 		}

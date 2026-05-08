@@ -22,7 +22,7 @@ func normalizeAngle(a float32) float32 {
 // WanderSystem steers entities with a Wander component along smoothly
 // changing headings, updating both velocity and rotation.
 type WanderSystem struct {
-	mmokit.SystemBase[*GameWorld]
+	mmokit.SystemBase
 	entities mmokit.Query[struct {
 		W   *gamecomp.Wander
 		Vel *mmokit.Velocity

@@ -11,7 +11,8 @@ import (
 // lifecycle handling (reverse lock map, PlayerOwnState, auto-broadcast
 // typed events).
 type NetworkSystem struct {
-	mmokit.SystemBase[*GameWorld]
+	mmokit.SystemBase
+	gw       *GameWorld
 	replSys *mmokit.ReplicationSystem
 	ctx     *gameNetContext
 
@@ -29,7 +30,8 @@ type NetworkSystem struct {
 }
 
 func (s *NetworkSystem) Init() {
-	gw := s.World()
+	s.gw = mmokit.State[GameWorld](s.Stage())
+	gw := s.gw
 
 	s.ctx = &gameNetContext{
 		lockedBy: make(map[ecs.Entity]lockerInfo),
@@ -39,12 +41,12 @@ func (s *NetworkSystem) Init() {
 	s.lockVictims.With(mmokit.IncludeAll())
 
 	// Build replicators from EntityKindDefs (auto-discovery).
-	defs := gw.EntityKindDefs()
+	defs := gw.stage.EntityKindDefs()
 	defSlice := make([]mmokit.EntityKindDef, 0, len(defs))
 	for _, d := range defs {
 		defSlice = append(defSlice, *d)
 	}
-	replicators := mmokit.BuildReplicators(gw.ECSWorld(), gw.Process(), defSlice...)
+	replicators := mmokit.BuildReplicators(gw.stage.ECSWorld(), gw.stage.Process(), defSlice...)
 
 	// Process is nil in some unit tests (newTestCell wires Stage with
 	// a nil coordinator); guard the ClusterClock lookup accordingly. In
@@ -52,7 +54,7 @@ func (s *NetworkSystem) Init() {
 	// clock — acceptable for single-process tests, never correct across
 	// hosts.
 	var clock mmokit.ClusterClock
-	if p := gw.Process(); p != nil {
+	if p := gw.stage.Process(); p != nil {
 		clock = p.ClusterClock
 	}
 	cfg := mmokit.DefaultReplicationConfig(gw.eng, gw.Spatial, clock)
@@ -81,7 +83,7 @@ func (s *NetworkSystem) Update(dt float32) {
 // beforeTick builds the reverse lock map, syncs the LockedBy component on all
 // lockable entities, and hoists per-tick lookups.
 func (s *NetworkSystem) beforeTick(tick uint32) {
-	gw := s.World()
+	gw := s.gw
 
 	// Build reverse lock map: for each entity being locked, track the most-
 	// progressed locker. Resolve via TargetNetID (not the locker's TargetEntity)
@@ -93,7 +95,7 @@ func (s *NetworkSystem) beforeTick(tick uint32) {
 		if b.Lock.TargetNetID == 0 || b.Lock.Progress <= 0 {
 			continue
 		}
-		targetE := mmokit.EntityByNetID(gw.Stage, b.Lock.TargetNetID)
+		targetE := mmokit.EntityByNetID(gw.stage, b.Lock.TargetNetID)
 		if !targetE.Alive() {
 			continue
 		}
@@ -127,15 +129,15 @@ func (s *NetworkSystem) beforeTick(tick uint32) {
 	// Drain the per-stage auto-broadcast queue: each event carries an opaque
 	// reflect-codec body + a list of anchor NetIDs whose positions drive the
 	// per-viewer AoI filter applied in afterSend.
-	s.pendingBroadcasts = gw.Stage.BroadcastQueue().Drain()
+	s.pendingBroadcasts = gw.stage.BroadcastQueue().Drain()
 }
 
 // beforeSend sends PlayerOwnState per viewer.
 func (s *NetworkSystem) beforeSend(viewer *mmokit.ViewerInfo, visible map[uint32]bool) {
-	gw := s.World()
+	gw := s.gw
 
 	// Send own-entity state.
-	if sess := gw.Players.ByConnID(viewer.ConnID); sess != nil && sess.State == mmokit.StateActive && gw.Stage.ECSWorld().Alive(sess.Entity) {
+	if sess := gw.Players.ByConnID(viewer.ConnID); sess != nil && sess.State == mmokit.StateActive && gw.stage.ECSWorld().Alive(sess.Entity) {
 		s.sendOwnState(viewer.ConnID, sess.Entity)
 	}
 }
@@ -155,7 +157,7 @@ func (s *NetworkSystem) afterSend(viewer *mmokit.ViewerInfo, visible map[uint32]
 		return
 	}
 
-	gw := s.World()
+	gw := s.gw
 	var passed []mmokit.BroadcastEvent
 	for _, evt := range s.pendingBroadcasts {
 		for _, nid := range evt.Anchors {
@@ -181,8 +183,8 @@ func (s *NetworkSystem) afterTick(tick uint32) {
 // sendOwnState builds and sends a typed PlayerOwnState event to the owning
 // player each tick.
 func (s *NetworkSystem) sendOwnState(connID uint32, entity ecs.Entity) {
-	gw := s.World()
-	e := mmokit.EntityFromECS(gw.Stage, entity)
+	gw := s.gw
+	e := mmokit.EntityFromECS(gw.stage, entity)
 
 	msg := &PlayerOwnState{}
 
@@ -236,5 +238,5 @@ func (s *NetworkSystem) sendOwnState(connID uint32, entity ecs.Entity) {
 		msg.BeingLockedByProgress = lb.progress
 	}
 
-	mmokit.SendEvent(gw.Stage, connID, msg)
+	mmokit.SendEvent(gw.stage, connID, msg)
 }

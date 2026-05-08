@@ -27,7 +27,7 @@ func newShipDynamicsFixture(t *testing.T) *shipDynamicsTestFixture {
 	// dynamics system still runs drag but at coeff=0 it's a no-op.
 	gw.Config.ShipDragCoeff = 0
 
-	w := gw.Stage.ECSWorld()
+	w := gw.stage.ECSWorld()
 	mapper := ecs.NewMap6[
 		mmokit.Position,
 		mmokit.Velocity,
@@ -51,11 +51,12 @@ func newShipDynamicsFixture(t *testing.T) *shipDynamicsTestFixture {
 		&mmokit.MoveTarget{Active: false},
 		&mmokit.NetworkID{ID: netID},
 	)
-	gw.Stage.RegisterLiveNetID(netID, handle)
-	entity := mmokit.EntityFromECS(gw.Stage, handle)
+	gw.stage.RegisterLiveNetID(netID, handle)
+	entity := mmokit.EntityFromECS(gw.stage, handle)
 
 	sys := &ShipDynamicsSystem{}
-	mmokit.WireSystem(sys, w, gw.eng, gw)
+	mmokit.WireSystem(sys, w, gw.eng, gw.stage)
+	sys.gw = gw
 
 	return &shipDynamicsTestFixture{gw: gw, sys: sys, entity: entity}
 }

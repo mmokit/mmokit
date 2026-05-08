@@ -11,15 +11,20 @@ import (
 
 // TargetLockSystem manages EVE-style lock-on targeting.
 type TargetLockSystem struct {
-	mmokit.SystemBase[*GameWorld]
+	mmokit.SystemBase
+	gw       *GameWorld
 	entities mmokit.Query[struct {
 		Input *gamecomp.PlayerInput
 		Lock  *gamecomp.TargetLock
 	}]
 }
 
+func (s *TargetLockSystem) Init() {
+	s.gw = mmokit.State[GameWorld](s.Stage())
+}
+
 func (s *TargetLockSystem) Update(dt float32) {
-	gw := s.World()
+	gw := s.gw
 
 	for e, b := range s.entities.Iter {
 		input, lock := b.Input, b.Lock
@@ -41,7 +46,7 @@ func (s *TargetLockSystem) Update(dt float32) {
 			lock.Locked = false
 
 			// Resolve net ID to entity
-			targetE := mmokit.EntityByNetID(gw.Stage, input.LockTargetNetID)
+			targetE := mmokit.EntityByNetID(gw.stage, input.LockTargetNetID)
 			if !targetE.Alive() {
 				gw.eng.Log.Log(CatCombatLock, "lock: BREAK - netID=%d not found in stage", input.LockTargetNetID)
 				s.breakLock(lock)
@@ -78,9 +83,9 @@ func (s *TargetLockSystem) Update(dt float32) {
 		}
 
 		// Validate lock target is still valid — re-resolve from NetID if needed (e.g. after cell transfer)
-		targetE := mmokit.EntityFromECS(gw.Stage, lock.TargetEntity)
+		targetE := mmokit.EntityFromECS(gw.stage, lock.TargetEntity)
 		if !targetE.Alive() {
-			resolved := mmokit.EntityByNetID(gw.Stage, lock.TargetNetID)
+			resolved := mmokit.EntityByNetID(gw.stage, lock.TargetNetID)
 			if resolved.Alive() {
 				lock.TargetEntity = resolved.Handle()
 				targetE = resolved
@@ -100,7 +105,7 @@ func (s *TargetLockSystem) Update(dt float32) {
 		}
 
 		// Check range
-		casterE := mmokit.EntityFromECS(gw.Stage, e)
+		casterE := mmokit.EntityFromECS(gw.stage, e)
 		pos := mmokit.Get[mmokit.Position](casterE)
 		targetPos := mmokit.Get[mmokit.Position](targetE)
 		if pos == nil || targetPos == nil {

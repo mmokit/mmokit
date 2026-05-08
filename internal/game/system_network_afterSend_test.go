@@ -77,12 +77,12 @@ func TestAfterSend_WritesBatchedTypedEventFrame(t *testing.T) {
 	body1 := []byte{0x10, 0x20}
 	body2 := []byte{0x30, 0x40, 0x50}
 
-	gw.Stage.BroadcastQueue().Push(mmokit.BroadcastEvent{
+	gw.stage.BroadcastQueue().Push(mmokit.BroadcastEvent{
 		TypeID:  0xAAAA0001,
 		Body:    body1,
 		Anchors: []uint32{visibleNID},
 	})
-	gw.Stage.BroadcastQueue().Push(mmokit.BroadcastEvent{
+	gw.stage.BroadcastQueue().Push(mmokit.BroadcastEvent{
 		TypeID:  0xBBBB0002,
 		Body:    body2,
 		Anchors: []uint32{otherNID, visibleNID}, // passes via second anchor
@@ -157,12 +157,12 @@ func TestAfterSend_NoVisibleAnchors_NoFrameSent(t *testing.T) {
 
 	ns := wireNetworkSystemForTest(t, gw)
 
-	gw.Stage.BroadcastQueue().Push(mmokit.BroadcastEvent{
+	gw.stage.BroadcastQueue().Push(mmokit.BroadcastEvent{
 		TypeID:  0xAAAA0001,
 		Body:    []byte{0x10, 0x20},
 		Anchors: []uint32{999},
 	})
-	gw.Stage.BroadcastQueue().Push(mmokit.BroadcastEvent{
+	gw.stage.BroadcastQueue().Push(mmokit.BroadcastEvent{
 		TypeID:  0xBBBB0002,
 		Body:    []byte{0x30},
 		Anchors: []uint32{888},
