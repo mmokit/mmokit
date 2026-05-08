@@ -9,10 +9,8 @@ import (
 	"github.com/zenion/mmoserver/pkg/query"
 )
 
-type wireTestWorld struct{ tag string }
-
 type wireTestSystem struct {
-	engine.SystemBase[*wireTestWorld]
+	engine.SystemBase
 	q query.Query[struct {
 		Pos *component.Position
 	}]
@@ -23,11 +21,7 @@ func (s *wireTestSystem) Update(dt float32) {}
 func TestWireSystem_FullLifecycle(t *testing.T) {
 	w := ecs.NewWorld()
 	s := &wireTestSystem{}
-	WireSystem(s, w, nil, &wireTestWorld{tag: "ok"})
-
-	if s.World().tag != "ok" {
-		t.Fatalf("World() returned %+v", s.World())
-	}
+	WireSystem(s, w, nil, nil) // no engine, no stage
 
 	count := 0
 	for range s.q.Iter {

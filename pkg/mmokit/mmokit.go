@@ -1105,7 +1105,7 @@ func Peek[T any](q *engine.TickQueue) []T {
 // NewNetworkSystem returns a SystemDef that creates a ReplicationSystem
 // with DefaultReplicationConfig pre-filled. Replicators are auto-discovered
 // from registered EntityKindDefs. AoIRadius is inherited from the coordinator
-// config. Use NewNetworkSystemWith for custom configuration.
+// config.
 func NewNetworkSystem() SystemDef {
 	return SystemDef{
 		Name:    "Network",
@@ -1114,40 +1114,20 @@ func NewNetworkSystem() SystemDef {
 }
 
 type defaultNetworkSystem struct {
-	engine.SystemBase[any]
+	SystemBase
 	replSys *ReplicationSystem
 }
 
 func (s *defaultNetworkSystem) Init() {
-	var grid *spatial.HashGrid
-	if sp, ok := s.GameWorld().(interface{ SpatialGrid() *spatial.HashGrid }); ok {
-		grid = sp.SpatialGrid()
-	}
-	cfg := DefaultReplicationConfig(s.Engine(), grid, clockFromGameWorld(s.GameWorld()))
-	if ar, ok := s.GameWorld().(interface{ GetAoIRadius() float32 }); ok {
-		cfg.AoIRadius = ar.GetAoIRadius()
-	}
-	if wb, ok := s.GameWorld().(interface{ Process() *universe.Process }); ok {
-		wireBlinkDetector(&cfg, wb.Process(), s.Engine().Log)
-	}
-	autoDiscoverReplicators(s.GameWorld(), &cfg)
+	stage := s.Stage()
+	cfg := DefaultReplicationConfig(s.Engine(), stage.SpatialGrid(), stage.Process().ClusterClock)
+	cfg.AoIRadius = stage.GetAoIRadius()
+	wireBlinkDetector(&cfg, stage.Process(), s.Engine().Log)
+	autoDiscoverReplicators(stage, &cfg)
 	if cfg.Replicators == nil {
 		return // no entity kinds registered — nothing to replicate
 	}
 	s.replSys = NewReplicationSystem(cfg)
-}
-
-// clockFromGameWorld extracts the Process's shared ClusterClock when the
-// game world exposes a Process() method. Returns nil when absent — e.g.
-// when a test wires a GameWorld shim without a coordinator — and the
-// ReplicationSystem falls back to the local wall clock.
-func clockFromGameWorld(gw any) system.ClusterClock {
-	if wb, ok := gw.(interface{ Process() *universe.Process }); ok {
-		if p := wb.Process(); p != nil {
-			return p.ClusterClock
-		}
-	}
-	return nil
 }
 
 func (s *defaultNetworkSystem) Update(dt float32) {
@@ -1157,58 +1137,6 @@ func (s *defaultNetworkSystem) Update(dt float32) {
 }
 
 func (s *defaultNetworkSystem) ReplicationSystem() *ReplicationSystem {
-	return s.replSys
-}
-
-// NewNetworkSystemWith returns a SystemDef like NewNetworkSystem, but with
-// a typed setup callback for custom configuration. The setup function receives
-// the pre-filled config and typed game world — set Replicators, AoIRadius, and
-// any optional fields (callbacks, dormancy, etc.) there.
-//
-//	mmo.AddSystem(mmokit.NewNetworkSystemWith(func(cfg *mmokit.ReplicationConfig, gw *MyWorld) {
-//	    cfg.AoIRadius = 800
-//	    cfg.OnEntityEnter = func(...) { ... }
-//	}))
-func NewNetworkSystemWith[W any](setup func(cfg *ReplicationConfig, gw W)) SystemDef {
-	return SystemDef{
-		Name:    "Network",
-		Factory: func() engine.System { return &networkSystem[W]{setup: setup} },
-	}
-}
-
-type networkSystem[W any] struct {
-	engine.SystemBase[any]
-	setup   func(cfg *ReplicationConfig, gw W)
-	replSys *ReplicationSystem
-}
-
-func (s *networkSystem[W]) Init() {
-	gw := s.GameWorld().(W)
-	var grid *spatial.HashGrid
-	if sp, ok := s.GameWorld().(interface{ SpatialGrid() *spatial.HashGrid }); ok {
-		grid = sp.SpatialGrid()
-	}
-	cfg := DefaultReplicationConfig(s.Engine(), grid, clockFromGameWorld(s.GameWorld()))
-	if ar, ok := s.GameWorld().(interface{ GetAoIRadius() float32 }); ok {
-		cfg.AoIRadius = ar.GetAoIRadius()
-	}
-	if wb, ok := s.GameWorld().(interface{ Process() *universe.Process }); ok {
-		wireBlinkDetector(&cfg, wb.Process(), s.Engine().Log)
-	}
-	s.setup(&cfg, gw)
-	if cfg.Replicators == nil {
-		autoDiscoverReplicators(s.GameWorld(), &cfg)
-	}
-	s.replSys = NewReplicationSystem(cfg)
-}
-
-func (s *networkSystem[W]) Update(dt float32) {
-	s.replSys.Update(dt)
-}
-
-// ReplicationSystem returns the underlying ReplicationSystem. Games that need
-// post-init access (e.g. for farewell packets) can type-assert the System.
-func (s *networkSystem[W]) ReplicationSystem() *ReplicationSystem {
 	return s.replSys
 }
 
@@ -1254,24 +1182,19 @@ func wireBlinkDetector(cfg *ReplicationConfig, coord *universe.Process, log *log
 
 // autoDiscoverReplicators populates cfg.Replicators from registered EntityKindDefs
 // if no replicators were set explicitly.
-func autoDiscoverReplicators(gw any, cfg *ReplicationConfig) {
+func autoDiscoverReplicators(stage *universe.Stage, cfg *ReplicationConfig) {
 	if cfg.Replicators != nil {
 		return
 	}
-	if wb, ok := gw.(interface {
-		EntityKindDefs() map[uint8]*universe.EntityKindDef
-		Process() *universe.Process
-		ECSWorld() *ecs.World
-	}); ok {
-		defs := wb.EntityKindDefs()
-		if len(defs) > 0 {
-			defSlice := make([]universe.EntityKindDef, 0, len(defs))
-			for _, d := range defs {
-				defSlice = append(defSlice, *d)
-			}
-			cfg.Replicators = BuildReplicators(wb.ECSWorld(), wb.Process(), defSlice...)
-		}
+	defs := stage.EntityKindDefs()
+	if len(defs) == 0 {
+		return
 	}
+	defSlice := make([]universe.EntityKindDef, 0, len(defs))
+	for _, d := range defs {
+		defSlice = append(defSlice, *d)
+	}
+	cfg.Replicators = BuildReplicators(stage.ECSWorld(), stage.Process(), defSlice...)
 }
 
 // makeWorldDeltaFrame wraps the encoded delta body bytes as a typed-event
@@ -1360,19 +1283,26 @@ func CountRealEntities(w *ecs.World) int {
 	return count
 }
 
-// WireSystem wires a system as the coordinator does — SetDeps, BindQueries,
-// Init, BuildQueries — in one call. Use in tests where you want a fully-
-// initialized system without spinning up a coordinator.
-func WireSystem(sys engine.System, ecsWorld *ecs.World, eng *engine.Engine, gw any) {
+// WireSystem wires a system as the coordinator does — SetDeps, InitStage (if
+// applicable), BindQueries, Init, BuildQueries — in one call. Use in tests
+// where you want a fully-initialized system without spinning up a coordinator.
+// Pass stage=nil for engine-only systems that don't embed mmokit.SystemBase.
+func WireSystem(sys engine.System, ecsWorld *ecs.World, eng *engine.Engine, stage *universe.Stage) {
 	type depsInjectable interface {
-		SetDeps(w *ecs.World, eng *engine.Engine, gw any)
+		SetDeps(w *ecs.World, eng *engine.Engine)
+	}
+	type stageInjectable interface {
+		InitStage(s *universe.Stage)
 	}
 	type queryBinder interface{ BindQueries(outer any) }
 	type initializable interface{ Init() }
 	type queryBuilder interface{ BuildQueries() }
 
 	if di, ok := sys.(depsInjectable); ok {
-		di.SetDeps(ecsWorld, eng, gw)
+		di.SetDeps(ecsWorld, eng)
+	}
+	if si, ok := sys.(stageInjectable); ok && stage != nil {
+		si.InitStage(stage)
 	}
 	if qb, ok := sys.(queryBinder); ok {
 		qb.BindQueries(sys)

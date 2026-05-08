@@ -9,21 +9,8 @@ import (
 	"github.com/zenion/mmoserver/pkg/engine"
 )
 
-// debugBroadcasterWorld is the minimal interface debugBroadcaster needs
-// from a game world. *Stage satisfies it directly; *GameWorld-shaped
-// types satisfy it because they embed *Stage. SendEvent below frames
-// the typed event and writes directly to ConnMgr — no Stage handle
-// needed at the call site.
-type debugBroadcasterWorld interface {
-	Topology() []ClusterCellInfo
-	GridDimensions() (uint32, uint32, float32)
-	GetAoIRadius() float32
-	Engine() *engine.Engine
-	HasInflightTransfers() bool
-}
-
 type debugBroadcaster struct {
-	SystemBase[debugBroadcasterWorld]
+	SystemBase
 	sentHash map[uint32]uint64
 }
 
@@ -50,15 +37,15 @@ func (s *debugBroadcaster) Update(dt float32) {
 	// leak to clients as a 1-tick visual flicker. Each commit window
 	// is ~1-3 ticks (50-150ms); the next tick after the orchestrator
 	// finishes will fire the post-commit topology hash.
-	if s.World().HasInflightTransfers() {
+	if s.Stage().HasInflightTransfers() {
 		return
 	}
 
-	cells := s.World().Topology()
-	radius := s.World().GetAoIRadius()
+	cells := s.Stage().Topology()
+	radius := s.Stage().GetAoIRadius()
 
 	activeNow := make(map[uint32]struct{})
-	pm := s.World().Engine().Players
+	pm := s.Stage().Engine().Players
 	pm.ForEach(StateActive, func(sess *PlayerSession) {
 		activeNow[sess.ConnID] = struct{}{}
 		if sess.DebugFlags == 0 {
@@ -70,7 +57,7 @@ func (s *debugBroadcaster) Update(dt float32) {
 			// identical hash and the broadcaster would silently skip.
 			if _, hadFlags := s.sentHash[sess.ConnID]; hadFlags {
 				var empty DebugInfo
-				s.World().Engine().ConnMgr.SendReliable(sess.ConnID, BuildTypedEventFrame(&empty))
+				s.Stage().Engine().ConnMgr.SendReliable(sess.ConnID, BuildTypedEventFrame(&empty))
 				delete(s.sentHash, sess.ConnID)
 			}
 			return
@@ -80,10 +67,7 @@ func (s *debugBroadcaster) Update(dt float32) {
 			return
 		}
 		msg := buildDebugInfo(cells, radius, sess.DebugFlags)
-		// Frame inline + write through ConnMgr — interface doesn't expose
-		// a *Stage handle, but the engine's ConnMgr is enough for the
-		// reliable typed-event channel.
-		s.World().Engine().ConnMgr.SendReliable(sess.ConnID, BuildTypedEventFrame(&msg))
+		s.Stage().Engine().ConnMgr.SendReliable(sess.ConnID, BuildTypedEventFrame(&msg))
 		s.sentHash[sess.ConnID] = hash
 	})
 
