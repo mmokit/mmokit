@@ -1535,7 +1535,7 @@ func (c *Process) Build() {
 
 	// RoleGateway (embedded): coordinator is present; create an in-process
 	// gateway. Auth-service responses drive PlayerAssignment dispatch via
-	// the GatewayHook installed by mmokit.RegisterAuthService.
+	// the service.Bus subscribers wired by Gateway.subscribeToAuthEvents.
 	//
 	// Two sub-modes:
 	//
