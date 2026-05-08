@@ -742,6 +742,11 @@ func New(cfg Config) *Process {
 			typeName, processID, panicValue, stack)
 	})
 
+	// Wire the cross-process dispatcher onto the Bus. Lookup of the local
+	// HostNetwork is lazy at publish time, so installing this in New (before
+	// gateway / hosts are constructed in Build) is safe.
+	c.installServiceEventDispatch()
+
 	// Service framework: process-local Kind catalog and gateway-side
 	// routing index initialized for every process — both are cheap and
 	// every process either registers kinds (RoleService) or applies

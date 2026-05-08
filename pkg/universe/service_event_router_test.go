@@ -3,6 +3,8 @@ package universe
 import (
 	"reflect"
 	"testing"
+
+	"github.com/zenion/mmoserver/pkg/service"
 )
 
 func TestServiceEventRouter_UpdateAndSnapshot(t *testing.T) {
@@ -96,4 +98,23 @@ func TestBroadcastPeerList_PopulatesLocalBusRoutingCache(t *testing.T) {
 	if len(got["foo.Event"]) != 1 || got["foo.Event"][0] != "host-1" {
 		t.Fatalf("local bus cache not refreshed: %v", got)
 	}
+}
+
+// tinyDispatchEvent is a payload type for the dispatch smoke test —
+// declared at package level so service.RegisterEventType can introspect
+// it before the Bus dispatch path tries to resolve its name.
+type tinyDispatchEvent struct{ N int }
+
+func TestProcess_DispatchServiceEvent_NoPeers_NoCrash(t *testing.T) {
+	p := New(Config{Headless: true, Mode: "all", CellsX: 1, CellsY: 1, ControlListen: "127.0.0.1:0"})
+	p.Build()
+	defer p.Shutdown()
+
+	// Publish a typed event with no remote subscribers in the routing
+	// cache. The RemotePublishFunc is wired (Phase 3 Task 7) but with
+	// peerIDsExceptSelf returning empty, notifyRemote skips the
+	// dispatcher entirely. This pins the empty-cache happy path —
+	// confirms no panic / no nil deref through the new glue.
+	service.RegisterEventType[tinyDispatchEvent]()
+	service.Publish(p.bus, tinyDispatchEvent{N: 1})
 }
