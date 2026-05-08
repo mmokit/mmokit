@@ -11,7 +11,7 @@ import (
 func TestDirectionMoveActive(t *testing.T) {
 	world := ecs.NewWorld()
 	sys := &DirectionMoveSystem{}
-	wireSystem(sys, world, nil, nil)
+	wireSystem(sys, world, nil)
 
 	mapper := ecs.NewMap4[component.Position, component.Velocity, component.DirectionInput, component.MoveParams](world)
 	entity := mapper.NewEntity(
@@ -36,7 +36,7 @@ func TestDirectionMoveActive(t *testing.T) {
 func TestDirectionMoveInactive(t *testing.T) {
 	world := ecs.NewWorld()
 	sys := &DirectionMoveSystem{}
-	wireSystem(sys, world, nil, nil)
+	wireSystem(sys, world, nil)
 
 	mapper := ecs.NewMap3[component.Position, component.Velocity, component.DirectionInput](world)
 	entity := mapper.NewEntity(
@@ -57,7 +57,7 @@ func TestDirectionMoveInactive(t *testing.T) {
 func TestDirectionMoveNormalization(t *testing.T) {
 	world := ecs.NewWorld()
 	sys := &DirectionMoveSystem{}
-	wireSystem(sys, world, nil, nil)
+	wireSystem(sys, world, nil)
 
 	mapper := ecs.NewMap4[component.Position, component.Velocity, component.DirectionInput, component.MoveParams](world)
 	entity := mapper.NewEntity(
