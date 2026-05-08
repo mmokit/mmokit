@@ -14,15 +14,15 @@ import (
 // handler code paths) without requiring two-cell scaffolding.
 func TestKillCredit_FullChain(t *testing.T) {
 	gw, _ := newTestGameWorld()
-	gw.Stage.SetGameWorld(gw)
+	gw.stage.SetStateByName("game.GameWorld", gw)
 
 	// Wire all three legs of the chain:
 	//   observer fires Killed when Health <= 0
 	//   killedHandler runs handleNPCKilled → currency drops dispatch KillCredit
 	//   killCreditHandler credits the player's currency balance
-	mmokit.Handle(gw.Stage, killedHandler)
-	mmokit.Handle(gw.Stage, killCreditHandler)
-	mmokit.OnTickEach(gw.Stage, deathObserver)
+	mmokit.Handle(gw.stage, killedHandler)
+	mmokit.Handle(gw.stage, killCreditHandler)
+	mmokit.OnTickEach(gw.stage, deathObserver)
 
 	// Register a deterministic drop table for the test NPC kind. DropChance=1.0
 	// + Min==Max ensures RollDrops returns exactly one currency entry, so the
@@ -59,8 +59,8 @@ func TestKillCredit_FullChain(t *testing.T) {
 	// newTestPlayerShip builds the entity with PlayerConn, NetworkID, Health,
 	// Shield, Position — sufficient for the killCreditHandler path.
 
-	targetE := mmokit.EntityByNetID(gw.Stage, target)
-	killerE := mmokit.EntityByNetID(gw.Stage, killer)
+	targetE := mmokit.EntityByNetID(gw.stage, target)
+	killerE := mmokit.EntityByNetID(gw.stage, killer)
 	if !killerE.Alive() {
 		t.Fatal("killer entity not alive")
 	}
@@ -76,7 +76,7 @@ func TestKillCredit_FullChain(t *testing.T) {
 	// Drive 1 tick: observer fires Killed; Killed handler runs Send
 	// synchronously (same-cell); killCreditHandler runs synchronously and
 	// credits the player's currency balance.
-	runTickCallbacks(t, gw.Stage, 1)
+	runTickCallbacks(t, gw.stage, 1)
 
 	pdata := gw.PlayerDB.GetOrCreate("alice")
 	if got := pdata.GetCurrency(item.CreditsItemID); got != int64(dropAmount) {

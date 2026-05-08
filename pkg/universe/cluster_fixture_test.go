@@ -270,7 +270,6 @@ func newColocatedFixture(t *testing.T, cfg FixtureConfig) clusterFixture {
 		ConnManager:         net.NewConnManager(),
 		Logger:              logger.New(),
 		DynamicPartitioning: cfg.DynamicPartitioning,
-		World:               func(base *Stage) GameWorld { return base },
 	})
 	coord.Build()
 

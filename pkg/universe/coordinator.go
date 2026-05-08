@@ -293,17 +293,6 @@ type Config struct {
 	// set this directly.
 	DumpSchema bool
 
-	// World, when set, is the per-cell GameWorld factory. Mutually exclusive
-	// with OnInit — Build panics if both are set. If both are nil, the
-	// engine creates a bare *Stage per cell (the trivial factory).
-	World func(base *Stage) GameWorld
-
-	// OnInit, when set, runs once per cell after the engine constructs a
-	// bare *Stage. Use for the simple case where you don't need a custom
-	// GameWorld type but still need to spawn entities or register replicators.
-	// Mutually exclusive with World — Build panics if both are set.
-	OnInit func(base *Stage)
-
 	// PlayerRouter resolves a username to its target cell ID at login.
 	// Optional — when nil, the gateway's default topology-based routing
 	// applies. Forward-compat field; no consumer today.
@@ -474,8 +463,6 @@ type Process struct {
 	// monotonically advances across restarts without persistence.
 	coordEpoch uint64
 
-	worldFactory   func(base *Stage) GameWorld
-	onInit         func(w *Stage)
 	consoleOpts    *ConsoleOpts
 	onConsoleReady func(c *engine.Console)
 
@@ -1437,18 +1424,6 @@ type stateFactory struct {
 	build    func(*Stage) any
 }
 
-// onInitWorld wraps a bare Stage and calls the OnInit callback during Init().
-type onInitWorld struct {
-	*Stage
-	initFn func(w *Stage)
-}
-
-func (w *onInitWorld) Init() {
-	if w.initFn != nil {
-		w.initFn(w.Stage)
-	}
-}
-
 // Build creates all nodes, wires topology, bridges, and metrics.
 // Called automatically by Start() if not called explicitly.
 func (c *Process) Build() {
@@ -1549,17 +1524,6 @@ func (c *Process) Build() {
 		c.Log.EnableFromFlag(c.cfg.LogCategories)
 	}
 	c.Log.Enable(StartupCategories...)
-
-	// Resolve world factory + init hook from Config. Mutually exclusive.
-	if c.cfg.World != nil && c.cfg.OnInit != nil {
-		panic("mmokit: Config.World and Config.OnInit are mutually exclusive — pick one")
-	}
-	c.worldFactory = c.cfg.World
-	c.onInit = c.cfg.OnInit
-	// Default: bare *Stage factory when neither is set on Host roles.
-	if roles.Has(RoleHost) && c.worldFactory == nil && c.onInit == nil {
-		c.worldFactory = func(base *Stage) GameWorld { return base }
-	}
 
 	// Console + OnConsoleReady from Config. (PlayerRouter has no consumer
 	// today — gateway uses topology-based routing — but the field is kept
@@ -1723,8 +1687,6 @@ func (c *Process) Build() {
 		c.hostExecutors[hostID] = newCellTransferExecutor(c, h)
 		h.netIDAlloc = c.netIDAlloc
 		h.systemDefs = c.systemDefs
-		h.worldFactory = c.worldFactory
-		h.onInit = c.onInit
 		h.executor = c.hostExecutors[hostID]
 		h.vcm = c.vcm
 		h.coord = c
@@ -1808,7 +1770,7 @@ func (c *Process) Build() {
 		// Two-phase init: World.Init() first (registers entity kinds, login handlers),
 		// then system Init() (discovers replicators, creates query filters).
 		for _, s := range setups {
-			s.cell.World.Init()
+			s.cell.Stage.Init()
 		}
 		for _, s := range setups {
 			initSystems(s.systems)
@@ -1864,8 +1826,6 @@ func (c *Process) buildRemoteHost() {
 
 	host.netIDAlloc = c.netIDAlloc
 	host.systemDefs = c.systemDefs
-	host.worldFactory = c.worldFactory
-	host.onInit = c.onInit
 	host.executor = c.hostExecutors[hostID]
 	host.vcm = c.vcm
 	host.coord = c
@@ -2148,19 +2108,6 @@ func (c *Process) createNode(cell CellID, spatialBucketSize float32, owningHost 
 		{From: engine.StateActive, To: engine.StateDisconnected, Action: defaultLeaveCleanup},
 	})
 
-	var world GameWorld
-	if c.worldFactory != nil {
-		world = c.worldFactory(base)
-	} else if c.onInit != nil {
-		world = &onInitWorld{Stage: base, initFn: c.onInit}
-	} else {
-		world = base
-	}
-	// Make the world reachable from Stage.GameWorld() so game code can
-	// hop from an Entity back to its game-specific helpers without
-	// threading a *Process or *Cell pointer through every callsite.
-	base.SetGameWorld(world)
-
 	// Instantiate registered per-stage state. Runs after kind realization
 	// so factories can read the cell's EntityKindDefs if they need to,
 	// and BEFORE OnState wiring so user hooks can call mmokit.State[T]
@@ -2228,10 +2175,17 @@ func (c *Process) createNode(cell CellID, spatialBucketSize float32, owningHost 
 		sys := def.Factory()
 
 		type depsInjectable interface {
-			SetDeps(w *ecs.World, eng *engine.Engine, gw any)
+			SetDeps(w *ecs.World, eng *engine.Engine)
 		}
 		if di, ok := sys.(depsInjectable); ok {
-			di.SetDeps(eng.ECS, eng, world)
+			di.SetDeps(eng.ECS, eng)
+		}
+
+		type stageInjectable interface {
+			InitStage(s *Stage)
+		}
+		if si, ok := sys.(stageInjectable); ok {
+			si.InitStage(base)
 		}
 
 		type queryBinder interface {
@@ -2253,9 +2207,9 @@ func (c *Process) createNode(cell CellID, spatialBucketSize float32, owningHost 
 		}
 	}
 
-	if _, ok := world.(BoundaryWorld); ok {
-		bs := &BoundarySystem{}
-		bs.SetDeps(eng.ECS, eng, world)
+	{
+		bs := &BoundarySystem{stage: base}
+		bs.SetDeps(eng.ECS, eng)
 		bs.BindQueries(bs)
 		gameSystems = append(gameSystems, bs)
 		systemNames = append(systemNames, "CellBoundary")
@@ -2265,7 +2219,6 @@ func (c *Process) createNode(cell CellID, spatialBucketSize float32, owningHost 
 		MeshID:    cell.MeshID(),
 		Cell:      cell,
 		Engine:    eng,
-		World:     world,
 		Stage:     base,
 		Inbox:     make(chan CellMessage, 256),
 		Events:    events,
@@ -2286,7 +2239,7 @@ func (c *Process) createNode(cell CellID, spatialBucketSize float32, owningHost 
 		func(username string) { c.notifySessionRemoved(username) },
 	)
 
-	gameHooks := world.Hooks()
+	gameHooks := base.Hooks()
 	tickDt := float32(1.0 / float32(platformCfg.TickRate))
 	mergedHooks := engine.Hooks{
 		OnConnect:    gameHooks.OnConnect,
@@ -2349,7 +2302,7 @@ func (c *Process) createNode(cell CellID, spatialBucketSize float32, owningHost 
 	// on whether the owning host has a HostNetwork.
 	bridge := newBridgeForCell(node, c, owningHost, c.cellToHostResolver(), c.cfg.GatewayMode)
 	node.Bridge = bridge
-	node.World.SetBridge(bridge)
+	node.Stage.SetBridge(bridge)
 
 	// Callers during Build() don't need locking (single-threaded).
 	// Callers during runtime (SplitCell) must hold c.mu write lock.
@@ -2409,23 +2362,38 @@ func (c *Process) Start(parent ...context.Context) {
 		go node.Run(ctx)
 	}
 
-	// Run the OpRouter polling loop on processes that own client
-	// connections AND have ops to handle. RoleGateway is the gate for
-	// connection ownership; the run is harmless when no handlers are
-	// registered (just polls + ignores unknown codes). Starts after
-	// startServices so service handlers are already registered.
+	// Run the OpRouter polling loop on processes that own a typed-op
+	// drain surface — clients connected directly via WebSocket on a
+	// gateway, or gateway-forwarded sessions queued in the host's VCM.
+	// The run is harmless when no handlers are registered (just polls +
+	// ignores unknown codes). Starts after startServices so service
+	// handlers are already registered.
+	//
+	// Drain source selection:
+	//   - Remote host (c.vcm != nil): swap the router from the
+	//     placeholder WS ConnManager (set in main.go before role-aware
+	//     setup) to the VCM, which is where ClientInput frames forwarded
+	//     by the gateway actually queue. Without this swap the host
+	//     never drains its typed-op queue and BankRequest et al. hang.
+	//   - Otherwise (all-in-one, coord+gateway): keep the WS
+	//     ConnManager wired in by main.go.
 	//
 	// Skip the OpRouter when the gateway runs a per-conn pump
-	// (Gateway.runSessionPump). That pump drains the same opInput queue
-	// every 1ms and forks per-frame on RouteKind: RouteGatewayLocal ops
-	// dispatched inline, RoutePlayerCell ops forwarded to the player's
-	// host via MeshData. Running the OpRouter alongside the pump races
-	// the drain — the OpRouter's CellOpRouter path can't reach a remote
-	// cell (returns OperationError synchronously), so any RoutePlayerCell
-	// frame the OpRouter wins is lost. The pump's gate is g.hostNetwork
-	// != nil, so we mirror it here.
+	// (Gateway.runSessionPump). That pump drains the same WS opInput
+	// queue every 1ms and forks per-frame on RouteKind: RouteGatewayLocal
+	// ops dispatched inline, RoutePlayerCell ops forwarded to the
+	// player's host via MeshData. Running the OpRouter alongside the
+	// pump races the drain — the OpRouter's CellOpRouter path can't
+	// reach a remote cell (returns OperationError synchronously), so
+	// any RoutePlayerCell frame the OpRouter wins is lost. The pump's
+	// gate is g.hostNetwork != nil, so we mirror it here.
 	pumpOwnsDrain := c.gateway != nil && c.gateway.hostNetwork != nil
-	if c.cfg.OpRouter != nil && c.roles.Has(RoleGateway) && !pumpOwnsDrain {
+	hasGatewayClients := c.roles.Has(RoleGateway) && !pumpOwnsDrain
+	hasVCMClients := c.vcm != nil
+	if c.cfg.OpRouter != nil && (hasGatewayClients || hasVCMClients) {
+		if hasVCMClients {
+			c.cfg.OpRouter.SetDrainSource(c.vcm)
+		}
 		// Install the typed-op dispatcher. Every drained 0x01 frame is a
 		// typed-op request; DispatchTypedOpInbound routes it via the
 		// matching RegisterOp handler. The Process is passed as the
@@ -2685,7 +2653,7 @@ func (c *Process) assignCellOnNode(cellID MeshCellID) {
 
 	// Two-phase init matches the Build() path: World.Init registers
 	// entity kinds + world state; then systems discover them.
-	node.World.Init()
+	node.Stage.Init()
 	initSystems(systems)
 
 	go node.Run(context.Background())
@@ -2783,8 +2751,8 @@ func (c *Process) renameCellOnNode(from, to MeshCellID) error {
 	runErr := cell.Engine.RunOnLoop(ctx, func() error {
 		cell.MeshID = to
 		cell.Cell = toCellID
-		if cell.World != nil {
-			cell.World.UpdateCellBounds(toCellID, coords.CellSize)
+		if cell.Stage != nil {
+			cell.Stage.UpdateCellBounds(toCellID, coords.CellSize)
 		}
 		if cell.Metrics != nil {
 			cell.Metrics.SetCellID(string(to))

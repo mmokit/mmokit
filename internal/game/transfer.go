@@ -13,7 +13,7 @@ import (
 // `mmokit:"local"`-tagged local-only fields). Only config-dependent
 // values that can't be expressed as zero defaults remain here.
 func (gw *GameWorld) FinishTransferSpawn(handle ecs.Entity, frame *mmokit.TransferFrame) {
-	entity := mmokit.EntityFromECS(gw.Stage, handle)
+	entity := mmokit.EntityFromECS(gw.stage, handle)
 	switch frame.EntityType {
 	case gamecomp.KindShip:
 		// Override collider to match game config

@@ -19,9 +19,9 @@ import (
 	"github.com/zenion/mmoserver/pkg/orderbook"
 	"github.com/zenion/mmoserver/pkg/persist"
 	"github.com/zenion/mmoserver/pkg/persist/postgres"
+	"github.com/zenion/mmoserver/pkg/replication"
 	"github.com/zenion/mmoserver/pkg/service"
 	"github.com/zenion/mmoserver/pkg/spatial"
-	"github.com/zenion/mmoserver/pkg/replication"
 	"github.com/zenion/mmoserver/pkg/system"
 	"github.com/zenion/mmoserver/pkg/universe"
 )
@@ -95,11 +95,6 @@ type Engine = engine.Engine
 // System is the interface all game systems implement. Call Update(dt) each tick.
 // Embed SystemBase for automatic dependency injection via SetDeps/Init.
 type System = engine.System
-
-// SystemBase is the generic base for all systems. Embed it with the game's
-// typed world: `mmokit.SystemBase[*MyWorld]`. Engine-side systems that don't
-// need world methods use `mmokit.SystemBase[any]`.
-type SystemBase[W any] = engine.SystemBase[W]
 
 // SystemDef pairs a name with a System for registration and profiling.
 type SystemDef = engine.SystemDef
@@ -269,11 +264,6 @@ var DisabledPartitionConfig = universe.DisabledPartitionConfig
 // Zero values use sensible defaults.
 type Config = universe.Config
 
-// GameWorld is the interface a game must implement to use the server meshing
-// infrastructure. Methods handle entity serialization, transfers, replication,
-// cross-cell actions, and chat. Embed Stage for working defaults.
-type GameWorld = universe.GameWorld
-
 // Stage provides default implementations for all GameWorld interface methods.
 // Embed it in your game world struct to get working multi-node support out of the
 // box, including entity spawning, border replication, and cross-cell transfers.
@@ -405,10 +395,6 @@ type NeighborInfo = universe.NeighborInfo
 // SpawnOption configures an optional component when spawning an entity via
 // Stage.SpawnEntity (e.g. WithVelocity, WithCollider, WithRotation).
 type SpawnOption = universe.SpawnOption
-
-// BoundaryWorld is the interface needed by BoundarySystem to serialize entities
-// and initiate cross-cell transfers. Stage implements this automatically.
-type BoundaryWorld = universe.BoundaryWorld
 
 // BoundarySystem normalizes entity positions into [0, CellSize) and initiates
 // cross-cell transfers when entities cross cell boundaries.
@@ -555,10 +541,10 @@ type CommandEnv = cmdsys.Env
 type CommandRouteKind = cmdsys.RouteKind
 
 const (
-	RouteLocal         = cmdsys.RouteLocal
-	RouteAllHosts      = cmdsys.RouteAllHosts
-	RouteSpecificCell  = cmdsys.RouteSpecificCell
-	RoutePlayerOwner   = cmdsys.RoutePlayerOwner
+	RouteLocal        = cmdsys.RouteLocal
+	RouteAllHosts     = cmdsys.RouteAllHosts
+	RouteSpecificCell = cmdsys.RouteSpecificCell
+	RoutePlayerOwner  = cmdsys.RoutePlayerOwner
 )
 
 // CmdOnLoop is the ergonomic helper for cmdsys handlers that need ECS
@@ -681,9 +667,6 @@ type ClickToMoveSystem = system.ClickToMoveSystem
 // DirectionMoveSystem moves entities using DirectionInput at MoveParams.MaxSpeed.
 type DirectionMoveSystem = system.DirectionMoveSystem
 
-// SpatialHooks provides optional per-tick callbacks for game-specific spatial logic.
-type SpatialHooks = system.SpatialHooks
-
 // NewSpatialSystem returns a SystemDef for the standard spatial grid update
 // with no game-specific hooks. Queries Position+Collider+NetworkID, reads Rotation
 // if present, registers/updates entities in the HashGrid each tick.
@@ -692,27 +675,25 @@ type SpatialHooks = system.SpatialHooks
 func NewSpatialSystem() SystemDef {
 	return SystemDef{
 		Name:    "Spatial",
-		Factory: func() engine.System { return &system.SpatialSystem{} },
+		Factory: func() engine.System { return &SpatialSystem{} },
 	}
 }
 
-// NewSpatialSystemWith returns a SystemDef with game-specific hooks.
-// The hooks function runs at Init time with the typed game world and returns
+// NewSpatialSystemWith returns a SystemDef with stage-aware hooks.
+// The hooks function runs at Init time with the cell's *Stage and returns
 // per-tick callbacks (PreTick, OnEntity, PostTick).
 //
-//	mmo.AddSystem(mmokit.NewSpatialSystemWith(func(gw *MyWorld) mmokit.SpatialHooks {
+//	mmo.AddSystem(mmokit.NewSpatialSystemWith(func(stage *mmokit.Stage) mmokit.SpatialHooks {
 //	    return mmokit.SpatialHooks{
 //	        OnEntity: func(entity ecs.Entity, entry mmokit.SpatialEntry) { ... },
 //	    }
 //	}))
-func NewSpatialSystemWith[W any](hooks func(gw W) SpatialHooks) SystemDef {
+func NewSpatialSystemWith(hooks func(stage *Stage) SpatialHooks) SystemDef {
 	return SystemDef{
 		Name: "Spatial",
 		Factory: func() engine.System {
-			sys := &system.SpatialSystem{}
-			sys.SetInitHook(func(gw any) system.SpatialHooks {
-				return hooks(gw.(W))
-			})
+			sys := &SpatialSystem{}
+			sys.SetInitHook(hooks)
 			return sys
 		},
 	}
@@ -1063,8 +1044,8 @@ func WithPreMarshal[T any](fn func(*T)) universe.ComponentOption {
 // about registration order. At most one var-tail binding is allowed per entity;
 // AutoReplicator will panic if there are more.
 func BuildReplicators(w *ecs.World, coord *universe.Process, defs ...universe.EntityKindDef) *system.ReplicatorRegistry {
-	velScale := float32(2000)  // matches universe.New default
-	sizeScale := float32(500)  // matches universe.New default
+	velScale := float32(2000) // matches universe.New default
+	sizeScale := float32(500) // matches universe.New default
 	if coord != nil {
 		velScale = coord.Cfg().VelQuantScale
 		sizeScale = coord.Cfg().SizeQuantScale
@@ -1107,11 +1088,10 @@ func Peek[T any](q *engine.TickQueue) []T {
 	return engine.Peek[T](q)
 }
 
-
 // NewNetworkSystem returns a SystemDef that creates a ReplicationSystem
 // with DefaultReplicationConfig pre-filled. Replicators are auto-discovered
 // from registered EntityKindDefs. AoIRadius is inherited from the coordinator
-// config. Use NewNetworkSystemWith for custom configuration.
+// config.
 func NewNetworkSystem() SystemDef {
 	return SystemDef{
 		Name:    "Network",
@@ -1120,40 +1100,20 @@ func NewNetworkSystem() SystemDef {
 }
 
 type defaultNetworkSystem struct {
-	engine.SystemBase[any]
+	SystemBase
 	replSys *ReplicationSystem
 }
 
 func (s *defaultNetworkSystem) Init() {
-	var grid *spatial.HashGrid
-	if sp, ok := s.GameWorld().(interface{ SpatialGrid() *spatial.HashGrid }); ok {
-		grid = sp.SpatialGrid()
-	}
-	cfg := DefaultReplicationConfig(s.Engine(), grid, clockFromGameWorld(s.GameWorld()))
-	if ar, ok := s.GameWorld().(interface{ GetAoIRadius() float32 }); ok {
-		cfg.AoIRadius = ar.GetAoIRadius()
-	}
-	if wb, ok := s.GameWorld().(interface{ Process() *universe.Process }); ok {
-		wireBlinkDetector(&cfg, wb.Process(), s.Engine().Log)
-	}
-	autoDiscoverReplicators(s.GameWorld(), &cfg)
+	stage := s.Stage()
+	cfg := DefaultReplicationConfig(s.Engine(), stage.SpatialGrid(), stage.Process().ClusterClock)
+	cfg.AoIRadius = stage.GetAoIRadius()
+	wireBlinkDetector(&cfg, stage.Process(), s.Engine().Log)
+	autoDiscoverReplicators(stage, &cfg)
 	if cfg.Replicators == nil {
 		return // no entity kinds registered — nothing to replicate
 	}
 	s.replSys = NewReplicationSystem(cfg)
-}
-
-// clockFromGameWorld extracts the Process's shared ClusterClock when the
-// game world exposes a Process() method. Returns nil when absent — e.g.
-// when a test wires a GameWorld shim without a coordinator — and the
-// ReplicationSystem falls back to the local wall clock.
-func clockFromGameWorld(gw any) system.ClusterClock {
-	if wb, ok := gw.(interface{ Process() *universe.Process }); ok {
-		if p := wb.Process(); p != nil {
-			return p.ClusterClock
-		}
-	}
-	return nil
 }
 
 func (s *defaultNetworkSystem) Update(dt float32) {
@@ -1163,58 +1123,6 @@ func (s *defaultNetworkSystem) Update(dt float32) {
 }
 
 func (s *defaultNetworkSystem) ReplicationSystem() *ReplicationSystem {
-	return s.replSys
-}
-
-// NewNetworkSystemWith returns a SystemDef like NewNetworkSystem, but with
-// a typed setup callback for custom configuration. The setup function receives
-// the pre-filled config and typed game world — set Replicators, AoIRadius, and
-// any optional fields (callbacks, dormancy, etc.) there.
-//
-//	mmo.AddSystem(mmokit.NewNetworkSystemWith(func(cfg *mmokit.ReplicationConfig, gw *MyWorld) {
-//	    cfg.AoIRadius = 800
-//	    cfg.OnEntityEnter = func(...) { ... }
-//	}))
-func NewNetworkSystemWith[W any](setup func(cfg *ReplicationConfig, gw W)) SystemDef {
-	return SystemDef{
-		Name:    "Network",
-		Factory: func() engine.System { return &networkSystem[W]{setup: setup} },
-	}
-}
-
-type networkSystem[W any] struct {
-	engine.SystemBase[any]
-	setup   func(cfg *ReplicationConfig, gw W)
-	replSys *ReplicationSystem
-}
-
-func (s *networkSystem[W]) Init() {
-	gw := s.GameWorld().(W)
-	var grid *spatial.HashGrid
-	if sp, ok := s.GameWorld().(interface{ SpatialGrid() *spatial.HashGrid }); ok {
-		grid = sp.SpatialGrid()
-	}
-	cfg := DefaultReplicationConfig(s.Engine(), grid, clockFromGameWorld(s.GameWorld()))
-	if ar, ok := s.GameWorld().(interface{ GetAoIRadius() float32 }); ok {
-		cfg.AoIRadius = ar.GetAoIRadius()
-	}
-	if wb, ok := s.GameWorld().(interface{ Process() *universe.Process }); ok {
-		wireBlinkDetector(&cfg, wb.Process(), s.Engine().Log)
-	}
-	s.setup(&cfg, gw)
-	if cfg.Replicators == nil {
-		autoDiscoverReplicators(s.GameWorld(), &cfg)
-	}
-	s.replSys = NewReplicationSystem(cfg)
-}
-
-func (s *networkSystem[W]) Update(dt float32) {
-	s.replSys.Update(dt)
-}
-
-// ReplicationSystem returns the underlying ReplicationSystem. Games that need
-// post-init access (e.g. for farewell packets) can type-assert the System.
-func (s *networkSystem[W]) ReplicationSystem() *ReplicationSystem {
 	return s.replSys
 }
 
@@ -1260,24 +1168,19 @@ func wireBlinkDetector(cfg *ReplicationConfig, coord *universe.Process, log *log
 
 // autoDiscoverReplicators populates cfg.Replicators from registered EntityKindDefs
 // if no replicators were set explicitly.
-func autoDiscoverReplicators(gw any, cfg *ReplicationConfig) {
+func autoDiscoverReplicators(stage *universe.Stage, cfg *ReplicationConfig) {
 	if cfg.Replicators != nil {
 		return
 	}
-	if wb, ok := gw.(interface {
-		EntityKindDefs() map[uint8]*universe.EntityKindDef
-		Process() *universe.Process
-		ECSWorld() *ecs.World
-	}); ok {
-		defs := wb.EntityKindDefs()
-		if len(defs) > 0 {
-			defSlice := make([]universe.EntityKindDef, 0, len(defs))
-			for _, d := range defs {
-				defSlice = append(defSlice, *d)
-			}
-			cfg.Replicators = BuildReplicators(wb.ECSWorld(), wb.Process(), defSlice...)
-		}
+	defs := stage.EntityKindDefs()
+	if len(defs) == 0 {
+		return
 	}
+	defSlice := make([]universe.EntityKindDef, 0, len(defs))
+	for _, d := range defs {
+		defSlice = append(defSlice, *d)
+	}
+	cfg.Replicators = BuildReplicators(stage.ECSWorld(), stage.Process(), defSlice...)
 }
 
 // makeWorldDeltaFrame wraps the encoded delta body bytes as a typed-event
@@ -1366,19 +1269,26 @@ func CountRealEntities(w *ecs.World) int {
 	return count
 }
 
-// WireSystem wires a system as the coordinator does — SetDeps, BindQueries,
-// Init, BuildQueries — in one call. Use in tests where you want a fully-
-// initialized system without spinning up a coordinator.
-func WireSystem(sys engine.System, ecsWorld *ecs.World, eng *engine.Engine, gw any) {
+// WireSystem wires a system as the coordinator does — SetDeps, InitStage (if
+// applicable), BindQueries, Init, BuildQueries — in one call. Use in tests
+// where you want a fully-initialized system without spinning up a coordinator.
+// Pass stage=nil for engine-only systems that don't embed mmokit.SystemBase.
+func WireSystem(sys engine.System, ecsWorld *ecs.World, eng *engine.Engine, stage *universe.Stage) {
 	type depsInjectable interface {
-		SetDeps(w *ecs.World, eng *engine.Engine, gw any)
+		SetDeps(w *ecs.World, eng *engine.Engine)
+	}
+	type stageInjectable interface {
+		InitStage(s *universe.Stage)
 	}
 	type queryBinder interface{ BindQueries(outer any) }
 	type initializable interface{ Init() }
 	type queryBuilder interface{ BuildQueries() }
 
 	if di, ok := sys.(depsInjectable); ok {
-		di.SetDeps(ecsWorld, eng, gw)
+		di.SetDeps(ecsWorld, eng)
+	}
+	if si, ok := sys.(stageInjectable); ok && stage != nil {
+		si.InitStage(stage)
 	}
 	if qb, ok := sys.(queryBinder); ok {
 		qb.BindQueries(sys)

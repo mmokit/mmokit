@@ -10,21 +10,23 @@ import (
 // CollisionSystem handles terrain bounce (player-vs-asteroid).
 // Actual combat damage is hitscan, handled by AbilitySystem via GameWorld.ApplyDamage.
 type CollisionSystem struct {
-	mmokit.SystemBase[*GameWorld]
+	mmokit.SystemBase
+	gw       *GameWorld
 	nearby []mmokit.SpatialEntry // reusable scratch buffer
 }
 
 func (s *CollisionSystem) Init() {
+	s.gw = mmokit.State[GameWorld](s.Stage())
 	s.nearby = make([]mmokit.SpatialEntry, 0, 64)
 }
 
 func (s *CollisionSystem) Update(dt float32) {
-	gw := s.World()
+	gw := s.gw
 
 	// Terrain bounce: only check player entities against nearby terrain.
 	// This avoids the O(n²) full-grid scan that was the previous bottleneck.
 	gw.Players.ForEach(mmokit.StateActive, func(sess *mmokit.PlayerSession) {
-		entity := mmokit.EntityFromECS(gw.Stage, sess.Entity)
+		entity := mmokit.EntityFromECS(gw.stage, sess.Entity)
 		if !entity.Alive() {
 			return
 		}
@@ -45,7 +47,7 @@ func (s *CollisionSystem) Update(dt float32) {
 			if terrain.Layer != component.LayerTerrain {
 				continue
 			}
-			if !gw.Stage.ECSWorld().Alive(terrain.Entity) {
+			if !gw.stage.ECSWorld().Alive(terrain.Entity) {
 				continue
 			}
 
@@ -79,10 +81,10 @@ func (s *CollisionSystem) Update(dt float32) {
 }
 
 func (s *CollisionSystem) handleTerrainCollision(player, terrain mmokit.SpatialEntry) {
-	gw := s.World()
+	gw := s.gw
 
-	playerE := mmokit.EntityFromECS(gw.Stage, player.Entity)
-	terrainE := mmokit.EntityFromECS(gw.Stage, terrain.Entity)
+	playerE := mmokit.EntityFromECS(gw.stage, player.Entity)
+	terrainE := mmokit.EntityFromECS(gw.stage, terrain.Entity)
 	playerPos := mmokit.Get[mmokit.Position](playerE)
 	terrainPos := mmokit.Get[mmokit.Position](terrainE)
 	if playerPos == nil || terrainPos == nil {

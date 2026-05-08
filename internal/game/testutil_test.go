@@ -48,12 +48,16 @@ func newTestCell(cell pkguniverse.CellID) *pkguniverse.Cell {
 		gw.FinishTransferSpawn(entity, frame)
 	})
 
+	// Register GameWorld as cell-local state so mmokit.State[GameWorld](stage)
+	// resolves to gw inside production code paths exercised by the test.
+	base.SetStateByName("game.GameWorld", gw)
+
 	defs := tmpCoord.SystemDefs()
 	gameSystems := make([]engine.System, len(defs))
 	systemNames := make([]string, len(defs))
 	for i, def := range defs {
 		sys := def.Factory()
-		mmokit.WireSystem(sys, eng.ECS, eng, gw)
+		mmokit.WireSystem(sys, eng.ECS, eng, base)
 		gameSystems[i] = sys
 		systemNames[i] = def.Name
 	}
@@ -63,15 +67,13 @@ func newTestCell(cell pkguniverse.CellID) *pkguniverse.Cell {
 		base.SpatialGrid().Deregister(e)
 	}
 
-	gameHooks := gw.Hooks()
-	gameLoop := engine.NewGameLoop(eng, gameSystems, systemNames, gameHooks)
+	gameLoop := engine.NewGameLoop(eng, gameSystems, systemNames, base.Hooks())
 	gameLoop.SetEventsCh(events)
 
 	node := &pkguniverse.Cell{
 		MeshID:    cell.MeshID(),
 		Cell:      cell,
 		Engine:    eng,
-		World:     gw,
 		Stage:     base,
 		Loop:      gameLoop,
 		Bridge:    pkguniverse.NoopBridge{},
@@ -81,11 +83,11 @@ func newTestCell(cell pkguniverse.CellID) *pkguniverse.Cell {
 		Log:       log,
 	}
 
-	gw.SetBridge(pkguniverse.NoopBridge{})
+	base.SetBridge(pkguniverse.NoopBridge{})
 	return node
 }
 
 // testGW extracts the underlying *GameWorld from a test node.
 func testGW(node *pkguniverse.Cell) *GameWorld {
-	return UnwrapGameWorld(node.World)
+	return mmokit.State[GameWorld](node.Stage)
 }

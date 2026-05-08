@@ -6,8 +6,6 @@ import (
 	"net/netip"
 	"sync"
 	"time"
-
-	"github.com/zenion/mmoserver/pkg/net"
 )
 
 // EventCode is any integer type usable as an op code (proto enums are int32).
@@ -26,13 +24,30 @@ type OpContext struct {
 // bound state from the gateway into handlers (e.g. session token).
 func (c *OpContext) Bag() *sync.Map { return &c.bag }
 
+// DrainSource is the abstraction the Router needs to poll and respond on
+// behalf of a process's typed-op surface. The WebSocket-side
+// *net.ConnManager and the host-side *universe.VirtualConnManager both
+// satisfy it: the former drains direct WS clients, the latter drains
+// gateway-forwarded ClientInput frames queued per VCM-local connID.
+//
+// Decoupling Router from a concrete ConnManager lets the same poll loop
+// run on any process that needs to dispatch typed-ops — gateway, host,
+// or future service processes — without duplicating drain machinery.
+type DrainSource interface {
+	ActiveConnIDs() []uint32
+	DrainOpInput(connID uint32) [][]byte
+	SendReliable(connID uint32, data []byte)
+	RemoteAddrString(connID uint32) string
+}
+
 // Router polls all connections for channel-0x01 messages and dispatches
 // them to the typed-op handler. Plan 2 Phase 5 retired the legacy
 // code-keyed proto-op router — every 0x01 frame now rides through the
 // typed-op dispatcher; the Router struct exists primarily as the host
 // for the poll goroutine and the connection-manager handle.
 type Router struct {
-	connMgr  *net.ConnManager // concrete type intentional: uses gateway-only ActiveConnIDs()
+	mu       sync.RWMutex
+	src      DrainSource
 	sessions *PlayerSessions
 
 	// typedOpHandler is the typed-op dispatcher. Wired by pkg/universe in
@@ -54,12 +69,26 @@ func (r *Router) SetTypedOpHandler(h TypedOpHandler) {
 	r.typedOpHandler = h
 }
 
-// NewRouter creates a new operation router.
-func NewRouter(connMgr *net.ConnManager, sessions *PlayerSessions) *Router {
+// NewRouter creates a new operation router. The drain source is the
+// connection surface to poll for typed-op frames; pkg/universe replaces
+// it via SetDrainSource on remote-host processes (where the host's VCM
+// owns the queues, not the unused-on-host WS ConnManager).
+func NewRouter(src DrainSource, sessions *PlayerSessions) *Router {
 	return &Router{
-		connMgr:  connMgr,
+		src:      src,
 		sessions: sessions,
 	}
+}
+
+// SetDrainSource replaces the drain source the poll loop reads from.
+// Used by pkg/universe to swap a host's drain target from the WS
+// ConnManager (created upfront in cmd/server/main.go before the Process
+// knows its mode) to the VirtualConnManager (created later inside the
+// remote-host setup path). Safe to call before Run starts.
+func (r *Router) SetDrainSource(src DrainSource) {
+	r.mu.Lock()
+	r.src = src
+	r.mu.Unlock()
 }
 
 // Run starts the poll loop. Blocks until ctx is done.
@@ -78,25 +107,31 @@ func (r *Router) Run(ctx context.Context) {
 }
 
 func (r *Router) poll() {
+	r.mu.RLock()
+	src := r.src
+	r.mu.RUnlock()
+	if src == nil {
+		return
+	}
 	if r.typedOpHandler == nil {
 		// Drain frames anyway so they don't accumulate in the per-conn
 		// queue, but drop them — no dispatcher means no possible handler.
-		for _, connID := range r.connMgr.ActiveConnIDs() {
-			r.connMgr.DrainOpInput(connID)
+		for _, connID := range src.ActiveConnIDs() {
+			src.DrainOpInput(connID)
 		}
 		return
 	}
-	for _, connID := range r.connMgr.ActiveConnIDs() {
-		msgs := r.connMgr.DrainOpInput(connID)
+	for _, connID := range src.ActiveConnIDs() {
+		msgs := src.DrainOpInput(connID)
 		for _, raw := range msgs {
 			username := r.sessions.Get(connID)
 			ctx := &OpContext{
 				ConnID:   connID,
 				Username: username,
-				ClientIP: ParseClientIP(r.connMgr.RemoteAddrString(connID)),
+				ClientIP: ParseClientIP(src.RemoteAddrString(connID)),
 			}
 			if respFrame := r.typedOpHandler(raw, ctx); respFrame != nil {
-				r.connMgr.SendReliable(connID, respFrame)
+				src.SendReliable(connID, respFrame)
 			}
 		}
 	}

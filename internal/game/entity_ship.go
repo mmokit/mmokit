@@ -38,7 +38,7 @@ type ShipBundle struct {
 // If s.Entity is already alive, this is a reconnection or cross-cell transfer —
 // reuse the existing entity instead of creating a new one.
 func (gw *GameWorld) SpawnPlayer(s *mmokit.PlayerSession) {
-	if s.Entity != (ecs.Entity{}) && gw.Stage.ECSWorld().Alive(s.Entity) {
+	if s.Entity != (ecs.Entity{}) && gw.stage.ECSWorld().Alive(s.Entity) {
 		gw.reconnectPlayer(s)
 		return
 	}
@@ -96,14 +96,14 @@ func (gw *GameWorld) SpawnPlayer(s *mmokit.PlayerSession) {
 
 	br := boundingRadius(gw.Config.ShipWidth, gw.Config.ShipHeight)
 
-	handle := gw.SpawnEntity(
+	handle := gw.stage.SpawnEntity(
 		mmokit.Position{X: x, Y: y},
 		mmokit.WithEntityKind(gamecomp.KindShip),
 		mmokit.WithCollider(br),
 		mmokit.WithRotation(0),  // ShipDynamicsSystem reads Rotation for turn-rate steering
 		mmokit.WithComponents(), // auto-adds all registered ship components
 	)
-	entity := mmokit.EntityFromECS(gw.Stage, handle)
+	entity := mmokit.EntityFromECS(gw.stage, handle)
 
 	// Set collider shape details (SpawnEntity only sets radius)
 	if col := mmokit.Get[mmokit.Collider](entity); col != nil {
@@ -158,7 +158,7 @@ func (gw *GameWorld) SpawnPlayer(s *mmokit.PlayerSession) {
 			EquipSlot:   uint32(def.EquipSlot),
 		})
 	}
-	mmokit.SendEvent(gw.Stage, connID, &PlayerSpawned{
+	mmokit.SendEvent(gw.stage, connID, &PlayerSpawned{
 		YourEntityID: netID,
 		ItemDefs:     itemDefs,
 		OriginCellX:  sec.CellX,
@@ -173,12 +173,12 @@ func (gw *GameWorld) SpawnPlayer(s *mmokit.PlayerSession) {
 
 	// Send map data (station positions) to the client
 	mapStations := gw.CollectStationMapData()
-	mmokit.SendEvent(gw.Stage, connID, &MapData{Stations: mapStations})
+	mmokit.SendEvent(gw.stage, connID, &MapData{Stations: mapStations})
 	gw.eng.Log.Log(CatWorldMap, "map data sent: conn=%d stations=%d", connID, len(mapStations))
 
 	// Send current currency balances so the client has them immediately
 	for curID, bal := range pdata.Currencies {
-		mmokit.SendEvent(gw.Stage, connID, &CurrencyUpdate{
+		mmokit.SendEvent(gw.stage, connID, &CurrencyUpdate{
 			CurrencyID: curID,
 			Balance:    bal,
 			Earned:     0,
@@ -190,7 +190,7 @@ func (gw *GameWorld) SpawnPlayer(s *mmokit.PlayerSession) {
 // (grace period reconnection). Updates the PlayerConn component with the
 // new connID and sends the client the spawn message so it knows its entity ID.
 func (gw *GameWorld) reconnectPlayer(s *mmokit.PlayerSession) {
-	entity := mmokit.EntityFromECS(gw.Stage, s.Entity)
+	entity := mmokit.EntityFromECS(gw.stage, s.Entity)
 	connID := s.ConnID
 
 	// Update PlayerConn with new connection ID
@@ -227,7 +227,7 @@ func (gw *GameWorld) reconnectPlayer(s *mmokit.PlayerSession) {
 			EquipSlot:   uint32(def.EquipSlot),
 		})
 	}
-	mmokit.SendEvent(gw.Stage, connID, &PlayerSpawned{
+	mmokit.SendEvent(gw.stage, connID, &PlayerSpawned{
 		YourEntityID: netID,
 		ItemDefs:     itemDefs,
 		OriginCellX:  sec.CellX,
@@ -237,12 +237,12 @@ func (gw *GameWorld) reconnectPlayer(s *mmokit.PlayerSession) {
 
 	// Send map data
 	mapStations := gw.CollectStationMapData()
-	mmokit.SendEvent(gw.Stage, connID, &MapData{Stations: mapStations})
+	mmokit.SendEvent(gw.stage, connID, &MapData{Stations: mapStations})
 
 	// Send currency balances
 	pdata := gw.PlayerDB.GetOrCreate(s.Username)
 	for curID, bal := range pdata.Currencies {
-		mmokit.SendEvent(gw.Stage, connID, &CurrencyUpdate{
+		mmokit.SendEvent(gw.stage, connID, &CurrencyUpdate{
 			CurrencyID: curID,
 			Balance:    bal,
 			Earned:     0,

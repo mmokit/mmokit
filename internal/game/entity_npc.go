@@ -20,14 +20,14 @@ type NPCBundle struct {
 func (gw *GameWorld) SpawnNPC(x, y float32) ecs.Entity {
 	br := boundingRadius(gw.Config.NpcWidth, gw.Config.NpcHeight)
 
-	handle := gw.SpawnEntity(
+	handle := gw.stage.SpawnEntity(
 		mmokit.Position{X: x, Y: y},
 		mmokit.WithEntityKind(gamecomp.KindNPC),
 		mmokit.WithCollider(br),
 		mmokit.WithRotation(0),
 		mmokit.WithComponents(),
 	)
-	entity := mmokit.EntityFromECS(gw.Stage, handle)
+	entity := mmokit.EntityFromECS(gw.stage, handle)
 
 	// Set collider shape details
 	if col := mmokit.Get[mmokit.Collider](entity); col != nil {

@@ -12,15 +12,15 @@ import (
 // path and returns without enqueuing loot.
 func TestKilled_NPC_NoDropsIsSafe(t *testing.T) {
 	gw, _ := newTestGameWorld()
-	gw.Stage.SetGameWorld(gw)
-	mmokit.Handle(gw.Stage, killedHandler)
-	mmokit.Handle(gw.Stage, killCreditHandler)
+	gw.stage.SetStateByName("game.GameWorld", gw)
+	mmokit.Handle(gw.stage, killedHandler)
+	mmokit.Handle(gw.stage, killCreditHandler)
 
 	target := newTestNPC(t, gw, 101, 99) // unmapped in NPCDropTables
 	killer := newTestShip(t, gw, 202, 100, 0)
 
-	targetE := mmokit.EntityByNetID(gw.Stage, target)
-	killerE := mmokit.EntityByNetID(gw.Stage, killer)
+	targetE := mmokit.EntityByNetID(gw.stage, target)
+	killerE := mmokit.EntityByNetID(gw.stage, killer)
 
 	targetE.Send(&Killed{Killer: killerE})
 
@@ -36,11 +36,11 @@ func TestKilled_NPC_NoDropsIsSafe(t *testing.T) {
 // local cell, so the Send path runs the handler synchronously.
 func TestKillCredit_SameCell_CreditsCurrency(t *testing.T) {
 	gw, _ := newTestGameWorld()
-	gw.Stage.SetGameWorld(gw)
-	mmokit.Handle(gw.Stage, killCreditHandler)
+	gw.stage.SetStateByName("game.GameWorld", gw)
+	mmokit.Handle(gw.stage, killCreditHandler)
 
 	killer := newTestPlayerShip(t, gw, 303, "alice")
-	killerE := mmokit.EntityByNetID(gw.Stage, killer)
+	killerE := mmokit.EntityByNetID(gw.stage, killer)
 
 	killerE.Send(&KillCredit{Currency: 1, Amount: 50})
 

@@ -15,18 +15,18 @@ import (
 // has already mutated Minable.Remaining.
 func TestMineExtract_SameCell_ReducesMinable(t *testing.T) {
 	gw, _ := newTestGameWorld()
-	gw.Stage.SetGameWorld(gw)
+	gw.stage.SetStateByName("game.GameWorld", gw)
 
 	// Register the handler manually (production goes through GameSetup
 	// → RegisterMiningVerb → HandleAll, but this test bypasses Process
 	// and works on a single Stage directly).
-	mmokit.Handle(gw.Stage, mineExtractHandler)
+	mmokit.Handle(gw.stage, mineExtractHandler)
 
 	asteroid := newTestAsteroid(t, gw, 301, 100, 1)
 	caster := newTestShip(t, gw, 401, 100, 0)
 
-	casterE := mmokit.EntityByNetID(gw.Stage, caster)
-	asteroidE := mmokit.EntityByNetID(gw.Stage, asteroid)
+	casterE := mmokit.EntityByNetID(gw.stage, caster)
+	asteroidE := mmokit.EntityByNetID(gw.stage, asteroid)
 
 	gw.MineExtract(casterE, asteroidE, 0, 25)
 
@@ -44,14 +44,14 @@ func TestMineExtract_SameCell_ReducesMinable(t *testing.T) {
 // entity for removal, and that FlushRemovals tears it down.
 func TestMineExtract_DepletesAndMarksForRemoval(t *testing.T) {
 	gw, _ := newTestGameWorld()
-	gw.Stage.SetGameWorld(gw)
-	mmokit.Handle(gw.Stage, mineExtractHandler)
+	gw.stage.SetStateByName("game.GameWorld", gw)
+	mmokit.Handle(gw.stage, mineExtractHandler)
 
 	asteroid := newTestAsteroid(t, gw, 302, 10, 1)
 	caster := newTestShip(t, gw, 402, 100, 0)
 
-	casterE := mmokit.EntityByNetID(gw.Stage, caster)
-	asteroidE := mmokit.EntityByNetID(gw.Stage, asteroid)
+	casterE := mmokit.EntityByNetID(gw.stage, caster)
+	asteroidE := mmokit.EntityByNetID(gw.stage, asteroid)
 
 	gw.MineExtract(casterE, asteroidE, 0, 25)
 
@@ -78,12 +78,12 @@ func TestMineExtract_DepletesAndMarksForRemoval(t *testing.T) {
 // an mmokit.Entity handle.
 func newTestAsteroid(t *testing.T, gw *GameWorld, netID uint32, remaining float32, itemID uint32) uint32 {
 	t.Helper()
-	w := gw.Stage.ECSWorld()
+	w := gw.stage.ECSWorld()
 	netIDMapper := ecs.NewMap1[mmokit.NetworkID](w)
 	handle := w.NewEntity()
 	netIDMapper.Add(handle, &mmokit.NetworkID{ID: netID})
-	gw.Stage.RegisterLiveNetID(netID, handle)
-	e := mmokit.EntityByNetID(gw.Stage, netID)
+	gw.stage.RegisterLiveNetID(netID, handle)
+	e := mmokit.EntityByNetID(gw.stage, netID)
 	mmokit.Set(e, mmokit.Position{X: 0, Y: 0})
 	mmokit.Set(e, gamecomp.Minable{ItemID: itemID, Remaining: remaining})
 	return netID

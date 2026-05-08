@@ -3,6 +3,8 @@ package game
 import (
 	"maps"
 
+	"github.com/mlange-42/ark/ecs"
+
 	gamecomp "github.com/zenion/mmoserver/internal/component"
 	"github.com/zenion/mmoserver/internal/item"
 	"github.com/zenion/mmoserver/pkg/mmokit"
@@ -73,10 +75,13 @@ type DockingProgress struct {
 	StationNetID uint32 // for client VFX
 }
 
-// GameWorld holds all game-specific state and embeds Stage for multi-node support.
+// GameWorld holds all game-specific state for a single cell. It is registered
+// per-stage via mmokit.AddState[GameWorld] and looked up via
+// mmokit.State[GameWorld](stage). The cell's Stage is held in the unexported
+// `stage` field; external packages reach it through the Stage() accessor.
 type GameWorld struct {
-	*mmokit.Stage
-	eng *mmokit.Engine // cached for convenience (avoids gw.Engine().ECS everywhere)
+	stage *mmokit.Stage
+	eng   *mmokit.Engine // cached for convenience (avoids gw.Engine().ECS everywhere)
 
 	Spatial *mmokit.HashGrid
 	// Config is a shared pointer across all GameWorlds in the coordinator —
@@ -111,26 +116,28 @@ type GameWorld struct {
 	PlayerSessions *mmokit.PlayerSessions
 
 	// RootCell identifies which root cell this node owns (depth-0 coordinates).
-	// Distinct name from the embedded Stage.Cell() method, which returns a
-	// CellID with depth — this field is kept for game-side convenience that
-	// only needs the X/Y of the root cell. Renaming to "RootCell" avoids
-	// shadowing Stage.Cell(), which would silently break the
-	// pkg/universe BoundaryWorld interface check and disable boundary
-	// transfers entirely.
+	// Convenience over the cell's CellID — game-side code typically only
+	// needs the X/Y of the root cell.
 	RootCell mmokit.CellCoord
 
 	// OnPostSpawn is called after a player spawns (for topology sends, etc.)
 	OnPostSpawn func(connID uint32)
 }
 
-// Ensure GameWorld implements mmokit.GameWorld at compile time.
-var _ mmokit.GameWorld = (*GameWorld)(nil)
+// GetStage returns the per-cell Stage this GameWorld is wired to. External
+// packages (e.g. internal/game/commands) use this in place of the previous
+// embedded-pointer access. Named GetStage rather than Stage() to avoid
+// shadowing the existing field — game code in the same package reads via
+// gw.stage directly.
+func (gw *GameWorld) GetStage() *mmokit.Stage { return gw.stage }
 
-// Ensure GameWorld also satisfies mmokit.BoundaryWorld. A field named `Cell`
-// on GameWorld would shadow the embedded Stage.Cell() method and
-// silently disable all cross-cell entity transfers — this assertion catches
-// that class of bug at compile time instead of silently at runtime.
-var _ mmokit.BoundaryWorld = (*GameWorld)(nil)
+// Engine returns the engine for this cell.
+func (gw *GameWorld) Engine() *mmokit.Engine { return gw.eng }
+
+// MarkForRemoval forwards to the Stage's engine.
+func (gw *GameWorld) MarkForRemoval(e ecs.Entity) {
+	gw.stage.MarkForRemoval(e)
+}
 
 // SavePlayerState persists the current entity state to the player database.
 func (gw *GameWorld) SavePlayerState(s *mmokit.PlayerSession) {
@@ -138,7 +145,7 @@ func (gw *GameWorld) SavePlayerState(s *mmokit.PlayerSession) {
 	if username == "" {
 		return
 	}
-	entity := mmokit.EntityFromECS(gw.Stage, s.Entity)
+	entity := mmokit.EntityFromECS(gw.stage, s.Entity)
 	if !entity.Alive() {
 		return
 	}
@@ -184,7 +191,7 @@ func (gw *GameWorld) syncActiveMining(entity mmokit.Entity, laser *gamecomp.Mini
 	newBeam0 := laser.Beams[0].Active
 	newBeam1 := laser.Beams[1].Active
 	var newTarget uint32
-	target := mmokit.EntityFromECS(gw.Stage, laser.Target)
+	target := mmokit.EntityFromECS(gw.stage, laser.Target)
 	if (newBeam0 || newBeam1) && target.Alive() {
 		newTarget = target.NetID()
 	}

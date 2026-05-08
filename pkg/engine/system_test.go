@@ -8,57 +8,12 @@ import (
 	"github.com/zenion/mmoserver/pkg/query"
 )
 
-type stubWorld struct{ tag string }
-
 type testSystem struct {
-	SystemBase[*stubWorld]
-}
-
-func (s *testSystem) Update(dt float32) {}
-
-func TestSystemBase_TypedWorld(t *testing.T) {
-	s := &testSystem{}
-	w := &stubWorld{tag: "hello"}
-	s.SetDeps(ecs.NewWorld(), nil, w)
-
-	got := s.World()
-	if got == nil || got.tag != "hello" {
-		t.Fatalf("World() returned %+v, want stubWorld{tag:\"hello\"}", got)
-	}
-}
-
-func TestSystemBase_TypeMismatch_Panics(t *testing.T) {
-	type wrongWorld struct{}
-	s := &testSystem{}
-	defer func() {
-		if r := recover(); r == nil {
-			t.Fatal("expected panic, got none")
-		}
-	}()
-	s.SetDeps(ecs.NewWorld(), nil, &wrongWorld{})
-}
-
-func TestSystemBase_NilGameWorld_OK_ForAny(t *testing.T) {
-	type anySystem struct{ SystemBase[any] }
-	s := &anySystem{}
-	// Should NOT panic.
-	s.SetDeps(ecs.NewWorld(), nil, nil)
-	if s.World() != nil {
-		t.Fatalf("expected nil World, got %v", s.World())
-	}
-}
-
-func TestSystemBase_NilGameWorld_OK_ForPointer(t *testing.T) {
-	s := &testSystem{}
-	// Should NOT panic — typed nil → *stubWorld is fine.
-	s.SetDeps(ecs.NewWorld(), nil, (*stubWorld)(nil))
-	if s.World() != nil {
-		t.Fatalf("expected nil World, got %v", s.World())
-	}
+	SystemBase
 }
 
 type autoBindSystem struct {
-	SystemBase[*stubWorld]
+	SystemBase
 	pos query.Query[struct {
 		Pos *component.Position
 	}]
@@ -69,7 +24,7 @@ func (s *autoBindSystem) Update(dt float32) {}
 func TestSystemBase_AutoBindsQueries(t *testing.T) {
 	s := &autoBindSystem{}
 	w := ecs.NewWorld()
-	s.SetDeps(w, nil, &stubWorld{})
+	s.SetDeps(w, nil)
 
 	// Mimic framework lifecycle.
 	s.BindQueries(s)
@@ -87,7 +42,7 @@ func TestSystemBase_AutoBindsQueries(t *testing.T) {
 }
 
 type ghostExclusionSystem struct {
-	SystemBase[*stubWorld]
+	SystemBase
 	q query.Query[struct {
 		Pos *component.Position
 	}]
@@ -98,7 +53,7 @@ func (s *ghostExclusionSystem) Update(dt float32) {}
 func TestSystemBase_DefaultExclusions(t *testing.T) {
 	s := &ghostExclusionSystem{}
 	w := ecs.NewWorld()
-	s.SetDeps(w, nil, &stubWorld{})
+	s.SetDeps(w, nil)
 	s.BindQueries(s)
 	s.Init()
 	s.BuildQueries()
@@ -114,4 +69,11 @@ func TestSystemBase_DefaultExclusions(t *testing.T) {
 	if count != 0 {
 		t.Fatalf("expected 0 (Ghost excluded by default), got %d", count)
 	}
+}
+
+func TestSystemBase_DefaultUpdate_NoOp(t *testing.T) {
+	// testSystem embeds SystemBase and doesn't override Update — should not panic.
+	s := &testSystem{}
+	s.SetDeps(ecs.NewWorld(), nil)
+	s.Update(0.05)
 }

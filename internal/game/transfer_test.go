@@ -40,6 +40,10 @@ func newTestGameWorld() (*GameWorld, *net.ConnManager) {
 	GameSetup(tmpCoord)
 	tmpCoord.RealizeKindSpecs(base)
 	gw := NewGameWorld(base, &cfg, playerDB, mmokit.CellCoord{}, false)
+	// Register the GameWorld as cell-local state so production paths that
+	// resolve via mmokit.State[GameWorld](stage) (e.g. system Init, verb
+	// dispatch) work inside unit tests.
+	base.SetStateByName("game.GameWorld", gw)
 	return gw, connMgr
 }
 
@@ -58,7 +62,7 @@ func addMockConn(gw *GameWorld, cm *net.ConnManager) uint32 {
 func TestFinishTransferSpawn_Asteroid(t *testing.T) {
 	gw, _ := newTestGameWorld()
 
-	mapper := ecs.NewMap6[mmokit.Position, mmokit.Velocity, mmokit.Rotation, mmokit.Collider, mmokit.NetworkID, mmokit.EntityKind](gw.Stage.ECSWorld())
+	mapper := ecs.NewMap6[mmokit.Position, mmokit.Velocity, mmokit.Rotation, mmokit.Collider, mmokit.NetworkID, mmokit.EntityKind](gw.stage.ECSWorld())
 	entity := mapper.NewEntity(
 		&mmokit.Position{X: 500, Y: -300},
 		&mmokit.Velocity{X: 0, Y: 0},
@@ -67,8 +71,8 @@ func TestFinishTransferSpawn_Asteroid(t *testing.T) {
 		&mmokit.NetworkID{ID: 100},
 		&mmokit.EntityKind{Type: gamecomp.KindAsteroid},
 	)
-	gw.Stage.RegisterLiveNetID(100, entity)
-	e := mmokit.EntityFromECS(gw.Stage, entity)
+	gw.stage.RegisterLiveNetID(100, entity)
+	e := mmokit.EntityFromECS(gw.stage, entity)
 	mmokit.Set(e, mmokit.CellCoord{CellX: 1, CellY: 2})
 	mmokit.Set(e, gamecomp.Minable{ItemID: 2, Remaining: 75})
 
@@ -103,7 +107,7 @@ func TestFinishTransferSpawn_Ship(t *testing.T) {
 	connID := addMockConn(gw, cm)
 	gw.Players.RegisterTransferSession(connID, "testplayer")
 
-	mapper := ecs.NewMap6[mmokit.Position, mmokit.Velocity, mmokit.Rotation, mmokit.Collider, mmokit.NetworkID, mmokit.EntityKind](gw.Stage.ECSWorld())
+	mapper := ecs.NewMap6[mmokit.Position, mmokit.Velocity, mmokit.Rotation, mmokit.Collider, mmokit.NetworkID, mmokit.EntityKind](gw.stage.ECSWorld())
 	entity := mapper.NewEntity(
 		&mmokit.Position{X: 10, Y: 20},
 		&mmokit.Velocity{X: 3, Y: 4},
@@ -112,8 +116,8 @@ func TestFinishTransferSpawn_Ship(t *testing.T) {
 		&mmokit.NetworkID{ID: 200},
 		&mmokit.EntityKind{Type: gamecomp.KindShip},
 	)
-	gw.Stage.RegisterLiveNetID(200, entity)
-	e := mmokit.EntityFromECS(gw.Stage, entity)
+	gw.stage.RegisterLiveNetID(200, entity)
+	e := mmokit.EntityFromECS(gw.stage, entity)
 	mmokit.Set(e, mmokit.CellCoord{CellX: 0, CellY: 0})
 	mmokit.Set(e, mmokit.PlayerConn{ConnID: connID})
 
@@ -133,7 +137,7 @@ func TestFinishTransferSpawn_Ship(t *testing.T) {
 	}
 
 	// Real transfer path auto-adds kind components before FinishTransferSpawn.
-	gw.EnsureEntityKindComponents(entity)
+	gw.stage.EnsureEntityKindComponents(entity)
 	gw.FinishTransferSpawn(entity, frame)
 
 	if !e.Alive() {
@@ -186,7 +190,7 @@ func TestFinishTransferSpawn_Ship(t *testing.T) {
 func TestFinishTransferSpawn_LootCrate(t *testing.T) {
 	gw, _ := newTestGameWorld()
 
-	mapper := ecs.NewMap6[mmokit.Position, mmokit.Velocity, mmokit.Rotation, mmokit.Collider, mmokit.NetworkID, mmokit.EntityKind](gw.Stage.ECSWorld())
+	mapper := ecs.NewMap6[mmokit.Position, mmokit.Velocity, mmokit.Rotation, mmokit.Collider, mmokit.NetworkID, mmokit.EntityKind](gw.stage.ECSWorld())
 	entity := mapper.NewEntity(
 		&mmokit.Position{X: -50, Y: 75},
 		&mmokit.Velocity{},
@@ -195,8 +199,8 @@ func TestFinishTransferSpawn_LootCrate(t *testing.T) {
 		&mmokit.NetworkID{ID: 300},
 		&mmokit.EntityKind{Type: gamecomp.KindLootCrate},
 	)
-	gw.Stage.RegisterLiveNetID(300, entity)
-	e := mmokit.EntityFromECS(gw.Stage, entity)
+	gw.stage.RegisterLiveNetID(300, entity)
+	e := mmokit.EntityFromECS(gw.stage, entity)
 	mmokit.Set(e, mmokit.CellCoord{CellX: 0, CellY: 1})
 
 	// Simulate components added by registry
@@ -212,7 +216,7 @@ func TestFinishTransferSpawn_LootCrate(t *testing.T) {
 	}
 
 	// Real transfer path auto-adds kind components before FinishTransferSpawn.
-	gw.EnsureEntityKindComponents(entity)
+	gw.stage.EnsureEntityKindComponents(entity)
 	gw.FinishTransferSpawn(entity, frame)
 
 	if !e.Alive() {

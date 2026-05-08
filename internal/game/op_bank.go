@@ -46,8 +46,8 @@ func HandleBankRequest(ctx *mmokit.OpContext, _ *BankRequest) (*BankResponse, er
 	if stage == nil {
 		return &BankResponse{Error: "no cell context"}, nil
 	}
-	gw, ok := stage.GameWorld().(*GameWorld)
-	if !ok || gw == nil {
+	gw := mmokit.State[GameWorld](stage)
+	if gw == nil {
 		return &BankResponse{Error: "no game world"}, nil
 	}
 
@@ -59,7 +59,7 @@ func HandleBankRequest(ctx *mmokit.OpContext, _ *BankRequest) (*BankResponse, er
 	// Docked players skip the entity / proximity check — bank UI is
 	// always available while docked.
 	if sess.State != StateDocked {
-		entity := mmokit.EntityFromECS(gw.Stage, sess.Entity)
+		entity := mmokit.EntityFromECS(gw.stage, sess.Entity)
 		if !entity.Alive() {
 			return &BankResponse{Error: "no live entity"}, nil
 		}
@@ -83,7 +83,7 @@ func HandleBankRequest(ctx *mmokit.OpContext, _ *BankRequest) (*BankResponse, er
 // query directly would require coupling between the typed-op handler
 // and the system instance.
 func nearAnyStation(gw *GameWorld, pos *mmokit.Position, range2 float64) bool {
-	filter := ecs.NewFilter2[gamecomp.Station, mmokit.Position](gw.Stage.ECSWorld())
+	filter := ecs.NewFilter2[gamecomp.Station, mmokit.Position](gw.stage.ECSWorld())
 	query := filter.Query()
 	defer query.Close() // see entity_station.go: panic in body must not leak the world write-lock
 	for query.Next() {

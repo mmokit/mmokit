@@ -11,7 +11,8 @@ import (
 // Mining beams are activated/deactivated by the AbilitySystem; this system
 // performs the per-tick resource extraction for active beams.
 type MiningSystem struct {
-	mmokit.SystemBase[*GameWorld]
+	mmokit.SystemBase
+	gw       *GameWorld
 	entities mmokit.Query[struct {
 		Input  *gamecomp.PlayerInput
 		Laser  *gamecomp.MiningLaser
@@ -26,15 +27,19 @@ type pendingJettison struct {
 	items map[uint32]int32
 }
 
+func (s *MiningSystem) Init() {
+	s.gw = mmokit.State[GameWorld](s.Stage())
+}
+
 func (s *MiningSystem) Update(dt float32) {
-	gw := s.World()
+	gw := s.gw
 
 	var jettisons []pendingJettison
 
 	for e, b := range s.entities.Iter {
 		input, laser, pos, inv := b.Input, b.Laser, b.Pos, b.Inv
 
-		entity := mmokit.EntityFromECS(gw.Stage, e)
+		entity := mmokit.EntityFromECS(gw.stage, e)
 
 		// Handle jettison — drop items into a loot crate
 		if input.JettisonItemID > 0 {
@@ -62,7 +67,7 @@ func (s *MiningSystem) Update(dt float32) {
 			}
 
 			// Validate target
-			targetE := mmokit.EntityFromECS(gw.Stage, laser.Target)
+			targetE := mmokit.EntityFromECS(gw.stage, laser.Target)
 			minable := mmokit.Get[gamecomp.Minable](targetE)
 			if !targetE.Alive() || minable == nil {
 				beam.Active = false
@@ -126,7 +131,7 @@ func (s *MiningSystem) Update(dt float32) {
 			// Minable.Remaining + marks for removal. When replica, Send
 			// routes the action to the authoritative cell; we still
 			// decrement the local replica copy for visual feedback.
-			asteroid := mmokit.EntityByNetID(gw.Stage, targetE.NetID())
+			asteroid := mmokit.EntityByNetID(gw.stage, targetE.NetID())
 
 			if !asteroid.Local() {
 				minable.Remaining -= float32(added)

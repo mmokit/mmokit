@@ -257,7 +257,7 @@ func main() {
 		coordCfg.OnConsoleReady = func(p *mmokit.Process, console *mmokit.Console) {
 			var anyWorld *game.GameWorld
 			for _, node := range p.Cells {
-				gw := game.UnwrapGameWorld(node.World)
+				gw := mmokit.State[game.GameWorld](node.Stage)
 				if anyWorld == nil {
 					anyWorld = gw
 				}
@@ -273,7 +273,7 @@ func main() {
 					// the config.apply_stats command dispatched to all hosts.
 					ConfigOnChanged: func(_ string) {
 						for _, node := range p.Cells {
-							gw := game.UnwrapGameWorld(node.World)
+							gw := mmokit.State[game.GameWorld](node.Stage)
 							if gw == nil {
 								continue
 							}
@@ -301,11 +301,11 @@ func main() {
 		}
 	}
 
-	if needsGameState {
-		coordCfg.World = game.WorldFactory(&gameCfg, playerDB, playerSessions)
-	}
-
 	coordinator = mmokit.New(coordCfg)
+
+	if needsGameState {
+		mmokit.AddState(coordinator, game.NewGameWorldStateFactory(&gameCfg, playerDB, playerSessions))
+	}
 
 	if playerDB != nil {
 		coordinator.SetHasPlayerDB(true)

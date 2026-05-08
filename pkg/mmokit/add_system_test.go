@@ -5,7 +5,7 @@ import "testing"
 // addSysFakeSystem satisfies System with no-op implementations. Used to
 // exercise NewSystem's type plumbing without spinning up a full Process.
 type addSysFakeSystem struct {
-	SystemBase[any]
+	SystemBase
 }
 
 func (f *addSysFakeSystem) Update(dt float32) {}
@@ -13,7 +13,7 @@ func (f *addSysFakeSystem) Update(dt float32) {}
 // addSysFakeWidget covers the case where the type name does NOT end in
 // "System" — strip should be a no-op.
 type addSysFakeWidget struct {
-	SystemBase[any]
+	SystemBase
 }
 
 func (f *addSysFakeWidget) Update(dt float32) {}

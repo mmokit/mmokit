@@ -1,6 +1,11 @@
 package universe
 
-import "testing"
+import (
+	"sync/atomic"
+	"testing"
+
+	"github.com/zenion/mmoserver/pkg/engine"
+)
 
 // TestConfigProtocolRoundTrip verifies that Config.Protocol passes through
 // Process.Protocol() unchanged.
@@ -24,74 +29,36 @@ func TestConfigProtocolUnset(t *testing.T) {
 	}
 }
 
-// TestConfigWorldAndOnInitMutuallyExclusive verifies that Build panics when
-// both Config.World and Config.OnInit are set.
-func TestConfigWorldAndOnInitMutuallyExclusive(t *testing.T) {
-	defer func() {
-		if r := recover(); r == nil {
-			t.Fatal("expected panic when both Config.World and Config.OnInit are set")
-		}
-	}()
-	cfg := Config{
-		Mode:     "all",
-		CellsX:   1,
-		CellsY:   1,
-		Headless: true,
-		World:    func(b *Stage) GameWorld { return b },
-		OnInit:   func(b *Stage) {},
-	}
-	p := New(cfg)
-	p.Build()
+// countingSystem increments a shared counter on Init.
+type countingSystem struct {
+	engine.SystemBase
+	counter *int32
 }
 
-// TestConfigWorldDefaultsToBareWorldBase verifies that when neither World nor
-// OnInit is set, Build creates a bare *Stage per cell.
-func TestConfigWorldDefaultsToBareWorldBase(t *testing.T) {
-	cfg := Config{
-		Mode:     "all",
-		CellsX:   1,
-		CellsY:   1,
-		Headless: true,
-	}
-	p := New(cfg)
-	p.Build()
-	if len(p.Cells) != 1 {
-		t.Fatalf("expected 1 cell, got %d", len(p.Cells))
-	}
-	cell := p.Cells["cell_0_0"]
-	if cell == nil {
-		t.Fatal("cell_0_0 not found")
-	}
-	if cell.Stage == nil {
-		t.Error("cell.Stage is nil; expected default *Stage")
-	}
-	if cell.World != GameWorld(cell.Stage) {
-		t.Errorf("expected cell.World to be the bare *Stage; got %T", cell.World)
-	}
-}
+func (s *countingSystem) Init() { atomic.AddInt32(s.counter, 1) }
 
-// TestConfigOnInitRunsOnceAfterConstruction verifies that Config.OnInit is
-// called exactly once with the cell's *Stage after Build.
-func TestConfigOnInitRunsOnceAfterConstruction(t *testing.T) {
-	var calls int
-	var seen *Stage
-	cfg := Config{
-		Mode:     "all",
-		CellsX:   1,
-		CellsY:   1,
+// TestSystemInitRunsOnceAfterConstruction verifies that a system's Init()
+// fires exactly once per cell during cell construction. Replaces the
+// pre-C-full TestConfigOnInitRunsOnceAfterConstruction.
+func TestSystemInitRunsOnceAfterConstruction(t *testing.T) {
+	var calls int32
+	mmo := New(Config{
+		CellsX: 2, CellsY: 2, CellSize: 1000, TickRate: 20, AoIRadius: 100,
 		Headless: true,
-		OnInit: func(b *Stage) {
-			calls++
-			seen = b
+	})
+	// Each cell gets a fresh countingSystem instance; they all share &calls.
+	mmo.AddSystem(engine.SystemDef{
+		Name: "OnceInitTracker",
+		Factory: func() engine.System {
+			return &countingSystem{counter: &calls}
 		},
-	}
-	p := New(cfg)
-	p.Build()
-	if calls != 1 {
-		t.Errorf("OnInit called %d times, want 1", calls)
-	}
-	if seen != p.Cells["cell_0_0"].Stage {
-		t.Error("OnInit did not receive the cell's *Stage")
+	})
+	mmo.Build()
+	t.Cleanup(mmo.Shutdown)
+
+	expected := int32(4) // 2x2 cells, Init() per cell
+	if atomic.LoadInt32(&calls) != expected {
+		t.Errorf("Init fired %d times across 4 cells, expected %d", atomic.LoadInt32(&calls), expected)
 	}
 }
 

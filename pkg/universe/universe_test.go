@@ -12,60 +12,10 @@ import (
 )
 
 // ---------------------------------------------------------------------------
-// Mock GameWorld
-// ---------------------------------------------------------------------------
-
-type mockWorld struct {
-	spawned        [][]byte
-	bridge         Bridge
-	shutdownCalled bool
-
-	// SerializeEntity returns these
-	serializeResult []byte
-	serializeErr    error
-
-	// SpawnFromTransfer returns these
-	spawnNetID  uint32
-	spawnConnID uint32
-	spawnErr    error
-}
-
-func (m *mockWorld) Init() {}
-
-func (m *mockWorld) SerializeEntity(ecs.Entity) ([]byte, error) {
-	return m.serializeResult, m.serializeErr
-}
-
-func (m *mockWorld) SpawnFromTransfer(data []byte) (uint32, uint32, error) {
-	m.spawned = append(m.spawned, data)
-	return m.spawnNetID, m.spawnConnID, m.spawnErr
-}
-
-func (m *mockWorld) MarkForRemoval(ecs.Entity) {}
-
-func (m *mockWorld) SetBridge(bridge Bridge) {
-	m.bridge = bridge
-}
-
-func (m *mockWorld) Shutdown() {
-	m.shutdownCalled = true
-}
-
-func (m *mockWorld) UpdateCellBounds(CellID, float32) {}
-
-func (m *mockWorld) Hooks() engine.Hooks {
-	return engine.Hooks{}
-}
-
-// ---------------------------------------------------------------------------
 // Test helpers
 // ---------------------------------------------------------------------------
 
-func newTestCell(id string, cell CellID) (*Cell, *mockWorld) {
-	mw := &mockWorld{
-		spawnNetID:  100,
-		spawnConnID: 42,
-	}
+func newTestCell(id string, cell CellID) *Cell {
 	log := logger.New()
 	connMgr := net.NewConnManager()
 	eng := engine.New(engine.DefaultConfig(), connMgr, log)
@@ -74,26 +24,19 @@ func newTestCell(id string, cell CellID) (*Cell, *mockWorld) {
 		MeshID:    MeshCellID(id),
 		Cell:      cell,
 		Engine:    eng,
-		World:     mw,
 		Stage:     base,
 		Inbox:     make(chan CellMessage, 64),
 		Neighbors: make(map[MeshCellID]*Cell),
 		Log:       log,
-	}, mw
+	}
 }
 
-func newTestCoordinator(cfg Config) (*Process, map[CellID]*mockWorld) {
-	worlds := make(map[CellID]*mockWorld)
+func newTestCoordinator(cfg Config) *Process {
 	if cfg.ConnManager == nil {
 		cfg.ConnManager = net.NewConnManager()
 	}
 	if cfg.Logger == nil {
 		cfg.Logger = logger.New()
-	}
-	cfg.World = func(base *Stage) GameWorld {
-		mw := &mockWorld{spawnNetID: 100, spawnConnID: 42}
-		worlds[base.Cell()] = mw
-		return mw
 	}
 	c := New(cfg)
 	c.Build()
@@ -106,7 +49,7 @@ func newTestCoordinator(cfg Config) (*Process, map[CellID]*mockWorld) {
 			Y: c.cfg.CellSize / 2,
 		}
 	}
-	return c, worlds
+	return c
 }
 
 // ---------------------------------------------------------------------------
@@ -120,7 +63,7 @@ func newTestCoordinator(cfg Config) (*Process, map[CellID]*mockWorld) {
 // >= CommitTick. This matches the source-side H1 contract: both ends
 // flip authority at the same cluster-coherent tick.
 func TestCell_DrainInbox_Handoff(t *testing.T) {
-	cell, _ := newTestCell("dest", CellID{X: 1, Y: 0})
+	cell := newTestCell("dest", CellID{X: 1, Y: 0})
 	cell.Bridge = &recordingBridge{}
 
 	// Build a valid TransferBlob via SerializeEntity on a temp entity so
@@ -213,7 +156,7 @@ func TestCell_DrainInbox_Handoff(t *testing.T) {
 // the engine's input router would no longer find them for the connID —
 // client loses control of their player.
 func TestCell_MsgHandoff_ReplacesExistingReplicaAtCommitTick(t *testing.T) {
-	cell, _ := newTestCell("dest", CellID{X: 1, Y: 0})
+	cell := newTestCell("dest", CellID{X: 1, Y: 0})
 	cell.Bridge = &recordingBridge{}
 	world := cell.Engine.ECS
 
@@ -323,7 +266,7 @@ func TestCell_MsgHandoff_PreservesDebugFlagsOnSession(t *testing.T) {
 	const cellSize = float32(1024)
 	coords.SetCellSize(cellSize)
 
-	c, _ := newTestCoordinator(Config{CellsX: 2, CellsY: 1, CellSize: cellSize})
+	c := newTestCoordinator(Config{CellsX: 2, CellsY: 1, CellSize: cellSize})
 	dst := c.Cells[CellID{X: 1, Y: 0}.MeshID()]
 	if dst == nil {
 		t.Fatal("dest cell 1_0 missing from coordinator")
@@ -394,7 +337,7 @@ func TestCell_MsgHandoff_PreservesDebugFlagsOnSession(t *testing.T) {
 }
 
 func TestCell_DrainInbox_SpawnTransfer(t *testing.T) {
-	node, _ := newTestCell("default", CellID{X: 0, Y: 0})
+	node := newTestCell("default", CellID{X: 0, Y: 0})
 	node.Bridge = &recordingBridge{}
 
 	node.Inbox <- CellMessage{
@@ -415,7 +358,7 @@ func TestCell_DrainInbox_SpawnTransfer(t *testing.T) {
 }
 
 func TestCell_DrainInbox_TicksAfterDrain(t *testing.T) {
-	node, _ := newTestCell("n", CellID{X: 0, Y: 0})
+	node := newTestCell("n", CellID{X: 0, Y: 0})
 	node.Bridge = &recordingBridge{}
 
 	// Empty inbox — DrainInbox calls TickGhosts and TickTransferCooldowns on Base
@@ -441,7 +384,7 @@ func TestCoordinator_GridCreation(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			c, _ := newTestCoordinator(tc.grid)
+			c := newTestCoordinator(tc.grid)
 			if len(c.Cells) != tc.expected {
 				t.Fatalf("expected %d nodes, got %d", tc.expected, len(c.Cells))
 			}
@@ -451,7 +394,7 @@ func TestCoordinator_GridCreation(t *testing.T) {
 
 func TestCoordinator_CellOwnership(t *testing.T) {
 	grid := Config{CellsX: 3, CellsY: 3}
-	c, _ := newTestCoordinator(grid)
+	c := newTestCoordinator(grid)
 
 	seen := make(map[string]bool)
 	for sy := int32(0); sy <= 2; sy++ {
@@ -475,7 +418,7 @@ func TestCoordinator_CellOwnership(t *testing.T) {
 
 func TestCoordinator_NeighborWiring(t *testing.T) {
 	grid := Config{CellsX: 3, CellsY: 3}
-	c, _ := newTestCoordinator(grid)
+	c := newTestCoordinator(grid)
 
 	// Center node (1,1) should have 8 neighbors
 	centerID := CellID{X: 1, Y: 1}.MeshID()
@@ -501,24 +444,21 @@ func TestCoordinator_NeighborWiring(t *testing.T) {
 
 func TestCoordinator_BridgeWired(t *testing.T) {
 	grid := Config{CellsX: 2, CellsY: 2}
-	c, worlds := newTestCoordinator(grid)
+	c := newTestCoordinator(grid)
 
 	for _, node := range c.Cells {
 		if node.Bridge == nil {
 			t.Fatalf("node %s has nil Bridge", node.MeshID)
 		}
-	}
-
-	for cell, mw := range worlds {
-		if mw.bridge == nil {
-			t.Fatalf("world for cell (%d,%d) has nil bridge (SetBridge not called)", cell.X, cell.Y)
+		if node.Stage.Bridge() == nil {
+			t.Fatalf("node %s Stage has nil bridge (SetBridge not called on Stage)", node.MeshID)
 		}
 	}
 }
 
 func TestCoordinator_NetIDRanges(t *testing.T) {
 	grid := Config{CellsX: 3, CellsY: 1}
-	c, _ := newTestCoordinator(grid)
+	c := newTestCoordinator(grid)
 
 	// Each node should have a unique engine (pointer).
 	engines := make(map[*engine.Engine]string)
@@ -540,7 +480,7 @@ func TestCoordinator_NetIDRanges(t *testing.T) {
 
 func TestBridge_SendHandoff(t *testing.T) {
 	grid := Config{CellsX: 2, CellsY: 1}
-	c, _ := newTestCoordinator(grid)
+	c := newTestCoordinator(grid)
 
 	srcID := CellID{X: 0, Y: 0}.MeshID()
 	dstID := CellID{X: 1, Y: 0}.MeshID()
@@ -589,7 +529,7 @@ func TestBridge_SendHandoff(t *testing.T) {
 
 func TestBridge_RequestRespawn(t *testing.T) {
 	grid := Config{CellsX: 2, CellsY: 1}
-	c, _ := newTestCoordinator(grid)
+	c := newTestCoordinator(grid)
 
 	targetID := string(CellID{X: 0, Y: 0}.MeshID())
 	// Point the default spawn into the target cell — RequestRespawn uses the
@@ -626,7 +566,7 @@ func TestBridge_RequestRespawn(t *testing.T) {
 
 func TestBridge_SendAction(t *testing.T) {
 	grid := Config{CellsX: 2, CellsY: 1}
-	c, _ := newTestCoordinator(grid)
+	c := newTestCoordinator(grid)
 
 	srcID := CellID{X: 0, Y: 0}.MeshID()
 	dstID := CellID{X: 1, Y: 0}.MeshID()
@@ -660,7 +600,7 @@ func TestBridge_SendAction(t *testing.T) {
 
 func TestBridge_CellOwner(t *testing.T) {
 	grid := Config{CellsX: 2, CellsY: 1}
-	c, _ := newTestCoordinator(grid)
+	c := newTestCoordinator(grid)
 
 	nodeID := string(CellID{X: 0, Y: 0}.MeshID())
 	node := c.Cells[MeshCellID(nodeID)]

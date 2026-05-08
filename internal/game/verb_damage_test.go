@@ -19,19 +19,19 @@ import (
 func TestDamage_SameCell_AppliesViaSend(t *testing.T) {
 	gw, _ := newTestGameWorld()
 	// Wire the stage→world link so damageHandler's gameWorldOfEntity helper
-	// can resolve the *GameWorld from any Entity bound to gw.Stage.
-	gw.Stage.SetGameWorld(gw)
+	// can resolve the *GameWorld from any Entity bound to gw.stage.
+	gw.stage.SetStateByName("game.GameWorld", gw)
 
 	// Register the handler manually (production goes through GameSetup
 	// → RegisterDamageVerb → HandleAll, but this test bypasses Process
 	// and works on a single Stage directly).
-	mmokit.Handle(gw.Stage, damageHandler)
+	mmokit.Handle(gw.stage, damageHandler)
 
 	target := newTestShip(t, gw, 101, 100, 0)
 	caster := newTestShip(t, gw, 202, 100, 0)
 
-	targetE := mmokit.EntityByNetID(gw.Stage, target)
-	casterE := mmokit.EntityByNetID(gw.Stage, caster)
+	targetE := mmokit.EntityByNetID(gw.stage, target)
+	casterE := mmokit.EntityByNetID(gw.stage, caster)
 
 	gw.Damage(casterE, targetE, 25, 0, 0, 1)
 
@@ -50,14 +50,14 @@ func TestDamage_SameCell_AppliesViaSend(t *testing.T) {
 // handler reads the live Shield component on the dest cell.
 func TestDamage_BonusAppliedWhenShieldDown(t *testing.T) {
 	gw, _ := newTestGameWorld()
-	gw.Stage.SetGameWorld(gw)
-	mmokit.Handle(gw.Stage, damageHandler)
+	gw.stage.SetStateByName("game.GameWorld", gw)
+	mmokit.Handle(gw.stage, damageHandler)
 
 	target := newTestShip(t, gw, 101, 100, 0) // shield depleted (Current=0)
 	caster := newTestShip(t, gw, 202, 100, 0)
 
-	casterE := mmokit.EntityByNetID(gw.Stage, caster)
-	targetE := mmokit.EntityByNetID(gw.Stage, target)
+	casterE := mmokit.EntityByNetID(gw.stage, caster)
+	targetE := mmokit.EntityByNetID(gw.stage, target)
 
 	// Base 10 + bonus 15 = 25 since shield is 0.
 	gw.Damage(casterE, targetE, 10, 15, 0, 1)
@@ -71,14 +71,14 @@ func TestDamage_BonusAppliedWhenShieldDown(t *testing.T) {
 // shield > 0, the bonus is NOT added. Shield absorbs the base damage.
 func TestDamage_BonusSuppressedWhenShieldUp(t *testing.T) {
 	gw, _ := newTestGameWorld()
-	gw.Stage.SetGameWorld(gw)
-	mmokit.Handle(gw.Stage, damageHandler)
+	gw.stage.SetStateByName("game.GameWorld", gw)
+	mmokit.Handle(gw.stage, damageHandler)
 
 	target := newTestShip(t, gw, 101, 100, 50) // shield Current=50
 	caster := newTestShip(t, gw, 202, 100, 0)
 
-	casterE := mmokit.EntityByNetID(gw.Stage, caster)
-	targetE := mmokit.EntityByNetID(gw.Stage, target)
+	casterE := mmokit.EntityByNetID(gw.stage, caster)
+	targetE := mmokit.EntityByNetID(gw.stage, target)
 
 	// Base 10, bonus 15. Shield up → bonus suppressed; only 10 dmg applied.
 	gw.Damage(casterE, targetE, 10, 15, 0, 1)
@@ -101,12 +101,12 @@ func TestDamage_BonusSuppressedWhenShieldUp(t *testing.T) {
 // can read it.
 func newTestShip(t *testing.T, gw *GameWorld, netID uint32, healthMax, shieldCurrent float32) uint32 {
 	t.Helper()
-	w := gw.Stage.ECSWorld()
+	w := gw.stage.ECSWorld()
 	netIDMapper := ecs.NewMap1[mmokit.NetworkID](w)
 	handle := w.NewEntity()
 	netIDMapper.Add(handle, &mmokit.NetworkID{ID: netID})
-	gw.Stage.RegisterLiveNetID(netID, handle)
-	e := mmokit.EntityByNetID(gw.Stage, netID)
+	gw.stage.RegisterLiveNetID(netID, handle)
+	e := mmokit.EntityByNetID(gw.stage, netID)
 	mmokit.Set(e, mmokit.Position{X: 0, Y: 0})
 	mmokit.Set(e, gamecomp.Health{Current: healthMax, Max: healthMax})
 	mmokit.Set(e, gamecomp.Shield{Current: shieldCurrent, Max: 200})
@@ -120,7 +120,7 @@ func newTestShip(t *testing.T, gw *GameWorld, netID uint32, healthMax, shieldCur
 func newTestNPC(t *testing.T, gw *GameWorld, netID uint32, kindType uint8) uint32 {
 	t.Helper()
 	id := newTestShip(t, gw, netID, 100, 0)
-	mmokit.Set(mmokit.EntityByNetID(gw.Stage, id), mmokit.EntityKind{Type: kindType})
+	mmokit.Set(mmokit.EntityByNetID(gw.stage, id), mmokit.EntityKind{Type: kindType})
 	return id
 }
 
@@ -132,7 +132,7 @@ func newTestPlayerShip(t *testing.T, gw *GameWorld, netID uint32, username strin
 	t.Helper()
 	connID := netID
 	id := newTestShip(t, gw, netID, 100, 0)
-	mmokit.Set(mmokit.EntityByNetID(gw.Stage, id), mmokit.PlayerConn{ConnID: connID})
+	mmokit.Set(mmokit.EntityByNetID(gw.stage, id), mmokit.PlayerConn{ConnID: connID})
 	gw.Players.RegisterPlayer(connID, username)
 	return id
 }

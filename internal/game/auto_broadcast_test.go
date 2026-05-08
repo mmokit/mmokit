@@ -15,20 +15,20 @@ import (
 // queue push).
 func TestAutoBroadcast_SameCell_PostHandler(t *testing.T) {
 	gw, _ := newTestGameWorld()
-	gw.Stage.SetGameWorld(gw)
-	mmokit.Handle(gw.Stage, damageHandler)
+	gw.stage.SetStateByName("game.GameWorld", gw)
+	mmokit.Handle(gw.stage, damageHandler)
 
 	target := newTestShip(t, gw, 101, 100, 0)
 	caster := newTestShip(t, gw, 202, 100, 0)
-	targetE := mmokit.EntityByNetID(gw.Stage, target)
-	casterE := mmokit.EntityByNetID(gw.Stage, caster)
+	targetE := mmokit.EntityByNetID(gw.stage, target)
+	casterE := mmokit.EntityByNetID(gw.stage, caster)
 
 	// Drain any events queued during test setup before we exercise the path.
-	gw.Stage.BroadcastQueue().Drain()
+	gw.stage.BroadcastQueue().Drain()
 
 	targetE.Send(&Damage{Amount: 25, Source: casterE, Slot: 0, AbilityType: 1})
 
-	events := gw.Stage.BroadcastQueue().Drain()
+	events := gw.stage.BroadcastQueue().Drain()
 	if len(events) != 1 {
 		t.Fatalf("broadcast queue: got %d events, want 1", len(events))
 	}
@@ -49,7 +49,7 @@ func TestAutoBroadcast_SameCell_PostHandler(t *testing.T) {
 
 	// Decode the body back and confirm post-handler state (Dealt populated).
 	var decoded Damage
-	pkguniverse.ReflectUnmarshalOnStage(gw.Stage, e.Body, &decoded)
+	pkguniverse.ReflectUnmarshalOnStage(gw.stage, e.Body, &decoded)
 	if decoded.Dealt <= 0 {
 		t.Errorf("Dealt = %v, want >0 (handler should have populated it before broadcast push)", decoded.Dealt)
 	}
@@ -66,17 +66,17 @@ func TestAutoBroadcast_SameCell_PostHandler(t *testing.T) {
 // CurrencyUpdate event from the handler, not the message itself.
 func TestAutoBroadcast_Internal_DoesNotBroadcast(t *testing.T) {
 	gw, _ := newTestGameWorld()
-	gw.Stage.SetGameWorld(gw)
-	mmokit.Handle(gw.Stage, killCreditHandler)
+	gw.stage.SetStateByName("game.GameWorld", gw)
+	mmokit.Handle(gw.stage, killCreditHandler)
 
 	killer := newTestPlayerShip(t, gw, 303, "alice")
-	killerE := mmokit.EntityByNetID(gw.Stage, killer)
+	killerE := mmokit.EntityByNetID(gw.stage, killer)
 
-	gw.Stage.BroadcastQueue().Drain() // baseline
+	gw.stage.BroadcastQueue().Drain() // baseline
 
 	killerE.Send(&KillCredit{Currency: 1, Amount: 50})
 
-	events := gw.Stage.BroadcastQueue().Drain()
+	events := gw.stage.BroadcastQueue().Drain()
 	if len(events) != 0 {
 		t.Fatalf("HandleAllInternal should suppress broadcast: got %d events (%v)", len(events), events)
 	}

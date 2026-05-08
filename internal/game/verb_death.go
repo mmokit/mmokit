@@ -79,7 +79,7 @@ func killCreditHandler(killer mmokit.Entity, msg *KillCredit) {
 	gw.eng.Log.Log(CatEconomyLoot, "kill credit: player=%s currency=%d amount=%d balance=%d",
 		s.Username, msg.Currency, msg.Amount, pdata.GetCurrency(msg.Currency))
 
-	mmokit.SendEvent(gw.Stage, conn.ConnID, &CurrencyUpdate{
+	mmokit.SendEvent(gw.stage, conn.ConnID, &CurrencyUpdate{
 		CurrencyID: msg.Currency,
 		Balance:    pdata.GetCurrency(msg.Currency),
 		Earned:     msg.Amount,
@@ -105,7 +105,7 @@ func (gw *GameWorld) handlePlayerKilled(target mmokit.Entity, killer mmokit.Enti
 	// Caller (killedHandler) verified PlayerConn presence via mmokit.Has[PlayerConn].
 	connID := mmokit.Get[mmokit.PlayerConn](target).ConnID
 
-	mmokit.SendEvent(gw.Stage, connID, &PlayerDied{KillerID: killer.NetID()})
+	mmokit.SendEvent(gw.stage, connID, &PlayerDied{KillerID: killer.NetID()})
 
 	if s := gw.Players.ByConnID(connID); s != nil {
 		if s.Username != "" {

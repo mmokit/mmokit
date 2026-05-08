@@ -13,16 +13,16 @@ import (
 // re-fire on subsequent ticks (DeathFired idempotence).
 func TestDeathObserver_FiresOnceWhenHealthZero(t *testing.T) {
 	gw, _ := newTestGameWorld()
-	gw.Stage.SetGameWorld(gw)
+	gw.stage.SetStateByName("game.GameWorld", gw)
 
 	var killedFires int
-	mmokit.Handle(gw.Stage, func(target mmokit.Entity, msg *Killed) {
+	mmokit.Handle(gw.stage, func(target mmokit.Entity, msg *Killed) {
 		killedFires++
 	})
-	mmokit.OnTickEach(gw.Stage, deathObserver)
+	mmokit.OnTickEach(gw.stage, deathObserver)
 
 	target := newTestShip(t, gw, 101, 100, 0)
-	targetE := mmokit.EntityByNetID(gw.Stage, target)
+	targetE := mmokit.EntityByNetID(gw.stage, target)
 	h := mmokit.Get[gamecomp.Health](targetE)
 	if h == nil {
 		t.Fatal("Health missing on test ship")
@@ -31,7 +31,7 @@ func TestDeathObserver_FiresOnceWhenHealthZero(t *testing.T) {
 	h.LastDamagedByNetID = 0 // unattributed death
 
 	// Drive 3 ticks; Killed should fire on tick 1 and not refire.
-	runTickCallbacks(t, gw.Stage, 3)
+	runTickCallbacks(t, gw.stage, 3)
 
 	if killedFires != 1 {
 		t.Fatalf("Killed fired %d times, want exactly 1", killedFires)

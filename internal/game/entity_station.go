@@ -28,19 +28,19 @@ const (
 
 // SpawnStation creates the trade station entity in the station cell.
 func (gw *GameWorld) SpawnStation() {
-	handle := gw.SpawnEntity(
+	handle := gw.stage.SpawnEntity(
 		mmokit.Position{X: StationLocalX, Y: StationLocalY},
 		mmokit.WithEntityKind(gamecomp.KindStation),
 		mmokit.WithCollider(gw.Config.StationRadius),
 		mmokit.WithComponents(),
 	)
-	entity := mmokit.EntityFromECS(gw.Stage, handle)
+	entity := mmokit.EntityFromECS(gw.stage, handle)
 	gw.eng.Log.Log(CatPlayerSpawn, "station spawned: netID=%d pos=(%.1f,%.1f)", entity.NetID(), StationLocalX, StationLocalY)
 }
 
 // CollectStationMapData returns map marker data for all stations in the world.
 func (gw *GameWorld) CollectStationMapData() []MapStationInfo {
-	filter := ecs.NewFilter3[gamecomp.Station, mmokit.Position, mmokit.CellCoord](gw.Stage.ECSWorld())
+	filter := ecs.NewFilter3[gamecomp.Station, mmokit.Position, mmokit.CellCoord](gw.stage.ECSWorld())
 	query := filter.Query()
 	defer query.Close() // ark holds a world write-lock for the duration of an
 	// open query; a panic in the loop body would otherwise leak the lock and

@@ -28,14 +28,6 @@ func main() {
 		StaticFS:      webFS,
 		AnonymousAuth: true,
 		Protocol:      mmokit.NewProtocol("simple"),
-		OnInit: func(stage *mmokit.Stage) {
-			const count = 60
-			const span = 1200.0
-			for i := range count {
-				x := float32(i) * (span / float32(count-1))
-				stage.SpawnEntity(mmokit.Position{X: x, Y: 0})
-			}
-		},
 	})
 
 	process.AddSystem(mmokit.NewSystem(&SineWaveSystem{}))

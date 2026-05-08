@@ -63,17 +63,14 @@ func damageHandler(target mmokit.Entity, msg *Damage) {
 }
 
 // gameWorldOfEntity returns the *GameWorld bound to the entity's stage.
-// Returns nil if the entity has no stage or the stage's world is not a
-// *GameWorld (test stages without a world).
+// Returns nil if the entity has no stage. Panics if GameWorld is not
+// registered as cell-local state — that's a programmer error.
 func gameWorldOfEntity(e mmokit.Entity) *GameWorld {
 	stage := e.Stage()
 	if stage == nil {
 		return nil
 	}
-	if gw, ok := stage.GameWorld().(*GameWorld); ok {
-		return gw
-	}
-	return nil
+	return mmokit.State[GameWorld](stage)
 }
 
 // RegisterDamageVerb wires the damage handler onto every Stage owned by

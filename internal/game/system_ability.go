@@ -27,17 +27,19 @@ type abilityAction struct {
 
 // AbilitySystem processes ability casts using equipment-driven ability parameters.
 type AbilitySystem struct {
-	mmokit.SystemBase[*GameWorld]
+	mmokit.SystemBase
+	gw       *GameWorld
 	entities mmokit.Query[abilityBundle]
 	deferred []abilityAction
 }
 
 func (s *AbilitySystem) Init() {
+	s.gw = mmokit.State[GameWorld](s.Stage())
 	s.deferred = make([]abilityAction, 0, 16)
 }
 
 func (s *AbilitySystem) Update(dt float32) {
-	gw := s.World()
+	gw := s.gw
 
 	s.deferred = s.deferred[:0]
 
@@ -55,7 +57,7 @@ func (s *AbilitySystem) Update(dt float32) {
 			continue
 		}
 
-		casterE := mmokit.EntityFromECS(gw.Stage, entity)
+		casterE := mmokit.EntityFromECS(gw.stage, entity)
 		casterNetID := casterE.NetID()
 
 		for slot := range uint8(gamecomp.AbilityCount) {
@@ -79,7 +81,7 @@ func (s *AbilitySystem) Update(dt float32) {
 			// activation validates the target inside executeAbility.
 			isMiningToggle := params.Type == item.AbilityTypeMiningBeam
 			if slot <= gamecomp.AbilityR && !isMiningToggle {
-				if !lock.Locked || !gw.Stage.ECSWorld().Alive(lock.TargetEntity) {
+				if !lock.Locked || !gw.stage.ECSWorld().Alive(lock.TargetEntity) {
 					continue
 				}
 				if params.Range > 0 && !s.inRange(entity, lock.TargetEntity, params.Range) {
@@ -143,9 +145,9 @@ func resolveAbilityParams(equip *gamecomp.Equipment, slot uint8) *item.AbilityPa
 }
 
 func (s *AbilitySystem) executeAbility(action abilityAction) bool {
-	gw := s.World()
+	gw := s.gw
 	entity := action.caster
-	casterE := mmokit.EntityFromECS(gw.Stage, entity)
+	casterE := mmokit.EntityFromECS(gw.stage, entity)
 
 	if !casterE.Alive() {
 		return false
@@ -160,9 +162,9 @@ func (s *AbilitySystem) executeAbility(action abilityAction) bool {
 	// --- Hitscan damage abilities ---
 	case item.AbilityTypePulseLaser, item.AbilityTypePulseBarrage,
 		item.AbilityTypeRailShot, item.AbilityTypeIonOverload, item.AbilityTypePlasmaBolt:
-		target := mmokit.EntityByNetID(gw.Stage, lock.TargetNetID)
+		target := mmokit.EntityByNetID(gw.stage, lock.TargetNetID)
 		if target.Alive() {
-			caster := mmokit.EntityByNetID(gw.Stage, action.casterNetID)
+			caster := mmokit.EntityByNetID(gw.stage, action.casterNetID)
 			gw.Damage(caster, target, params.Damage, 0, action.slot, uint8(params.Type))
 			gw.eng.Log.Log(CatCombatAbility, "ability %s: %d -> %d dmg=%.0f",
 				params.Name, action.casterNetID, lock.TargetNetID, params.Damage)
@@ -170,9 +172,9 @@ func (s *AbilitySystem) executeAbility(action abilityAction) bool {
 
 	// --- Hitscan + bonus vs unshielded ---
 	case item.AbilityTypePiercingRound, item.AbilityTypePlasmaTorpedo:
-		target := mmokit.EntityByNetID(gw.Stage, lock.TargetNetID)
+		target := mmokit.EntityByNetID(gw.stage, lock.TargetNetID)
 		if target.Alive() {
-			caster := mmokit.EntityByNetID(gw.Stage, action.casterNetID)
+			caster := mmokit.EntityByNetID(gw.stage, action.casterNetID)
 			gw.Damage(caster, target, params.Damage, params.BonusDamage, action.slot, uint8(params.Type))
 			gw.eng.Log.Log(CatCombatAbility, "ability %s: %d -> %d dmg=%.0f",
 				params.Name, action.casterNetID, lock.TargetNetID, params.Damage)
@@ -180,9 +182,9 @@ func (s *AbilitySystem) executeAbility(action abilityAction) bool {
 
 	// --- DoT debuff ---
 	case item.AbilityTypeIonBurn:
-		target := mmokit.EntityByNetID(gw.Stage, lock.TargetNetID)
+		target := mmokit.EntityByNetID(gw.stage, lock.TargetNetID)
 		if target.Alive() {
-			caster := mmokit.EntityByNetID(gw.Stage, action.casterNetID)
+			caster := mmokit.EntityByNetID(gw.stage, action.casterNetID)
 			gw.ApplyStatus(caster, target, gamecomp.StatusIonBurn,
 				params.DotDuration, params.DotDPS, action.slot, uint8(params.Type))
 			gw.eng.Log.Log(CatCombatAbility, "ability %s: %d -> %d (%.1f dps for %.1fs)",
@@ -221,7 +223,7 @@ func (s *AbilitySystem) executeAbility(action abilityAction) bool {
 			gw.eng.Log.Log(CatEconomyMining, "mining beam off: %d beam=%d", action.casterNetID, beamIdx)
 		} else {
 			// Toggle on — require lock and validate target is minable
-			lockTarget := mmokit.EntityFromECS(gw.Stage, lock.TargetEntity)
+			lockTarget := mmokit.EntityFromECS(gw.stage, lock.TargetEntity)
 			if !lock.Locked || !lockTarget.Alive() || !mmokit.Has[gamecomp.Minable](lockTarget) {
 				fired = false
 				break
@@ -255,7 +257,7 @@ func (s *AbilitySystem) executeAbility(action abilityAction) bool {
 		beam := &laser.Beams[beamIdx]
 
 		// Require active mining beam
-		laserTarget := mmokit.EntityFromECS(gw.Stage, laser.Target)
+		laserTarget := mmokit.EntityFromECS(gw.stage, laser.Target)
 		if !beam.Active || !laserTarget.Alive() {
 			fired = false
 			break
@@ -301,8 +303,8 @@ func (s *AbilitySystem) executeAbility(action abilityAction) bool {
 		// authoritative cell; we still decrement the local replica copy
 		// for immediate caster-side visual feedback.
 		asteroidNetID := laserTarget.NetID()
-		asteroid := mmokit.EntityByNetID(gw.Stage, asteroidNetID)
-		caster := mmokit.EntityByNetID(gw.Stage, action.casterNetID)
+		asteroid := mmokit.EntityByNetID(gw.stage, asteroidNetID)
+		caster := mmokit.EntityByNetID(gw.stage, action.casterNetID)
 
 		if !asteroid.Local() {
 			// Replica: optimistic local decrement; handler runs on the
@@ -335,9 +337,9 @@ func (s *AbilitySystem) slotToBeamIndex(slot uint8) int {
 }
 
 func (s *AbilitySystem) inRange(caster, target ecs.Entity, abilityRange float32) bool {
-	gw := s.World()
-	casterE := mmokit.EntityFromECS(gw.Stage, caster)
-	targetE := mmokit.EntityFromECS(gw.Stage, target)
+	gw := s.gw
+	casterE := mmokit.EntityFromECS(gw.stage, caster)
+	targetE := mmokit.EntityFromECS(gw.stage, target)
 	casterPos := mmokit.Get[mmokit.Position](casterE)
 	targetPos := mmokit.Get[mmokit.Position](targetE)
 	if casterPos == nil || targetPos == nil {

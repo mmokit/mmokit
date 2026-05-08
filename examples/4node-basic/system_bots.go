@@ -18,7 +18,7 @@ import (
 // KindComponent, so a bot crossing a cell seam mid-wander arrives on the
 // neighbor with its countdown intact.
 type BotSystem struct {
-	mmokit.SystemBase[*mmokit.Stage]
+	mmokit.SystemBase
 
 	bots mmokit.Query[BotComponents]
 }
@@ -34,7 +34,7 @@ func (s *BotSystem) Update(dt float32) {
 	// wandering across the entire original cell space even after it
 	// splits, so they naturally cross child-cell boundaries and exercise
 	// the cross-cell handoff protocol.
-	origin := s.World().Cell()
+	origin := s.Stage().Cell()
 	for origin.Depth > 0 {
 		origin = origin.Parent()
 	}
