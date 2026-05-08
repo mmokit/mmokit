@@ -39,6 +39,7 @@ import (
 	"github.com/zenion/mmoserver/pkg/logger"
 	"github.com/zenion/mmoserver/pkg/net"
 	"github.com/zenion/mmoserver/pkg/ops"
+	"github.com/zenion/mmoserver/pkg/service"
 	"github.com/zenion/mmoserver/pkg/services/auth"
 )
 
@@ -371,11 +372,20 @@ func (g *Gateway) dispatchPostAuthAssignment(connID uint32, userID uuid.UUID, us
 		g.coord.registerAuthenticatedSession(userID, username, g.id, connID, sess.hostID, sess.cellID)
 	}
 
-	// Drive chat presence/subscription bookkeeping if the chat service
-	// is registered. Use g.process (set in both embedded and standalone
-	// build paths) rather than g.coord (nil for standalone gateways).
-	// On a standalone gateway,service process the chat service is local;
-	// on a coord+gateway colocated process the same path applies.
+	// Publish the session-enter event on the per-process bus. Any service
+	// (chat presence, future presence service, achievements) subscribed
+	// at Init time receives the event synchronously. No-op if Bus is nil
+	// (defensive — Bus is always constructed in Process.New, but standalone
+	// fixture tests may bypass that path).
+	if g.process != nil && g.process.bus != nil {
+		service.Publish(g.process.bus, service.SessionEnterEvent{
+			ConnID:    connID,
+			UserID:    userID.String(),
+			Username:  username,
+			GatewayID: g.id,
+		})
+	}
+	// chatHook path (legacy) — deleted in Task 9 of this phase.
 	if g.process != nil && g.process.chatHook != nil {
 		g.process.chatHook.OnSessionEnter(connID, userID.String(), username, g.id)
 	}
@@ -438,10 +448,21 @@ func (g *Gateway) handleDisconnect(evt net.PlayerEvent) {
 		}
 	}
 
-	// Drop chat presence/subscription state if the chat service is
-	// registered. Idempotent — chat tolerates unknown connIDs. Use
-	// g.process (set in both embedded and standalone paths) so this
-	// fires on standalone gateway,service processes too.
+	// Publish the session-leave event on the per-process bus. Subscribers
+	// (chat presence, future presence service, etc) drop per-conn state.
+	// Idempotent on the chat-side handler.
+	if g.process != nil && g.process.bus != nil {
+		userIDStr := ""
+		if sess.userID != uuid.Nil {
+			userIDStr = sess.userID.String()
+		}
+		service.Publish(g.process.bus, service.SessionLeaveEvent{
+			ConnID:    connID,
+			UserID:    userIDStr,
+			GatewayID: g.id,
+		})
+	}
+	// chatHook path (legacy) — deleted in Task 9 of this phase.
 	if g.process != nil && g.process.chatHook != nil {
 		g.process.chatHook.OnSessionLeave(connID, g.id)
 	}
