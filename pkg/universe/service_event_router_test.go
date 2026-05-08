@@ -1,0 +1,53 @@
+package universe
+
+import (
+	"reflect"
+	"testing"
+)
+
+func TestServiceEventRouter_UpdateAndSnapshot(t *testing.T) {
+	r := newServiceEventRouter()
+	r.UpdateProcess("proc-A", []string{"foo.Event", "bar.Event"})
+	r.UpdateProcess("proc-B", []string{"foo.Event"})
+	got := r.Snapshot()
+	want := map[string][]string{
+		"foo.Event": {"proc-A", "proc-B"},
+		"bar.Event": {"proc-A"},
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("snapshot mismatch:\n got=%v\nwant=%v", got, want)
+	}
+}
+
+func TestServiceEventRouter_UpdateReplacesWholeSet(t *testing.T) {
+	r := newServiceEventRouter()
+	r.UpdateProcess("proc-A", []string{"foo.Event", "bar.Event"})
+	r.UpdateProcess("proc-A", []string{"baz.Event"}) // bar/foo dropped
+	got := r.Snapshot()
+	if len(got["foo.Event"]) != 0 || len(got["bar.Event"]) != 0 {
+		t.Fatalf("update didn't drop previous entries: %v", got)
+	}
+	if len(got["baz.Event"]) != 1 || got["baz.Event"][0] != "proc-A" {
+		t.Fatalf("update didn't add new entry: %v", got)
+	}
+}
+
+func TestServiceEventRouter_RemoveProcess(t *testing.T) {
+	r := newServiceEventRouter()
+	r.UpdateProcess("proc-A", []string{"foo.Event"})
+	r.UpdateProcess("proc-B", []string{"foo.Event"})
+	r.RemoveProcess("proc-A")
+	got := r.Snapshot()
+	if len(got["foo.Event"]) != 1 || got["foo.Event"][0] != "proc-B" {
+		t.Fatalf("RemoveProcess didn't drop A: %v", got)
+	}
+}
+
+func TestServiceEventRouter_EmptyTypeNamesRemoves(t *testing.T) {
+	r := newServiceEventRouter()
+	r.UpdateProcess("proc-A", []string{"foo.Event"})
+	r.UpdateProcess("proc-A", nil)
+	if len(r.Snapshot()) != 0 {
+		t.Fatalf("empty typeNames should remove process")
+	}
+}
