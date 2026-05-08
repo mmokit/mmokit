@@ -161,6 +161,13 @@ func (c *Process) startServices(ctx context.Context) error {
 		}
 	}
 
+	// Force-flush the bus subscription set to coord. Init may have
+	// registered Subscribe handlers; we want them visible cluster-wide
+	// before announceServices triggers the first PeerList rebroadcast.
+	if c.bus != nil {
+		c.sendServiceEventSubscribe(c.bus.SubscribedTypeNames())
+	}
+
 	return c.announceServices()
 }
 

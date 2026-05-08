@@ -15,6 +15,8 @@ package universe
 
 import (
 	"fmt"
+	"sync"
+	"time"
 
 	meshpb "github.com/zenion/mmoserver/gen/go/meshpb"
 	"github.com/zenion/mmoserver/pkg/service"
@@ -88,6 +90,77 @@ func (c *Process) localHostNetwork() *HostNetwork {
 		}
 	}
 	return nil
+}
+
+// installSubscriptionFlush wires a SubscriptionFlushFunc into c.bus that
+// debounces (50ms) and ships a ServiceEventSubscribe HostMessage to coord
+// over MeshControl.
+//
+// Debounce: a service.Init that calls Subscribe[T1], Subscribe[T2], ...
+// fires the flush per-call; we want one wire message after the last one
+// settles, not N. The debounce window is short enough that no in-flight
+// publisher misses a fresh subscriber for long.
+func (c *Process) installSubscriptionFlush() {
+	if c.bus == nil {
+		return
+	}
+	var (
+		mu      sync.Mutex
+		timer   *time.Timer
+		pending []string
+	)
+	flushNow := func() {
+		mu.Lock()
+		set := append([]string(nil), pending...)
+		pending = nil
+		timer = nil
+		mu.Unlock()
+		c.sendServiceEventSubscribe(set)
+	}
+	c.bus.SetSubscriptionFlush(func(typeNames []string) {
+		mu.Lock()
+		pending = typeNames
+		if timer == nil {
+			timer = time.AfterFunc(50*time.Millisecond, flushNow)
+		}
+		mu.Unlock()
+	})
+}
+
+// sendServiceEventSubscribe ships a HostMessage.ServiceEventSubscribe to
+// coord. On a coordinator-bearing process the message is delivered in-
+// process (the router's UpdateProcess is called directly + a PeerList
+// re-broadcast triggered). Remote-host / standalone-gateway processes
+// route via their MeshControl client.
+func (c *Process) sendServiceEventSubscribe(typeNames []string) {
+	procID := c.processID()
+	// In-process path: coord lives here.
+	if c.serviceEventRouter != nil && c.assignmentEngine != nil {
+		c.serviceEventRouter.UpdateProcess(procID, typeNames)
+		c.broadcastPeerListOnServiceChange()
+		return
+	}
+	// Wire path: send via MeshControl.
+	msg := &meshpb.HostMessage{
+		Msg: &meshpb.HostMessage_ServiceEventSubscribe{
+			ServiceEventSubscribe: &meshpb.ServiceEventSubscribe{
+				TypeNames: append([]string(nil), typeNames...),
+			},
+		},
+	}
+	if c.controlClient != nil {
+		if err := c.controlClient.send(msg); err != nil {
+			c.Log.Log(CatServicesBus, "ServiceEventSubscribe send failed: %v", err)
+		}
+		return
+	}
+	if c.gateway != nil && c.gateway.controlClient != nil {
+		if err := c.gateway.controlClient.send(msg); err != nil {
+			c.Log.Log(CatServicesBus, "ServiceEventSubscribe send (gateway) failed: %v", err)
+		}
+		return
+	}
+	c.Log.Log(CatServicesBus, "ServiceEventSubscribe: no controlClient, dropping (procID=%s)", procID)
 }
 
 // processID returns the stable per-process identifier used by the Bus

@@ -657,6 +657,20 @@ func (s *meshControlServer) handleGatewayControl(stream meshpb.MeshControl_Contr
 					s.coord.broadcastPeerListOnServiceChange()
 				}
 
+			case *meshpb.HostMessage_ServiceEventSubscribe:
+				// Service event bus: a standalone gateway (or gateway,service)
+				// process announced its complete type-set. Whole-set replace
+				// keyed on the gateway ID; empty drops the entry. Mirrors the
+				// host-stream handler so subscriptions originating on
+				// gateway-bearing processes populate the routing table.
+				sub := v.ServiceEventSubscribe
+				if sub != nil && s.coord.serviceEventRouter != nil {
+					s.coord.serviceEventRouter.UpdateProcess(gatewayID, sub.GetTypeNames())
+					s.log.Log(CatServicesBus, "coordinator: gw %s subscribes to %d types: %v",
+						gatewayID, len(sub.GetTypeNames()), sub.GetTypeNames())
+					s.coord.broadcastPeerListOnServiceChange()
+				}
+
 			case *meshpb.HostMessage_CommandResponse:
 				// gateway,service replied to a CommandRequest the coord sent.
 				// Deliver to the in-flight orchestrator. Mirrors the host-stream
