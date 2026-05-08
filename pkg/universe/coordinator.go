@@ -1311,6 +1311,15 @@ func (c *Process) Roles() Roles {
 	return c.roles
 }
 
+// Bus returns the per-process service event bus. Initialized in New;
+// safe to call before Build. Exposed so external callers (tests,
+// game-side wiring) can publish or subscribe directly without going
+// through a service.Context. Cross-process fan-out is wired in Build,
+// so for full distributed semantics call this after Build returns.
+func (c *Process) Bus() *service.Bus {
+	return c.bus
+}
+
 // ServesClients reports whether this process terminates client WebSocket
 // connections. True when RoleGateway is in the role set. Use this to gate
 // the WebSocket + UDP listeners in main.go so that pure-control-plane and

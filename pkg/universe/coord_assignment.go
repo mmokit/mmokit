@@ -26,6 +26,22 @@ type assignmentEngine struct {
 	ctrl     *meshControlServer
 	log      *logger.Logger
 
+	// broadcastMu serializes broadcastPeerList. Without it, concurrent
+	// broadcasts (rebalance + service-change + cell-transfer commit, etc.)
+	// race on coord.bus.SetRoutingCache: each broadcast takes an
+	// independent snapshot of serviceEventRouter at start, then races to
+	// publish its (potentially stale) view. Whichever SetRoutingCache
+	// call wins last sticks — even if its snapshot was older. Holding
+	// broadcastMu across each broadcast forces strict ordering: the
+	// LATER broadcast always re-snapshots after the prior finishes, so
+	// its view is fresher and no stale state can overwrite a current one.
+	//
+	// Held independently of `mu` (which guards the settle counters).
+	// Network sends inside broadcastPeerList are non-trivial latency so
+	// this lock can be held for milliseconds — that's acceptable; topology
+	// broadcasts are infrequent (rebalance, service-change, host-up/down).
+	broadcastMu sync.Mutex
+
 	mu              sync.Mutex
 	firstRegistered bool
 	settleDeadline  time.Time
@@ -483,6 +499,11 @@ func (e *assignmentEngine) buildPeerList() *meshpb.CoordMessage {
 // host. Called after rebalance() and after reassignOrphanedCells()
 // so every node has a fresh peer roster + cell ownership view.
 func (e *assignmentEngine) broadcastPeerList() {
+	// Serialize against concurrent callers (rebalance, service-change,
+	// commit paths, etc.). See broadcastMu's docstring for why.
+	e.broadcastMu.Lock()
+	defer e.broadcastMu.Unlock()
+
 	msg := e.buildPeerList()
 	live := e.registry.LiveHosts()
 	sent := 0
