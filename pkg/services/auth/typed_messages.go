@@ -113,6 +113,12 @@ type AuthValidateTokenResponse struct {
 type AuthLogoutRequest struct{}
 
 type AuthLogoutResponse struct {
+	// UserID + Username carry the identity of the session that was just
+	// revoked, so cross-process subscribers (e.g. AuthLogoutEvent on the
+	// service bus) can act on a real principal instead of an empty
+	// string. Populated from the resolved Session row pre-revoke.
+	UserID       string
+	Username     string
 	ErrorCode    uint32
 	ErrorMessage string
 }

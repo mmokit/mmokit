@@ -275,12 +275,26 @@ func (s *Service) handleLogout(opCtx *ops.OpContext, _ *AuthLogoutRequest) (*Aut
 	ctx := context.Background()
 	sess, err := s.repo.GetSession(ctx, h)
 	if err != nil {
+		// Unknown / already-revoked session: client is effectively
+		// logged out already. Return an empty response (no identity
+		// available without a session row).
 		return &AuthLogoutResponse{}, nil
+	}
+	// Resolve the username before revoking — subscribers to
+	// AuthLogoutEvent (presence services, audit fan-out, etc) need
+	// identity, not just the connID. Username lookup is best-effort:
+	// failure here doesn't block the logout.
+	var username string
+	if user, lookupErr := s.repo.GetUserByID(ctx, sess.UserID); lookupErr == nil {
+		username = user.Username
 	}
 	_ = s.repo.RevokeSession(ctx, h)
 	s.audit(opCtx, "logout", sess.UserID, "", nil)
 	s.ctx.Logger.Log(logCat, "logout: user=%s", sess.UserID)
-	return &AuthLogoutResponse{}, nil
+	return &AuthLogoutResponse{
+		UserID:   sess.UserID.String(),
+		Username: username,
+	}, nil
 }
 
 // --- handleChangePassword ---

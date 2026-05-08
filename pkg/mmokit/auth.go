@@ -112,15 +112,27 @@ func RegisterAuthService(p *universe.Process, opts AuthOpts) error {
 			// populates authStates synchronously inline (Bus is process-local
 			// synchronous). The nil-guard tolerates fixture tests that
 			// bypass Process.New (Bus is constructed in New, not Build).
+			//
+			// Phase 3 hard prereq #2: drop+log the publish if GatewayID is
+			// empty. Auth ops are RouteGatewayLocal so this should never fire
+			// in practice — but Phase 3 federation uses GatewayID as a session
+			// routing key, so an empty value is a programmer error worth
+			// surfacing loudly rather than silently shipping a useless event.
 			if bus := liveService.Bus(); bus != nil {
-				service.Publish(bus, service.AuthLoginSucceededEvent{
-					UserID:       resp.UserID,
-					Username:     resp.Username,
-					SessionToken: resp.SessionToken,
-					ExpiresAtMs:  resp.ExpiresAtMs,
-					ConnID:       opCtx.ConnID,
-					GatewayID:    p.GatewayID(),
-				})
+				gwID := p.GatewayID()
+				if gwID == "" {
+					p.Log.Log(universe.CatServicesBus,
+						"auth: AuthLoginSucceededEvent skipped — GatewayID empty (non-gateway publisher?)")
+				} else {
+					service.Publish(bus, service.AuthLoginSucceededEvent{
+						UserID:       resp.UserID,
+						Username:     resp.Username,
+						SessionToken: resp.SessionToken,
+						ExpiresAtMs:  resp.ExpiresAtMs,
+						ConnID:       opCtx.ConnID,
+						GatewayID:    gwID,
+					})
+				}
 			}
 			return resp, nil
 		})
@@ -137,15 +149,26 @@ func RegisterAuthService(p *universe.Process, opts AuthOpts) error {
 			// AuthLoginSucceededEvent (for session-state services like the
 			// gateway's authStates map) AND AuthRegisteredEvent (for
 			// first-login-only services like welcome packs / achievements).
+			//
+			// Phase 3 hard prereq #2: see AuthLogin handler above for the
+			// GatewayID-empty rationale. AuthRegisteredEvent has no
+			// GatewayID field so it's published unconditionally; only the
+			// session-bearing event is gated.
 			if bus := liveService.Bus(); bus != nil {
-				service.Publish(bus, service.AuthLoginSucceededEvent{
-					UserID:       resp.UserID,
-					Username:     resp.Username,
-					SessionToken: resp.SessionToken,
-					ExpiresAtMs:  resp.ExpiresAtMs,
-					ConnID:       opCtx.ConnID,
-					GatewayID:    p.GatewayID(),
-				})
+				gwID := p.GatewayID()
+				if gwID == "" {
+					p.Log.Log(universe.CatServicesBus,
+						"auth: AuthLoginSucceededEvent skipped — GatewayID empty (non-gateway publisher?)")
+				} else {
+					service.Publish(bus, service.AuthLoginSucceededEvent{
+						UserID:       resp.UserID,
+						Username:     resp.Username,
+						SessionToken: resp.SessionToken,
+						ExpiresAtMs:  resp.ExpiresAtMs,
+						ConnID:       opCtx.ConnID,
+						GatewayID:    gwID,
+					})
+				}
 				service.Publish(bus, service.AuthRegisteredEvent{
 					UserID:   resp.UserID,
 					Username: resp.Username,
@@ -166,14 +189,22 @@ func RegisterAuthService(p *universe.Process, opts AuthOpts) error {
 			// already has one — so SessionToken is intentionally empty. The
 			// gateway subscriber preserves its cached request-side token via
 			// the same convention the legacy NotifyValidateTokenSuccess used.
+			//
+			// Phase 3 hard prereq #2: see AuthLogin handler for rationale.
 			if bus := liveService.Bus(); bus != nil {
-				service.Publish(bus, service.AuthLoginSucceededEvent{
-					UserID:      resp.UserID,
-					Username:    resp.Username,
-					ExpiresAtMs: resp.ExpiresAtMs,
-					ConnID:      opCtx.ConnID,
-					GatewayID:   p.GatewayID(),
-				})
+				gwID := p.GatewayID()
+				if gwID == "" {
+					p.Log.Log(universe.CatServicesBus,
+						"auth: AuthLoginSucceededEvent (validate) skipped — GatewayID empty (non-gateway publisher?)")
+				} else {
+					service.Publish(bus, service.AuthLoginSucceededEvent{
+						UserID:      resp.UserID,
+						Username:    resp.Username,
+						ExpiresAtMs: resp.ExpiresAtMs,
+						ConnID:      opCtx.ConnID,
+						GatewayID:   gwID,
+					})
+				}
 			}
 			return resp, nil
 		})
@@ -186,15 +217,25 @@ func RegisterAuthService(p *universe.Process, opts AuthOpts) error {
 			if err != nil {
 				return nil, err
 			}
-			// Phase 2: AuthLogoutResponse does not carry UserID / Username —
-			// the auth handler intentionally omits them (the response is
-			// one-shot ack). Subscribers (gateway authStates lookup) resolve
-			// identity from their per-conn cache keyed by ConnID + GatewayID.
+			// Phase 3 hard prereq #3: AuthLogoutResponse now carries
+			// UserID + Username, populated by handleLogout from the
+			// pre-revoke Session lookup. Cross-process subscribers see
+			// real identity instead of empty strings.
+			//
+			// Phase 3 hard prereq #2: see AuthLogin handler for rationale.
 			if bus := liveService.Bus(); bus != nil {
-				service.Publish(bus, service.AuthLogoutEvent{
-					ConnID:    opCtx.ConnID,
-					GatewayID: p.GatewayID(),
-				})
+				gwID := p.GatewayID()
+				if gwID == "" {
+					p.Log.Log(universe.CatServicesBus,
+						"auth: AuthLogoutEvent skipped — GatewayID empty (non-gateway publisher?)")
+				} else {
+					service.Publish(bus, service.AuthLogoutEvent{
+						UserID:    resp.UserID,
+						Username:  resp.Username,
+						ConnID:    opCtx.ConnID,
+						GatewayID: gwID,
+					})
+				}
 			}
 			return resp, nil
 		})

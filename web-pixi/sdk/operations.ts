@@ -179,6 +179,8 @@ export class AuthLogoutRequest {
 /** Broadcast-eligible event auth.AuthLogoutResponse (typeID 0xb9984dd0). */
 export class AuthLogoutResponse {
   static readonly typeID = 0xb9984dd0;
+  userID: string = "";
+  username: string = "";
   errorCode: number = 0;
   errorMessage: string = "";
 
@@ -186,6 +188,14 @@ export class AuthLogoutResponse {
     const dv = new DataView(buf.buffer, buf.byteOffset, buf.byteLength);
     let off = 0;
     const m = new AuthLogoutResponse();
+    {
+      const sl = dv.getUint16(off, true); off += 2;
+      m.userID = new TextDecoder().decode(buf.subarray(off, off + sl)); off += sl;
+    }
+    {
+      const sl = dv.getUint16(off, true); off += 2;
+      m.username = new TextDecoder().decode(buf.subarray(off, off + sl)); off += sl;
+    }
     m.errorCode = dv.getUint32(off, true); off += 4;
     {
       const sl = dv.getUint16(off, true); off += 2;
