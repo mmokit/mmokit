@@ -2362,23 +2362,38 @@ func (c *Process) Start(parent ...context.Context) {
 		go node.Run(ctx)
 	}
 
-	// Run the OpRouter polling loop on processes that own client
-	// connections AND have ops to handle. RoleGateway is the gate for
-	// connection ownership; the run is harmless when no handlers are
-	// registered (just polls + ignores unknown codes). Starts after
-	// startServices so service handlers are already registered.
+	// Run the OpRouter polling loop on processes that own a typed-op
+	// drain surface — clients connected directly via WebSocket on a
+	// gateway, or gateway-forwarded sessions queued in the host's VCM.
+	// The run is harmless when no handlers are registered (just polls +
+	// ignores unknown codes). Starts after startServices so service
+	// handlers are already registered.
+	//
+	// Drain source selection:
+	//   - Remote host (c.vcm != nil): swap the router from the
+	//     placeholder WS ConnManager (set in main.go before role-aware
+	//     setup) to the VCM, which is where ClientInput frames forwarded
+	//     by the gateway actually queue. Without this swap the host
+	//     never drains its typed-op queue and BankRequest et al. hang.
+	//   - Otherwise (all-in-one, coord+gateway): keep the WS
+	//     ConnManager wired in by main.go.
 	//
 	// Skip the OpRouter when the gateway runs a per-conn pump
-	// (Gateway.runSessionPump). That pump drains the same opInput queue
-	// every 1ms and forks per-frame on RouteKind: RouteGatewayLocal ops
-	// dispatched inline, RoutePlayerCell ops forwarded to the player's
-	// host via MeshData. Running the OpRouter alongside the pump races
-	// the drain — the OpRouter's CellOpRouter path can't reach a remote
-	// cell (returns OperationError synchronously), so any RoutePlayerCell
-	// frame the OpRouter wins is lost. The pump's gate is g.hostNetwork
-	// != nil, so we mirror it here.
+	// (Gateway.runSessionPump). That pump drains the same WS opInput
+	// queue every 1ms and forks per-frame on RouteKind: RouteGatewayLocal
+	// ops dispatched inline, RoutePlayerCell ops forwarded to the
+	// player's host via MeshData. Running the OpRouter alongside the
+	// pump races the drain — the OpRouter's CellOpRouter path can't
+	// reach a remote cell (returns OperationError synchronously), so
+	// any RoutePlayerCell frame the OpRouter wins is lost. The pump's
+	// gate is g.hostNetwork != nil, so we mirror it here.
 	pumpOwnsDrain := c.gateway != nil && c.gateway.hostNetwork != nil
-	if c.cfg.OpRouter != nil && c.roles.Has(RoleGateway) && !pumpOwnsDrain {
+	hasGatewayClients := c.roles.Has(RoleGateway) && !pumpOwnsDrain
+	hasVCMClients := c.vcm != nil
+	if c.cfg.OpRouter != nil && (hasGatewayClients || hasVCMClients) {
+		if hasVCMClients {
+			c.cfg.OpRouter.SetDrainSource(c.vcm)
+		}
 		// Install the typed-op dispatcher. Every drained 0x01 frame is a
 		// typed-op request; DispatchTypedOpInbound routes it via the
 		// matching RegisterOp handler. The Process is passed as the

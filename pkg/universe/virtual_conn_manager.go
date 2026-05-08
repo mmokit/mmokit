@@ -258,6 +258,29 @@ func (v *VirtualConnManager) DrainOpInput(localID uint32) [][]byte {
 	return out
 }
 
+// ActiveConnIDs returns a snapshot of every registered VCM-local connID.
+// Used by the typed-op poll loop on host processes — the same drain
+// pattern the gateway uses against its WS ConnManager. Order is
+// unspecified.
+func (v *VirtualConnManager) ActiveConnIDs() []uint32 {
+	v.mu.RLock()
+	out := make([]uint32, 0, len(v.byLocal))
+	for id := range v.byLocal {
+		out = append(out, id)
+	}
+	v.mu.RUnlock()
+	return out
+}
+
+// RemoteAddrString satisfies the ops.DrainSource contract. The host
+// can't observe the original WS RemoteAddr — that lives at the gateway —
+// so this is always empty. Handlers that rely on ClientIP need the
+// gateway to forward it explicitly (e.g. through the OpContext bag);
+// today no handler does.
+func (v *VirtualConnManager) RemoteAddrString(localID uint32) string {
+	return ""
+}
+
 // ─── internal helpers ─────────────────────────────────────────────────────────
 
 // forwardToGateway wraps data in a MeshFrame.ClientFrame and sends it to the
