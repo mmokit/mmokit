@@ -1660,10 +1660,12 @@ func (c *Process) Build() {
 		if c.gatewayRegistry != nil {
 			c.gatewayRegistry.RegisterLocal(gwID, gwGrpcAddr)
 		}
-		// Now that the gateway exists, install the auth response hook
-		// queued by mmokit.RegisterAuthService at facade time. No-op if
-		// auth wasn't registered.
-		c.installPendingAuthHook()
+		// Now that the gateway exists, subscribe it to the bus so it
+		// observes auth login/logout events and populates authStates.
+		// Replaces the legacy installPendingAuthHook path (Phase 2 cutover).
+		if c.gateway != nil && c.bus != nil {
+			c.gateway.subscribeToAuthEvents(c.bus)
+		}
 		c.gateway.connMgr.OnUpgrade = c.gateway.onWSUpgrade
 	}
 
@@ -1881,9 +1883,11 @@ func (c *Process) buildStandaloneGateway() {
 	c.gateway.controlClient = newMeshGatewayClient(c.gateway, cfg.CoordinatorAddr)
 	_ = c.gateway.controlClient.Start(context.Background())
 
-	// Install any auth-response hook queued by mmokit.RegisterAuthService
+	// Subscribe the gateway to bus events queued by mmokit.RegisterAuthService
 	// at facade time, now that the gateway exists.
-	c.installPendingAuthHook()
+	if c.gateway != nil && c.bus != nil {
+		c.gateway.subscribeToAuthEvents(c.bus)
+	}
 	c.gateway.connMgr.OnUpgrade = c.gateway.onWSUpgrade
 
 	c.Log.Log(CatNetConn, "coordinator: standalone gateway %q -> coordinator %s (grpc=%s)", gwID, cfg.CoordinatorAddr, hn.Addr())

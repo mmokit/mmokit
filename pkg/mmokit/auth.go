@@ -94,15 +94,10 @@ func RegisterAuthService(p *universe.Process, opts AuthOpts) error {
 		return fmt.Errorf("RegisterAuthService: %w", err)
 	}
 
-	// Install the gateway hook (typed-op response interceptor) and capture
-	// the per-op success notifier so the typed-op handlers can drive the
-	// gateway's connID → auth-state map after every successful auth call.
-	hook := p.InstallGatewayAuthHook()
-
 	// Register the five typed-op auth handlers. All five are RouteGatewayLocal —
 	// auth ops never need cell-routed dispatch (no ECS access, no per-player
 	// cell affinity). The handlers wrap the live Service.Handle* methods and
-	// notify the gateway hook on success.
+	// publish bus events on success.
 	RegisterOp[auth.AuthLoginRequest, auth.AuthLoginResponse](RouteGatewayLocal,
 		func(opCtx *OpContext, req *auth.AuthLoginRequest) (*auth.AuthLoginResponse, error) {
 			if liveService == nil {
@@ -112,12 +107,10 @@ func RegisterAuthService(p *universe.Process, opts AuthOpts) error {
 			if err != nil {
 				return nil, err
 			}
-			hook.NotifyLoginSuccess(opCtx.ConnID, resp)
-			// Phase 2 additive: publish AuthLoginSucceededEvent on the
-			// per-process bus alongside the legacy hook. No subscriber is
-			// wired yet (Task 5 wires the gateway subscribe + drops the
-			// legacy hook in one atomic commit), so this has no observable
-			// effect today. The nil-guard tolerates fixture tests that
+			// Phase 2: publish AuthLoginSucceededEvent on the per-process
+			// bus. The gateway subscribes via subscribeToAuthEvents and
+			// populates authStates synchronously inline (Bus is process-local
+			// synchronous). The nil-guard tolerates fixture tests that
 			// bypass Process.New (Bus is constructed in New, not Build).
 			if bus := liveService.Bus(); bus != nil {
 				service.Publish(bus, service.AuthLoginSucceededEvent{
@@ -140,10 +133,9 @@ func RegisterAuthService(p *universe.Process, opts AuthOpts) error {
 			if err != nil {
 				return nil, err
 			}
-			hook.NotifyRegisterSuccess(opCtx.ConnID, resp)
-			// Phase 2 additive: register also logs the user in, so emit
-			// BOTH AuthLoginSucceededEvent (for session-state services like
-			// the gateway's authStates map) AND AuthRegisteredEvent (for
+			// Phase 2: register also logs the user in, so emit BOTH
+			// AuthLoginSucceededEvent (for session-state services like the
+			// gateway's authStates map) AND AuthRegisteredEvent (for
 			// first-login-only services like welcome packs / achievements).
 			if bus := liveService.Bus(); bus != nil {
 				service.Publish(bus, service.AuthLoginSucceededEvent{
@@ -170,12 +162,10 @@ func RegisterAuthService(p *universe.Process, opts AuthOpts) error {
 			if err != nil {
 				return nil, err
 			}
-			hook.NotifyValidateTokenSuccess(opCtx.ConnID, resp)
-			// Phase 2 additive: validate-token doesn't mint a new token —
-			// the client already has one — so SessionToken is intentionally
-			// empty. The gateway subscriber preserves its cached
-			// request-side token via the same convention the legacy
-			// NotifyValidateTokenSuccess uses.
+			// Phase 2: validate-token doesn't mint a new token — the client
+			// already has one — so SessionToken is intentionally empty. The
+			// gateway subscriber preserves its cached request-side token via
+			// the same convention the legacy NotifyValidateTokenSuccess used.
 			if bus := liveService.Bus(); bus != nil {
 				service.Publish(bus, service.AuthLoginSucceededEvent{
 					UserID:      resp.UserID,
@@ -196,12 +186,10 @@ func RegisterAuthService(p *universe.Process, opts AuthOpts) error {
 			if err != nil {
 				return nil, err
 			}
-			hook.NotifyLogoutSuccess(opCtx.ConnID)
-			// Phase 2 additive: AuthLogoutResponse does not carry
-			// UserID / Username — the auth handler intentionally omits them
-			// (the response is one-shot ack). Subscribers (gateway
-			// authStates lookup) resolve identity from their per-conn cache
-			// keyed by ConnID + GatewayID.
+			// Phase 2: AuthLogoutResponse does not carry UserID / Username —
+			// the auth handler intentionally omits them (the response is
+			// one-shot ack). Subscribers (gateway authStates lookup) resolve
+			// identity from their per-conn cache keyed by ConnID + GatewayID.
 			if bus := liveService.Bus(); bus != nil {
 				service.Publish(bus, service.AuthLogoutEvent{
 					ConnID:    opCtx.ConnID,
