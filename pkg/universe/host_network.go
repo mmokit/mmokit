@@ -890,7 +890,19 @@ func (n *HostNetwork) routeInboundFrame(frame *meshpb.MeshFrame) error {
 // deliverServiceEvent decodes a wire ServiceEvent into a Go value via the
 // service event-type registry and re-enters the local Bus dispatch path.
 // Self-echo (sourceProcessID == this process's ID) is dropped defensively.
+//
+// A defensive recover guards against ReflectUnmarshal panicking on a
+// corrupt wire payload (low-likelihood but possible if a peer sends
+// malformed bytes). Without it, a single bad frame would crash the
+// recv-loop goroutine. Local-bus handler panics are already recovered
+// inside service.publishAny; this guard catches everything before it.
 func (n *HostNetwork) deliverServiceEvent(se *meshpb.ServiceEvent) {
+	defer func() {
+		if r := recover(); r != nil {
+			n.log.Log(CatServicesBus, "[%s] deliverServiceEvent panic: type=%s from=%s: %v",
+				n.hostID, se.GetTypeName(), se.GetSourceProcessId(), r)
+		}
+	}()
 	if n.coord == nil || n.coord.bus == nil {
 		return
 	}

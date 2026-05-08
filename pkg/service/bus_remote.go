@@ -191,8 +191,12 @@ func sortStrings(s []string) {
 // addition + a tiny hook in publishAny.
 //
 // Held under b.remoteMu, separate from b.mu (which guards handlers).
+// processID lives here too so SetProcessID and peerIDsExceptSelf both
+// take the same lock — universe re-stamps processID post-Build to
+// align with the gateway-derived identifier.
 type remoteState struct {
 	remoteMu          sync.RWMutex
+	processID         string
 	remotePublish     RemotePublishFunc
 	subscriptionFlush SubscriptionFlushFunc
 	routingCache      map[string][]string

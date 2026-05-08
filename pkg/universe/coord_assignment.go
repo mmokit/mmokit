@@ -118,6 +118,16 @@ func (e *assignmentEngine) checkLiveness() {
 		}
 		e.log.Log(CatMeshCell, "coordinator: host %s DEAD (no heartbeat for %s)", host.ID, now.Sub(host.LastHeartbeat).Round(time.Millisecond))
 		e.registry.MarkDead(host.ID)
+		// Service framework: drop the dead host's instances + bus routing
+		// so publishers stop dispatching at a peer that's gone. Idempotent.
+		// reassignOrphanedCells below already triggers a PeerList rebroadcast
+		// which picks up the cleared routing.
+		if e.coord != nil && e.coord.coordServices != nil {
+			e.coord.coordServices.UnregisterByHost(host.ID)
+		}
+		if e.coord != nil && e.coord.serviceEventRouter != nil {
+			e.coord.serviceEventRouter.RemoveProcess(host.ID)
+		}
 		e.reassignOrphanedCells(host)
 	}
 }
@@ -159,6 +169,16 @@ func (e *assignmentEngine) checkGatewayLiveness() {
 		e.log.Log(CatMeshCell, "coordinator: gateway %s DEAD (no heartbeat for %s)", gw.ID, now.Sub(gw.LastHeartbeat).Round(time.Millisecond))
 		e.coord.gatewayRegistry.MarkDead(gw.ID)
 		n := e.coord.sessionRoutes.RemoveByGateway(gw.ID)
+		// Service framework: a gateway,service process publishes services +
+		// bus subscriptions keyed on the gatewayID. Drop both and rebroadcast
+		// so publishers stop dispatching at a dead peer.
+		if e.coord.coordServices != nil {
+			e.coord.coordServices.UnregisterByHost(gw.ID)
+		}
+		if e.coord.serviceEventRouter != nil {
+			e.coord.serviceEventRouter.RemoveProcess(gw.ID)
+			e.broadcastPeerList()
+		}
 		e.log.Log(CatMeshCell, "coordinator: gateway %s DEAD, cleaned up %d sessions", gw.ID, n)
 	}
 }

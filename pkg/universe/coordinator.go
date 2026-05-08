@@ -1761,6 +1761,18 @@ func (c *Process) Build() {
 	// Log categories were enabled at the top of Build() so every
 	// lifecycle log line above respects the --log flag.
 
+	// Re-stamp the bus's processID now that gateway/host IDs are finalized.
+	// At New time, the Bus was constructed with processIDFromConfig(cfg)
+	// which sees an empty cfg.GatewayID for auto-generated standalone
+	// gateways — the actual gateway.id is populated above in
+	// buildStandaloneGateway / buildEmbeddedGateway. Without this re-stamp,
+	// the Bus's self-echo-skip identifier would be "local" while wire
+	// ServiceEvents stamp the post-Build "gateway-XXXX" — self-echo would
+	// fail and events would round-trip through the publisher's own gateway
+	// peer.
+	if c.bus != nil {
+		c.bus.SetProcessID(c.processID())
+	}
 }
 
 // isStandaloneGateway returns true when this process is a gateway without a

@@ -10,9 +10,14 @@ import (
 // is process-local only — Publish[T] dispatches synchronously to every
 // local subscriber registered for T. Phase 3 will add cross-process
 // peer-mesh fan-out behind the same API.
+//
+// processID is the per-process identifier used by Phase 3 self-echo skip.
+// It lives under remoteMu (in remoteState) — readers of processID
+// (peerIDsExceptSelf) already hold remoteMu, so co-locating the field
+// keeps every accessor on a single lock and gives universe a hook
+// (SetProcessID) to align the at-construction-time identifier with the
+// post-Build gateway-derived ID without racing the publish path.
 type Bus struct {
-	processID string
-
 	mu          sync.RWMutex
 	handlers    map[reflect.Type][]*handlerSlot
 	panicLogger PanicLogger
@@ -34,12 +39,27 @@ type handlerSlot struct {
 }
 
 // NewBus returns an empty Bus. processID is used by Phase 3 self-echo
-// detection; in Phase 1 it's stored only for diagnostic logging.
+// detection; in Phase 1 it's stored only for diagnostic logging. The
+// processID can be updated post-construction via SetProcessID — universe
+// uses this to align the bus identifier with the post-Build gateway-
+// derived ID (auto-generated gateway IDs are populated during Build,
+// after Bus construction).
 func NewBus(processID string) *Bus {
-	return &Bus{
-		processID: processID,
-		handlers:  map[reflect.Type][]*handlerSlot{},
+	b := &Bus{
+		handlers: map[reflect.Type][]*handlerSlot{},
 	}
+	b.processID = processID
+	return b
+}
+
+// SetProcessID updates the bus's process identifier. Used by universe
+// to align the bus's self-echo-skip identifier with the gateway-derived
+// process ID resolved during Build (which may differ from the
+// at-construction-time identifier when GatewayID is auto-generated).
+func (b *Bus) SetProcessID(id string) {
+	b.remoteMu.Lock()
+	defer b.remoteMu.Unlock()
+	b.processID = id
 }
 
 // Subscribe registers a handler for events of type T. Multiple handlers
@@ -135,7 +155,10 @@ func invokeHandler(b *Bus, typ reflect.Type, fn func(any), ev any) {
 		log := b.panicLogger
 		b.mu.RUnlock()
 		if log != nil {
-			log(typ.String(), b.processID, r, debug.Stack())
+			b.remoteMu.RLock()
+			pid := b.processID
+			b.remoteMu.RUnlock()
+			log(typ.String(), pid, r, debug.Stack())
 		}
 	}()
 	fn(ev)

@@ -175,6 +175,15 @@ func (s *meshControlServer) handleHostControl(stream meshpb.MeshControl_ControlS
 			// only ran services and never owned cells.
 			if s.coord != nil && s.coord.coordServices != nil {
 				s.coord.coordServices.UnregisterByHost(hostID)
+				if s.coord.serviceEventRouter != nil {
+					s.coord.serviceEventRouter.RemoveProcess(hostID)
+				}
+				s.coord.broadcastPeerListOnServiceChange()
+			} else if s.coord != nil && s.coord.serviceEventRouter != nil {
+				// Even if no coordServices (no service framework on this
+				// process) we still want to drop the routing entry so
+				// publishers don't dispatch to a dead peer.
+				s.coord.serviceEventRouter.RemoveProcess(hostID)
 				s.coord.broadcastPeerListOnServiceChange()
 			}
 			if s.coord != nil && s.coord.commitLog != nil {
@@ -194,6 +203,17 @@ func (s *meshControlServer) handleHostControl(stream meshpb.MeshControl_ControlS
 		// path pick up the orphaned cells on its next tick.
 		s.log.Log(CatMeshCell, "coordinator: host %s stream closed with %d owned cells — treating as crash", hostID, len(host.OwnedCells))
 		s.registry.MarkDead(hostID)
+		// Service framework: drop any service instances + service-event
+		// routing entries owned by the dead host so publishers don't keep
+		// dispatching at it. Idempotent on processes without the service
+		// framework wired.
+		if s.coord != nil && s.coord.coordServices != nil {
+			s.coord.coordServices.UnregisterByHost(hostID)
+		}
+		if s.coord != nil && s.coord.serviceEventRouter != nil {
+			s.coord.serviceEventRouter.RemoveProcess(hostID)
+			s.coord.broadcastPeerListOnServiceChange()
+		}
 		if s.coord != nil && s.coord.commitLog != nil {
 			s.coord.commitLog.Append(CommitEvent{
 				Kind:    EventHostLeave,
@@ -502,6 +522,16 @@ func (s *meshControlServer) handleGatewayControl(stream meshpb.MeshControl_Contr
 			s.log.Log(CatMeshCell, "coordinator: gateway %s graceful leave — removing entry", gatewayID)
 			s.gatewayRegistry.MarkLeaving(gatewayID)
 			s.gatewayRegistry.Remove(gatewayID)
+			// Service framework: a gateway,service process publishes
+			// service instances + bus subscriptions keyed on its gatewayID.
+			// Drop both so publishers don't dispatch at a dead peer.
+			if s.coord != nil && s.coord.coordServices != nil {
+				s.coord.coordServices.UnregisterByHost(gatewayID)
+			}
+			if s.coord != nil && s.coord.serviceEventRouter != nil {
+				s.coord.serviceEventRouter.RemoveProcess(gatewayID)
+				s.coord.broadcastPeerListOnServiceChange()
+			}
 			return
 		}
 
@@ -510,6 +540,14 @@ func (s *meshControlServer) handleGatewayControl(stream meshpb.MeshControl_Contr
 		// Live gateway while sessions are mid-cleanup), then remove routes.
 		s.gatewayRegistry.MarkDead(gatewayID)
 		n := s.coord.sessionRoutes.RemoveByGateway(gatewayID)
+		// Service framework cleanup (mirrors graceful path above).
+		if s.coord != nil && s.coord.coordServices != nil {
+			s.coord.coordServices.UnregisterByHost(gatewayID)
+		}
+		if s.coord != nil && s.coord.serviceEventRouter != nil {
+			s.coord.serviceEventRouter.RemoveProcess(gatewayID)
+			s.coord.broadcastPeerListOnServiceChange()
+		}
 		s.log.Log(CatMeshCell, "coordinator: gateway %s stream closed with %d sessions — treating as crash, cleaned %d routes", gatewayID, len(gw.Sessions), n)
 	}()
 
