@@ -34,6 +34,7 @@ message HostMessage {
     HostOpAck         host_op_ack         = 18;
     ServiceAnnounce   service_announce    = 19;  // service framework: host → coord new service instance
     ServiceLeave      service_leave       = 20;  // service framework: host → coord service instance going away
+    ServiceEventSubscribe service_event_subscribe = 51;  // services bus: process → coord, whole-set replace of subscribed type names
   }
 }
 
@@ -169,6 +170,9 @@ message PeerList {
   repeated CellOwnership cells    = 2;
   repeated GatewayRecord gateways = 3;
   repeated ServiceRecord services = 4;
+  // typeName → list of processIDs subscribed to that type. Updated by
+  // coord whenever ServiceEventSubscribe arrives or a process leaves.
+  map<string, ProcessList> event_routing = 5;
 }
 
 message CellOwnership {
@@ -211,6 +215,38 @@ message ServiceAnnounce {
 // and re-broadcasts PeerList. Idempotent: unknown instance_id is a no-op.
 message ServiceLeave {
   string instance_id = 1;
+}
+
+// ProcessList wraps a repeated string in a single message so it can be
+// used as the value type of map<string, ProcessList> in PeerList.
+// (Proto3 forbids repeated values directly inside a map.)
+message ProcessList {
+  repeated string process_ids = 1;
+}
+
+// ServiceEventSubscribe — a process announces the COMPLETE set of event
+// type names it currently subscribes to. Whole-set replace; coord drops
+// any previously-recorded entries for this process and replaces with
+// type_names. Idempotent. Sent on Bus initial flush (after all services'
+// Init completes) and on every debounced subscription change.
+message ServiceEventSubscribe {
+  repeated string type_names = 1;
+}
+
+// ServiceEvent — a typed event payload riding the existing peer-mesh
+// streams. Sent directly from publisher to subscriber processes (no
+// coordinator hop). Receivers decode payload via the local
+// service.LookupEventType(type_name) reflection registry.
+message ServiceEvent {
+  // Process ID of the publisher. Used for self-echo skip + diagnostics.
+  string source_process_id = 1;
+  // Fully-qualified Go type name, e.g. "github.com/zenion/mmoserver/pkg/service.SessionEnterEvent".
+  // Receivers look this up in service.eventTypes (Phase 1 registry) to decode payload.
+  string type_name = 2;
+  // Reflection-codec encoded payload (universe.ReflectMarshal output).
+  bytes payload = 3;
+  // Per-publisher monotonic sequence number. Observability-only.
+  uint64 sequence = 4;
 }
 
 message NetIDRangeGrant {
@@ -334,6 +370,7 @@ message MeshFrame {
     SessionTransfer   session_transfer    = 11;
     SpawnTransfer     spawn_transfer      = 12;
     ClientDisconnect  client_disconnect   = 13; // S6: pair with client_input/client_frame — graceful disconnect
+    ServiceEvent      service_event       = 50;  // services bus: peer-to-peer typed event payload
   }
 }
 
