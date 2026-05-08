@@ -37,7 +37,7 @@ func TestTickGhosts_Expiry(t *testing.T) {
 	gw := testGW(node)
 
 	// Create an entity with Ghost component, TTL=1
-	w := gw.Stage.ECSWorld()
+	w := gw.stage.ECSWorld()
 	mapper := ecs.NewMap6[comp.Position, comp.Velocity, comp.Rotation, comp.Collider, comp.NetworkID, comp.EntityKind](w)
 	entity := mapper.NewEntity(
 		&comp.Position{X: 100, Y: 100},
@@ -47,8 +47,8 @@ func TestTickGhosts_Expiry(t *testing.T) {
 		&comp.NetworkID{ID: 123},
 		&comp.EntityKind{Type: gamecomp.KindShip},
 	)
-	gw.Stage.RegisterLiveNetID(123, entity)
-	mmokit.Set(mmokit.EntityFromECS(gw.Stage, entity), comp.Ghost{})
+	gw.stage.RegisterLiveNetID(123, entity)
+	mmokit.Set(mmokit.EntityFromECS(gw.stage, entity), comp.Ghost{})
 
 	// DrainInbox calls TickGhosts after processing messages
 	node.DrainInbox()
@@ -66,7 +66,7 @@ func TestTickTransferCooldowns_Expiry(t *testing.T) {
 	gw := testGW(node)
 
 	// Create an entity with TransferCooldown
-	w := gw.Stage.ECSWorld()
+	w := gw.stage.ECSWorld()
 	mapper := ecs.NewMap6[comp.Position, comp.Velocity, comp.Rotation, comp.Collider, comp.NetworkID, comp.EntityKind](w)
 	entity := mapper.NewEntity(
 		&comp.Position{X: 100, Y: 100},
@@ -76,8 +76,8 @@ func TestTickTransferCooldowns_Expiry(t *testing.T) {
 		&comp.NetworkID{ID: 456},
 		&comp.EntityKind{Type: gamecomp.KindShip},
 	)
-	gw.Stage.RegisterLiveNetID(456, entity)
-	e := mmokit.EntityFromECS(gw.Stage, entity)
+	gw.stage.RegisterLiveNetID(456, entity)
+	e := mmokit.EntityFromECS(gw.stage, entity)
 	mmokit.Set(e, comp.TransferCooldown{Remaining: 1})
 
 	node.DrainInbox()

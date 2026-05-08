@@ -27,11 +27,11 @@ func (gw *GameWorld) Hooks() mmokit.Hooks {
 // Init is called by the Process after all nodes are created and bridges are wired.
 // It sets up replication, transfer hooks, and post-spawn callbacks.
 func (gw *GameWorld) Init() {
-	gw.SetOnTransferReceived(func(entity ecs.Entity, frame *mmokit.TransferFrame) {
+	gw.stage.SetOnTransferReceived(func(entity ecs.Entity, frame *mmokit.TransferFrame) {
 		gw.FinishTransferSpawn(entity, frame)
 	})
 
-	gw.SetOnPlayerTransferReceived(func(entity ecs.Entity, frame *mmokit.TransferFrame) {
+	gw.stage.SetOnPlayerTransferReceived(func(entity ecs.Entity, frame *mmokit.TransferFrame) {
 		if s := gw.eng.Players.ByConnID(frame.ConnID); s != nil {
 			gw.WireTransferPlayer(entity, s)
 		}
@@ -47,7 +47,7 @@ func (gw *GameWorld) Init() {
 		// cl_fullupdate or Gaffer's "encoded relative to initial state"
 		// pattern. Clients never learn about cells, authority transfers,
 		// or server boundaries.
-		mmokit.SendEvent(gw.Stage, frame.ConnID, &MapData{
+		mmokit.SendEvent(gw.stage, frame.ConnID, &MapData{
 			Stations: gw.CollectStationMapData(),
 		})
 		// Topology / debug overlay is pushed reactively by the
@@ -64,7 +64,7 @@ func (gw *GameWorld) Init() {
 // Call after the game loop has stopped.
 func (gw *GameWorld) Shutdown() {
 	gw.Players.ForEach(mmokit.StateActive, func(s *mmokit.PlayerSession) {
-		if gw.Stage.ECSWorld().Alive(s.Entity) {
+		if gw.stage.ECSWorld().Alive(s.Entity) {
 			gw.SavePlayerState(s)
 		}
 	})
@@ -89,7 +89,7 @@ func (gw *GameWorld) Shutdown() {
 func (gw *GameWorld) postTick() {
 	if gw.flushTicks > 0 && gw.eng.Tick%gw.flushTicks == 0 {
 		gw.Players.ForEach(mmokit.StateActive, func(s *mmokit.PlayerSession) {
-			if gw.Stage.ECSWorld().Alive(s.Entity) {
+			if gw.stage.ECSWorld().Alive(s.Entity) {
 				gw.SavePlayerState(s)
 			}
 		})
@@ -119,7 +119,7 @@ func (gw *GameWorld) processDockCompletions() {
 	for _, s := range completed {
 		ds := gw.dockingStates[s.Username]
 
-		entity := mmokit.EntityFromECS(gw.Stage, s.Entity)
+		entity := mmokit.EntityFromECS(gw.stage, s.Entity)
 		if !entity.Alive() {
 			delete(gw.dockingStates, s.Username)
 			continue
@@ -159,7 +159,7 @@ func (gw *GameWorld) processDockCompletions() {
 		}
 
 		// Notify the client AFTER server-side state is fully consistent.
-		mmokit.SendEvent(gw.Stage, s.ConnID, &Docked{})
+		mmokit.SendEvent(gw.stage, s.ConnID, &Docked{})
 
 		delete(gw.dockingStates, s.Username)
 		gw.Players.Transition(s, StateDocked)
@@ -181,14 +181,14 @@ func (gw *GameWorld) processUndocks() {
 		// station's collider, and sync pdata.Cargo back into the entity's
 		// Inventory (bank deposits/withdrawals while docked mutate pdata,
 		// not the entity directly).
-		entity := mmokit.EntityFromECS(gw.Stage, s.Entity)
+		entity := mmokit.EntityFromECS(gw.stage, s.Entity)
 		if !entity.Alive() {
 			gw.eng.Log.Log(CatPlayerDock, "undock skipped: entity gone for conn=%d username=%s — falling back to spawn", req.ConnID, s.Username)
 			gw.Players.Transition(s, mmokit.StateActive)
 			continue
 		}
 		// Remove Dormant via raw ECS (mmokit has no Remove primitive yet).
-		dormantMap := ecs.NewMap1[mmokit.Dormant](gw.Stage.ECSWorld())
+		dormantMap := ecs.NewMap1[mmokit.Dormant](gw.stage.ECSWorld())
 		if dormantMap.HasAll(s.Entity) {
 			dormantMap.Remove(s.Entity)
 		}
@@ -226,7 +226,7 @@ func (gw *GameWorld) processUndocks() {
 }
 
 func (gw *GameWorld) GetNetID(entity ecs.Entity) (uint32, bool) {
-	e := mmokit.EntityFromECS(gw.Stage, entity)
+	e := mmokit.EntityFromECS(gw.stage, entity)
 	// Ghost and Replica removals are silent — don't generate kill notifications
 	if mmokit.Has[mmokit.Ghost](e) || mmokit.Has[mmokit.Replica](e) {
 		return 0, false
@@ -262,7 +262,7 @@ func (gw *GameWorld) processRespawns() {
 		// If this node doesn't have a station, transfer the respawn there.
 		if !gw.hasStation() {
 			gw.eng.Log.Log(CatPlayerConnect, "respawn transfer: conn=%d username=%s -> station node", connID, s.Username)
-			gw.Bridge().RequestRespawn(connID, s.Username)
+			gw.stage.Bridge().RequestRespawn(connID, s.Username)
 			// Clean up player from this node
 			gw.Players.Transition(s, mmokit.StateTransferring)
 			gw.Players.Remove(s)
@@ -289,7 +289,7 @@ func (gw *GameWorld) clearTickState() {
 // query.Next() directly without closing, which leaked the lock forever
 // any time the filter matched.
 func (gw *GameWorld) hasStation() bool {
-	filter := ecs.NewFilter1[gamecomp.Station](gw.Stage.ECSWorld())
+	filter := ecs.NewFilter1[gamecomp.Station](gw.stage.ECSWorld())
 	query := filter.Query()
 	defer query.Close()
 	return query.Next()

@@ -9,14 +9,14 @@ import (
 
 func TestApplyStatus_SameCell_AddsEffect(t *testing.T) {
 	gw, _ := newTestGameWorld()
-	gw.Stage.SetGameWorld(gw)
-	mmokit.Handle(gw.Stage, statusHandler)
+	gw.stage.SetStateByName("game.GameWorld", gw)
+	mmokit.Handle(gw.stage, statusHandler)
 
 	target := newTestShipWithStatus(t, gw, 101, 100, 0)
 	caster := newTestShip(t, gw, 202, 100, 0)
 
-	casterE := mmokit.EntityByNetID(gw.Stage, caster)
-	targetE := mmokit.EntityByNetID(gw.Stage, target)
+	casterE := mmokit.EntityByNetID(gw.stage, caster)
+	targetE := mmokit.EntityByNetID(gw.stage, target)
 
 	gw.ApplyStatus(casterE, targetE, gamecomp.StatusIonBurn, 5.0, 3.0, 0, 1)
 
@@ -39,6 +39,6 @@ func TestApplyStatus_SameCell_AddsEffect(t *testing.T) {
 func newTestShipWithStatus(t *testing.T, gw *GameWorld, netID uint32, healthMax, shieldCurrent float32) uint32 {
 	t.Helper()
 	id := newTestShip(t, gw, netID, healthMax, shieldCurrent)
-	mmokit.Set(mmokit.EntityByNetID(gw.Stage, id), gamecomp.StatusEffects{})
+	mmokit.Set(mmokit.EntityByNetID(gw.stage, id), gamecomp.StatusEffects{})
 	return id
 }

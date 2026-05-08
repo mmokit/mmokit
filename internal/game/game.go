@@ -36,7 +36,7 @@ func NewGameWorld(base *mmokit.Stage, cfg *GameConfig, playerDB *PlayerRepo, cel
 	item.Init()
 
 	gw := &GameWorld{
-		Stage:         base,
+		stage:         base,
 		eng:           eng,
 		Spatial:       base.SpatialGrid(),
 		Config:        cfg,
@@ -64,7 +64,7 @@ func NewGameWorld(base *mmokit.Stage, cfg *GameConfig, playerDB *PlayerRepo, cel
 	// If the entity has a Ghost component (transfer in progress), skip removal —
 	// the ghost lingers for visual continuity until the replica arrives.
 	removeFromWorld := func(s *mmokit.PlayerSession, pm *mmokit.PlayerManager) {
-		entity := mmokit.EntityFromECS(gw.Stage, s.Entity)
+		entity := mmokit.EntityFromECS(gw.stage, s.Entity)
 		if entity.Alive() {
 			if mmokit.Has[mmokit.Ghost](entity) {
 				// Transfer ghost — don't remove, let TTL expire.
@@ -131,7 +131,7 @@ func NewGameWorld(base *mmokit.Stage, cfg *GameConfig, playerDB *PlayerRepo, cel
 				return
 			}
 			// Grace period expired — clean up
-			entity := mmokit.EntityFromECS(gw.Stage, s.Entity)
+			entity := mmokit.EntityFromECS(gw.stage, s.Entity)
 			if entity.Alive() {
 				gw.SavePlayerState(s)
 				gw.Spatial.Deregister(s.Entity)
@@ -161,7 +161,3 @@ func NewGameWorld(base *mmokit.Stage, cfg *GameConfig, playerDB *PlayerRepo, cel
 	return gw
 }
 
-// UnwrapGameWorld extracts the underlying *GameWorld from a mmokit.GameWorld.
-func UnwrapGameWorld(w mmokit.GameWorld) *GameWorld {
-	return w.(*GameWorld)
-}

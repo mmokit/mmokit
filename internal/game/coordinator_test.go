@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/zenion/mmoserver/pkg/logger"
+	"github.com/zenion/mmoserver/pkg/mmokit"
 	"github.com/zenion/mmoserver/pkg/net"
 	"github.com/zenion/mmoserver/pkg/ops"
 	"github.com/zenion/mmoserver/pkg/persist/persisttest"
@@ -23,8 +24,8 @@ func newTestCoordinator() *pkguniverse.Process {
 		TickRate:    20,
 		ConnManager: connMgr,
 		Logger:      log,
-		World:       WorldFactory(&cfg, playerDB, playerSessions),
 	})
+	mmokit.AddState(coord, NewGameWorldStateFactory(&cfg, playerDB, playerSessions))
 	GameSetup(coord)
 	coord.Build()
 	return coord

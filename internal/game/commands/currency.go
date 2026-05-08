@@ -95,7 +95,7 @@ func sendBankContentsAdmin(gw *game.GameWorld, connID uint32, pdata *game.Player
 	if cfg != nil {
 		bankMaxMass = cfg.BankMaxMass
 	}
-	mmokit.SendEvent(gw.Stage, connID, &game.BankContents{
+	mmokit.SendEvent(gw.GetStage(), connID, &game.BankContents{
 		Items:      items,
 		TotalMass:  pdata.BankTotalMass(),
 		MaxMass:    bankMaxMass,

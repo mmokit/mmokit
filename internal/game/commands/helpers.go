@@ -5,14 +5,14 @@ import (
 	"github.com/zenion/mmoserver/pkg/mmokit"
 )
 
-// gwForStage finds the *game.GameWorld whose Stage pointer matches the given
-// stage. Returns nil if the stage is not hosted by a local cell or the cell's
-// world is not a *GameWorld.
+// gwForStage returns the per-stage *game.GameWorld registered via
+// mmokit.AddState. Returns nil only if the stage is nil; callers that get
+// nil from a non-nil stage have hit a programmer error (the type wasn't
+// registered).
 func gwForStage(coord *mmokit.Process, stage *mmokit.Stage) *game.GameWorld {
-	for _, cell := range coord.Cells {
-		if cell.Stage == stage {
-			return game.UnwrapGameWorld(cell.World)
-		}
+	_ = coord
+	if stage == nil {
+		return nil
 	}
-	return nil
+	return mmokit.State[game.GameWorld](stage)
 }

@@ -1632,6 +1632,17 @@ func (b *Stage) StateByName(name string) (any, bool) {
 	return v, ok
 }
 
+// SetStateByName installs a per-stage state value under name. Internal API
+// for tests and code paths that bypass the Process-level AddState factory
+// (e.g. unit-test cell construction). Production code should register state
+// via mmokit.AddState[T] on the Process before Build().
+func (b *Stage) SetStateByName(name string, v any) {
+	if b.state == nil {
+		b.state = make(map[string]any, 1)
+	}
+	b.state[name] = v
+}
+
 // Dispatcher returns the per-Stage MessageDispatcher, lazily initialized.
 // Used by mmokit.Handle and mmokit.Send to route typed messages.
 func (s *Stage) Dispatcher() *MessageDispatcher {

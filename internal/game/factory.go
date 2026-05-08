@@ -6,18 +6,18 @@ import (
 	"github.com/zenion/mmoserver/pkg/mmokit"
 )
 
-// WorldFactory returns a world constructor function for use as Config.World.
-// The gameCfg pointer is shared across every GameWorld the coordinator creates
-// so that runtime config changes made through the console apply to every node.
-func WorldFactory(
+// NewGameWorldStateFactory returns the factory passed to mmokit.AddState[GameWorld].
+// The gameCfg pointer is shared across every GameWorld the coordinator creates so
+// that runtime config changes made through the console apply to every cell.
+func NewGameWorldStateFactory(
 	gameCfg *GameConfig,
 	playerDB *PlayerRepo,
 	playerSessions *mmokit.PlayerSessions,
-) func(base *mmokit.Stage) mmokit.GameWorld {
-	return func(base *mmokit.Stage) mmokit.GameWorld {
+) func(base *mmokit.Stage) *GameWorld {
+	return func(base *mmokit.Stage) *GameWorld {
 		cell := base.Cell()
 
-		// Use root cell (depth 0) for CellCoord — entities always keep base-cell coordinates
+		// Use root cell (depth 0) for CellCoord — entities always keep base-cell coordinates.
 		rootCell := cell
 		for rootCell.Depth > 0 {
 			rootCell = rootCell.Parent()
@@ -90,9 +90,9 @@ func registerPlayerJoin(coord *mmokit.Process) {
 		// they explicitly press the respawn button. Send the death cue
 		// directly without going through SpawnPlayer.
 		if s.State == StateDead {
-			mmokit.SendEvent(gw.Stage, s.ConnID, &PlayerDied{KillerID: 0})
+			mmokit.SendEvent(gw.stage, s.ConnID, &PlayerDied{KillerID: 0})
 			gw.eng.Log.Log(CatPlayerSpawn, "reconnect-to-dead: conn=%d username=%s", s.ConnID, s.Username)
-		} else if s.Entity != (ecs.Entity{}) && gw.Stage.ECSWorld().Alive(s.Entity) {
+		} else if s.Entity != (ecs.Entity{}) && gw.stage.ECSWorld().Alive(s.Entity) {
 			// Entity preserved across grace period (Active / Docked / Docking).
 			gw.reconnectPlayer(s)
 			// State-specific welcome on reconnect into a non-Active state.
@@ -101,7 +101,7 @@ func registerPlayerJoin(coord *mmokit.Process) {
 			// the bank panel / dock animation reopens.
 			switch s.State {
 			case StateDocked:
-				mmokit.SendEvent(gw.Stage, s.ConnID, &Docked{})
+				mmokit.SendEvent(gw.stage, s.ConnID, &Docked{})
 				gw.eng.Log.Log(CatPlayerDock, "reconnect-to-docked: conn=%d username=%s", s.ConnID, s.Username)
 			case StateDocking:
 				// Mid-dock disconnect+reconnect: re-send the docking-state
@@ -112,7 +112,7 @@ func registerPlayerJoin(coord *mmokit.Process) {
 					if progress > 1 {
 						progress = 1
 					}
-					mmokit.SendEvent(gw.Stage, s.ConnID, &DockingState{
+					mmokit.SendEvent(gw.stage, s.ConnID, &DockingState{
 						Docking:   true,
 						Progress:  progress,
 						TotalTime: gw.Config.DockTime,
@@ -135,15 +135,12 @@ func registerPlayerJoin(coord *mmokit.Process) {
 }
 
 // gameWorldFromStage resolves the cell-local GameWorld for a given stage.
-// Returns nil if the stage's cell is not in the process's cell map (e.g.
-// the cell was torn down between dispatch and resolution).
+// Returns nil if the stage is nil. Panics if GameWorld was never registered
+// via mmokit.AddState[GameWorld] — that's a programmer error, not a runtime
+// condition.
 func gameWorldFromStage(stage *mmokit.Stage) *GameWorld {
 	if stage == nil {
 		return nil
 	}
-	cell := stage.Process().CellByID(stage.CellID())
-	if cell == nil {
-		return nil
-	}
-	return UnwrapGameWorld(cell.World)
+	return mmokit.State[GameWorld](stage)
 }

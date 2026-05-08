@@ -76,8 +76,8 @@ func RegisterEntityKinds(p *mmokit.Process) {
 // EntityRegistry that previously powered the legacy entity.add console
 // command was removed when the cluster-aware entity.spawn landed.
 func (gw *GameWorld) initEntityKinds() {
-	w := gw.Stage.ECSWorld()
-	reg := gw.ReplicationRegistry()
+	w := gw.stage.ECSWorld()
+	reg := gw.stage.ReplicationRegistry()
 	mmokit.RegisterComponent(reg, ecs.NewMap1[mmokit.Velocity](w))
 	mmokit.RegisterComponent(reg, ecs.NewMap1[mmokit.Rotation](w))
 }

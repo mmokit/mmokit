@@ -17,7 +17,7 @@ func TestApplyDamage_DormantTargetTakesNoDamage(t *testing.T) {
 	gw, _ := newTestGameWorld()
 
 	netID := newTestShip(t, gw, 901, 100, 0)
-	entity := mmokit.EntityByNetID(gw.Stage, netID)
+	entity := mmokit.EntityByNetID(gw.stage, netID)
 
 	// Sanity: damage applies normally to a non-Dormant target.
 	dealt := gw.ApplyDamage(entity, 25, 0)
