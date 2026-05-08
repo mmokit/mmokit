@@ -58,6 +58,23 @@ type meshControlClient struct {
 
 	sendMu sync.Mutex // protects stream.Send — grpc-go ClientStream is not safe for concurrent Send
 
+	// streamReady is closed (idempotently via streamReadyOnce) the FIRST
+	// time runConnection successfully opens a stream. send() uses this as
+	// a one-shot gate to block briefly if a caller fires before the dial
+	// loop has connected — closes the subscribe-flush-during-dial race
+	// where service.Subscribe in Service.Init could fire its 50ms-debounced
+	// flush before controlClient.Start finished its first dial.
+	//
+	// After first-open the channel stays closed forever; subsequent
+	// reconnect cycles do NOT re-arm it. This is intentional — once the
+	// Bus has flushed its full subscription set once, every later flush
+	// re-ships the whole set, so a transient disconnect that drops a
+	// flush is recovered by the next debounce window. Callers during
+	// reconnect see the existing "stream not ready" error and rely on
+	// debounce-resend.
+	streamReady     chan struct{}
+	streamReadyOnce sync.Once
+
 	epochMu      sync.RWMutex
 	highestEpoch uint64 // monotonic fencing token — reject CoordMessages with lower epochs
 
@@ -97,9 +114,17 @@ func newMeshControlClient(coord *Process, hostID, coordAddr string) *meshControl
 		hostID:       hostID,
 		coordAddr:    coordAddr,
 		done:         make(chan struct{}),
+		streamReady:  make(chan struct{}),
 		clusterClock: coord.ClusterClock,
 	}
 }
+
+// streamReadyTimeout is the upper bound send() will wait on the
+// first-stream-open signal before giving up and returning "stream not
+// ready". Picked to absorb a sluggish dial (gRPC with backoff jitter
+// can take a few hundred ms to land) without blocking long enough to
+// stall startServices on a coordinator that's genuinely unreachable.
+const streamReadyTimeout = 5 * time.Second
 
 // Start spawns the reconnect loop and returns immediately. Never
 // returns an error — connection failures are retried in the background
@@ -197,6 +222,10 @@ func (c *meshControlClient) runConnection() error {
 	c.stream = stream
 	c.streamCancel = streamCancel
 	c.connMu.Unlock()
+
+	// First-open signal: unblock any sender that's waiting on a
+	// not-yet-ready stream. Idempotent across reconnects via Once.
+	c.streamReadyOnce.Do(func() { close(c.streamReady) })
 
 	defer func() {
 		c.connMu.Lock()
@@ -322,16 +351,65 @@ func (c *meshControlClient) runHeartbeatLoop(ctx context.Context) {
 // send pushes a HostMessage onto the current control stream. Uses
 // sendMu because grpc-go client streams are not safe for concurrent
 // Send. Returns an error if no stream is currently connected.
+//
+// First-open slow path: if the stream is nil AND streamReady has not
+// yet been closed (the dial loop is still working on its first
+// connect), block up to streamReadyTimeout for the signal. This closes
+// the subscribe-flush-during-dial race — service.Subscribe in
+// Service.Init can fire its 50ms-debounced flush before the dial loop
+// has finished, and we want that flush to ride the first stream
+// instead of being silently dropped.
+//
+// After the first stream opens (streamReady closed), this select falls
+// through immediately on every later call, so reconnect cycles keep
+// the existing fast-fail behavior — the Bus's flush is full-set and
+// re-ships on the next debounce window if the current one fails.
 func (c *meshControlClient) send(msg *meshpb.HostMessage) error {
 	c.connMu.Lock()
 	stream := c.stream
 	c.connMu.Unlock()
 	if stream == nil {
-		return fmt.Errorf("mesh control: stream not ready")
+		// Slow path — wait for first-open signal. Once
+		// streamReadyOnce fires, this select is "instant" forever.
+		select {
+		case <-c.streamReady:
+		case <-c.rootCtxDone():
+			return c.rootCtxErr()
+		case <-time.After(streamReadyTimeout):
+			return fmt.Errorf("mesh control: stream not ready (timeout after %s)", streamReadyTimeout)
+		}
+		// Re-load: the connection may have come up and gone down
+		// again between the signal and this re-read on a flaky link.
+		c.connMu.Lock()
+		stream = c.stream
+		c.connMu.Unlock()
+		if stream == nil {
+			return fmt.Errorf("mesh control: stream not ready")
+		}
 	}
 	c.sendMu.Lock()
 	defer c.sendMu.Unlock()
 	return stream.Send(msg)
+}
+
+// rootCtxDone returns the rootCtx's Done channel, or a never-closed
+// channel if rootCtx has not been initialized yet (Start not called).
+// Defensive — in practice send is only invoked after Start because
+// service.Subscribe runs in Process.Start.
+func (c *meshControlClient) rootCtxDone() <-chan struct{} {
+	if c.rootCtx == nil {
+		return make(chan struct{}) // never closes
+	}
+	return c.rootCtx.Done()
+}
+
+// rootCtxErr mirrors rootCtxDone — returns ctx error or a generic
+// "shutting down" error if rootCtx is nil.
+func (c *meshControlClient) rootCtxErr() error {
+	if c.rootCtx == nil {
+		return fmt.Errorf("mesh control: not started")
+	}
+	return c.rootCtx.Err()
 }
 
 // armDrainWaiter installs a fresh channel that the dispatch loop closes

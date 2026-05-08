@@ -100,11 +100,11 @@ func TestServiceEventBus_E2E_SubscribeAndPublish(t *testing.T) {
 	svcB.Build()
 	t.Cleanup(svcB.Shutdown)
 
-	// === 4. Wait for both service-hosts to register with coord. The
-	// MeshControl client dial + RegisterHost handshake is async; without
-	// this gate svc-A's first Subscribe would fire its flush callback
-	// before the controlClient stream is open and the message would be
-	// dropped on the floor.
+	// === 4. Wait for both service-hosts to register with coord. Belt-and-
+	// suspenders: the controlClient.send slow-path now blocks (briefly) on
+	// the first-stream-open signal, so the subscribe-flush from step 2 will
+	// land regardless of dial timing. We still wait for RegisterHost so
+	// the routing-cache assertions below have a deterministic anchor.
 	if err := coord.HarnessWaitForHost(ctx, "svc-A"); err != nil {
 		t.Fatalf("svc-A failed to register with coord: %v", err)
 	}
@@ -112,22 +112,7 @@ func TestServiceEventBus_E2E_SubscribeAndPublish(t *testing.T) {
 		t.Fatalf("svc-B failed to register with coord: %v", err)
 	}
 
-	// === 5. Re-issue Subscribe AFTER registration so the flush definitely
-	// has a live controlClient to ride. Subscribe is idempotent at the
-	// type level (multiple handlers per type are allowed) — the second
-	// call adds a tombstone-able slot but the SubscribedTypeNames set is
-	// unchanged, which is what the flush ships.
-	//
-	// In practice the original Subscribe at step 2 races with the
-	// controlClient.Start backoff loop: if Start completed before the
-	// flush timer fired (50ms debounce), the subscribe rides the live
-	// stream and reaches coord. If not, it's lost. Re-issuing here closes
-	// the race for the test fixture without papering over the production
-	// path (real services subscribe AFTER Build returns + gateway is up
-	// → controlClient is already streaming).
-	service.Subscribe(svcA.Bus(), func(ev e2eBusEvent) {})
-
-	// === 6. Wait for svc-A's subscription to propagate through coord's
+	// === 5. Wait for svc-A's subscription to propagate through coord's
 	// router and back into coord's own bus.routingCache via the PeerList
 	// re-broadcast. The TypeName uses the canonical PkgPath.Name form:
 	// for an external-package test type, that's the _test package.
@@ -145,7 +130,7 @@ func TestServiceEventBus_E2E_SubscribeAndPublish(t *testing.T) {
 			wantTypeName, err, coord.Bus().RoutingCacheSnapshot())
 	}
 
-	// === 7. Routing-table negative assertion: svc-B is registered with
+	// === 6. Routing-table negative assertion: svc-B is registered with
 	// coord (verified in step 4) but never called Subscribe. The router's
 	// snapshot for this event MUST contain svc-A and exclude svc-B.
 	cache := coord.Bus().RoutingCacheSnapshot()
@@ -155,12 +140,12 @@ func TestServiceEventBus_E2E_SubscribeAndPublish(t *testing.T) {
 		}
 	}
 
-	// === 8. Publish from coord+gateway. Bus.Publish does local fan-out
+	// === 7. Publish from coord+gateway. Bus.Publish does local fan-out
 	// (no local subscriber on coord — fine) and remote fan-out to every
 	// peer in the routing-cache slice.
 	service.Publish(coord.Bus(), e2eBusEvent{Tag: 42, Msg: "hello"})
 
-	// === 9. Assert svc-A receives within 2s. The dispatch path is one
+	// === 8. Assert svc-A receives within 2s. The dispatch path is one
 	// MeshFrame over MeshData (TCP loopback) — ~milliseconds in practice.
 	if err := waitFor(ctx, 2*time.Second, func() bool {
 		return atomic.LoadInt32(&received) == 1

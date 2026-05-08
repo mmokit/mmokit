@@ -55,6 +55,15 @@ type meshGatewayClient struct {
 
 	sendMu sync.Mutex // grpc-go ClientStream is not safe for concurrent Send
 
+	// streamReady is closed (idempotently via streamReadyOnce) on FIRST
+	// successful stream open. send() waits up to streamReadyTimeout on
+	// this gate when called before the dial loop has connected — closes
+	// the subscribe-flush-during-dial race for standalone gateways that
+	// run --mode=gateway,service. Mirrors the same gate on
+	// meshControlClient. See mesh_control_client.go for design rationale.
+	streamReady     chan struct{}
+	streamReadyOnce sync.Once
+
 	epochMu      sync.RWMutex
 	highestEpoch uint64
 
@@ -66,9 +75,10 @@ type meshGatewayClient struct {
 // off the reconnect loop.
 func newMeshGatewayClient(gw *Gateway, coordAddr string) *meshGatewayClient {
 	return &meshGatewayClient{
-		gw:        gw,
-		coordAddr: coordAddr,
-		done:      make(chan struct{}),
+		gw:          gw,
+		coordAddr:   coordAddr,
+		done:        make(chan struct{}),
+		streamReady: make(chan struct{}),
 	}
 }
 
@@ -154,6 +164,10 @@ func (c *meshGatewayClient) runConnection() error {
 	c.streamCancel = streamCancel
 	c.connMu.Unlock()
 
+	// First-open signal: unblock any sender waiting on a not-yet-ready
+	// stream. Idempotent across reconnects via Once.
+	c.streamReadyOnce.Do(func() { close(c.streamReady) })
+
 	defer func() {
 		c.connMu.Lock()
 		c.conn = nil
@@ -214,16 +228,49 @@ func (c *meshGatewayClient) runHeartbeatLoop(ctx context.Context) {
 
 // send pushes a HostMessage onto the current control stream using the
 // per-connection send mutex.
+//
+// First-open slow path: blocks up to streamReadyTimeout if the stream
+// is nil and the dial loop has not yet completed its first connect.
+// See meshControlClient.send for design rationale.
 func (c *meshGatewayClient) send(msg *meshpb.HostMessage) error {
 	c.connMu.Lock()
 	stream := c.stream
 	c.connMu.Unlock()
 	if stream == nil {
-		return fmt.Errorf("mesh gateway control: stream not ready")
+		select {
+		case <-c.streamReady:
+		case <-c.rootCtxDone():
+			return c.rootCtxErr()
+		case <-time.After(streamReadyTimeout):
+			return fmt.Errorf("mesh gateway control: stream not ready (timeout after %s)", streamReadyTimeout)
+		}
+		c.connMu.Lock()
+		stream = c.stream
+		c.connMu.Unlock()
+		if stream == nil {
+			return fmt.Errorf("mesh gateway control: stream not ready")
+		}
 	}
 	c.sendMu.Lock()
 	defer c.sendMu.Unlock()
 	return stream.Send(msg)
+}
+
+// rootCtxDone / rootCtxErr — defensive helpers for the rare case
+// send is called before Start has run. Mirror the pair on
+// meshControlClient.
+func (c *meshGatewayClient) rootCtxDone() <-chan struct{} {
+	if c.rootCtx == nil {
+		return make(chan struct{})
+	}
+	return c.rootCtx.Done()
+}
+
+func (c *meshGatewayClient) rootCtxErr() error {
+	if c.rootCtx == nil {
+		return fmt.Errorf("mesh gateway control: not started")
+	}
+	return c.rootCtx.Err()
 }
 
 // Shutdown cancels the reconnect loop and waits for it to exit.
