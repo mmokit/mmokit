@@ -1852,10 +1852,28 @@ Per `user_solo_developer`, merge directly to `main` — no PR.
 
 ---
 
+## Hard prerequisites surfaced by Phase 2 final review
+
+These were raised in the Phase 2 final review (commit `eb50727` reviewed 2026-05-09). They become **load-bearing** the moment Phase 3 federates auth events across processes. Address before any Phase 3 commit that puts `AuthLoginSucceededEvent` on the wire:
+
+1. **`AuthLoginSucceededEvent.SessionToken` is a bearer credential.** Phase 1 spec §14.4 deferred per-event capability gating. If Phase 3 ships federation without it, every host listening on the bus receives every session token cluster-wide. Two viable resolutions:
+   - **Split the event:** declare `AuthLoginSucceededEvent` as **process-local-only** (don't register with the wire codec; reject if received from a peer). Add a separate `AuthLoginAnnounceEvent` with no token field for cross-process distribution. Subscribers needing the token must be colocated with auth.
+   - **Capability gating:** implement §14.4 (`RegisterEventTypeWithCapability[T](cap)`) and only deliver `AuthLoginSucceededEvent` to peers whose service-account holds the `auth.read-token` capability. More work; preferable long-term.
+
+   **Pick one before any Phase 3 task that touches the auth event types.** Document the choice in the Task 1 proto changes: if splitting, declare a clear "do not register on the wire codec" rule for `AuthLoginSucceededEvent`.
+
+2. **`Process.GatewayID() == ""` is currently non-load-bearing.** All five auth typed-ops are RouteGatewayLocal so the publish site has a non-empty `GatewayID` by construction. Phase 3 federation will use `GatewayID` as a session routing key — empty becomes a real bug. Phase 3's send-edge code must validate `len(GatewayID) > 0` before forwarding any auth event to a peer (`pkg/universe/service_event_dispatch.go::dispatchServiceEvent`). Drop+log the event if empty; this is a programmer error worth surfacing loudly.
+
+3. **`AuthLogoutEvent.UserID` / `.Username` are always empty in Phase 2** (the underlying `auth.AuthLogoutResponse` doesn't carry identity). Cross-process subscribers may need these. Phase 3 should either:
+   - Populate them: extend `auth.AuthLogoutResponse` with `UserID` + `Username` so the publish site has them.
+   - Remove them: drop both fields from `service.AuthLogoutEvent` so the empty-string footgun is gone.
+
+   Easiest: populate. The auth handler at `pkg/services/auth/handlers.go::handleLogout` has `sess.UserID` available pre-revoke.
+
 ## Out of scope for this plan
 
-- **Phase 2 (auth event extraction)** — separate plan ([2026-05-08-services-event-bus-phase2.md](2026-05-08-services-event-bus-phase2.md)). Builds on Phase 1; independent of Phase 3.
-- **Per-event capability gating (§14.4)** — deferred to when service-account auth lands.
+- **Phase 2 (auth event extraction)** — separate plan ([2026-05-08-services-event-bus-phase2.md](2026-05-08-services-event-bus-phase2.md)). Builds on Phase 1; independent of Phase 3. **Done as of 2026-05-09.**
+- **Per-event capability gating (§14.4)** — deferred to when service-account auth lands. See **Hard prerequisite #1** above for what Phase 3 must do in the meantime.
 - **Cross-cluster federation (§14.5)** — out of scope.
 - **Trace context / metadata (§14.6)** — Phase 3 leaves `ServiceEvent.metadata` field unallocated; add when needed.
 - **Wire-stable type identifiers decoupled from Go type names (§14.2)** — Phase 3 ships with package-qualified Go reflect-type names; rename = wire break. Acceptable for v1.
