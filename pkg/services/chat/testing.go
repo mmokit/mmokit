@@ -25,6 +25,14 @@ type TestService struct{ *Service }
 // chat). Tests typically pass `chattest.NewMock()`.
 func NewTestService(t *testing.T, repo Repository, defaults []DefaultChannelDef) *TestService {
 	t.Helper()
+	return NewTestServiceWithBus(t, repo, defaults, service.NewBus("test"))
+}
+
+// NewTestServiceWithBus is identical to NewTestService but lets the caller
+// inject a specific *service.Bus so the test can publish events through
+// it and observe chat's bus-driven side effects.
+func NewTestServiceWithBus(t *testing.T, repo Repository, defaults []DefaultChannelDef, bus *service.Bus) *TestService {
+	t.Helper()
 	opts := DefaultServiceOpts()
 	opts.Repository = repo
 	opts.DefaultChannels = defaults
@@ -33,6 +41,7 @@ func NewTestService(t *testing.T, repo Repository, defaults []DefaultChannelDef)
 		InstanceID: "test",
 		Logger:     logger.New(),
 		Roles:      map[string]struct{}{"service": {}},
+		Bus:        bus,
 	}
 	svc := &Service{ctx: ctx, opts: opts}
 	if err := svc.Init(ctx); err != nil {
@@ -59,6 +68,7 @@ func NewTestServiceWithAuth(t *testing.T, repo Repository, authRepo auth.Reposit
 		InstanceID: "test",
 		Logger:     logger.New(),
 		Roles:      map[string]struct{}{"service": {}},
+		Bus:        service.NewBus("test"),
 	}
 	svc := &Service{ctx: ctx, opts: opts}
 	if err := svc.Init(ctx); err != nil {

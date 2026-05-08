@@ -4,6 +4,8 @@ import (
 	"context"
 	"testing"
 
+	"github.com/google/uuid"
+
 	"github.com/zenion/mmoserver/pkg/logger"
 	"github.com/zenion/mmoserver/pkg/service"
 	"github.com/zenion/mmoserver/pkg/services/chat"
@@ -16,6 +18,7 @@ func newTestCtx() *service.Context {
 		InstanceID: "test",
 		Logger:     logger.New(),
 		Roles:      map[string]struct{}{"service": {}},
+		Bus:        service.NewBus("test"),
 	}
 }
 
@@ -48,5 +51,34 @@ func TestService_InitBootstrapsDefaultChannels(t *testing.T) {
 	all, _ := repo.ListAllChannels(context.Background())
 	if len(all) != 2 {
 		t.Fatalf("got %d channels, want 2 from DefaultChannels", len(all))
+	}
+}
+
+// TestService_BusSubscriptionDrivesPresence verifies that chat subscribes
+// to service.SessionEnter/Leave events at Init and that publishing those
+// events through the bus drives the same presence transitions as the
+// older Process.chatHook path. Sets up the new consumer ahead of the
+// gateway publisher swap (Task 7).
+func TestService_BusSubscriptionDrivesPresence(t *testing.T) {
+	bus := service.NewBus("test-proc")
+	repo := chattest.NewMock()
+	svc := chat.NewTestServiceWithBus(t, repo, nil, bus)
+
+	uid := uuid.NewString()
+	service.Publish(bus, service.SessionEnterEvent{
+		ConnID:    42,
+		UserID:    uid,
+		Username:  "alice",
+		GatewayID: "gw-1",
+	})
+	if _, online := svc.OnlineConnIDForUser(uuid.MustParse(uid)); !online {
+		t.Fatal("alice not online after SessionEnterEvent")
+	}
+	service.Publish(bus, service.SessionLeaveEvent{
+		ConnID:    42,
+		GatewayID: "gw-1",
+	})
+	if _, online := svc.OnlineConnIDForUser(uuid.MustParse(uid)); online {
+		t.Fatal("alice still online after SessionLeaveEvent")
 	}
 }

@@ -127,6 +127,27 @@ func (s *Service) OnlineConnIDForUser(userID uuid.UUID) (uint32, bool) {
 
 func (s *Service) Init(ctx *service.Context) error {
 	s.ctx = ctx
+
+	// Bus subscriptions for engine-driven session events. Replaces the
+	// previous Process.chatHook plumbing — chat now listens for the same
+	// transitions on the typed pub/sub bus owned by Process.
+	//
+	// Bus is always non-nil per service.Context contract.
+	service.Subscribe(ctx.Bus, func(ev service.SessionEnterEvent) {
+		_, _ = s.HandleSessionEnter(nil, &ChatSessionEnterRequest{
+			ConnID:    ev.ConnID,
+			UserID:    ev.UserID,
+			Username:  ev.Username,
+			GatewayID: ev.GatewayID,
+		})
+	})
+	service.Subscribe(ctx.Bus, func(ev service.SessionLeaveEvent) {
+		_, _ = s.HandleSessionLeave(nil, &ChatSessionLeaveRequest{
+			ConnID:    ev.ConnID,
+			GatewayID: ev.GatewayID,
+		})
+	})
+
 	if s.opts.Repository != nil {
 		s.repo = s.opts.Repository
 	} else {
