@@ -43,8 +43,7 @@ func NewBus(processID string) *Bus {
 //
 // The returned Unsubscribe is idempotent.
 func Subscribe[T any](b *Bus, handler func(T)) Unsubscribe {
-	var zero T
-	typ := reflect.TypeOf(zero)
+	typ := reflect.TypeFor[T]()
 	if typ == nil {
 		// T is an interface or untyped nil — Subscribe[interface{}] is
 		// disallowed. The Bus is type-keyed; an interface key would

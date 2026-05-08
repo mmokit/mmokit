@@ -14,8 +14,7 @@ import (
 // mmokit. Phase 3 carries this string in MeshFrame.ServiceEvent.type_name;
 // Phase 1 uses it only as the registry key so the API is stable.
 func EventTypeName[T any]() string {
-	var zero T
-	t := reflect.TypeOf(zero)
+	t := reflect.TypeFor[T]()
 	if t == nil {
 		panic("service.EventTypeName: T must be a concrete struct type")
 	}
@@ -50,8 +49,7 @@ var (
 // pre-populated. Phase 3 receivers consult this registry to decode wire
 // payloads back into Go values.
 func RegisterEventType[T any]() {
-	var zero T
-	t := reflect.TypeOf(zero)
+	t := reflect.TypeFor[T]()
 	if t == nil {
 		// T is an interface or untyped nil — RegisterEventType[interface{}]
 		// is disallowed. The registry is type-keyed; an interface key would
