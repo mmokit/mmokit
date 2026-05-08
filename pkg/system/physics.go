@@ -20,7 +20,7 @@ import (
 // spike at the handoff boundary. After wall-time catches up past one
 // full dt, normal dt applies automatically.
 type PhysicsSystem struct {
-	engine.SystemBase[any]
+	engine.SystemBase
 	entities query.Query[struct {
 		Pos  *component.Position
 		Vel  *component.Velocity
