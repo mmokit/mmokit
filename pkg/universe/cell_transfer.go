@@ -841,7 +841,9 @@ const timeoutPollInterval = 50 * time.Millisecond
 // ErrOrchestratorNoHosts.
 func (o *cellTransferOrchestrator) liveHostIDsLocked() []string {
 	if o.coord.hostRegistry != nil {
-		live := o.coord.hostRegistry.LiveHosts()
+		// cellBearingHosts excludes ServiceOnly entries — cell transfers
+		// must only target hosts that can actually execute cells.
+		live := o.coord.hostRegistry.cellBearingHosts()
 		ids := make([]string, 0, len(live))
 		for _, h := range live {
 			if h.State == RemoteHostRegistered || h.State == RemoteHostLive {

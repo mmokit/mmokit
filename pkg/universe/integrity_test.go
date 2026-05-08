@@ -107,7 +107,7 @@ func TestInvariant_SessionRouteHostLive_OK(t *testing.T) {
 		hostRegistry:  NewHostRegistry(nil),
 		sessionRoutes: newSessionRoutes(),
 	}
-	c.hostRegistry.Register("host-a", "", false)
+	c.hostRegistry.Register("host-a", "", false, false)
 	c.sessionRoutes.Set(&SessionRoute{
 		Key:    SessionKey{GatewayID: "gw", ConnID: 1},
 		HostID: "host-a",

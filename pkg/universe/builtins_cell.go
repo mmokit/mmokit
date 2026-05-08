@@ -463,6 +463,9 @@ func registerCellBuiltins(reg *cmdsys.Registry, coord *Process) error {
 			if c.hostRegistry != nil {
 				for _, h := range c.hostRegistry.LiveHosts() {
 					if h.ID == destHost {
+						if h.ServiceOnly {
+							return nil, fmt.Errorf("host %q is service-only (--mode=service); not a valid cell migration destination", destHost)
+						}
 						known = true
 						break
 					}

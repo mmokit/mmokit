@@ -213,12 +213,20 @@ func (c *meshControlClient) runConnection() error {
 	if host := c.coord.localHost(); host != nil && host.Network != nil {
 		grpcAddr = host.Network.Addr()
 	}
+	// Service-only hosts (--mode=service alone) are dialable for
+	// ServiceEvent peer-mesh but have no executor / systemDefs / VCM —
+	// the assignment engine MUST skip them when distributing cells.
+	serviceOnly := c.coord.roles.Has(RoleService) &&
+		!c.coord.roles.Has(RoleHost) &&
+		!c.coord.roles.Has(RoleGateway) &&
+		!c.coord.roles.Has(RoleCoordinator)
 	reg := &meshpb.HostMessage{
 		Msg: &meshpb.HostMessage_Register{
 			Register: &meshpb.RegisterHost{
 				HostId:      c.hostID,
 				GrpcAddr:    grpcAddr,
 				HasPlayerDb: c.coord.hasPlayerDB.Load(),
+				ServiceOnly: serviceOnly,
 			},
 		},
 	}

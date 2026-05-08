@@ -774,10 +774,17 @@ func (*CoordMessage_CellRename) isCoordMessage_Msg() {}
 func (*CoordMessage_CoordTimeSync) isCoordMessage_Msg() {}
 
 type RegisterHost struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	HostId        string                 `protobuf:"bytes,1,opt,name=host_id,json=hostId,proto3" json:"host_id,omitempty"`
-	GrpcAddr      string                 `protobuf:"bytes,2,opt,name=grpc_addr,json=grpcAddr,proto3" json:"grpc_addr,omitempty"`
-	HasPlayerDb   bool                   `protobuf:"varint,3,opt,name=has_player_db,json=hasPlayerDb,proto3" json:"has_player_db,omitempty"`
+	state       protoimpl.MessageState `protogen:"open.v1"`
+	HostId      string                 `protobuf:"bytes,1,opt,name=host_id,json=hostId,proto3" json:"host_id,omitempty"`
+	GrpcAddr    string                 `protobuf:"bytes,2,opt,name=grpc_addr,json=grpcAddr,proto3" json:"grpc_addr,omitempty"`
+	HasPlayerDb bool                   `protobuf:"varint,3,opt,name=has_player_db,json=hasPlayerDb,proto3" json:"has_player_db,omitempty"`
+	// service_only = true means the host registered with --mode=service
+	// alone (no RoleHost, no RoleGateway). Service-only hosts are
+	// dialable for ServiceEvent peer-mesh but MUST NOT receive cell
+	// assignments — they have no executor, systemDefs, or VCM. Default
+	// false (cell-bearing) is backward compatible with hosts that
+	// pre-date the field.
+	ServiceOnly   bool `protobuf:"varint,4,opt,name=service_only,json=serviceOnly,proto3" json:"service_only,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -829,6 +836,13 @@ func (x *RegisterHost) GetGrpcAddr() string {
 func (x *RegisterHost) GetHasPlayerDb() bool {
 	if x != nil {
 		return x.HasPlayerDb
+	}
+	return false
+}
+
+func (x *RegisterHost) GetServiceOnly() bool {
+	if x != nil {
+		return x.ServiceOnly
 	}
 	return false
 }
@@ -4827,11 +4841,12 @@ const file_meshpb_mesh_proto_rawDesc = "" +
 	"\vcell_rename\x18\x14 \x01(\v2\x12.meshpb.CellRenameH\x00R\n" +
 	"cellRename\x12?\n" +
 	"\x0fcoord_time_sync\x18\x15 \x01(\v2\x15.meshpb.CoordTimeSyncH\x00R\rcoordTimeSyncB\x05\n" +
-	"\x03msg\"h\n" +
+	"\x03msg\"\x8b\x01\n" +
 	"\fRegisterHost\x12\x17\n" +
 	"\ahost_id\x18\x01 \x01(\tR\x06hostId\x12\x1b\n" +
 	"\tgrpc_addr\x18\x02 \x01(\tR\bgrpcAddr\x12\"\n" +
-	"\rhas_player_db\x18\x03 \x01(\bR\vhasPlayerDb\"8\n" +
+	"\rhas_player_db\x18\x03 \x01(\bR\vhasPlayerDb\x12!\n" +
+	"\fservice_only\x18\x04 \x01(\bR\vserviceOnly\"8\n" +
 	"\tHeartbeat\x12\x17\n" +
 	"\ahost_id\x18\x01 \x01(\tR\x06hostId\x12\x12\n" +
 	"\x04tick\x18\x02 \x01(\x04R\x04tick\"=\n" +

@@ -70,6 +70,13 @@ message RegisterHost {
   string host_id        = 1;
   string grpc_addr      = 2;
   bool   has_player_db  = 3;
+  // service_only = true means the host registered with --mode=service
+  // alone (no RoleHost, no RoleGateway). Service-only hosts are
+  // dialable for ServiceEvent peer-mesh but MUST NOT receive cell
+  // assignments — they have no executor, systemDefs, or VCM. Default
+  // false (cell-bearing) is backward compatible with hosts that
+  // pre-date the field.
+  bool   service_only   = 4;
 }
 
 message Heartbeat {

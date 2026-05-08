@@ -94,7 +94,7 @@ func (s *meshControlServer) handleHostControl(stream meshpb.MeshControl_ControlS
 	s.mu.Unlock()
 
 	// Insert into HostRegistry and notify the assignment engine.
-	host := s.registry.Register(hostID, reg.GrpcAddr, reg.GetHasPlayerDb())
+	host := s.registry.Register(hostID, reg.GrpcAddr, reg.GetHasPlayerDb(), reg.GetServiceOnly())
 
 	if s.coord != nil && s.coord.commitLog != nil {
 		s.coord.commitLog.Append(CommitEvent{

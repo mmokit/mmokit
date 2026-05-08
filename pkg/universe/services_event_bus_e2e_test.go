@@ -58,19 +58,7 @@ func TestServiceEventBus_E2E_SubscribeAndPublish(t *testing.T) {
 		CellsY:              1,
 	})
 	coord.Build()
-	// Teardown ordering matters here. `t.Cleanup` is LIFO, so the
-	// coord cleanup is registered LAST further down (after the
-	// service-hosts) — this guarantees the coord shuts down BEFORE
-	// the service-hosts.
-	//
-	// Why: pure --mode=service processes carry no cell executor, but
-	// the coord's AssignmentEngine still places the 1×1 default
-	// layout's single cell on whatever hosts are registered. On
-	// service-host Shutdown the coord runs drainHost, attempting to
-	// migrate the cell to a peer with no executor either; that drain
-	// hangs the full 30s gracefulLeaveDrainTimeout. Tearing down the
-	// coord first severs the MeshControl streams so the service-hosts'
-	// GracefulLeave attempts fail fast (they don't wait for an ack).
+	t.Cleanup(coord.Shutdown)
 
 	coordAddr := coord.ControlListenAddr()
 	if coordAddr == "" {
@@ -111,9 +99,6 @@ func TestServiceEventBus_E2E_SubscribeAndPublish(t *testing.T) {
 	})
 	svcB.Build()
 	t.Cleanup(svcB.Shutdown)
-
-	// Coord cleanup last (LIFO ordering — see above).
-	t.Cleanup(coord.Shutdown)
 
 	// === 4. Wait for both service-hosts to register with coord. The
 	// MeshControl client dial + RegisterHost handshake is async; without

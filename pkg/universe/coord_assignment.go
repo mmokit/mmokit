@@ -191,7 +191,9 @@ func (e *assignmentEngine) checkGatewayLiveness() {
 // treated identically: the rendezvous ring is the single source of
 // truth for cell ownership after T2.
 func (e *assignmentEngine) reassignOrphanedCells(dead *RemoteHost) {
-	live := e.registry.LiveHosts()
+	// cellBearingHosts excludes ServiceOnly entries — orphaned cells
+	// must only be redistributed across hosts that can run cells.
+	live := e.registry.cellBearingHosts()
 	liveIDs := make([]string, 0, len(live))
 	for _, h := range live {
 		if h.State == RemoteHostLive {
@@ -284,7 +286,10 @@ func (e *assignmentEngine) runSettleLoop(ctx context.Context) {
 // ring is the single authoritative owner assignment, regardless of
 // whether a host is in-process or remote.
 func (e *assignmentEngine) rebalance() {
-	live := e.registry.LiveHosts()
+	// cellBearingHosts excludes ServiceOnly entries — service-only
+	// processes (--mode=service alone) lack the executor/systemDefs/VCM
+	// needed to run a cell, so they MUST NOT receive CellAssign.
+	live := e.registry.cellBearingHosts()
 
 	liveIDs := make([]string, 0, len(live))
 	for _, h := range live {

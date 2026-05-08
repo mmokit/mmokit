@@ -68,6 +68,13 @@ type RemoteHost struct {
 	// at startup. Commands targeting offline players are dispatched to the
 	// lex-first live DB-bearing host via Coordinator.PickDBHost.
 	HasPlayerDB bool
+
+	// ServiceOnly is true if this host registered with --mode=service
+	// alone (no RoleHost, no RoleGateway). Service-only hosts are
+	// dialable for ServiceEvent peer-mesh but MUST NOT receive cell
+	// assignments — they have no executor, systemDefs, or VCM. The
+	// assignment engine filters these out via cellBearingHosts().
+	ServiceOnly bool
 }
 
 // HostRegistry is the coordinator's view of all registered remote nodes.
@@ -105,7 +112,7 @@ func (r *HostRegistry) SetOwnershipChangedCallback(fn func(cellID MeshCellID)) {
 // and grpc address. Returns the entry. If a prior entry existed (e.g.
 // a reconnection after crash), OwnedCells is reset — the node is
 // expected to re-announce via CellReady messages during reassignment.
-func (r *HostRegistry) Register(hostID, grpcAddr string, hasPlayerDB bool) *RemoteHost {
+func (r *HostRegistry) Register(hostID, grpcAddr string, hasPlayerDB bool, serviceOnly bool) *RemoteHost {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	host := &RemoteHost{
@@ -116,6 +123,7 @@ func (r *HostRegistry) Register(hostID, grpcAddr string, hasPlayerDB bool) *Remo
 		State:         RemoteHostRegistered,
 		OwnedCells:    make(map[MeshCellID]bool),
 		HasPlayerDB:   hasPlayerDB,
+		ServiceOnly:   serviceOnly,
 	}
 	r.hosts[hostID] = host
 	return host
@@ -190,6 +198,29 @@ func (r *HostRegistry) LiveHosts() []*RemoteHost {
 	defer r.mu.RUnlock()
 	out := make([]*RemoteHost, 0, len(r.hosts))
 	for _, host := range r.hosts {
+		out = append(out, r.cloneHost(host))
+	}
+	return out
+}
+
+// cellBearingHosts returns LiveHosts() filtered to entries where
+// ServiceOnly == false. These are the only hosts eligible for cell
+// assignment — service-only processes (--mode=service alone) lack the
+// executor, systemDefs, and VirtualConnManager needed to run a cell.
+//
+// Use this anywhere the assignment engine or cell-transfer logic is
+// picking destinations. PeerList broadcasts, ServiceEvent dispatch,
+// and the host list console command should keep using LiveHosts() so
+// service-only hosts remain visible for diagnostics + dispatchable for
+// service traffic.
+func (r *HostRegistry) cellBearingHosts() []*RemoteHost {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	out := make([]*RemoteHost, 0, len(r.hosts))
+	for _, host := range r.hosts {
+		if host.ServiceOnly {
+			continue
+		}
 		out = append(out, r.cloneHost(host))
 	}
 	return out
@@ -294,5 +325,6 @@ func (r *HostRegistry) cloneHost(h *RemoteHost) *RemoteHost {
 		OwnedCells:    cells,
 		Local:         h.Local,
 		HasPlayerDB:   h.HasPlayerDB,
+		ServiceOnly:   h.ServiceOnly,
 	}
 }

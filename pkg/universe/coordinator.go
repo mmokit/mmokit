@@ -1228,12 +1228,16 @@ func (c *Process) EntityHostForNetID(netID uint32) string {
 	return ""
 }
 
-// LiveHostIDs returns the IDs of all hosts that are currently considered live.
-// In all-in-one mode this is the single in-process host. In coordinator
-// mode with a live HostRegistry these are the registered remote hosts.
+// LiveHostIDs returns the IDs of all hosts eligible to receive cell-
+// related commands (RouteAllHosts fan-out). In all-in-one mode this is
+// the single in-process host. In coordinator mode with a live
+// HostRegistry these are the registered cell-bearing remote hosts —
+// service-only hosts (--mode=service alone) are filtered out because
+// they have no executor / systemDefs / VCM and cannot run cells or
+// answer cell-targeted commands.
 func (c *Process) LiveHostIDs() []string {
 	if c.hostRegistry != nil {
-		hosts := c.hostRegistry.LiveHosts()
+		hosts := c.hostRegistry.cellBearingHosts()
 		ids := make([]string, len(hosts))
 		for i, h := range hosts {
 			ids[i] = h.ID
@@ -2936,9 +2940,11 @@ func (c *Process) drainHost(ctx context.Context, hostID string) error {
 
 // survivingHostIDs returns the set of live host IDs excluding the leaving
 // one. Prefers the HostRegistry snapshot; falls back to the ownership map.
+// Service-only hosts are filtered out — drain/migrate destinations must
+// be cell-bearing.
 func (c *Process) survivingHostIDs(leavingHostID string) []string {
 	if c.hostRegistry != nil {
-		live := c.hostRegistry.LiveHosts()
+		live := c.hostRegistry.cellBearingHosts()
 		out := make([]string, 0, len(live))
 		for _, h := range live {
 			if h.ID == leavingHostID {

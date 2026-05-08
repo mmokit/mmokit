@@ -44,8 +44,8 @@ func registerHostBuiltins(reg *cmdsys.Registry, coord *Process) error {
 					return hostListResult{Output: "  (no hosts registered)\n"}, nil
 				}
 				sort.Slice(hosts, func(i, j int) bool { return hosts[i].ID < hosts[j].ID })
-				fmt.Fprintf(&sb, "  %-16s %-12s %-10s %-22s %-6s\n", "HOST", "STATE", "HB-AGE", "GRPC-ADDR", "CELLS")
-				fmt.Fprintf(&sb, "  %-16s %-12s %-10s %-22s %-6s\n", "----", "-----", "------", "---------", "-----")
+				fmt.Fprintf(&sb, "  %-16s %-12s %-10s %-22s %-6s %-7s\n", "HOST", "STATE", "HB-AGE", "GRPC-ADDR", "CELLS", "SVC-ONLY")
+				fmt.Fprintf(&sb, "  %-16s %-12s %-10s %-22s %-6s %-7s\n", "----", "-----", "------", "---------", "-----", "--------")
 				now := time.Now()
 				for _, h := range hosts {
 					state := h.State.String()
@@ -55,8 +55,12 @@ func registerHostBuiltins(reg *cmdsys.Registry, coord *Process) error {
 					} else {
 						age = now.Sub(h.LastHeartbeat).Truncate(time.Millisecond).String()
 					}
-					fmt.Fprintf(&sb, "  %-16s %-12s %-10s %-22s %d\n",
-						h.ID, state, age, h.GrpcAddr, len(h.OwnedCells))
+					svcOnly := "-"
+					if h.ServiceOnly {
+						svcOnly = "yes"
+					}
+					fmt.Fprintf(&sb, "  %-16s %-12s %-10s %-22s %-6d %-7s\n",
+						h.ID, state, age, h.GrpcAddr, len(h.OwnedCells), svcOnly)
 				}
 				return hostListResult{Output: sb.String()}, nil
 			}
