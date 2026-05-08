@@ -1,10 +1,13 @@
 # Chat Service — Design
 
-**Status:** Draft for review
+**Status:** Implemented with Phase 1 services event-bus migration
 **Author:** Josh Stout (with Claude)
 **Date:** 2026-05-07
+**Updated:** 2026-05-08 (services event-bus Phase 1)
 **Related memories:** `feedback_no_backward_compat`, `feedback_refactor_over_stopgaps`, `feedback_mmokit_facade_only`, `feedback_logging`, `project_opensource_ready`
 **Related specs:** [2026-04-27-pluggable-services-design.md](2026-04-27-pluggable-services-design.md), [2026-05-01-auth-service-design.md](2026-05-01-auth-service-design.md)
+
+**Note (2026-05-08):** This document describes the current chat-service implementation using event-based architecture. The **`MeshFrame.ChatSessionEnter`/`ChatSessionLeave` messages** (§8.1) represent the event-driven session-lifecycle signaling that coordinates chat presence with the gateway. This aligns with the generic services event-bus design in [2026-05-08-services-event-bus-design.md](2026-05-08-services-event-bus-design.md).
 
 ## 1. Summary
 

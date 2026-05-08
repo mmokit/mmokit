@@ -81,6 +81,8 @@ The engine supports multi-cell server meshing via a `GameWorld` interface:
 
 Combination rules: bare `host` (no coordinator) requires `--coordinator-addr`; every other combination is accepted. Empty `--mode=` defaults to `all`.
 
+**Control plane vs data plane.** The coordinator owns control-plane state (host roster, cell ownership, service routing, event-bus subscriptions). It is NEVER on the per-tick or per-action data path. Data flows directly between hosts/gateways/service-hosts over MeshData streams. The service event bus (`pkg/service.Bus`) enforces this principle by construction: coordinator stores subscriptions but never sees event payloads.
+
 **Common presets:**
 
 - `--mode=all` (default, also implied when `--mode` is omitted) — alias for `coordinator,host,gateway`. Single-process dev server; the classic setup. Set `Config.TestHosts` programmatically to distribute cells across multiple in-process `Host` instances via gRPC loopback (testing-only).

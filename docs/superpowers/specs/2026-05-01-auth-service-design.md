@@ -1,10 +1,13 @@
 # Auth Service — Design
 
-**Status:** Draft for review
+**Status:** Implemented with Phase 3 event-bus migration
 **Author:** Josh Stout (with Claude)
 **Date:** 2026-05-01
+**Updated:** 2026-05-08 (services event-bus Phase 3)
 **Related memories:** `feedback_no_backward_compat`, `feedback_refactor_over_stopgaps`, `feedback_mmokit_facade_only`, `feedback_enginepb_import`, `feedback_logging`, `feedback_proto_field_cleanup`, `project_opensource_ready`
 **Related specs:** [2026-04-27-pluggable-services-design.md](2026-04-27-pluggable-services-design.md), [2026-04-18-role-separation-design.md](2026-04-18-role-separation-design.md)
+
+**Note (2026-05-08):** This document predates the Phase 3 services event-bus migration. The **direct GatewayHook callback mechanism** described in §8 has been replaced by `service.Bus` subscriptions — the gateway subscribes to `AuthLoginSucceededEvent` and `AuthLogoutEvent` from the bus, enabling the same behavior with event-based composition instead of inline hooks. See [2026-05-08-services-event-bus-design.md](2026-05-08-services-event-bus-design.md) for the bus-based flow. Sections §8 and related architecture diagrams are historical; the gateway integration now occurs through the event bus.
 
 ## 1. Summary
 

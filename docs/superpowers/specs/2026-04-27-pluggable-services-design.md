@@ -13,7 +13,26 @@ This design adds a fourth engine role — `service` — and a new generic packag
 
 v1 is **stateless services only** (DB-backed state, no in-memory authoritative state). Sharding, active/passive sync, and anti-affinity placement are explicitly deferred — the v1 interface is designed so they bolt on without breaking service authors.
 
-## 2. Goals & non-goals
+## 2. v2: Generic event bus
+
+Cross-service signaling now flows through a typed pub/sub bus
+(`pkg/service.Bus`) rather than per-service core hooks. Service authors
+subscribe at `Init` time via `service.Subscribe[T](ctx.Bus, handler)`
+and publish via `service.Publish[T](bus, ev)`. Process-local
+subscribers fire synchronously inline; cluster-wide delivery rides the
+existing peer-mesh fabric (control plane via PeerList, data plane via
+direct MeshData streams).
+
+Wire eligibility is opt-in: `RegisterEventType[T]()` makes a type
+known to the codec; `RegisterWireEvent[T]()` additionally declares it
+safe for cross-process delivery. Events default to process-local-only
+to prevent accidental credential leakage (e.g. session tokens).
+
+See [docs/superpowers/specs/2026-05-08-services-event-bus-design.md](2026-05-08-services-event-bus-design.md)
+for the full design and [docs/superpowers/plans/2026-05-08-services-event-bus-phase1.md](../plans/2026-05-08-services-event-bus-phase1.md)
++ phase2 + phase3 plans for the migration.
+
+## 3. Goals & non-goals
 
 ### Goals
 
