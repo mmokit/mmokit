@@ -320,7 +320,7 @@ func spawnBotsForTest(t *testing.T, cluster *testCluster, cellID mmokit.CellID, 
 
 	var netIDs []uint32
 	execOnTestLoop(t, cell, func() {
-		w := cell.World.(*mmokit.Stage)
+		w := cell.Stage
 		netMap := ecs.NewMap1[mmokit.NetworkID](w.ECSWorld())
 		filter := ecs.NewFilter2[BotBehavior, mmokit.NetworkID](w.ECSWorld())
 		q := filter.Query()
@@ -445,8 +445,8 @@ func botLocations(t *testing.T, cluster *testCluster) map[uint32]string {
 	for _, cell := range cluster.allCells() {
 		cellKey := string(cell.MeshID)
 		execOnTestLoop(t, cell, func() {
-			w, ok := cell.World.(*mmokit.Stage)
-			if !ok {
+			w := cell.Stage
+			if w == nil {
 				return
 			}
 			netMap := ecs.NewMap1[mmokit.NetworkID](w.ECSWorld())
@@ -483,8 +483,8 @@ func assertNoStrandedReplicas(t *testing.T, cluster *testCluster, phase string) 
 		for _, cell := range cluster.allCells() {
 			cellKey := string(cell.MeshID)
 			execOnTestLoop(t, cell, func() {
-				w, ok := cell.World.(*mmokit.Stage)
-				if !ok {
+				w := cell.Stage
+				if w == nil {
 					return
 				}
 

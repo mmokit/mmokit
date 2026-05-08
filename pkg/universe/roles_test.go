@@ -162,8 +162,7 @@ func TestCoordinatorBuild_BareHostRequiresCoordAddr(t *testing.T) {
 	}()
 
 	cfg := Config{
-		Mode:   "host",
-		OnInit: func(w *Stage) {},
+		Mode: "host",
 	}
 	c := New(cfg)
 	c.Build()

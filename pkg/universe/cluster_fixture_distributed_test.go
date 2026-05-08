@@ -46,7 +46,6 @@ func newDistributedFixture(t *testing.T, cfg FixtureConfig) clusterFixture {
 		Logger:                   logger.New(),
 		ClusterClockSyncInterval: cfg.ClusterClockSyncInterval,
 		DynamicPartitioning:      cfg.DynamicPartitioning,
-		World:                    func(base *Stage) GameWorld { return base },
 	})
 	coord.Build()
 
@@ -88,8 +87,7 @@ func newDistributedFixture(t *testing.T, cfg FixtureConfig) clusterFixture {
 			ShutdownGracePeriod: 50 * time.Millisecond,
 			ConnManager:         net.NewConnManager(),
 			Logger:              logger.New(),
-			World:               func(base *Stage) GameWorld { return base },
-		})
+			})
 		host.Build()
 		t.Cleanup(host.Shutdown)
 		hosts[hid] = host

@@ -41,7 +41,6 @@ func newExecutorTestCoord(t *testing.T) (*Process, *Host, *Cell) {
 		CellsY:   1,
 		CellSize: 1024,
 		Headless: true,
-		World:    func(base *Stage) GameWorld { return base },
 	})
 	coord.Build()
 
@@ -264,7 +263,7 @@ func TestExecutorMergeSerializesAllEntities(t *testing.T) {
 	destCell, destSystems := coord.createNode(survivorCellID, spatialCellSize, destHost, true)
 	destHost.AddCell(survivorCellID, destCell)
 	coord.mu.Unlock()
-	destCell.World.Init()
+	destCell.Stage.Init()
 	initSystems(destSystems)
 	go destCell.Run(context.Background())
 	time.Sleep(10 * time.Millisecond)
@@ -440,7 +439,7 @@ func TestExecutorAbortTearsDownPartialCell(t *testing.T) {
 	node, systems := coord.createNode(destCellID, spatialCellSize, host, true)
 	host.AddCell(destCellID, node)
 	coord.mu.Unlock()
-	node.World.Init()
+	node.Stage.Init()
 	initSystems(systems)
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)

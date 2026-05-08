@@ -25,7 +25,7 @@ type WaveStateMsg struct {
 // mutating positions it broadcasts a snapshot to every connected player
 // via the engine's typed-event service.
 type SineWaveSystem struct {
-	mmokit.SystemBase[any]
+	mmokit.SystemBase
 	entities mmokit.Query[struct {
 		Pos *mmokit.Position
 	}]

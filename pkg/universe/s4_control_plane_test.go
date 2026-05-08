@@ -36,7 +36,6 @@ func TestS4CoordHostRegistrationAndAssignment(t *testing.T) {
 		Headless:            true,
 		SettleWindow:        50 * time.Millisecond,
 		ShutdownGracePeriod: 50 * time.Millisecond,
-		World:               func(base *Stage) GameWorld { return base },
 	})
 	coord.Build()
 	t.Cleanup(coord.Shutdown)
@@ -52,7 +51,6 @@ func TestS4CoordHostRegistrationAndAssignment(t *testing.T) {
 		HostID:              "node-alpha",
 		Headless:            true,
 		ShutdownGracePeriod: 50 * time.Millisecond,
-		World:               func(base *Stage) GameWorld { return base },
 	})
 	node1.Build()
 	t.Cleanup(node1.Shutdown)
@@ -93,7 +91,6 @@ func TestS4CoordHostRegistrationAndAssignment(t *testing.T) {
 		HostID:              "node-beta",
 		Headless:            true,
 		ShutdownGracePeriod: 50 * time.Millisecond,
-		World:               func(base *Stage) GameWorld { return base },
 	})
 	node2.Build()
 	t.Cleanup(node2.Shutdown)
@@ -121,7 +118,6 @@ func TestS4GracefulShutdown(t *testing.T) {
 		Headless:            true,
 		SettleWindow:        50 * time.Millisecond,
 		ShutdownGracePeriod: 50 * time.Millisecond,
-		World:               func(base *Stage) GameWorld { return base },
 	})
 	coord.Build()
 	t.Cleanup(coord.Shutdown)
@@ -136,7 +132,6 @@ func TestS4GracefulShutdown(t *testing.T) {
 		HostID:              "node-shutdown",
 		Headless:            true,
 		ShutdownGracePeriod: 50 * time.Millisecond,
-		World:               func(base *Stage) GameWorld { return base },
 	})
 	node.Build()
 
