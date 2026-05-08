@@ -46,11 +46,9 @@ type Host struct {
 	// Host-plane state. Populated during Build() from Process's
 	// corresponding fields. Phase 2 migration makes these
 	// authoritative; Phase 6 drops Process's copies.
-	netIDAlloc   *NetIDAllocator
-	systemDefs   []engine.SystemDef
-	worldFactory func(base *Stage) GameWorld
-	onInit       func(w *Stage)
-	executor     *cellTransferExecutor
+	netIDAlloc *NetIDAllocator
+	systemDefs []engine.SystemDef
+	executor   *cellTransferExecutor
 	vcm          *VirtualConnManager
 
 	// Back-reference to the parent Process. Populated during Build()

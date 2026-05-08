@@ -36,7 +36,6 @@ type Cell struct {
 	MeshID  MeshCellID
 	Cell    CellID
 	Engine  *engine.Engine
-	World   GameWorld
 	Stage   *Stage // direct access for infrastructure methods
 	Loop    *engine.GameLoop
 	Bridge  Bridge
@@ -111,7 +110,7 @@ func (c *Cell) Shutdown() {
 	if done != nil {
 		<-done
 	}
-	c.World.Shutdown()
+	c.Stage.Shutdown()
 	c.Log.Log(CatMeshCell, "[%s] cell shutdown complete", c.MeshID)
 }
 

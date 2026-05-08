@@ -9,18 +9,6 @@ import (
 	"github.com/zenion/mmoserver/pkg/query"
 )
 
-// BoundaryWorld is the interface needed by BoundarySystem to detect entities
-// crossing cell boundaries and queue CrossingEvents for the HandoffDriver.
-// Stage implements this automatically.
-type BoundaryWorld interface {
-	Bridge() Bridge
-	CellID() MeshCellID
-	Cell() CellID
-	CellSize() float32
-	Engine() *engine.Engine
-	QueueCrossing(evt CrossingEvent)
-}
-
 // edgeMargin is the minimum distance from the cell edge when clamping
 // entities at world boundaries.
 const edgeMargin float32 = 5.0
@@ -28,7 +16,8 @@ const edgeMargin float32 = 5.0
 // BoundarySystem normalizes entity positions into [0, CellSize) and
 // initiates cross-cell transfers when entities cross cell boundaries.
 type BoundarySystem struct {
-	engine.SystemBase[BoundaryWorld]
+	engine.SystemBase
+	stage    *Stage // injected directly during construction (universe-internal type, no public InitStage)
 	entities query.Query[struct {
 		Pos    *component.Position
 		CC     *component.CellCoord
@@ -48,9 +37,8 @@ func (s *BoundarySystem) Init() {
 }
 
 func (s *BoundarySystem) Update(dt float32) {
-	gw := s.World()
 	cellSize := coords.CellSize
-	cell := gw.Cell()
+	cell := s.stage.Cell()
 
 	// Compute this node's bounds in base-cell-local coordinates.
 	// For depth-0 cells this is [0, baseCellSize). For sub-cells after a
@@ -79,7 +67,7 @@ func (s *BoundarySystem) Update(dt float32) {
 		// Compute world-space position for the ownership lookup.
 		worldX := float32(rootCell.X)*cellSize + pos.X
 		worldY := float32(rootCell.Y)*cellSize + pos.Y
-		destCellID := gw.Bridge().CellOwnerAtPos(worldX, worldY)
+		destCellID := s.stage.Bridge().CellOwnerAtPos(worldX, worldY)
 
 		if destCellID == "" {
 			// World edge — clamp position back into this node's bounds
@@ -105,7 +93,7 @@ func (s *BoundarySystem) Update(dt float32) {
 			continue
 		}
 
-		if destCellID == string(gw.CellID()) {
+		if destCellID == string(s.stage.CellID()) {
 			// Same node — clamp into bounds (shouldn't happen with 1:1 cell mapping)
 			if pos.X >= bMaxX {
 				pos.X = bMaxX - edgeMargin
@@ -143,14 +131,14 @@ func (s *BoundarySystem) Update(dt float32) {
 		var username string
 		if playerMap.HasAll(t.entity) {
 			connID = playerMap.Get(t.entity).ConnID
-			if eng := gw.Engine(); eng != nil {
+			if eng := s.stage.Engine(); eng != nil {
 				if sess := eng.Players.ByConnID(connID); sess != nil {
 					username = sess.Username
 				}
 			}
 		}
 
-		gw.QueueCrossing(CrossingEvent{
+		s.stage.QueueCrossing(CrossingEvent{
 			Entity:     t.entity,
 			NetID:      netID,
 			ConnID:     connID,

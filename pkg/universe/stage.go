@@ -252,13 +252,6 @@ type Stage struct {
 	// replication phase. Initialized in NewStage.
 	broadcastQueue *BroadcastQueue
 
-	// world is the GameWorld value produced by the world factory in
-	// Process.createNode. Stored here so game code can reach back from
-	// an Entity (via Entity.Stage().GameWorld()) to game-side helpers.
-	// nil for Stages built outside a Process (tests, stand-alone benchmarks)
-	// or before Process.createNode wires it.
-	world any
-
 	// tickCallbacks are invoked once per simulation tick by the loop driver
 	// (and by tests that call TickCallbacks() directly). Registered via
 	// RegisterTickCallback; backs mmokit.OnWorldTick / OnTick / OnTickEach.
@@ -415,19 +408,6 @@ func (b *Stage) Cell() CellID { return b.cell }
 
 // Process returns the coordinator that owns this node, or nil in single-node mode.
 func (b *Stage) Process() *Process { return b.coord }
-
-// GameWorld returns the world value produced by Config.World (or onInit) at
-// Stage construction. Returns nil if the Stage was built outside a Process
-// (tests, stand-alone benchmarks) or before Process.createNode wired it.
-// Used by game code that needs to reach back from Entity → game-specific
-// helpers; type-assert to the concrete game world type at the callsite.
-func (b *Stage) GameWorld() any { return b.world }
-
-// SetGameWorld stores the world value on the Stage. Called by
-// Process.createNode immediately after the world factory runs so
-// Stage.GameWorld() returns the same value installed on cell.World.
-// Game code never calls this directly.
-func (b *Stage) SetGameWorld(world any) { b.world = world }
 
 // Protocol returns the user-supplied Config.Protocol via the owning Process.
 // Game code retrieves the typed *mmokit.Protocol via mmokit.ProtocolOf.

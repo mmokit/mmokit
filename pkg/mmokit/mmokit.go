@@ -264,11 +264,6 @@ var DisabledPartitionConfig = universe.DisabledPartitionConfig
 // Zero values use sensible defaults.
 type Config = universe.Config
 
-// GameWorld is the interface a game must implement to use the server meshing
-// infrastructure. Methods handle entity serialization, transfers, replication,
-// cross-cell actions, and chat. Embed Stage for working defaults.
-type GameWorld = universe.GameWorld
-
 // Stage provides default implementations for all GameWorld interface methods.
 // Embed it in your game world struct to get working multi-node support out of the
 // box, including entity spawning, border replication, and cross-cell transfers.
@@ -400,10 +395,6 @@ type NeighborInfo = universe.NeighborInfo
 // SpawnOption configures an optional component when spawning an entity via
 // Stage.SpawnEntity (e.g. WithVelocity, WithCollider, WithRotation).
 type SpawnOption = universe.SpawnOption
-
-// BoundaryWorld is the interface needed by BoundarySystem to serialize entities
-// and initiate cross-cell transfers. Stage implements this automatically.
-type BoundaryWorld = universe.BoundaryWorld
 
 // BoundarySystem normalizes entity positions into [0, CellSize) and initiates
 // cross-cell transfers when entities cross cell boundaries.

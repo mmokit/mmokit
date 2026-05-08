@@ -369,7 +369,7 @@ func (e *cellTransferExecutor) Receive(proto *meshpb.CellTransfer) error {
 	e.mu.Unlock()
 
 	// Two-phase init: World.Init then system Init. Mirrors Build()'s order.
-	node.World.Init()
+	node.Stage.Init()
 	initSystems(systems)
 
 	// Start the game loop before enqueuing the populate closure so the
