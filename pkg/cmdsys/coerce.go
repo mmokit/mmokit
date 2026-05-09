@@ -59,6 +59,22 @@ func (d *Dispatcher) coerceArgs(cmd Command, raw any) (any, error) {
 	return argsPtr.Elem().Interface(), nil
 }
 
+// NewArgs returns a fresh pointer to a zero-valued args struct of the type
+// registered with the command. Callers (e.g. HTTP/console adapters that
+// receive args as JSON) decode the request body into the returned pointer
+// before calling Dispatcher.Invoke. Returns nil + nil error when the
+// command takes no args (cmd.Args == nil).
+func NewArgs(c Command) (any, error) {
+	if c.Args == nil {
+		return nil, nil
+	}
+	t := reflect.TypeOf(c.Args)
+	if t.Kind() == reflect.Pointer {
+		t = t.Elem()
+	}
+	return reflect.New(t).Interface(), nil
+}
+
 // newTraceID returns a 16-character hex trace ID from 8 random bytes.
 func newTraceID() string {
 	var b [8]byte
