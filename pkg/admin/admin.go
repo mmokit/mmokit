@@ -105,6 +105,9 @@ func NewServer(opts ServerOpts) *Server {
 		s.cancel = cancel
 		startPublishers(ctx, opts.Process, opts.View, bus)
 	}
+	if opts.Panels != nil {
+		_ = RegisterBuiltinPanels(opts.Panels)
+	}
 	return s
 }
 
