@@ -60,6 +60,41 @@ func TestAssignCellToHostDistribution(t *testing.T) {
 	}
 }
 
+// TestAssignCellToHostDistribution_SimilarPrefixHostnames pins the fix
+// for the FNV-64a → SHA-256 swap. With FNV the names "space-host-{0,1,2}"
+// caused all 9 cells in a 3x3 grid to land on space-host-2 — host 0 and
+// host 1 starved, distributed-space mode was broken. Real-world
+// hostname patterns frequently share long prefixes; HRW must distribute
+// even on short distinguishing suffixes.
+func TestAssignCellToHostDistribution_SimilarPrefixHostnames(t *testing.T) {
+	cases := [][]string{
+		{"space-host-0", "space-host-1", "space-host-2"},
+		{"node-0", "node-1", "node-2"},
+		{"host-0", "host-1", "host-2"},
+	}
+	cells := []string{
+		"cell_0_0", "cell_0_1", "cell_0_2",
+		"cell_1_0", "cell_1_1", "cell_1_2",
+		"cell_2_0", "cell_2_1", "cell_2_2",
+	}
+	for _, hosts := range cases {
+		counts := map[string]int{}
+		for _, c := range cells {
+			counts[AssignCellToHost(c, hosts)]++
+		}
+		// Every host must receive at least one cell. With 9 cells over
+		// 3 hosts the fair share is 3; require ≥ 1 to allow some
+		// distribution variance without re-introducing the starvation
+		// regression.
+		for _, h := range hosts {
+			if counts[h] == 0 {
+				t.Errorf("hosts=%v: host %q starved (counts=%v) — rendezvous distribution regression",
+					hosts, h, counts)
+			}
+		}
+	}
+}
+
 func TestAssignCellsAcrossHostsDeterministic(t *testing.T) {
 	// Two calls with identical inputs must return identical maps.
 	cells := []string{"cell_0_0", "cell_1_0", "cell_2_0", "cell_0_1", "cell_1_1", "cell_2_1"}

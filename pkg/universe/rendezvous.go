@@ -1,7 +1,8 @@
 package universe
 
 import (
-	"hash/fnv"
+	"crypto/sha256"
+	"encoding/binary"
 )
 
 // localityBonus is the rendezvous-score multiplier applied to a candidate
@@ -148,14 +149,23 @@ func assignCellToHostWithLocality(
 }
 
 // hrwScore is the per-(cell, host) weight used by AssignCellToHost.
-// fnv64a is deterministic and fast. We write hostID first so that each
-// host acts as a distinct prefix — this ensures the hashes diverge
-// early and produce a uniform spread across hosts. The 0x00 separator
-// prevents aliasing between pairs like ("ab", "cd") and ("a", "bcd").
+// SHA-256 truncated to 64 bits — deterministic, stdlib-only, and has
+// uniform avalanche even for short similar-prefix host names. (FNV-64a,
+// the original choice, exhibits poor distribution for HRW with inputs
+// like "host-0/1/2" or "space-host-0/1/2": one host wins every cell
+// because the small trailing-byte divergence isn't amplified enough by
+// FNV's multiply-and-XOR mixing. SHA-256's avalanche fixes this; the
+// per-rebalance cost is microseconds — rendezvous is not on the hot
+// path.)
+//
+// We write hostID first, then a 0x00 separator, then cellID. The
+// separator prevents aliasing between pairs like ("ab", "cd") and
+// ("a", "bcd").
 func hrwScore(cellID, hostID string) uint64 {
-	h := fnv.New64a()
+	h := sha256.New()
 	_, _ = h.Write([]byte(hostID))
 	_, _ = h.Write([]byte{0})
 	_, _ = h.Write([]byte(cellID))
-	return h.Sum64()
+	sum := h.Sum(nil)
+	return binary.BigEndian.Uint64(sum[:8])
 }
