@@ -1,6 +1,10 @@
 package admin
 
-import "time"
+import (
+	"time"
+
+	"github.com/zenion/mmoserver/pkg/cmdsys"
+)
 
 // Server is the admin HTTP handler set. Construct with NewServer (Task 15);
 // mount onto any net/http mux with Mount.
@@ -13,8 +17,8 @@ import "time"
 // implementations land.
 type Server struct {
 	view       ClusterView
-	registry   any // *cmdsys.Registry — Task 13/15
-	dispatcher any // *cmdsys.Dispatcher — Task 13/15
+	registry   *cmdsys.Registry
+	dispatcher *cmdsys.Dispatcher
 	sessions   SessionStore
 	audit      *AuditLog
 	lockout    *Lockout
