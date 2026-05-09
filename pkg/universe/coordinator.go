@@ -296,6 +296,12 @@ type Config struct {
 	// set this directly.
 	DumpSchema bool
 
+	// AdminHashPassword, when true, causes Process.Start to prompt for a
+	// password (stdin), print its argon2id-encoded hash, and exit. Used to
+	// generate operator entries for AdminConfig.Operators. Engine-owned via
+	// the --admin-hash-password flag in BindFlags.
+	AdminHashPassword bool
+
 	// PlayerRouter resolves a username to its target cell ID at login.
 	// Optional — when nil, the gateway's default topology-based routing
 	// applies. Forward-compat field; no consumer today.
@@ -2410,6 +2416,14 @@ func (c *Process) Start(parent ...context.Context) {
 	if c.cfg.DumpSchema {
 		c.dumpSchemaAndExit()
 		return // unreachable — dumpSchemaAndExit calls os.Exit
+	}
+
+	if c.cfg.AdminHashPassword {
+		if err := promptAndPrintAdminHash(); err != nil {
+			fmt.Fprintf(os.Stderr, "admin-hash-password: %v\n", err)
+			os.Exit(1)
+		}
+		os.Exit(0)
 	}
 
 	ctx, cancel := context.WithCancel(ctx)

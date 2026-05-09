@@ -100,6 +100,8 @@ func (c *Config) BindFlags() {
 		"disable Secure flag on the auth session cookie (plain-HTTP local dev only)")
 	flag.BoolVar(&c.DumpSchema, "dump-schema", false,
 		"dump protocol schema JSON to stdout and exit (after Build, before Start)")
+	flag.BoolVar(&c.AdminHashPassword, "admin-hash-password", false,
+		"interactively prompt for a password and print its argon2id hash, then exit")
 }
 
 // DefaultPlayerRouter returns a PlayerRouter that routes every player to the
