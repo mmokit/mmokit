@@ -87,7 +87,7 @@ func cellInfoFromSnapshot(id string, snap metrics.LoadSnapshot, p *universe.Proc
 			Ghost:     snap.Entities.Ghost,
 			Connected: snap.Entities.Connected,
 		},
-		BytesPS:   BytesPerSec{Sent: snap.Network.BytesSent, Recv: snap.Network.BytesRecv},
+		Bytes:     BytesTotal{Sent: snap.Network.BytesSent, Recv: snap.Network.BytesRecv},
 		Neighbors: nil, // populated when NeighborsOf accessor lands
 	}
 }
@@ -147,10 +147,7 @@ func (v *LocalClusterView) Players(filter PlayerFilter) []PlayerInfo {
 	if filter.Offset >= len(out) {
 		return nil
 	}
-	end := filter.Offset + limit
-	if end > len(out) {
-		end = len(out)
-	}
+	end := min(filter.Offset+limit, len(out))
 	return out[filter.Offset:end]
 }
 

@@ -54,8 +54,9 @@ type CellInfo struct {
 	TickP99Us int64        `json:"tickP99Us"`
 	TickP95Us int64        `json:"tickP95Us"`
 	Entities  EntityCounts `json:"entities"`
-	BytesPS   BytesPerSec  `json:"bytesPerSec"`
-	Neighbors []string     `json:"neighbors"`
+	// Bytes is cumulative — frontend computes rate via diff over time.
+	Bytes     BytesTotal `json:"bytes"`
+	Neighbors []string   `json:"neighbors"`
 }
 
 type EntityCounts struct {
@@ -65,7 +66,8 @@ type EntityCounts struct {
 	Connected int `json:"connected"` // count of connected sessions (player WebSockets) currently in the cell
 }
 
-type BytesPerSec struct {
+// BytesTotal carries cumulative bytes counters (counter, not rate). Frontend derives per-second rates from successive snapshots.
+type BytesTotal struct {
 	Sent uint64 `json:"sent"`
 	Recv uint64 `json:"recv"`
 }
@@ -83,17 +85,21 @@ type HostInfo struct {
 }
 
 // GatewayInfo describes a gateway process.
+// BytesSentPS / BytesRecvPS are cumulative counters today (rate computation deferred).
 type GatewayInfo struct {
 	ID          string `json:"id"`
 	Sessions    int    `json:"sessions"`
-	BytesSentPS uint64 `json:"bytesSentPerSec"`
-	BytesRecvPS uint64 `json:"bytesRecvPerSec"`
+	BytesSentPS uint64 `json:"bytesSent"`
+	BytesRecvPS uint64 `json:"bytesRecv"`
 	Mode        string `json:"mode"` // "local-shortcut"|"always-proxy"
 }
 
 // PlayerFilter is the query for Players().
 type PlayerFilter struct {
-	Status string `json:"status"` // ""|"online"|"offline"
+	// Status filter: ""|"online"|"offline"|"all". v1 only resolves online
+	// players via in-memory state; "offline" and "all" return online entries
+	// only until persist.PlayerRepository exposes a search API.
+	Status string `json:"status"`
 	Search string `json:"search"` // username substring
 	Limit  int    `json:"limit"`  // default 100
 	Offset int    `json:"offset"`
