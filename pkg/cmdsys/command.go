@@ -67,6 +67,7 @@ const (
 	SourceConsole     CallerSource = iota // interactive server console
 	SourceMeshControl                     // arriving via MeshControl gRPC
 	SourceTest                            // in-process test caller
+	SourceAdminHTTP                       // arriving via /admin/api/* HTTP
 	// SourceChat reserved for post-chat-rework
 )
 
