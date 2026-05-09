@@ -40,6 +40,7 @@ The `pkg/` layer is a **generic, reusable 2D game engine** with zero imports fro
 - `pkg/spatial/` — spatial hash grid for AoI and collision queries
 - `pkg/coords/` — infinite-world cell coordinate system (configurable cell size via `SetCellSize`)
 - `pkg/persist/` — domain repository interfaces (`PlayerRepository`, `MarketRepository`, `ConfigRepository`) + snapshot types. Postgres implementation in `pkg/persist/postgres/`; in-memory mocks for game-domain tests in `pkg/persist/persisttest/`
+- `pkg/admin/` — admin/observability dashboard backend: `ClusterView` over `*Process`, `TopicBus` for live SSE updates, `/admin/api/*` HTTP routes (auth, cluster, cells, hosts, gateways, players, events, perf, commands, stream, audit, panels), session-cookie auth via argon2id + `pkg/services/auth` primitives, `PanelRegistry` for game-extensible sidebar entries. Embedded SPA placeholder in `pkg/admin/static/dist/`; full Svelte SPA lives in `web-admin/` (separate plan)
 - `pkg/logger/` — category-based debug logging with dynamic registration
 
 **Game-specific (`internal/`):**
@@ -198,6 +199,8 @@ coord.Start()    // blocks until shutdown (calls Build() if not already called);
 - `Stage.FromSplit()` lets spawn hooks skip initial entity spawning for split-created stages
 
 **Console lifecycle:** The Coordinator creates an interactive console on its own goroutine (not tied to any specific cell). Cell builtins (`cell list`, `cell load`, `log`, `perf`) are auto-wired. Games add config/entity builtins via `coord.SetConsole(ConsoleOpts{...})` and custom commands via `coord.OnConsoleReady(fn func(*Console))`. Admin commands that target players are routed to the correct cell via the coordinator's `activeUsers` tracking. When `DynamicPartitioning` is enabled, `cell` commands are auto-registered. The `debug` console command toggles the topology overlay on all connected clients (sends `SE_CELL_TOPOLOGY` events).
+
+**Admin dashboard** (`Config.Admin.Enabled = true`, requires `--admin-listen` and `Config.Admin.ServerFactory = mmokit.DefaultAdminServerFactory()`): mounts the engine-shipped admin SPA + JSON/SSE API on the same listener at `/admin/*`. Operators are configured under `Config.Admin.Operators` with argon2id password hashes (use `--admin-hash-password` to generate). Live updates flow over SSE topics (`cells`, `hosts`, `events`, `topology`, `alerts`); commands route through the existing `cmdsys.Dispatcher` with `Caller.Source = SourceAdminHTTP`. Games register custom sidebar panels via `mmokit.RegisterAdminPanel(coord, AdminPanelDef{...})`. All cluster reads go through the `ClusterView` interface; `LocalClusterView` is the v1 in-process impl, with a future `RemoteClusterView` enabling a `--mode=admin` standalone role. See [docs/superpowers/specs/2026-05-10-admin-dashboard-design.md](docs/superpowers/specs/2026-05-10-admin-dashboard-design.md).
 
 ### Game Loop (20Hz fixed timestep in `pkg/engine/loop.go`)
 
