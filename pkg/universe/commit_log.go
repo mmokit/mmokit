@@ -126,6 +126,9 @@ type CommitLog struct {
 	cap    int
 	seq    uint64
 	logger *logger.Logger
+
+	subMu sync.Mutex
+	subs  []chan CommitEvent
 }
 
 func newCommitLog(cap int, log *logger.Logger) *CommitLog {
@@ -152,6 +155,17 @@ func (l *CommitLog) Append(e CommitEvent) {
 		l.size++
 	}
 	l.mu.Unlock()
+
+	// Fan out to live subscribers. Drop on slow consumers — admin
+	// streams are observability, not load-bearing.
+	l.subMu.Lock()
+	for _, ch := range l.subs {
+		select {
+		case ch <- e:
+		default:
+		}
+	}
+	l.subMu.Unlock()
 
 	if l.logger != nil {
 		category := "events:" + e.Kind.String()
@@ -223,4 +237,30 @@ func (l *CommitLog) Since(t time.Time) []CommitEvent {
 		}
 	}
 	return out
+}
+
+// Subscribe registers a channel to receive every newly-appended CommitEvent.
+// The returned channel is buffered (default 64); on overflow the bus drops
+// the event for that subscriber. Used by pkg/admin to stream events live.
+//
+// Caller MUST eventually call Unsubscribe(ch) to release resources.
+func (l *CommitLog) Subscribe() <-chan CommitEvent {
+	ch := make(chan CommitEvent, 64)
+	l.subMu.Lock()
+	l.subs = append(l.subs, ch)
+	l.subMu.Unlock()
+	return ch
+}
+
+// Unsubscribe removes a channel previously registered via Subscribe and closes it.
+func (l *CommitLog) Unsubscribe(ch <-chan CommitEvent) {
+	l.subMu.Lock()
+	defer l.subMu.Unlock()
+	for i, c := range l.subs {
+		if (<-chan CommitEvent)(c) == ch {
+			l.subs = append(l.subs[:i], l.subs[i+1:]...)
+			close(c)
+			return
+		}
+	}
 }
