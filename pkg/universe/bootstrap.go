@@ -71,6 +71,8 @@ func (c *Config) BindFlags() {
 	stringFlag("admin-listen",
 		"admin HTTP listen addr for /events, /commands, /metrics (empty = disabled)",
 		"", &c.AdminListen)
+	flag.BoolVar(&c.Admin.Enabled, "admin-enabled", false,
+		"enable the admin dashboard at /admin/* (requires --admin-listen)")
 	stringFlag("coordinator-addr",
 		"MeshControl dial addr (host/gateway roles when running standalone)",
 		"", &c.CoordinatorAddr)
@@ -226,6 +228,13 @@ func (c *Process) startAdminHTTPListener() {
 	mux.Handle("/commands", handleCommandList(c.registry))
 	mux.Handle("/commands/", handleCommandDescribe(c.registry))
 	mux.HandleFunc("/events", handleCommitLogEvents(c.commitLog))
+
+	// Mount the admin dashboard when configured.
+	if c.cfg.Admin.Enabled && c.cfg.Admin.ServerFactory != nil {
+		c.adminServer = c.cfg.Admin.ServerFactory(c)
+		c.adminServer.Mount(mux)
+		c.Log.Log(CatMeshCell, "admin: mounted /admin/* on %s", c.cfg.AdminListen)
+	}
 
 	c.adminHTTPServer = &http.Server{Addr: c.cfg.AdminListen, Handler: mux}
 	c.Log.Log(CatMeshCell, "admin-http: listening on %s (roles=%s)", c.cfg.AdminListen, c.roles)

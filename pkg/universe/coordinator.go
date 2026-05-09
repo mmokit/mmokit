@@ -115,6 +115,9 @@ type Config struct {
 	// "127.0.0.1:9101".
 	AdminListen string
 
+	// Admin configures the optional admin dashboard. See AdminConfig.
+	Admin AdminConfig
+
 	// CoordinatorAddr is the MeshControl server address to dial. Used by
 	// remote hosts (`--mode=host` with no local coordinator) and by
 	// standalone gateways (`--mode=gateway`). Empty for in-process roles.
@@ -333,6 +336,43 @@ type Config struct {
 	AnonymousAuth bool
 }
 
+// AdminConfig configures the engine-shipped admin/observability dashboard
+// at /admin/* on the AdminListen mux. When Enabled=false (default), the
+// dashboard is not mounted; /metrics, /commands, /events still work.
+//
+// pkg/admin imports pkg/universe (for ClusterView), so universe cannot
+// import pkg/admin directly. ServerFactory supplies the concrete Server
+// from a higher layer (mmokit.DefaultAdminServerFactory) without
+// introducing an import cycle.
+type AdminConfig struct {
+	Enabled            bool
+	SessionTTL         time.Duration
+	LockoutMaxAttempts int
+	LockoutWindow      time.Duration
+	AuditCap           int
+	Operators          []AdminOperatorConfig
+
+	// ServerFactory builds the admin server when Enabled. Provided by
+	// mmokit.DefaultAdminServerFactory or a custom factory. Nil = the
+	// admin section is a no-op even when Enabled=true.
+	ServerFactory func(*Process) AdminServer
+}
+
+// AdminOperatorConfig is one entry in AdminConfig.Operators. PasswordHash
+// is the encoded argon2id string from `<server> --admin-hash-password`.
+type AdminOperatorConfig struct {
+	Username     string
+	PasswordHash string
+	Grants       []string
+}
+
+// AdminServer is the slim contract pkg/admin.Server satisfies. universe
+// holds a reference for Mount/Stop without importing pkg/admin.
+type AdminServer interface {
+	Mount(mux *http.ServeMux)
+	Stop()
+}
+
 // IsRemoteHost reports whether the given role set represents a remote host —
 // bare RoleHost with a non-empty CoordinatorAddr. Remote hosts dial the
 // coordinator via MeshControl and receive cell assignments dynamically;
@@ -542,6 +582,10 @@ type Process struct {
 	// Typically used on pure-coordinator processes that don't bind the
 	// client HTTP listener but still need operational observability.
 	adminHTTPServer *http.Server
+
+	// adminServer is the optional admin dashboard server (pkg/admin). Non-nil
+	// only when Config.Admin.Enabled and Config.Admin.ServerFactory is set.
+	adminServer AdminServer
 
 	// C3: cross-process command dispatch.
 	// registry and dispatcher are constructed in New so they are
@@ -3000,6 +3044,10 @@ func (c *Process) localHostExecutor(hostID string) *cellTransferExecutor {
 
 // Shutdown saves state on all nodes.
 func (c *Process) Shutdown() {
+	if c.adminServer != nil {
+		c.adminServer.Stop()
+	}
+
 	// Service framework: drain services before HTTP and cells go away so
 	// (a) in-flight service ops complete via the still-active OpRouter,
 	// (b) the coordinator stops routing to us before our handlers go.
