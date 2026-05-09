@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/zenion/mmoserver/pkg/admin/static"
 	"github.com/zenion/mmoserver/pkg/cmdsys"
 	"github.com/zenion/mmoserver/pkg/universe"
 )
@@ -156,11 +157,16 @@ func (s *Server) Mount(mux *http.ServeMux) {
 	mux.Handle("/admin/api/stream", s.requireSession(http.HandlerFunc(s.handleStream)))
 }
 
-// staticDist is the SPA filesystem. Task 16 replaces this with the real
-// //go:embed FS via static.FS. The fallback below makes the package
-// compile and serve a 404 for /admin/* until the SPA is built.
-var staticDist fs.FS = embedFallbackFS{}
+// staticDist is the SPA filesystem, embedded from pkg/admin/static/dist via
+// the //go:embed directive in pkg/admin/static/dist.go. v1 ships a placeholder
+// index.html; the real Svelte SPA is built into dist/ by `just admin-build`
+// in a follow-up plan.
+var staticDist fs.FS = mustSubFS(static.FS, "dist")
 
-type embedFallbackFS struct{}
-
-func (embedFallbackFS) Open(string) (fs.File, error) { return nil, fs.ErrNotExist }
+func mustSubFS(f fs.FS, dir string) fs.FS {
+	sub, err := fs.Sub(f, dir)
+	if err != nil {
+		panic(err)
+	}
+	return sub
+}
