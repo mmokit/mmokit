@@ -12,9 +12,9 @@ import "time"
 // s.registry, s.dispatcher; those fields are added incrementally as their
 // implementations land.
 type Server struct {
-	view       any // ClusterView; concrete in Task 15
-	registry   any // *cmdsys.Registry
-	dispatcher any // *cmdsys.Dispatcher
+	view       ClusterView
+	registry   any // *cmdsys.Registry — Task 13/15
+	dispatcher any // *cmdsys.Dispatcher — Task 13/15
 	sessions   SessionStore
 	audit      *AuditLog
 	lockout    *Lockout
@@ -22,8 +22,7 @@ type Server struct {
 	panels     *PanelRegistry
 	bus        *TopicBus
 	log        Logger
-
-	cfg Config
+	cfg        Config
 }
 
 // Logger is the minimal logger surface admin.Server needs. *logger.Logger
