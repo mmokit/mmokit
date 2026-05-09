@@ -1,6 +1,6 @@
 // Package universe — builtins_service_bus.go
 //
-// services.bus.list — observability shim for the cluster-wide service
+// service.bus.list — observability shim for the cluster-wide service
 // event bus (Phase 3, Task 12). Snapshots the local Bus routing cache
 // (typeName → []processID, the publisher-side view) and, on a
 // coordinator-bearing process, the authoritative coord-side router.
@@ -25,45 +25,45 @@ import (
 	"github.com/zenion/mmoserver/pkg/cmdsys"
 )
 
-type servicesBusListArgs struct {
+type serviceBusListArgs struct {
 	Type string `cmd:"optional,name=type,help=filter rows to one fully-qualified event type name"`
 }
 
-// ServicesBusRoutingRow is one row in the rendered routing-table view.
+// ServiceBusRoutingRow is one row in the rendered routing-table view.
 // The CoordRouter column distinguishes "coord knows about this subscriber"
 // (Local + Coord both populated) from "local cache stale" (Local
 // populated, Coord empty) on a coordinator process.
-type ServicesBusRoutingRow struct {
+type ServiceBusRoutingRow struct {
 	TypeName    string
 	LocalCache  string // comma-joined processIDs from the local Bus.RoutingCacheSnapshot
 	CoordRouter string // comma-joined processIDs from the coord-side serviceEventRouter; "(non-coord)" on processes that don't host the router
 }
 
-type servicesBusListResult struct {
-	Rows   []ServicesBusRoutingRow `cmd:"table"`
+type serviceBusListResult struct {
+	Rows   []ServiceBusRoutingRow `cmd:"table"`
 	Notice string
 }
 
-// registerServiceBusBuiltins wires `services.bus.list` into the
+// registerServiceBusBuiltins wires `service.bus.list` into the
 // dispatcher. Sister of registerServiceBuiltins; lives in its own file
 // because it touches the bus + serviceEventRouter rather than the
 // service kind / typed-op registry.
 func registerServiceBusBuiltins(reg *cmdsys.Registry, coord *Process) error {
 	if err := reg.Register(cmdsys.Command{
-		Verb:        "services.bus.list",
+		Verb:        "service.bus.list",
 		Capability:  "service.list",
 		Description: "snapshot the local service-event routing cache + (on coord) the authoritative router",
 		Examples: []string{
-			"services bus list",
-			"services bus list --type=github.com/zenion/mmoserver/pkg/service.SessionEnterEvent",
+			"service bus list",
+			"service bus list --type=github.com/zenion/mmoserver/pkg/service.SessionEnterEvent",
 		},
 		Route:  cmdsys.RouteLocal,
-		Args:   servicesBusListArgs{},
-		Result: servicesBusListResult{},
+		Args:   serviceBusListArgs{},
+		Result: serviceBusListResult{},
 		Handler: func(ctx context.Context, env *cmdsys.Env, raw any) (any, error) {
-			args := raw.(servicesBusListArgs)
+			args := raw.(serviceBusListArgs)
 			if coord == nil {
-				return servicesBusListResult{Notice: "no Process in scope"}, nil
+				return serviceBusListResult{Notice: "no Process in scope"}, nil
 			}
 
 			var local map[string][]string
@@ -94,9 +94,9 @@ func registerServiceBusBuiltins(reg *cmdsys.Registry, coord *Process) error {
 			}
 			sort.Strings(types)
 
-			rows := make([]ServicesBusRoutingRow, 0, len(types))
+			rows := make([]ServiceBusRoutingRow, 0, len(types))
 			for _, t := range types {
-				row := ServicesBusRoutingRow{
+				row := ServiceBusRoutingRow{
 					TypeName:   t,
 					LocalCache: joinSorted(local[t]),
 				}
@@ -110,14 +110,14 @@ func registerServiceBusBuiltins(reg *cmdsys.Registry, coord *Process) error {
 
 			if len(rows) == 0 {
 				if args.Type != "" {
-					return servicesBusListResult{Notice: fmt.Sprintf("no routing entries for type %q", args.Type)}, nil
+					return serviceBusListResult{Notice: fmt.Sprintf("no routing entries for type %q", args.Type)}, nil
 				}
-				return servicesBusListResult{Notice: "no routing entries (no remote subscribers cached)"}, nil
+				return serviceBusListResult{Notice: "no routing entries (no remote subscribers cached)"}, nil
 			}
-			return servicesBusListResult{Rows: rows}, nil
+			return serviceBusListResult{Rows: rows}, nil
 		},
 	}); err != nil {
-		return fmt.Errorf("services.bus.list: %w", err)
+		return fmt.Errorf("service.bus.list: %w", err)
 	}
 	return nil
 }
