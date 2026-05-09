@@ -35,119 +35,121 @@ type ClusterView interface {
 
 // ClusterInfo is the cluster-wide one-shot snapshot returned by GET /api/cluster.
 type ClusterInfo struct {
-	Now           time.Time
-	HostCount     int
-	GatewayCount  int
-	CellCount     int
-	SessionCount  int
-	TotalEntities int
-	RecentEvents  []CommitEvent // last ~20 events for the dashboard's at-a-glance view
+	Now           time.Time     `json:"now"`
+	HostCount     int           `json:"hostCount"`
+	GatewayCount  int           `json:"gatewayCount"`
+	CellCount     int           `json:"cellCount"`
+	SessionCount  int           `json:"sessionCount"`
+	TotalEntities int           `json:"totalEntities"`
+	RecentEvents  []CommitEvent `json:"recentEvents"` // last ~20 events for the dashboard's at-a-glance view
 }
 
 // CellInfo describes a single cell at any quadtree depth.
 type CellInfo struct {
-	ID         string   // base or split ID, e.g. "0_0" or "0_0:1"
-	Depth      int
-	Parent     string   // empty when Depth==0
-	HostID     string
-	Load       float64  // 0..>1 (CompositeLoad)
-	TickP99Us  int64
-	TickP95Us  int64
-	Entities   EntityCounts
-	BytesPS    BytesPerSec
-	Neighbors  []string
+	ID        string       `json:"id"` // base or split ID, e.g. "0_0" or "0_0:1"
+	Depth     int          `json:"depth"`
+	Parent    string       `json:"parent"` // empty when Depth==0
+	HostID    string       `json:"hostId"`
+	Load      float64      `json:"load"` // 0..>1 (CompositeLoad)
+	TickP99Us int64        `json:"tickP99Us"`
+	TickP95Us int64        `json:"tickP95Us"`
+	Entities  EntityCounts `json:"entities"`
+	BytesPS   BytesPerSec  `json:"bytesPerSec"`
+	Neighbors []string     `json:"neighbors"`
 }
 
 type EntityCounts struct {
-	Real      int
-	Replica   int
-	Ghost     int
-	Connected int
+	Real      int `json:"real"`
+	Replica   int `json:"replica"`
+	Ghost     int `json:"ghost"`
+	Connected int `json:"connected"` // count of connected sessions (player WebSockets) currently in the cell
 }
 
 type BytesPerSec struct {
-	Sent uint64
-	Recv uint64
+	Sent uint64 `json:"sent"`
+	Recv uint64 `json:"recv"`
 }
 
 // HostInfo describes a host process in the cluster.
 type HostInfo struct {
-	ID             string
-	Roles          []string // ["coordinator","host"], etc.
-	State          string   // "live"|"draining"|"dead"
-	IsLocal        bool
-	HeartbeatAgeMS int64
-	Cells          []string
-	Load           float64 // composite over owned cells
-	TotalEntities  int
+	ID             string   `json:"id"`
+	Roles          []string `json:"roles"` // ["coordinator","host"], etc.
+	State          string   `json:"state"` // "live"|"draining"|"dead"
+	IsLocal        bool     `json:"isLocal"`
+	HeartbeatAgeMS int64    `json:"heartbeatAgeMs"`
+	Cells          []string `json:"cells"`
+	Load           float64  `json:"load"` // composite over owned cells
+	TotalEntities  int      `json:"totalEntities"`
 }
 
 // GatewayInfo describes a gateway process.
 type GatewayInfo struct {
-	ID           string
-	Sessions     int
-	BytesSentPS  uint64
-	BytesRecvPS  uint64
-	Mode         string // "local-shortcut"|"always-proxy"
+	ID          string `json:"id"`
+	Sessions    int    `json:"sessions"`
+	BytesSentPS uint64 `json:"bytesSentPerSec"`
+	BytesRecvPS uint64 `json:"bytesRecvPerSec"`
+	Mode        string `json:"mode"` // "local-shortcut"|"always-proxy"
 }
 
 // PlayerFilter is the query for Players().
 type PlayerFilter struct {
-	Status string // ""|"online"|"offline"
-	Search string // username substring
-	Limit  int    // default 100
-	Offset int
+	Status string `json:"status"` // ""|"online"|"offline"
+	Search string `json:"search"` // username substring
+	Limit  int    `json:"limit"`  // default 100
+	Offset int    `json:"offset"`
 }
 
 // PlayerInfo describes a single player.
 type PlayerInfo struct {
-	Username  string
-	Status    string  // "online"|"offline"
-	HostID    string  // online only
-	CellID    string  // online only
-	WorldX    float32 // online only
-	WorldY    float32 // online only
-	LastLogin time.Time
+	Username  string    `json:"username"`
+	Status    string    `json:"status"` // "online"|"offline"
+	HostID    string    `json:"hostId"` // online only
+	CellID    string    `json:"cellId"` // online only
+	WorldX    float32   `json:"worldX"` // online only
+	WorldY    float32   `json:"worldY"` // online only
+	LastLogin time.Time `json:"lastLogin"`
 }
 
 // CommitQuery is the parameter for CommitLog().
 type CommitQuery struct {
-	N       int           // limit, 0 = default 200
-	Since   time.Duration // 0 = no time filter
-	Cell    string
-	Commit  string
+	N      int           `json:"n"`     // limit, 0 = default 200
+	Since  time.Duration `json:"since"` // 0 = no time filter
+	Cell   string        `json:"cell"`
+	Commit string        `json:"commit"`
 }
 
 // CommitEvent mirrors universe.CommitEvent for the wire layer. The remote
 // view impl produces these from the gRPC response without depending on
 // the universe package's struct layout.
 type CommitEvent struct {
-	CommitID    string
-	Scenario    string
-	Step        string
-	StepIndex   int
-	Success     bool
-	DurationMs  int64
-	Affected    []string
-	HostIDs     []string
-	Error       string
-	Timestamp   time.Time
+	CommitID   string    `json:"commitId"` // string-encoded universe.CommitEvent.CommitID (uint64) — string for JS integer-precision safety
+	Scenario   string    `json:"scenario"`
+	Step       string    `json:"step"`
+	StepIndex  int       `json:"stepIndex"`
+	Success    bool      `json:"success"`
+	DurationMs int64     `json:"durationMs"`
+	Affected   []string  `json:"affected"`
+	HostIDs    []string  `json:"hostIds"`
+	Error      string    `json:"error"`
+	SeqNo      uint64    `json:"seqNo"` // monotonic per-process commit-log seq for stable ordering
+	Kind       string    `json:"kind"`  // "commit" | "invariant" | "host" | "session"
+	Timestamp  time.Time `json:"timestamp"`
 }
 
 // PerfSnapshot is per-cell tick profiling data.
 type PerfSnapshot struct {
-	CellID      string
-	SystemNames []string
-	Systems     []TimingStats
-	Total       TimingStats
-	SampleCount int
+	CellID      string        `json:"cellId"`
+	SystemNames []string      `json:"systemNames"`
+	Systems     []TimingStats `json:"systems"`
+	Total       TimingStats   `json:"total"`
+	SampleCount int           `json:"sampleCount"`
 }
 
 type TimingStats struct {
-	LatestUs int64
-	AvgUs    int64
-	P50Us    int64
-	P95Us    int64
-	P99Us    int64
-	MaxUs    int64
+	LatestUs int64 `json:"latestUs"`
+	AvgUs    int64 `json:"avgUs"`
+	P50Us    int64 `json:"p50Us"`
+	P95Us    int64 `json:"p95Us"`
+	P99Us    int64 `json:"p99Us"`
+	MaxUs    int64 `json:"maxUs"`
 }
