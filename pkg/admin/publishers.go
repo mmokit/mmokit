@@ -79,15 +79,26 @@ func commitPublisher(ctx context.Context, p *universe.Process, bus *TopicBus) {
 	}
 }
 
+// isTopologyEvent fires the "topology" SSE topic for any commit step that
+// finalizes ownership change. The hosts/cells maps are stable after these
+// steps fire, so the dashboard can rerender ownership tiles. Step names
+// match PlanStep.Name in commit_builders_{split,merge,migrate}.go.
 func isTopologyEvent(ev universe.CommitEvent) bool {
-	// Scenario is a typed CommitKind; .String() returns "Split"|"Merge"|"Migrate".
-	switch ev.Scenario.String() {
-	case "Split", "Merge", "Migrate":
-		return ev.Step == "topology-commit" || ev.Step == "release-donors"
+	if ev.Kind != universe.EventCommitSplit &&
+		ev.Kind != universe.EventCommitMerge &&
+		ev.Kind != universe.EventCommitMigrate {
+		return false
+	}
+	switch ev.Step {
+	case "release-parent-host", // split: parent retired
+		"release-donors",     // merge: donor cells retired
+		"release-src-host",   // migrate: source host released
+		"broadcast-peer-list": // post-finalize: PeerList shipped to all peers
+		return true
 	}
 	return false
 }
 
 func isInvariantViolation(ev universe.CommitEvent) bool {
-	return ev.Step == "invariant-violation"
+	return ev.Kind == universe.EventInvariantViolation
 }
