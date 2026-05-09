@@ -16,8 +16,8 @@ type Server struct {
 	registry   any // *cmdsys.Registry
 	dispatcher any // *cmdsys.Dispatcher
 	sessions   SessionStore
-	audit      any // *AuditLog (Task 10)
-	lockout    any // *Lockout (Task 10)
+	audit      *AuditLog
+	lockout    *Lockout
 	operators  map[string]OperatorConfig
 	panels     *PanelRegistry
 	bus        *TopicBus
