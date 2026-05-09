@@ -132,11 +132,23 @@ func (c *Process) installSubscriptionFlush() {
 // process (the router's UpdateProcess is called directly + a PeerList
 // re-broadcast triggered). Remote-host / standalone-gateway processes
 // route via their MeshControl client.
+//
+// Filters typeNames to wire-eligible types only. Process-local-only
+// subscriptions (e.g. AuthLoginSucceededEvent — see Hard prereq #1)
+// must not pollute coord's routing table or PeerList broadcasts:
+// they're invisible to peerIDsExceptSelf at publish time anyway, so
+// announcing them is pure overhead.
 func (c *Process) sendServiceEventSubscribe(typeNames []string) {
+	wireOnly := make([]string, 0, len(typeNames))
+	for _, n := range typeNames {
+		if service.IsWireEligible(n) {
+			wireOnly = append(wireOnly, n)
+		}
+	}
 	procID := c.processID()
 	// In-process path: coord lives here.
 	if c.serviceEventRouter != nil && c.assignmentEngine != nil {
-		c.serviceEventRouter.UpdateProcess(procID, typeNames)
+		c.serviceEventRouter.UpdateProcess(procID, wireOnly)
 		c.broadcastPeerListOnServiceChange()
 		return
 	}
@@ -144,7 +156,7 @@ func (c *Process) sendServiceEventSubscribe(typeNames []string) {
 	msg := &meshpb.HostMessage{
 		Msg: &meshpb.HostMessage_ServiceEventSubscribe{
 			ServiceEventSubscribe: &meshpb.ServiceEventSubscribe{
-				TypeNames: append([]string(nil), typeNames...),
+				TypeNames: wireOnly,
 			},
 		},
 	}
