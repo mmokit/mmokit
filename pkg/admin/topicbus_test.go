@@ -81,7 +81,10 @@ func TestTopicBus_Unsubscribe(t *testing.T) {
 	bus.Publish("cells", "second")
 	bus.Drain()
 
-	if len(s.events) != 1 {
-		t.Fatalf("expected 1 event after unsubscribe, got %d", len(s.events))
+	s.mu.Lock()
+	got := len(s.events)
+	s.mu.Unlock()
+	if got != 1 {
+		t.Fatalf("expected 1 event after unsubscribe, got %d", got)
 	}
 }

@@ -108,7 +108,9 @@ func (b *TopicBus) Publish(topic string, payload any) {
 }
 
 // Drain is a test helper that waits for every currently-queued message to
-// be delivered. Production code never calls this.
+// be delivered. It sends a rendezvous token through each subscriber's queue so
+// the caller is guaranteed to observe all prior Deliver calls completing before
+// Drain returns. Production code never calls this.
 func (b *TopicBus) Drain() {
 	b.mu.RLock()
 	subs := make([]*subState, 0, len(b.subscribers))
@@ -117,11 +119,17 @@ func (b *TopicBus) Drain() {
 	}
 	b.mu.RUnlock()
 	for _, st := range subs {
-		for {
-			if len(st.queue) == 0 {
-				break
+		ack := make(chan struct{})
+		// Send a sentinel that the dispatcher will close-ack. Use a select on
+		// st.done so we don't deadlock if the subscriber is torn down mid-drain
+		// (e.g. from a concurrent Close or Deliver returning false).
+		select {
+		case st.queue <- busMessage{topic: "\x00drain", payload: ack}:
+			select {
+			case <-ack:
+			case <-st.done:
 			}
-			time.Sleep(time.Millisecond)
+		case <-st.done:
 		}
 	}
 }
@@ -153,6 +161,11 @@ func (b *TopicBus) dispatcher(s Subscriber, st *subState) {
 			s.Close()
 			return
 		case msg := <-st.queue:
+			if msg.topic == "\x00drain" {
+				// Drain rendezvous: close the done channel to unblock Drain().
+				close(msg.payload.(chan struct{}))
+				continue
+			}
 			if !s.Deliver(msg.topic, msg.payload, msg.ts) {
 				b.Unsubscribe(s)
 				return
