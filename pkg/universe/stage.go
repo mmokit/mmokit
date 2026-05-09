@@ -627,8 +627,32 @@ func (b *Stage) ECSWorld() *ecs.World                                 { return b
 func (b *Stage) GetAoIRadius() float32                                { return b.aoiRadius }
 func (b *Stage) SetBridge(bridge Bridge)                              { b.bridge = bridge }
 func (b *Stage) MarkForRemoval(e ecs.Entity)                          { b.eng.MarkForRemoval(e) }
-func (b *Stage) Hooks() engine.Hooks                                  { return engine.Hooks{} }
 func (b *Stage) Shutdown()                                            {}
+
+// Hooks returns the engine lifecycle hooks for this Stage. If a state
+// registered via mmokit.AddState[T] implements `Hooks() engine.Hooks`,
+// its hooks are returned — restoring the pre-refactor behavior where
+// game state (e.g. GameWorld) supplied PreFlush / PostFlush / etc via
+// implicit-embedding pointer promotion. Without this lookup, game hooks
+// (processDockCompletions, postFlush, clearTickState, postTick) never
+// fire, and game state silently desyncs (the first symptom is usually
+// docking timers reaching 0 but no Docked transition / event).
+//
+// At most one registered state may provide Hooks; if multiple do, the
+// last-registered wins (factories iterate the underlying map in
+// indeterminate order — games should keep this single-owner). If no
+// registered state has a Hooks method, returns an empty hook set.
+func (b *Stage) Hooks() engine.Hooks {
+	type hooksProvider interface {
+		Hooks() engine.Hooks
+	}
+	for _, v := range b.state {
+		if hp, ok := v.(hooksProvider); ok {
+			return hp.Hooks()
+		}
+	}
+	return engine.Hooks{}
+}
 
 // SendEventTyped writes a single-event 0x00 frame for msg to connID.
 // msg must be a pointer to a Go struct registered via mmokit.RegisterEvent[T].
