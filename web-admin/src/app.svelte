@@ -11,6 +11,8 @@
   import Hosts from "./routes/hosts.svelte";
   import Gateways from "./routes/gateways.svelte";
   import Players from "./routes/players.svelte";
+  import Performance from "./routes/performance.svelte";
+  import Events from "./routes/events.svelte";
   import Sidebar from "./components/Sidebar.svelte";
   import TopBar from "./components/TopBar.svelte";
 
@@ -72,6 +74,10 @@
           <Gateways />
         {:else if path === "/players"}
           <Players />
+        {:else if path === "/performance"}
+          <Performance />
+        {:else if path === "/events"}
+          <Events />
         {:else}
           <div class="p-8 text-slate-500">
             Panel <code>{path}</code> — not yet implemented.
