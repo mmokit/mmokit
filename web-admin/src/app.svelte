@@ -8,6 +8,9 @@
   import type { ClusterInfo } from "$lib/types";
   import Login from "./routes/login.svelte";
   import Cluster from "./routes/cluster.svelte";
+  import Hosts from "./routes/hosts.svelte";
+  import Gateways from "./routes/gateways.svelte";
+  import Players from "./routes/players.svelte";
   import Sidebar from "./components/Sidebar.svelte";
   import TopBar from "./components/TopBar.svelte";
 
@@ -63,6 +66,12 @@
       <div class="grow overflow-auto">
         {#if path === "/cluster"}
           <Cluster />
+        {:else if path === "/hosts"}
+          <Hosts />
+        {:else if path === "/gateways"}
+          <Gateways />
+        {:else if path === "/players"}
+          <Players />
         {:else}
           <div class="p-8 text-slate-500">
             Panel <code>{path}</code> — not yet implemented.
