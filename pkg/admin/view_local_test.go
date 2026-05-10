@@ -31,6 +31,43 @@ func TestLocalClusterView_Cell_NotFound(t *testing.T) {
 	}
 }
 
+func TestLocalClusterView_Hosts(t *testing.T) {
+	t.Parallel()
+	v := NewLocalClusterView(newTestProcessForView(t))
+	hosts := v.Hosts()
+	if len(hosts) == 0 {
+		t.Fatalf("expected >=1 host, got 0")
+	}
+	for _, h := range hosts {
+		if h.ID == "" {
+			t.Fatalf("host missing ID: %+v", h)
+		}
+		if h.State == "" {
+			t.Fatalf("host %s missing State", h.ID)
+		}
+	}
+}
+
+func TestLocalClusterView_Gateways(t *testing.T) {
+	t.Parallel()
+	v := NewLocalClusterView(newTestProcessForView(t))
+	// Default config (Modes unset) resolves to the "all" preset
+	// (coordinator+host+gateway), so the embedded in-process gateway is
+	// always present in the fixture.
+	gws := v.Gateways()
+	if len(gws) == 0 {
+		t.Fatalf("expected >=1 gateway, got 0")
+	}
+}
+
+func TestLocalClusterView_Players_EmptyOnFreshFixture(t *testing.T) {
+	t.Parallel()
+	v := NewLocalClusterView(newTestProcessForView(t))
+	if got := v.Players(PlayerFilter{}); len(got) != 0 {
+		t.Fatalf("expected 0 players in fresh fixture, got %d", len(got))
+	}
+}
+
 // newTestProcessForView spins up a minimal headless coordinator with a 2x2
 // grid so view tests can read live state without a full game wiring.
 // HTTPPort is set to -1 to keep the listener disabled so parallel tests
