@@ -1,9 +1,13 @@
 package universe
 
 import (
+	"context"
+	"errors"
+	"fmt"
 	"time"
 
 	meshpb "github.com/zenion/mmoserver/gen/go/meshpb"
+	"github.com/zenion/mmoserver/pkg/cmdsys"
 	"github.com/zenion/mmoserver/pkg/metrics"
 )
 
@@ -326,6 +330,51 @@ func (c *Process) GatewayListEntries() []GatewayListEntry {
 	}
 
 	return out
+}
+
+// PerfSnapshotForCell returns live tick profiling data for one cell. Routes
+// through the existing perf.snapshot cmdsys verb (RouteAllHosts), which
+// fans out to every host and returns the matching cell's snapshot —
+// transparent over distributed mode.
+//
+// Returns (PerfCellSnapshot{}, false, nil) when the cell is not currently
+// owned by any reachable host. Errors from the dispatcher (e.g. context
+// cancel, no dispatcher) surface as the error return.
+//
+// Used by pkg/admin's LocalClusterView.Perf(). Caller must supply a context
+// with a deadline; ~2s is a sensible default since the call fans out over
+// MeshControl in distributed deployments.
+func (c *Process) PerfSnapshotForCell(ctx context.Context, cellID string) (PerfCellSnapshot, bool, error) {
+	if c.dispatcher == nil {
+		return PerfCellSnapshot{}, false, errors.New("perf snapshot: no dispatcher")
+	}
+	caller := cmdsys.Caller{
+		ID:     "admin",
+		Source: cmdsys.SourceAdminHTTP,
+		Grants: []cmdsys.Grant{{Pattern: "perf", Allow: true}},
+	}
+	res, err := c.dispatcher.Invoke(ctx, caller, "perf.snapshot", perfSnapshotArgs{CellID: cellID})
+	if err != nil {
+		return PerfCellSnapshot{}, false, fmt.Errorf("perf snapshot: %w", err)
+	}
+	for _, tr := range res.PerTarget {
+		if !tr.OK {
+			continue
+		}
+		r, ok := tr.Result.(perfSnapshotResult)
+		if !ok {
+			continue
+		}
+		for _, row := range r.Rows {
+			if row.CellID == cellID {
+				if row.HostID == "" {
+					row.HostID = tr.TargetID
+				}
+				return row, true, nil
+			}
+		}
+	}
+	return PerfCellSnapshot{}, false, nil
 }
 
 func aggregateCellMetrics(cellIDs []string, metricsByCell map[string]metrics.LoadSnapshot) (load float64, totalEntities int) {
