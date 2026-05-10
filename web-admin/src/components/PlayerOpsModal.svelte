@@ -50,7 +50,7 @@
     void invoke("player.tpto", { Username: username, Target: target.trim() });
   }
   function confirmKick() {
-    void invoke("player.kick", { Username: username });
+    void invoke("auth.user.kick", { Username: username });
   }
 </script>
 
