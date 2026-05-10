@@ -6,6 +6,12 @@
   import { fmtBytes, fmtDuration, fmtLoad } from "$lib/format";
   import type { HostInfo, GatewayInfo } from "$lib/types";
   import DataTable from "../components/DataTable.svelte";
+  import NodeDrawer from "../components/NodeDrawer.svelte";
+
+  type SelectedNode =
+    | { kind: "host"; data: HostInfo }
+    | { kind: "gateway"; data: GatewayInfo }
+    | null;
 
   // Unified row type: a "node" is either a host or a gateway. Rows carry
   // the shared fields directly and the type-specific fields wrapped in a
@@ -27,16 +33,34 @@
   let gateways = $derived<GatewayInfo[]>(gatewaysStore.value ?? []);
   let typeFilter = $state<"all" | "host" | "gateway">("all");
   let search = $state("");
+  let selected = $state<SelectedNode>(null);
+
+  function selectRow(r: NodeRow) {
+    if (r.kind === "host") {
+      const h = hosts.find((x) => x.id === r.id);
+      if (h) selected = { kind: "host", data: h };
+    } else {
+      const g = gateways.find((x) => x.id === r.id);
+      if (g) selected = { kind: "gateway", data: g };
+    }
+  }
 
   // Honor a pending palette navigation for nodes — pre-fill the search
-  // box with the picked node's ID so the table narrows to it.
+  // box with the picked node's ID so the table narrows to it, and open
+  // the drawer directly when the live store has the entry.
   $effect(() => {
     const t = pendingNav.value;
-    if (t && t.kind === "node") {
-      search = t.id;
-      typeFilter = "all";
-      pendingNav.consume();
+    if (!t || t.kind !== "node") return;
+    search = t.id;
+    typeFilter = "all";
+    pendingNav.consume();
+    const h = hosts.find((x) => x.id === t.id);
+    if (h) {
+      selected = { kind: "host", data: h };
+      return;
     }
+    const g = gateways.find((x) => x.id === t.id);
+    if (g) selected = { kind: "gateway", data: g };
   });
 
   let rows = $derived.by<NodeRow[]>(() => {
@@ -151,7 +175,8 @@
   ];
 </script>
 
-<main class="p-4 space-y-3">
+<div class="h-full flex">
+  <main class="grow p-4 space-y-3 min-w-0">
   <div class="flex items-center justify-between">
     <h2 class="text-accent-300 text-[11px] uppercase tracking-wide">Nodes</h2>
     <div class="flex items-center gap-2 text-[11px]">
@@ -180,6 +205,10 @@
       {columns}
       initialSortKey="kind"
       emptyText="No nodes registered."
+      onRowClick={selectRow}
     />
   </div>
-</main>
+  </main>
+
+  <NodeDrawer node={selected} onClose={() => (selected = null)} />
+</div>
