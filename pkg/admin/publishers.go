@@ -13,13 +13,15 @@ import (
 // Topic cadences:
 //
 //	cells    — 4 Hz batched snapshot
-//	hosts    — 1 Hz batched snapshot
+//	hosts    — 1 Hz batched snapshot (shared ticker with gateways + players)
+//	gateways — 1 Hz batched snapshot (shared ticker with hosts + players)
+//	players  — 1 Hz batched snapshot (shared ticker with hosts + gateways)
 //	topology — on commit (delegated through commitPublisher)
 //	events   — on every CommitLog append (delegated through commitPublisher)
 //	alerts   — on invariant violation (delegated through commitPublisher)
 func startPublishers(ctx context.Context, p *universe.Process, view ClusterView, bus *TopicBus) {
 	go cellsPublisher(ctx, view, bus)
-	go hostsPublisher(ctx, view, bus)
+	go rosterPublisher(ctx, view, bus)
 	go commitPublisher(ctx, p, bus)
 }
 
@@ -36,7 +38,11 @@ func cellsPublisher(ctx context.Context, view ClusterView, bus *TopicBus) {
 	}
 }
 
-func hostsPublisher(ctx context.Context, view ClusterView, bus *TopicBus) {
+// rosterPublisher fans the host roster, gateway roster, and player roster
+// onto the bus at 1 Hz on a single ticker. These three topics share a cadence
+// because the underlying state changes are infrequent (login/logout/cell-
+// migration) — a per-second snapshot is plenty to keep tables in sync.
+func rosterPublisher(ctx context.Context, view ClusterView, bus *TopicBus) {
 	t := time.NewTicker(time.Second)
 	defer t.Stop()
 	for {
@@ -45,6 +51,8 @@ func hostsPublisher(ctx context.Context, view ClusterView, bus *TopicBus) {
 			return
 		case <-t.C:
 			bus.Publish("hosts", view.Hosts())
+			bus.Publish("gateways", view.Gateways())
+			bus.Publish("players", view.Players(PlayerFilter{Limit: 1000}))
 		}
 	}
 }
