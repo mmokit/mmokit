@@ -8,7 +8,12 @@
   import Sparkline from "../components/Sparkline.svelte";
   import BarChart from "../components/BarChart.svelte";
 
-  let cells = $derived<CellInfo[]>(cellsStore.value ?? []);
+  // Sort cells by ID so the row order is stable across SSE ticks. Without
+  // this, the underlying map iteration on the backend reshuffles the array
+  // every second and rows visually jump around.
+  let cells = $derived<CellInfo[]>(
+    [...(cellsStore.value ?? [])].sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0)),
+  );
   let history = $derived(metricsHistoryStore.value);
 
   // Push every cells SSE update into the per-cell ring buffer. The store

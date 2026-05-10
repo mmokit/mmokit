@@ -259,12 +259,20 @@ func (v *LocalClusterView) CommitLog(q CommitQuery) []CommitEvent {
 //
 //   - CommitID is encoded as a decimal string for JS integer-precision safety
 //     (uint64 exceeds Number.MAX_SAFE_INTEGER).
-//   - Scenario uses universe.CommitKind.String() ("split"|"merge"|"migrate").
+//   - Scenario is "Split"|"Merge"|"Migrate" only for commit-step events; for
+//     non-commit events (host join/leave, invariant, session) it's the empty
+//     string. CommitKind's zero value stringifies as "Split", so we gate on
+//     Kind to avoid mislabelling those events as splits.
 //   - Kind uses universe.EventKind.String() ("commit-step"|"invariant"|"host"|...).
 func mapCommitEvent(r universe.CommitEvent) CommitEvent {
+	scenario := ""
+	switch r.Kind {
+	case universe.EventCommitSplit, universe.EventCommitMerge, universe.EventCommitMigrate:
+		scenario = r.Scenario.String()
+	}
 	return CommitEvent{
 		CommitID:   strconv.FormatUint(r.CommitID, 10),
-		Scenario:   r.Scenario.String(),
+		Scenario:   scenario,
 		Step:       r.Step,
 		StepIndex:  r.StepIndex,
 		Success:    r.Success,
