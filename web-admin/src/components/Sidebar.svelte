@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { Globe, Server, GitBranch, Users, Activity, List, Scroll, Settings } from "$lib/icons";
+  import { Globe, Boxes, Users, Activity, List, Scroll, Settings } from "$lib/icons";
   import { navigate, route } from "$lib/router";
 
   // lucide-svelte 0.460 components don't conform to Svelte 5's Component<T>
@@ -17,8 +17,7 @@
 
   const items: Item[] = [
     { id: "cluster", label: "Cells", icon: Globe, group: "CLUSTER", path: "/cluster" },
-    { id: "hosts", label: "Hosts", icon: Server, group: "CLUSTER", path: "/hosts" },
-    { id: "gateways", label: "Gateways", icon: GitBranch, group: "CLUSTER", path: "/gateways" },
+    { id: "nodes", label: "Nodes", icon: Boxes, group: "CLUSTER", path: "/nodes" },
     { id: "players", label: "Players", icon: Users, group: "PEOPLE", path: "/players" },
     { id: "performance", label: "Performance", icon: Activity, group: "DIAGNOSE", path: "/performance" },
     { id: "events", label: "Events", icon: List, group: "DIAGNOSE", path: "/events" },

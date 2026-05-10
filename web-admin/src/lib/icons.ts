@@ -18,3 +18,4 @@ export { default as AlertTriangle } from "@lucide/svelte/icons/triangle-alert";
 export { default as CheckCircle2 } from "@lucide/svelte/icons/circle-check-big";
 export { default as Circle } from "@lucide/svelte/icons/circle";
 export { default as Loader2 } from "@lucide/svelte/icons/loader-circle";
+export { default as Boxes } from "@lucide/svelte/icons/boxes";

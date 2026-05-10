@@ -8,8 +8,7 @@
   import type { ClusterInfo } from "$lib/types";
   import Login from "./routes/login.svelte";
   import Cluster from "./routes/cluster.svelte";
-  import Hosts from "./routes/hosts.svelte";
-  import Gateways from "./routes/gateways.svelte";
+  import Nodes from "./routes/nodes.svelte";
   import Players from "./routes/players.svelte";
   import Performance from "./routes/performance.svelte";
   import Events from "./routes/events.svelte";
@@ -68,10 +67,8 @@
       <div class="grow overflow-auto">
         {#if path === "/cluster"}
           <Cluster />
-        {:else if path === "/hosts"}
-          <Hosts />
-        {:else if path === "/gateways"}
-          <Gateways />
+        {:else if path === "/nodes" || path === "/hosts" || path === "/gateways"}
+          <Nodes />
         {:else if path === "/players"}
           <Players />
         {:else if path === "/performance"}
