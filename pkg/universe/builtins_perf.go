@@ -139,10 +139,20 @@ func registerPerfSnapshotWorker(reg *cmdsys.Registry, coord *Process) error {
 					continue
 				}
 				var snap PerfCellSnapshot
-				// When the game loop is running, schedule the read on-loop for
-				// thread safety. When no loop is active (e.g. tests, headless
-				// bootstrap), call directly — TickProfile has no concurrent
-				// writers at that point.
+				// Fast path: if the loop has computed Stats() recently we can
+				// reuse the cached result off-loop and skip the RunOnLoop
+				// detour entirely. cell.Metrics.Snapshot() (read inside
+				// buildPerfCellSnapshotFromStats) is concurrency-safe.
+				if cached := cell.Engine.Perf.CachedStats(); cached != nil {
+					snap = buildPerfCellSnapshotFromStats(cell, cellHost[cell], *cached)
+					rows = append(rows, snap)
+					continue
+				}
+				// Slow path: cache miss or stale. Schedule the recompute
+				// on-loop; Stats() repopulates the cache so subsequent polls
+				// hit the fast path. When no loop is active (e.g. tests,
+				// headless bootstrap), call directly — TickProfile has no
+				// concurrent writers at that point.
 				if cell.Engine.HasLoopRunning() {
 					err := cell.Engine.RunOnLoop(ctx, func() error {
 						snap = buildPerfCellSnapshot(cell, cellHost[cell])

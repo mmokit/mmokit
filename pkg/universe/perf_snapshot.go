@@ -85,9 +85,17 @@ func (s PerfCellSnapshot) toText() engine.PerfSnapshotText {
 // engine.RunOnLoop). Tolerates nil Metrics; all read access to Engine.Perf is
 // required, so Engine and Engine.Perf must be non-nil.
 func buildPerfCellSnapshot(cell *Cell, hostID string) PerfCellSnapshot {
-	eng := cell.Engine
-	stats := eng.Perf.Stats()
+	stats := cell.Engine.Perf.Stats()
+	return buildPerfCellSnapshotFromStats(cell, hostID, stats)
+}
 
+// buildPerfCellSnapshotFromStats composes the snapshot from a precomputed
+// PerfStats. Useful when the caller already has a cached value (e.g. via
+// TickProfile.CachedStats) and wants to avoid the on-loop Stats() recompute.
+// cell.Metrics.Snapshot() is concurrency-safe (atomic reads), so this can
+// run off the game-loop goroutine.
+func buildPerfCellSnapshotFromStats(cell *Cell, hostID string, stats engine.PerfStats) PerfCellSnapshot {
+	eng := cell.Engine
 	budgetMS := 0
 	if eng.Config.TickRate > 0 {
 		budgetMS = 1000 / eng.Config.TickRate

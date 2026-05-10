@@ -2,10 +2,19 @@ package engine
 
 import (
 	"sort"
+	"sync/atomic"
 	"time"
 )
 
 const perfBufferSize = 1000
+
+// statsCacheTTL is how long a TickProfile.Stats() result stays cached
+// before another call recomputes. Set by the dashboard's polling cadence:
+// at 1Hz polling we want the first call per second to recompute and the
+// rest to hit the cache. Recompute is ~5-10ms on a busy cell with many
+// systems, so without the cache every poll lands on the loop and trips
+// the slow-admin-job warning.
+const statsCacheTTL = time.Second
 
 // TickSample stores timing data for a single tick.
 type TickSample struct {
@@ -35,8 +44,15 @@ type PerfStats struct {
 type TickProfile struct {
 	systemNames []string
 	samples     [perfBufferSize]TickSample
-	head        int  // next write index
-	count       int  // number of valid samples (up to perfBufferSize)
+	head        int // next write index
+	count       int // number of valid samples (up to perfBufferSize)
+
+	// cachedStats holds the last Stats() result so off-loop callers (the
+	// admin dashboard) can poll without paying the sort cost on every read.
+	// Loaded lock-free; stored only by Stats() itself, which is called on
+	// the loop goroutine.
+	cachedStats   atomic.Pointer[PerfStats]
+	cachedStatsAt atomic.Int64 // unix nano, paired with cachedStats
 }
 
 // NewTickProfile creates a new profiler for the given system names.
@@ -66,6 +82,22 @@ func (tp *TickProfile) Record(systemTimings []time.Duration, total time.Duration
 func (tp *TickProfile) Reset() {
 	tp.head = 0
 	tp.count = 0
+	tp.cachedStats.Store(nil)
+	tp.cachedStatsAt.Store(0)
+}
+
+// CachedStats returns the most recent Stats() result if it is still within
+// statsCacheTTL; otherwise nil. Safe to call from any goroutine — the cache
+// is loaded lock-free. The on-loop Stats() path is the only writer.
+func (tp *TickProfile) CachedStats() *PerfStats {
+	p := tp.cachedStats.Load()
+	if p == nil {
+		return nil
+	}
+	if time.Since(time.Unix(0, tp.cachedStatsAt.Load())) > statsCacheTTL {
+		return nil
+	}
+	return p
 }
 
 // Stats computes percentile statistics from collected samples.
@@ -105,6 +137,12 @@ func (tp *TickProfile) Stats() PerfStats {
 		stats.Systems[s] = computeStats(sysBuffers[s], tp.samples[latestIdx].Systems[s])
 	}
 
+	// Cache so subsequent CachedStats() calls within statsCacheTTL skip the
+	// sort. Caller is expected to be the loop goroutine, so the store sees
+	// no concurrent writes from Record.
+	cached := stats
+	tp.cachedStats.Store(&cached)
+	tp.cachedStatsAt.Store(time.Now().UnixNano())
 	return stats
 }
 
