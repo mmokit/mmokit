@@ -4,6 +4,11 @@ import { resolve } from "node:path";
 
 export default defineConfig({
   plugins: [svelte()],
+  resolve: {
+    alias: {
+      $lib: resolve(__dirname, "src/lib"),
+    },
+  },
   build: {
     outDir: resolve(__dirname, "../pkg/admin/static/dist"),
     emptyOutDir: true,
