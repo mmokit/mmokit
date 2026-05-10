@@ -20,24 +20,51 @@ export type LayoutOpts = {
 };
 
 // layoutCells lays cells out as a quadtree-aware 2D grid. Depth-0 cells form
-// an N×M grid derived from their X_Y IDs; split children render as nested
-// 2×2 squares inside their parent rect.
+// an N×M grid derived from their X_Y IDs; deeper cells nest as 2×2 quadrants
+// inside their parent rect, recursively, derived from each cell's X/Y mod 2
+// (X mod 2 == 0 → west, == 1 → east; same for Y → north/south).
 //
-// Cell IDs follow either `<X>_<Y>` (test/legacy) or `cell_<X>_<Y>` (real
-// universe.MeshCellID format) for depth 0, with `:1..4` suffixes for splits
-// where 1=NW, 2=NE, 3=SW, 4=SE. The same scheme nests recursively for deeper
-// splits (`cell_0_0:1:2` is the NE quadrant of the NW quadrant of cell_0_0).
+// Cell IDs follow universe.MeshCellID:
+//   "cell_X_Y"        — depth 0
+//   "cell_dN_X_Y"     — depth N (split). At depth N the world is split into a
+//                       2^N × 2^N grid of sub-cells; the parent of (X,Y) at
+//                       depth N is (X/2, Y/2) at depth N-1.
+//
+// Each input must have its `depth` field set correctly by the producer (the
+// admin DTO's `cellInfoFromSnapshot` parses the depth from the ID format).
+// `parent` is optional — when present it's used as the placement key; when
+// absent the helper computes `cell_d<N-1>_<X/2>_<Y/2>` itself.
 //
 // Layout returns one entry per input cell (parents AND children) so callers
 // can choose to render only leaves, only parents, or both with translucency.
 
-// parseBaseXY extracts the trailing X_Y coordinates from a base cell ID,
-// tolerating both `<X>_<Y>` and `<prefix>_<X>_<Y>` (e.g. `cell_0_0`).
-// Returns null if the ID doesn't end in two underscore-separated integers.
-export function parseBaseXY(id: string): { x: number; y: number } | null {
-  const m = /(\d+)_(\d+)$/.exec(id);
+// parseXY extracts the X_Y coordinates from a cell ID at any depth.
+// Tolerates legacy "X_Y" / "X_Y:N" formats too. Returns null on garbage.
+export function parseXY(id: string): { x: number; y: number } | null {
+  // Strip a leading "cell_" if present.
+  let s = id.startsWith("cell_") ? id.slice(5) : id;
+  // Strip a leading "d<N>_" if present (depth marker for splits).
+  if (s.startsWith("d")) {
+    const us = s.indexOf("_");
+    if (us > 0 && /^\d+$/.test(s.slice(1, us))) s = s.slice(us + 1);
+  }
+  // Strip any trailing ":<slot>:<slot>..." suffix from legacy split IDs.
+  const colon = s.indexOf(":");
+  if (colon >= 0) s = s.slice(0, colon);
+  const m = /^(\d+)_(\d+)$/.exec(s);
   if (!m) return null;
   return { x: Number.parseInt(m[1], 10), y: Number.parseInt(m[2], 10) };
+}
+
+function parentIdFor(c: CellLayoutInput): string | null {
+  if (c.parent) return c.parent;
+  if (c.depth <= 0) return null;
+  const xy = parseXY(c.id);
+  if (!xy) return null;
+  const px = Math.floor(xy.x / 2);
+  const py = Math.floor(xy.y / 2);
+  if (c.depth === 1) return `cell_${px}_${py}`;
+  return `cell_d${c.depth - 1}_${px}_${py}`;
 }
 
 export function layoutCells(input: CellLayoutInput[], opts: LayoutOpts): Layout[] {
@@ -45,7 +72,7 @@ export function layoutCells(input: CellLayoutInput[], opts: LayoutOpts): Layout[
   let maxX = 0;
   let maxY = 0;
   for (const c of baseCells) {
-    const xy = parseBaseXY(c.id);
+    const xy = parseXY(c.id);
     if (!xy) continue;
     maxX = Math.max(maxX, xy.x);
     maxY = Math.max(maxY, xy.y);
@@ -56,45 +83,46 @@ export function layoutCells(input: CellLayoutInput[], opts: LayoutOpts): Layout[
   const cellH = (opts.height - 2 * opts.padding) / rows;
 
   const out: Layout[] = [];
-  const baseRect = new Map<string, Layout>();
+  const placed = new Map<string, Layout>();
+
   for (const c of baseCells) {
-    const xy = parseBaseXY(c.id);
+    const xy = parseXY(c.id);
     if (!xy) continue;
-    const xi = xy.x;
-    const yi = xy.y;
     const rect: Layout = {
       id: c.id,
-      x: opts.padding + xi * cellW,
-      y: opts.padding + yi * cellH,
+      x: opts.padding + xy.x * cellW,
+      y: opts.padding + xy.y * cellH,
       w: cellW,
       h: cellH,
       depth: 0,
     };
     out.push(rect);
-    baseRect.set(c.id, rect);
+    placed.set(c.id, rect);
   }
 
-  // Place split children. Order by depth ascending so each split's parent
-  // is already placed by the time we descend.
+  // Synthesize missing ancestor cells for any deep child whose chain of
+  // parents isn't fully present in the input. The synthesized parents are
+  // NOT pushed to `out` (callers only render real cells), but they ARE
+  // placed in `placed` so the recursive nesting math can chain through them.
+  // This handles the post-split case where the parent was removed from the
+  // backend's cells map but the children need a placement anchor.
   const splits = input.filter((c) => c.depth > 0).sort((a, b) => a.depth - b.depth);
-  const placed = new Map<string, Layout>(baseRect);
   for (const c of splits) {
-    const colonIdx = c.id.lastIndexOf(":");
-    if (colonIdx < 0) continue;
-    const parentId = c.id.slice(0, colonIdx);
-    const slot = Number.parseInt(c.id.slice(colonIdx + 1), 10);
-    const parent = placed.get(parentId);
-    if (!parent) continue;
+    const xy = parseXY(c.id);
+    if (!xy) continue;
+    const parentKey = parentIdFor(c);
+    if (!parentKey) continue;
+    let parent: Layout | null | undefined = placed.get(parentKey);
+    if (!parent) {
+      // Parent missing — synthesize from the depth-0 grid by walking up.
+      // This relies on the depth-0 grid being known.
+      parent = synthesizeAncestor(parentKey, c.depth - 1, opts, cellW, cellH, placed);
+      if (!parent) continue;
+    }
     const halfW = parent.w / 2;
     const halfH = parent.h / 2;
-    let dx = 0;
-    let dy = 0;
-    switch (slot) {
-      case 1: dx = 0; dy = 0; break;        // NW
-      case 2: dx = halfW; dy = 0; break;     // NE
-      case 3: dx = 0; dy = halfH; break;     // SW
-      case 4: dx = halfW; dy = halfH; break; // SE
-    }
+    const dx = (xy.x % 2) * halfW;
+    const dy = (xy.y % 2) * halfH;
     const rect: Layout = {
       id: c.id,
       x: parent.x + dx,
@@ -108,4 +136,55 @@ export function layoutCells(input: CellLayoutInput[], opts: LayoutOpts): Layout[
   }
 
   return out;
+}
+
+// synthesizeAncestor walks up from the given (id, depth) until it hits a
+// placed cell, then walks back down placing intermediate parents. Used when
+// a split cell exists in the input but the original depth-0 parent has been
+// removed from the cells map (post-split: the parent is replaced by its
+// children).
+function synthesizeAncestor(
+  id: string,
+  depth: number,
+  opts: LayoutOpts,
+  cellW: number,
+  cellH: number,
+  placed: Map<string, Layout>,
+): Layout | null {
+  if (placed.has(id)) return placed.get(id)!;
+  const xy = parseXY(id);
+  if (!xy) return null;
+
+  if (depth === 0) {
+    // Couldn't find a depth-0 parent — synthesize from the grid math.
+    const rect: Layout = {
+      id,
+      x: opts.padding + xy.x * cellW,
+      y: opts.padding + xy.y * cellH,
+      w: cellW,
+      h: cellH,
+      depth: 0,
+    };
+    placed.set(id, rect);
+    return rect;
+  }
+
+  const px = Math.floor(xy.x / 2);
+  const py = Math.floor(xy.y / 2);
+  const parentId = depth === 1 ? `cell_${px}_${py}` : `cell_d${depth - 1}_${px}_${py}`;
+  const parent = synthesizeAncestor(parentId, depth - 1, opts, cellW, cellH, placed);
+  if (!parent) return null;
+
+  const halfW = parent.w / 2;
+  const halfH = parent.h / 2;
+  const rect: Layout = {
+    id,
+    x: parent.x + (xy.x % 2) * halfW,
+    y: parent.y + (xy.y % 2) * halfH,
+    w: halfW,
+    h: halfH,
+    depth,
+  };
+  placed.set(id, rect);
+  return rect;
 }

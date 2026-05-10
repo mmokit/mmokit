@@ -64,15 +64,14 @@ func (v *LocalClusterView) Cell(id string) (CellInfo, error) {
 }
 
 // cellInfoFromSnapshot maps a metrics.LoadSnapshot + cell ID into the
-// admin DTO. Depth/Parent are derived from the colon-segmented split-cell
-// ID convention ("0_0" depth 0, "0_0:1" depth 1, ...). Neighbors is
-// populated when a NeighborsOf accessor lands on universe.Process.
+// admin DTO. Depth/Parent are derived from the universe.MeshCellID format:
+//
+//	"cell_X_Y"        — depth 0
+//	"cell_d<N>_X_Y"   — depth N (split). Parent is the depth-(N-1) cell at (X/2, Y/2).
+//
+// Neighbors is populated when a NeighborsOf accessor lands on universe.Process.
 func cellInfoFromSnapshot(id string, snap metrics.LoadSnapshot, p *universe.Process) CellInfo {
-	depth := strings.Count(id, ":")
-	parent := ""
-	if i := strings.LastIndex(id, ":"); i >= 0 {
-		parent = id[:i]
-	}
+	depth, parent := parseDepthAndParent(id)
 	return CellInfo{
 		ID:        id,
 		Depth:     depth,
@@ -231,4 +230,46 @@ func mapCommitEvent(r universe.CommitEvent) CommitEvent {
 func (v *LocalClusterView) Perf(cellID string) (PerfSnapshot, error) {
 	_ = cellID
 	return PerfSnapshot{}, ErrUnavailable
+}
+
+// parseDepthAndParent extracts the depth and parent ID from a universe
+// MeshCellID. Mirrors the format produced by (CellID).MeshID():
+//
+//	"cell_X_Y"      → depth=0, parent=""
+//	"cell_d<N>_X_Y" → depth=N, parent="cell_d<N-1>_<X/2>_<Y/2>" (or "cell_<X/2>_<Y/2>" when N=1)
+//
+// Unknown / malformed IDs return depth=0, parent="" so the dashboard
+// degrades gracefully rather than crashing.
+func parseDepthAndParent(id string) (depth int, parent string) {
+	if !strings.HasPrefix(id, "cell_") {
+		return 0, ""
+	}
+	rest := id[len("cell_"):]
+	// Split format: "d<N>_<X>_<Y>"
+	if strings.HasPrefix(rest, "d") {
+		// "d<N>_<X>_<Y>"
+		parts := strings.SplitN(rest[1:], "_", 3)
+		if len(parts) != 3 {
+			return 0, ""
+		}
+		n, err := strconv.Atoi(parts[0])
+		if err != nil || n < 1 {
+			return 0, ""
+		}
+		x, err := strconv.Atoi(parts[1])
+		if err != nil {
+			return 0, ""
+		}
+		y, err := strconv.Atoi(parts[2])
+		if err != nil {
+			return 0, ""
+		}
+		px, py := x/2, y/2
+		if n == 1 {
+			return 1, "cell_" + strconv.Itoa(px) + "_" + strconv.Itoa(py)
+		}
+		return n, "cell_d" + strconv.Itoa(n-1) + "_" + strconv.Itoa(px) + "_" + strconv.Itoa(py)
+	}
+	// Base format: "<X>_<Y>"
+	return 0, ""
 }
