@@ -1,8 +1,19 @@
 <script lang="ts">
   import { Circle, Command, Bell } from "$lib/icons";
   import { cellsStore, alertsStore, sessionStore, paletteOpen } from "$lib/stores.svelte";
+  import { auth } from "$lib/auth";
   import AlertBanner from "./AlertBanner.svelte";
   import ClusterOpsMenu from "./ClusterOpsMenu.svelte";
+
+  async function logout() {
+    try {
+      await auth.logout();
+    } finally {
+      // Clear the local session even if the server call failed (e.g. expired
+      // cookie, network blip) so the auth gate redirects to login.
+      sessionStore.set(null);
+    }
+  }
 
   // Derive counts from the live cells SSE stream so they tick automatically.
   // The one-shot /admin/api/cluster snapshot is fine for boot but doesn't update.
@@ -51,6 +62,14 @@
     </span>
     {#if user}
       <span class="text-slate-300">{user}</span>
+      <button
+        type="button"
+        class="px-2 py-0.5 rounded border border-white/10 bg-white/5 text-slate-300 hover:bg-white/10"
+        title="Sign out"
+        onclick={logout}
+      >
+        sign out
+      </button>
     {/if}
   </div>
 </header>
