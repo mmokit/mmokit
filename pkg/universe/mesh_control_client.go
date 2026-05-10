@@ -332,8 +332,9 @@ func (c *meshControlClient) runHeartbeatLoop(ctx context.Context) {
 			hb := &meshpb.HostMessage{
 				Msg: &meshpb.HostMessage_Heartbeat{
 					Heartbeat: &meshpb.Heartbeat{
-						HostId: c.hostID,
-						Tick:   0,
+						HostId:  c.hostID,
+						Tick:    0,
+						Metrics: c.buildCellMetricsReports(),
 					},
 				},
 			}
@@ -346,6 +347,41 @@ func (c *meshControlClient) runHeartbeatLoop(ctx context.Context) {
 			}
 		}
 	}
+}
+
+// buildCellMetricsReports snapshots every locally-owned cell's load metrics
+// for inclusion in the next heartbeat. The coordinator caches these so the
+// admin dashboard can display real entity counts / load / tick stats from
+// remote hosts in distributed mode.
+func (c *meshControlClient) buildCellMetricsReports() []*meshpb.CellMetricsReport {
+	if c.coord == nil {
+		return nil
+	}
+	c.coord.mu.RLock()
+	defer c.coord.mu.RUnlock()
+	if len(c.coord.Cells) == 0 {
+		return nil
+	}
+	out := make([]*meshpb.CellMetricsReport, 0, len(c.coord.Cells))
+	for id, node := range c.coord.Cells {
+		if node == nil || node.Metrics == nil {
+			continue
+		}
+		s := node.Metrics.Snapshot()
+		out = append(out, &meshpb.CellMetricsReport{
+			CellId:            string(id),
+			CompositeLoad:     s.CompositeLoad,
+			TickP99Us:         s.Tick.P99Duration.Microseconds(),
+			TickP95Us:         s.Tick.P95Duration.Microseconds(),
+			EntitiesReal:      int32(s.Entities.Real),
+			EntitiesReplica:   int32(s.Entities.Replica),
+			EntitiesGhost:     int32(s.Entities.Ghost),
+			EntitiesConnected: int32(s.Entities.Connected),
+			BytesSent:         s.Network.BytesSent,
+			BytesRecv:         s.Network.BytesRecv,
+		})
+	}
+	return out
 }
 
 // send pushes a HostMessage onto the current control stream. Uses

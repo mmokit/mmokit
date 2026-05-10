@@ -128,6 +128,11 @@ func (e *assignmentEngine) checkLiveness() {
 		if e.coord != nil && e.coord.serviceEventRouter != nil {
 			e.coord.serviceEventRouter.RemoveProcess(host.ID)
 		}
+		// Drop cached metrics from the dead host so the dashboard doesn't
+		// keep showing its last-reported entity counts.
+		if e.coord != nil {
+			e.coord.dropRemoteCellMetricsForHost(host.ID)
+		}
 		e.reassignOrphanedCells(host)
 	}
 }

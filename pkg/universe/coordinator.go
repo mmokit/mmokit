@@ -464,6 +464,13 @@ type Process struct {
 	CellOwner map[CellID]MeshCellID // cell -> meshID
 	Hosts     map[string]*Host      // hostID -> Host
 
+	// remoteCellMetrics caches the latest LoadSnapshot reported by remote
+	// hosts via Heartbeat metrics. Keyed by cellID. Used by the admin
+	// dashboard's LocalClusterView when the coordinator process owns no
+	// cells locally (distributed mode). Empty in single-process all-in-one.
+	remoteCellMetrics      map[MeshCellID]remoteMetricsEntry
+	remoteCellMetricsMu    sync.RWMutex
+
 	ConnMgr *net.ConnManager
 	Log     *logger.Logger
 
@@ -3574,17 +3581,30 @@ func (c *Process) cellLoad(nodeID MeshCellID) (metrics.LoadSnapshot, bool) {
 	c.mu.RLock()
 	node, ok := c.Cells[nodeID]
 	c.mu.RUnlock()
-	if !ok || node.Metrics == nil {
-		return metrics.LoadSnapshot{}, false
+	if ok && node.Metrics != nil {
+		return node.Metrics.Snapshot(), true
 	}
-	return node.Metrics.Snapshot(), true
+	// Fall through to remote-cell cache for distributed-mode lookups.
+	c.remoteCellMetricsMu.RLock()
+	defer c.remoteCellMetricsMu.RUnlock()
+	if e, ok := c.remoteCellMetrics[nodeID]; ok {
+		return e.snap, true
+	}
+	return metrics.LoadSnapshot{}, false
 }
 
 // allCellLoads returns load snapshots for all nodes. Used by MetricsHandler.
+// Local-cell metrics take precedence; remote-cell metrics (cached from
+// Heartbeat reports) fill in cells the coordinator process doesn't own —
+// the distributed-mode case where the dashboard runs on a pure coordinator.
 func (c *Process) allCellLoads() map[string]metrics.LoadSnapshot {
+	remote := c.remoteCellMetricsSnapshot()
 	c.mu.RLock()
 	defer c.mu.RUnlock()
-	result := make(map[string]metrics.LoadSnapshot, len(c.Cells))
+	result := make(map[string]metrics.LoadSnapshot, len(c.Cells)+len(remote))
+	for id, snap := range remote {
+		result[id] = snap
+	}
 	for id, node := range c.Cells {
 		if node.Metrics != nil {
 			result[string(id)] = node.Metrics.Snapshot()

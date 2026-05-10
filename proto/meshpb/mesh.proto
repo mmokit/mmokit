@@ -82,6 +82,25 @@ message RegisterHost {
 message Heartbeat {
   string host_id = 1;
   uint64 tick    = 2;
+  // Per-cell metrics snapshots for every cell this host currently owns.
+  // The coordinator stores the latest entry per cell_id so the admin
+  // dashboard can show real entity counts / load / tick stats from
+  // remote hosts. When a cell's host changes, the new host's heartbeat
+  // overwrites the snapshot within one heartbeat interval.
+  repeated CellMetricsReport metrics = 3;
+}
+
+message CellMetricsReport {
+  string cell_id            = 1;
+  double composite_load     = 2;
+  int64  tick_p99_us        = 3;
+  int64  tick_p95_us        = 4;
+  int32  entities_real      = 5;
+  int32  entities_replica   = 6;
+  int32  entities_ghost     = 7;
+  int32  entities_connected = 8;
+  uint64 bytes_sent         = 9;
+  uint64 bytes_recv         = 10;
 }
 
 message CellReady {

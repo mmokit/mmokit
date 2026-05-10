@@ -3,8 +3,91 @@ package universe
 import (
 	"time"
 
+	meshpb "github.com/zenion/mmoserver/gen/go/meshpb"
 	"github.com/zenion/mmoserver/pkg/metrics"
 )
+
+// remoteMetricsEntry caches a per-cell LoadSnapshot reported via Heartbeat,
+// tagged with the source host so stale entries can be evicted when a host
+// disappears.
+type remoteMetricsEntry struct {
+	hostID string
+	snap   metrics.LoadSnapshot
+}
+
+// applyRemoteCellMetrics records per-cell metrics reported by a remote host
+// in its Heartbeat. The coordinator caches these so the admin dashboard can
+// surface real entity counts / load / tick stats from cells that live on
+// remote hosts.
+func (c *Process) applyRemoteCellMetrics(hostID string, reports []*meshpb.CellMetricsReport) {
+	if hostID == "" || len(reports) == 0 {
+		return
+	}
+	c.remoteCellMetricsMu.Lock()
+	defer c.remoteCellMetricsMu.Unlock()
+	if c.remoteCellMetrics == nil {
+		c.remoteCellMetrics = make(map[MeshCellID]remoteMetricsEntry, len(reports))
+	}
+	for _, r := range reports {
+		if r == nil || r.CellId == "" {
+			continue
+		}
+		c.remoteCellMetrics[MeshCellID(r.CellId)] = remoteMetricsEntry{
+			hostID: hostID,
+			snap: metrics.LoadSnapshot{
+				CellID:        r.CellId,
+				CompositeLoad: r.CompositeLoad,
+				Tick: metrics.TickHealthSnapshot{
+					P99Duration: time.Duration(r.TickP99Us) * time.Microsecond,
+					P95Duration: time.Duration(r.TickP95Us) * time.Microsecond,
+				},
+				Entities: metrics.EntitySnapshot{
+					Real:      int(r.EntitiesReal),
+					Replica:   int(r.EntitiesReplica),
+					Ghost:     int(r.EntitiesGhost),
+					Connected: int(r.EntitiesConnected),
+				},
+				Network: metrics.NetworkSnapshot{
+					BytesSent: r.BytesSent,
+					BytesRecv: r.BytesRecv,
+				},
+				Timestamp: time.Now(),
+			},
+		}
+	}
+}
+
+// dropRemoteCellMetricsForHost evicts cached metrics for cells last reported
+// by hostID. Called when the host's heartbeat times out so the dashboard
+// doesn't show stale data after a host crash.
+func (c *Process) dropRemoteCellMetricsForHost(hostID string) {
+	if hostID == "" {
+		return
+	}
+	c.remoteCellMetricsMu.Lock()
+	defer c.remoteCellMetricsMu.Unlock()
+	for id, e := range c.remoteCellMetrics {
+		if e.hostID == hostID {
+			delete(c.remoteCellMetrics, id)
+		}
+	}
+}
+
+// remoteCellMetricsSnapshot returns a point-in-time copy of the cached
+// remote-cell metrics map. Used by allCellLoads to merge remote metrics
+// into the dashboard view.
+func (c *Process) remoteCellMetricsSnapshot() map[string]metrics.LoadSnapshot {
+	c.remoteCellMetricsMu.RLock()
+	defer c.remoteCellMetricsMu.RUnlock()
+	if len(c.remoteCellMetrics) == 0 {
+		return nil
+	}
+	out := make(map[string]metrics.LoadSnapshot, len(c.remoteCellMetrics))
+	for id, e := range c.remoteCellMetrics {
+		out[string(id)] = e.snap
+	}
+	return out
+}
 
 // MetricsSnapshots returns a point-in-time copy of the per-cell load snapshot
 // map. Used by pkg/admin's LocalClusterView for the dashboard. Read-only —
