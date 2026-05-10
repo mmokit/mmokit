@@ -23,3 +23,12 @@ gen/
 log/
 
 .superpowers/
+
+# admin frontend build artifacts
+web-admin/node_modules/
+web-admin/.vite/
+
+# admin embed: build output is derived; only the placeholder + .gitkeep are tracked
+pkg/admin/static/dist/*
+!pkg/admin/static/dist/.gitkeep
+!pkg/admin/static/dist/index.html
