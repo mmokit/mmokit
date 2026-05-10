@@ -29,7 +29,7 @@ export type BytesTotal = {
 export type HostInfo = {
   id: string;
   roles: string[] | null;
-  state: "live" | "draining" | "dead";
+  state: string; // "live"|"registered"|"dead"|"leaving"|"unknown"
   isLocal: boolean;
   heartbeatAgeMs: number;
   cells: string[] | null;
@@ -43,6 +43,7 @@ export type GatewayInfo = {
   bytesSent: number;
   bytesRecv: number;
   mode: string;
+  isLocal: boolean;
 };
 
 export type PlayerInfo = {
