@@ -56,7 +56,7 @@
   let expandedPerf = $state<PerfSnapshot | null>(null);
   let drillError = $state("");
 
-  async function toggleProfile(cellId: string) {
+  function toggleProfile(cellId: string) {
     if (expandedCell === cellId) {
       expandedCell = null;
       expandedPerf = null;
@@ -66,12 +66,36 @@
     expandedCell = cellId;
     expandedPerf = null;
     drillError = "";
-    try {
-      expandedPerf = await apiGet<PerfSnapshot>(`/admin/api/perf/${encodeURIComponent(cellId)}`);
-    } catch (e) {
-      drillError = (e as Error).message;
-    }
   }
+
+  // Poll the perf endpoint at 1Hz while a row is expanded so the bar chart
+  // tracks current samples instead of freezing at click time. The effect
+  // tears down (clearInterval) when expandedCell flips back to null or the
+  // component unmounts.
+  $effect(() => {
+    const cellId = expandedCell;
+    if (!cellId) return;
+    let cancelled = false;
+    const fetchOnce = async () => {
+      try {
+        const res = await apiGet<PerfSnapshot>(`/admin/api/perf/${encodeURIComponent(cellId)}`);
+        if (!cancelled && expandedCell === cellId) {
+          expandedPerf = res;
+          drillError = "";
+        }
+      } catch (e) {
+        if (!cancelled && expandedCell === cellId) {
+          drillError = (e as Error).message;
+        }
+      }
+    };
+    void fetchOnce();
+    const id = setInterval(() => void fetchOnce(), 1000);
+    return () => {
+      cancelled = true;
+      clearInterval(id);
+    };
+  });
 
   function samplesFor(cellId: string): MetricsSample[] {
     return history[cellId] ?? [];
