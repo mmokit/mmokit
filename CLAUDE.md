@@ -204,6 +204,8 @@ coord.Start()    // blocks until shutdown (calls Build() if not already called);
 
 The SPA lives in `web-admin/` (Svelte 5 + Vite + Bun + Tailwind v4 + `@lucide/svelte`). `bun run build` outputs directly into `pkg/admin/static/dist/` so the binary's `//go:embed` picks it up. Local dev: `just admin-dev` runs Vite on `:5173` proxying API calls to a backend at `:9101`. CI/release: `just admin-build` regenerates the bundle; wired into the top-level `just build`. The Cluster page is canvas-rendered (`CellMap.svelte`) with quadtree-aware nesting (cell IDs `X_Y` at depth 0, `X_Y:1..4` for splits → NW/NE/SW/SE quadrants); click a cell → `CellDrawer` with split/merge/migrate actions. Live updates flow through one multiplexed SSE connection at `/admin/api/stream`. Stores using Svelte 5 runes live in `web-admin/src/lib/stores.svelte.ts` (the `.svelte.ts` extension is required for `$state` outside `.svelte` files).
 
+The Hosts, Gateways, and Players routes (`/hosts`, `/gateways`, `/players`) consume `Process.HostListEntries` / `GatewayListEntries` / `ActivePlayerSnapshots` — typed accessors that aggregate registry + metrics state. Live updates flow on the `hosts` / `gateways` / `players` SSE topics (one shared 1Hz `rosterPublisher` ticker). Player operations (tp / tpto / kick) POST to `/admin/api/commands/<verb>`, dispatched through the existing cmdsys with the operator's grants. Offline player listing is a placeholder until `PlayerRepository` exposes a search API. Hosts/Gateways tables use a shared `DataTable.svelte` component (sortable, headless); the Players table is hand-rolled because each row needs interactive op buttons.
+
 ### Game Loop (20Hz fixed timestep in `pkg/engine/loop.go`)
 
 Each tick runs these phases in order:
