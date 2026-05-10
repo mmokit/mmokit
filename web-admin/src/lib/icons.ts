@@ -1,22 +1,20 @@
-// Curated subset of lucide-svelte icons used across the dashboard.
-// Importing only what we use keeps the bundle lean.
-export {
-  Globe,
-  Server,
-  GitBranch,
-  Users,
-  Activity,
-  List,
-  ScrollText as Scroll,
-  Settings,
-  Search,
-  Command,
-  Bell,
-  ChevronDown,
-  ChevronRight,
-  X as Close,
-  TriangleAlert as AlertTriangle,
-  CheckCircle2,
-  Circle,
-  LoaderCircle as Loader2,
-} from "lucide-svelte";
+// Curated subset of @lucide/svelte (Svelte 5 native) icons used across the
+// dashboard. Per-icon imports keep the bundle lean.
+export { default as Globe } from "@lucide/svelte/icons/globe";
+export { default as Server } from "@lucide/svelte/icons/server";
+export { default as GitBranch } from "@lucide/svelte/icons/git-branch";
+export { default as Users } from "@lucide/svelte/icons/users";
+export { default as Activity } from "@lucide/svelte/icons/activity";
+export { default as List } from "@lucide/svelte/icons/list";
+export { default as Scroll } from "@lucide/svelte/icons/scroll-text";
+export { default as Settings } from "@lucide/svelte/icons/settings";
+export { default as Search } from "@lucide/svelte/icons/search";
+export { default as Command } from "@lucide/svelte/icons/command";
+export { default as Bell } from "@lucide/svelte/icons/bell";
+export { default as ChevronDown } from "@lucide/svelte/icons/chevron-down";
+export { default as ChevronRight } from "@lucide/svelte/icons/chevron-right";
+export { default as Close } from "@lucide/svelte/icons/x";
+export { default as AlertTriangle } from "@lucide/svelte/icons/triangle-alert";
+export { default as CheckCircle2 } from "@lucide/svelte/icons/circle-check-big";
+export { default as Circle } from "@lucide/svelte/icons/circle";
+export { default as Loader2 } from "@lucide/svelte/icons/loader-circle";

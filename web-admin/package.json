@@ -11,7 +11,7 @@
     "test:watch": "vitest"
   },
   "dependencies": {
-    "lucide-svelte": "^0.460.0",
+    "@lucide/svelte": "^1.14.0",
     "svelte": "^5.0.0"
   },
   "devDependencies": {
