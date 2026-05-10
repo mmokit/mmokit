@@ -128,3 +128,43 @@ export type MetricsSample = {
   bytesSent: number;
   bytesRecv: number;
 };
+
+// CommandSummary mirrors the per-entry shape returned by GET /admin/api/commands.
+export type CommandSummary = {
+  verb: string;
+  capability: string;
+  description: string;
+  route: string;
+  hidden?: boolean;
+  aliases?: string[];
+};
+
+// FieldSchema mirrors pkg/cmdsys/schema.go::FieldSchema.
+export type FieldSchema = {
+  name: string;
+  kind: string; // "string", "int32", "int64", "float32", "float64", "bool", "[]<elem>", "{...}"
+  required: boolean;
+  named_only: boolean;
+  default: string;
+  enum: string[] | null;
+  help?: string;
+  rest?: boolean;
+  complete?: string;
+};
+
+export type Schema = {
+  struct: string;
+  fields: FieldSchema[];
+};
+
+// CommandDescribe is the response shape from GET /admin/api/commands/<verb>.
+export type CommandDescribe = {
+  verb: string;
+  capability: string;
+  description: string;
+  route: string;
+  argsSchema: Schema;
+  resultSchema: Schema;
+  usage?: string;
+  examples?: string[] | null;
+};
