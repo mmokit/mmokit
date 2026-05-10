@@ -68,6 +68,27 @@ func TestLocalClusterView_Players_EmptyOnFreshFixture(t *testing.T) {
 	}
 }
 
+func TestLocalClusterView_Perf_NotFound(t *testing.T) {
+	t.Parallel()
+	v := NewLocalClusterView(newTestProcessForView(t))
+	_, err := v.Perf("cell_99_99")
+	if err != ErrCellNotFound {
+		t.Fatalf("expected ErrCellNotFound, got %v", err)
+	}
+}
+
+func TestLocalClusterView_Perf_HappyPath(t *testing.T) {
+	t.Parallel()
+	v := NewLocalClusterView(newTestProcessForView(t))
+	got, err := v.Perf("cell_0_0")
+	if err != nil {
+		t.Fatalf("Perf(cell_0_0): %v", err)
+	}
+	if got.CellID != "cell_0_0" {
+		t.Fatalf("CellID = %q, want cell_0_0", got.CellID)
+	}
+}
+
 // newTestProcessForView spins up a minimal headless coordinator with a 2x2
 // grid so view tests can read live state without a full game wiring.
 // HTTPPort is set to -1 to keep the listener disabled so parallel tests
