@@ -15,6 +15,7 @@
   import Sidebar from "./components/Sidebar.svelte";
   import TopBar from "./components/TopBar.svelte";
   import CommandPalette from "./components/CommandPalette.svelte";
+  import Toast from "./components/Toast.svelte";
 
   let path = $state("/cluster");
   let booting = $state(true);
@@ -73,9 +74,21 @@
     }
   }
 
+  let toasts = $state<{ id: number; ok: boolean; msg: string }[]>([]);
+  let toastSeq = 0;
+
+  function pushToast(ok: boolean, msg: string) {
+    const id = ++toastSeq;
+    toasts = [...toasts, { id, ok, msg }];
+    setTimeout(() => {
+      toasts = toasts.filter((t) => t.id !== id);
+    }, 4000);
+  }
+
   function onPaletteResult(ok: boolean, message: string, payload?: unknown) {
-    // v1: log to console; Task 10 adds Toast for in-UI feedback.
-    console[ok ? "log" : "warn"]("cmd palette:", message, payload);
+    pushToast(ok, message);
+    // Keep payload accessible for debugging when dev tools are open.
+    console[ok ? "log" : "warn"]("cmd:", message, payload);
   }
 </script>
 
@@ -114,5 +127,6 @@
       onClose={() => paletteOpen.set(false)}
       onResult={onPaletteResult}
     />
+    <Toast entries={toasts} />
   </div>
 {/if}
