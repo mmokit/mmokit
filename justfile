@@ -9,7 +9,7 @@ build-go:
 
 # build TS SDK + web client + server into bin/server
 # space-sdk runs first so the web client picks up any schema changes.
-build: space-sdk build-web build-go
+build: space-sdk build-web admin-build build-go
 
 # build + run
 run: build
@@ -188,3 +188,15 @@ db-reset:
 test-pg:
     POSTGRES_URL=postgres://mmo:mmo@localhost:5432/mmo?sslmode=disable \
         go test -count=1 -tags=pgtest ./pkg/persist/...
+
+# build the admin SPA into pkg/admin/static/dist (consumed by //go:embed)
+admin-build:
+    cd web-admin && bun install --frozen-lockfile && bun run build
+
+# vite dev server with proxy to a running coordinator's --admin-listen=:9101
+admin-dev:
+    cd web-admin && bun install && bun run dev
+
+# vitest unit tests for lib/*
+admin-test:
+    cd web-admin && bun run test
