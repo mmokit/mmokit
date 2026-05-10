@@ -26,6 +26,17 @@ type hostKillResult struct {
 	Note   string
 }
 
+type hostDrainArgs struct {
+	HostID string `cmd:"help=host ID to drain,complete=hosts"`
+}
+
+type hostDrainResult struct {
+	HostID string
+	Cells  int
+	Note   string
+	OK     bool
+}
+
 func registerHostBuiltins(reg *cmdsys.Registry, coord *Process) error {
 	c := coord
 
@@ -122,6 +133,46 @@ func registerHostBuiltins(reg *cmdsys.Registry, coord *Process) error {
 		},
 	}); err != nil {
 		return fmt.Errorf("host.kill: %w", err)
+	}
+
+	if err := reg.Register(cmdsys.Command{
+		Verb:        "host.drain",
+		Capability:  "host.drain",
+		Description: "migrate every cell currently owned by hostID to surviving hosts",
+		Examples:    []string{"host drain host-2"},
+		Route:       cmdsys.RouteLocal,
+		Args:        hostDrainArgs{},
+		Result:      hostDrainResult{},
+		Handler: func(ctx context.Context, env *cmdsys.Env, raw any) (any, error) {
+			args := raw.(hostDrainArgs)
+			if args.HostID == "" {
+				return nil, fmt.Errorf("host.drain: host ID required")
+			}
+			// Snapshot cell count before drainHost potentially clears the
+			// ownership map so the result is meaningful.
+			owned := 0
+			if c.hostRegistry != nil {
+				for _, h := range c.hostRegistry.LiveHosts() {
+					if h.ID == args.HostID {
+						owned = len(h.OwnedCells)
+						break
+					}
+				}
+			}
+			ctx2, cancel := context.WithTimeout(ctx, 30*time.Second)
+			defer cancel()
+			if err := c.drainHost(ctx2, args.HostID); err != nil {
+				return hostDrainResult{HostID: args.HostID, Cells: owned, OK: false, Note: err.Error()}, nil
+			}
+			return hostDrainResult{
+				HostID: args.HostID,
+				Cells:  owned,
+				OK:     true,
+				Note:   fmt.Sprintf("drained %d cells", owned),
+			}, nil
+		},
+	}); err != nil {
+		return fmt.Errorf("host.drain: %w", err)
 	}
 
 	return nil
