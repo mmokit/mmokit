@@ -1,5 +1,16 @@
 @import "tailwindcss";
 
+/* Tailwind v4 reads its theme from CSS, not tailwind.config.ts. The legacy
+ * config file is ignored — declare custom colors here so utilities like
+ * bg-accent-400 / text-accent-300 register. */
+@theme {
+  --color-accent-50: #ecfeff;
+  --color-accent-200: #a5f3fc;
+  --color-accent-300: #7dd3fc;
+  --color-accent-400: #38bdf8;
+  --color-accent-500: #0ea5e9;
+}
+
 /* Design tokens — referenced by Svelte components via CSS custom properties. */
 :root {
   --color-bg: #0a0e14;
