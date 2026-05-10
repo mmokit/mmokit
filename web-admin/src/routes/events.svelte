@@ -12,7 +12,7 @@
 
   let events = $derived<CommitEvent[]>(eventsStore.value ?? []);
   let scenarioFilter = $state<"all" | "split" | "merge" | "migrate">("all");
-  let kindFilter = $state<"all" | "commit-step" | "invariant-violation" | "host" | "session">("all");
+  let kindFilter = $state<"all" | "commit-step" | "invariant-violation" | "host">("all");
   let cellSearch = $state("");
   let paused = $state(false);
 
@@ -24,7 +24,8 @@
       if (cs) {
         const hit =
           e.affected?.some((c) => c.toLowerCase().includes(cs)) ||
-          e.hostIds?.some((h) => h.toLowerCase().includes(cs));
+          e.hostIds?.some((h) => h.toLowerCase().includes(cs)) ||
+          e.step?.toLowerCase().includes(cs);
         if (!hit) return false;
       }
       return true;
@@ -70,7 +71,7 @@
     <div class="flex items-center gap-2 text-[11px]">
       <input
         type="text"
-        placeholder="cell or host…"
+        placeholder="cell, host, or step…"
         class="bg-white/5 border border-white/10 rounded px-2 py-1 text-[12px] text-slate-200 placeholder-slate-500 focus:outline-none w-44"
         bind:value={cellSearch}
       />
