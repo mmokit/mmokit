@@ -115,3 +115,16 @@ export type AuthSession = {
   grants: string[];
   expiresAt: string;
 };
+
+// MetricsSample is one tick's worth of dashboard-relevant numbers for one
+// cell, captured from the `cells` SSE topic. The performance route keeps a
+// rolling ring of these per cell to drive sparklines.
+export type MetricsSample = {
+  t: number;          // ms epoch when the sample was captured client-side
+  load: number;
+  tickP99Us: number;
+  tickP95Us: number;
+  entitiesReal: number;
+  bytesSent: number;
+  bytesRecv: number;
+};
