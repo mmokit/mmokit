@@ -9,6 +9,7 @@ import (
 
 	"github.com/zenion/mmoserver/pkg/admin/static"
 	"github.com/zenion/mmoserver/pkg/cmdsys"
+	"github.com/zenion/mmoserver/pkg/logger"
 	"github.com/zenion/mmoserver/pkg/universe"
 )
 
@@ -50,6 +51,7 @@ type Server struct {
 	panels     *PanelRegistry
 	bus        *TopicBus
 	log        Logger
+	logger     *logger.Logger
 
 	cfg Config
 
@@ -64,7 +66,7 @@ type ServerOpts struct {
 	Dispatcher   *cmdsys.Dispatcher
 	SessionStore SessionStore
 	Panels       *PanelRegistry
-	Logger       Logger
+	Logger       *logger.Logger
 	Process      *universe.Process // for publishers; only the Process needs to live this long
 	Config       Config
 }
@@ -98,6 +100,7 @@ func NewServer(opts ServerOpts) *Server {
 		panels:     opts.Panels,
 		bus:        bus,
 		log:        opts.Logger,
+		logger:     opts.Logger,
 		cfg:        cfg,
 	}
 	if opts.Process != nil {
@@ -142,6 +145,8 @@ func (s *Server) Mount(mux *http.ServeMux) {
 	mux.Handle("/admin/api/perf/", s.requireSession(http.HandlerFunc(s.handlePerf)))
 	mux.Handle("/admin/api/audit", s.requireSession(http.HandlerFunc(s.handleAudit)))
 	mux.Handle("/admin/api/panels", s.requireSession(http.HandlerFunc(s.handlePanels)))
+	mux.Handle("/admin/api/logs/categories", s.requireSession(http.HandlerFunc(s.handleLogCategories)))
+	mux.Handle("/admin/api/logs/categories/", s.requireSession(http.HandlerFunc(s.handleLogToggle)))
 
 	// Commands.
 	mux.Handle("/admin/api/commands", s.requireSession(http.HandlerFunc(s.handleCommandsList)))
