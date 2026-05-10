@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount } from "svelte";
-  import { playersStore } from "$lib/stores.svelte";
+  import { playersStore, pendingNav } from "$lib/stores.svelte";
   import { stream } from "$lib/stream";
   import { apiGet } from "$lib/api";
   import type { PlayerInfo } from "$lib/types";
@@ -10,6 +10,18 @@
   let allPlayers = $derived<PlayerInfo[]>(playersStore.value ?? []);
   let search = $state("");
   let statusFilter = $state<"all" | "online" | "offline">("online");
+
+  // Honor a pending palette navigation: prefill the search box with the
+  // picked player's username and broaden the status filter so an offline
+  // player still shows up.
+  $effect(() => {
+    const t = pendingNav.value;
+    if (t && t.kind === "player") {
+      search = t.username;
+      statusFilter = "all";
+      pendingNav.consume();
+    }
+  });
 
   let filtered = $derived.by(() => {
     const q = search.trim().toLowerCase();

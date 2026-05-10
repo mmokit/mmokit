@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { cellsStore } from "$lib/stores.svelte";
+  import { cellsStore, pendingNav } from "$lib/stores.svelte";
   import CellMap from "../components/CellMap.svelte";
   import CellDrawer from "../components/CellDrawer.svelte";
   import type { CellInfo } from "$lib/types";
@@ -14,6 +14,17 @@
   );
 
   const colorModes: Array<"load" | "host" | "entities"> = ["load", "host", "entities"];
+
+  // Honor a pending palette navigation: when the user pickeed a cell in
+  // ⌘K we land here with a `kind: "cell"` target. consume() clears the
+  // signal so back-then-forward doesn't re-select.
+  $effect(() => {
+    const t = pendingNav.value;
+    if (t && t.kind === "cell") {
+      selected = t.id;
+      pendingNav.consume();
+    }
+  });
 </script>
 
 <div class="h-full flex">

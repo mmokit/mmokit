@@ -3,7 +3,6 @@
   import { cellsStore, alertsStore, sessionStore, paletteOpen } from "$lib/stores.svelte";
   import { auth } from "$lib/auth";
   import AlertBanner from "./AlertBanner.svelte";
-  import ClusterOpsMenu from "./ClusterOpsMenu.svelte";
 
   async function logout() {
     try {
@@ -45,11 +44,10 @@
         ? `${cellCount} cells · ${entityCount} ent · ${sessionCount} sess`
         : "loading…"}
     </span>
-    <ClusterOpsMenu />
     <button
       type="button"
       class="px-2 py-0.5 rounded border border-white/10 bg-white/5 text-slate-300 hover:bg-white/10 flex items-center gap-1"
-      title="Command palette (⌘K)"
+      title="Find cell / node / player (⌘K)"
       onclick={() => paletteOpen.set(true)}
     >
       <Command class="w-3 h-3" /> ⌘K

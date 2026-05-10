@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount } from "svelte";
-  import { hostsStore, gatewaysStore } from "$lib/stores.svelte";
+  import { hostsStore, gatewaysStore, pendingNav } from "$lib/stores.svelte";
   import { stream } from "$lib/stream";
   import { apiGet } from "$lib/api";
   import { fmtBytes, fmtDuration, fmtLoad } from "$lib/format";
@@ -26,6 +26,18 @@
   let hosts = $derived<HostInfo[]>(hostsStore.value ?? []);
   let gateways = $derived<GatewayInfo[]>(gatewaysStore.value ?? []);
   let typeFilter = $state<"all" | "host" | "gateway">("all");
+  let search = $state("");
+
+  // Honor a pending palette navigation for nodes — pre-fill the search
+  // box with the picked node's ID so the table narrows to it.
+  $effect(() => {
+    const t = pendingNav.value;
+    if (t && t.kind === "node") {
+      search = t.id;
+      typeFilter = "all";
+      pendingNav.consume();
+    }
+  });
 
   let rows = $derived.by<NodeRow[]>(() => {
     const out: NodeRow[] = [];
@@ -57,10 +69,10 @@
         metricText: fmtBytes(g.bytesSent + g.bytesRecv),
       });
     }
-    if (typeFilter !== "all") {
-      return out.filter((r) => r.kind === typeFilter);
-    }
-    return out;
+    let filtered = typeFilter === "all" ? out : out.filter((r) => r.kind === typeFilter);
+    const q = search.trim().toLowerCase();
+    if (q) filtered = filtered.filter((r) => r.id.toLowerCase().includes(q));
+    return filtered;
   });
 
   // One-shot fetch at mount + live updates via SSE.
@@ -142,15 +154,23 @@
 <main class="p-4 space-y-3">
   <div class="flex items-center justify-between">
     <h2 class="text-accent-300 text-[11px] uppercase tracking-wide">Nodes</h2>
-    <div class="flex bg-white/5 border border-white/10 rounded overflow-hidden text-[11px]">
-      {#each ["all", "host", "gateway"] as f (f)}
-        <button
-          class="px-2 py-0.5 {typeFilter === f
-            ? 'bg-accent-300/20 text-accent-300'
-            : 'text-slate-400 hover:bg-white/5'}"
-          onclick={() => (typeFilter = f as typeof typeFilter)}
-        >{f}</button>
-      {/each}
+    <div class="flex items-center gap-2 text-[11px]">
+      <input
+        type="text"
+        placeholder="search id…"
+        class="bg-white/5 border border-white/10 rounded px-2 py-1 text-[12px] text-slate-200 placeholder-slate-500 focus:outline-none w-44"
+        bind:value={search}
+      />
+      <div class="flex bg-white/5 border border-white/10 rounded overflow-hidden">
+        {#each ["all", "host", "gateway"] as f (f)}
+          <button
+            class="px-2 py-0.5 {typeFilter === f
+              ? 'bg-accent-300/20 text-accent-300'
+              : 'text-slate-400 hover:bg-white/5'}"
+            onclick={() => (typeFilter = f as typeof typeFilter)}
+          >{f}</button>
+        {/each}
+      </div>
     </div>
   </div>
 

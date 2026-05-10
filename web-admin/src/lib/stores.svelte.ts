@@ -74,25 +74,44 @@ export const metricsHistoryStore = new MetricsHistory();
 
 class Palette {
   #open = $state(false);
-  #verb = $state<string | null>(null);
   get value(): boolean {
     return this.#open;
   }
-  get verb(): string | null {
-    return this.#verb;
-  }
   set(v: boolean): void {
     this.#open = v;
-    if (!v) this.#verb = null;
   }
   toggle(): void {
     this.#open = !this.#open;
-    if (!this.#open) this.#verb = null;
-  }
-  openAt(verb: string): void {
-    this.#verb = verb;
-    this.#open = true;
   }
 }
 
 export const paletteOpen = new Palette();
+
+// PendingNav is a one-shot signal from the command palette to a route:
+// "you've just been navigated to, please select / pre-fill X." Each route
+// consumes the signal in an $effect on mount and clears it. Keeps the
+// palette decoupled from route-internal selection state.
+export type PendingNav =
+  | { kind: "cell"; id: string }
+  | { kind: "node"; id: string }
+  | { kind: "player"; username: string };
+
+class PendingNavStore {
+  #target = $state<PendingNav | null>(null);
+  get value(): PendingNav | null {
+    return this.#target;
+  }
+  set(v: PendingNav | null): void {
+    this.#target = v;
+  }
+  // consume returns the current value AND clears it atomically. Used by the
+  // target route once it has applied the selection so a back-then-forward
+  // doesn't reapply.
+  consume(): PendingNav | null {
+    const v = this.#target;
+    this.#target = null;
+    return v;
+  }
+}
+
+export const pendingNav = new PendingNavStore();

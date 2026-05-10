@@ -1,10 +1,7 @@
-import type { CommandDescribe } from "./types";
-import { apiGet } from "./api";
-
 // fuzzyScore returns a positive number when every character of `query`
 // appears in `text` in order (case-insensitive), 0 otherwise. Score
 // favors earlier matches and contiguous runs so prefix matches outrank
-// scattered hits — good enough for a verb palette without a fuzzy lib.
+// scattered hits — good enough for the entity palette without a fuzzy lib.
 export function fuzzyScore(text: string, query: string): number {
   if (!query) return 1; // empty query matches everything weakly
   const t = text.toLowerCase();
@@ -30,22 +27,4 @@ export function fuzzyScore(text: string, query: string): number {
     textIdx = found + 1;
   }
   return score;
-}
-
-// describeCache memoizes GET /admin/api/commands/<verb> for the lifetime
-// of the SPA session. Schemas are stable across a coordinator process —
-// no need to refetch every time the palette opens. clearCache() is
-// available for tests.
-const cache = new Map<string, CommandDescribe>();
-
-export async function describe(verb: string): Promise<CommandDescribe> {
-  const hit = cache.get(verb);
-  if (hit) return hit;
-  const res = await apiGet<CommandDescribe>(`/admin/api/commands/${encodeURIComponent(verb)}`);
-  cache.set(verb, res);
-  return res;
-}
-
-export function clearDescribeCache(): void {
-  cache.clear();
 }
