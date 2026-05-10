@@ -278,9 +278,9 @@ func (s *meshControlServer) handleHostControl(stream meshpb.MeshControl_ControlS
 				hb := v.Heartbeat
 				if hb != nil && s.registry != nil {
 					s.registry.Touch(hb.HostId)
-					if len(hb.Metrics) > 0 {
-						s.coord.applyRemoteCellMetrics(hb.HostId, hb.Metrics)
-					}
+					// Always call apply — even with zero reports it serves as
+					// the eviction signal that this host now owns no cells.
+					s.coord.applyRemoteCellMetrics(hb.HostId, hb.Metrics)
 				}
 
 			case *meshpb.HostMessage_PlayerMigrated:

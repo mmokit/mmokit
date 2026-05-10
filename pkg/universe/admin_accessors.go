@@ -23,14 +23,37 @@ type remoteMetricsEntry struct {
 // in its Heartbeat. The coordinator caches these so the admin dashboard can
 // surface real entity counts / load / tick stats from cells that live on
 // remote hosts.
+//
+// Each heartbeat is treated as the authoritative snapshot for the reporting
+// host: any cells previously cached under hostID that are absent from the
+// new report list are evicted. Without this, post-merge donor cells (or
+// post-migrate cells the host no longer owns) linger in the cache and the
+// dashboard keeps showing them.
 func (c *Process) applyRemoteCellMetrics(hostID string, reports []*meshpb.CellMetricsReport) {
-	if hostID == "" || len(reports) == 0 {
+	if hostID == "" {
 		return
 	}
 	c.remoteCellMetricsMu.Lock()
 	defer c.remoteCellMetricsMu.Unlock()
 	if c.remoteCellMetrics == nil {
 		c.remoteCellMetrics = make(map[MeshCellID]remoteMetricsEntry, len(reports))
+	}
+	// Build the set of cells the host now claims to own, then evict any
+	// stale entries previously attributed to this host.
+	current := make(map[MeshCellID]struct{}, len(reports))
+	for _, r := range reports {
+		if r == nil || r.CellId == "" {
+			continue
+		}
+		current[MeshCellID(r.CellId)] = struct{}{}
+	}
+	for id, e := range c.remoteCellMetrics {
+		if e.hostID != hostID {
+			continue
+		}
+		if _, kept := current[id]; !kept {
+			delete(c.remoteCellMetrics, id)
+		}
 	}
 	for _, r := range reports {
 		if r == nil || r.CellId == "" {
