@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { Globe, Boxes, Users, Activity, List, Scroll, Settings } from "$lib/icons";
+  import { Globe, Boxes, Users, Activity, List, Scroll, Settings, ShieldCheck } from "$lib/icons";
   import { navigate, route } from "$lib/router";
 
   // lucide-svelte 0.460 components don't conform to Svelte 5's Component<T>
@@ -21,6 +21,7 @@
     { id: "players", label: "Players", icon: Users, group: "PEOPLE", path: "/players" },
     { id: "performance", label: "Performance", icon: Activity, group: "DIAGNOSE", path: "/performance" },
     { id: "events", label: "Events", icon: List, group: "DIAGNOSE", path: "/events" },
+    { id: "audit", label: "Audit", icon: ShieldCheck, group: "DIAGNOSE", path: "/audit" },
     { id: "logs", label: "Logs", icon: Scroll, group: "DIAGNOSE", path: "/logs" },
     { id: "settings", label: "Settings", icon: Settings, group: "CONFIG", path: "/settings" },
   ];
