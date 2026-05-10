@@ -1,14 +1,20 @@
 <script lang="ts">
   import { Circle, Command, Bell } from "$lib/icons";
-  import { clusterStore, alertsStore, sessionStore } from "$lib/stores.svelte";
+  import { cellsStore, alertsStore, sessionStore } from "$lib/stores.svelte";
   import AlertBanner from "./AlertBanner.svelte";
 
-  let cluster = $derived(clusterStore.value);
+  // Derive counts from the live cells SSE stream so they tick automatically.
+  // The one-shot /admin/api/cluster snapshot is fine for boot but doesn't update.
+  let cells = $derived(cellsStore.value ?? []);
+  let cellCount = $derived(cells.length);
+  let entityCount = $derived(cells.reduce((sum, c) => sum + c.entities.real, 0));
+  let sessionCount = $derived(cells.reduce((sum, c) => sum + c.entities.connected, 0));
+
   let alertCount = $derived((alertsStore.value ?? []).length);
   let user = $derived(sessionStore.value?.user ?? "");
 
-  // Health: green if cluster snapshot recent and no alerts; yellow if alerts; gray while loading.
-  let health = $derived(alertCount > 0 ? "warn" : cluster ? "ok" : "stale");
+  // Health: green if cells snapshot recent and no alerts; yellow if alerts; gray while loading.
+  let health = $derived(alertCount > 0 ? "warn" : cellCount > 0 ? "ok" : "stale");
 </script>
 
 <header class="border-b border-white/5 bg-[#0a0e14] flex items-center gap-4 px-4 py-2 text-[12px]">
@@ -23,8 +29,8 @@
       <Circle
         class="w-2 h-2 fill-current {health === 'ok' ? 'text-emerald-500' : health === 'warn' ? 'text-amber-400' : 'text-slate-600'}"
       />
-      {cluster
-        ? `${cluster.cellCount} cells · ${cluster.totalEntities} ent · ${cluster.sessionCount} sess`
+      {cellCount > 0
+        ? `${cellCount} cells · ${entityCount} ent · ${sessionCount} sess`
         : "loading…"}
     </span>
     <button

@@ -23,20 +23,32 @@ export type LayoutOpts = {
 // an N×M grid derived from their X_Y IDs; split children render as nested
 // 2×2 squares inside their parent rect.
 //
-// Cell IDs follow `<X>_<Y>` for depth 0 and `<X>_<Y>:1..4` for splits, where
-// split index 1=NW, 2=NE, 3=SW, 4=SE. The same scheme nests recursively for
-// deeper splits (`0_0:1:2` is the NE quadrant of the NW quadrant of 0_0).
+// Cell IDs follow either `<X>_<Y>` (test/legacy) or `cell_<X>_<Y>` (real
+// universe.MeshCellID format) for depth 0, with `:1..4` suffixes for splits
+// where 1=NW, 2=NE, 3=SW, 4=SE. The same scheme nests recursively for deeper
+// splits (`cell_0_0:1:2` is the NE quadrant of the NW quadrant of cell_0_0).
 //
 // Layout returns one entry per input cell (parents AND children) so callers
 // can choose to render only leaves, only parents, or both with translucency.
+
+// parseBaseXY extracts the trailing X_Y coordinates from a base cell ID,
+// tolerating both `<X>_<Y>` and `<prefix>_<X>_<Y>` (e.g. `cell_0_0`).
+// Returns null if the ID doesn't end in two underscore-separated integers.
+export function parseBaseXY(id: string): { x: number; y: number } | null {
+  const m = /(\d+)_(\d+)$/.exec(id);
+  if (!m) return null;
+  return { x: Number.parseInt(m[1], 10), y: Number.parseInt(m[2], 10) };
+}
+
 export function layoutCells(input: CellLayoutInput[], opts: LayoutOpts): Layout[] {
   const baseCells = input.filter((c) => c.depth === 0);
   let maxX = 0;
   let maxY = 0;
   for (const c of baseCells) {
-    const [xs, ys] = c.id.split("_");
-    maxX = Math.max(maxX, Number.parseInt(xs, 10));
-    maxY = Math.max(maxY, Number.parseInt(ys, 10));
+    const xy = parseBaseXY(c.id);
+    if (!xy) continue;
+    maxX = Math.max(maxX, xy.x);
+    maxY = Math.max(maxY, xy.y);
   }
   const cols = maxX + 1;
   const rows = maxY + 1;
@@ -46,9 +58,10 @@ export function layoutCells(input: CellLayoutInput[], opts: LayoutOpts): Layout[
   const out: Layout[] = [];
   const baseRect = new Map<string, Layout>();
   for (const c of baseCells) {
-    const [xs, ys] = c.id.split("_");
-    const xi = Number.parseInt(xs, 10);
-    const yi = Number.parseInt(ys, 10);
+    const xy = parseBaseXY(c.id);
+    if (!xy) continue;
+    const xi = xy.x;
+    const yi = xy.y;
     const rect: Layout = {
       id: c.id,
       x: opts.padding + xi * cellW,
