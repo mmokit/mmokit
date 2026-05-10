@@ -1,11 +1,11 @@
 // Vitest jsdom doesn't ship EventSource. Provide a minimal mock so SSE tests
 // can exercise the demuxer without spinning up a real server.
 class MockEventSource extends EventTarget {
-  static CONNECTING = 0 as const;
-  static OPEN = 1 as const;
-  static CLOSED = 2 as const;
+  static readonly CONNECTING = 0;
+  static readonly OPEN = 1;
+  static readonly CLOSED = 2;
 
-  readyState = MockEventSource.CONNECTING;
+  readyState: number = MockEventSource.CONNECTING;
   url: string;
   onopen: ((ev: Event) => void) | null = null;
   onerror: ((ev: Event) => void) | null = null;
