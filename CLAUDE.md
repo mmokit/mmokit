@@ -206,6 +206,8 @@ The SPA lives in `web-admin/` (Svelte 5 + Vite + Bun + Tailwind v4 + `@lucide/sv
 
 The Hosts, Gateways, and Players routes (`/hosts`, `/gateways`, `/players`) consume `Process.HostListEntries` / `GatewayListEntries` / `ActivePlayerSnapshots` — typed accessors that aggregate registry + metrics state. Live updates flow on the `hosts` / `gateways` / `players` SSE topics (one shared 1Hz `rosterPublisher` ticker). Player operations (tp / tpto / kick) POST to `/admin/api/commands/<verb>`, dispatched through the existing cmdsys with the operator's grants. Offline player listing is a placeholder until `PlayerRepository` exposes a search API. Hosts/Gateways tables use a shared `DataTable.svelte` component (sortable, headless); the Players table is hand-rolled because each row needs interactive op buttons.
 
+The Performance route (`/performance`) charts per-cell sparklines (load, tick p99 µs, real entities, bytes/sec) from a 60-sample SPA-side ring buffer (`metricsHistoryStore`) fed by the existing `cells` SSE topic; the per-cell drilldown calls `/admin/api/perf/<cellId>`, which routes through the `perf.snapshot` cmdsys verb (`RouteAllHosts`) via `Process.PerfSnapshotForCell` so it works in distributed mode without per-host wiring. The Events route (`/events`) tails `/admin/api/events` + the `events` SSE topic with client-side filters (scenario / kind / cell-or-host substring) and a pause toggle. Sparklines are zero-dep canvas (`Sparkline.svelte`); the per-system drilldown uses `BarChart.svelte`.
+
 ### Game Loop (20Hz fixed timestep in `pkg/engine/loop.go`)
 
 Each tick runs these phases in order:
