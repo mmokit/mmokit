@@ -75,8 +75,8 @@ type BytesTotal struct {
 // HostInfo describes a host process in the cluster.
 type HostInfo struct {
 	ID             string   `json:"id"`
-	Roles          []string `json:"roles"` // ["coordinator","host"], etc.
-	State          string   `json:"state"` // "live"|"draining"|"dead"
+	Roles          []string `json:"roles"` // ["host"]|["service"]
+	State          string   `json:"state"` // "live"|"registered"|"dead"|"leaving"|"unknown"
 	IsLocal        bool     `json:"isLocal"`
 	HeartbeatAgeMs int64    `json:"heartbeatAgeMs"`
 	Cells          []string `json:"cells"`
