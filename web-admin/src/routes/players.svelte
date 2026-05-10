@@ -5,22 +5,26 @@
   import { apiGet } from "$lib/api";
   import type { PlayerInfo } from "$lib/types";
   import PlayerOpsModal from "../components/PlayerOpsModal.svelte";
+  import PlayerDrawer from "../components/PlayerDrawer.svelte";
   import { Search } from "$lib/icons";
 
   let allPlayers = $derived<PlayerInfo[]>(playersStore.value ?? []);
   let search = $state("");
   let statusFilter = $state<"all" | "online" | "offline">("online");
+  let drawerPlayer = $state<PlayerInfo | null>(null);
 
   // Honor a pending palette navigation: prefill the search box with the
   // picked player's username and broaden the status filter so an offline
-  // player still shows up.
+  // player still shows up. Open the drawer directly when the live store
+  // has the entry.
   $effect(() => {
     const t = pendingNav.value;
-    if (t && t.kind === "player") {
-      search = t.username;
-      statusFilter = "all";
-      pendingNav.consume();
-    }
+    if (!t || t.kind !== "player") return;
+    search = t.username;
+    statusFilter = "all";
+    pendingNav.consume();
+    const p = allPlayers.find((x) => x.username === t.username);
+    if (p) drawerPlayer = p;
   });
 
   let filtered = $derived.by(() => {
@@ -67,7 +71,8 @@
   });
 </script>
 
-<main class="p-4 space-y-3">
+<div class="h-full flex">
+  <main class="grow p-4 space-y-3 min-w-0">
   <div class="flex items-center justify-between">
     <h2 class="text-accent-300 text-[11px] uppercase tracking-wide">Players</h2>
     <div class="flex items-center gap-2 text-[11px]">
@@ -106,7 +111,13 @@
       <tbody>
         {#each filtered as p (p.username)}
           <tr class="border-b border-white/5 hover:bg-white/5">
-            <td class="py-1.5 px-2 font-mono">{p.username}</td>
+            <td class="py-1.5 px-2 font-mono">
+              <button
+                type="button"
+                class="text-slate-200 hover:text-accent-300"
+                onclick={() => (drawerPlayer = p)}
+              >{p.username}</button>
+            </td>
             <td class="py-1.5 px-2 {p.status === 'online' ? 'text-emerald-300' : 'text-slate-500'}">
               {p.status === "online" ? "● online" : "○ offline"}
             </td>
@@ -167,4 +178,11 @@
     onClose={closeOp}
     onResult={onResult}
   />
-</main>
+  </main>
+
+  <PlayerDrawer
+    player={drawerPlayer}
+    onClose={() => (drawerPlayer = null)}
+    onResult={onResult}
+  />
+</div>
