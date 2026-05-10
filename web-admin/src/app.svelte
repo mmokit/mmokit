@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount } from "svelte";
   import { auth } from "$lib/auth";
-  import { sessionStore, clusterStore } from "$lib/stores.svelte";
+  import { sessionStore, clusterStore, paletteOpen } from "$lib/stores.svelte";
   import { route } from "$lib/router";
   import { stream } from "$lib/stream";
   import { apiGet } from "$lib/api";
@@ -14,6 +14,7 @@
   import Events from "./routes/events.svelte";
   import Sidebar from "./components/Sidebar.svelte";
   import TopBar from "./components/TopBar.svelte";
+  import CommandPalette from "./components/CommandPalette.svelte";
 
   let path = $state("/cluster");
   let booting = $state(true);
@@ -53,7 +54,32 @@
     sessionStore.set(s);
     if (s) hydrateCluster();
   }
+
+  function onGlobalKey(e: KeyboardEvent) {
+    // Cmd+K / Ctrl+K toggles palette unless the user is typing in an input.
+    const target = e.target as HTMLElement | null;
+    const editable = target && (
+      target.tagName === "INPUT" ||
+      target.tagName === "TEXTAREA" ||
+      target.isContentEditable
+    );
+    if ((e.metaKey || e.ctrlKey) && (e.key === "k" || e.key === "K")) {
+      e.preventDefault();
+      paletteOpen.toggle();
+      return;
+    }
+    if (e.key === "Escape" && paletteOpen.value && !editable) {
+      paletteOpen.set(false);
+    }
+  }
+
+  function onPaletteResult(ok: boolean, message: string, payload?: unknown) {
+    // v1: log to console; Task 10 adds Toast for in-UI feedback.
+    console[ok ? "log" : "warn"]("cmd palette:", message, payload);
+  }
 </script>
+
+<svelte:window onkeydown={onGlobalKey} />
 
 {#if booting}
   <div class="h-full flex items-center justify-center text-slate-400">loading…</div>
@@ -82,5 +108,10 @@
         {/if}
       </div>
     </div>
+    <CommandPalette
+      open={paletteOpen.value}
+      onClose={() => paletteOpen.set(false)}
+      onResult={onPaletteResult}
+    />
   </div>
 {/if}

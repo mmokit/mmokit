@@ -1,6 +1,6 @@
 <script lang="ts">
   import { Circle, Command, Bell } from "$lib/icons";
-  import { cellsStore, alertsStore, sessionStore } from "$lib/stores.svelte";
+  import { cellsStore, alertsStore, sessionStore, paletteOpen } from "$lib/stores.svelte";
   import AlertBanner from "./AlertBanner.svelte";
 
   // Derive counts from the live cells SSE stream so they tick automatically.
@@ -37,6 +37,7 @@
       type="button"
       class="px-2 py-0.5 rounded border border-white/10 bg-white/5 text-slate-300 hover:bg-white/10 flex items-center gap-1"
       title="Command palette (⌘K)"
+      onclick={() => paletteOpen.set(true)}
     >
       <Command class="w-3 h-3" /> ⌘K
     </button>

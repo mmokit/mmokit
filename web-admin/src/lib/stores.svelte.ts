@@ -71,3 +71,18 @@ class MetricsHistory {
 }
 
 export const metricsHistoryStore = new MetricsHistory();
+
+class PaletteOpen {
+  #open = $state(false);
+  get value(): boolean {
+    return this.#open;
+  }
+  set(v: boolean): void {
+    this.#open = v;
+  }
+  toggle(): void {
+    this.#open = !this.#open;
+  }
+}
+
+export const paletteOpen = new PaletteOpen();
