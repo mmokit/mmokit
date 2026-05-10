@@ -72,17 +72,27 @@ class MetricsHistory {
 
 export const metricsHistoryStore = new MetricsHistory();
 
-class PaletteOpen {
+class Palette {
   #open = $state(false);
+  #verb = $state<string | null>(null);
   get value(): boolean {
     return this.#open;
   }
+  get verb(): string | null {
+    return this.#verb;
+  }
   set(v: boolean): void {
     this.#open = v;
+    if (!v) this.#verb = null;
   }
   toggle(): void {
     this.#open = !this.#open;
+    if (!this.#open) this.#verb = null;
+  }
+  openAt(verb: string): void {
+    this.#verb = verb;
+    this.#open = true;
   }
 }
 
-export const paletteOpen = new PaletteOpen();
+export const paletteOpen = new Palette();

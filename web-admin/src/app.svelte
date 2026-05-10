@@ -110,6 +110,7 @@
     </div>
     <CommandPalette
       open={paletteOpen.value}
+      initialVerb={paletteOpen.verb}
       onClose={() => paletteOpen.set(false)}
       onResult={onPaletteResult}
     />

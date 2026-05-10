@@ -7,10 +7,11 @@
 
   type Props = {
     open: boolean;
+    initialVerb?: string | null;
     onClose: () => void;
     onResult: (ok: boolean, message: string, payload?: unknown) => void;
   };
-  let { open, onClose, onResult }: Props = $props();
+  let { open, initialVerb = null, onClose, onResult }: Props = $props();
 
   let allCommands = $state<CommandSummary[]>([]);
   let query = $state("");
@@ -48,13 +49,21 @@
     })();
   });
 
-  // Reset state + focus input on each open.
   $effect(() => {
-    if (open) {
-      query = "";
-      activeIdx = 0;
-      picked = null;
-      pickError = "";
+    if (!open) return;
+    query = "";
+    activeIdx = 0;
+    picked = null;
+    pickError = "";
+    if (initialVerb) {
+      void (async () => {
+        try {
+          picked = await describeVerb(initialVerb);
+        } catch (e) {
+          pickError = (e as Error).message;
+        }
+      })();
+    } else {
       void tick().then(() => inputEl?.focus());
     }
   });

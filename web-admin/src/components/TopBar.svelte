@@ -2,6 +2,7 @@
   import { Circle, Command, Bell } from "$lib/icons";
   import { cellsStore, alertsStore, sessionStore, paletteOpen } from "$lib/stores.svelte";
   import AlertBanner from "./AlertBanner.svelte";
+  import ClusterOpsMenu from "./ClusterOpsMenu.svelte";
 
   // Derive counts from the live cells SSE stream so they tick automatically.
   // The one-shot /admin/api/cluster snapshot is fine for boot but doesn't update.
@@ -33,6 +34,7 @@
         ? `${cellCount} cells · ${entityCount} ent · ${sessionCount} sess`
         : "loading…"}
     </span>
+    <ClusterOpsMenu />
     <button
       type="button"
       class="px-2 py-0.5 rounded border border-white/10 bg-white/5 text-slate-300 hover:bg-white/10 flex items-center gap-1"
