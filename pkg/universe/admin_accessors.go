@@ -23,11 +23,13 @@ func (c *Process) MetricsSnapshot(cellID string) (metrics.LoadSnapshot, bool) {
 }
 
 // PlayerSnapshot describes one online player's location at a moment in time.
-// Populated from c.players under the read lock; fields are best-effort and
-// may be zero-valued when the underlying PlayerLocation doesn't carry richer
-// state (today: WorldX, WorldY, LastLogin are always zero — universe tracks
-// only HostID + CellID + Active per username, not in-world position or
-// login history).
+// Populated from c.players under the read lock.
+//
+// Fields populated in v1: Username, HostID, CellID. WorldX/WorldY/LastLogin
+// are zero unless the underlying PlayerLocation tracks them — they're left
+// in the struct so the wire shape is stable as those fields land. Per-player
+// detail (last login, exact world position) lands via a separate
+// `player.info`-backed lookup when the dashboard adds detail routes.
 type PlayerSnapshot struct {
 	Username  string
 	HostID    string
