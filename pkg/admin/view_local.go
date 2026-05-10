@@ -1,6 +1,7 @@
 package admin
 
 import (
+	"context"
 	"strconv"
 	"strings"
 	"time"
@@ -277,13 +278,41 @@ func mapCommitEvent(r universe.CommitEvent) CommitEvent {
 	}
 }
 
-// Perf returns per-cell tick profiling data. v1: per-cell tick stats
-// accessor doesn't yet exist on Process. Returns ErrUnavailable so the
-// dashboard's perf panel can render an "unavailable" state without
-// crashing. Wire up when TickStatsForCell lands in pkg/universe.
+// Perf returns per-cell tick profiling data via the perf.snapshot cmdsys
+// verb. Returns ErrCellNotFound when the cell isn't currently owned by any
+// reachable host (e.g. mid-split, host crashed, unknown ID).
 func (v *LocalClusterView) Perf(cellID string) (PerfSnapshot, error) {
-	_ = cellID
-	return PerfSnapshot{}, ErrUnavailable
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	row, ok, err := v.p.PerfSnapshotForCell(ctx, cellID)
+	if err != nil {
+		return PerfSnapshot{}, err
+	}
+	if !ok {
+		return PerfSnapshot{}, ErrCellNotFound
+	}
+	out := PerfSnapshot{
+		CellID:      row.CellID,
+		SampleCount: row.Tick.SampleCount,
+		SystemNames: make([]string, len(row.Systems)),
+		Systems:     make([]TimingStats, len(row.Systems)),
+		Total: TimingStats{
+			LatestUs: row.Tick.Latest.Microseconds(),
+			AvgUs:    row.Tick.Avg.Microseconds(),
+			P50Us:    row.Tick.P50.Microseconds(),
+			P95Us:    row.Tick.P95.Microseconds(),
+			P99Us:    row.Tick.P99.Microseconds(),
+			MaxUs:    row.Tick.Max.Microseconds(),
+		},
+	}
+	for i, s := range row.Systems {
+		out.SystemNames[i] = s.Name
+		out.Systems[i] = TimingStats{
+			AvgUs: s.Avg.Microseconds(),
+			P95Us: s.P95.Microseconds(),
+		}
+	}
+	return out, nil
 }
 
 // parseDepthAndParent extracts the depth and parent ID from a universe
