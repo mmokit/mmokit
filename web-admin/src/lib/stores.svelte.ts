@@ -7,6 +7,7 @@ import type {
   PlayerInfo,
   AuthSession,
   PanelDef,
+  MetricsSample,
 } from "./types";
 
 // A reactive holder backed by Svelte 5 $state. Use directly: cellsStore.value.
@@ -43,3 +44,30 @@ export function pushAlert(e: CommitEvent): void {
   const next = [e, ...cur].slice(0, 50);
   alertsStore.set(next);
 }
+
+// METRICS_HISTORY_LEN is the per-cell sample budget. At ~4Hz from the cells
+// SSE topic, 60 samples covers ~15 seconds — enough for a useful sparkline
+// without holding huge arrays. A page reload starts fresh.
+export const METRICS_HISTORY_LEN = 60;
+
+// metricsHistory is a per-cell ring buffer of MetricsSample. Pushes wrap
+// at METRICS_HISTORY_LEN. Reactive: callers can read .value and re-render
+// when it changes.
+class MetricsHistory {
+  #map = $state<Record<string, MetricsSample[]>>({});
+  get value(): Record<string, MetricsSample[]> {
+    return this.#map;
+  }
+  push(cellId: string, sample: MetricsSample): void {
+    const cur = this.#map[cellId] ?? [];
+    const next = cur.length < METRICS_HISTORY_LEN
+      ? [...cur, sample]
+      : [...cur.slice(1), sample];
+    this.#map = { ...this.#map, [cellId]: next };
+  }
+  clear(): void {
+    this.#map = {};
+  }
+}
+
+export const metricsHistoryStore = new MetricsHistory();
