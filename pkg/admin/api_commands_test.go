@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/zenion/mmoserver/pkg/cmdsys"
+	"github.com/zenion/mmoserver/pkg/logger"
 )
 
 func TestHandleCommandInvoke_Success(t *testing.T) {
@@ -39,7 +40,7 @@ func TestHandleCommandInvoke_Success(t *testing.T) {
 		registry:   reg,
 		dispatcher: disp,
 		audit:      NewAuditLog(8),
-		log:        testLogger{},
+		logger:     logger.New(),
 	}
 
 	body, _ := json.Marshal(map[string]string{"msg": "hi"})

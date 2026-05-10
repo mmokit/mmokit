@@ -121,7 +121,7 @@ func (s *Server) handleCommandInvoke(w http.ResponseWriter, r *http.Request) {
 		entry.OK = false
 		entry.Error = invokeErr.Error()
 		s.audit.Append(entry)
-		s.log.Log("admin", "cmd verb=%s user=%s ok=false err=%s", verb, caller.ID, invokeErr)
+		s.logger.Log("admin", "cmd verb=%s user=%s ok=false err=%s", verb, caller.ID, invokeErr)
 		writeJSONError(w, http.StatusForbidden, invokeErr.Error())
 		return
 	case errors.Is(invokeErr, cmdsys.ErrUnknownVerb):
@@ -134,7 +134,7 @@ func (s *Server) handleCommandInvoke(w http.ResponseWriter, r *http.Request) {
 		entry.OK = false
 		entry.Error = invokeErr.Error()
 		s.audit.Append(entry)
-		s.log.Log("admin", "cmd verb=%s user=%s ok=false dur=%s err=%s", verb, caller.ID, finishedAt.Sub(startedAt), invokeErr)
+		s.logger.Log("admin", "cmd verb=%s user=%s ok=false dur=%s err=%s", verb, caller.ID, finishedAt.Sub(startedAt), invokeErr)
 		writeJSONError(w, http.StatusInternalServerError, invokeErr.Error())
 		return
 	}
@@ -161,6 +161,6 @@ func (s *Server) handleCommandInvoke(w http.ResponseWriter, r *http.Request) {
 	}
 	entry.OK = true
 	s.audit.Append(entry)
-	s.log.Log("admin", "cmd verb=%s user=%s ok=true dur=%s", verb, caller.ID, finishedAt.Sub(startedAt))
+	s.logger.Log("admin", "cmd verb=%s user=%s ok=true dur=%s", verb, caller.ID, finishedAt.Sub(startedAt))
 	writeJSON(w, http.StatusOK, resp)
 }

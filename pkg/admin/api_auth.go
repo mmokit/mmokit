@@ -52,7 +52,7 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 			OK: false, Error: "unknown user",
 			StartedAt: time.Now(), FinishedAt: time.Now(),
 		})
-		s.log.Log("admin", "login-fail user=%s ip=%s reason=unknown-user", req.Username, remoteAddr(r))
+		s.logger.Log("admin", "login-fail user=%s ip=%s reason=unknown-user", req.Username, remoteAddr(r))
 		writeJSONError(w, http.StatusUnauthorized, "invalid credentials")
 		return
 	}
@@ -63,7 +63,7 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 			OK: false, Error: "bad password",
 			StartedAt: time.Now(), FinishedAt: time.Now(),
 		})
-		s.log.Log("admin", "login-fail user=%s ip=%s reason=bad-password", req.Username, remoteAddr(r))
+		s.logger.Log("admin", "login-fail user=%s ip=%s reason=bad-password", req.Username, remoteAddr(r))
 		writeJSONError(w, http.StatusUnauthorized, "invalid credentials")
 		return
 	}
@@ -89,7 +89,7 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 		Username: req.Username, IP: rec.IP, Verb: "auth.login",
 		OK: true, StartedAt: time.Now(), FinishedAt: time.Now(),
 	})
-	s.log.Log("admin", "login user=%s ip=%s", req.Username, rec.IP)
+	s.logger.Log("admin", "login user=%s ip=%s", req.Username, rec.IP)
 	writeJSON(w, http.StatusOK, loginResponse{User: req.Username, Grants: op.Grants, ExpiresAt: expiresAt})
 }
 

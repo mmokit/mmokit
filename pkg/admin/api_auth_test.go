@@ -9,12 +9,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/zenion/mmoserver/pkg/logger"
 	"github.com/zenion/mmoserver/pkg/services/auth"
 )
-
-type testLogger struct{}
-
-func (testLogger) Log(string, string, ...any) {}
 
 func newTestServer(t *testing.T) *Server {
 	t.Helper()
@@ -29,7 +26,7 @@ func newTestServer(t *testing.T) *Server {
 		operators: map[string]OperatorConfig{
 			"josh": {Username: "josh", PasswordHash: hash, Grants: []string{"*.*"}},
 		},
-		log: testLogger{},
+		logger: logger.New(),
 		cfg: Config{
 			SessionTTL: time.Hour,
 			CookieOpts: defaultCookieOpts(),

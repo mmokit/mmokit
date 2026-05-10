@@ -13,12 +13,6 @@ import (
 	"github.com/zenion/mmoserver/pkg/universe"
 )
 
-// Logger is the minimal logger surface admin.Server needs. *logger.Logger
-// satisfies it implicitly.
-type Logger interface {
-	Log(category, format string, args ...any)
-}
-
 // Config is the construction-time bundle for NewServer.
 type Config struct {
 	BindAddr   string        // for cookie Secure-flag relaxing on loopback
@@ -50,7 +44,6 @@ type Server struct {
 	operators  map[string]OperatorConfig
 	panels     *PanelRegistry
 	bus        *TopicBus
-	log        Logger
 	logger     *logger.Logger
 
 	cfg Config
@@ -99,7 +92,6 @@ func NewServer(opts ServerOpts) *Server {
 		operators:  ops,
 		panels:     opts.Panels,
 		bus:        bus,
-		log:        opts.Logger,
 		logger:     opts.Logger,
 		cfg:        cfg,
 	}
