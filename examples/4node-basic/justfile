@@ -34,9 +34,10 @@ build-web:
 # ships with the previous build's bundle.
 build: sdk build-web build-go
 
-# build and run `all` preset (serves the built web/dist — no vite needed)
+# build and run `all` preset (serves the built web/dist — no vite needed).
+# Admin dashboard is on http://localhost:9101/admin/ (login: josh / localdev).
 run: build
-    cd {{root}} && ./bin/4node-basic '--postgres-url={{postgres_url}}'
+    cd {{root}} && ./bin/4node-basic '--postgres-url={{postgres_url}}' --admin-listen={{admin_listen}}
 
 # build Go + run with vite dev server (HMR on :5173, Go backend on :8080)
 # Disables static serving on the Go side so vite is the sole asset source.
@@ -48,7 +49,7 @@ dev *ARGS: build-go
     tmux kill-session -t 4node-vite 2>/dev/null || true
     tmux new-session -d -s 4node-vite -c "{{root}}/examples/4node-basic/web" 'bun run dev'
     trap 'tmux kill-session -t 4node-vite 2>/dev/null' INT TERM EXIT
-    cd {{root}} && ./bin/4node-basic --web-dir=disabled '--postgres-url={{postgres_url}}' --dev-insecure-cookie {{ARGS}}
+    cd {{root}} && ./bin/4node-basic --web-dir=disabled '--postgres-url={{postgres_url}}' --admin-listen={{admin_listen}} --dev-insecure-cookie {{ARGS}}
 
 # All-roles dev with the echo service enabled. Bring up Postgres first
 # (`just db-up` from the repo root) — echo requires DB. Vite runs on

@@ -3,6 +3,7 @@ package main
 import (
 	"embed"
 	"log"
+	"time"
 
 	"github.com/zenion/mmoserver/pkg/mmokit"
 
@@ -40,6 +41,26 @@ func main() {
 			}
 		},
 		Protocol: mmokit.NewProtocol("basic"),
+
+		// Admin dashboard at /admin/* on the AdminListen port (defaults to
+		// :9101 when --admin-listen is set; --admin-enabled flips Enabled
+		// at the flag layer too). The hash below is for password
+		// "localdev"; regenerate with `./bin/server --admin-hash-password`
+		// if you want a different one.
+		Admin: mmokit.AdminConfig{
+			Enabled:            true,
+			SessionTTL:         8 * time.Hour,
+			LockoutMaxAttempts: 5,
+			LockoutWindow:      15 * time.Minute,
+			Operators: []mmokit.AdminOperatorConfig{
+				{
+					Username:     "josh",
+					PasswordHash: "$argon2id$v=19$m=65536,t=3,p=4$ArtLNjQQrFf3vzfkEQ7lXw$5xmMsnQJ5vxY6B7QieFNKOVX3HnedHA4uXdJIA+uZu0",
+					Grants:       []string{"*.*"},
+				},
+			},
+			ServerFactory: mmokit.DefaultAdminServerFactory(),
+		},
 	})
 
 	if err := mmokit.RegisterAuthService(process, mmokit.DefaultAuthOpts()); err != nil {

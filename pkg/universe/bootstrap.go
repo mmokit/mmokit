@@ -71,7 +71,9 @@ func (c *Config) BindFlags() {
 	stringFlag("admin-listen",
 		"admin HTTP listen addr for /events, /commands, /metrics (empty = disabled)",
 		"", &c.AdminListen)
-	flag.BoolVar(&c.Admin.Enabled, "admin-enabled", false,
+	// Default mirrors what the Config literal already set so games that
+	// hardcode Admin.Enabled = true don't need to also pass --admin-enabled.
+	flag.BoolVar(&c.Admin.Enabled, "admin-enabled", c.Admin.Enabled,
 		"enable the admin dashboard at /admin/* (requires --admin-listen)")
 	stringFlag("coordinator-addr",
 		"MeshControl dial addr (host/gateway roles when running standalone)",

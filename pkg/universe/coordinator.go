@@ -2411,19 +2411,24 @@ func (c *Process) Start(parent ...context.Context) {
 	if len(parent) > 0 {
 		ctx = parent[0]
 	}
-	c.Build()
 
-	if c.cfg.DumpSchema {
-		c.dumpSchemaAndExit()
-		return // unreachable — dumpSchemaAndExit calls os.Exit
-	}
-
+	// admin-hash-password runs BEFORE Build() because the operator hash
+	// generation needs none of the cluster machinery — it's just argon2id
+	// over a stdin-prompted password. Running before Build avoids requiring
+	// Postgres / etc. just to generate a config hash.
 	if c.cfg.AdminHashPassword {
 		if err := promptAndPrintAdminHash(); err != nil {
 			fmt.Fprintf(os.Stderr, "admin-hash-password: %v\n", err)
 			os.Exit(1)
 		}
 		os.Exit(0)
+	}
+
+	c.Build()
+
+	if c.cfg.DumpSchema {
+		c.dumpSchemaAndExit()
+		return // unreachable — dumpSchemaAndExit calls os.Exit
 	}
 
 	ctx, cancel := context.WithCancel(ctx)
