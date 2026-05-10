@@ -172,6 +172,77 @@ func (c *Process) HostListEntries() []HostListEntry {
 	return out
 }
 
+// GatewayListEntry is the dashboard-facing view of one gateway.
+type GatewayListEntry struct {
+	ID        string
+	Sessions  int    // count of active sessions routed through this gateway
+	BytesSent uint64 // cumulative (zero until per-gateway byte counters are wired)
+	BytesRecv uint64 // cumulative (zero until per-gateway byte counters are wired)
+	Mode      string // "local-shortcut" | "always-proxy" | "" (unknown / standalone)
+	IsLocal   bool   // true for the embedded gateway in the all-in-one preset
+}
+
+// GatewayListEntries returns one entry per gateway known to this Process.
+// Combines the gatewayRegistry (remote standalone gateways + the embedded
+// gateway after RegisterLocal) with the local embedded gateway when present
+// — deduped by gateway ID.
+//
+// Used by pkg/admin's LocalClusterView.Gateways(). Read-locked snapshot —
+// safe to call concurrently with cluster work.
+func (c *Process) GatewayListEntries() []GatewayListEntry {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
+	// Sessions per gateway: walk sessionRoutes (keyed by GatewayID+ConnID).
+	// sessionRoutes has its own mutex, separate from c.mu.
+	sessionsByGateway := make(map[string]int)
+	if c.sessionRoutes != nil {
+		c.sessionRoutes.ForEach(func(r *SessionRoute) bool {
+			sessionsByGateway[r.Key.GatewayID]++
+			return true
+		})
+	}
+
+	out := []GatewayListEntry{}
+	seen := map[string]bool{}
+
+	// Embedded gateway's mode reflects this process's GatewayMode config —
+	// applies to in-process / coord+gateway combos. Standalone gateways
+	// don't expose their mode via the registry (no field for it), so we
+	// leave Mode empty for non-local entries.
+	embeddedMode := c.cfg.GatewayMode
+
+	if c.gatewayRegistry != nil {
+		for _, g := range c.gatewayRegistry.LiveGateways() {
+			ent := GatewayListEntry{
+				ID:       g.ID,
+				Sessions: sessionsByGateway[g.ID],
+				IsLocal:  g.Local,
+			}
+			if g.Local {
+				ent.Mode = embeddedMode
+			}
+			out = append(out, ent)
+			seen[g.ID] = true
+		}
+	}
+
+	// Backfill the embedded gateway when it isn't in the registry (e.g.
+	// early Build phase before RegisterLocal fires, or a coord+gateway
+	// preset that hasn't published yet). The embedded gateway uses
+	// InprocGatewayID by convention.
+	if c.gateway != nil && !seen[c.gateway.id] {
+		out = append(out, GatewayListEntry{
+			ID:       c.gateway.id,
+			Sessions: sessionsByGateway[c.gateway.id],
+			IsLocal:  true,
+			Mode:     embeddedMode,
+		})
+	}
+
+	return out
+}
+
 func aggregateCellMetrics(cellIDs []string, metricsByCell map[string]metrics.LoadSnapshot) (load float64, totalEntities int) {
 	for _, id := range cellIDs {
 		s, ok := metricsByCell[id]
