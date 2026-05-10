@@ -129,3 +129,21 @@ export type MetricsSample = {
   bytesRecv: number;
 };
 
+export type AuditEntry = {
+  traceId?: string;
+  username: string;
+  ip: string;
+  verb: string;
+  args?: string;
+  ok: boolean;
+  error?: string;
+  startedAt: string;
+  finishedAt: string;
+};
+
+export type LogCategory = { name: string; enabled: boolean };
+
+export type LogGroup = { name: string; categories: LogCategory[] };
+
+export type LogCategoriesResp = { groups: LogGroup[] };
+
