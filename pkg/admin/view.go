@@ -78,7 +78,7 @@ type HostInfo struct {
 	Roles          []string `json:"roles"` // ["coordinator","host"], etc.
 	State          string   `json:"state"` // "live"|"draining"|"dead"
 	IsLocal        bool     `json:"isLocal"`
-	HeartbeatAgeMS int64    `json:"heartbeatAgeMs"`
+	HeartbeatAgeMs int64    `json:"heartbeatAgeMs"`
 	Cells          []string `json:"cells"`
 	Load           float64  `json:"load"` // composite over owned cells
 	TotalEntities  int      `json:"totalEntities"`
@@ -92,6 +92,7 @@ type GatewayInfo struct {
 	BytesSentPS uint64 `json:"bytesSent"`
 	BytesRecvPS uint64 `json:"bytesRecv"`
 	Mode        string `json:"mode"` // "local-shortcut"|"always-proxy"
+	IsLocal     bool   `json:"isLocal"`
 }
 
 // PlayerFilter is the query for Players().

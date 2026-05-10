@@ -35,12 +35,16 @@ func (v *LocalClusterView) Cluster() ClusterInfo {
 	for _, c := range cells {
 		totalEntities += c.Entities.Real
 	}
+	sessionCount := 0
+	for _, g := range gws {
+		sessionCount += g.Sessions
+	}
 	return ClusterInfo{
 		Now:           time.Now(),
 		HostCount:     len(hosts),
 		GatewayCount:  len(gws),
 		CellCount:     len(cells),
-		SessionCount:  0, // populated when GatewayList exposes per-gateway sessions
+		SessionCount:  sessionCount,
 		TotalEntities: totalEntities,
 		RecentEvents:  v.CommitLog(CommitQuery{N: 20}),
 	}
@@ -92,24 +96,36 @@ func cellInfoFromSnapshot(id string, snap metrics.LoadSnapshot, p *universe.Proc
 }
 
 func (v *LocalClusterView) Hosts() []HostInfo {
-	ids := v.p.LiveHostIDs()
-	out := make([]HostInfo, 0, len(ids))
-	for _, id := range ids {
+	entries := v.p.HostListEntries()
+	out := make([]HostInfo, 0, len(entries))
+	for _, e := range entries {
+		cells := append([]string(nil), e.OwnedCells...)
 		out = append(out, HostInfo{
-			ID:    id,
-			State: "live",
-			// Roles, IsLocal, HeartbeatAgeMS, Cells, Load, TotalEntities:
-			// populated when richer host accessors land on Process.
+			ID:             e.ID,
+			Roles:          append([]string(nil), e.Roles...),
+			State:          strings.ToLower(e.State),
+			IsLocal:        e.IsLocal,
+			HeartbeatAgeMs: e.HeartbeatAge.Milliseconds(),
+			Cells:          cells,
+			Load:           e.Load,
+			TotalEntities:  e.TotalEntities,
 		})
 	}
 	return out
 }
 
 func (v *LocalClusterView) Gateways() []GatewayInfo {
-	ids := v.p.LiveGatewayIDs()
-	out := make([]GatewayInfo, 0, len(ids))
-	for _, id := range ids {
-		out = append(out, GatewayInfo{ID: id})
+	entries := v.p.GatewayListEntries()
+	out := make([]GatewayInfo, 0, len(entries))
+	for _, e := range entries {
+		out = append(out, GatewayInfo{
+			ID:          e.ID,
+			Sessions:    e.Sessions,
+			BytesSentPS: e.BytesSent,
+			BytesRecvPS: e.BytesRecv,
+			Mode:        e.Mode,
+			IsLocal:     e.IsLocal,
+		})
 	}
 	return out
 }
