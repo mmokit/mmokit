@@ -48,12 +48,18 @@
     return stops[stops.length - 1][1];
   }
 
+  // hostColor picks a stable hue per host. Uses FNV-1a + a Knuth-style
+  // golden-ratio multiplier so hosts with similar IDs (e.g. "test-node-0"
+  // vs "test-node-3", differing only in the last byte) land on
+  // well-separated hues instead of collapsing within a few degrees.
   function hostColor(hostId: string): string {
-    let h = 0;
+    let h = 2166136261 >>> 0; // FNV offset basis
     for (let i = 0; i < hostId.length; i++) {
-      h = (h * 31 + hostId.charCodeAt(i)) | 0;
+      h = (h ^ hostId.charCodeAt(i)) >>> 0;
+      h = Math.imul(h, 16777619) >>> 0; // FNV prime
     }
-    const hue = ((h % 360) + 360) % 360;
+    h = Math.imul(h, 2654435769) >>> 0; // golden-ratio bit scramble
+    const hue = h % 360;
     return `hsl(${hue} 65% 50%)`;
   }
 
