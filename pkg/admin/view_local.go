@@ -52,19 +52,57 @@ func (v *LocalClusterView) Cluster() ClusterInfo {
 
 func (v *LocalClusterView) Cells() []CellInfo {
 	snaps := v.p.MetricsSnapshots()
-	out := make([]CellInfo, 0, len(snaps))
+	clusterCells := v.p.ClusterCells()
+	// Union: every cell known to topology, with metrics filled in when
+	// available locally. In distributed mode the coordinator process owns no
+	// cells — metrics live on the remote hosts — so the snaps map is empty
+	// but the topology view still tells us cell IDs + ownership.
+	seen := make(map[string]bool, len(clusterCells))
+	out := make([]CellInfo, 0, len(clusterCells))
+	for _, c := range clusterCells {
+		id := string(c.Cell.MeshID())
+		seen[id] = true
+		if snap, ok := snaps[id]; ok {
+			out = append(out, cellInfoFromSnapshot(id, snap, v.p))
+		} else {
+			out = append(out, cellInfoNoMetrics(id, c.HostID))
+		}
+	}
+	// Backfill any locally-tracked metrics whose cell wasn't in the topology
+	// view yet (transient — split/merge mid-commit windows).
 	for id, snap := range snaps {
+		if seen[id] {
+			continue
+		}
 		out = append(out, cellInfoFromSnapshot(id, snap, v.p))
 	}
 	return out
 }
 
 func (v *LocalClusterView) Cell(id string) (CellInfo, error) {
-	snap, ok := v.p.MetricsSnapshot(id)
-	if !ok {
+	if snap, ok := v.p.MetricsSnapshot(id); ok {
+		return cellInfoFromSnapshot(id, snap, v.p), nil
+	}
+	// Distributed mode: no local metrics, but the cell may still be known
+	// via the cluster topology view.
+	hostID := v.p.HostForCellID(universe.MeshCellID(id))
+	if hostID == "" {
 		return CellInfo{}, ErrCellNotFound
 	}
-	return cellInfoFromSnapshot(id, snap, v.p), nil
+	return cellInfoNoMetrics(id, hostID), nil
+}
+
+// cellInfoNoMetrics builds a CellInfo for a cell whose metrics live on a
+// remote host (distributed mode). Fields that depend on the metrics snapshot
+// stay zero; the dashboard renders them as dashes.
+func cellInfoNoMetrics(id, hostID string) CellInfo {
+	depth, parent := parseDepthAndParent(id)
+	return CellInfo{
+		ID:     id,
+		Depth:  depth,
+		Parent: parent,
+		HostID: hostID,
+	}
 }
 
 // cellInfoFromSnapshot maps a metrics.LoadSnapshot + cell ID into the
