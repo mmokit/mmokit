@@ -208,6 +208,8 @@ The Hosts, Gateways, and Players routes (`/hosts`, `/gateways`, `/players`) cons
 
 The Performance route (`/performance`) charts per-cell sparklines (load, tick p99 µs, real entities, bytes/sec) from a 60-sample SPA-side ring buffer (`metricsHistoryStore`) fed by the existing `cells` SSE topic; the per-cell drilldown calls `/admin/api/perf/<cellId>`, which routes through the `perf.snapshot` cmdsys verb (`RouteAllHosts`) via `Process.PerfSnapshotForCell` so it works in distributed mode without per-host wiring. The Events route (`/events`) tails `/admin/api/events` + the `events` SSE topic with client-side filters (scenario / kind / cell-or-host substring) and a pause toggle. Sparklines are zero-dep canvas (`Sparkline.svelte`); the per-system drilldown uses `BarChart.svelte`.
 
+The Command palette (`⌘K`) lists every registered cmdsys verb from `/admin/api/commands` with fuzzy match; clicking a row opens a generic `CommandForm.svelte` that builds inputs from the verb's `argsSchema` (typed coercion in `CommandForm.helpers.ts`) and POSTs to `/admin/api/commands/<verb>`. The TopBar `ops ▾` dropdown (`ClusterOpsMenu.svelte`) opens the palette pre-targeted at a specific verb — used for `cell.split/merge/migrate`, `host.drain`, and `host.kill`. `host.drain` is a thin cmdsys wrapper around `Process.drainHost` (already used by the `GracefulLeave` MeshControl handler).
+
 ### Game Loop (20Hz fixed timestep in `pkg/engine/loop.go`)
 
 Each tick runs these phases in order:
