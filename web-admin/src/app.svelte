@@ -12,6 +12,9 @@
   import Players from "./routes/players.svelte";
   import Performance from "./routes/performance.svelte";
   import Events from "./routes/events.svelte";
+  import Audit from "./routes/audit.svelte";
+  import Logs from "./routes/logs.svelte";
+  import Settings from "./routes/settings.svelte";
   import Sidebar from "./components/Sidebar.svelte";
   import TopBar from "./components/TopBar.svelte";
   import CommandPalette from "./components/CommandPalette.svelte";
@@ -97,6 +100,12 @@
           <Performance />
         {:else if path === "/events"}
           <Events />
+        {:else if path === "/audit"}
+          <Audit />
+        {:else if path === "/logs"}
+          <Logs />
+        {:else if path === "/settings"}
+          <Settings />
         {:else}
           <div class="p-8 text-slate-500">
             Panel <code>{path}</code> — not yet implemented.
