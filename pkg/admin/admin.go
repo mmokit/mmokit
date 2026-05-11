@@ -21,6 +21,7 @@ type Config struct {
 	LockoutMax int           // default 5
 	LockoutWin time.Duration // default 15m
 	AuditCap   int           // default 4096
+	LogRingCap int           // default 4096
 
 	Operators []OperatorConfig
 }
@@ -40,6 +41,8 @@ type Server struct {
 	dispatcher *cmdsys.Dispatcher
 	sessions   SessionStore
 	audit      *AuditLog
+	logRing    *LogRing
+	logPump    *logPump
 	lockout    *Lockout
 	operators  map[string]OperatorConfig
 	panels     *PanelRegistry
@@ -64,8 +67,12 @@ type ServerOpts struct {
 	// Bus optionally injects a pre-created topic bus. Used by mmokit so game
 	// code can publish to admin topics before the Server is constructed. If
 	// nil, NewServer creates one internally.
-	Bus    *TopicBus
-	Config Config
+	Bus *TopicBus
+	// LogRing optionally injects a pre-created ring. Used by mmokit so
+	// game-side wiring and the SSE pump share the same buffer. If nil,
+	// NewServer creates one sized by cfg.LogRingCap.
+	LogRing *LogRing
+	Config  Config
 }
 
 // NewServer wires the dependencies. Caller still owns the publishers' lifetime
@@ -78,6 +85,9 @@ func NewServer(opts ServerOpts) *Server {
 	if cfg.AuditCap == 0 {
 		cfg.AuditCap = 4096
 	}
+	if cfg.LogRingCap == 0 {
+		cfg.LogRingCap = 4096
+	}
 	if cfg.CookieOpts == (CookieOpts{}) {
 		cfg.CookieOpts = devLoopbackRelaxed(defaultCookieOpts(), cfg.BindAddr)
 	}
@@ -89,12 +99,17 @@ func NewServer(opts ServerOpts) *Server {
 	if bus == nil {
 		bus = NewTopicBus(0)
 	}
+	ring := opts.LogRing
+	if ring == nil {
+		ring = NewLogRing(cfg.LogRingCap)
+	}
 	s := &Server{
 		view:       opts.View,
 		registry:   opts.Registry,
 		dispatcher: opts.Dispatcher,
 		sessions:   opts.SessionStore,
 		audit:      NewAuditLog(cfg.AuditCap),
+		logRing:    ring,
 		lockout:    NewLockout(cfg.LockoutMax, cfg.LockoutWin),
 		operators:  ops,
 		panels:     opts.Panels,
@@ -102,9 +117,14 @@ func NewServer(opts ServerOpts) *Server {
 		logger:     opts.Logger,
 		cfg:        cfg,
 	}
+	ctx, cancel := context.WithCancel(context.Background())
+	s.cancel = cancel
+	s.logPump = newLogPump(s.logRing, bus)
+	go s.logPump.Run(ctx)
+	if opts.Logger != nil {
+		opts.Logger.AddHook(s.logPump)
+	}
 	if opts.Process != nil {
-		ctx, cancel := context.WithCancel(context.Background())
-		s.cancel = cancel
 		startPublishers(ctx, opts.Process, opts.View, bus)
 	}
 	if opts.Panels != nil {
@@ -143,6 +163,7 @@ func (s *Server) Mount(mux *http.ServeMux) {
 	mux.Handle("/admin/api/events", s.requireSession(http.HandlerFunc(s.handleEvents)))
 	mux.Handle("/admin/api/perf/", s.requireSession(http.HandlerFunc(s.handlePerf)))
 	mux.Handle("/admin/api/audit", s.requireSession(http.HandlerFunc(s.handleAudit)))
+	mux.Handle("/admin/api/logs/recent", s.requireSession(http.HandlerFunc(s.handleLogsRecent)))
 	mux.Handle("/admin/api/panels", s.requireSession(http.HandlerFunc(s.handlePanels)))
 	mux.Handle("/admin/api/logs/categories", s.requireSession(http.HandlerFunc(s.handleLogCategories)))
 	mux.Handle("/admin/api/logs/categories/", s.requireSession(http.HandlerFunc(s.handleLogToggle)))
