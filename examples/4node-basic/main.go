@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"embed"
 	"log"
 	"time"
@@ -80,6 +81,17 @@ func main() {
 	mmokit.RegisterKind[PlayerComponents](process, KindPlayer, "Player")
 	mmokit.RegisterKind[BotComponents](process, KindBot, "Bot")
 
+	if err := mmokit.RegisterAdminPanel(process, mmokit.AdminPanelDef{
+		ID:       "bots",
+		Label:    "Bots",
+		Icon:     "Bot",
+		Group:    "Game",
+		Topics:   []string{"bots"},
+		Commands: []string{"bot.spawn", "bot.clear", "bot.list"},
+	}); err != nil {
+		log.Fatalf("4node-basic: register bots panel: %v", err)
+	}
+
 	process.OnPlayerJoin(func(session *mmokit.PlayerSession, stage *mmokit.Stage) {
 		if err := mmokit.GrantDebug(process, session, "topology"); err != nil {
 			log.Printf("4node-basic: auto-grant topology for %s: %v", session.Username, err)
@@ -116,5 +128,10 @@ func main() {
 	process.AddSystem(mmokit.NewNetworkSystem())
 
 	log.Printf("4node-basic: grid %dx%d cells, cell size %.0f, AoI %.0f", CellsX, CellsY, CellSize, AoIRadius)
+
+	botsCtx, botsCancel := context.WithCancel(context.Background())
+	defer botsCancel()
+	startBotsPublisher(botsCtx, process)
+
 	process.Start()
 }
