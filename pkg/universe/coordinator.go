@@ -519,6 +519,12 @@ type Process struct {
 	consoleOpts    *ConsoleOpts
 	onConsoleReady func(c *engine.Console)
 
+	// remoteLogBatch is invoked when a host forwards a LogBatch over
+	// MeshControl. Wired by mmokit.DefaultAdminServerFactory so
+	// pkg/universe doesn't import pkg/admin. nil = drop incoming
+	// batches.
+	remoteLogBatch func([]RemoteLogEntry)
+
 	// kindSpecs holds typed entity-kind registrations from
 	// mmokit.RegisterKind[T]. Realized per-cell during createNode.
 	kindSpecs []kindSpec
@@ -1371,6 +1377,25 @@ func (c *Process) GatewayID() string {
 // Build() from Config.Mode via ParseRoles. Safe to call after Build().
 func (c *Process) Roles() Roles {
 	return c.roles
+}
+
+// RemoteLogEntry is one log line forwarded by a host over MeshControl,
+// stamped with the sender's host_id at decode time. Mmokit's admin
+// factory wires Process.OnRemoteLogBatch to bridge this into
+// admin.LogEntry + LogRing + TopicBus.
+type RemoteLogEntry struct {
+	HostID string
+	Cat    string
+	Msg    string
+	TimeMs int64
+}
+
+// OnRemoteLogBatch installs the callback invoked when a host forwards a
+// LogBatch over MeshControl. Wired by mmokit.DefaultAdminServerFactory.
+// Safe to call before Build; the callback fires on the controlServer
+// goroutine.
+func (c *Process) OnRemoteLogBatch(fn func([]RemoteLogEntry)) {
+	c.remoteLogBatch = fn
 }
 
 // Bus returns the per-process service event bus. Initialized in New;

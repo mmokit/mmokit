@@ -283,6 +283,20 @@ func (s *meshControlServer) handleHostControl(stream meshpb.MeshControl_ControlS
 					s.coord.applyRemoteCellMetrics(hb.HostId, hb.Metrics)
 				}
 
+			case *meshpb.HostMessage_LogBatch:
+				if s.coord.remoteLogBatch != nil && v.LogBatch != nil {
+					entries := make([]RemoteLogEntry, 0, len(v.LogBatch.Entries))
+					for _, e := range v.LogBatch.Entries {
+						entries = append(entries, RemoteLogEntry{
+							HostID: hostID,
+							Cat:    e.Cat,
+							Msg:    e.Msg,
+							TimeMs: e.TsUnixMs,
+						})
+					}
+					s.coord.remoteLogBatch(entries)
+				}
+
 			case *meshpb.HostMessage_PlayerMigrated:
 				pm := v.PlayerMigrated
 				if pm != nil {
