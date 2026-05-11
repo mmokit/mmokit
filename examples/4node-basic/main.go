@@ -25,6 +25,7 @@ var webDist embed.FS
 
 func main() {
 	process := mmokit.New(mmokit.Config{
+		Name:             "basic",
 		InvariantMode:    mmokit.InvariantPanic,
 		StrictNetIDIndex: true,
 		CellsX:           CellsX,
@@ -35,12 +36,12 @@ func main() {
 		StaticFS:         webDist,
 		StaticFSPrefix:   "web/dist",
 		DefaultSpawn:     mmokit.Location{X: CellSize * 0.85, Y: CellSize * 0.85},
-		OnConsoleReady: func(p *mmokit.Process, console *mmokit.Console) {
-			if err := registerBotCommands(p, console.Registry()); err != nil {
-				log.Printf("4node-basic: failed to register bot commands: %v", err)
-			}
-		},
-		Protocol: mmokit.NewProtocol("basic"),
+	})
+
+	process.OnConsoleReady(func(p *mmokit.Process, console *mmokit.Console) {
+		if err := registerBotCommands(p, console.Registry()); err != nil {
+			log.Printf("4node-basic: failed to register bot commands: %v", err)
+		}
 	})
 
 	if err := mmokit.RegisterAuthService(process, mmokit.DefaultAuthOpts()); err != nil {

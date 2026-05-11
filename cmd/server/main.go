@@ -24,20 +24,20 @@ func main() {
 	// serving on any gateway-role process. The space game's web client lives
 	// in web-pixi/dist and is embedded via the webpixi package. UDP is started
 	// separately below — different protocol, same ConnManager.
+	// Engine-default typed events (Pong, DebugInfo, WorldDelta,
+	// PlayerEntityAssigned, CellChange, ServerConfig) are auto-registered
+	// by mmokit.New from cfg.Name. Game-specific events are registered by
+	// GameSetup via game.RegisterServerEvents below. Client→server typed
+	// inputs are registered via mmokit.HandleClient[T] in input_handlers.go
+	// and exposed through the ClientInputTypes schema; engine-default
+	// HandleClient[Ping] is installed by universe.New.
 	coordCfg := mmokit.Config{
+		Name:           "space",
 		TickRate:       platformCfg.TickRate,
 		ConnManager:    connMgr,
 		StaticFS:       webpixi.FS,
 		StaticFSPrefix: "dist",
 	}
-	// Engine-default typed events (Pong, DebugInfo, WorldDelta,
-	// PlayerEntityAssigned, CellChange, ServerConfig) are auto-registered
-	// by NewProtocol. Game-specific events are registered by GameSetup via
-	// game.RegisterServerEvents below. Client→server typed inputs are
-	// registered via mmokit.HandleClient[T] in input_handlers.go and
-	// exposed through the ClientInputTypes schema; engine-default
-	// HandleClient[Ping] is installed by universe.New.
-	coordCfg.Protocol = mmokit.NewProtocol("space")
 	coordCfg.BindFlags()
 	flag.Parse()
 
@@ -244,6 +244,8 @@ func main() {
 	// callback needed.
 	coordCfg.OpRouter = opRouter
 
+	coordinator = mmokit.New(coordCfg)
+
 	// Game admin commands register on every process that has a console
 	// (coordinator, host, node) so operators can dispatch from any pane.
 	// RoutePlayerOwner handlers (tp, damage, etc.) resolve to the owning
@@ -254,7 +256,7 @@ func main() {
 	// of panicking. World-bound builtins (config, entity) still need a
 	// live cell and are skipped on pure-coordinator.
 	if needsGameConfig {
-		coordCfg.OnConsoleReady = func(p *mmokit.Process, console *mmokit.Console) {
+		coordinator.OnConsoleReady(func(p *mmokit.Process, console *mmokit.Console) {
 			var anyWorld *game.GameWorld
 			for _, node := range p.Cells {
 				gw := mmokit.State[game.GameWorld](node.Stage)
@@ -298,10 +300,8 @@ func main() {
 			if err := gamecommands.RegisterAll(console.Registry(), p, playerDB, &gameCfg); err != nil {
 				log.Printf("console: failed to register game commands: %v", err)
 			}
-		}
+		})
 	}
-
-	coordinator = mmokit.New(coordCfg)
 
 	if needsGameState {
 		mmokit.AddState(coordinator, game.NewGameWorldStateFactory(&gameCfg, playerDB, playerSessions))

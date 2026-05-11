@@ -256,6 +256,16 @@ func registerServiceBuiltins(reg *cmdsys.Registry, coord *Process) error {
 				// invoke from any pane.
 				return serviceInstancesResult{}, nil
 			}
+			// Mirror service.list: typed-op-only kinds (the modern norm)
+			// leave Kind.OpCodes nil because dispatch is by request typeID,
+			// not integer code. Aggregate the typed-op registry by kind so
+			// per-instance OpCount matches what `service list` reports.
+			typedOpsByKind := map[string]int{}
+			if TypedOpHooks.ListTypedOps != nil {
+				for _, e := range TypedOpHooks.ListTypedOps() {
+					typedOpsByKind[serviceKindOf(e.RequestType)]++
+				}
+			}
 			rows := make([]serviceInstanceRow, 0)
 			for _, k := range coord.coordServices.Kinds() {
 				for _, inst := range coord.coordServices.InstancesOfKind(k) {
@@ -263,7 +273,7 @@ func registerServiceBuiltins(reg *cmdsys.Registry, coord *Process) error {
 						Kind:       inst.Kind,
 						InstanceID: inst.InstanceID,
 						HostID:     inst.HostID,
-						OpCount:    len(inst.OpCodes),
+						OpCount:    typedOpsByKind[inst.Kind] + len(inst.OpCodes),
 					})
 				}
 			}

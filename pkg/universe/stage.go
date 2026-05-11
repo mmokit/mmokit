@@ -409,15 +409,6 @@ func (b *Stage) Cell() CellID { return b.cell }
 // Process returns the coordinator that owns this node, or nil in single-node mode.
 func (b *Stage) Process() *Process { return b.coord }
 
-// Protocol returns the user-supplied Config.Protocol via the owning Process.
-// Game code retrieves the typed *mmokit.Protocol via mmokit.ProtocolOf.
-func (b *Stage) Protocol() any {
-	if b.coord == nil {
-		return nil
-	}
-	return b.coord.Protocol()
-}
-
 // FromSplit returns true if this world was created during a cell split.
 // Split-created worlds should skip initial entity spawning since entities
 // arrive via transfer from the parent cell.

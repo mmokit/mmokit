@@ -7,25 +7,23 @@ import (
 	"github.com/zenion/mmoserver/pkg/engine"
 )
 
-// TestConfigProtocolRoundTrip verifies that Config.Protocol passes through
-// Process.Protocol() unchanged.
-func TestConfigProtocolRoundTrip(t *testing.T) {
+// TestSetProtocolStoresValue verifies that SetProtocol stores the supplied
+// schema dumper for later use by dumpSchemaAndExit.
+func TestSetProtocolStoresValue(t *testing.T) {
 	marker := "my-protocol-marker"
-	p := New(Config{
-		Mode:     "all",
-		Protocol: marker,
-	})
-	if p.Protocol() != marker {
-		t.Errorf("Protocol() = %v, want %q", p.Protocol(), marker)
+	p := New(Config{Mode: "all"})
+	p.SetProtocol(marker)
+	if p.protocol != marker {
+		t.Errorf("protocol = %v, want %q", p.protocol, marker)
 	}
 }
 
-// TestConfigProtocolUnset verifies that Process.Protocol() returns nil when
-// Config.Protocol is not set.
-func TestConfigProtocolUnset(t *testing.T) {
+// TestProtocolUnsetByDefault verifies that a Process constructed via
+// universe.New directly (without mmokit.New) starts with no protocol installed.
+func TestProtocolUnsetByDefault(t *testing.T) {
 	p := New(Config{Mode: "all"})
-	if p.Protocol() != nil {
-		t.Errorf("Protocol() = %v, want nil", p.Protocol())
+	if p.protocol != nil {
+		t.Errorf("protocol = %v, want nil", p.protocol)
 	}
 }
 

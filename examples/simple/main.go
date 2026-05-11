@@ -24,10 +24,10 @@ func main() {
 	mmokit.RegisterEvent[WaveStateMsg]()
 
 	process := mmokit.New(mmokit.Config{
+		Name:          "simple",
 		WebDir:        "embed",
 		StaticFS:      webFS,
 		AnonymousAuth: true,
-		Protocol:      mmokit.NewProtocol("simple"),
 	})
 
 	process.AddSystem(mmokit.NewSystem(&SineWaveSystem{}))

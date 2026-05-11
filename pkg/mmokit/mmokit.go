@@ -795,7 +795,8 @@ func DefaultReplicationConfig(eng *engine.Engine, grid *spatial.HashGrid, clock 
 
 // New constructs a Process from the given config. Auto-wires
 // DefaultAdminServerFactory when the game enables admin without
-// supplying its own factory.
+// supplying its own factory, and synthesizes the schema-dump Protocol
+// from cfg.Name.
 //
 // Flags are parsed here (before the admin auto-wire check) so games
 // can drive admin via CLI flags alone without populating Config.Admin
@@ -810,7 +811,9 @@ func New(cfg Config) *Process {
 	if cfg.AdminListen != "" && cfg.Admin.Enabled && cfg.Admin.ServerFactory == nil {
 		cfg.Admin.ServerFactory = DefaultAdminServerFactory()
 	}
-	return universe.New(cfg)
+	proc := universe.New(cfg)
+	proc.SetProtocol(NewProtocol(cfg.Name))
+	return proc
 }
 
 var (
@@ -1317,16 +1320,4 @@ func WireSystem(sys engine.System, ecsWorld *ecs.World, eng *engine.Engine, stag
 	if qb, ok := sys.(queryBuilder); ok {
 		qb.BuildQueries()
 	}
-}
-
-// ProtocolOf returns the *Protocol from p.Protocol(), or nil if p is nil,
-// the protocol is unset, or the stored value is not a *Protocol.
-func ProtocolOf(p *Process) *Protocol {
-	if p == nil {
-		return nil
-	}
-	if proto, ok := p.Protocol().(*Protocol); ok {
-		return proto
-	}
-	return nil
 }

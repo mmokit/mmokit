@@ -271,10 +271,11 @@ type Config struct {
 	// Zero means "use the default".
 	SettleWindow time.Duration
 
-	// Protocol holds the game's *mmokit.Protocol declaration — typed as any
-	// to avoid an import cycle (pkg/mmokit imports pkg/universe). The
-	// pkg/mmokit layer type-asserts back to *mmokit.Protocol via accessors.
-	Protocol any
+	// Name is the game's short identifier (e.g. "simple", "basic", "space").
+	// Used as the schema prefix in --dump-schema output and as the class-name
+	// prefix in the generated TypeScript SDK. mmokit.New synthesizes the
+	// internal *Protocol from this field; games never construct it directly.
+	Name string
 
 	// OpRouter, when set, is exposed via Process.OpRouter() for schema export.
 	// Optional — games without operations leave this nil. Wired by the game's
@@ -305,11 +306,6 @@ type Config struct {
 	// so zero value (nil) means "not set" — ConsoleOpts contains func
 	// fields and is not directly comparable.
 	Console *ConsoleOpts
-
-	// OnConsoleReady fires once the console is constructed. Receives the
-	// owning *Process so admin commands can wire registries without
-	// closure-capturing a pre-existing variable.
-	OnConsoleReady func(p *Process, c *engine.Console)
 
 	// AuthResolver validates a cookie/session token at WS-upgrade time
 	// without touching the op channel. Stamped by
@@ -470,6 +466,11 @@ type Process struct {
 	netIDAlloc   *NetIDAllocator
 	partState    *partitionState // nil if dynamic partitioning disabled
 
+	// protocol is the schema dumper synthesized by mmokit.New from
+	// cfg.Name. Typed as any so pkg/universe stays import-free of
+	// pkg/mmokit; dumpSchemaAndExit type-asserts to the schema interface.
+	protocol any
+
 	// invariantMode controls how invariant-check violations are handled.
 	// Copied from Config.InvariantMode at New() time.
 	invariantMode InvariantMode
@@ -502,7 +503,7 @@ type Process struct {
 	coordEpoch uint64
 
 	consoleOpts    *ConsoleOpts
-	onConsoleReady func(c *engine.Console)
+	onConsoleReady []func(*Process, *engine.Console)
 
 	// remoteLogBatch is invoked when a host forwards a LogBatch over
 	// MeshControl. Wired by mmokit.DefaultAdminServerFactory so
@@ -981,6 +982,14 @@ func (c *Process) OnPlayerJoin(fn func(*engine.PlayerSession, *Stage)) {
 	c.onPlayerJoin = append(c.onPlayerJoin, fn)
 }
 
+// OnConsoleReady registers a callback fired once the interactive admin console
+// is constructed (after Build()). Receives the owning *Process so admin
+// commands can wire registries without closure-capturing a pre-existing
+// variable. Multiple hooks may be registered; they fire in registration order.
+func (c *Process) OnConsoleReady(fn func(*Process, *engine.Console)) {
+	c.onConsoleReady = append(c.onConsoleReady, fn)
+}
+
 // fireJoinHooks runs every registered OnPlayerJoin callback for the given
 // session + stage. Internal — invoked from OnEnter(StateActive) for normal
 // joins and from cell-level reconnect dispatch for reconnects into
@@ -1426,9 +1435,9 @@ func (c *Process) HasInflightTransfers() bool {
 	return c.orchestrator.HasInflight()
 }
 
-// Protocol returns the user-supplied Config.Protocol unchanged. Callers in
-// pkg/mmokit type-assert to *mmokit.Protocol via mmokit.ProtocolOf.
-func (c *Process) Protocol() any { return c.cfg.Protocol }
+// SetProtocol stores the internal schema-dumper produced by mmokit.New
+// from Config.Name. Engine-internal — games never call this.
+func (c *Process) SetProtocol(p any) { c.protocol = p }
 
 // OpRouter returns the operations router from Config.OpRouter, or nil if unset.
 func (c *Process) OpRouter() *ops.Router { return c.cfg.OpRouter }
@@ -1587,15 +1596,10 @@ func (c *Process) Build() {
 	}
 	c.Log.Enable(StartupCategories...)
 
-	// Console + OnConsoleReady from Config. (PlayerRouter has no consumer
-	// today — gateway uses topology-based routing — but the field is kept
-	// for forward compat.)
+	// Console from Config; OnConsoleReady hooks register via Process.OnConsoleReady.
+	// (PlayerRouter has no consumer today — gateway uses topology-based routing —
+	// but the field is kept for forward compat.)
 	c.consoleOpts = c.cfg.Console
-	if c.cfg.OnConsoleReady != nil {
-		c.onConsoleReady = func(con *engine.Console) {
-			c.cfg.OnConsoleReady(c, con)
-		}
-	}
 
 	// Bare RoleHost alone represents a remote host — it dials the coordinator.
 	// Anything else requires the dial address to be empty OR would be caught
@@ -2698,10 +2702,9 @@ func (c *Process) startConsole(ctx context.Context) {
 	c.wireCompletionSources()
 
 	// Let the game (if any) register its own commands. Games that need custom
-	// config opts call console.RegisterBuiltins(...) themselves in this callback.
-	onReady := c.onConsoleReady
-	if onReady != nil {
-		onReady(c.console)
+	// config opts call console.RegisterBuiltins(...) themselves in these hooks.
+	for _, hook := range c.onConsoleReady {
+		hook(c, c.console)
 	}
 
 	// Fallback: register the coordinator-level config builtins if the game
