@@ -1,6 +1,6 @@
 // Package postgres is the PostgreSQL implementation of the persist
-// repository interfaces. Open returns a *Store that exposes the three
-// repos via Players(), Market(), Config().
+// repository interfaces. Open returns a *Store that exposes the
+// repos via Players(), Market(), Config(), AdminOperators().
 package postgres
 
 import (
@@ -115,3 +115,8 @@ func (s *Store) Market() persist.MarketRepository { return &marketRepo{pool: s.p
 
 // Config returns the ConfigRepository implementation.
 func (s *Store) Config() persist.ConfigRepository { return &configRepo{pool: s.pool} }
+
+// AdminOperators returns the AdminOperatorRepository implementation.
+func (s *Store) AdminOperators() persist.AdminOperatorRepository {
+	return &adminOperatorRepo{pool: s.pool}
+}
