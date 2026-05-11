@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/zenion/mmoserver/pkg/cmdsys"
 	"github.com/zenion/mmoserver/pkg/logger"
 	"github.com/zenion/mmoserver/pkg/persist"
 	"github.com/zenion/mmoserver/pkg/persist/persisttest"
@@ -139,5 +140,32 @@ func TestNewServer_DoesNotReseedWhenOperatorsExist(t *testing.T) {
 	// "alice" should still be there.
 	if _, err := repo.GetByUsername(context.Background(), "alice"); err != nil {
 		t.Fatalf("pre-existing alice operator vanished: %v", err)
+	}
+}
+
+func TestNewServer_RegistersOperatorCommands(t *testing.T) {
+	t.Parallel()
+	repo := persisttest.NewAdminOperatorRepoMock()
+
+	reg := cmdsys.NewRegistry()
+	srv := NewServer(ServerOpts{
+		SessionStore: NewMemorySessionStore(),
+		Panels:       NewPanelRegistry(),
+		Logger:       logger.New(),
+		Registry:     reg,
+		OperatorRepo: repo,
+		Config:       Config{SessionTTL: time.Hour},
+	})
+	t.Cleanup(srv.Stop)
+
+	for _, verb := range []string{
+		"admin.operator.create",
+		"admin.operator.delete",
+		"admin.operator.password",
+		"admin.operator.list",
+	} {
+		if _, ok := reg.Lookup(verb); !ok {
+			t.Errorf("verb %q not registered", verb)
+		}
 	}
 }

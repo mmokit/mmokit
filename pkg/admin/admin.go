@@ -143,6 +143,13 @@ func NewServer(opts ServerOpts) *Server {
 			opts.Logger.Log("admin", "seed default operator: %v", err)
 		}
 	}
+	if opts.Registry != nil && opts.OperatorRepo != nil {
+		if err := RegisterOperatorCommands(opts.Registry, opts.OperatorRepo); err != nil {
+			if opts.Logger != nil {
+				opts.Logger.Log("admin", "register operator commands: %v", err)
+			}
+		}
+	}
 	return s
 }
 
