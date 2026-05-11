@@ -4,6 +4,7 @@ package mmokit
 
 import (
 	"context"
+	"flag"
 	"fmt"
 
 	"github.com/mlange-42/ark/ecs"
@@ -795,7 +796,17 @@ func DefaultReplicationConfig(eng *engine.Engine, grid *spatial.HashGrid, clock 
 // New constructs a Process from the given config. Auto-wires
 // DefaultAdminServerFactory when the game enables admin without
 // supplying its own factory.
+//
+// Flags are parsed here (before the admin auto-wire check) so games
+// can drive admin via CLI flags alone without populating Config.Admin
+// in their main.go. Games that need to register their own flags
+// should call cfg.BindFlags() + flag.Parse() themselves first; the
+// flag.Parsed() guard makes this idempotent.
 func New(cfg Config) *Process {
+	if !flag.Parsed() {
+		cfg.BindFlags()
+		flag.Parse()
+	}
 	if cfg.AdminListen != "" && cfg.Admin.Enabled && cfg.Admin.ServerFactory == nil {
 		cfg.Admin.ServerFactory = DefaultAdminServerFactory()
 	}
