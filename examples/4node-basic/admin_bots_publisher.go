@@ -12,9 +12,16 @@ import (
 // BotRow is one row of the "bots" admin topic. The PanelHost auto-derives
 // columns from the row keys (JSON tags), so any rename here is reflected
 // in the table header on the next publish.
+//
+// Real = authoritative bots on this cell; Replica = border-replicated
+// copies of bots authoritative on a neighbor; Ghost = mid-handoff
+// markers awaiting cleanup. The three sum to the cell's BotBehavior
+// total.
 type BotRow struct {
-	CellID string `json:"cellId"`
-	Count  int    `json:"count"`
+	CellID  string `json:"cellId"`
+	Real    int    `json:"real"`
+	Replica int    `json:"replica"`
+	Ghost   int    `json:"ghost"`
 }
 
 // startBotsPublisher runs a 1Hz goroutine that publishes per-cell bot
@@ -81,7 +88,12 @@ func collectBotRows(ctx context.Context, coord *mmokit.Process) []BotRow {
 			continue
 		}
 		for _, c := range lr.Cells {
-			rows = append(rows, BotRow{CellID: c.Cell, Count: c.Bots})
+			rows = append(rows, BotRow{
+				CellID:  c.Cell,
+				Real:    c.Real,
+				Replica: c.Replica,
+				Ghost:   c.Ghost,
+			})
 		}
 	}
 	return rows

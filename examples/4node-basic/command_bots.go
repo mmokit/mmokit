@@ -121,13 +121,18 @@ func registerBotCommands(coord *mmokit.Process, reg *mmokit.CommandRegistry) err
 			cells := snapshotCells(coord)
 			var rows []botCellRow
 			for _, cell := range cells {
-				n, err := mmokit.CmdOnLoop(ctx, cell.Engine, func() (int, error) {
+				counts, err := mmokit.CmdOnLoop(ctx, cell.Engine, func() (botCounts, error) {
 					return countBotsOnLoop(cell), nil
 				})
 				if err != nil {
 					return nil, err
 				}
-				rows = append(rows, botCellRow{Cell: string(cell.MeshID), Bots: n})
+				rows = append(rows, botCellRow{
+					Cell:    string(cell.MeshID),
+					Real:    counts.Real,
+					Replica: counts.Replica,
+					Ghost:   counts.Ghost,
+				})
 			}
 			return botListResult{Cells: rows}, nil
 		},
@@ -164,8 +169,10 @@ type botClearResult struct {
 type botListArgs struct{}
 
 type botCellRow struct {
-	Cell string
-	Bots int
+	Cell    string
+	Real    int
+	Replica int
+	Ghost   int
 }
 
 type botListResult struct {
@@ -267,16 +274,39 @@ func clearBotsOnLoop(cell *mmokit.Cell) int {
 	return len(victims)
 }
 
-// countBotsOnLoop reports how many bot entities currently live on the cell.
-// MUST be called from the cell's game loop goroutine.
-func countBotsOnLoop(cell *mmokit.Cell) int {
+// botCounts is the per-cell presence breakdown for entities carrying
+// BotBehavior. Real = authoritative on this cell; Replica = border-
+// replicated copy of a bot authoritative on a neighboring cell; Ghost =
+// mid-handoff marker awaiting cleanup on the next TickGhosts pass.
+type botCounts struct {
+	Real    int
+	Replica int
+	Ghost   int
+}
+
+// countBotsOnLoop returns the per-presence bot count on the cell. MUST
+// be called from the cell's game loop goroutine — ark queries are
+// world-locked.
+func countBotsOnLoop(cell *mmokit.Cell) botCounts {
 	stage := cell.Stage
-	n := 0
-	q := ecs.NewFilter1[BotBehavior](stage.ECSWorld()).Query()
+	world := stage.ECSWorld()
+	repMap := ecs.NewMap1[mmokit.Replica](world)
+	ghostMap := ecs.NewMap1[mmokit.Ghost](world)
+	var counts botCounts
+	q := ecs.NewFilter1[BotBehavior](world).Query()
+	defer q.Close()
 	for q.Next() {
-		n++
+		e := q.Entity()
+		switch {
+		case ghostMap.HasAll(e):
+			counts.Ghost++
+		case repMap.HasAll(e):
+			counts.Replica++
+		default:
+			counts.Real++
+		}
 	}
-	return n
+	return counts
 }
 
 // spawnBotsInCell schedules spawnBotsOnLoop via engine.RunOnLoop. Safe to
