@@ -132,7 +132,7 @@ func (gw *GameWorld) SpawnPlayer(s *mmokit.PlayerSession) {
 	mmokit.Set(entity, gamecomp.Shield{Current: gw.Config.ShipShield, Max: gw.Config.ShipShield, RegenRate: gw.Config.ShieldRegenRate, RegenDelay: gw.Config.ShieldRegenDelay})
 	mmokit.Set(entity, gamecomp.Inventory{Items: savedCargo, MaxMass: gw.Config.MaxCargo})
 	mmokit.Set(entity, gamecomp.TargetLock{
-		LockTime: gw.Config.LockOnTime,
+		MaxSlots: gw.Config.LockMaxSlotsPlayer,
 		Range:    gw.Config.LockOnRange,
 	})
 	mmokit.Set(entity, equip)

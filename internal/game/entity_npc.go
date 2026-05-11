@@ -14,6 +14,7 @@ type NPCBundle struct {
 	Health        *gamecomp.Health
 	Shield        *gamecomp.Shield
 	StatusEffects *gamecomp.StatusEffects
+	TargetLock    *gamecomp.TargetLock // multi-slot but always MaxSlots=1 for NPCs
 }
 
 // SpawnNPC creates a stationary NPC ship entity at the given position.
@@ -44,6 +45,10 @@ func (gw *GameWorld) SpawnNPC(x, y float32) ecs.Entity {
 		Max:        gw.Config.NpcShield,
 		RegenRate:  gw.Config.NpcShieldRegenRate,
 		RegenDelay: gw.Config.NpcShieldRegenDelay,
+	})
+	mmokit.Set(entity, gamecomp.TargetLock{
+		MaxSlots: gw.Config.LockMaxSlotsNPC,
+		Range:    gw.Config.LockOnRange,
 	})
 
 	gw.eng.Log.Log(CatPlayerSpawn, "npc spawned: netID=%d pos=(%.0f,%.0f)", entity.NetID(), x, y)

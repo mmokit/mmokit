@@ -253,10 +253,10 @@ func (gw *GameWorld) ApplyEquipmentStats(entity mmokit.Entity) {
 		inv.MaxMass = gw.Config.MaxCargo
 	}
 
-	// TargetLock tuning — both fields are pure config reads with no
-	// equipment modifier today.
+	// TargetLock tuning — Range is a pure config read with no equipment
+	// modifier today. LockOnTime is consumed per-slot at LockTarget time;
+	// live locks keep their captured value.
 	if tl := mmokit.Get[gamecomp.TargetLock](entity); tl != nil {
-		tl.LockTime = gw.Config.LockOnTime
 		tl.Range = gw.Config.LockOnRange
 	}
 

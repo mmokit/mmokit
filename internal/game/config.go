@@ -51,9 +51,11 @@ type GameConfig struct {
 	NpcHeight           float32 `json:"npcHeight"`
 
 	// Target lock
-	LockOnTime     float32 `json:"lockOnTime"`     // seconds to achieve full lock
-	LockOnRange    float32 `json:"lockOnRange"`    // max range to maintain lock
-	MiningLockTime float32 `json:"miningLockTime"` // seconds to lock an asteroid
+	LockOnTime         float32 `json:"lockOnTime"`         // seconds to achieve full lock
+	LockOnRange        float32 `json:"lockOnRange"`        // max range to maintain lock
+	LockMaxSlotsPlayer uint8   `json:"lock_max_slots_player"`
+	LockMaxSlotsNPC    uint8   `json:"lock_max_slots_npc"`
+	MiningLockTime     float32 `json:"miningLockTime"` // seconds to lock an asteroid
 
 	// Docking
 	DockTime         float32 `json:"dockTime"`         // seconds to complete docking
@@ -116,9 +118,11 @@ func DefaultGameConfig() GameConfig {
 		NpcHeight:           0.83,
 
 		// Target lock
-		LockOnTime:     2.0,
-		LockOnRange:    50,
-		MiningLockTime: 1.5,
+		LockOnTime:         2.0,
+		LockOnRange:        50,
+		LockMaxSlotsPlayer: 4,
+		LockMaxSlotsNPC:    1,
+		MiningLockTime:     1.5,
 
 		// Docking
 		DockTime:         3.0,
