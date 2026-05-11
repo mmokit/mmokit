@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/zenion/mmoserver/pkg/services/auth"
@@ -44,8 +45,8 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	op, ok := s.operators[req.Username]
-	if !ok {
+	op, err := s.operatorRepo.GetByUsername(r.Context(), strings.ToLower(req.Username))
+	if err != nil {
 		// already counted as a failure by the Check above
 		s.audit.Append(AuditEntry{
 			Username: req.Username, IP: remoteAddr(r).String(), Verb: "auth.login",

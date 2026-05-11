@@ -4,12 +4,13 @@ import (
 	"context"
 	"io/fs"
 	"net/http"
-	"strings"
 	"time"
 
 	"github.com/zenion/mmoserver/pkg/admin/static"
 	"github.com/zenion/mmoserver/pkg/cmdsys"
 	"github.com/zenion/mmoserver/pkg/logger"
+	"github.com/zenion/mmoserver/pkg/persist"
+	"github.com/zenion/mmoserver/pkg/services/auth"
 	"github.com/zenion/mmoserver/pkg/universe"
 )
 
@@ -22,15 +23,6 @@ type Config struct {
 	LockoutWin time.Duration // default 15m
 	AuditCap   int           // default 4096
 	LogRingCap int           // default 4096
-
-	Operators []OperatorConfig
-}
-
-// OperatorConfig is one entry in the Admin operators list.
-type OperatorConfig struct {
-	Username     string
-	PasswordHash string
-	Grants       []string
 }
 
 // Server is the admin HTTP handler set. Construct with NewServer; mount onto
@@ -44,7 +36,7 @@ type Server struct {
 	logRing    *LogRing
 	logPump    *logPump
 	lockout    *Lockout
-	operators  map[string]OperatorConfig
+	operatorRepo persist.AdminOperatorRepository
 	panels     *PanelRegistry
 	bus        *TopicBus
 	logger     *logger.Logger
@@ -78,6 +70,11 @@ type ServerOpts struct {
 	// ID (cfg.HostID, or a role-derived fallback like "coordinator").
 	LocalHostID string
 	Config      Config
+	// OperatorRepo persists admin operators. When NewServer detects
+	// an empty table (Count == 0), a default admin/admin operator is
+	// seeded with grants ["*.*"]. Required — pass an in-memory mock
+	// from pkg/persist/persisttest for tests.
+	OperatorRepo persist.AdminOperatorRepository
 }
 
 // NewServer wires the dependencies. Caller still owns the publishers' lifetime
@@ -96,10 +93,6 @@ func NewServer(opts ServerOpts) *Server {
 	if cfg.CookieOpts == (CookieOpts{}) {
 		cfg.CookieOpts = devLoopbackRelaxed(defaultCookieOpts(), cfg.BindAddr)
 	}
-	ops := make(map[string]OperatorConfig, len(cfg.Operators))
-	for _, o := range cfg.Operators {
-		ops[strings.ToLower(o.Username)] = o
-	}
 	bus := opts.Bus
 	if bus == nil {
 		bus = NewTopicBus(0)
@@ -116,7 +109,7 @@ func NewServer(opts ServerOpts) *Server {
 		audit:      NewAuditLog(cfg.AuditCap),
 		logRing:    ring,
 		lockout:    NewLockout(cfg.LockoutMax, cfg.LockoutWin),
-		operators:  ops,
+		operatorRepo: opts.OperatorRepo,
 		panels:     opts.Panels,
 		bus:        bus,
 		logger:     opts.Logger,
@@ -140,6 +133,14 @@ func NewServer(opts ServerOpts) *Server {
 			// Best-effort: a shared registry may already have log.set
 			// from a prior NewServer. Logging the failure is enough.
 			opts.Logger.Log("admin", "RegisterLogCommands: %v", err)
+		}
+	}
+	// Seed a default admin/admin operator if the table is empty.
+	// First-run dev convenience: production deployments rotate via
+	// future admin-UI user management.
+	if err := seedDefaultOperator(ctx, opts.OperatorRepo, opts.Logger); err != nil {
+		if opts.Logger != nil {
+			opts.Logger.Log("admin", "seed default operator: %v", err)
 		}
 	}
 	return s
@@ -209,4 +210,39 @@ func mustSubFS(f fs.FS, dir string) fs.FS {
 		panic(err)
 	}
 	return sub
+}
+
+// seedDefaultOperator inserts a default admin/admin operator with the
+// wildcard grant when the table is empty. Idempotent: a non-zero Count
+// short-circuits the insert. Used on first run so the admin dashboard
+// is reachable without manual seeding.
+//
+// Logs a banner with the credentials so operators don't need to grep
+// the source — the expectation is rotation in production.
+func seedDefaultOperator(ctx context.Context, repo persist.AdminOperatorRepository, log *logger.Logger) error {
+	if repo == nil {
+		return nil
+	}
+	n, err := repo.Count(ctx)
+	if err != nil {
+		return err
+	}
+	if n > 0 {
+		return nil
+	}
+	hash, err := auth.HashPassword("admin", auth.DefaultArgonParams())
+	if err != nil {
+		return err
+	}
+	if err := repo.Create(ctx, &persist.AdminOperator{
+		Username:     "admin",
+		PasswordHash: hash,
+		Grants:       []string{"*.*"},
+	}); err != nil {
+		return err
+	}
+	if log != nil {
+		log.Log("admin", "seeded default operator: admin / admin (CHANGE IN PRODUCTION)")
+	}
+	return nil
 }

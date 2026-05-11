@@ -2,6 +2,7 @@ package admin
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -10,6 +11,8 @@ import (
 	"time"
 
 	"github.com/zenion/mmoserver/pkg/logger"
+	"github.com/zenion/mmoserver/pkg/persist"
+	"github.com/zenion/mmoserver/pkg/persist/persisttest"
 	"github.com/zenion/mmoserver/pkg/services/auth"
 )
 
@@ -19,14 +22,20 @@ func newTestServer(t *testing.T) *Server {
 	if err != nil {
 		t.Fatal(err)
 	}
+	repo := persisttest.NewAdminOperatorRepoMock()
+	if err := repo.Create(context.Background(), &persist.AdminOperator{
+		Username:     "josh",
+		PasswordHash: hash,
+		Grants:       []string{"*.*"},
+	}); err != nil {
+		t.Fatal(err)
+	}
 	return &Server{
-		sessions: NewMemorySessionStore(),
-		audit:    NewAuditLog(256),
-		lockout:  NewLockout(5, 15*time.Minute),
-		operators: map[string]OperatorConfig{
-			"josh": {Username: "josh", PasswordHash: hash, Grants: []string{"*.*"}},
-		},
-		logger: logger.New(),
+		sessions:     NewMemorySessionStore(),
+		audit:        NewAuditLog(256),
+		lockout:      NewLockout(5, 15*time.Minute),
+		operatorRepo: repo,
+		logger:       logger.New(),
 		cfg: Config{
 			SessionTTL: time.Hour,
 			CookieOpts: defaultCookieOpts(),
@@ -70,5 +79,65 @@ func TestLogin_UnknownUser(t *testing.T) {
 	s.handleLogin(w, r)
 	if w.Code != 401 {
 		t.Fatalf("expected 401, got %d", w.Code)
+	}
+}
+
+func TestNewServer_SeedsDefaultOperator(t *testing.T) {
+	t.Parallel()
+	repo := persisttest.NewAdminOperatorRepoMock()
+
+	// Build a minimal Server via NewServer so the seeding path fires.
+	srv := NewServer(ServerOpts{
+		SessionStore: NewMemorySessionStore(),
+		Panels:       NewPanelRegistry(),
+		Logger:       logger.New(),
+		OperatorRepo: repo,
+		Config:       Config{SessionTTL: time.Hour},
+	})
+	t.Cleanup(srv.Stop)
+
+	got, err := repo.GetByUsername(context.Background(), "admin")
+	if err != nil {
+		t.Fatalf("default admin operator not seeded: %v", err)
+	}
+	if len(got.Grants) != 1 || got.Grants[0] != "*.*" {
+		t.Errorf("default admin grants = %v, want [*.*]", got.Grants)
+	}
+	ok, verr := auth.VerifyPassword("admin", got.PasswordHash)
+	if verr != nil {
+		t.Fatalf("VerifyPassword: %v", verr)
+	}
+	if !ok {
+		t.Errorf("default admin password should verify against 'admin'")
+	}
+}
+
+func TestNewServer_DoesNotReseedWhenOperatorsExist(t *testing.T) {
+	t.Parallel()
+	repo := persisttest.NewAdminOperatorRepoMock()
+	if err := repo.Create(context.Background(), &persist.AdminOperator{
+		Username:     "alice",
+		PasswordHash: "preexisting",
+		Grants:       []string{"cell.*"},
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	srv := NewServer(ServerOpts{
+		SessionStore: NewMemorySessionStore(),
+		Panels:       NewPanelRegistry(),
+		Logger:       logger.New(),
+		OperatorRepo: repo,
+		Config:       Config{SessionTTL: time.Hour},
+	})
+	t.Cleanup(srv.Stop)
+
+	// "admin" should NOT have been seeded — non-empty table short-circuits.
+	if _, err := repo.GetByUsername(context.Background(), "admin"); err == nil {
+		t.Fatalf("seed fired even though table was non-empty")
+	}
+	// "alice" should still be there.
+	if _, err := repo.GetByUsername(context.Background(), "alice"); err != nil {
+		t.Fatalf("pre-existing alice operator vanished: %v", err)
 	}
 }

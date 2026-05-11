@@ -14,6 +14,8 @@ import (
 	"time"
 
 	"github.com/zenion/mmoserver/pkg/admin"
+	"github.com/zenion/mmoserver/pkg/persist"
+	"github.com/zenion/mmoserver/pkg/persist/persisttest"
 	"github.com/zenion/mmoserver/pkg/services/auth"
 	"github.com/zenion/mmoserver/pkg/universe"
 )
@@ -63,6 +65,14 @@ func mountE2EAdmin(t *testing.T, p *universe.Process, username, password string)
 		t.Fatal(err)
 	}
 
+	repo := persisttest.NewAdminOperatorRepoMock()
+	if err := repo.Create(context.Background(), &persist.AdminOperator{
+		Username:     username,
+		PasswordHash: hash,
+		Grants:       []string{"*.*"},
+	}); err != nil {
+		t.Fatal(err)
+	}
 	mux := http.NewServeMux()
 	srv := admin.NewServer(admin.ServerOpts{
 		View:         admin.NewLocalClusterView(p),
@@ -72,12 +82,10 @@ func mountE2EAdmin(t *testing.T, p *universe.Process, username, password string)
 		Panels:       admin.NewPanelRegistry(),
 		Logger:       p.Log,
 		Process:      p,
+		OperatorRepo: repo,
 		Config: admin.Config{
 			BindAddr:   "127.0.0.1:0",
 			SessionTTL: time.Hour,
-			Operators: []admin.OperatorConfig{
-				{Username: username, PasswordHash: hash, Grants: []string{"*.*"}},
-			},
 		},
 	})
 	srv.Mount(mux)
