@@ -93,6 +93,7 @@ func newConsoleWith(gameLog *logger.Logger, adapter *cmdsysAdapter) *Console {
 		log.Fatalf("failed to create readline: %v", err)
 	}
 	c.rl = rl
+	adapter.stdout = rl.Stdout()
 
 	log.SetOutput(rl.Stdout())
 

@@ -2,6 +2,7 @@ package engine
 
 import (
 	"context"
+	"os"
 	"strings"
 	"testing"
 	"time"
@@ -17,8 +18,10 @@ func newTestAdapter() *cmdsysAdapter {
 }
 
 // dispatchSync invokes verb+rest through the dispatcher without ExecOnLoop.
+// Routes through Dispatch (not DispatchRaw) so secret-field handling and
+// other Dispatch-only logic stays exercised in tests.
 func dispatchSync(a *cmdsysAdapter, raw string) string {
-	return a.DispatchRaw(raw)
+	return a.Dispatch(raw)
 }
 
 // ---------------------------------------------------------------------------
@@ -292,6 +295,51 @@ func TestConsole_HelpResult_RendersText(t *testing.T) {
 	}
 	if strings.Contains(out, "{") {
 		t.Errorf("output should not contain typed-struct braces. got:\n%s", out)
+	}
+}
+
+func TestDispatch_SecretFieldPromptsAndPopulates(t *testing.T) {
+	a := newTestAdapter()
+
+	type args struct {
+		Name     string `cmd:"help=user"`
+		Password string `cmd:"secret,help=password"`
+	}
+	type result struct {
+		GotPassword string `json:"gotPassword"`
+	}
+
+	captured := ""
+	err := a.Registry.Register(cmdsys.Command{
+		Verb:        "test.secret",
+		Capability:  "test.secret",
+		Description: "verifies secret prompt",
+		Args:        args{},
+		Result:      result{},
+		Route:       cmdsys.RouteLocal,
+		Handler: func(ctx context.Context, env *cmdsys.Env, raw any) (any, error) {
+			a := raw.(args)
+			captured = a.Password
+			return result{GotPassword: a.Password}, nil
+		},
+	})
+	if err != nil {
+		t.Fatalf("Register: %v", err)
+	}
+
+	// Pipe stdin so promptSecretFields' non-TTY fallback reads "s3cret".
+	old := os.Stdin
+	r, w, _ := os.Pipe()
+	os.Stdin = r
+	defer func() { os.Stdin = old }()
+	go func() {
+		_, _ = w.Write([]byte("s3cret\n"))
+		_ = w.Close()
+	}()
+
+	out := dispatchSync(a, "test.secret alice")
+	if captured != "s3cret" {
+		t.Fatalf("handler captured password %q; want %q (console out: %s)", captured, "s3cret", out)
 	}
 }
 

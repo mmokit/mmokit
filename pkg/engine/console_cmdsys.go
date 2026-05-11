@@ -1,11 +1,16 @@
 package engine
 
 import (
+	"bufio"
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
+	"os"
 	"strings"
 	"time"
+
+	"golang.org/x/term"
 
 	"github.com/zenion/mmoserver/pkg/cmdsys"
 )
@@ -23,6 +28,22 @@ var operatorCaller = cmdsys.Caller{
 type cmdsysAdapter struct {
 	Registry   *cmdsys.Registry
 	Dispatcher *cmdsys.Dispatcher
+
+	// stdout is the writer the adapter uses for interactive prompts
+	// (e.g. password input). Wired from readline.Instance.Stdout() by
+	// newConsoleWith so prompts interleave cleanly with the REPL prompt.
+	// Unset in tests — out() falls back to os.Stdout.
+	stdout io.Writer
+}
+
+// out returns the writer the adapter draws prompts onto (typically
+// readline's Stdout, which interleaves cleanly with the prompt).
+// Falls back to os.Stdout when unset.
+func (a *cmdsysAdapter) out() io.Writer {
+	if a.stdout != nil {
+		return a.stdout
+	}
+	return os.Stdout
 }
 
 func newCmdsysAdapter() *cmdsysAdapter {
@@ -153,6 +174,23 @@ func (a *cmdsysAdapter) Dispatch(raw string) string {
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
+
+	// If the resolved verb has any secret-marked Args fields, parse the
+	// non-secret tokens against a schema with secrets stripped, prompt
+	// the user for each secret via TTY, then invoke with the typed args
+	// struct. Otherwise fall through to the legacy string-args path.
+	cmd, regFound := a.Registry.Lookup(verb)
+	if regFound {
+		fullSchema, schemaErr := cmdsys.SchemaOf(cmd.Args)
+		if schemaErr == nil && hasSecretField(fullSchema) {
+			res, err := a.dispatchWithSecrets(ctx, cmd, fullSchema, argsRest)
+			if err != nil {
+				return fmt.Sprintf("  error: %v\n", err)
+			}
+			return renderDispatchResult(res, asJSON)
+		}
+	}
+
 	res, err := a.Dispatcher.Invoke(ctx, operatorCaller, verb, argsRest)
 	if err != nil {
 		if err == cmdsys.ErrUnknownVerb {
@@ -161,6 +199,51 @@ func (a *cmdsysAdapter) Dispatch(raw string) string {
 		return fmt.Sprintf("  error: %v\n", err)
 	}
 	return renderDispatchResult(res, asJSON)
+}
+
+func hasSecretField(schema cmdsys.Schema) bool {
+	for _, f := range schema.Fields {
+		if f.Secret {
+			return true
+		}
+	}
+	return false
+}
+
+// dispatchWithSecrets parses non-secret tokens against a stripped
+// schema, TTY-prompts for each secret field, and invokes the dispatcher
+// with the typed args value. Returns the dispatcher Result for normal
+// rendering.
+func (a *cmdsysAdapter) dispatchWithSecrets(ctx context.Context, cmd cmdsys.Command, fullSchema cmdsys.Schema, argsRest string) (cmdsys.Result, error) {
+	nonSecret := cmdsys.Schema{StructName: fullSchema.StructName}
+	for _, f := range fullSchema.Fields {
+		if !f.Secret {
+			nonSecret.Fields = append(nonSecret.Fields, f)
+		}
+	}
+	parser := cmdsys.Parser{}
+	values, err := parser.Bind(argsRest, nonSecret)
+	if err != nil {
+		return cmdsys.Result{}, fmt.Errorf("parse args: %w", err)
+	}
+	if values == nil {
+		values = make(map[string]any)
+	}
+	secrets, err := promptSecretFields(a.out(), fullSchema)
+	if err != nil {
+		return cmdsys.Result{}, err
+	}
+	for name, val := range secrets {
+		values[name] = val
+	}
+	typed, err := cmdsys.NewArgs(cmd)
+	if err != nil {
+		return cmdsys.Result{}, fmt.Errorf("args alloc: %w", err)
+	}
+	if err := cmdsys.ApplyMap(typed, values); err != nil {
+		return cmdsys.Result{}, fmt.Errorf("apply args: %w", err)
+	}
+	return a.Dispatcher.Invoke(ctx, operatorCaller, cmd.Verb, typed)
 }
 
 // stripJSONFlag removes a `--json` token from raw and returns the cleaned
@@ -283,4 +366,48 @@ func (a *cmdsysAdapter) DispatchRaw(raw string) string {
 		return hr.Text
 	}
 	return renderResult(tr.Result)
+}
+
+// promptSecretFields walks the schema for any Secret fields and reads
+// their values from the TTY without echo. The returned map is keyed
+// by FieldSchema.Name. Returns nil + nil error when no secret fields
+// exist.
+//
+// Non-TTY callers (tests, piped stdin) fall through to a plain
+// bufio.Scanner read so test fixtures can pipe values in without
+// needing a pty.
+func promptSecretFields(out io.Writer, schema cmdsys.Schema) (map[string]string, error) {
+	var secrets []cmdsys.FieldSchema
+	for _, f := range schema.Fields {
+		if f.Secret {
+			secrets = append(secrets, f)
+		}
+	}
+	if len(secrets) == 0 {
+		return nil, nil
+	}
+	result := make(map[string]string, len(secrets))
+	for _, f := range secrets {
+		fmt.Fprintf(out, "%s: ", f.Name)
+		var pwd []byte
+		if term.IsTerminal(int(os.Stdin.Fd())) {
+			b, err := term.ReadPassword(int(os.Stdin.Fd()))
+			fmt.Fprintln(out)
+			if err != nil {
+				return nil, fmt.Errorf("read %s: %w", f.Name, err)
+			}
+			pwd = b
+		} else {
+			s := bufio.NewScanner(os.Stdin)
+			if !s.Scan() {
+				return nil, fmt.Errorf("read %s: no input", f.Name)
+			}
+			pwd = []byte(strings.TrimSpace(s.Text()))
+		}
+		if len(pwd) == 0 {
+			return nil, fmt.Errorf("%s required", f.Name)
+		}
+		result[f.Name] = string(pwd)
+	}
+	return result, nil
 }
