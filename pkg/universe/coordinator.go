@@ -296,12 +296,6 @@ type Config struct {
 	// set this directly.
 	DumpSchema bool
 
-	// AdminHashPassword, when true, causes Process.Start to prompt for a
-	// password (stdin), print its argon2id-encoded hash, and exit. Used to
-	// generate operator entries for AdminConfig.Operators. Engine-owned via
-	// the --admin-hash-password flag in BindFlags.
-	AdminHashPassword bool
-
 	// PlayerRouter resolves a username to its target cell ID at login.
 	// Optional — when nil, the gateway's default topology-based routing
 	// applies. Forward-compat field; no consumer today.
@@ -351,25 +345,16 @@ type Config struct {
 // from a higher layer (mmokit.DefaultAdminServerFactory) without
 // introducing an import cycle.
 type AdminConfig struct {
-	Enabled            bool
-	SessionTTL         time.Duration
-	LockoutMaxAttempts int
-	LockoutWindow      time.Duration
-	AuditCap           int
-	Operators          []AdminOperatorConfig
+	Enabled            bool          // default true (auto-set in Build when AdminListen is non-empty)
+	SessionTTL         time.Duration // default 8h
+	LockoutMaxAttempts int           // default 5
+	LockoutWindow      time.Duration // default 15m
+	AuditCap           int           // default 4096
 
-	// ServerFactory builds the admin server when Enabled. Provided by
-	// mmokit.DefaultAdminServerFactory or a custom factory. Nil = the
-	// admin section is a no-op even when Enabled=true.
+	// ServerFactory builds the admin server when Enabled. Defaulted by
+	// mmokit.New to DefaultAdminServerFactory() when nil. Games may
+	// override with a custom factory.
 	ServerFactory func(*Process) AdminServer
-}
-
-// AdminOperatorConfig is one entry in AdminConfig.Operators. PasswordHash
-// is the encoded argon2id string from `<server> --admin-hash-password`.
-type AdminOperatorConfig struct {
-	Username     string
-	PasswordHash string
-	Grants       []string
 }
 
 // AdminServer is the slim contract pkg/admin.Server satisfies. universe
@@ -1541,6 +1526,29 @@ func (c *Process) Build() {
 		c.ownsDBStore = true
 	}
 
+	// Apply AdminConfig defaults so games don't have to spell them out.
+	// AdminListen non-empty implies "user wants admin" — enable unless
+	// they explicitly disabled it via --admin-enabled=false (which sets
+	// Enabled to false at flag-parse time). The flag default is true.
+	if cfg.AdminListen != "" && cfg.Admin.Enabled {
+		if cfg.Admin.SessionTTL == 0 {
+			cfg.Admin.SessionTTL = 8 * time.Hour
+		}
+		if cfg.Admin.LockoutMaxAttempts == 0 {
+			cfg.Admin.LockoutMaxAttempts = 5
+		}
+		if cfg.Admin.LockoutWindow == 0 {
+			cfg.Admin.LockoutWindow = 15 * time.Minute
+		}
+		if cfg.Admin.AuditCap == 0 {
+			cfg.Admin.AuditCap = 4096
+		}
+		if cfg.DBStore == nil {
+			panic(fmt.Errorf("coordinator: Admin.Enabled requires a database — set --postgres-url"))
+		}
+		c.cfg = cfg
+	}
+
 	// Auto-register the engine's per-player debug-flag console
 	// commands (`debug.grant/revoke/list/features`) when DBStore is
 	// available. These are mmokit-owned commands, not game-specific —
@@ -2449,18 +2457,6 @@ func (c *Process) Start(parent ...context.Context) {
 	ctx := context.Background()
 	if len(parent) > 0 {
 		ctx = parent[0]
-	}
-
-	// admin-hash-password runs BEFORE Build() because the operator hash
-	// generation needs none of the cluster machinery — it's just argon2id
-	// over a stdin-prompted password. Running before Build avoids requiring
-	// Postgres / etc. just to generate a config hash.
-	if c.cfg.AdminHashPassword {
-		if err := promptAndPrintAdminHash(); err != nil {
-			fmt.Fprintf(os.Stderr, "admin-hash-password: %v\n", err)
-			os.Exit(1)
-		}
-		os.Exit(0)
 	}
 
 	c.Build()

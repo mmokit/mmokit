@@ -792,6 +792,16 @@ func DefaultReplicationConfig(eng *engine.Engine, grid *spatial.HashGrid, clock 
 // Constructors & Functions
 // ---------------------------------------------------------------------------
 
+// New constructs a Process from the given config. Auto-wires
+// DefaultAdminServerFactory when the game enables admin without
+// supplying its own factory.
+func New(cfg Config) *Process {
+	if cfg.AdminListen != "" && cfg.Admin.Enabled && cfg.Admin.ServerFactory == nil {
+		cfg.Admin.ServerFactory = DefaultAdminServerFactory()
+	}
+	return universe.New(cfg)
+}
+
 var (
 	// DefaultEngineConfig returns the default Engine configuration (listen addr, tick rate).
 	DefaultEngineConfig = engine.DefaultConfig
@@ -816,9 +826,6 @@ var (
 
 	// FmtDuration formats a time.Duration as a human-readable string.
 	FmtDuration = engine.FmtDuration
-
-	// New creates a Process from the given Config. Call Start() to run.
-	New = universe.New
 
 	// NewStage creates a Stage with the given engine, cell, nodeID, AoI radius,
 	// spatial grid, and replication registry. Embed in your game world struct.

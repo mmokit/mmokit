@@ -71,9 +71,11 @@ func (c *Config) BindFlags() {
 	stringFlag("admin-listen",
 		"admin HTTP listen addr for /events, /commands, /metrics (empty = disabled)",
 		"", &c.AdminListen)
-	// Default mirrors what the Config literal already set so games that
-	// hardcode Admin.Enabled = true don't need to also pass --admin-enabled.
-	flag.BoolVar(&c.Admin.Enabled, "admin-enabled", c.Admin.Enabled,
+	// Default-on: admin dashboard mounts whenever --admin-listen is set.
+	// Operators can explicitly disable via --admin-enabled=false to get
+	// the operational endpoints (/metrics, /commands, /events) without
+	// the auth/UI surface.
+	flag.BoolVar(&c.Admin.Enabled, "admin-enabled", true,
 		"enable the admin dashboard at /admin/* (requires --admin-listen)")
 	stringFlag("coordinator-addr",
 		"MeshControl dial addr (host/gateway roles when running standalone)",
@@ -102,8 +104,6 @@ func (c *Config) BindFlags() {
 		"disable Secure flag on the auth session cookie (plain-HTTP local dev only)")
 	flag.BoolVar(&c.DumpSchema, "dump-schema", false,
 		"dump protocol schema JSON to stdout and exit (after Build, before Start)")
-	flag.BoolVar(&c.AdminHashPassword, "admin-hash-password", false,
-		"interactively prompt for a password and print its argon2id hash, then exit")
 }
 
 // DefaultPlayerRouter returns a PlayerRouter that routes every player to the

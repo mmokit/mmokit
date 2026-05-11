@@ -39,9 +39,6 @@ func localLogID(cfg universe.Config) string {
 // AdminConfig is the facade alias for universe.AdminConfig.
 type AdminConfig = universe.AdminConfig
 
-// AdminOperatorConfig is the facade alias for universe.AdminOperatorConfig.
-type AdminOperatorConfig = universe.AdminOperatorConfig
-
 // adminPanelRegistries maps each *universe.Process to its admin.PanelRegistry,
 // allowing games to register panels before the admin Server is built. The
 // factory below pulls the same registry into the Server it constructs, so
@@ -136,14 +133,10 @@ func DefaultAdminServerFactory() func(*universe.Process) universe.AdminServer {
 		cfg := c.Cfg()
 		ac := cfg.Admin
 		view := admin.NewLocalClusterView(c)
-		ops := make([]admin.OperatorConfig, 0, len(ac.Operators))
-		for _, o := range ac.Operators {
-			ops = append(ops, admin.OperatorConfig{
-				Username:     o.Username,
-				PasswordHash: o.PasswordHash,
-				Grants:       o.Grants,
-			})
-		}
+		// OperatorRepo is sourced from the cluster Postgres store. Build
+		// panics earlier if DBStore is nil when Admin.Enabled is set, so
+		// the dereference here is safe.
+		operatorRepo := cfg.DBStore.AdminOperators()
 		ring := adminLogRing(c, 0)
 		bus := adminBus(c)
 		server := admin.NewServer(admin.ServerOpts{
@@ -157,13 +150,13 @@ func DefaultAdminServerFactory() func(*universe.Process) universe.AdminServer {
 			LocalHostID:  localLogID(cfg),
 			Logger:       c.Log,
 			Process:      c,
+			OperatorRepo: operatorRepo,
 			Config: admin.Config{
 				BindAddr:   cfg.AdminListen,
 				SessionTTL: ac.SessionTTL,
 				LockoutMax: ac.LockoutMaxAttempts,
 				LockoutWin: ac.LockoutWindow,
 				AuditCap:   ac.AuditCap,
-				Operators:  ops,
 			},
 		})
 		// Bridge remote-host LogBatches into the same ring + bus that
