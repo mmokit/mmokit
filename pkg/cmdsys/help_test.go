@@ -266,3 +266,18 @@ func TestRenderHelp_GroupShimWithSubcommands(t *testing.T) {
 		t.Errorf("interactive renderer leaked dot-notation. output:\n%s", out)
 	}
 }
+
+func TestRenderFieldLine_SecretShowsAnnotation(t *testing.T) {
+	var b strings.Builder
+	renderFieldLine(&b, FieldSchema{
+		Name:     "Password",
+		Kind:     "string",
+		Help:     "operator password",
+		Secret:   true,
+		Required: true,
+	}, false)
+	out := b.String()
+	if !strings.Contains(out, "(secret, prompted)") {
+		t.Errorf("help output missing '(secret, prompted)' annotation: %q", out)
+	}
+}

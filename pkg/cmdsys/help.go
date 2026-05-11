@@ -205,6 +205,9 @@ func renderFieldLine(b *strings.Builder, f FieldSchema, flag bool) {
 	if len(annotations) > 0 {
 		suffix = "  (" + strings.Join(annotations, ", ") + ")"
 	}
+	if f.Secret {
+		suffix += " (secret, prompted)"
+	}
 	fmt.Fprintf(b, "    %-14s %s%s\n", name, help, suffix)
 }
 
