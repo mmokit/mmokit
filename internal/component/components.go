@@ -52,14 +52,33 @@ type Shield struct {
 	DamageCooldown float32 // time remaining before regen resumes
 }
 
-// TargetLock holds lock-on state for targeting another entity.
+// TargetLock holds slot-based EVE-style multi-target lock state.
+//
+// Slots is a contiguous slice; iteration order = lock acquisition order.
+// ActiveNetID is the currently-selected slot's target — read by abilities
+// for default firing. MaxSlots is local-only (set per-entity at spawn:
+// 4 for player ships, 1 for NPCs). Range is the maximum lock distance.
+//
+// Slots are NOT replicated via per-entity wire — the owning player learns
+// its own slot state via LockSlotsMsg events. Other players see only the
+// reverse-direction LockedBy marker on their own entity when locked.
 type TargetLock struct {
-	TargetEntity ecs.Entity // entity being locked/locked onto
-	TargetNetID  uint32     // network ID of target
-	Progress     float32    // 0.0 to 1.0 (1.0 = locked)
-	LockTime     float32    // seconds required to achieve full lock
-	Range        float32    // max lock range
-	Locked       bool       // true when Progress >= 1.0
+	Slots       []LockSlot
+	ActiveNetID uint32  // local-only — owner learns via LockSlotsMsg
+	MaxSlots    uint8   // local-only — 4 for ships, 1 for NPCs
+	Range       float32
+}
+
+// LockSlot is one in-progress or completed lock. ScanResolution and
+// SigRadius are reserved for v2 sensor mechanics; v1 ignores them.
+type LockSlot struct {
+	TargetNetID    uint32
+	TargetEntity   ecs.Entity
+	Progress       float32 // 0..1
+	LockTime       float32 // seconds to full lock for this target
+	Locked         bool    // true when Progress >= 1.0
+	ScanResolution float32 // reserved v2 — unused
+	SigRadius      float32 // reserved v2 — unused
 }
 
 // LockedBy is a replicated "who is locking me" marker. The NetworkSystem
