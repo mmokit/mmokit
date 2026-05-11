@@ -32,7 +32,7 @@ func openTestStore(t *testing.T) *Store {
 	}
 	t.Cleanup(s.Close)
 	if _, err := s.pool.Exec(ctx, `
-		TRUNCATE players, game_config, market_orders, market_trades RESTART IDENTITY
+		TRUNCATE players, game_config, market_orders, market_trades, admin_operators RESTART IDENTITY
 	`); err != nil {
 		t.Fatalf("truncate: %v", err)
 	}
@@ -709,5 +709,184 @@ func TestExtraMigrationsAppliedAfterEngine(t *testing.T) {
 	var n int
 	if err := s.pool.QueryRow(ctx, "SELECT COUNT(*) FROM extra_test").Scan(&n); err != nil {
 		t.Fatalf("extra_test table missing after extra migration: %v", err)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// AdminOperatorRepository tests
+// ---------------------------------------------------------------------------
+
+func TestAdminOperatorRepo_CreateAndGet(t *testing.T) {
+	s := openTestStore(t)
+	ctx := context.Background()
+	repo := s.AdminOperators()
+
+	op := &persist.AdminOperator{
+		Username:     "alice",
+		PasswordHash: "$argon2id$v=19$m=65536,t=3,p=4$XXXX$YYYY",
+		Grants:       []string{"*.*"},
+	}
+	if err := repo.Create(ctx, op); err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+
+	got, err := repo.GetByUsername(ctx, "alice")
+	if err != nil {
+		t.Fatalf("GetByUsername: %v", err)
+	}
+	if got.Username != "alice" {
+		t.Errorf("Username = %q, want %q", got.Username, "alice")
+	}
+	if got.PasswordHash != op.PasswordHash {
+		t.Errorf("PasswordHash = %q, want %q", got.PasswordHash, op.PasswordHash)
+	}
+	if len(got.Grants) != 1 || got.Grants[0] != "*.*" {
+		t.Errorf("Grants = %v, want [*.*]", got.Grants)
+	}
+	if got.CreatedAt.IsZero() {
+		t.Errorf("CreatedAt should be auto-populated")
+	}
+}
+
+func TestAdminOperatorRepo_GetUnknown(t *testing.T) {
+	s := openTestStore(t)
+	ctx := context.Background()
+	if _, err := s.AdminOperators().GetByUsername(ctx, "nobody"); !errors.Is(err, persist.ErrNotFound) {
+		t.Fatalf("expected ErrNotFound, got %v", err)
+	}
+}
+
+func TestAdminOperatorRepo_CountEmpty(t *testing.T) {
+	s := openTestStore(t)
+	ctx := context.Background()
+	n, err := s.AdminOperators().Count(ctx)
+	if err != nil {
+		t.Fatalf("Count: %v", err)
+	}
+	if n != 0 {
+		t.Errorf("Count on empty table = %d, want 0", n)
+	}
+}
+
+func TestAdminOperatorRepo_Count(t *testing.T) {
+	s := openTestStore(t)
+	ctx := context.Background()
+	repo := s.AdminOperators()
+	for _, name := range []string{"alice", "bob", "charlie"} {
+		if err := repo.Create(ctx, &persist.AdminOperator{Username: name, PasswordHash: "x"}); err != nil {
+			t.Fatalf("Create %q: %v", name, err)
+		}
+	}
+	n, err := repo.Count(ctx)
+	if err != nil {
+		t.Fatalf("Count: %v", err)
+	}
+	if n != 3 {
+		t.Errorf("Count = %d, want 3", n)
+	}
+}
+
+func TestAdminOperatorRepo_List(t *testing.T) {
+	s := openTestStore(t)
+	ctx := context.Background()
+	repo := s.AdminOperators()
+	for _, name := range []string{"zoe", "alice", "bob"} {
+		if err := repo.Create(ctx, &persist.AdminOperator{Username: name, PasswordHash: "x"}); err != nil {
+			t.Fatalf("Create %q: %v", name, err)
+		}
+	}
+	out, err := repo.List(ctx)
+	if err != nil {
+		t.Fatalf("List: %v", err)
+	}
+	if len(out) != 3 {
+		t.Fatalf("len = %d, want 3", len(out))
+	}
+	// List returns sorted by username.
+	wantOrder := []string{"alice", "bob", "zoe"}
+	for i, want := range wantOrder {
+		if out[i].Username != want {
+			t.Errorf("[%d] Username = %q, want %q", i, out[i].Username, want)
+		}
+	}
+}
+
+func TestAdminOperatorRepo_DuplicateCreateRejected(t *testing.T) {
+	s := openTestStore(t)
+	ctx := context.Background()
+	repo := s.AdminOperators()
+	op := &persist.AdminOperator{Username: "dup", PasswordHash: "x"}
+	if err := repo.Create(ctx, op); err != nil {
+		t.Fatalf("first Create: %v", err)
+	}
+	if err := repo.Create(ctx, op); err == nil {
+		t.Fatalf("expected error on duplicate Create, got nil")
+	}
+}
+
+func TestAdminOperatorRepo_Delete(t *testing.T) {
+	s := openTestStore(t)
+	ctx := context.Background()
+	repo := s.AdminOperators()
+	if err := repo.Create(ctx, &persist.AdminOperator{Username: "alice", PasswordHash: "x"}); err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+	if err := repo.Delete(ctx, "alice"); err != nil {
+		t.Fatalf("Delete: %v", err)
+	}
+	if _, err := repo.GetByUsername(ctx, "alice"); !errors.Is(err, persist.ErrNotFound) {
+		t.Fatalf("expected ErrNotFound after Delete, got %v", err)
+	}
+}
+
+func TestAdminOperatorRepo_DeleteUnknownIsNoop(t *testing.T) {
+	s := openTestStore(t)
+	ctx := context.Background()
+	if err := s.AdminOperators().Delete(ctx, "no-such-user"); err != nil {
+		t.Fatalf("Delete of unknown user should be no-op, got %v", err)
+	}
+}
+
+func TestAdminOperatorRepo_UpdatePasswordHash(t *testing.T) {
+	s := openTestStore(t)
+	ctx := context.Background()
+	repo := s.AdminOperators()
+	if err := repo.Create(ctx, &persist.AdminOperator{Username: "alice", PasswordHash: "v1"}); err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+	if err := repo.UpdatePasswordHash(ctx, "alice", "v2"); err != nil {
+		t.Fatalf("UpdatePasswordHash: %v", err)
+	}
+	got, err := repo.GetByUsername(ctx, "alice")
+	if err != nil {
+		t.Fatalf("GetByUsername: %v", err)
+	}
+	if got.PasswordHash != "v2" {
+		t.Errorf("PasswordHash = %q, want v2", got.PasswordHash)
+	}
+}
+
+func TestAdminOperatorRepo_UpdateUnknownReturnsErrNotFound(t *testing.T) {
+	s := openTestStore(t)
+	ctx := context.Background()
+	if err := s.AdminOperators().UpdatePasswordHash(ctx, "no-such-user", "x"); !errors.Is(err, persist.ErrNotFound) {
+		t.Fatalf("expected ErrNotFound, got %v", err)
+	}
+}
+
+func TestAdminOperatorRepo_GrantsDefaultEmptyArray(t *testing.T) {
+	s := openTestStore(t)
+	ctx := context.Background()
+	repo := s.AdminOperators()
+	// Insert without grants — default '[]'::jsonb should produce an empty slice (or nil).
+	if err := repo.Create(ctx, &persist.AdminOperator{Username: "nogrants", PasswordHash: "x"}); err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+	got, err := repo.GetByUsername(ctx, "nogrants")
+	if err != nil {
+		t.Fatalf("GetByUsername: %v", err)
+	}
+	if len(got.Grants) != 0 {
+		t.Errorf("Grants = %v, want empty", got.Grants)
 	}
 }
