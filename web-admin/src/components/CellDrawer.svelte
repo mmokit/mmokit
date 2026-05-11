@@ -41,32 +41,36 @@
 
   // === System profile (per-system tick µs) — auto-polled at 1Hz while a
   // cell is selected. Replaces the standalone /performance route's drilldown.
+  //
+  // The cell prop is reassigned to a new object every SSE tick (parent does
+  // cells.find(...) which returns fresh references), so depending the effect
+  // directly on `cell` would re-fire and reset perf=null every tick → BarChart
+  // flicker. Derive the id string first: $derived uses === equality, so the
+  // downstream effect only re-runs when the cell actually changes.
+  let cellId = $derived(cell?.id ?? null);
+
   let perf = $state<PerfSnapshot | null>(null);
   let perfError = $state("");
-  let perfLoading = $state(false);
 
   $effect(() => {
-    const id = cell?.id ?? null;
+    const id = cellId;
     perf = null;
     perfError = "";
     if (!id) return;
     let cancelled = false;
-    perfLoading = true;
     const fetchOnce = async () => {
       try {
         const res = await apiGet<PerfSnapshot>(
           `/admin/api/perf/${encodeURIComponent(id)}`,
         );
-        if (!cancelled && cell?.id === id) {
+        if (!cancelled) {
           perf = res;
           perfError = "";
         }
       } catch (e) {
-        if (!cancelled && cell?.id === id) {
+        if (!cancelled) {
           perfError = e instanceof ApiError ? e.message : (e as Error).message;
         }
-      } finally {
-        perfLoading = false;
       }
     };
     void fetchOnce();
@@ -77,14 +81,23 @@
     };
   });
 
-  // BarChart rows for the per-system breakdown.
+  // BarChart rows for the per-system breakdown. Bars are scaled to tick
+  // total (see <BarChart max={...} />) so each bar reads as "share of CPU
+  // time per tick" instead of being autoscaled relative to the slowest
+  // system — autoscaling makes a 38µs system look "full" which is misleading.
+  let perfTotal = $derived(perf?.total.avgUs ?? 0);
   let perfRows = $derived(
     perf && perf.systems && perf.systemNames
-      ? perf.systemNames.map((n, i) => ({
-          label: n,
-          value: perf!.systems![i].avgUs,
-          valueText: `${perf!.systems![i].avgUs}µs · p95 ${perf!.systems![i].p95Us}`,
-        }))
+      ? perf.systemNames.map((n, i) => {
+          const avg = perf!.systems![i].avgUs;
+          const p95 = perf!.systems![i].p95Us;
+          const pct = perfTotal > 0 ? (avg / perfTotal) * 100 : 0;
+          return {
+            label: n,
+            value: avg,
+            valueText: `${avg}µs · ${pct.toFixed(0)}% · p95 ${p95}`,
+          };
+        })
       : [],
   );
   let loadSeries = $derived(history.map((h) => h.load));
@@ -316,21 +329,22 @@
         <div class="font-mono text-[10.5px] text-ember-300 tracking-tight">
           ✕ {perfError}
         </div>
-      {:else if !perf && perfLoading}
+      {:else if !perf}
         <div class="font-mono text-[10.5px] text-[var(--text-dim)] italic tracking-tight">
           loading…
         </div>
-      {:else if !perf || !perf.systems || perf.systems.length === 0}
+      {:else if !perf.systems || perf.systems.length === 0}
         <div class="font-mono text-[10.5px] text-[var(--text-dim)] italic tracking-tight">
           no samples yet (cell may have just reset)
         </div>
       {:else}
         <BarChart
           rows={perfRows}
-          maxWidth={120}
+          maxWidth={96}
+          max={perfTotal}
           color="#22d3da"
-          labelWidth={88}
-          valueWidth={108}
+          labelWidth={74}
+          valueWidth={130}
         />
 
         <!-- Tick total — secondary stats line -->

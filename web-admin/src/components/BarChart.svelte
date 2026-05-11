@@ -12,6 +12,10 @@
     /** Column widths — labels can run long with system names. */
     labelWidth?: number;
     valueWidth?: number;
+    /** Optional absolute scale. When provided, bars are sized as value/max
+     * rather than value/max(values) — useful for showing per-system µs as
+     * a fraction of total tick time instead of an autoscaled relative view. */
+    max?: number;
   };
 
   let {
@@ -20,9 +24,18 @@
     color = "#22d3da",
     labelWidth = 96,
     valueWidth = 78,
+    max,
   }: Props = $props();
 
-  let bars = $derived.by(() => layoutBars(rows.map((r) => r.value), maxWidth));
+  let bars = $derived.by(() => {
+    if (max !== undefined && max > 0) {
+      return rows.map((r) => ({
+        value: r.value,
+        width: Math.min(maxWidth, Math.max(0, r.value / max) * maxWidth),
+      }));
+    }
+    return layoutBars(rows.map((r) => r.value), maxWidth);
+  });
   let maxIdx = $derived.by(() => {
     let i = -1;
     let mv = -Infinity;

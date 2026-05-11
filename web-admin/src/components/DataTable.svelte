@@ -1,4 +1,5 @@
 <script lang="ts" generics="T">
+  import { untrack } from "svelte";
   import { ChevronDown, ChevronRight } from "$lib/icons";
   import { sortRows, type SortDir } from "./DataTable.helpers";
 
@@ -33,8 +34,11 @@
     onRowClick,
   }: Props = $props();
 
-  let sortKey = $state(initialSortKey ?? columns[0]?.key ?? "");
-  let sortDir = $state<SortDir>(initialSortDir);
+  // Seed state from props once at component setup. Later prop changes must not
+  // reset internal sort — untrack the reads so the compiler doesn't flag them
+  // as "captures initial value only".
+  let sortKey = $state(untrack(() => initialSortKey ?? columns[0]?.key ?? ""));
+  let sortDir = $state<SortDir>(untrack(() => initialSortDir));
 
   let sorted = $derived.by(() => {
     const col = columns.find((c) => c.key === sortKey);

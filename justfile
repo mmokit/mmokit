@@ -200,3 +200,7 @@ admin-dev:
 # vitest unit tests for lib/*
 admin-test:
     cd web-admin && bun run test
+
+# svelte-check (typecheck + vite-plugin-svelte warnings as errors)
+admin-typecheck:
+    cd web-admin && bun install --frozen-lockfile && bun run typecheck
