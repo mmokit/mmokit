@@ -51,7 +51,11 @@
 
   let visible = $derived.by<LogEntry[]>(() => {
     const cq = catFilter.trim().toLowerCase();
-    const hostSet = filterHosts && filterHosts.size > 0 ? filterHosts : null;
+    // filterHosts === undefined: parent says "no filter, show all".
+    // filterHosts === Set (possibly empty): parent provides a allowlist.
+    // An empty Set means "explicitly nothing matches" — used when the
+    // user clicks `none` or unchecks every host.
+    const hostSet = filterHosts ?? null;
     return entries.filter((e) => {
       if (cq && !e.cat.toLowerCase().includes(cq) && !e.msg.toLowerCase().includes(cq)) return false;
       if (hostSet && !hostSet.has(e.host)) return false;
