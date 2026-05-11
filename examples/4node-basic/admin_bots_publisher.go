@@ -55,7 +55,9 @@ func collectBotRows(ctx context.Context, coord *mmokit.Process) []BotRow {
 	caller := cmdsys.Caller{
 		ID:     "admin:bots-publisher",
 		Source: cmdsys.SourceConsole,
-		Grants: []cmdsys.Grant{{Pattern: "*", Allow: true}},
+		// "*.*" is the global wildcard per pkg/cmdsys/rbac.go::matchScore.
+		// A bare "*" never matches — pattern needs the namespace.action shape.
+		Grants: []cmdsys.Grant{{Pattern: "*.*", Allow: true}},
 	}
 	res, err := coord.CmdDispatcher().Invoke(invokeCtx, caller, "bot.list", nil)
 	if err != nil {

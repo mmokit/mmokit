@@ -10,32 +10,24 @@
   };
   let { verb, schema, onClose, onResult }: Props = $props();
 
-  // Per-field input state, keyed by field name. Stored as strings;
-  // coerced to typed values on submit.
-  //
-  // Seeded once at mount — NOT inside a $effect. An effect would re-fire
-  // whenever the reactive schema prop is re-passed (which happens on
-  // every PanelHost re-render driven by an unrelated SSE tick) and wipe
-  // the user's typed input. The modal unmounts on close (via {#if
-  // modalVerb} in PanelHost), so a fresh open always gets fresh defaults.
-  function seedValues(): Record<string, string> {
-    const v: Record<string, string> = {};
-    for (const f of schema.fields ?? []) {
-      v[f.name] = f.default ?? "";
-    }
-    return v;
+  // Per-field input state, keyed by field name. Seeded once at mount
+  // from the schema's declared defaults — the modal unmounts on close
+  // (via {#if modalVerb} in PanelHost) so a fresh open gets fresh
+  // defaults.
+  const initialValues: Record<string, string> = {};
+  const initialChecks: Record<string, boolean> = {};
+  for (const f of schema.fields ?? []) {
+    initialValues[f.name] = f.default ?? "";
+    initialChecks[f.name] = f.default === "true";
   }
-  function seedChecks(): Record<string, boolean> {
-    const c: Record<string, boolean> = {};
-    for (const f of schema.fields ?? []) {
-      c[f.name] = f.default === "true";
-    }
-    return c;
-  }
-  let values = $state<Record<string, string>>(seedValues());
-  let checks = $state<Record<string, boolean>>(seedChecks());
+  let values = $state<Record<string, string>>(initialValues);
+  let checks = $state<Record<string, boolean>>(initialChecks);
   let error = $state("");
   let submitting = $state(false);
+
+  // Focus the first non-bool input when the modal opens so the user
+  // can type immediately without clicking into the form.
+  const firstFocusable = (schema.fields ?? []).find((f) => f.kind !== "bool")?.name ?? "";
 
   function coerce(f: FieldSchema): unknown {
     const raw = values[f.name] ?? "";
@@ -135,6 +127,7 @@
             step="1"
             class="mt-1 w-full bg-white/5 border border-[var(--border-subtle)] rounded px-2 py-1 text-[var(--text-bright)] font-mono tabular-nums focus:outline-none focus:border-[var(--border-phosphor)]"
             bind:value={values[f.name]}
+            autofocus={f.name === firstFocusable}
             placeholder={f.default}
           />
         {:else if f.kind === "float32" || f.kind === "float64"}
@@ -143,6 +136,7 @@
             step="any"
             class="mt-1 w-full bg-white/5 border border-[var(--border-subtle)] rounded px-2 py-1 text-[var(--text-bright)] font-mono tabular-nums focus:outline-none focus:border-[var(--border-phosphor)]"
             bind:value={values[f.name]}
+            autofocus={f.name === firstFocusable}
             placeholder={f.default}
           />
         {:else if f.kind === "string"}
@@ -150,6 +144,7 @@
             type="text"
             class="mt-1 w-full bg-white/5 border border-[var(--border-subtle)] rounded px-2 py-1 text-[var(--text-bright)] font-mono focus:outline-none focus:border-[var(--border-phosphor)]"
             bind:value={values[f.name]}
+            autofocus={f.name === firstFocusable}
             placeholder={f.default}
           />
         {:else}
@@ -157,6 +152,7 @@
             type="text"
             class="mt-1 w-full bg-white/5 border border-[var(--border-subtle)] rounded px-2 py-1 text-[var(--text-bright)] font-mono focus:outline-none focus:border-[var(--border-phosphor)]"
             bind:value={values[f.name]}
+            autofocus={f.name === firstFocusable}
             placeholder={'JSON (e.g. ["a","b"] or {"k":1})'}
           />
         {/if}
