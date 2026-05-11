@@ -48,18 +48,22 @@
   // Merge game-registered panels under their declared group (upper-cased
   // to match the builtin group convention). Glyph auto-derived from the
   // first letter of the label.
+  //
+  // pkg/admin's PanelRegistry also ships defs for cluster/hosts/gateways/
+  // players/events/logs/settings — we dedup against builtinItems by id so
+  // the SPA's hand-styled entries win and game-only panels (like "bots")
+  // pass through.
   let items = $derived.by<Item[]>(() => {
-    const builtinPaths = new Set(builtinItems.map((b) => b.path));
+    const builtinIDs = new Set(builtinItems.map((b) => b.id));
     const extras: Item[] = [];
     for (const p of panels) {
-      const path = `/panel/${p.id}`;
-      if (builtinPaths.has(path)) continue;
+      if (builtinIDs.has(p.id)) continue;
       extras.push({
         id: p.id,
         label: p.label,
         icon: iconFor(p.icon),
         group: (p.group || "PANELS").toUpperCase(),
-        path,
+        path: `/panel/${p.id}`,
         glyph: (p.label[0] ?? "?").toUpperCase(),
       });
     }
