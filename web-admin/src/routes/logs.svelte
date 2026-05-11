@@ -8,6 +8,45 @@
   let error = $state("");
   let loading = $state(true);
 
+  // Hosts discovered by LogTail (from the entries it has seen). When a
+  // new host appears we add it to selectedHosts so its lines stay
+  // visible by default; existing selections (user-checked / unchecked)
+  // are preserved across discovery updates.
+  let discoveredHosts = $state<string[]>([]);
+  let selectedHosts = $state<Set<string>>(new Set());
+
+  function onHostsChanged(hosts: string[]) {
+    // Add genuinely new hosts as "selected" by default.
+    let dirty = false;
+    const next = new Set(selectedHosts);
+    for (const h of hosts) {
+      if (!discoveredHosts.includes(h)) {
+        next.add(h);
+        dirty = true;
+      }
+    }
+    discoveredHosts = hosts;
+    if (dirty) selectedHosts = next;
+  }
+
+  function toggleHost(host: string, checked: boolean) {
+    const next = new Set(selectedHosts);
+    if (checked) next.add(host);
+    else next.delete(host);
+    selectedHosts = next;
+  }
+
+  function selectAllHosts(checked: boolean) {
+    selectedHosts = checked ? new Set(discoveredHosts) : new Set();
+  }
+
+  // Filter passed to LogTail: undefined = no host filter (every host
+  // visible). We emit the set only when at least one host is unchecked
+  // — when ALL discovered hosts are selected the filter is a no-op.
+  let hostFilter = $derived(
+    selectedHosts.size === discoveredHosts.length ? undefined : selectedHosts,
+  );
+
   async function refresh() {
     loading = true;
     error = "";
@@ -73,8 +112,45 @@
   {/if}
 
   <div class="grow min-h-0 flex gap-3">
-    <!-- Left: category toggles (narrow column) -->
+    <!-- Left: host filter + category toggles -->
     <aside class="w-[280px] shrink-0 overflow-auto bg-[var(--bg-deep)] border border-[var(--border-subtle)] rounded-lg p-3 space-y-3">
+      <div>
+        <div class="flex items-center justify-between mb-1">
+          <h3 class="font-mono text-[11px] text-phosphor-300 tracking-[0.12em] uppercase">
+            Hosts
+          </h3>
+          <div class="flex gap-1 text-[10.5px] font-mono">
+            <button
+              type="button"
+              class="px-1.5 py-0.5 rounded border border-[var(--border-subtle)] bg-white/5 text-[var(--text-muted)] hover:bg-white/10"
+              onclick={() => selectAllHosts(true)}
+            >all</button>
+            <button
+              type="button"
+              class="px-1.5 py-0.5 rounded border border-[var(--border-subtle)] bg-white/5 text-[var(--text-muted)] hover:bg-white/10"
+              onclick={() => selectAllHosts(false)}
+            >none</button>
+          </div>
+        </div>
+        <div class="space-y-0.5">
+          {#each discoveredHosts as h (h)}
+            <label class="flex items-center gap-2 text-[11px] font-mono cursor-pointer">
+              <input
+                type="checkbox"
+                class="accent-phosphor-400"
+                checked={selectedHosts.has(h)}
+                onchange={(e) => toggleHost(h, (e.currentTarget as HTMLInputElement).checked)}
+              />
+              <span class="text-[var(--text-default)]">{h}</span>
+            </label>
+          {:else}
+            <div class="text-[var(--text-dim)] text-[10.5px] italic font-mono">
+              waiting for log entries…
+            </div>
+          {/each}
+        </div>
+      </div>
+
       {#if loading && groups.length === 0}
         <div class="text-[var(--text-dim)] text-[12px] font-mono">loading…</div>
       {/if}
@@ -116,7 +192,7 @@
 
     <!-- Right: live tail -->
     <div class="grow min-h-0">
-      <LogTail />
+      <LogTail filterHosts={hostFilter} {onHostsChanged} />
     </div>
   </div>
 </main>

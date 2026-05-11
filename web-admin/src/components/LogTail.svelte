@@ -4,12 +4,21 @@
   import { stream } from "$lib/stream";
   import type { LogEntry } from "$lib/types";
 
+  // filterHosts, when non-empty, restricts visible entries to the named
+  // hosts. Empty / undefined = no host filtering.
+  // onHostsChanged fires whenever the discovered host set changes — the
+  // logs page uses this to render the host checkbox list.
+  type Props = {
+    filterHosts?: Set<string>;
+    onHostsChanged?: (hosts: string[]) => void;
+  };
+  let { filterHosts, onHostsChanged }: Props = $props();
+
   const CLIENT_CAP = 1000;
 
   let entries = $state<LogEntry[]>([]);   // oldest first (natural reading)
   let paused = $state(false);
   let catFilter = $state("");
-  let hostFilter = $state("");
   let scrollEl = $state<HTMLDivElement | null>(null);
   let userScrolled = $state(false);
 
@@ -42,12 +51,22 @@
 
   let visible = $derived.by<LogEntry[]>(() => {
     const cq = catFilter.trim().toLowerCase();
-    const hq = hostFilter.trim().toLowerCase();
+    const hostSet = filterHosts && filterHosts.size > 0 ? filterHosts : null;
     return entries.filter((e) => {
       if (cq && !e.cat.toLowerCase().includes(cq) && !e.msg.toLowerCase().includes(cq)) return false;
-      if (hq && !e.host.toLowerCase().includes(hq)) return false;
+      if (hostSet && !hostSet.has(e.host)) return false;
       return true;
     });
+  });
+
+  // Publish the discovered host set upward so the logs page can render
+  // checkboxes. Recomputes when entries change; we just emit the latest
+  // sorted list — parent dedupes against its own state.
+  $effect(() => {
+    if (!onHostsChanged) return;
+    const seen = new Set<string>();
+    for (const e of entries) seen.add(e.host);
+    onHostsChanged(Array.from(seen).sort());
   });
 
   onMount(async () => {
@@ -97,14 +116,8 @@
     <input
       type="text"
       placeholder="filter cat / msg"
-      class="bg-white/5 border border-[var(--border-subtle)] rounded px-2 py-1 text-[var(--text-bright)] focus:outline-none focus:border-[var(--border-phosphor)] w-44"
+      class="bg-white/5 border border-[var(--border-subtle)] rounded px-2 py-1 text-[var(--text-bright)] focus:outline-none focus:border-[var(--border-phosphor)] w-56"
       bind:value={catFilter}
-    />
-    <input
-      type="text"
-      placeholder="filter host"
-      class="bg-white/5 border border-[var(--border-subtle)] rounded px-2 py-1 text-[var(--text-bright)] focus:outline-none focus:border-[var(--border-phosphor)] w-32"
-      bind:value={hostFilter}
     />
     <button
       type="button"
@@ -137,7 +150,7 @@
       </div>
     {:else}
       <div class="text-[var(--text-dim)] italic text-center py-4">
-        No log lines match — enable a category on the left or clear the filters.
+        No log lines match — enable a category on the left, check more hosts, or clear the filter.
       </div>
     {/each}
   </div>
