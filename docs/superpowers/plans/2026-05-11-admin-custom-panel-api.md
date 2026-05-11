@@ -454,6 +454,8 @@ EOF
 
 Generic typed-arg form. Opened by `PanelHost` when a toolbar button's verb has a non-empty schema.
 
+**Theme note:** the SPA is on a "Mission Control / Operations Console" phosphor theme. Use `text-phosphor-300/400` for accents; `text-[var(--text-bright|default|muted|dim)]` for the slate scale; `bg-[var(--bg-deep)]` for surfaces; `border-[var(--border-subtle|faint|phosphor)]` for borders. Match the style used by `web-admin/src/routes/cluster.svelte` and `web-admin/src/components/CellDrawer.svelte`.
+
 - [ ] **Step 1: Implement**
 
 Create `web-admin/src/components/ArgsModal.svelte`:
@@ -555,39 +557,39 @@ Create `web-admin/src/components/ArgsModal.svelte`:
   }
 </script>
 
-<div class="fixed inset-0 bg-black/40 flex items-center justify-center z-50" onclick={onClose} role="presentation">
+<div class="fixed inset-0 bg-black/60 flex items-center justify-center z-50" onclick={onClose} role="presentation">
   <form
-    class="bg-[#0d1117] border border-white/10 rounded-lg p-4 w-[420px] max-w-[90vw] space-y-3"
+    class="bg-[var(--bg-deep)] border border-[var(--border-subtle)] rounded-lg p-4 w-[420px] max-w-[90vw] space-y-3 shadow-xl"
     onsubmit={submit}
     onclick={(e: Event) => e.stopPropagation()}
   >
     <div class="flex items-center justify-between">
-      <h3 class="text-[13px] text-accent-300 font-mono">{verb}</h3>
-      <button type="button" class="text-slate-500 hover:text-slate-200 text-[12px]" onclick={onClose}>esc</button>
+      <h3 class="text-[13px] text-phosphor-300 font-mono tracking-tight">{verb}</h3>
+      <button type="button" class="text-[var(--text-dim)] hover:text-[var(--text-bright)] text-[11px] font-mono uppercase tracking-[0.16em]" onclick={onClose}>esc</button>
     </div>
 
     {#if (schema.fields ?? []).length === 0}
-      <div class="text-[12px] text-slate-500 italic">No arguments — submit to run.</div>
+      <div class="text-[12px] text-[var(--text-dim)] italic">No arguments — submit to run.</div>
     {/if}
 
     {#each schema.fields ?? [] as f (f.name)}
       <label class="block text-[11.5px]">
-        <span class="text-slate-400">
+        <span class="text-[var(--text-muted)] font-mono">
           {f.name}
-          {#if f.required}<span class="text-rose-400">*</span>{/if}
-          <span class="text-slate-600 ml-1">({f.kind})</span>
+          {#if f.required}<span class="text-ember-300">*</span>{/if}
+          <span class="text-[var(--text-dim)] ml-1">({f.kind})</span>
         </span>
         {#if f.kind === "bool"}
           <input
             type="checkbox"
-            class="mt-1 accent-accent-400"
+            class="mt-1 accent-phosphor-400"
             bind:checked={checks[f.name]}
           />
         {:else if f.kind === "int32" || f.kind === "int64"}
           <input
             type="number"
             step="1"
-            class="mt-1 w-full bg-white/5 border border-white/10 rounded px-2 py-1 text-slate-200"
+            class="mt-1 w-full bg-white/5 border border-[var(--border-subtle)] rounded px-2 py-1 text-[var(--text-bright)] font-mono tabular-nums focus:outline-none focus:border-[var(--border-phosphor)]"
             bind:value={values[f.name]}
             placeholder={f.default}
           />
@@ -595,46 +597,46 @@ Create `web-admin/src/components/ArgsModal.svelte`:
           <input
             type="number"
             step="any"
-            class="mt-1 w-full bg-white/5 border border-white/10 rounded px-2 py-1 text-slate-200"
+            class="mt-1 w-full bg-white/5 border border-[var(--border-subtle)] rounded px-2 py-1 text-[var(--text-bright)] font-mono tabular-nums focus:outline-none focus:border-[var(--border-phosphor)]"
             bind:value={values[f.name]}
             placeholder={f.default}
           />
         {:else if f.kind === "string"}
           <input
             type="text"
-            class="mt-1 w-full bg-white/5 border border-white/10 rounded px-2 py-1 text-slate-200"
+            class="mt-1 w-full bg-white/5 border border-[var(--border-subtle)] rounded px-2 py-1 text-[var(--text-bright)] font-mono focus:outline-none focus:border-[var(--border-phosphor)]"
             bind:value={values[f.name]}
             placeholder={f.default}
           />
         {:else}
           <input
             type="text"
-            class="mt-1 w-full bg-white/5 border border-white/10 rounded px-2 py-1 text-slate-200 font-mono"
+            class="mt-1 w-full bg-white/5 border border-[var(--border-subtle)] rounded px-2 py-1 text-[var(--text-bright)] font-mono focus:outline-none focus:border-[var(--border-phosphor)]"
             bind:value={values[f.name]}
             placeholder='JSON (e.g. ["a","b"] or {"k":1})'
           />
         {/if}
         {#if f.help}
-          <span class="text-[10.5px] text-slate-500">{f.help}</span>
+          <span class="text-[10.5px] text-[var(--text-dim)]">{f.help}</span>
         {/if}
       </label>
     {/each}
 
     {#if error}
-      <div class="text-rose-300 text-[11.5px]">{error}</div>
+      <div class="text-ember-300 text-[11.5px] font-mono">{error}</div>
     {/if}
 
     <div class="flex justify-end gap-2">
       <button
         type="button"
-        class="px-3 py-1 text-[11.5px] bg-white/5 border border-white/10 rounded text-slate-300 hover:bg-white/10"
+        class="px-3 py-1 text-[11px] font-mono uppercase tracking-[0.16em] bg-white/5 border border-[var(--border-subtle)] rounded text-[var(--text-default)] hover:bg-white/10"
         onclick={onClose}
       >
         cancel
       </button>
       <button
         type="submit"
-        class="px-3 py-1 text-[11.5px] bg-accent-300/20 border border-accent-300/40 rounded text-accent-200 hover:bg-accent-300/30 disabled:opacity-50"
+        class="px-3 py-1 text-[11px] font-mono uppercase tracking-[0.16em] bg-phosphor-300/15 border border-[var(--border-phosphor)] rounded text-phosphor-200 hover:bg-phosphor-300/25 disabled:opacity-50"
         disabled={submitting}
       >
         {submitting ? "…" : "run"}
@@ -799,13 +801,13 @@ Create `web-admin/src/components/PanelHost.svelte`:
 
 <main class="p-4 space-y-3">
   <div class="flex items-center justify-between">
-    <h2 class="text-accent-300 text-[11px] uppercase tracking-wide">{panel.label}</h2>
+    <h2 class="text-phosphor-300 text-[11px] uppercase tracking-[0.18em] font-mono">{panel.label}</h2>
     <div class="flex gap-1.5">
       {#each panel.commands ?? [] as verb (verb)}
         {@const err = schemaError[verb]}
         <button
           type="button"
-          class="px-2 py-0.5 text-[11px] rounded border border-white/10 bg-white/5 text-slate-200 hover:bg-white/10 disabled:opacity-50"
+          class="px-2 py-0.5 text-[11px] font-mono rounded border border-[var(--border-subtle)] bg-white/5 text-[var(--text-default)] hover:bg-white/10 hover:text-[var(--text-bright)] disabled:opacity-50"
           title={err ? `schema error: ${err}` : verb}
           disabled={!schemas[verb]}
           onclick={() => runVerb(verb)}
@@ -816,7 +818,7 @@ Create `web-admin/src/components/PanelHost.svelte`:
     </div>
   </div>
 
-  <div class="bg-[#0d1117] border border-white/10 rounded-lg p-3">
+  <div class="bg-[var(--bg-deep)] border border-[var(--border-subtle)] rounded-lg p-3">
     {#if rows.length > 0}
       <DataTable
         rows={rows}
@@ -826,14 +828,14 @@ Create `web-admin/src/components/PanelHost.svelte`:
     {:else if isScalarObject}
       <div class="grid grid-cols-[160px_1fr] gap-x-3 gap-y-1 text-[12px]">
         {#each Object.entries(payload as Record<string, unknown>) as [k, v] (k)}
-          <span class="text-slate-500 font-mono">{k}</span>
-          <span class="text-slate-200 font-mono">
+          <span class="text-[var(--text-dim)] font-mono">{k}</span>
+          <span class="text-[var(--text-bright)] font-mono tabular-nums">
             {typeof v === "object" ? JSON.stringify(v) : String(v)}
           </span>
         {/each}
       </div>
     {:else}
-      <div class="text-slate-500 italic text-[12px] py-4 text-center">
+      <div class="text-[var(--text-dim)] italic text-[12px] py-4 text-center font-mono">
         Waiting for topic {panel.topics?.[0] ?? "(none)"}…
       </div>
     {/if}
@@ -841,9 +843,9 @@ Create `web-admin/src/components/PanelHost.svelte`:
 
   {#if toast}
     <div
-      class="text-[12px] px-3 py-1.5 rounded {toast.ok
-        ? 'bg-emerald-900/30 text-emerald-200 border border-emerald-700/40'
-        : 'bg-rose-900/30 text-rose-200 border border-rose-700/40'}"
+      class="text-[12px] font-mono px-3 py-1.5 rounded border {toast.ok
+        ? 'bg-lime-900/30 text-lime-200 border-lime-700/40'
+        : 'bg-ember-900/30 text-ember-200 border-ember-700/40'}"
     >
       {toast.msg}
     </div>
@@ -889,42 +891,52 @@ EOF
 - Modify: `web-admin/src/lib/icons.ts`
 - Modify: `web-admin/src/components/Sidebar.svelte`
 
-Add a `Bot` icon and a small icon lookup so PanelDef.Icon string values map to actual Svelte components. Render game-registered panels alongside builtins.
+The sidebar was recently redesigned (commit pending in user's working tree) with a phosphor "ops console" theme. Each item now carries a one-letter `glyph` mnemonic shown in the right margin. Game-registered panels need to slot into this same shape — we extend the items array via `$derived` rather than the existing `const`.
+
+`icons.ts` already exports `Layers`, `Zap`, etc. — we only need to add `Bot` for the bots-panel example. Other game icons fall back to `Boxes`.
 
 - [ ] **Step 1: Add Bot icon**
 
-Append to `web-admin/src/lib/icons.ts`:
+Append to the end of `web-admin/src/lib/icons.ts`:
 
 ```ts
 export { default as Bot } from "@lucide/svelte/icons/bot";
 export { default as Database } from "@lucide/svelte/icons/database";
-export { default as Layers } from "@lucide/svelte/icons/layers";
-export { default as Zap } from "@lucide/svelte/icons/zap";
 export { default as Gauge } from "@lucide/svelte/icons/gauge";
 ```
 
-(Stub set of common game-panel icon names. Games whose Icon string is missing fall back to `Boxes`.)
+(Database + Gauge round out the common game-panel icon names. Already-present `Layers`, `Zap`, `Server`, `Cpu`, `Radio` are reused.)
 
-- [ ] **Step 2: Modify Sidebar.svelte**
-
-Read the current Sidebar first to be sure of the structure:
+- [ ] **Step 2: Read the current Sidebar to confirm the shape**
 
 ```bash
-sed -n '1,45p' web-admin/src/components/Sidebar.svelte
+sed -n '1,60p' web-admin/src/components/Sidebar.svelte
 ```
 
-Replace the existing top-of-file imports + state with:
+You'll see:
+- `Item` type carries `{id, label, icon, group, path, glyph}`.
+- A `const items: Item[]` array enumerates the 7 builtin entries: cluster, nodes, players, events, audit, logs, settings.
+- Groups used: `MESH`, `PEOPLE`, `TELEMETRY`, `CONFIG`. (The earlier `CLUSTER` / `DIAGNOSE` group names are GONE — match the new naming.)
+- A non-reactive `groups` const bucket-sorts items by group.
+
+We add panelsStore merge by converting the const items list into a `$derived` list that includes game-registered panels.
+
+- [ ] **Step 3: Replace the script block**
+
+Replace the entire `<script lang="ts">…</script>` block at the top of `web-admin/src/components/Sidebar.svelte` with:
 
 ```svelte
 <script lang="ts">
   import {
-    Globe, Boxes, Users, Activity, List, Scroll, Settings, ShieldCheck,
-    Bot, Database, Layers, Zap, Gauge, Server,
+    Globe, Boxes, Users, List, Scroll, Settings, ShieldCheck,
+    Bot, Database, Gauge, Layers, Zap, Server, Cpu, Radio,
   } from "$lib/icons";
   import { navigate, route } from "$lib/router";
   import { panelsStore } from "$lib/stores.svelte";
   import type { PanelDef } from "$lib/types";
 
+  // lucide-svelte 0.460 components don't conform to Svelte 5's Component<T>
+  // type yet. Use a loose type for the icon slot — they render correctly.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   type IconComponent = any;
 
@@ -934,13 +946,15 @@ Replace the existing top-of-file imports + state with:
     icon: IconComponent;
     group: string;
     path: string;
+    /** One-letter mnemonic shown in the rail margin. */
+    glyph: string;
   };
 
   // Map PanelDef.Icon string names → Svelte components. Unknown names
-  // fall back to Boxes.
+  // fall back to Boxes. Game panels declare Icon by lucide name.
   const iconMap: Record<string, IconComponent> = {
-    Bot, Database, Layers, Zap, Gauge, Server,
-    Globe, Boxes, Users, Activity, List, Scroll, Settings, ShieldCheck,
+    Bot, Database, Gauge, Layers, Zap, Server, Cpu, Radio,
+    Globe, Boxes, Users, List, Scroll, Settings, ShieldCheck,
   };
 
   function iconFor(name: string): IconComponent {
@@ -948,21 +962,20 @@ Replace the existing top-of-file imports + state with:
   }
 
   const builtinItems: Item[] = [
-    { id: "cluster", label: "Cells", icon: Globe, group: "CLUSTER", path: "/cluster" },
-    { id: "nodes", label: "Nodes", icon: Boxes, group: "CLUSTER", path: "/nodes" },
-    { id: "players", label: "Players", icon: Users, group: "PEOPLE", path: "/players" },
-    { id: "performance", label: "Performance", icon: Activity, group: "DIAGNOSE", path: "/performance" },
-    { id: "events", label: "Events", icon: List, group: "DIAGNOSE", path: "/events" },
-    { id: "audit", label: "Audit", icon: ShieldCheck, group: "DIAGNOSE", path: "/audit" },
-    { id: "logs", label: "Logs", icon: Scroll, group: "DIAGNOSE", path: "/logs" },
-    { id: "settings", label: "Settings", icon: Settings, group: "CONFIG", path: "/settings" },
+    { id: "cluster",  label: "Cells",    icon: Globe,       group: "MESH",      path: "/cluster",  glyph: "C" },
+    { id: "nodes",    label: "Nodes",    icon: Boxes,       group: "MESH",      path: "/nodes",    glyph: "N" },
+    { id: "players",  label: "Players",  icon: Users,       group: "PEOPLE",    path: "/players",  glyph: "P" },
+    { id: "events",   label: "Events",   icon: List,        group: "TELEMETRY", path: "/events",   glyph: "E" },
+    { id: "audit",    label: "Audit",    icon: ShieldCheck, group: "TELEMETRY", path: "/audit",    glyph: "A" },
+    { id: "logs",     label: "Logs",     icon: Scroll,      group: "TELEMETRY", path: "/logs",     glyph: "L" },
+    { id: "settings", label: "Settings", icon: Settings,    group: "CONFIG",    path: "/settings", glyph: "S" },
   ];
 
   let panels = $derived<PanelDef[]>(panelsStore.value ?? []);
 
-  // Merge game-registered panels (those NOT already represented by a
-  // builtin path) under their declared group, upper-cased to match the
-  // builtin group convention.
+  // Merge game-registered panels under their declared group (upper-cased
+  // to match the builtin group convention). Glyph auto-derived from the
+  // first letter of the label.
   let items = $derived.by<Item[]>(() => {
     const builtinPaths = new Set(builtinItems.map((b) => b.path));
     const extras: Item[] = [];
@@ -975,6 +988,7 @@ Replace the existing top-of-file imports + state with:
         icon: iconFor(p.icon),
         group: (p.group || "PANELS").toUpperCase(),
         path,
+        glyph: (p.label[0] ?? "?").toUpperCase(),
       });
     }
     return [...builtinItems, ...extras];
@@ -986,8 +1000,7 @@ Replace the existing top-of-file imports + state with:
     return off;
   });
 
-  // Group items by group, preserving insertion order. Same algorithm as
-  // before — it works for the dynamic list too.
+  // Group items by group, preserving insertion order.
   let groups = $derived.by<{ name: string; items: Item[] }[]>(() => {
     const out: { name: string; items: Item[] }[] = [];
     for (const it of items) {
@@ -997,12 +1010,25 @@ Replace the existing top-of-file imports + state with:
     }
     return out;
   });
+
+  // Current YYYY-MM-DD HH:MM:SS for the rail footer — "ops console clock".
+  let now = $state(formatNow());
+  $effect(() => {
+    const i = window.setInterval(() => (now = formatNow()), 1000);
+    return () => window.clearInterval(i);
+  });
+
+  function formatNow(): string {
+    const d = new Date();
+    const pad = (n: number) => n.toString().padStart(2, "0");
+    return `${d.getFullYear()}.${pad(d.getMonth() + 1)}.${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+  }
 </script>
 ```
 
-(Keep the markup section below the script unchanged — it already iterates `groups`.)
+Leave the markup below the script untouched — it iterates `groups` already and will pick up the merged items automatically.
 
-- [ ] **Step 3: Typecheck**
+- [ ] **Step 4: Typecheck**
 
 ```bash
 cd web-admin && bun run typecheck
@@ -1010,7 +1036,7 @@ cd web-admin && bun run typecheck
 
 0 errors.
 
-- [ ] **Step 4: Commit**
+- [ ] **Step 5: Commit**
 
 ```bash
 cd .
@@ -1032,9 +1058,11 @@ EOF
 
 Fetch `/admin/api/panels` at boot to populate `panelsStore`. Add a route branch that renders `PanelHost` for any `/panel/<id>` path.
 
+**Note:** the `Performance` route was recently removed — `/performance` now falls into the `Cluster` branch via `path === "/cluster" || path === "/performance"`. Don't try to insert next to a `Performance` import; it doesn't exist.
+
 - [ ] **Step 1: Add imports**
 
-In `web-admin/src/app.svelte`, alongside the existing imports:
+In `web-admin/src/app.svelte`, add to the top-of-file import block (alongside existing route imports):
 
 ```svelte
 import { panelsStore } from "$lib/stores.svelte";
@@ -1044,7 +1072,7 @@ import PanelHost from "./components/PanelHost.svelte";
 
 - [ ] **Step 2: Hydrate panelsStore inside hydrateCluster()**
 
-Find `async function hydrateCluster()`. Add a parallel fetch alongside the existing `apiGet<ClusterInfo>("/admin/api/cluster")` call:
+Replace the body of `async function hydrateCluster()` with a parallel fetch:
 
 ```ts
 async function hydrateCluster() {
@@ -1058,6 +1086,9 @@ async function hydrateCluster() {
   } catch {
     // 401 etc. — auth gate redirects to login
   }
+  // Subscribe to topics: cells (per-cell snapshots), alerts (invariant violations).
+  // Each panel that needs live data subscribes itself; this keeps the global
+  // stream alive while the user is logged in.
   stream.subscribe("cells", () => {
     // CellMap reads cellsStore directly via its own subscription.
   });
@@ -1066,7 +1097,7 @@ async function hydrateCluster() {
 
 - [ ] **Step 3: Add the `/panel/<id>` route branch**
 
-Find the `{:else if path === "/settings"}` branch. Add immediately after it (before the fallback):
+Find the `{:else if path === "/settings"}` branch. Add immediately after it (before the `{:else}` fallback):
 
 ```svelte
 {:else if path.startsWith("/panel/")}
@@ -1075,8 +1106,8 @@ Find the `{:else if path === "/settings"}` branch. Add immediately after it (bef
   {#if def}
     <PanelHost panel={def} />
   {:else}
-    <div class="p-8 text-slate-500">
-      Panel <code>{id}</code> not registered.
+    <div class="p-8 text-[var(--text-dim)] font-mono text-[12px]">
+      Panel <code class="text-phosphor-300">{id}</code> not registered.
     </div>
   {/if}
 ```
@@ -1294,13 +1325,14 @@ just dev   # rebuilds admin SPA + 4node-basic binary, starts vite + server
 
 Browse to `http://localhost:9101/admin/`, log in as `josh / localdev`.
 
-1. **Sidebar shows the Bots entry** under a new "GAME" group, with the Bot icon.
-2. Click → URL becomes `/panel/bots`. Panel header reads "Bots". Toolbar has 3 buttons: `bot.spawn`, `bot.clear`, `bot.list`.
+1. **Sidebar shows the Bots entry** under a new "GAME" group (between TELEMETRY and CONFIG, ordering depends on registration time), with the Bot icon + glyph "B".
+2. Click → URL becomes `/panel/bots`. Panel header reads "Bots" in phosphor-300. Toolbar has 3 buttons: `bot.spawn`, `bot.clear`, `bot.list`.
 3. Empty table initially (no bots spawned). The "Waiting for topic…" placeholder disappears within ~1s — first publish lands and the table shows one row per cell with `count: 0`.
 4. From the server console: `bot spawn 30 cell_0_0`. Within 1s the table updates: `cell_0_0 | 30`. Other cells stay at 0.
-5. Click the `bot.spawn` toolbar button → ArgsModal opens asking for `count` (int) and `cellID` (string). Submit with `count: 10`, `cellID: cell_0_3`. Toast: ok. Table shows `cell_0_3 | 10`.
+5. Click the `bot.spawn` toolbar button → ArgsModal opens asking for `count` (int32) and `cellID` (string). Submit with `count: 10`, `cellID: cell_0_3`. Toast: ok. Table shows `cell_0_3 | 10`.
 6. Click `bot.clear` → no modal (zero-arg). Toast: ok. Table rows go to `count: 0`.
 7. Click `bot.list` → no modal (zero-arg). Toast: ok with the verb's result (best-effort — the table is the live view).
+8. **Visual consistency:** the panel header, toolbar buttons, table, and modal use the same phosphor / `--text-*` colors as Cluster and other builtin panels. No stray slate-300 / accent-300 from the old theme.
 
 - [ ] **Step 3: Failure modes**
 
