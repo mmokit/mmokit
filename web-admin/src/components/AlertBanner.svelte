@@ -16,14 +16,20 @@
 </script>
 
 {#each visible as a (key(a.seqNo, a.commitId))}
-  <div class="flex items-center gap-2 bg-rose-900/30 border border-rose-700/40 text-rose-200 px-3 py-1.5 rounded text-[11.5px]">
-    <AlertTriangle class="w-3.5 h-3.5 shrink-0" />
-    <span class="grow">
-      {a.scenario}/{a.step} — {a.error || "invariant violation"}
+  <div
+    class="flex items-center gap-2 bg-ember-400/[0.06] border border-ember-400/30 text-ember-300 px-3 py-1 rounded font-mono text-[10.5px] tracking-tight"
+  >
+    <AlertTriangle class="w-3 h-3 shrink-0 text-ember-400" />
+    <span class="text-[var(--text-dim)] uppercase tracking-[0.12em]">violation</span>
+    <span class="text-ember-200">
+      {a.scenario}<span class="text-ember-400/50 mx-0.5">/</span>{a.step}
     </span>
+    {#if a.error}
+      <span class="text-[var(--text-default)]">— {a.error}</span>
+    {/if}
     <button
       type="button"
-      class="opacity-60 hover:opacity-100"
+      class="opacity-60 hover:opacity-100 ml-1"
       aria-label="Dismiss"
       onclick={() => {
         dismissed = new Set([...dismissed, key(a.seqNo, a.commitId)]);

@@ -1,31 +1,103 @@
 @import "tailwindcss";
 
-/* Tailwind v4 reads its theme from CSS, not tailwind.config.ts. The legacy
- * config file is ignored — declare custom colors here so utilities like
- * bg-accent-400 / text-accent-300 register. */
+/* Tailwind v4 reads its theme from CSS. Declare custom palette + font tokens
+ * here so utilities like bg-phosphor/15, text-amber-400, font-mono register.
+ *
+ * Aesthetic: "Mission Control / Operations Console" — phosphor terminal hues
+ * on cosmic void backgrounds. Built for a 2D space MMO server mesh; the
+ * cells view reads as a tactical display, not a generic admin table.
+ */
 @theme {
-  --color-accent-50: #ecfeff;
-  --color-accent-200: #a5f3fc;
-  --color-accent-300: #7dd3fc;
-  --color-accent-400: #38bdf8;
-  --color-accent-500: #0ea5e9;
+  --font-sans: "Geist", ui-sans-serif, system-ui, -apple-system, sans-serif;
+  --font-mono:
+    "JetBrains Mono", ui-monospace, "SF Mono", "Cascadia Code", monospace;
+
+  /* Phosphor (primary): cyan-teal — used for active selection, live signals,
+   * the brand mark. Saturated enough to read against deep voids. */
+  --color-phosphor-50: #ecfffe;
+  --color-phosphor-100: #cffafd;
+  --color-phosphor-200: #a5f3f7;
+  --color-phosphor-300: #67e8ee;
+  --color-phosphor-400: #22d3da;
+  --color-phosphor-500: #06b6c4;
+  --color-phosphor-600: #0891a3;
+  --color-phosphor-700: #0e7a87;
+
+  /* Amber: warnings, mid-load, advisory. */
+  --color-amber-300: #fcd34d;
+  --color-amber-400: #fbbf24;
+  --color-amber-500: #f59e0b;
+
+  /* Plasma: emphasis, splits, highlights — never used for "live" states. */
+  --color-plasma-300: #f9a8d4;
+  --color-plasma-400: #f472b6;
+  --color-plasma-500: #ec4899;
+
+  /* Lime: healthy state, OK badges. */
+  --color-lime-300: #bef264;
+  --color-lime-400: #a3e635;
+  --color-lime-500: #84cc16;
+
+  /* Ember: critical, dead-host, invariant violations. */
+  --color-ember-300: #fda4af;
+  --color-ember-400: #fb7185;
+  --color-ember-500: #f43f5e;
+
+  /* Void: backgrounds. */
+  --color-void-950: #04060b;
+  --color-void-900: #060912;
+  --color-void-800: #0a0e1a;
+  --color-void-700: #0f1422;
+  --color-void-600: #141a2a;
+  --color-void-500: #1c2238;
+
+  /* Steel: borders, dividers, dim chrome. */
+  --color-steel-100: #e2e8f4;
+  --color-steel-200: #cbd5e7;
+  --color-steel-300: #94a3bd;
+  --color-steel-400: #64758b;
+  --color-steel-500: #475569;
+  --color-steel-600: #334155;
+  --color-steel-700: #1e293b;
+
+  /* Legacy accent aliases (existing components reference accent-300/400/500). */
+  --color-accent-300: #67e8ee;
+  --color-accent-400: #22d3da;
+  --color-accent-500: #06b6c4;
 }
 
-/* Design tokens — referenced by Svelte components via CSS custom properties. */
+/* Design tokens — referenced via CSS custom properties (canvas drawing, etc.) */
 :root {
-  --color-bg: #0a0e14;
-  --color-surface: #0d1117;
-  --color-border: rgba(255, 255, 255, 0.08);
-  --color-text: #cbd5e1;
-  --color-muted: #94a3b8;
-  --color-accent: #7dd3fc;
+  --bg-void: #04060b;
+  --bg-deep: #07090f;
+  --bg-surface: #0a0d16;
+  --bg-elevated: #0f1422;
+  --bg-card: #11172a;
 
-  /* Cell-load color scale (green → yellow → red), used by CellMap. */
-  --load-0: #22c55e;
-  --load-1: #84cc16;
-  --load-2: #facc15;
-  --load-3: #f97316;
-  --load-4: #ef4444;
+  --border-faint: rgba(148, 163, 189, 0.06);
+  --border-subtle: rgba(148, 163, 189, 0.12);
+  --border-bright: rgba(148, 163, 189, 0.22);
+  --border-phosphor: rgba(34, 211, 218, 0.45);
+
+  --text-bright: #e8edf7;
+  --text-default: #b8c1d4;
+  --text-muted: #6b7488;
+  --text-dim: #4a5366;
+
+  --phosphor: #22d3da;
+  --phosphor-soft: #67e8ee;
+  --phosphor-glow: rgba(34, 211, 218, 0.55);
+  --amber: #fbbf24;
+  --plasma: #f472b6;
+  --lime: #a3e635;
+  --ember: #fb7185;
+
+  /* Cell-load color scale (lime → amber → ember). Read by canvas code. */
+  --load-0: #a3e635;
+  --load-1: #d4d63a;
+  --load-2: #fbbf24;
+  --load-3: #fb923c;
+  --load-4: #fb7185;
 }
 
 html,
@@ -35,10 +107,65 @@ body,
   margin: 0;
 }
 
-body {
-  font-feature-settings: "cv11", "ss01";
+html {
+  background: var(--bg-void);
+  color: var(--text-default);
+  font-family: var(--font-sans);
+  /* Tabular figures keep numeric columns aligned across the dashboard. */
+  font-variant-numeric: tabular-nums;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
+body {
+  background:
+    /* concentric vignette to draw the eye toward the cluster center */
+    radial-gradient(
+      ellipse 80% 60% at 50% 40%,
+      rgba(34, 211, 218, 0.04) 0%,
+      transparent 70%
+    ),
+    /* faint cosmic noise via layered radial points */
+      radial-gradient(
+        circle at 15% 22%,
+        rgba(244, 114, 182, 0.04) 0,
+        transparent 35%
+      ),
+    radial-gradient(
+      circle at 82% 78%,
+      rgba(163, 230, 53, 0.025) 0,
+      transparent 40%
+    ),
+    var(--bg-void);
+  color: var(--text-default);
+}
+
+/* Subtle global grid overlay — gives the whole UI a "graph paper" base layer
+ * that contextualizes the cell map. Fixed-position so it never scrolls. */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  background-image:
+    linear-gradient(rgba(148, 163, 189, 0.04) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(148, 163, 189, 0.04) 1px, transparent 1px);
+  background-size: 32px 32px;
+  background-position: -1px -1px;
+  mask-image: radial-gradient(
+    ellipse 90% 80% at 50% 50%,
+    black 30%,
+    transparent 90%
+  );
+}
+
+#app {
+  position: relative;
+  z-index: 1;
+}
+
+/* Custom scrollbar — minimal, phosphor accent on hover. */
 *::-webkit-scrollbar {
   width: 10px;
   height: 10px;
@@ -47,9 +174,243 @@ body {
   background: transparent;
 }
 *::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.1);
-  border-radius: 5px;
+  background: rgba(148, 163, 189, 0.08);
+  border-radius: 6px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
 }
 *::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.18);
+  background: rgba(103, 232, 238, 0.25);
+  background-clip: padding-box;
+}
+
+/* Selection — phosphor not blue */
+::selection {
+  background: rgba(34, 211, 218, 0.3);
+  color: var(--text-bright);
+}
+
+/* === Reusable atomic classes (use sparingly, prefer Tailwind utilities). === */
+
+/* Section eyebrow — small caps, generous letterspacing, phosphor tint */
+.eyebrow {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  font-weight: 500;
+  color: var(--phosphor-soft);
+}
+
+/* "Stat" label inside cards — quieter than eyebrow */
+.stat-label {
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+/* "Stat" value — large mono, bright */
+.stat-value {
+  font-family: var(--font-mono);
+  font-weight: 500;
+  font-feature-settings: "tnum" on, "zero" on;
+  color: var(--text-bright);
+}
+
+/* Surface cards — base, no border by default, with optional glow variant */
+.surface {
+  background: linear-gradient(
+    180deg,
+    var(--bg-elevated) 0%,
+    var(--bg-surface) 100%
+  );
+  border: 1px solid var(--border-subtle);
+  border-radius: 6px;
+}
+
+.surface-phosphor {
+  background:
+    linear-gradient(
+      180deg,
+      rgba(34, 211, 218, 0.04) 0%,
+      rgba(34, 211, 218, 0.01) 100%
+    ),
+    linear-gradient(
+      180deg,
+      var(--bg-elevated) 0%,
+      var(--bg-surface) 100%
+    );
+  border: 1px solid var(--border-phosphor);
+  border-radius: 6px;
+  box-shadow:
+    0 0 0 1px rgba(34, 211, 218, 0.06) inset,
+    0 8px 24px -12px rgba(34, 211, 218, 0.25);
+}
+
+/* Phosphor pulsing dot — used in TopBar status indicator */
+.phosphor-pulse {
+  position: relative;
+}
+.phosphor-pulse::after {
+  content: "";
+  position: absolute;
+  inset: -3px;
+  border-radius: 999px;
+  border: 1px solid var(--phosphor);
+  opacity: 0;
+  animation: phosphor-ring 2.4s ease-out infinite;
+}
+@keyframes phosphor-ring {
+  0% {
+    transform: scale(0.6);
+    opacity: 0.7;
+  }
+  100% {
+    transform: scale(2);
+    opacity: 0;
+  }
+}
+
+/* Live signal — slow breathing for "all systems nominal" badges */
+@keyframes breathe {
+  0%,
+  100% {
+    opacity: 0.8;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+.breathe {
+  animation: breathe 3.5s ease-in-out infinite;
+}
+
+/* Page enter — fades + slides up on route mount */
+@keyframes page-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.page-in {
+  animation: page-in 280ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+/* Stagger helper — for sequenced reveals */
+.stagger > * {
+  animation: page-in 320ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+.stagger > *:nth-child(1) {
+  animation-delay: 0ms;
+}
+.stagger > *:nth-child(2) {
+  animation-delay: 40ms;
+}
+.stagger > *:nth-child(3) {
+  animation-delay: 80ms;
+}
+.stagger > *:nth-child(4) {
+  animation-delay: 120ms;
+}
+.stagger > *:nth-child(5) {
+  animation-delay: 160ms;
+}
+.stagger > *:nth-child(6) {
+  animation-delay: 200ms;
+}
+
+/* Diagonal stripe pattern — used for "busy/loading" placeholders */
+.stripe {
+  background-image: repeating-linear-gradient(
+    45deg,
+    rgba(148, 163, 189, 0.04) 0 6px,
+    transparent 6px 12px
+  );
+}
+
+/* Inputs — used by login + drawer prompts */
+.field {
+  background: rgba(4, 6, 11, 0.6);
+  border: 1px solid var(--border-subtle);
+  border-radius: 4px;
+  padding: 8px 10px;
+  color: var(--text-bright);
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  letter-spacing: 0.01em;
+  transition: border-color 120ms ease, background 120ms ease;
+}
+.field:focus {
+  outline: none;
+  border-color: var(--phosphor);
+  background: rgba(34, 211, 218, 0.04);
+}
+
+/* Primary button — phosphor */
+.btn-phosphor {
+  background: linear-gradient(180deg, #22d3da 0%, #06b6c4 100%);
+  color: #04060b;
+  font-family: var(--font-mono);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  font-size: 11.5px;
+  padding: 7px 14px;
+  border-radius: 4px;
+  border: 1px solid rgba(34, 211, 218, 0.5);
+  box-shadow: 0 0 16px -4px rgba(34, 211, 218, 0.5);
+  transition: transform 80ms ease, box-shadow 160ms ease;
+}
+.btn-phosphor:hover {
+  box-shadow: 0 0 24px -2px rgba(34, 211, 218, 0.65);
+}
+.btn-phosphor:active {
+  transform: translateY(1px);
+}
+.btn-phosphor:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+/* Ghost button — outline */
+.btn-ghost {
+  background: rgba(148, 163, 189, 0.04);
+  color: var(--text-default);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  padding: 5px 10px;
+  border-radius: 4px;
+  border: 1px solid var(--border-subtle);
+  transition: border-color 120ms ease, background 120ms ease;
+}
+.btn-ghost:hover {
+  background: rgba(34, 211, 218, 0.06);
+  border-color: var(--border-bright);
+  color: var(--text-bright);
+}
+.btn-ghost:active {
+  transform: translateY(1px);
+}
+
+/* Badge — small status pill */
+.badge {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 2px 6px;
+  border-radius: 3px;
+  border: 1px solid currentColor;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  line-height: 1.4;
 }
