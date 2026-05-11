@@ -130,6 +130,13 @@ func NewServer(opts ServerOpts) *Server {
 	if opts.Panels != nil {
 		_ = RegisterBuiltinPanels(opts.Panels)
 	}
+	if opts.Registry != nil && opts.Logger != nil {
+		if err := RegisterLogCommands(opts.Registry, opts.Logger); err != nil {
+			// Best-effort: a shared registry may already have log.set
+			// from a prior NewServer. Logging the failure is enough.
+			opts.Logger.Log("admin", "RegisterLogCommands: %v", err)
+		}
+	}
 	return s
 }
 
