@@ -9,13 +9,15 @@ import (
 	"github.com/zenion/mmoserver/pkg/mmokit"
 )
 
-// TargetLockSystem manages EVE-style lock-on targeting.
+// TargetLockSystem ticks per-slot lock progress and prunes invalid
+// slots (target dead / out of AoI / out of range / dormant / leashing).
+// Lock acquisition/release is handled by input_handlers (LockTarget /
+// UnlockTarget). This system only advances + validates state.
 type TargetLockSystem struct {
 	mmokit.SystemBase
 	gw       *GameWorld
 	entities mmokit.Query[struct {
-		Input *gamecomp.PlayerInput
-		Lock  *gamecomp.TargetLock
+		Lock *gamecomp.TargetLock
 	}]
 }
 
@@ -25,119 +27,105 @@ func (s *TargetLockSystem) Init() {
 
 func (s *TargetLockSystem) Update(dt float32) {
 	gw := s.gw
-
 	for e, b := range s.entities.Iter {
-		input, lock := b.Input, b.Lock
-
-		// Player cleared target or set to 0
-		if input.LockTargetNetID == 0 {
-			if lock.TargetNetID != 0 {
-				gw.eng.Log.Log(CatCombatLock, "lock: player cleared lock (was targetting %d)", lock.TargetNetID)
-			}
-			s.breakLock(lock)
+		lock := b.Lock
+		owner := mmokit.EntityFromECS(gw.stage, e)
+		ownerPos := mmokit.Get[mmokit.Position](owner)
+		if ownerPos == nil {
+			// Owner has no Position — drop everything.
+			s.clearAll(lock)
 			continue
 		}
 
-		// Player switched targets
-		if input.LockTargetNetID != lock.TargetNetID {
-			gw.eng.Log.Log(CatCombatLock, "lock: new target netID=%d (was %d)", input.LockTargetNetID, lock.TargetNetID)
-			lock.TargetNetID = input.LockTargetNetID
-			lock.Progress = 0
-			lock.Locked = false
+		// Iterate in reverse so we can remove without shifting indices.
+		dirty := false
+		for i := len(lock.Slots) - 1; i >= 0; i-- {
+			slot := &lock.Slots[i]
+			drop := false
 
-			// Resolve net ID to entity
-			targetE := mmokit.EntityByNetID(gw.stage, input.LockTargetNetID)
+			// Re-resolve target after potential cell transfer.
+			targetE := mmokit.EntityFromECS(gw.stage, slot.TargetEntity)
 			if !targetE.Alive() {
-				gw.eng.Log.Log(CatCombatLock, "lock: BREAK - netID=%d not found in stage", input.LockTargetNetID)
-				s.breakLock(lock)
-				continue
-			}
-
-			// Dormant entities (e.g. docked players parked at a station) are
-			// not lockable — they're "inside" the station from a gameplay
-			// perspective and AoI replication doesn't broadcast them anyway.
-			if mmokit.Has[mmokit.Dormant](targetE) {
-				gw.eng.Log.Log(CatCombatLock, "lock: BREAK - target netID=%d is dormant", input.LockTargetNetID)
-				s.breakLock(lock)
-				continue
-			}
-
-			// Only lock onto ships, NPCs, and asteroids
-			if kindComp := mmokit.Get[mmokit.EntityKind](targetE); kindComp != nil {
-				kind := kindComp.Type
-				if kind != gamecomp.KindShip && kind != gamecomp.KindNPC && kind != gamecomp.KindAsteroid {
-					gw.eng.Log.Log(CatCombatLock, "lock: BREAK - target type %d not lockable", kind)
-					s.breakLock(lock)
-					continue
-				}
-				// Asteroids lock faster
-				if kind == gamecomp.KindAsteroid {
-					lock.LockTime = gw.Config.MiningLockTime
+				resolved := mmokit.EntityByNetID(gw.stage, slot.TargetNetID)
+				if resolved.Alive() {
+					slot.TargetEntity = resolved.Handle()
+					targetE = resolved
 				} else {
-					lock.LockTime = gw.Config.LockOnTime
+					drop = true
 				}
 			}
 
-			lock.TargetEntity = targetE.Handle()
-			gw.eng.Log.Log(CatCombatLock, "lock: started locking netID=%d", input.LockTargetNetID)
-		}
+			if !drop && mmokit.Has[mmokit.Dormant](targetE) {
+				drop = true
+			}
+			if !drop && mmokit.Has[gamecomp.Leashing](targetE) {
+				drop = true
+			}
 
-		// Validate lock target is still valid — re-resolve from NetID if needed (e.g. after cell transfer)
-		targetE := mmokit.EntityFromECS(gw.stage, lock.TargetEntity)
-		if !targetE.Alive() {
-			resolved := mmokit.EntityByNetID(gw.stage, lock.TargetNetID)
-			if resolved.Alive() {
-				lock.TargetEntity = resolved.Handle()
-				targetE = resolved
-				gw.eng.Log.Log(CatCombatLock, "lock: re-resolved netID=%d after transfer", lock.TargetNetID)
-			} else {
-				gw.eng.Log.Log(CatCombatLock, "lock: BREAK - target entity no longer alive (netID=%d)", lock.TargetNetID)
-				s.breakLock(lock)
+			if !drop {
+				tpos := mmokit.Get[mmokit.Position](targetE)
+				if tpos == nil {
+					drop = true
+				} else {
+					dx, dy := tpos.X-ownerPos.X, tpos.Y-ownerPos.Y
+					dist := float32(math.Sqrt(float64(dx*dx + dy*dy)))
+					if dist > lock.Range {
+						drop = true
+					}
+				}
+			}
+
+			if drop {
+				gw.eng.Log.Log(CatCombatLock, "lock: drop slot=%d owner=%d target=%d",
+					i, owner.NetID(), slot.TargetNetID)
+				droppedNetID := slot.TargetNetID
+				lock.Slots = append(lock.Slots[:i], lock.Slots[i+1:]...)
+				if lock.ActiveNetID == droppedNetID {
+					lock.ActiveNetID = 0 // re-resolved below
+				}
+				dirty = true
 				continue
 			}
-		}
 
-		// Target became Dormant mid-lock (e.g. enemy player just docked).
-		if mmokit.Has[mmokit.Dormant](targetE) {
-			gw.eng.Log.Log(CatCombatLock, "lock: BREAK - target netID=%d went dormant", lock.TargetNetID)
-			s.breakLock(lock)
-			continue
-		}
-
-		// Check range
-		casterE := mmokit.EntityFromECS(gw.stage, e)
-		pos := mmokit.Get[mmokit.Position](casterE)
-		targetPos := mmokit.Get[mmokit.Position](targetE)
-		if pos == nil || targetPos == nil {
-			gw.eng.Log.Log(CatCombatLock, "lock: BREAK - missing position component")
-			s.breakLock(lock)
-			continue
-		}
-		dx := targetPos.X - pos.X
-		dy := targetPos.Y - pos.Y
-		dist := float32(math.Sqrt(float64(dx*dx + dy*dy)))
-
-		if dist > lock.Range {
-			gw.eng.Log.Log(CatCombatLock, "lock: BREAK - out of range (dist=%.0f, max=%.0f)", dist, lock.Range)
-			s.breakLock(lock)
-			continue
-		}
-
-		// Tick lock progress
-		if !lock.Locked {
-			lock.Progress += dt / lock.LockTime
-			if lock.Progress >= 1.0 {
-				lock.Progress = 1.0
-				lock.Locked = true
-				gw.eng.Log.Log(CatCombatLock, "lock: LOCKED on netID=%d", lock.TargetNetID)
+			// Tick lock progress.
+			if !slot.Locked {
+				prevLocked := slot.Locked
+				slot.Progress += dt / slot.LockTime
+				if slot.Progress >= 1.0 {
+					slot.Progress = 1.0
+					slot.Locked = true
+					gw.eng.Log.Log(CatCombatLock, "lock: LOCKED owner=%d target=%d",
+						owner.NetID(), slot.TargetNetID)
+				}
+				if slot.Locked != prevLocked {
+					dirty = true
+					// First newly-locked slot becomes active when none set.
+					if lock.ActiveNetID == 0 {
+						lock.ActiveNetID = slot.TargetNetID
+					}
+				}
 			}
+		}
+
+		// If we dropped the active, fall back.
+		if lock.ActiveNetID == 0 && len(lock.Slots) > 0 {
+			lock.ActiveNetID = pickActiveFallback(lock)
+			if lock.ActiveNetID != 0 {
+				dirty = true
+			}
+		}
+
+		// Push update to owner if they're a player.
+		if dirty && mmokit.Has[mmokit.PlayerConn](owner) {
+			sendLockSlots(gw, owner)
 		}
 	}
 }
 
-func (s *TargetLockSystem) breakLock(lock *gamecomp.TargetLock) {
-	lock.TargetNetID = 0
-	lock.Progress = 0
-	lock.Locked = false
-	lock.TargetEntity = ecs.Entity{}
+func (s *TargetLockSystem) clearAll(lock *gamecomp.TargetLock) {
+	lock.Slots = lock.Slots[:0]
+	lock.ActiveNetID = 0
 }
+
+// Silence unused-import warning if ecs not yet referenced.
+var _ ecs.Entity

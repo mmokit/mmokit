@@ -7,6 +7,21 @@ import (
 	"github.com/zenion/mmoserver/pkg/mmokit"
 )
 
+// highestProgressSlot returns (targetNetID, progress) for the slot with
+// the highest progress. Locked slots (Progress=1) win over partial
+// progress; if no slots exist, returns (0, 0).
+func highestProgressSlot(lock *gamecomp.TargetLock) (uint32, float32) {
+	var bestNetID uint32
+	var bestProg float32
+	for _, s := range lock.Slots {
+		if s.Progress > bestProg {
+			bestProg = s.Progress
+			bestNetID = s.TargetNetID
+		}
+	}
+	return bestNetID, bestProg
+}
+
 // NetworkSystem wraps the generic ReplicationSystem with game-specific
 // lifecycle handling (reverse lock map, PlayerOwnState, auto-broadcast
 // typed events).
@@ -90,18 +105,24 @@ func (s *NetworkSystem) beforeTick(tick uint32) {
 	// — the cross-cell codec skips ecs.Entity fields, so on a border replica of
 	// the locker that handle is zero. NetID lookup gives the local entity in
 	// either case, which is what lets LockedBy populate over a cell line.
+	//
+	// With slot-based locks, walk every slot on every locker: each slot is an
+	// independent (locker → target) edge. A locker with N slots contributes N
+	// entries; per-target dedup keeps the highest-progress slot.
 	clear(s.ctx.lockedBy)
 	for _, b := range s.locks.Iter {
-		if b.Lock.TargetNetID == 0 || b.Lock.Progress <= 0 {
-			continue
-		}
-		targetE := mmokit.EntityByNetID(gw.stage, b.Lock.TargetNetID)
-		if !targetE.Alive() {
-			continue
-		}
-		target := targetE.Handle()
-		if existing, ok := s.ctx.lockedBy[target]; !ok || b.Lock.Progress > existing.progress {
-			s.ctx.lockedBy[target] = lockerInfo{netID: b.NetID.ID, progress: b.Lock.Progress}
+		for _, slot := range b.Lock.Slots {
+			if slot.TargetNetID == 0 || slot.Progress <= 0 {
+				continue
+			}
+			targetE := mmokit.EntityByNetID(gw.stage, slot.TargetNetID)
+			if !targetE.Alive() {
+				continue
+			}
+			target := targetE.Handle()
+			if existing, ok := s.ctx.lockedBy[target]; !ok || slot.Progress > existing.progress {
+				s.ctx.lockedBy[target] = lockerInfo{netID: b.NetID.ID, progress: slot.Progress}
+			}
 		}
 	}
 
@@ -188,10 +209,13 @@ func (s *NetworkSystem) sendOwnState(connID uint32, entity ecs.Entity) {
 
 	msg := &PlayerOwnState{}
 
-	// Lock-on state
+	// Lock-on state — surface the highest-progress slot. Preserves the
+	// single-target wire semantics that PlayerOwnState's HUD ring expects
+	// even though the underlying lock model is now multi-slot.
 	if lock := mmokit.Get[gamecomp.TargetLock](e); lock != nil {
-		msg.LockProgress = lock.Progress
-		msg.LockTargetID = lock.TargetNetID
+		netID, prog := highestProgressSlot(lock)
+		msg.LockProgress = prog
+		msg.LockTargetID = netID
 	}
 
 	// Ability cooldowns
