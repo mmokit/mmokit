@@ -352,6 +352,14 @@ func (s *StatusEffects) TickDown(dt float32) {
 	}
 }
 
+// Leashing marks an NPC currently returning to its anchor under the
+// leash mechanic. Leashing entities are invulnerable (ApplyDamage skips
+// them), untargetable (TargetLockSystem auto-drops any existing locks
+// and rejects new ones), and move at 2× speed toward their anchor.
+// Removed when the NPC reaches its anchor — at that point HP and Shield
+// are restored to Max and the NPC re-enters Idle.
+type Leashing struct{}
+
 // PilotName stores the player's display name for network replication.
 type PilotName struct {
 	Name string `net:"initial"`
