@@ -37,6 +37,36 @@ func adminPanelRegistry(c *universe.Process) *admin.PanelRegistry {
 	return r
 }
 
+// adminBusMap caches the *admin.TopicBus per *universe.Process so game-side
+// code can publish to admin topics before the admin Server is constructed.
+// DefaultAdminServerFactory pulls the same bus into ServerOpts so the
+// SSE multiplexer fans payloads out to subscribers.
+var (
+	adminBusMu  sync.Mutex
+	adminBusMap = map[*universe.Process]*admin.TopicBus{}
+)
+
+func adminBus(c *universe.Process) *admin.TopicBus {
+	adminBusMu.Lock()
+	defer adminBusMu.Unlock()
+	b, ok := adminBusMap[c]
+	if !ok {
+		b = admin.NewTopicBus(0)
+		adminBusMap[c] = b
+	}
+	return b
+}
+
+// PublishAdminTopic publishes payload on topic to the admin dashboard's
+// SSE multiplexer. Game-registered admin panels subscribe to topics by
+// name (PanelDef.Topics) — this is the matching push surface.
+//
+// No-op when no subscribers are listening. Safe to call from any
+// goroutine. The bus is per-Process so test fixtures get isolation.
+func PublishAdminTopic(coord *universe.Process, topic string, payload any) {
+	adminBus(coord).Publish(topic, payload)
+}
+
 // RegisterAdminPanel adds a game-defined panel to the dashboard sidebar. The
 // dashboard SPA reads /admin/api/panels at boot and renders any registered
 // panel reflectively from this metadata. Returns an error on duplicate IDs
@@ -76,6 +106,7 @@ func DefaultAdminServerFactory() func(*universe.Process) universe.AdminServer {
 			Dispatcher:   c.CmdDispatcher(),
 			SessionStore: admin.NewMemorySessionStore(),
 			Panels:       adminPanelRegistry(c),
+			Bus:          adminBus(c),
 			Logger:       c.Log,
 			Process:      c,
 			Config: admin.Config{
