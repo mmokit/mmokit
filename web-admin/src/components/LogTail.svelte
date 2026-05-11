@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount, tick } from "svelte";
+  import { onMount, tick, untrack } from "svelte";
   import { apiGet } from "$lib/api";
   import { stream } from "$lib/stream";
   import type { LogEntry } from "$lib/types";
@@ -64,13 +64,18 @@
   });
 
   // Publish the discovered host set upward so the logs page can render
-  // checkboxes. Recomputes when entries change; we just emit the latest
-  // sorted list — parent dedupes against its own state.
+  // checkboxes. Recomputes when entries change. The callback is wrapped
+  // in untrack() so any state reads inside the parent's onHostsChanged
+  // don't leak into THIS effect's dependency set — otherwise the parent
+  // updating discoveredHosts/selectedHosts would re-fire this effect
+  // and trigger an infinite reactive loop.
   $effect(() => {
-    if (!onHostsChanged) return;
+    const cb = onHostsChanged;
+    if (!cb) return;
     const seen = new Set<string>();
     for (const e of entries) seen.add(e.host);
-    onHostsChanged(Array.from(seen).sort());
+    const sorted = Array.from(seen).sort();
+    untrack(() => cb(sorted));
   });
 
   onMount(async () => {
