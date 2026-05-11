@@ -2,6 +2,7 @@ package mmokit
 
 import (
 	"sync"
+	"time"
 
 	"github.com/zenion/mmoserver/pkg/admin"
 	"github.com/zenion/mmoserver/pkg/universe"
@@ -57,6 +58,25 @@ func adminBus(c *universe.Process) *admin.TopicBus {
 	return b
 }
 
+// adminLogRingMap caches the *admin.LogRing per *universe.Process so the
+// in-process log pump and the remote-log callback both append to the
+// same ring (and the admin Server reads from that same ring).
+var (
+	adminLogRingMu  sync.Mutex
+	adminLogRingMap = map[*universe.Process]*admin.LogRing{}
+)
+
+func adminLogRing(c *universe.Process, cap int) *admin.LogRing {
+	adminLogRingMu.Lock()
+	defer adminLogRingMu.Unlock()
+	r, ok := adminLogRingMap[c]
+	if !ok {
+		r = admin.NewLogRing(cap)
+		adminLogRingMap[c] = r
+	}
+	return r
+}
+
 // PublishAdminTopic publishes payload on topic to the admin dashboard's
 // SSE multiplexer. Game-registered admin panels subscribe to topics by
 // name (PanelDef.Topics) — this is the matching push surface.
@@ -100,13 +120,16 @@ func DefaultAdminServerFactory() func(*universe.Process) universe.AdminServer {
 				Grants:       o.Grants,
 			})
 		}
-		return admin.NewServer(admin.ServerOpts{
+		ring := adminLogRing(c, 0)
+		bus := adminBus(c)
+		server := admin.NewServer(admin.ServerOpts{
 			View:         view,
 			Registry:     c.CmdRegistry(),
 			Dispatcher:   c.CmdDispatcher(),
 			SessionStore: admin.NewMemorySessionStore(),
 			Panels:       adminPanelRegistry(c),
-			Bus:          adminBus(c),
+			Bus:          bus,
+			LogRing:      ring,
 			Logger:       c.Log,
 			Process:      c,
 			Config: admin.Config{
@@ -118,5 +141,21 @@ func DefaultAdminServerFactory() func(*universe.Process) universe.AdminServer {
 				Operators:  ops,
 			},
 		})
+		// Bridge remote-host LogBatches into the same ring + bus that
+		// the in-process logPump feeds — so the admin /logs SSE topic
+		// surfaces local + remote lines uniformly.
+		c.OnRemoteLogBatch(func(entries []universe.RemoteLogEntry) {
+			for _, e := range entries {
+				le := admin.LogEntry{
+					Host: e.HostID,
+					Cat:  e.Cat,
+					Msg:  e.Msg,
+					T:    time.UnixMilli(e.TimeMs),
+				}
+				ring.Append(le)
+				bus.Publish("logs", le)
+			}
+		})
+		return server
 	}
 }

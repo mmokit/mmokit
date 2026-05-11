@@ -1902,6 +1902,13 @@ func (c *Process) buildRemoteHost() {
 	// forever; operators can Ctrl+C to stop.
 	_ = c.controlClient.Start(context.Background())
 
+	// Forward every Log() emission to the coordinator over MeshControl
+	// so the admin /logs view surfaces remote-host lines alongside
+	// coord-local ones. Drops on burst; never blocks the game loop.
+	forwarder := newMeshLogForwarder(c.controlClient.send)
+	c.Log.AddHook(forwarder)
+	go forwarder.Run(context.Background())
+
 	host.netIDAlloc = c.netIDAlloc
 	host.systemDefs = c.systemDefs
 	host.executor = c.hostExecutors[hostID]
