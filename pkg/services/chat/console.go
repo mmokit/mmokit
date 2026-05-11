@@ -429,31 +429,42 @@ func cmdCtx() (context.Context, context.CancelFunc) {
 	return context.WithTimeout(context.Background(), 10*time.Second)
 }
 
-// resolveOperatorConn looks up the cmdsys caller's user_id in the chat
-// service's online map and returns their connID. Console moderation
-// commands require the operator to be online (logged in to the game),
-// since the underlying Handle* methods resolve callerID from connID via
-// connIndex. Returns an error string the operator can act on.
+// operatorOpContext builds the *ops.OpContext that console moderation
+// wrappers pass into chat Handle* methods. Two paths:
 //
-// The caller's user_id is parsed from env.Caller.ID (cmdsys.Caller.ID is
-// set to the operator's UUID string when authenticated via the auth
-// service).
+//   - Bare interactive console (cmdsys.SourceConsole, sentinel ID like
+//     "console" that doesn't parse as a UUID): returns SystemTrusted=true.
+//     Authorization came from the cmdsys grant check upstream; chat
+//     handlers see callerID == SystemCallerID and bypass connIndex /
+//     hasGlobalAdmin checks.
 //
-// Note: read-only commands (list, info) do not require operator-online —
-// they don't dispatch through Handle* methods.
-func resolveOperatorConn(svc *Service, env *cmdsys.Env) (uint32, uuid.UUID, error) {
+//   - Authenticated operator (cmdsys caller carries a real UUID, e.g.
+//     from MeshControl or test fixtures): looks the operator up in
+//     chat's online map and pins opCtx.ConnID so the handler can
+//     resolve callerID via connIndex and re-check hasGlobalAdmin
+//     (defense in depth). Errors when the operator isn't online.
+//
+// Read-only commands (list, info) don't dispatch through Handle*
+// methods and skip this helper entirely.
+func operatorOpContext(svc *Service, env *cmdsys.Env) (*ops.OpContext, uuid.UUID, error) {
 	if env == nil || env.Caller.ID == "" {
-		return 0, uuid.Nil, errors.New("no operator identity in env (caller ID missing)")
+		return nil, uuid.Nil, errors.New("no operator identity in env (caller ID missing)")
 	}
 	operatorID, err := uuid.Parse(env.Caller.ID)
 	if err != nil {
-		return 0, uuid.Nil, fmt.Errorf("invalid operator user_id %q: %w", env.Caller.ID, err)
+		// Non-UUID caller ID is only legitimate for the bare interactive
+		// console (env.Caller.ID == "console"). Trust comes from cmdsys
+		// grants, not chat-side identity.
+		if env.Caller.Source == cmdsys.SourceConsole {
+			return &ops.OpContext{SystemTrusted: true}, uuid.Nil, nil
+		}
+		return nil, uuid.Nil, fmt.Errorf("invalid operator user_id %q: %w", env.Caller.ID, err)
 	}
 	connID, online := svc.OnlineConnIDForUser(operatorID)
 	if !online {
-		return 0, uuid.Nil, errors.New("operator must be logged into the game to use chat console moderation commands")
+		return nil, uuid.Nil, errors.New("operator must be logged into the game to use chat console moderation commands")
 	}
-	return connID, operatorID, nil
+	return &ops.OpContext{ConnID: connID}, operatorID, nil
 }
 
 // resolveChannelBySlug translates a slug to a channelID + Channel snapshot.
@@ -589,11 +600,11 @@ func channelAddMemberHandler(getSvc ServiceProvider, getAuth auth.RepoProvider) 
 		if err != nil {
 			return nil, err
 		}
-		connID, _, err := resolveOperatorConn(svc, env)
+		opCtx, _, err := operatorOpContext(svc, env)
 		if err != nil {
 			return nil, err
 		}
-		resp, _ := svc.HandleAddMember(&ops.OpContext{ConnID: connID}, &ChatAddMemberRequest{
+		resp, _ := svc.HandleAddMember(opCtx, &ChatAddMemberRequest{
 			ChannelID: chID.String(),
 			UserID:    target.UserID.String(),
 			Role:      args.Role,
@@ -634,11 +645,11 @@ func channelRemoveMemberHandler(getSvc ServiceProvider, getAuth auth.RepoProvide
 		if err != nil {
 			return nil, err
 		}
-		connID, _, err := resolveOperatorConn(svc, env)
+		opCtx, _, err := operatorOpContext(svc, env)
 		if err != nil {
 			return nil, err
 		}
-		resp, _ := svc.HandleRemoveMember(&ops.OpContext{ConnID: connID}, &ChatRemoveMemberRequest{
+		resp, _ := svc.HandleRemoveMember(opCtx, &ChatRemoveMemberRequest{
 			ChannelID: chID.String(),
 			UserID:    target.UserID.String(),
 		})
@@ -691,11 +702,11 @@ func userMuteHandler(getSvc ServiceProvider, getAuth auth.RepoProvider) cmdsys.H
 		} else {
 			scope = "globally"
 		}
-		connID, _, err := resolveOperatorConn(svc, env)
+		opCtx, _, err := operatorOpContext(svc, env)
 		if err != nil {
 			return nil, err
 		}
-		resp, _ := svc.HandleMuteUser(&ops.OpContext{ConnID: connID}, &ChatMuteUserRequest{
+		resp, _ := svc.HandleMuteUser(opCtx, &ChatMuteUserRequest{
 			UserID:     target.UserID.String(),
 			ChannelID:  chIDStr,
 			DurationMs: dur.Milliseconds(),
@@ -740,11 +751,11 @@ func userUnmuteHandler(getSvc ServiceProvider, getAuth auth.RepoProvider) cmdsys
 		} else {
 			scope = "globally"
 		}
-		connID, _, err := resolveOperatorConn(svc, env)
+		opCtx, _, err := operatorOpContext(svc, env)
 		if err != nil {
 			return nil, err
 		}
-		resp, _ := svc.HandleUnmuteUser(&ops.OpContext{ConnID: connID}, &ChatUnmuteUserRequest{
+		resp, _ := svc.HandleUnmuteUser(opCtx, &ChatUnmuteUserRequest{
 			UserID:    target.UserID.String(),
 			ChannelID: chIDStr,
 		})
@@ -780,11 +791,11 @@ func userKickHandler(getSvc ServiceProvider, getAuth auth.RepoProvider) cmdsys.H
 		if err != nil {
 			return nil, err
 		}
-		connID, _, err := resolveOperatorConn(svc, env)
+		opCtx, _, err := operatorOpContext(svc, env)
 		if err != nil {
 			return nil, err
 		}
-		resp, _ := svc.HandleKickFromChannel(&ops.OpContext{ConnID: connID}, &ChatKickRequest{
+		resp, _ := svc.HandleKickFromChannel(opCtx, &ChatKickRequest{
 			ChannelID: chID.String(),
 			UserID:    target.UserID.String(),
 		})
@@ -827,11 +838,11 @@ func userBanHandler(getSvc ServiceProvider, getAuth auth.RepoProvider) cmdsys.Ha
 		if err != nil {
 			return nil, err
 		}
-		connID, _, err := resolveOperatorConn(svc, env)
+		opCtx, _, err := operatorOpContext(svc, env)
 		if err != nil {
 			return nil, err
 		}
-		resp, _ := svc.HandleBanFromChannel(&ops.OpContext{ConnID: connID}, &ChatBanRequest{
+		resp, _ := svc.HandleBanFromChannel(opCtx, &ChatBanRequest{
 			ChannelID:  chID.String(),
 			UserID:     target.UserID.String(),
 			DurationMs: dur.Milliseconds(),
@@ -868,11 +879,11 @@ func userUnbanHandler(getSvc ServiceProvider, getAuth auth.RepoProvider) cmdsys.
 		if err != nil {
 			return nil, err
 		}
-		connID, _, err := resolveOperatorConn(svc, env)
+		opCtx, _, err := operatorOpContext(svc, env)
 		if err != nil {
 			return nil, err
 		}
-		resp, _ := svc.HandleUnbanFromChannel(&ops.OpContext{ConnID: connID}, &ChatUnbanRequest{
+		resp, _ := svc.HandleUnbanFromChannel(opCtx, &ChatUnbanRequest{
 			ChannelID: chID.String(),
 			UserID:    target.UserID.String(),
 		})
@@ -900,11 +911,11 @@ func broadcastHandler(getSvc ServiceProvider) cmdsys.HandlerFunc {
 		if err != nil {
 			return nil, err
 		}
-		connID, _, err := resolveOperatorConn(svc, env)
+		opCtx, _, err := operatorOpContext(svc, env)
 		if err != nil {
 			return nil, err
 		}
-		resp, _ := svc.HandleBroadcastSystem(&ops.OpContext{ConnID: connID}, &ChatBroadcastRequest{
+		resp, _ := svc.HandleBroadcastSystem(opCtx, &ChatBroadcastRequest{
 			ChannelID: chID.String(),
 			Body:      args.Body,
 		})
@@ -929,11 +940,11 @@ func msgDeleteHandler(getSvc ServiceProvider) cmdsys.HandlerFunc {
 		if err != nil {
 			return nil, err
 		}
-		connID, _, err := resolveOperatorConn(svc, env)
+		opCtx, _, err := operatorOpContext(svc, env)
 		if err != nil {
 			return nil, err
 		}
-		resp, _ := svc.HandleDeleteMessage(&ops.OpContext{ConnID: connID}, &ChatDeleteMessageRequest{
+		resp, _ := svc.HandleDeleteMessage(opCtx, &ChatDeleteMessageRequest{
 			MsgID:     args.MsgID,
 			ChannelID: chID.String(),
 		})
@@ -963,11 +974,11 @@ func channelCreateHandler(getSvc ServiceProvider) cmdsys.HandlerFunc {
 		if kind == ChannelKindCustom {
 			return nil, errors.New("custom channels are user-owned; use the in-game create op, not console")
 		}
-		connID, _, err := resolveOperatorConn(svc, env)
+		opCtx, _, err := operatorOpContext(svc, env)
 		if err != nil {
 			return nil, err
 		}
-		resp, _ := svc.HandleRegisterChannel(&ops.OpContext{ConnID: connID}, &ChatRegisterChannelRequest{
+		resp, _ := svc.HandleRegisterChannel(opCtx, &ChatRegisterChannelRequest{
 			Slug:  args.Slug,
 			Kind:  kind,
 			Topic: args.Topic,
@@ -993,11 +1004,11 @@ func channelDeleteHandler(getSvc ServiceProvider) cmdsys.HandlerFunc {
 		if err != nil {
 			return nil, err
 		}
-		connID, _, err := resolveOperatorConn(svc, env)
+		opCtx, _, err := operatorOpContext(svc, env)
 		if err != nil {
 			return nil, err
 		}
-		resp, _ := svc.HandleUnregisterChannel(&ops.OpContext{ConnID: connID}, &ChatUnregisterChannelRequest{
+		resp, _ := svc.HandleUnregisterChannel(opCtx, &ChatUnregisterChannelRequest{
 			ChannelID: chID.String(),
 		})
 		if resp.ErrorCode != 0 {
@@ -1021,11 +1032,11 @@ func channelRenameHandler(getSvc ServiceProvider) cmdsys.HandlerFunc {
 		if err != nil {
 			return nil, err
 		}
-		connID, _, err := resolveOperatorConn(svc, env)
+		opCtx, _, err := operatorOpContext(svc, env)
 		if err != nil {
 			return nil, err
 		}
-		resp, _ := svc.HandleRenameChannel(&ops.OpContext{ConnID: connID}, &ChatRenameChannelRequest{
+		resp, _ := svc.HandleRenameChannel(opCtx, &ChatRenameChannelRequest{
 			ChannelID: chID.String(),
 			NewSlug:   args.NewSlug,
 		})
@@ -1050,11 +1061,11 @@ func channelTopicHandler(getSvc ServiceProvider) cmdsys.HandlerFunc {
 		if err != nil {
 			return nil, err
 		}
-		connID, _, err := resolveOperatorConn(svc, env)
+		opCtx, _, err := operatorOpContext(svc, env)
 		if err != nil {
 			return nil, err
 		}
-		resp, _ := svc.HandleSetTopic(&ops.OpContext{ConnID: connID}, &ChatSetTopicRequest{
+		resp, _ := svc.HandleSetTopic(opCtx, &ChatSetTopicRequest{
 			ChannelID: chID.String(),
 			Topic:     args.Topic,
 		})
@@ -1079,11 +1090,11 @@ func channelSlowModeHandler(getSvc ServiceProvider) cmdsys.HandlerFunc {
 		if err != nil {
 			return nil, err
 		}
-		connID, _, err := resolveOperatorConn(svc, env)
+		opCtx, _, err := operatorOpContext(svc, env)
 		if err != nil {
 			return nil, err
 		}
-		resp, _ := svc.HandleSetSlowMode(&ops.OpContext{ConnID: connID}, &ChatSetSlowModeRequest{
+		resp, _ := svc.HandleSetSlowMode(opCtx, &ChatSetSlowModeRequest{
 			ChannelID: chID.String(),
 			Seconds:   args.Seconds,
 		})

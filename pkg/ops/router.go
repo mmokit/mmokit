@@ -17,6 +17,13 @@ type OpContext struct {
 	Username string
 	ClientIP netip.Addr // populated by gateway from WS RemoteAddr (or X-Forwarded-For when trusted)
 
+	// SystemTrusted indicates the op was issued by a trusted in-process
+	// caller (e.g. a cmdsys SourceConsole console wrapper) whose
+	// authorization was already enforced upstream. Identity-based handler
+	// auth (e.g. chat's connID → user_id → hasGlobalAdmin chain) should
+	// short-circuit when set. Never set on frames arriving from clients.
+	SystemTrusted bool
+
 	bag sync.Map
 }
 

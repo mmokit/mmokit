@@ -379,6 +379,50 @@ func TestConsole_Broadcast(t *testing.T) {
 	// dispatched without service-side validation tripping.
 }
 
+// TestConsole_BareConsole_Broadcast covers the bare interactive coord
+// console path: caller ID is the sentinel "console" (not a UUID), Source
+// is SourceConsole, and no operator is online in chat. operatorOpContext
+// must build a SystemTrusted opCtx so HandleBroadcastSystem bypasses
+// connIndex auth and broadcast succeeds. Regression for the bug where
+// `chat broadcast` from coord console errored "invalid operator user_id
+// 'console': invalid UUID length: 7".
+func TestConsole_BareConsole_Broadcast(t *testing.T) {
+	chatRepo := chattest.NewMock()
+	authRepo := authtest.NewMock()
+	svc := chat.NewTestServiceWithAuth(t, chatRepo, authRepo, nil)
+
+	reg := cmdsys.NewRegistry()
+	if err := chat.RegisterConsoleCommands(reg,
+		func() *chat.Service { return svc.Service },
+		func() auth.Repository { return authRepo },
+	); err != nil {
+		t.Fatalf("RegisterConsoleCommands: %v", err)
+	}
+	disp := cmdsys.NewDispatcher(cmdsys.DispatcherConfig{
+		Registry: reg,
+		Audit:    cmdsys.NoopAuditSink{},
+	})
+	t.Cleanup(func() { _ = disp.Close() })
+
+	// Mirror engine.operatorCaller: ID is the sentinel string, not a UUID.
+	caller := cmdsys.NewOperatorIdentity("console")
+
+	// Create a channel via the same trusted path.
+	if _, err := disp.Invoke(deadlineCtx(t), caller, "chat.channel.create",
+		chat.ChannelCreateArgs{Slug: "world", Kind: "system_all"}); err != nil {
+		t.Fatalf("Invoke channel.create: %v", err)
+	}
+	// Broadcast must succeed with no operator logged in.
+	res, err := disp.Invoke(deadlineCtx(t), caller, "chat.broadcast",
+		chat.BroadcastArgs{Channel: "world", Body: "hello i am god"})
+	if err != nil {
+		t.Fatalf("Invoke chat.broadcast: %v", err)
+	}
+	if len(res.PerTarget) != 1 || !res.PerTarget[0].OK {
+		t.Fatalf("expected broadcast OK, got %+v", res.PerTarget)
+	}
+}
+
 func TestConsole_MsgDelete_Unknown(t *testing.T) {
 	f := newConsoleFixture(t)
 	f.invokeOK(t, "chat.channel.create", chat.ChannelCreateArgs{
