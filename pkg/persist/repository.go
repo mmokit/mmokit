@@ -178,3 +178,49 @@ type ConfigSnapshot struct {
 	Data    []byte
 	Version int64
 }
+
+// AdminOperator is the persistence-layer representation of one admin
+// dashboard operator. PasswordHash is the encoded argon2id string
+// produced by pkg/services/auth.HashPassword. Grants follow the
+// cmdsys grant syntax (e.g. "*.*", "cell.*", "bot.spawn").
+type AdminOperator struct {
+	Username     string
+	PasswordHash string
+	Grants       []string
+	CreatedAt    time.Time
+	UpdatedAt    time.Time
+}
+
+// AdminOperatorRepository persists admin dashboard operators. The
+// admin server queries this at login time and seeds a default
+// admin/admin operator on first run when Count returns 0.
+//
+// Usernames are stored lowercase by contract (the admin server
+// lowercases at every call site). Implementations should not
+// re-normalize.
+type AdminOperatorRepository interface {
+	// GetByUsername returns the operator with the given username.
+	// Returns (nil, ErrNotFound) when no row matches.
+	GetByUsername(ctx context.Context, username string) (*AdminOperator, error)
+
+	// Create inserts a new operator. Returns an error if the
+	// username already exists (caller should pre-check with Count
+	// for seeding flows, or GetByUsername for explicit creates).
+	Create(ctx context.Context, op *AdminOperator) error
+
+	// List returns every operator. Used by the future admin UI
+	// "operators" page; today's only caller is tests.
+	List(ctx context.Context) ([]*AdminOperator, error)
+
+	// Delete removes an operator by username. No error when the
+	// username doesn't exist.
+	Delete(ctx context.Context, username string) error
+
+	// UpdatePasswordHash rotates the password hash. Returns
+	// ErrNotFound when the username doesn't exist.
+	UpdatePasswordHash(ctx context.Context, username, hash string) error
+
+	// Count returns the total number of operator rows. Backs the
+	// "if 0, seed admin/admin" check at NewServer startup.
+	Count(ctx context.Context) (int, error)
+}
