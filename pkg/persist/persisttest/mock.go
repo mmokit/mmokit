@@ -6,6 +6,7 @@ package persisttest
 
 import (
 	"context"
+	"fmt"
 	"maps"
 	"slices"
 	"sync"
@@ -225,11 +226,99 @@ func (m *ConfigRepoMock) Save(ctx context.Context, snapshot *persist.ConfigSnaps
 	return nil
 }
 
+// AdminOperatorRepoMock is an in-memory AdminOperatorRepository.
+type AdminOperatorRepoMock struct {
+	mu   sync.Mutex
+	rows map[string]*persist.AdminOperator
+}
+
+func NewAdminOperatorRepoMock() *AdminOperatorRepoMock {
+	return &AdminOperatorRepoMock{rows: make(map[string]*persist.AdminOperator)}
+}
+
+func (m *AdminOperatorRepoMock) GetByUsername(ctx context.Context, username string) (*persist.AdminOperator, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	rec, ok := m.rows[username]
+	if !ok {
+		return nil, persist.ErrNotFound
+	}
+	return cloneAdminOperator(rec), nil
+}
+
+func (m *AdminOperatorRepoMock) Create(ctx context.Context, op *persist.AdminOperator) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if _, exists := m.rows[op.Username]; exists {
+		return fmt.Errorf("adminOperatorRepoMock.Create: %q already exists", op.Username)
+	}
+	cp := *op
+	if cp.CreatedAt.IsZero() {
+		cp.CreatedAt = time.Now().UTC()
+	}
+	if cp.UpdatedAt.IsZero() {
+		cp.UpdatedAt = cp.CreatedAt
+	}
+	cp.Grants = slices.Clone(op.Grants)
+	m.rows[op.Username] = &cp
+	return nil
+}
+
+func (m *AdminOperatorRepoMock) List(ctx context.Context) ([]*persist.AdminOperator, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	keys := make([]string, 0, len(m.rows))
+	for k := range m.rows {
+		keys = append(keys, k)
+	}
+	slices.Sort(keys)
+	out := make([]*persist.AdminOperator, len(keys))
+	for i, k := range keys {
+		out[i] = cloneAdminOperator(m.rows[k])
+	}
+	return out, nil
+}
+
+func (m *AdminOperatorRepoMock) Delete(ctx context.Context, username string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	delete(m.rows, username)
+	return nil
+}
+
+func (m *AdminOperatorRepoMock) UpdatePasswordHash(ctx context.Context, username, hash string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	rec, ok := m.rows[username]
+	if !ok {
+		return persist.ErrNotFound
+	}
+	rec.PasswordHash = hash
+	rec.UpdatedAt = time.Now().UTC()
+	return nil
+}
+
+func (m *AdminOperatorRepoMock) Count(ctx context.Context) (int, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return len(m.rows), nil
+}
+
+func cloneAdminOperator(src *persist.AdminOperator) *persist.AdminOperator {
+	if src == nil {
+		return nil
+	}
+	cp := *src
+	cp.Grants = slices.Clone(src.Grants)
+	return &cp
+}
+
 // Compile-time interface assertions.
 var (
-	_ persist.PlayerRepository = (*PlayerRepoMock)(nil)
-	_ persist.MarketRepository = (*MarketRepoMock)(nil)
-	_ persist.ConfigRepository = (*ConfigRepoMock)(nil)
+	_ persist.PlayerRepository        = (*PlayerRepoMock)(nil)
+	_ persist.MarketRepository        = (*MarketRepoMock)(nil)
+	_ persist.ConfigRepository        = (*ConfigRepoMock)(nil)
+	_ persist.AdminOperatorRepository = (*AdminOperatorRepoMock)(nil)
 )
 
 // clonePlayer returns a deep copy of a PlayerSnapshot. Used by the
