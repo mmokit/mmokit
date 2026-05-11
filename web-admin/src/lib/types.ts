@@ -147,3 +147,23 @@ export type LogGroup = { name: string; categories: LogCategory[] };
 
 export type LogCategoriesResp = { groups: LogGroup[] };
 
+// FieldSchema mirrors pkg/cmdsys/schema.go::FieldSchema. Returned as part
+// of the GET /admin/api/commands/<verb> response's argsSchema field.
+export type FieldSchema = {
+  name: string;
+  kind: string;          // "string", "int32", "int64", "float32", "float64", "bool", "[]<elem>", "{...}"
+  required: boolean;
+  named_only: boolean;
+  default: string;
+  enum: string[] | null;
+  help?: string;
+  rest?: boolean;
+  complete?: string;
+};
+
+// Schema mirrors pkg/cmdsys/schema.go::Schema.
+export type Schema = {
+  struct: string;
+  fields: FieldSchema[];
+};
+
