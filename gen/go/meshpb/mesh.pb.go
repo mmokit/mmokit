@@ -96,6 +96,7 @@ type HostMessage struct {
 	//	*HostMessage_HostOpAck
 	//	*HostMessage_ServiceAnnounce
 	//	*HostMessage_ServiceLeave
+	//	*HostMessage_LogBatch
 	//	*HostMessage_ServiceEventSubscribe
 	Msg           isHostMessage_Msg `protobuf_oneof:"msg"`
 	unknownFields protoimpl.UnknownFields
@@ -310,6 +311,15 @@ func (x *HostMessage) GetServiceLeave() *ServiceLeave {
 	return nil
 }
 
+func (x *HostMessage) GetLogBatch() *LogBatch {
+	if x != nil {
+		if x, ok := x.Msg.(*HostMessage_LogBatch); ok {
+			return x.LogBatch
+		}
+	}
+	return nil
+}
+
 func (x *HostMessage) GetServiceEventSubscribe() *ServiceEventSubscribe {
 	if x != nil {
 		if x, ok := x.Msg.(*HostMessage_ServiceEventSubscribe); ok {
@@ -399,6 +409,10 @@ type HostMessage_ServiceLeave struct {
 	ServiceLeave *ServiceLeave `protobuf:"bytes,20,opt,name=service_leave,json=serviceLeave,proto3,oneof"` // service framework: host → coord service instance going away
 }
 
+type HostMessage_LogBatch struct {
+	LogBatch *LogBatch `protobuf:"bytes,21,opt,name=log_batch,json=logBatch,proto3,oneof"` // admin log tail: host → coord batched logger entries
+}
+
 type HostMessage_ServiceEventSubscribe struct {
 	ServiceEventSubscribe *ServiceEventSubscribe `protobuf:"bytes,51,opt,name=service_event_subscribe,json=serviceEventSubscribe,proto3,oneof"` // services bus: process → coord, whole-set replace of subscribed type names
 }
@@ -440,6 +454,8 @@ func (*HostMessage_HostOpAck) isHostMessage_Msg() {}
 func (*HostMessage_ServiceAnnounce) isHostMessage_Msg() {}
 
 func (*HostMessage_ServiceLeave) isHostMessage_Msg() {}
+
+func (*HostMessage_LogBatch) isHostMessage_Msg() {}
 
 func (*HostMessage_ServiceEventSubscribe) isHostMessage_Msg() {}
 
@@ -848,9 +864,15 @@ func (x *RegisterHost) GetServiceOnly() bool {
 }
 
 type Heartbeat struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	HostId        string                 `protobuf:"bytes,1,opt,name=host_id,json=hostId,proto3" json:"host_id,omitempty"`
-	Tick          uint64                 `protobuf:"varint,2,opt,name=tick,proto3" json:"tick,omitempty"`
+	state  protoimpl.MessageState `protogen:"open.v1"`
+	HostId string                 `protobuf:"bytes,1,opt,name=host_id,json=hostId,proto3" json:"host_id,omitempty"`
+	Tick   uint64                 `protobuf:"varint,2,opt,name=tick,proto3" json:"tick,omitempty"`
+	// Per-cell metrics snapshots for every cell this host currently owns.
+	// The coordinator stores the latest entry per cell_id so the admin
+	// dashboard can show real entity counts / load / tick stats from
+	// remote hosts. When a cell's host changes, the new host's heartbeat
+	// overwrites the snapshot within one heartbeat interval.
+	Metrics       []*CellMetricsReport `protobuf:"bytes,3,rep,name=metrics,proto3" json:"metrics,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -899,6 +921,238 @@ func (x *Heartbeat) GetTick() uint64 {
 	return 0
 }
 
+func (x *Heartbeat) GetMetrics() []*CellMetricsReport {
+	if x != nil {
+		return x.Metrics
+	}
+	return nil
+}
+
+type CellMetricsReport struct {
+	state             protoimpl.MessageState `protogen:"open.v1"`
+	CellId            string                 `protobuf:"bytes,1,opt,name=cell_id,json=cellId,proto3" json:"cell_id,omitempty"`
+	CompositeLoad     float64                `protobuf:"fixed64,2,opt,name=composite_load,json=compositeLoad,proto3" json:"composite_load,omitempty"`
+	TickP99Us         int64                  `protobuf:"varint,3,opt,name=tick_p99_us,json=tickP99Us,proto3" json:"tick_p99_us,omitempty"`
+	TickP95Us         int64                  `protobuf:"varint,4,opt,name=tick_p95_us,json=tickP95Us,proto3" json:"tick_p95_us,omitempty"`
+	EntitiesReal      int32                  `protobuf:"varint,5,opt,name=entities_real,json=entitiesReal,proto3" json:"entities_real,omitempty"`
+	EntitiesReplica   int32                  `protobuf:"varint,6,opt,name=entities_replica,json=entitiesReplica,proto3" json:"entities_replica,omitempty"`
+	EntitiesGhost     int32                  `protobuf:"varint,7,opt,name=entities_ghost,json=entitiesGhost,proto3" json:"entities_ghost,omitempty"`
+	EntitiesConnected int32                  `protobuf:"varint,8,opt,name=entities_connected,json=entitiesConnected,proto3" json:"entities_connected,omitempty"`
+	BytesSent         uint64                 `protobuf:"varint,9,opt,name=bytes_sent,json=bytesSent,proto3" json:"bytes_sent,omitempty"`
+	BytesRecv         uint64                 `protobuf:"varint,10,opt,name=bytes_recv,json=bytesRecv,proto3" json:"bytes_recv,omitempty"`
+	unknownFields     protoimpl.UnknownFields
+	sizeCache         protoimpl.SizeCache
+}
+
+func (x *CellMetricsReport) Reset() {
+	*x = CellMetricsReport{}
+	mi := &file_meshpb_mesh_proto_msgTypes[4]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CellMetricsReport) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CellMetricsReport) ProtoMessage() {}
+
+func (x *CellMetricsReport) ProtoReflect() protoreflect.Message {
+	mi := &file_meshpb_mesh_proto_msgTypes[4]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CellMetricsReport.ProtoReflect.Descriptor instead.
+func (*CellMetricsReport) Descriptor() ([]byte, []int) {
+	return file_meshpb_mesh_proto_rawDescGZIP(), []int{4}
+}
+
+func (x *CellMetricsReport) GetCellId() string {
+	if x != nil {
+		return x.CellId
+	}
+	return ""
+}
+
+func (x *CellMetricsReport) GetCompositeLoad() float64 {
+	if x != nil {
+		return x.CompositeLoad
+	}
+	return 0
+}
+
+func (x *CellMetricsReport) GetTickP99Us() int64 {
+	if x != nil {
+		return x.TickP99Us
+	}
+	return 0
+}
+
+func (x *CellMetricsReport) GetTickP95Us() int64 {
+	if x != nil {
+		return x.TickP95Us
+	}
+	return 0
+}
+
+func (x *CellMetricsReport) GetEntitiesReal() int32 {
+	if x != nil {
+		return x.EntitiesReal
+	}
+	return 0
+}
+
+func (x *CellMetricsReport) GetEntitiesReplica() int32 {
+	if x != nil {
+		return x.EntitiesReplica
+	}
+	return 0
+}
+
+func (x *CellMetricsReport) GetEntitiesGhost() int32 {
+	if x != nil {
+		return x.EntitiesGhost
+	}
+	return 0
+}
+
+func (x *CellMetricsReport) GetEntitiesConnected() int32 {
+	if x != nil {
+		return x.EntitiesConnected
+	}
+	return 0
+}
+
+func (x *CellMetricsReport) GetBytesSent() uint64 {
+	if x != nil {
+		return x.BytesSent
+	}
+	return 0
+}
+
+func (x *CellMetricsReport) GetBytesRecv() uint64 {
+	if x != nil {
+		return x.BytesRecv
+	}
+	return 0
+}
+
+// LogBatch is shipped host → coord over MeshControl. Each entry was
+// captured by a logger.Hook on the host's *Logger. Batches are flushed
+// every ~100ms or when 64 entries accumulate, whichever first.
+type LogBatch struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Entries       []*LogEntry            `protobuf:"bytes,1,rep,name=entries,proto3" json:"entries,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *LogBatch) Reset() {
+	*x = LogBatch{}
+	mi := &file_meshpb_mesh_proto_msgTypes[5]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *LogBatch) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*LogBatch) ProtoMessage() {}
+
+func (x *LogBatch) ProtoReflect() protoreflect.Message {
+	mi := &file_meshpb_mesh_proto_msgTypes[5]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use LogBatch.ProtoReflect.Descriptor instead.
+func (*LogBatch) Descriptor() ([]byte, []int) {
+	return file_meshpb_mesh_proto_rawDescGZIP(), []int{5}
+}
+
+func (x *LogBatch) GetEntries() []*LogEntry {
+	if x != nil {
+		return x.Entries
+	}
+	return nil
+}
+
+// LogEntry mirrors admin.LogEntry on the receiving end. host is stamped
+// by the coordinator from the sender's stream identity, not the host.
+type LogEntry struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Cat           string                 `protobuf:"bytes,1,opt,name=cat,proto3" json:"cat,omitempty"`
+	Msg           string                 `protobuf:"bytes,2,opt,name=msg,proto3" json:"msg,omitempty"`
+	TsUnixMs      int64                  `protobuf:"varint,3,opt,name=ts_unix_ms,json=tsUnixMs,proto3" json:"ts_unix_ms,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *LogEntry) Reset() {
+	*x = LogEntry{}
+	mi := &file_meshpb_mesh_proto_msgTypes[6]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *LogEntry) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*LogEntry) ProtoMessage() {}
+
+func (x *LogEntry) ProtoReflect() protoreflect.Message {
+	mi := &file_meshpb_mesh_proto_msgTypes[6]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use LogEntry.ProtoReflect.Descriptor instead.
+func (*LogEntry) Descriptor() ([]byte, []int) {
+	return file_meshpb_mesh_proto_rawDescGZIP(), []int{6}
+}
+
+func (x *LogEntry) GetCat() string {
+	if x != nil {
+		return x.Cat
+	}
+	return ""
+}
+
+func (x *LogEntry) GetMsg() string {
+	if x != nil {
+		return x.Msg
+	}
+	return ""
+}
+
+func (x *LogEntry) GetTsUnixMs() int64 {
+	if x != nil {
+		return x.TsUnixMs
+	}
+	return 0
+}
+
 type CellReady struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	HostId        string                 `protobuf:"bytes,1,opt,name=host_id,json=hostId,proto3" json:"host_id,omitempty"`
@@ -909,7 +1163,7 @@ type CellReady struct {
 
 func (x *CellReady) Reset() {
 	*x = CellReady{}
-	mi := &file_meshpb_mesh_proto_msgTypes[4]
+	mi := &file_meshpb_mesh_proto_msgTypes[7]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -921,7 +1175,7 @@ func (x *CellReady) String() string {
 func (*CellReady) ProtoMessage() {}
 
 func (x *CellReady) ProtoReflect() protoreflect.Message {
-	mi := &file_meshpb_mesh_proto_msgTypes[4]
+	mi := &file_meshpb_mesh_proto_msgTypes[7]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -934,7 +1188,7 @@ func (x *CellReady) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CellReady.ProtoReflect.Descriptor instead.
 func (*CellReady) Descriptor() ([]byte, []int) {
-	return file_meshpb_mesh_proto_rawDescGZIP(), []int{4}
+	return file_meshpb_mesh_proto_rawDescGZIP(), []int{7}
 }
 
 func (x *CellReady) GetHostId() string {
@@ -961,7 +1215,7 @@ type CellStopped struct {
 
 func (x *CellStopped) Reset() {
 	*x = CellStopped{}
-	mi := &file_meshpb_mesh_proto_msgTypes[5]
+	mi := &file_meshpb_mesh_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -973,7 +1227,7 @@ func (x *CellStopped) String() string {
 func (*CellStopped) ProtoMessage() {}
 
 func (x *CellStopped) ProtoReflect() protoreflect.Message {
-	mi := &file_meshpb_mesh_proto_msgTypes[5]
+	mi := &file_meshpb_mesh_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -986,7 +1240,7 @@ func (x *CellStopped) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CellStopped.ProtoReflect.Descriptor instead.
 func (*CellStopped) Descriptor() ([]byte, []int) {
-	return file_meshpb_mesh_proto_rawDescGZIP(), []int{5}
+	return file_meshpb_mesh_proto_rawDescGZIP(), []int{8}
 }
 
 func (x *CellStopped) GetHostId() string {
@@ -1014,7 +1268,7 @@ type SplitComplete struct {
 
 func (x *SplitComplete) Reset() {
 	*x = SplitComplete{}
-	mi := &file_meshpb_mesh_proto_msgTypes[6]
+	mi := &file_meshpb_mesh_proto_msgTypes[9]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1026,7 +1280,7 @@ func (x *SplitComplete) String() string {
 func (*SplitComplete) ProtoMessage() {}
 
 func (x *SplitComplete) ProtoReflect() protoreflect.Message {
-	mi := &file_meshpb_mesh_proto_msgTypes[6]
+	mi := &file_meshpb_mesh_proto_msgTypes[9]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1039,7 +1293,7 @@ func (x *SplitComplete) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SplitComplete.ProtoReflect.Descriptor instead.
 func (*SplitComplete) Descriptor() ([]byte, []int) {
-	return file_meshpb_mesh_proto_rawDescGZIP(), []int{6}
+	return file_meshpb_mesh_proto_rawDescGZIP(), []int{9}
 }
 
 func (x *SplitComplete) GetHostId() string {
@@ -1074,7 +1328,7 @@ type MergeComplete struct {
 
 func (x *MergeComplete) Reset() {
 	*x = MergeComplete{}
-	mi := &file_meshpb_mesh_proto_msgTypes[7]
+	mi := &file_meshpb_mesh_proto_msgTypes[10]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1086,7 +1340,7 @@ func (x *MergeComplete) String() string {
 func (*MergeComplete) ProtoMessage() {}
 
 func (x *MergeComplete) ProtoReflect() protoreflect.Message {
-	mi := &file_meshpb_mesh_proto_msgTypes[7]
+	mi := &file_meshpb_mesh_proto_msgTypes[10]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1099,7 +1353,7 @@ func (x *MergeComplete) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MergeComplete.ProtoReflect.Descriptor instead.
 func (*MergeComplete) Descriptor() ([]byte, []int) {
-	return file_meshpb_mesh_proto_rawDescGZIP(), []int{7}
+	return file_meshpb_mesh_proto_rawDescGZIP(), []int{10}
 }
 
 func (x *MergeComplete) GetHostId() string {
@@ -1133,7 +1387,7 @@ type PersistBatch struct {
 
 func (x *PersistBatch) Reset() {
 	*x = PersistBatch{}
-	mi := &file_meshpb_mesh_proto_msgTypes[8]
+	mi := &file_meshpb_mesh_proto_msgTypes[11]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1145,7 +1399,7 @@ func (x *PersistBatch) String() string {
 func (*PersistBatch) ProtoMessage() {}
 
 func (x *PersistBatch) ProtoReflect() protoreflect.Message {
-	mi := &file_meshpb_mesh_proto_msgTypes[8]
+	mi := &file_meshpb_mesh_proto_msgTypes[11]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1158,7 +1412,7 @@ func (x *PersistBatch) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PersistBatch.ProtoReflect.Descriptor instead.
 func (*PersistBatch) Descriptor() ([]byte, []int) {
-	return file_meshpb_mesh_proto_rawDescGZIP(), []int{8}
+	return file_meshpb_mesh_proto_rawDescGZIP(), []int{11}
 }
 
 func (x *PersistBatch) GetHostId() string {
@@ -1187,7 +1441,7 @@ type PlayerHandoff struct {
 
 func (x *PlayerHandoff) Reset() {
 	*x = PlayerHandoff{}
-	mi := &file_meshpb_mesh_proto_msgTypes[9]
+	mi := &file_meshpb_mesh_proto_msgTypes[12]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1199,7 +1453,7 @@ func (x *PlayerHandoff) String() string {
 func (*PlayerHandoff) ProtoMessage() {}
 
 func (x *PlayerHandoff) ProtoReflect() protoreflect.Message {
-	mi := &file_meshpb_mesh_proto_msgTypes[9]
+	mi := &file_meshpb_mesh_proto_msgTypes[12]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1212,7 +1466,7 @@ func (x *PlayerHandoff) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PlayerHandoff.ProtoReflect.Descriptor instead.
 func (*PlayerHandoff) Descriptor() ([]byte, []int) {
-	return file_meshpb_mesh_proto_rawDescGZIP(), []int{9}
+	return file_meshpb_mesh_proto_rawDescGZIP(), []int{12}
 }
 
 func (x *PlayerHandoff) GetHostId() string {
@@ -1255,7 +1509,7 @@ type RegisterGateway struct {
 
 func (x *RegisterGateway) Reset() {
 	*x = RegisterGateway{}
-	mi := &file_meshpb_mesh_proto_msgTypes[10]
+	mi := &file_meshpb_mesh_proto_msgTypes[13]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1267,7 +1521,7 @@ func (x *RegisterGateway) String() string {
 func (*RegisterGateway) ProtoMessage() {}
 
 func (x *RegisterGateway) ProtoReflect() protoreflect.Message {
-	mi := &file_meshpb_mesh_proto_msgTypes[10]
+	mi := &file_meshpb_mesh_proto_msgTypes[13]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1280,7 +1534,7 @@ func (x *RegisterGateway) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RegisterGateway.ProtoReflect.Descriptor instead.
 func (*RegisterGateway) Descriptor() ([]byte, []int) {
-	return file_meshpb_mesh_proto_rawDescGZIP(), []int{10}
+	return file_meshpb_mesh_proto_rawDescGZIP(), []int{13}
 }
 
 func (x *RegisterGateway) GetGatewayId() string {
@@ -1325,7 +1579,7 @@ type SessionAnnounce struct {
 
 func (x *SessionAnnounce) Reset() {
 	*x = SessionAnnounce{}
-	mi := &file_meshpb_mesh_proto_msgTypes[11]
+	mi := &file_meshpb_mesh_proto_msgTypes[14]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1337,7 +1591,7 @@ func (x *SessionAnnounce) String() string {
 func (*SessionAnnounce) ProtoMessage() {}
 
 func (x *SessionAnnounce) ProtoReflect() protoreflect.Message {
-	mi := &file_meshpb_mesh_proto_msgTypes[11]
+	mi := &file_meshpb_mesh_proto_msgTypes[14]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1350,7 +1604,7 @@ func (x *SessionAnnounce) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SessionAnnounce.ProtoReflect.Descriptor instead.
 func (*SessionAnnounce) Descriptor() ([]byte, []int) {
-	return file_meshpb_mesh_proto_rawDescGZIP(), []int{11}
+	return file_meshpb_mesh_proto_rawDescGZIP(), []int{14}
 }
 
 func (x *SessionAnnounce) GetGatewayId() string {
@@ -1410,7 +1664,7 @@ type PlayerMigrated struct {
 
 func (x *PlayerMigrated) Reset() {
 	*x = PlayerMigrated{}
-	mi := &file_meshpb_mesh_proto_msgTypes[12]
+	mi := &file_meshpb_mesh_proto_msgTypes[15]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1422,7 +1676,7 @@ func (x *PlayerMigrated) String() string {
 func (*PlayerMigrated) ProtoMessage() {}
 
 func (x *PlayerMigrated) ProtoReflect() protoreflect.Message {
-	mi := &file_meshpb_mesh_proto_msgTypes[12]
+	mi := &file_meshpb_mesh_proto_msgTypes[15]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1435,7 +1689,7 @@ func (x *PlayerMigrated) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PlayerMigrated.ProtoReflect.Descriptor instead.
 func (*PlayerMigrated) Descriptor() ([]byte, []int) {
-	return file_meshpb_mesh_proto_rawDescGZIP(), []int{12}
+	return file_meshpb_mesh_proto_rawDescGZIP(), []int{15}
 }
 
 func (x *PlayerMigrated) GetGatewayId() string {
@@ -1484,7 +1738,7 @@ type RegisterAck struct {
 
 func (x *RegisterAck) Reset() {
 	*x = RegisterAck{}
-	mi := &file_meshpb_mesh_proto_msgTypes[13]
+	mi := &file_meshpb_mesh_proto_msgTypes[16]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1496,7 +1750,7 @@ func (x *RegisterAck) String() string {
 func (*RegisterAck) ProtoMessage() {}
 
 func (x *RegisterAck) ProtoReflect() protoreflect.Message {
-	mi := &file_meshpb_mesh_proto_msgTypes[13]
+	mi := &file_meshpb_mesh_proto_msgTypes[16]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1509,7 +1763,7 @@ func (x *RegisterAck) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RegisterAck.ProtoReflect.Descriptor instead.
 func (*RegisterAck) Descriptor() ([]byte, []int) {
-	return file_meshpb_mesh_proto_rawDescGZIP(), []int{13}
+	return file_meshpb_mesh_proto_rawDescGZIP(), []int{16}
 }
 
 func (x *RegisterAck) GetOk() bool {
@@ -1542,7 +1796,7 @@ type CellAssign struct {
 
 func (x *CellAssign) Reset() {
 	*x = CellAssign{}
-	mi := &file_meshpb_mesh_proto_msgTypes[14]
+	mi := &file_meshpb_mesh_proto_msgTypes[17]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1554,7 +1808,7 @@ func (x *CellAssign) String() string {
 func (*CellAssign) ProtoMessage() {}
 
 func (x *CellAssign) ProtoReflect() protoreflect.Message {
-	mi := &file_meshpb_mesh_proto_msgTypes[14]
+	mi := &file_meshpb_mesh_proto_msgTypes[17]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1567,7 +1821,7 @@ func (x *CellAssign) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CellAssign.ProtoReflect.Descriptor instead.
 func (*CellAssign) Descriptor() ([]byte, []int) {
-	return file_meshpb_mesh_proto_rawDescGZIP(), []int{14}
+	return file_meshpb_mesh_proto_rawDescGZIP(), []int{17}
 }
 
 func (x *CellAssign) GetCellId() string {
@@ -1587,7 +1841,7 @@ type CellRelease struct {
 
 func (x *CellRelease) Reset() {
 	*x = CellRelease{}
-	mi := &file_meshpb_mesh_proto_msgTypes[15]
+	mi := &file_meshpb_mesh_proto_msgTypes[18]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1599,7 +1853,7 @@ func (x *CellRelease) String() string {
 func (*CellRelease) ProtoMessage() {}
 
 func (x *CellRelease) ProtoReflect() protoreflect.Message {
-	mi := &file_meshpb_mesh_proto_msgTypes[15]
+	mi := &file_meshpb_mesh_proto_msgTypes[18]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1612,7 +1866,7 @@ func (x *CellRelease) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CellRelease.ProtoReflect.Descriptor instead.
 func (*CellRelease) Descriptor() ([]byte, []int) {
-	return file_meshpb_mesh_proto_rawDescGZIP(), []int{15}
+	return file_meshpb_mesh_proto_rawDescGZIP(), []int{18}
 }
 
 func (x *CellRelease) GetCellId() string {
@@ -1640,7 +1894,7 @@ type CellRename struct {
 
 func (x *CellRename) Reset() {
 	*x = CellRename{}
-	mi := &file_meshpb_mesh_proto_msgTypes[16]
+	mi := &file_meshpb_mesh_proto_msgTypes[19]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1652,7 +1906,7 @@ func (x *CellRename) String() string {
 func (*CellRename) ProtoMessage() {}
 
 func (x *CellRename) ProtoReflect() protoreflect.Message {
-	mi := &file_meshpb_mesh_proto_msgTypes[16]
+	mi := &file_meshpb_mesh_proto_msgTypes[19]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1665,7 +1919,7 @@ func (x *CellRename) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CellRename.ProtoReflect.Descriptor instead.
 func (*CellRename) Descriptor() ([]byte, []int) {
-	return file_meshpb_mesh_proto_rawDescGZIP(), []int{16}
+	return file_meshpb_mesh_proto_rawDescGZIP(), []int{19}
 }
 
 func (x *CellRename) GetFromCellId() string {
@@ -1704,7 +1958,7 @@ type PeerList struct {
 
 func (x *PeerList) Reset() {
 	*x = PeerList{}
-	mi := &file_meshpb_mesh_proto_msgTypes[17]
+	mi := &file_meshpb_mesh_proto_msgTypes[20]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1716,7 +1970,7 @@ func (x *PeerList) String() string {
 func (*PeerList) ProtoMessage() {}
 
 func (x *PeerList) ProtoReflect() protoreflect.Message {
-	mi := &file_meshpb_mesh_proto_msgTypes[17]
+	mi := &file_meshpb_mesh_proto_msgTypes[20]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1729,7 +1983,7 @@ func (x *PeerList) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PeerList.ProtoReflect.Descriptor instead.
 func (*PeerList) Descriptor() ([]byte, []int) {
-	return file_meshpb_mesh_proto_rawDescGZIP(), []int{17}
+	return file_meshpb_mesh_proto_rawDescGZIP(), []int{20}
 }
 
 func (x *PeerList) GetHosts() []*HostRecord {
@@ -1777,7 +2031,7 @@ type CellOwnership struct {
 
 func (x *CellOwnership) Reset() {
 	*x = CellOwnership{}
-	mi := &file_meshpb_mesh_proto_msgTypes[18]
+	mi := &file_meshpb_mesh_proto_msgTypes[21]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1789,7 +2043,7 @@ func (x *CellOwnership) String() string {
 func (*CellOwnership) ProtoMessage() {}
 
 func (x *CellOwnership) ProtoReflect() protoreflect.Message {
-	mi := &file_meshpb_mesh_proto_msgTypes[18]
+	mi := &file_meshpb_mesh_proto_msgTypes[21]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1802,7 +2056,7 @@ func (x *CellOwnership) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CellOwnership.ProtoReflect.Descriptor instead.
 func (*CellOwnership) Descriptor() ([]byte, []int) {
-	return file_meshpb_mesh_proto_rawDescGZIP(), []int{18}
+	return file_meshpb_mesh_proto_rawDescGZIP(), []int{21}
 }
 
 func (x *CellOwnership) GetCellId() string {
@@ -1830,7 +2084,7 @@ type HostRecord struct {
 
 func (x *HostRecord) Reset() {
 	*x = HostRecord{}
-	mi := &file_meshpb_mesh_proto_msgTypes[19]
+	mi := &file_meshpb_mesh_proto_msgTypes[22]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1842,7 +2096,7 @@ func (x *HostRecord) String() string {
 func (*HostRecord) ProtoMessage() {}
 
 func (x *HostRecord) ProtoReflect() protoreflect.Message {
-	mi := &file_meshpb_mesh_proto_msgTypes[19]
+	mi := &file_meshpb_mesh_proto_msgTypes[22]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1855,7 +2109,7 @@ func (x *HostRecord) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use HostRecord.ProtoReflect.Descriptor instead.
 func (*HostRecord) Descriptor() ([]byte, []int) {
-	return file_meshpb_mesh_proto_rawDescGZIP(), []int{19}
+	return file_meshpb_mesh_proto_rawDescGZIP(), []int{22}
 }
 
 func (x *HostRecord) GetHostId() string {
@@ -1889,7 +2143,7 @@ type GatewayRecord struct {
 
 func (x *GatewayRecord) Reset() {
 	*x = GatewayRecord{}
-	mi := &file_meshpb_mesh_proto_msgTypes[20]
+	mi := &file_meshpb_mesh_proto_msgTypes[23]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1901,7 +2155,7 @@ func (x *GatewayRecord) String() string {
 func (*GatewayRecord) ProtoMessage() {}
 
 func (x *GatewayRecord) ProtoReflect() protoreflect.Message {
-	mi := &file_meshpb_mesh_proto_msgTypes[20]
+	mi := &file_meshpb_mesh_proto_msgTypes[23]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1914,7 +2168,7 @@ func (x *GatewayRecord) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GatewayRecord.ProtoReflect.Descriptor instead.
 func (*GatewayRecord) Descriptor() ([]byte, []int) {
-	return file_meshpb_mesh_proto_rawDescGZIP(), []int{20}
+	return file_meshpb_mesh_proto_rawDescGZIP(), []int{23}
 }
 
 func (x *GatewayRecord) GetGatewayId() string {
@@ -1945,7 +2199,7 @@ type ServiceRecord struct {
 
 func (x *ServiceRecord) Reset() {
 	*x = ServiceRecord{}
-	mi := &file_meshpb_mesh_proto_msgTypes[21]
+	mi := &file_meshpb_mesh_proto_msgTypes[24]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1957,7 +2211,7 @@ func (x *ServiceRecord) String() string {
 func (*ServiceRecord) ProtoMessage() {}
 
 func (x *ServiceRecord) ProtoReflect() protoreflect.Message {
-	mi := &file_meshpb_mesh_proto_msgTypes[21]
+	mi := &file_meshpb_mesh_proto_msgTypes[24]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1970,7 +2224,7 @@ func (x *ServiceRecord) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ServiceRecord.ProtoReflect.Descriptor instead.
 func (*ServiceRecord) Descriptor() ([]byte, []int) {
-	return file_meshpb_mesh_proto_rawDescGZIP(), []int{21}
+	return file_meshpb_mesh_proto_rawDescGZIP(), []int{24}
 }
 
 func (x *ServiceRecord) GetKind() string {
@@ -2016,7 +2270,7 @@ type ServiceAnnounce struct {
 
 func (x *ServiceAnnounce) Reset() {
 	*x = ServiceAnnounce{}
-	mi := &file_meshpb_mesh_proto_msgTypes[22]
+	mi := &file_meshpb_mesh_proto_msgTypes[25]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2028,7 +2282,7 @@ func (x *ServiceAnnounce) String() string {
 func (*ServiceAnnounce) ProtoMessage() {}
 
 func (x *ServiceAnnounce) ProtoReflect() protoreflect.Message {
-	mi := &file_meshpb_mesh_proto_msgTypes[22]
+	mi := &file_meshpb_mesh_proto_msgTypes[25]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2041,7 +2295,7 @@ func (x *ServiceAnnounce) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ServiceAnnounce.ProtoReflect.Descriptor instead.
 func (*ServiceAnnounce) Descriptor() ([]byte, []int) {
-	return file_meshpb_mesh_proto_rawDescGZIP(), []int{22}
+	return file_meshpb_mesh_proto_rawDescGZIP(), []int{25}
 }
 
 func (x *ServiceAnnounce) GetKind() string {
@@ -2084,7 +2338,7 @@ type ServiceLeave struct {
 
 func (x *ServiceLeave) Reset() {
 	*x = ServiceLeave{}
-	mi := &file_meshpb_mesh_proto_msgTypes[23]
+	mi := &file_meshpb_mesh_proto_msgTypes[26]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2096,7 +2350,7 @@ func (x *ServiceLeave) String() string {
 func (*ServiceLeave) ProtoMessage() {}
 
 func (x *ServiceLeave) ProtoReflect() protoreflect.Message {
-	mi := &file_meshpb_mesh_proto_msgTypes[23]
+	mi := &file_meshpb_mesh_proto_msgTypes[26]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2109,7 +2363,7 @@ func (x *ServiceLeave) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ServiceLeave.ProtoReflect.Descriptor instead.
 func (*ServiceLeave) Descriptor() ([]byte, []int) {
-	return file_meshpb_mesh_proto_rawDescGZIP(), []int{23}
+	return file_meshpb_mesh_proto_rawDescGZIP(), []int{26}
 }
 
 func (x *ServiceLeave) GetInstanceId() string {
@@ -2131,7 +2385,7 @@ type ProcessList struct {
 
 func (x *ProcessList) Reset() {
 	*x = ProcessList{}
-	mi := &file_meshpb_mesh_proto_msgTypes[24]
+	mi := &file_meshpb_mesh_proto_msgTypes[27]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2143,7 +2397,7 @@ func (x *ProcessList) String() string {
 func (*ProcessList) ProtoMessage() {}
 
 func (x *ProcessList) ProtoReflect() protoreflect.Message {
-	mi := &file_meshpb_mesh_proto_msgTypes[24]
+	mi := &file_meshpb_mesh_proto_msgTypes[27]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2156,7 +2410,7 @@ func (x *ProcessList) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ProcessList.ProtoReflect.Descriptor instead.
 func (*ProcessList) Descriptor() ([]byte, []int) {
-	return file_meshpb_mesh_proto_rawDescGZIP(), []int{24}
+	return file_meshpb_mesh_proto_rawDescGZIP(), []int{27}
 }
 
 func (x *ProcessList) GetProcessIds() []string {
@@ -2180,7 +2434,7 @@ type ServiceEventSubscribe struct {
 
 func (x *ServiceEventSubscribe) Reset() {
 	*x = ServiceEventSubscribe{}
-	mi := &file_meshpb_mesh_proto_msgTypes[25]
+	mi := &file_meshpb_mesh_proto_msgTypes[28]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2192,7 +2446,7 @@ func (x *ServiceEventSubscribe) String() string {
 func (*ServiceEventSubscribe) ProtoMessage() {}
 
 func (x *ServiceEventSubscribe) ProtoReflect() protoreflect.Message {
-	mi := &file_meshpb_mesh_proto_msgTypes[25]
+	mi := &file_meshpb_mesh_proto_msgTypes[28]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2205,7 +2459,7 @@ func (x *ServiceEventSubscribe) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ServiceEventSubscribe.ProtoReflect.Descriptor instead.
 func (*ServiceEventSubscribe) Descriptor() ([]byte, []int) {
-	return file_meshpb_mesh_proto_rawDescGZIP(), []int{25}
+	return file_meshpb_mesh_proto_rawDescGZIP(), []int{28}
 }
 
 func (x *ServiceEventSubscribe) GetTypeNames() []string {
@@ -2236,7 +2490,7 @@ type ServiceEvent struct {
 
 func (x *ServiceEvent) Reset() {
 	*x = ServiceEvent{}
-	mi := &file_meshpb_mesh_proto_msgTypes[26]
+	mi := &file_meshpb_mesh_proto_msgTypes[29]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2248,7 +2502,7 @@ func (x *ServiceEvent) String() string {
 func (*ServiceEvent) ProtoMessage() {}
 
 func (x *ServiceEvent) ProtoReflect() protoreflect.Message {
-	mi := &file_meshpb_mesh_proto_msgTypes[26]
+	mi := &file_meshpb_mesh_proto_msgTypes[29]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2261,7 +2515,7 @@ func (x *ServiceEvent) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ServiceEvent.ProtoReflect.Descriptor instead.
 func (*ServiceEvent) Descriptor() ([]byte, []int) {
-	return file_meshpb_mesh_proto_rawDescGZIP(), []int{26}
+	return file_meshpb_mesh_proto_rawDescGZIP(), []int{29}
 }
 
 func (x *ServiceEvent) GetSourceProcessId() string {
@@ -2303,7 +2557,7 @@ type NetIDRangeGrant struct {
 
 func (x *NetIDRangeGrant) Reset() {
 	*x = NetIDRangeGrant{}
-	mi := &file_meshpb_mesh_proto_msgTypes[27]
+	mi := &file_meshpb_mesh_proto_msgTypes[30]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2315,7 +2569,7 @@ func (x *NetIDRangeGrant) String() string {
 func (*NetIDRangeGrant) ProtoMessage() {}
 
 func (x *NetIDRangeGrant) ProtoReflect() protoreflect.Message {
-	mi := &file_meshpb_mesh_proto_msgTypes[27]
+	mi := &file_meshpb_mesh_proto_msgTypes[30]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2328,7 +2582,7 @@ func (x *NetIDRangeGrant) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use NetIDRangeGrant.ProtoReflect.Descriptor instead.
 func (*NetIDRangeGrant) Descriptor() ([]byte, []int) {
-	return file_meshpb_mesh_proto_rawDescGZIP(), []int{27}
+	return file_meshpb_mesh_proto_rawDescGZIP(), []int{30}
 }
 
 func (x *NetIDRangeGrant) GetHostId() string {
@@ -2362,7 +2616,7 @@ type PersistResult struct {
 
 func (x *PersistResult) Reset() {
 	*x = PersistResult{}
-	mi := &file_meshpb_mesh_proto_msgTypes[28]
+	mi := &file_meshpb_mesh_proto_msgTypes[31]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2374,7 +2628,7 @@ func (x *PersistResult) String() string {
 func (*PersistResult) ProtoMessage() {}
 
 func (x *PersistResult) ProtoReflect() protoreflect.Message {
-	mi := &file_meshpb_mesh_proto_msgTypes[28]
+	mi := &file_meshpb_mesh_proto_msgTypes[31]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2387,7 +2641,7 @@ func (x *PersistResult) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PersistResult.ProtoReflect.Descriptor instead.
 func (*PersistResult) Descriptor() ([]byte, []int) {
-	return file_meshpb_mesh_proto_rawDescGZIP(), []int{28}
+	return file_meshpb_mesh_proto_rawDescGZIP(), []int{31}
 }
 
 func (x *PersistResult) GetOk() bool {
@@ -2420,7 +2674,7 @@ type UpstreamSwitch struct {
 
 func (x *UpstreamSwitch) Reset() {
 	*x = UpstreamSwitch{}
-	mi := &file_meshpb_mesh_proto_msgTypes[29]
+	mi := &file_meshpb_mesh_proto_msgTypes[32]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2432,7 +2686,7 @@ func (x *UpstreamSwitch) String() string {
 func (*UpstreamSwitch) ProtoMessage() {}
 
 func (x *UpstreamSwitch) ProtoReflect() protoreflect.Message {
-	mi := &file_meshpb_mesh_proto_msgTypes[29]
+	mi := &file_meshpb_mesh_proto_msgTypes[32]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2445,7 +2699,7 @@ func (x *UpstreamSwitch) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UpstreamSwitch.ProtoReflect.Descriptor instead.
 func (*UpstreamSwitch) Descriptor() ([]byte, []int) {
-	return file_meshpb_mesh_proto_rawDescGZIP(), []int{29}
+	return file_meshpb_mesh_proto_rawDescGZIP(), []int{32}
 }
 
 func (x *UpstreamSwitch) GetGatewayId() string {
@@ -2495,7 +2749,7 @@ type GracefulLeave struct {
 
 func (x *GracefulLeave) Reset() {
 	*x = GracefulLeave{}
-	mi := &file_meshpb_mesh_proto_msgTypes[30]
+	mi := &file_meshpb_mesh_proto_msgTypes[33]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2507,7 +2761,7 @@ func (x *GracefulLeave) String() string {
 func (*GracefulLeave) ProtoMessage() {}
 
 func (x *GracefulLeave) ProtoReflect() protoreflect.Message {
-	mi := &file_meshpb_mesh_proto_msgTypes[30]
+	mi := &file_meshpb_mesh_proto_msgTypes[33]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2520,7 +2774,7 @@ func (x *GracefulLeave) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GracefulLeave.ProtoReflect.Descriptor instead.
 func (*GracefulLeave) Descriptor() ([]byte, []int) {
-	return file_meshpb_mesh_proto_rawDescGZIP(), []int{30}
+	return file_meshpb_mesh_proto_rawDescGZIP(), []int{33}
 }
 
 func (x *GracefulLeave) GetHostId() string {
@@ -2541,7 +2795,7 @@ type CellsDrained struct {
 
 func (x *CellsDrained) Reset() {
 	*x = CellsDrained{}
-	mi := &file_meshpb_mesh_proto_msgTypes[31]
+	mi := &file_meshpb_mesh_proto_msgTypes[34]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2553,7 +2807,7 @@ func (x *CellsDrained) String() string {
 func (*CellsDrained) ProtoMessage() {}
 
 func (x *CellsDrained) ProtoReflect() protoreflect.Message {
-	mi := &file_meshpb_mesh_proto_msgTypes[31]
+	mi := &file_meshpb_mesh_proto_msgTypes[34]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2566,7 +2820,7 @@ func (x *CellsDrained) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CellsDrained.ProtoReflect.Descriptor instead.
 func (*CellsDrained) Descriptor() ([]byte, []int) {
-	return file_meshpb_mesh_proto_rawDescGZIP(), []int{31}
+	return file_meshpb_mesh_proto_rawDescGZIP(), []int{34}
 }
 
 func (x *CellsDrained) GetHostId() string {
@@ -2598,7 +2852,7 @@ type CoordTimeSync struct {
 
 func (x *CoordTimeSync) Reset() {
 	*x = CoordTimeSync{}
-	mi := &file_meshpb_mesh_proto_msgTypes[32]
+	mi := &file_meshpb_mesh_proto_msgTypes[35]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2610,7 +2864,7 @@ func (x *CoordTimeSync) String() string {
 func (*CoordTimeSync) ProtoMessage() {}
 
 func (x *CoordTimeSync) ProtoReflect() protoreflect.Message {
-	mi := &file_meshpb_mesh_proto_msgTypes[32]
+	mi := &file_meshpb_mesh_proto_msgTypes[35]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2623,7 +2877,7 @@ func (x *CoordTimeSync) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CoordTimeSync.ProtoReflect.Descriptor instead.
 func (*CoordTimeSync) Descriptor() ([]byte, []int) {
-	return file_meshpb_mesh_proto_rawDescGZIP(), []int{32}
+	return file_meshpb_mesh_proto_rawDescGZIP(), []int{35}
 }
 
 func (x *CoordTimeSync) GetCoordTimeMs() uint64 {
@@ -2655,7 +2909,7 @@ type CommandRequest struct {
 
 func (x *CommandRequest) Reset() {
 	*x = CommandRequest{}
-	mi := &file_meshpb_mesh_proto_msgTypes[33]
+	mi := &file_meshpb_mesh_proto_msgTypes[36]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2667,7 +2921,7 @@ func (x *CommandRequest) String() string {
 func (*CommandRequest) ProtoMessage() {}
 
 func (x *CommandRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_meshpb_mesh_proto_msgTypes[33]
+	mi := &file_meshpb_mesh_proto_msgTypes[36]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2680,7 +2934,7 @@ func (x *CommandRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CommandRequest.ProtoReflect.Descriptor instead.
 func (*CommandRequest) Descriptor() ([]byte, []int) {
-	return file_meshpb_mesh_proto_rawDescGZIP(), []int{33}
+	return file_meshpb_mesh_proto_rawDescGZIP(), []int{36}
 }
 
 func (x *CommandRequest) GetRequestId() uint64 {
@@ -2747,7 +3001,7 @@ type CommandResponse struct {
 
 func (x *CommandResponse) Reset() {
 	*x = CommandResponse{}
-	mi := &file_meshpb_mesh_proto_msgTypes[34]
+	mi := &file_meshpb_mesh_proto_msgTypes[37]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2759,7 +3013,7 @@ func (x *CommandResponse) String() string {
 func (*CommandResponse) ProtoMessage() {}
 
 func (x *CommandResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_meshpb_mesh_proto_msgTypes[34]
+	mi := &file_meshpb_mesh_proto_msgTypes[37]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2772,7 +3026,7 @@ func (x *CommandResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CommandResponse.ProtoReflect.Descriptor instead.
 func (*CommandResponse) Descriptor() ([]byte, []int) {
-	return file_meshpb_mesh_proto_rawDescGZIP(), []int{34}
+	return file_meshpb_mesh_proto_rawDescGZIP(), []int{37}
 }
 
 func (x *CommandResponse) GetRequestId() uint64 {
@@ -2834,7 +3088,7 @@ type CommandCancel struct {
 
 func (x *CommandCancel) Reset() {
 	*x = CommandCancel{}
-	mi := &file_meshpb_mesh_proto_msgTypes[35]
+	mi := &file_meshpb_mesh_proto_msgTypes[38]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2846,7 +3100,7 @@ func (x *CommandCancel) String() string {
 func (*CommandCancel) ProtoMessage() {}
 
 func (x *CommandCancel) ProtoReflect() protoreflect.Message {
-	mi := &file_meshpb_mesh_proto_msgTypes[35]
+	mi := &file_meshpb_mesh_proto_msgTypes[38]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2859,7 +3113,7 @@ func (x *CommandCancel) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CommandCancel.ProtoReflect.Descriptor instead.
 func (*CommandCancel) Descriptor() ([]byte, []int) {
-	return file_meshpb_mesh_proto_rawDescGZIP(), []int{35}
+	return file_meshpb_mesh_proto_rawDescGZIP(), []int{38}
 }
 
 func (x *CommandCancel) GetRequestId() uint64 {
@@ -2887,7 +3141,7 @@ type Caller struct {
 
 func (x *Caller) Reset() {
 	*x = Caller{}
-	mi := &file_meshpb_mesh_proto_msgTypes[36]
+	mi := &file_meshpb_mesh_proto_msgTypes[39]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2899,7 +3153,7 @@ func (x *Caller) String() string {
 func (*Caller) ProtoMessage() {}
 
 func (x *Caller) ProtoReflect() protoreflect.Message {
-	mi := &file_meshpb_mesh_proto_msgTypes[36]
+	mi := &file_meshpb_mesh_proto_msgTypes[39]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2912,7 +3166,7 @@ func (x *Caller) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Caller.ProtoReflect.Descriptor instead.
 func (*Caller) Descriptor() ([]byte, []int) {
-	return file_meshpb_mesh_proto_rawDescGZIP(), []int{36}
+	return file_meshpb_mesh_proto_rawDescGZIP(), []int{39}
 }
 
 func (x *Caller) GetId() string {
@@ -2946,7 +3200,7 @@ type Grant struct {
 
 func (x *Grant) Reset() {
 	*x = Grant{}
-	mi := &file_meshpb_mesh_proto_msgTypes[37]
+	mi := &file_meshpb_mesh_proto_msgTypes[40]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2958,7 +3212,7 @@ func (x *Grant) String() string {
 func (*Grant) ProtoMessage() {}
 
 func (x *Grant) ProtoReflect() protoreflect.Message {
-	mi := &file_meshpb_mesh_proto_msgTypes[37]
+	mi := &file_meshpb_mesh_proto_msgTypes[40]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2971,7 +3225,7 @@ func (x *Grant) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Grant.ProtoReflect.Descriptor instead.
 func (*Grant) Descriptor() ([]byte, []int) {
-	return file_meshpb_mesh_proto_rawDescGZIP(), []int{37}
+	return file_meshpb_mesh_proto_rawDescGZIP(), []int{40}
 }
 
 func (x *Grant) GetPattern() string {
@@ -3017,7 +3271,7 @@ type MeshFrame struct {
 
 func (x *MeshFrame) Reset() {
 	*x = MeshFrame{}
-	mi := &file_meshpb_mesh_proto_msgTypes[38]
+	mi := &file_meshpb_mesh_proto_msgTypes[41]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3029,7 +3283,7 @@ func (x *MeshFrame) String() string {
 func (*MeshFrame) ProtoMessage() {}
 
 func (x *MeshFrame) ProtoReflect() protoreflect.Message {
-	mi := &file_meshpb_mesh_proto_msgTypes[38]
+	mi := &file_meshpb_mesh_proto_msgTypes[41]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3042,7 +3296,7 @@ func (x *MeshFrame) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MeshFrame.ProtoReflect.Descriptor instead.
 func (*MeshFrame) Descriptor() ([]byte, []int) {
-	return file_meshpb_mesh_proto_rawDescGZIP(), []int{38}
+	return file_meshpb_mesh_proto_rawDescGZIP(), []int{41}
 }
 
 func (x *MeshFrame) GetDestCellId() string {
@@ -3285,7 +3539,7 @@ type BorderFrame struct {
 
 func (x *BorderFrame) Reset() {
 	*x = BorderFrame{}
-	mi := &file_meshpb_mesh_proto_msgTypes[39]
+	mi := &file_meshpb_mesh_proto_msgTypes[42]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3297,7 +3551,7 @@ func (x *BorderFrame) String() string {
 func (*BorderFrame) ProtoMessage() {}
 
 func (x *BorderFrame) ProtoReflect() protoreflect.Message {
-	mi := &file_meshpb_mesh_proto_msgTypes[39]
+	mi := &file_meshpb_mesh_proto_msgTypes[42]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3310,7 +3564,7 @@ func (x *BorderFrame) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use BorderFrame.ProtoReflect.Descriptor instead.
 func (*BorderFrame) Descriptor() ([]byte, []int) {
-	return file_meshpb_mesh_proto_rawDescGZIP(), []int{39}
+	return file_meshpb_mesh_proto_rawDescGZIP(), []int{42}
 }
 
 func (x *BorderFrame) GetFromCellId() string {
@@ -3351,7 +3605,7 @@ type Handoff struct {
 
 func (x *Handoff) Reset() {
 	*x = Handoff{}
-	mi := &file_meshpb_mesh_proto_msgTypes[40]
+	mi := &file_meshpb_mesh_proto_msgTypes[43]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3363,7 +3617,7 @@ func (x *Handoff) String() string {
 func (*Handoff) ProtoMessage() {}
 
 func (x *Handoff) ProtoReflect() protoreflect.Message {
-	mi := &file_meshpb_mesh_proto_msgTypes[40]
+	mi := &file_meshpb_mesh_proto_msgTypes[43]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3376,7 +3630,7 @@ func (x *Handoff) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Handoff.ProtoReflect.Descriptor instead.
 func (*Handoff) Descriptor() ([]byte, []int) {
-	return file_meshpb_mesh_proto_rawDescGZIP(), []int{40}
+	return file_meshpb_mesh_proto_rawDescGZIP(), []int{43}
 }
 
 func (x *Handoff) GetFromCellId() string {
@@ -3435,7 +3689,7 @@ type ForwardInput struct {
 
 func (x *ForwardInput) Reset() {
 	*x = ForwardInput{}
-	mi := &file_meshpb_mesh_proto_msgTypes[41]
+	mi := &file_meshpb_mesh_proto_msgTypes[44]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3447,7 +3701,7 @@ func (x *ForwardInput) String() string {
 func (*ForwardInput) ProtoMessage() {}
 
 func (x *ForwardInput) ProtoReflect() protoreflect.Message {
-	mi := &file_meshpb_mesh_proto_msgTypes[41]
+	mi := &file_meshpb_mesh_proto_msgTypes[44]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3460,7 +3714,7 @@ func (x *ForwardInput) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ForwardInput.ProtoReflect.Descriptor instead.
 func (*ForwardInput) Descriptor() ([]byte, []int) {
-	return file_meshpb_mesh_proto_rawDescGZIP(), []int{41}
+	return file_meshpb_mesh_proto_rawDescGZIP(), []int{44}
 }
 
 func (x *ForwardInput) GetFromCellId() string {
@@ -3506,7 +3760,7 @@ type CrossCellAction struct {
 
 func (x *CrossCellAction) Reset() {
 	*x = CrossCellAction{}
-	mi := &file_meshpb_mesh_proto_msgTypes[42]
+	mi := &file_meshpb_mesh_proto_msgTypes[45]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3518,7 +3772,7 @@ func (x *CrossCellAction) String() string {
 func (*CrossCellAction) ProtoMessage() {}
 
 func (x *CrossCellAction) ProtoReflect() protoreflect.Message {
-	mi := &file_meshpb_mesh_proto_msgTypes[42]
+	mi := &file_meshpb_mesh_proto_msgTypes[45]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3531,7 +3785,7 @@ func (x *CrossCellAction) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CrossCellAction.ProtoReflect.Descriptor instead.
 func (*CrossCellAction) Descriptor() ([]byte, []int) {
-	return file_meshpb_mesh_proto_rawDescGZIP(), []int{42}
+	return file_meshpb_mesh_proto_rawDescGZIP(), []int{45}
 }
 
 func (x *CrossCellAction) GetFromCellId() string {
@@ -3590,7 +3844,7 @@ type Location struct {
 
 func (x *Location) Reset() {
 	*x = Location{}
-	mi := &file_meshpb_mesh_proto_msgTypes[43]
+	mi := &file_meshpb_mesh_proto_msgTypes[46]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3602,7 +3856,7 @@ func (x *Location) String() string {
 func (*Location) ProtoMessage() {}
 
 func (x *Location) ProtoReflect() protoreflect.Message {
-	mi := &file_meshpb_mesh_proto_msgTypes[43]
+	mi := &file_meshpb_mesh_proto_msgTypes[46]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3615,7 +3869,7 @@ func (x *Location) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Location.ProtoReflect.Descriptor instead.
 func (*Location) Descriptor() ([]byte, []int) {
-	return file_meshpb_mesh_proto_rawDescGZIP(), []int{43}
+	return file_meshpb_mesh_proto_rawDescGZIP(), []int{46}
 }
 
 func (x *Location) GetX() float32 {
@@ -3667,7 +3921,7 @@ type PlayerAssignment struct {
 
 func (x *PlayerAssignment) Reset() {
 	*x = PlayerAssignment{}
-	mi := &file_meshpb_mesh_proto_msgTypes[44]
+	mi := &file_meshpb_mesh_proto_msgTypes[47]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3679,7 +3933,7 @@ func (x *PlayerAssignment) String() string {
 func (*PlayerAssignment) ProtoMessage() {}
 
 func (x *PlayerAssignment) ProtoReflect() protoreflect.Message {
-	mi := &file_meshpb_mesh_proto_msgTypes[44]
+	mi := &file_meshpb_mesh_proto_msgTypes[47]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3692,7 +3946,7 @@ func (x *PlayerAssignment) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PlayerAssignment.ProtoReflect.Descriptor instead.
 func (*PlayerAssignment) Descriptor() ([]byte, []int) {
-	return file_meshpb_mesh_proto_rawDescGZIP(), []int{44}
+	return file_meshpb_mesh_proto_rawDescGZIP(), []int{47}
 }
 
 func (x *PlayerAssignment) GetFromCellId() string {
@@ -3779,7 +4033,7 @@ type SessionTransfer struct {
 
 func (x *SessionTransfer) Reset() {
 	*x = SessionTransfer{}
-	mi := &file_meshpb_mesh_proto_msgTypes[45]
+	mi := &file_meshpb_mesh_proto_msgTypes[48]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3791,7 +4045,7 @@ func (x *SessionTransfer) String() string {
 func (*SessionTransfer) ProtoMessage() {}
 
 func (x *SessionTransfer) ProtoReflect() protoreflect.Message {
-	mi := &file_meshpb_mesh_proto_msgTypes[45]
+	mi := &file_meshpb_mesh_proto_msgTypes[48]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3804,7 +4058,7 @@ func (x *SessionTransfer) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SessionTransfer.ProtoReflect.Descriptor instead.
 func (*SessionTransfer) Descriptor() ([]byte, []int) {
-	return file_meshpb_mesh_proto_rawDescGZIP(), []int{45}
+	return file_meshpb_mesh_proto_rawDescGZIP(), []int{48}
 }
 
 func (x *SessionTransfer) GetFromCellId() string {
@@ -3855,7 +4109,7 @@ type SpawnTransfer struct {
 
 func (x *SpawnTransfer) Reset() {
 	*x = SpawnTransfer{}
-	mi := &file_meshpb_mesh_proto_msgTypes[46]
+	mi := &file_meshpb_mesh_proto_msgTypes[49]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3867,7 +4121,7 @@ func (x *SpawnTransfer) String() string {
 func (*SpawnTransfer) ProtoMessage() {}
 
 func (x *SpawnTransfer) ProtoReflect() protoreflect.Message {
-	mi := &file_meshpb_mesh_proto_msgTypes[46]
+	mi := &file_meshpb_mesh_proto_msgTypes[49]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3880,7 +4134,7 @@ func (x *SpawnTransfer) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SpawnTransfer.ProtoReflect.Descriptor instead.
 func (*SpawnTransfer) Descriptor() ([]byte, []int) {
-	return file_meshpb_mesh_proto_rawDescGZIP(), []int{46}
+	return file_meshpb_mesh_proto_rawDescGZIP(), []int{49}
 }
 
 func (x *SpawnTransfer) GetFromCellId() string {
@@ -3932,7 +4186,7 @@ type CellTransfer struct {
 
 func (x *CellTransfer) Reset() {
 	*x = CellTransfer{}
-	mi := &file_meshpb_mesh_proto_msgTypes[47]
+	mi := &file_meshpb_mesh_proto_msgTypes[50]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3944,7 +4198,7 @@ func (x *CellTransfer) String() string {
 func (*CellTransfer) ProtoMessage() {}
 
 func (x *CellTransfer) ProtoReflect() protoreflect.Message {
-	mi := &file_meshpb_mesh_proto_msgTypes[47]
+	mi := &file_meshpb_mesh_proto_msgTypes[50]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3957,7 +4211,7 @@ func (x *CellTransfer) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CellTransfer.ProtoReflect.Descriptor instead.
 func (*CellTransfer) Descriptor() ([]byte, []int) {
-	return file_meshpb_mesh_proto_rawDescGZIP(), []int{47}
+	return file_meshpb_mesh_proto_rawDescGZIP(), []int{50}
 }
 
 func (x *CellTransfer) GetRequestId() uint64 {
@@ -4044,7 +4298,7 @@ type CellBounds struct {
 
 func (x *CellBounds) Reset() {
 	*x = CellBounds{}
-	mi := &file_meshpb_mesh_proto_msgTypes[48]
+	mi := &file_meshpb_mesh_proto_msgTypes[51]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4056,7 +4310,7 @@ func (x *CellBounds) String() string {
 func (*CellBounds) ProtoMessage() {}
 
 func (x *CellBounds) ProtoReflect() protoreflect.Message {
-	mi := &file_meshpb_mesh_proto_msgTypes[48]
+	mi := &file_meshpb_mesh_proto_msgTypes[51]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4069,7 +4323,7 @@ func (x *CellBounds) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CellBounds.ProtoReflect.Descriptor instead.
 func (*CellBounds) Descriptor() ([]byte, []int) {
-	return file_meshpb_mesh_proto_rawDescGZIP(), []int{48}
+	return file_meshpb_mesh_proto_rawDescGZIP(), []int{51}
 }
 
 func (x *CellBounds) GetMinX() float32 {
@@ -4120,7 +4374,7 @@ type CellTransferReady struct {
 
 func (x *CellTransferReady) Reset() {
 	*x = CellTransferReady{}
-	mi := &file_meshpb_mesh_proto_msgTypes[49]
+	mi := &file_meshpb_mesh_proto_msgTypes[52]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4132,7 +4386,7 @@ func (x *CellTransferReady) String() string {
 func (*CellTransferReady) ProtoMessage() {}
 
 func (x *CellTransferReady) ProtoReflect() protoreflect.Message {
-	mi := &file_meshpb_mesh_proto_msgTypes[49]
+	mi := &file_meshpb_mesh_proto_msgTypes[52]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4145,7 +4399,7 @@ func (x *CellTransferReady) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CellTransferReady.ProtoReflect.Descriptor instead.
 func (*CellTransferReady) Descriptor() ([]byte, []int) {
-	return file_meshpb_mesh_proto_rawDescGZIP(), []int{49}
+	return file_meshpb_mesh_proto_rawDescGZIP(), []int{52}
 }
 
 func (x *CellTransferReady) GetRequestId() uint64 {
@@ -4212,7 +4466,7 @@ type ResolveSpawn struct {
 
 func (x *ResolveSpawn) Reset() {
 	*x = ResolveSpawn{}
-	mi := &file_meshpb_mesh_proto_msgTypes[50]
+	mi := &file_meshpb_mesh_proto_msgTypes[53]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4224,7 +4478,7 @@ func (x *ResolveSpawn) String() string {
 func (*ResolveSpawn) ProtoMessage() {}
 
 func (x *ResolveSpawn) ProtoReflect() protoreflect.Message {
-	mi := &file_meshpb_mesh_proto_msgTypes[50]
+	mi := &file_meshpb_mesh_proto_msgTypes[53]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4237,7 +4491,7 @@ func (x *ResolveSpawn) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ResolveSpawn.ProtoReflect.Descriptor instead.
 func (*ResolveSpawn) Descriptor() ([]byte, []int) {
-	return file_meshpb_mesh_proto_rawDescGZIP(), []int{50}
+	return file_meshpb_mesh_proto_rawDescGZIP(), []int{53}
 }
 
 func (x *ResolveSpawn) GetRequestId() uint64 {
@@ -4289,7 +4543,7 @@ type HostOpAck struct {
 
 func (x *HostOpAck) Reset() {
 	*x = HostOpAck{}
-	mi := &file_meshpb_mesh_proto_msgTypes[51]
+	mi := &file_meshpb_mesh_proto_msgTypes[54]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4301,7 +4555,7 @@ func (x *HostOpAck) String() string {
 func (*HostOpAck) ProtoMessage() {}
 
 func (x *HostOpAck) ProtoReflect() protoreflect.Message {
-	mi := &file_meshpb_mesh_proto_msgTypes[51]
+	mi := &file_meshpb_mesh_proto_msgTypes[54]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4314,7 +4568,7 @@ func (x *HostOpAck) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use HostOpAck.ProtoReflect.Descriptor instead.
 func (*HostOpAck) Descriptor() ([]byte, []int) {
-	return file_meshpb_mesh_proto_rawDescGZIP(), []int{51}
+	return file_meshpb_mesh_proto_rawDescGZIP(), []int{54}
 }
 
 func (x *HostOpAck) GetReqId() uint64 {
@@ -4364,7 +4618,7 @@ type SpawnResolved struct {
 
 func (x *SpawnResolved) Reset() {
 	*x = SpawnResolved{}
-	mi := &file_meshpb_mesh_proto_msgTypes[52]
+	mi := &file_meshpb_mesh_proto_msgTypes[55]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4376,7 +4630,7 @@ func (x *SpawnResolved) String() string {
 func (*SpawnResolved) ProtoMessage() {}
 
 func (x *SpawnResolved) ProtoReflect() protoreflect.Message {
-	mi := &file_meshpb_mesh_proto_msgTypes[52]
+	mi := &file_meshpb_mesh_proto_msgTypes[55]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4389,7 +4643,7 @@ func (x *SpawnResolved) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SpawnResolved.ProtoReflect.Descriptor instead.
 func (*SpawnResolved) Descriptor() ([]byte, []int) {
-	return file_meshpb_mesh_proto_rawDescGZIP(), []int{52}
+	return file_meshpb_mesh_proto_rawDescGZIP(), []int{55}
 }
 
 func (x *SpawnResolved) GetRequestId() uint64 {
@@ -4465,7 +4719,7 @@ type SessionRegister struct {
 
 func (x *SessionRegister) Reset() {
 	*x = SessionRegister{}
-	mi := &file_meshpb_mesh_proto_msgTypes[53]
+	mi := &file_meshpb_mesh_proto_msgTypes[56]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4477,7 +4731,7 @@ func (x *SessionRegister) String() string {
 func (*SessionRegister) ProtoMessage() {}
 
 func (x *SessionRegister) ProtoReflect() protoreflect.Message {
-	mi := &file_meshpb_mesh_proto_msgTypes[53]
+	mi := &file_meshpb_mesh_proto_msgTypes[56]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4490,7 +4744,7 @@ func (x *SessionRegister) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SessionRegister.ProtoReflect.Descriptor instead.
 func (*SessionRegister) Descriptor() ([]byte, []int) {
-	return file_meshpb_mesh_proto_rawDescGZIP(), []int{53}
+	return file_meshpb_mesh_proto_rawDescGZIP(), []int{56}
 }
 
 func (x *SessionRegister) GetGatewayId() string {
@@ -4539,7 +4793,7 @@ type CellTransferAbort struct {
 
 func (x *CellTransferAbort) Reset() {
 	*x = CellTransferAbort{}
-	mi := &file_meshpb_mesh_proto_msgTypes[54]
+	mi := &file_meshpb_mesh_proto_msgTypes[57]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4551,7 +4805,7 @@ func (x *CellTransferAbort) String() string {
 func (*CellTransferAbort) ProtoMessage() {}
 
 func (x *CellTransferAbort) ProtoReflect() protoreflect.Message {
-	mi := &file_meshpb_mesh_proto_msgTypes[54]
+	mi := &file_meshpb_mesh_proto_msgTypes[57]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4564,7 +4818,7 @@ func (x *CellTransferAbort) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CellTransferAbort.ProtoReflect.Descriptor instead.
 func (*CellTransferAbort) Descriptor() ([]byte, []int) {
-	return file_meshpb_mesh_proto_rawDescGZIP(), []int{54}
+	return file_meshpb_mesh_proto_rawDescGZIP(), []int{57}
 }
 
 func (x *CellTransferAbort) GetRequestId() uint64 {
@@ -4594,7 +4848,7 @@ type ClientInput struct {
 
 func (x *ClientInput) Reset() {
 	*x = ClientInput{}
-	mi := &file_meshpb_mesh_proto_msgTypes[55]
+	mi := &file_meshpb_mesh_proto_msgTypes[58]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4606,7 +4860,7 @@ func (x *ClientInput) String() string {
 func (*ClientInput) ProtoMessage() {}
 
 func (x *ClientInput) ProtoReflect() protoreflect.Message {
-	mi := &file_meshpb_mesh_proto_msgTypes[55]
+	mi := &file_meshpb_mesh_proto_msgTypes[58]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4619,7 +4873,7 @@ func (x *ClientInput) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ClientInput.ProtoReflect.Descriptor instead.
 func (*ClientInput) Descriptor() ([]byte, []int) {
-	return file_meshpb_mesh_proto_rawDescGZIP(), []int{55}
+	return file_meshpb_mesh_proto_rawDescGZIP(), []int{58}
 }
 
 func (x *ClientInput) GetConnId() uint32 {
@@ -4670,7 +4924,7 @@ type ClientFrame struct {
 
 func (x *ClientFrame) Reset() {
 	*x = ClientFrame{}
-	mi := &file_meshpb_mesh_proto_msgTypes[56]
+	mi := &file_meshpb_mesh_proto_msgTypes[59]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4682,7 +4936,7 @@ func (x *ClientFrame) String() string {
 func (*ClientFrame) ProtoMessage() {}
 
 func (x *ClientFrame) ProtoReflect() protoreflect.Message {
-	mi := &file_meshpb_mesh_proto_msgTypes[56]
+	mi := &file_meshpb_mesh_proto_msgTypes[59]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4695,7 +4949,7 @@ func (x *ClientFrame) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ClientFrame.ProtoReflect.Descriptor instead.
 func (*ClientFrame) Descriptor() ([]byte, []int) {
-	return file_meshpb_mesh_proto_rawDescGZIP(), []int{56}
+	return file_meshpb_mesh_proto_rawDescGZIP(), []int{59}
 }
 
 func (x *ClientFrame) GetConnId() uint32 {
@@ -4738,7 +4992,7 @@ type ClientDisconnect struct {
 
 func (x *ClientDisconnect) Reset() {
 	*x = ClientDisconnect{}
-	mi := &file_meshpb_mesh_proto_msgTypes[57]
+	mi := &file_meshpb_mesh_proto_msgTypes[60]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4750,7 +5004,7 @@ func (x *ClientDisconnect) String() string {
 func (*ClientDisconnect) ProtoMessage() {}
 
 func (x *ClientDisconnect) ProtoReflect() protoreflect.Message {
-	mi := &file_meshpb_mesh_proto_msgTypes[57]
+	mi := &file_meshpb_mesh_proto_msgTypes[60]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4763,7 +5017,7 @@ func (x *ClientDisconnect) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ClientDisconnect.ProtoReflect.Descriptor instead.
 func (*ClientDisconnect) Descriptor() ([]byte, []int) {
-	return file_meshpb_mesh_proto_rawDescGZIP(), []int{57}
+	return file_meshpb_mesh_proto_rawDescGZIP(), []int{60}
 }
 
 func (x *ClientDisconnect) GetGatewayId() string {
@@ -4791,7 +5045,7 @@ var File_meshpb_mesh_proto protoreflect.FileDescriptor
 
 const file_meshpb_mesh_proto_rawDesc = "" +
 	"\n" +
-	"\x11meshpb/mesh.proto\x12\x06meshpb\"\x99\n" +
+	"\x11meshpb/mesh.proto\x12\x06meshpb\"\xca\n" +
 	"\n" +
 	"\vHostMessage\x122\n" +
 	"\bregister\x18\x01 \x01(\v2\x14.meshpb.RegisterHostH\x00R\bregister\x121\n" +
@@ -4814,7 +5068,8 @@ const file_meshpb_mesh_proto_rawDesc = "" +
 	"\rresolve_spawn\x18\x11 \x01(\v2\x14.meshpb.ResolveSpawnH\x00R\fresolveSpawn\x123\n" +
 	"\vhost_op_ack\x18\x12 \x01(\v2\x11.meshpb.HostOpAckH\x00R\thostOpAck\x12D\n" +
 	"\x10service_announce\x18\x13 \x01(\v2\x17.meshpb.ServiceAnnounceH\x00R\x0fserviceAnnounce\x12;\n" +
-	"\rservice_leave\x18\x14 \x01(\v2\x14.meshpb.ServiceLeaveH\x00R\fserviceLeave\x12W\n" +
+	"\rservice_leave\x18\x14 \x01(\v2\x14.meshpb.ServiceLeaveH\x00R\fserviceLeave\x12/\n" +
+	"\tlog_batch\x18\x15 \x01(\v2\x10.meshpb.LogBatchH\x00R\blogBatch\x12W\n" +
 	"\x17service_event_subscribe\x183 \x01(\v2\x1d.meshpb.ServiceEventSubscribeH\x00R\x15serviceEventSubscribeB\x05\n" +
 	"\x03msg\"\xe0\b\n" +
 	"\fCoordMessage\x12 \n" +
@@ -4846,10 +5101,32 @@ const file_meshpb_mesh_proto_rawDesc = "" +
 	"\ahost_id\x18\x01 \x01(\tR\x06hostId\x12\x1b\n" +
 	"\tgrpc_addr\x18\x02 \x01(\tR\bgrpcAddr\x12\"\n" +
 	"\rhas_player_db\x18\x03 \x01(\bR\vhasPlayerDb\x12!\n" +
-	"\fservice_only\x18\x04 \x01(\bR\vserviceOnly\"8\n" +
+	"\fservice_only\x18\x04 \x01(\bR\vserviceOnly\"m\n" +
 	"\tHeartbeat\x12\x17\n" +
 	"\ahost_id\x18\x01 \x01(\tR\x06hostId\x12\x12\n" +
-	"\x04tick\x18\x02 \x01(\x04R\x04tick\"=\n" +
+	"\x04tick\x18\x02 \x01(\x04R\x04tick\x123\n" +
+	"\ametrics\x18\x03 \x03(\v2\x19.meshpb.CellMetricsReportR\ametrics\"\xf7\x02\n" +
+	"\x11CellMetricsReport\x12\x17\n" +
+	"\acell_id\x18\x01 \x01(\tR\x06cellId\x12%\n" +
+	"\x0ecomposite_load\x18\x02 \x01(\x01R\rcompositeLoad\x12\x1e\n" +
+	"\vtick_p99_us\x18\x03 \x01(\x03R\ttickP99Us\x12\x1e\n" +
+	"\vtick_p95_us\x18\x04 \x01(\x03R\ttickP95Us\x12#\n" +
+	"\rentities_real\x18\x05 \x01(\x05R\fentitiesReal\x12)\n" +
+	"\x10entities_replica\x18\x06 \x01(\x05R\x0fentitiesReplica\x12%\n" +
+	"\x0eentities_ghost\x18\a \x01(\x05R\rentitiesGhost\x12-\n" +
+	"\x12entities_connected\x18\b \x01(\x05R\x11entitiesConnected\x12\x1d\n" +
+	"\n" +
+	"bytes_sent\x18\t \x01(\x04R\tbytesSent\x12\x1d\n" +
+	"\n" +
+	"bytes_recv\x18\n" +
+	" \x01(\x04R\tbytesRecv\"6\n" +
+	"\bLogBatch\x12*\n" +
+	"\aentries\x18\x01 \x03(\v2\x10.meshpb.LogEntryR\aentries\"L\n" +
+	"\bLogEntry\x12\x10\n" +
+	"\x03cat\x18\x01 \x01(\tR\x03cat\x12\x10\n" +
+	"\x03msg\x18\x02 \x01(\tR\x03msg\x12\x1c\n" +
+	"\n" +
+	"ts_unix_ms\x18\x03 \x01(\x03R\btsUnixMs\"=\n" +
 	"\tCellReady\x12\x17\n" +
 	"\ahost_id\x18\x01 \x01(\tR\x06hostId\x12\x17\n" +
 	"\acell_id\x18\x02 \x01(\tR\x06cellId\"?\n" +
@@ -5196,142 +5473,148 @@ func file_meshpb_mesh_proto_rawDescGZIP() []byte {
 }
 
 var file_meshpb_mesh_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_meshpb_mesh_proto_msgTypes = make([]protoimpl.MessageInfo, 59)
+var file_meshpb_mesh_proto_msgTypes = make([]protoimpl.MessageInfo, 62)
 var file_meshpb_mesh_proto_goTypes = []any{
 	(CellTransferKind)(0),         // 0: meshpb.CellTransferKind
 	(*HostMessage)(nil),           // 1: meshpb.HostMessage
 	(*CoordMessage)(nil),          // 2: meshpb.CoordMessage
 	(*RegisterHost)(nil),          // 3: meshpb.RegisterHost
 	(*Heartbeat)(nil),             // 4: meshpb.Heartbeat
-	(*CellReady)(nil),             // 5: meshpb.CellReady
-	(*CellStopped)(nil),           // 6: meshpb.CellStopped
-	(*SplitComplete)(nil),         // 7: meshpb.SplitComplete
-	(*MergeComplete)(nil),         // 8: meshpb.MergeComplete
-	(*PersistBatch)(nil),          // 9: meshpb.PersistBatch
-	(*PlayerHandoff)(nil),         // 10: meshpb.PlayerHandoff
-	(*RegisterGateway)(nil),       // 11: meshpb.RegisterGateway
-	(*SessionAnnounce)(nil),       // 12: meshpb.SessionAnnounce
-	(*PlayerMigrated)(nil),        // 13: meshpb.PlayerMigrated
-	(*RegisterAck)(nil),           // 14: meshpb.RegisterAck
-	(*CellAssign)(nil),            // 15: meshpb.CellAssign
-	(*CellRelease)(nil),           // 16: meshpb.CellRelease
-	(*CellRename)(nil),            // 17: meshpb.CellRename
-	(*PeerList)(nil),              // 18: meshpb.PeerList
-	(*CellOwnership)(nil),         // 19: meshpb.CellOwnership
-	(*HostRecord)(nil),            // 20: meshpb.HostRecord
-	(*GatewayRecord)(nil),         // 21: meshpb.GatewayRecord
-	(*ServiceRecord)(nil),         // 22: meshpb.ServiceRecord
-	(*ServiceAnnounce)(nil),       // 23: meshpb.ServiceAnnounce
-	(*ServiceLeave)(nil),          // 24: meshpb.ServiceLeave
-	(*ProcessList)(nil),           // 25: meshpb.ProcessList
-	(*ServiceEventSubscribe)(nil), // 26: meshpb.ServiceEventSubscribe
-	(*ServiceEvent)(nil),          // 27: meshpb.ServiceEvent
-	(*NetIDRangeGrant)(nil),       // 28: meshpb.NetIDRangeGrant
-	(*PersistResult)(nil),         // 29: meshpb.PersistResult
-	(*UpstreamSwitch)(nil),        // 30: meshpb.UpstreamSwitch
-	(*GracefulLeave)(nil),         // 31: meshpb.GracefulLeave
-	(*CellsDrained)(nil),          // 32: meshpb.CellsDrained
-	(*CoordTimeSync)(nil),         // 33: meshpb.CoordTimeSync
-	(*CommandRequest)(nil),        // 34: meshpb.CommandRequest
-	(*CommandResponse)(nil),       // 35: meshpb.CommandResponse
-	(*CommandCancel)(nil),         // 36: meshpb.CommandCancel
-	(*Caller)(nil),                // 37: meshpb.Caller
-	(*Grant)(nil),                 // 38: meshpb.Grant
-	(*MeshFrame)(nil),             // 39: meshpb.MeshFrame
-	(*BorderFrame)(nil),           // 40: meshpb.BorderFrame
-	(*Handoff)(nil),               // 41: meshpb.Handoff
-	(*ForwardInput)(nil),          // 42: meshpb.ForwardInput
-	(*CrossCellAction)(nil),       // 43: meshpb.CrossCellAction
-	(*Location)(nil),              // 44: meshpb.Location
-	(*PlayerAssignment)(nil),      // 45: meshpb.PlayerAssignment
-	(*SessionTransfer)(nil),       // 46: meshpb.SessionTransfer
-	(*SpawnTransfer)(nil),         // 47: meshpb.SpawnTransfer
-	(*CellTransfer)(nil),          // 48: meshpb.CellTransfer
-	(*CellBounds)(nil),            // 49: meshpb.CellBounds
-	(*CellTransferReady)(nil),     // 50: meshpb.CellTransferReady
-	(*ResolveSpawn)(nil),          // 51: meshpb.ResolveSpawn
-	(*HostOpAck)(nil),             // 52: meshpb.HostOpAck
-	(*SpawnResolved)(nil),         // 53: meshpb.SpawnResolved
-	(*SessionRegister)(nil),       // 54: meshpb.SessionRegister
-	(*CellTransferAbort)(nil),     // 55: meshpb.CellTransferAbort
-	(*ClientInput)(nil),           // 56: meshpb.ClientInput
-	(*ClientFrame)(nil),           // 57: meshpb.ClientFrame
-	(*ClientDisconnect)(nil),      // 58: meshpb.ClientDisconnect
-	nil,                           // 59: meshpb.PeerList.EventRoutingEntry
+	(*CellMetricsReport)(nil),     // 5: meshpb.CellMetricsReport
+	(*LogBatch)(nil),              // 6: meshpb.LogBatch
+	(*LogEntry)(nil),              // 7: meshpb.LogEntry
+	(*CellReady)(nil),             // 8: meshpb.CellReady
+	(*CellStopped)(nil),           // 9: meshpb.CellStopped
+	(*SplitComplete)(nil),         // 10: meshpb.SplitComplete
+	(*MergeComplete)(nil),         // 11: meshpb.MergeComplete
+	(*PersistBatch)(nil),          // 12: meshpb.PersistBatch
+	(*PlayerHandoff)(nil),         // 13: meshpb.PlayerHandoff
+	(*RegisterGateway)(nil),       // 14: meshpb.RegisterGateway
+	(*SessionAnnounce)(nil),       // 15: meshpb.SessionAnnounce
+	(*PlayerMigrated)(nil),        // 16: meshpb.PlayerMigrated
+	(*RegisterAck)(nil),           // 17: meshpb.RegisterAck
+	(*CellAssign)(nil),            // 18: meshpb.CellAssign
+	(*CellRelease)(nil),           // 19: meshpb.CellRelease
+	(*CellRename)(nil),            // 20: meshpb.CellRename
+	(*PeerList)(nil),              // 21: meshpb.PeerList
+	(*CellOwnership)(nil),         // 22: meshpb.CellOwnership
+	(*HostRecord)(nil),            // 23: meshpb.HostRecord
+	(*GatewayRecord)(nil),         // 24: meshpb.GatewayRecord
+	(*ServiceRecord)(nil),         // 25: meshpb.ServiceRecord
+	(*ServiceAnnounce)(nil),       // 26: meshpb.ServiceAnnounce
+	(*ServiceLeave)(nil),          // 27: meshpb.ServiceLeave
+	(*ProcessList)(nil),           // 28: meshpb.ProcessList
+	(*ServiceEventSubscribe)(nil), // 29: meshpb.ServiceEventSubscribe
+	(*ServiceEvent)(nil),          // 30: meshpb.ServiceEvent
+	(*NetIDRangeGrant)(nil),       // 31: meshpb.NetIDRangeGrant
+	(*PersistResult)(nil),         // 32: meshpb.PersistResult
+	(*UpstreamSwitch)(nil),        // 33: meshpb.UpstreamSwitch
+	(*GracefulLeave)(nil),         // 34: meshpb.GracefulLeave
+	(*CellsDrained)(nil),          // 35: meshpb.CellsDrained
+	(*CoordTimeSync)(nil),         // 36: meshpb.CoordTimeSync
+	(*CommandRequest)(nil),        // 37: meshpb.CommandRequest
+	(*CommandResponse)(nil),       // 38: meshpb.CommandResponse
+	(*CommandCancel)(nil),         // 39: meshpb.CommandCancel
+	(*Caller)(nil),                // 40: meshpb.Caller
+	(*Grant)(nil),                 // 41: meshpb.Grant
+	(*MeshFrame)(nil),             // 42: meshpb.MeshFrame
+	(*BorderFrame)(nil),           // 43: meshpb.BorderFrame
+	(*Handoff)(nil),               // 44: meshpb.Handoff
+	(*ForwardInput)(nil),          // 45: meshpb.ForwardInput
+	(*CrossCellAction)(nil),       // 46: meshpb.CrossCellAction
+	(*Location)(nil),              // 47: meshpb.Location
+	(*PlayerAssignment)(nil),      // 48: meshpb.PlayerAssignment
+	(*SessionTransfer)(nil),       // 49: meshpb.SessionTransfer
+	(*SpawnTransfer)(nil),         // 50: meshpb.SpawnTransfer
+	(*CellTransfer)(nil),          // 51: meshpb.CellTransfer
+	(*CellBounds)(nil),            // 52: meshpb.CellBounds
+	(*CellTransferReady)(nil),     // 53: meshpb.CellTransferReady
+	(*ResolveSpawn)(nil),          // 54: meshpb.ResolveSpawn
+	(*HostOpAck)(nil),             // 55: meshpb.HostOpAck
+	(*SpawnResolved)(nil),         // 56: meshpb.SpawnResolved
+	(*SessionRegister)(nil),       // 57: meshpb.SessionRegister
+	(*CellTransferAbort)(nil),     // 58: meshpb.CellTransferAbort
+	(*ClientInput)(nil),           // 59: meshpb.ClientInput
+	(*ClientFrame)(nil),           // 60: meshpb.ClientFrame
+	(*ClientDisconnect)(nil),      // 61: meshpb.ClientDisconnect
+	nil,                           // 62: meshpb.PeerList.EventRoutingEntry
 }
 var file_meshpb_mesh_proto_depIdxs = []int32{
 	3,  // 0: meshpb.HostMessage.register:type_name -> meshpb.RegisterHost
 	4,  // 1: meshpb.HostMessage.heartbeat:type_name -> meshpb.Heartbeat
-	5,  // 2: meshpb.HostMessage.cell_ready:type_name -> meshpb.CellReady
-	6,  // 3: meshpb.HostMessage.cell_stopped:type_name -> meshpb.CellStopped
-	7,  // 4: meshpb.HostMessage.split_complete:type_name -> meshpb.SplitComplete
-	8,  // 5: meshpb.HostMessage.merge_complete:type_name -> meshpb.MergeComplete
-	9,  // 6: meshpb.HostMessage.persist_batch:type_name -> meshpb.PersistBatch
-	10, // 7: meshpb.HostMessage.player_handoff:type_name -> meshpb.PlayerHandoff
-	11, // 8: meshpb.HostMessage.register_gateway:type_name -> meshpb.RegisterGateway
-	12, // 9: meshpb.HostMessage.session_announce:type_name -> meshpb.SessionAnnounce
-	13, // 10: meshpb.HostMessage.player_migrated:type_name -> meshpb.PlayerMigrated
-	31, // 11: meshpb.HostMessage.graceful_leave:type_name -> meshpb.GracefulLeave
-	50, // 12: meshpb.HostMessage.cell_transfer_ready:type_name -> meshpb.CellTransferReady
-	35, // 13: meshpb.HostMessage.command_response:type_name -> meshpb.CommandResponse
-	34, // 14: meshpb.HostMessage.command_request:type_name -> meshpb.CommandRequest
-	51, // 15: meshpb.HostMessage.resolve_spawn:type_name -> meshpb.ResolveSpawn
-	52, // 16: meshpb.HostMessage.host_op_ack:type_name -> meshpb.HostOpAck
-	23, // 17: meshpb.HostMessage.service_announce:type_name -> meshpb.ServiceAnnounce
-	24, // 18: meshpb.HostMessage.service_leave:type_name -> meshpb.ServiceLeave
-	26, // 19: meshpb.HostMessage.service_event_subscribe:type_name -> meshpb.ServiceEventSubscribe
-	14, // 20: meshpb.CoordMessage.register_ack:type_name -> meshpb.RegisterAck
-	15, // 21: meshpb.CoordMessage.cell_assign:type_name -> meshpb.CellAssign
-	16, // 22: meshpb.CoordMessage.cell_release:type_name -> meshpb.CellRelease
-	18, // 23: meshpb.CoordMessage.peer_list:type_name -> meshpb.PeerList
-	28, // 24: meshpb.CoordMessage.netid_range:type_name -> meshpb.NetIDRangeGrant
-	29, // 25: meshpb.CoordMessage.persist_result:type_name -> meshpb.PersistResult
-	30, // 26: meshpb.CoordMessage.upstream_switch:type_name -> meshpb.UpstreamSwitch
-	32, // 27: meshpb.CoordMessage.cells_drained:type_name -> meshpb.CellsDrained
-	48, // 28: meshpb.CoordMessage.cell_transfer:type_name -> meshpb.CellTransfer
-	55, // 29: meshpb.CoordMessage.cell_transfer_abort:type_name -> meshpb.CellTransferAbort
-	34, // 30: meshpb.CoordMessage.command_request:type_name -> meshpb.CommandRequest
-	35, // 31: meshpb.CoordMessage.command_response:type_name -> meshpb.CommandResponse
-	36, // 32: meshpb.CoordMessage.command_cancel:type_name -> meshpb.CommandCancel
-	53, // 33: meshpb.CoordMessage.spawn_resolved:type_name -> meshpb.SpawnResolved
-	54, // 34: meshpb.CoordMessage.session_register:type_name -> meshpb.SessionRegister
-	17, // 35: meshpb.CoordMessage.cell_rename:type_name -> meshpb.CellRename
-	33, // 36: meshpb.CoordMessage.coord_time_sync:type_name -> meshpb.CoordTimeSync
-	20, // 37: meshpb.PeerList.hosts:type_name -> meshpb.HostRecord
-	19, // 38: meshpb.PeerList.cells:type_name -> meshpb.CellOwnership
-	21, // 39: meshpb.PeerList.gateways:type_name -> meshpb.GatewayRecord
-	22, // 40: meshpb.PeerList.services:type_name -> meshpb.ServiceRecord
-	59, // 41: meshpb.PeerList.event_routing:type_name -> meshpb.PeerList.EventRoutingEntry
-	37, // 42: meshpb.CommandRequest.caller:type_name -> meshpb.Caller
-	38, // 43: meshpb.Caller.grants:type_name -> meshpb.Grant
-	40, // 44: meshpb.MeshFrame.border_frame:type_name -> meshpb.BorderFrame
-	41, // 45: meshpb.MeshFrame.handoff:type_name -> meshpb.Handoff
-	42, // 46: meshpb.MeshFrame.forward_input:type_name -> meshpb.ForwardInput
-	48, // 47: meshpb.MeshFrame.cell_transfer:type_name -> meshpb.CellTransfer
-	50, // 48: meshpb.MeshFrame.cell_transfer_ready:type_name -> meshpb.CellTransferReady
-	55, // 49: meshpb.MeshFrame.cell_transfer_abort:type_name -> meshpb.CellTransferAbort
-	56, // 50: meshpb.MeshFrame.client_input:type_name -> meshpb.ClientInput
-	57, // 51: meshpb.MeshFrame.client_frame:type_name -> meshpb.ClientFrame
-	43, // 52: meshpb.MeshFrame.cross_action:type_name -> meshpb.CrossCellAction
-	45, // 53: meshpb.MeshFrame.player_assignment:type_name -> meshpb.PlayerAssignment
-	46, // 54: meshpb.MeshFrame.session_transfer:type_name -> meshpb.SessionTransfer
-	47, // 55: meshpb.MeshFrame.spawn_transfer:type_name -> meshpb.SpawnTransfer
-	58, // 56: meshpb.MeshFrame.client_disconnect:type_name -> meshpb.ClientDisconnect
-	27, // 57: meshpb.MeshFrame.service_event:type_name -> meshpb.ServiceEvent
-	44, // 58: meshpb.PlayerAssignment.spawn_location:type_name -> meshpb.Location
-	44, // 59: meshpb.SpawnTransfer.spawn_location:type_name -> meshpb.Location
-	0,  // 60: meshpb.CellTransfer.kind:type_name -> meshpb.CellTransferKind
-	49, // 61: meshpb.CellTransfer.bounds:type_name -> meshpb.CellBounds
-	25, // 62: meshpb.PeerList.EventRoutingEntry.value:type_name -> meshpb.ProcessList
-	1,  // 63: meshpb.MeshControl.Control:input_type -> meshpb.HostMessage
-	39, // 64: meshpb.MeshData.Data:input_type -> meshpb.MeshFrame
-	2,  // 65: meshpb.MeshControl.Control:output_type -> meshpb.CoordMessage
-	39, // 66: meshpb.MeshData.Data:output_type -> meshpb.MeshFrame
-	65, // [65:67] is the sub-list for method output_type
-	63, // [63:65] is the sub-list for method input_type
-	63, // [63:63] is the sub-list for extension type_name
-	63, // [63:63] is the sub-list for extension extendee
-	0,  // [0:63] is the sub-list for field type_name
+	8,  // 2: meshpb.HostMessage.cell_ready:type_name -> meshpb.CellReady
+	9,  // 3: meshpb.HostMessage.cell_stopped:type_name -> meshpb.CellStopped
+	10, // 4: meshpb.HostMessage.split_complete:type_name -> meshpb.SplitComplete
+	11, // 5: meshpb.HostMessage.merge_complete:type_name -> meshpb.MergeComplete
+	12, // 6: meshpb.HostMessage.persist_batch:type_name -> meshpb.PersistBatch
+	13, // 7: meshpb.HostMessage.player_handoff:type_name -> meshpb.PlayerHandoff
+	14, // 8: meshpb.HostMessage.register_gateway:type_name -> meshpb.RegisterGateway
+	15, // 9: meshpb.HostMessage.session_announce:type_name -> meshpb.SessionAnnounce
+	16, // 10: meshpb.HostMessage.player_migrated:type_name -> meshpb.PlayerMigrated
+	34, // 11: meshpb.HostMessage.graceful_leave:type_name -> meshpb.GracefulLeave
+	53, // 12: meshpb.HostMessage.cell_transfer_ready:type_name -> meshpb.CellTransferReady
+	38, // 13: meshpb.HostMessage.command_response:type_name -> meshpb.CommandResponse
+	37, // 14: meshpb.HostMessage.command_request:type_name -> meshpb.CommandRequest
+	54, // 15: meshpb.HostMessage.resolve_spawn:type_name -> meshpb.ResolveSpawn
+	55, // 16: meshpb.HostMessage.host_op_ack:type_name -> meshpb.HostOpAck
+	26, // 17: meshpb.HostMessage.service_announce:type_name -> meshpb.ServiceAnnounce
+	27, // 18: meshpb.HostMessage.service_leave:type_name -> meshpb.ServiceLeave
+	6,  // 19: meshpb.HostMessage.log_batch:type_name -> meshpb.LogBatch
+	29, // 20: meshpb.HostMessage.service_event_subscribe:type_name -> meshpb.ServiceEventSubscribe
+	17, // 21: meshpb.CoordMessage.register_ack:type_name -> meshpb.RegisterAck
+	18, // 22: meshpb.CoordMessage.cell_assign:type_name -> meshpb.CellAssign
+	19, // 23: meshpb.CoordMessage.cell_release:type_name -> meshpb.CellRelease
+	21, // 24: meshpb.CoordMessage.peer_list:type_name -> meshpb.PeerList
+	31, // 25: meshpb.CoordMessage.netid_range:type_name -> meshpb.NetIDRangeGrant
+	32, // 26: meshpb.CoordMessage.persist_result:type_name -> meshpb.PersistResult
+	33, // 27: meshpb.CoordMessage.upstream_switch:type_name -> meshpb.UpstreamSwitch
+	35, // 28: meshpb.CoordMessage.cells_drained:type_name -> meshpb.CellsDrained
+	51, // 29: meshpb.CoordMessage.cell_transfer:type_name -> meshpb.CellTransfer
+	58, // 30: meshpb.CoordMessage.cell_transfer_abort:type_name -> meshpb.CellTransferAbort
+	37, // 31: meshpb.CoordMessage.command_request:type_name -> meshpb.CommandRequest
+	38, // 32: meshpb.CoordMessage.command_response:type_name -> meshpb.CommandResponse
+	39, // 33: meshpb.CoordMessage.command_cancel:type_name -> meshpb.CommandCancel
+	56, // 34: meshpb.CoordMessage.spawn_resolved:type_name -> meshpb.SpawnResolved
+	57, // 35: meshpb.CoordMessage.session_register:type_name -> meshpb.SessionRegister
+	20, // 36: meshpb.CoordMessage.cell_rename:type_name -> meshpb.CellRename
+	36, // 37: meshpb.CoordMessage.coord_time_sync:type_name -> meshpb.CoordTimeSync
+	5,  // 38: meshpb.Heartbeat.metrics:type_name -> meshpb.CellMetricsReport
+	7,  // 39: meshpb.LogBatch.entries:type_name -> meshpb.LogEntry
+	23, // 40: meshpb.PeerList.hosts:type_name -> meshpb.HostRecord
+	22, // 41: meshpb.PeerList.cells:type_name -> meshpb.CellOwnership
+	24, // 42: meshpb.PeerList.gateways:type_name -> meshpb.GatewayRecord
+	25, // 43: meshpb.PeerList.services:type_name -> meshpb.ServiceRecord
+	62, // 44: meshpb.PeerList.event_routing:type_name -> meshpb.PeerList.EventRoutingEntry
+	40, // 45: meshpb.CommandRequest.caller:type_name -> meshpb.Caller
+	41, // 46: meshpb.Caller.grants:type_name -> meshpb.Grant
+	43, // 47: meshpb.MeshFrame.border_frame:type_name -> meshpb.BorderFrame
+	44, // 48: meshpb.MeshFrame.handoff:type_name -> meshpb.Handoff
+	45, // 49: meshpb.MeshFrame.forward_input:type_name -> meshpb.ForwardInput
+	51, // 50: meshpb.MeshFrame.cell_transfer:type_name -> meshpb.CellTransfer
+	53, // 51: meshpb.MeshFrame.cell_transfer_ready:type_name -> meshpb.CellTransferReady
+	58, // 52: meshpb.MeshFrame.cell_transfer_abort:type_name -> meshpb.CellTransferAbort
+	59, // 53: meshpb.MeshFrame.client_input:type_name -> meshpb.ClientInput
+	60, // 54: meshpb.MeshFrame.client_frame:type_name -> meshpb.ClientFrame
+	46, // 55: meshpb.MeshFrame.cross_action:type_name -> meshpb.CrossCellAction
+	48, // 56: meshpb.MeshFrame.player_assignment:type_name -> meshpb.PlayerAssignment
+	49, // 57: meshpb.MeshFrame.session_transfer:type_name -> meshpb.SessionTransfer
+	50, // 58: meshpb.MeshFrame.spawn_transfer:type_name -> meshpb.SpawnTransfer
+	61, // 59: meshpb.MeshFrame.client_disconnect:type_name -> meshpb.ClientDisconnect
+	30, // 60: meshpb.MeshFrame.service_event:type_name -> meshpb.ServiceEvent
+	47, // 61: meshpb.PlayerAssignment.spawn_location:type_name -> meshpb.Location
+	47, // 62: meshpb.SpawnTransfer.spawn_location:type_name -> meshpb.Location
+	0,  // 63: meshpb.CellTransfer.kind:type_name -> meshpb.CellTransferKind
+	52, // 64: meshpb.CellTransfer.bounds:type_name -> meshpb.CellBounds
+	28, // 65: meshpb.PeerList.EventRoutingEntry.value:type_name -> meshpb.ProcessList
+	1,  // 66: meshpb.MeshControl.Control:input_type -> meshpb.HostMessage
+	42, // 67: meshpb.MeshData.Data:input_type -> meshpb.MeshFrame
+	2,  // 68: meshpb.MeshControl.Control:output_type -> meshpb.CoordMessage
+	42, // 69: meshpb.MeshData.Data:output_type -> meshpb.MeshFrame
+	68, // [68:70] is the sub-list for method output_type
+	66, // [66:68] is the sub-list for method input_type
+	66, // [66:66] is the sub-list for extension type_name
+	66, // [66:66] is the sub-list for extension extendee
+	0,  // [0:66] is the sub-list for field type_name
 }
 
 func init() { file_meshpb_mesh_proto_init() }
@@ -5359,6 +5642,7 @@ func file_meshpb_mesh_proto_init() {
 		(*HostMessage_HostOpAck)(nil),
 		(*HostMessage_ServiceAnnounce)(nil),
 		(*HostMessage_ServiceLeave)(nil),
+		(*HostMessage_LogBatch)(nil),
 		(*HostMessage_ServiceEventSubscribe)(nil),
 	}
 	file_meshpb_mesh_proto_msgTypes[1].OneofWrappers = []any{
@@ -5380,7 +5664,7 @@ func file_meshpb_mesh_proto_init() {
 		(*CoordMessage_CellRename)(nil),
 		(*CoordMessage_CoordTimeSync)(nil),
 	}
-	file_meshpb_mesh_proto_msgTypes[38].OneofWrappers = []any{
+	file_meshpb_mesh_proto_msgTypes[41].OneofWrappers = []any{
 		(*MeshFrame_BorderFrame)(nil),
 		(*MeshFrame_Handoff)(nil),
 		(*MeshFrame_ForwardInput)(nil),
@@ -5402,7 +5686,7 @@ func file_meshpb_mesh_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_meshpb_mesh_proto_rawDesc), len(file_meshpb_mesh_proto_rawDesc)),
 			NumEnums:      1,
-			NumMessages:   59,
+			NumMessages:   62,
 			NumExtensions: 0,
 			NumServices:   2,
 		},

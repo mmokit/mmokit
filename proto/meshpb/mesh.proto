@@ -34,6 +34,7 @@ message HostMessage {
     HostOpAck         host_op_ack         = 18;
     ServiceAnnounce   service_announce    = 19;  // service framework: host → coord new service instance
     ServiceLeave      service_leave       = 20;  // service framework: host → coord service instance going away
+    LogBatch          log_batch           = 21;  // admin log tail: host → coord batched logger entries
     ServiceEventSubscribe service_event_subscribe = 51;  // services bus: process → coord, whole-set replace of subscribed type names
   }
 }
@@ -101,6 +102,21 @@ message CellMetricsReport {
   int32  entities_connected = 8;
   uint64 bytes_sent         = 9;
   uint64 bytes_recv         = 10;
+}
+
+// LogBatch is shipped host → coord over MeshControl. Each entry was
+// captured by a logger.Hook on the host's *Logger. Batches are flushed
+// every ~100ms or when 64 entries accumulate, whichever first.
+message LogBatch {
+  repeated LogEntry entries = 1;
+}
+
+// LogEntry mirrors admin.LogEntry on the receiving end. host is stamped
+// by the coordinator from the sender's stream identity, not the host.
+message LogEntry {
+  string cat        = 1;
+  string msg        = 2;
+  int64  ts_unix_ms = 3;
 }
 
 message CellReady {
