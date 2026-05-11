@@ -12,23 +12,30 @@
 
   // Per-field input state, keyed by field name. Stored as strings;
   // coerced to typed values on submit.
-  let values = $state<Record<string, string>>({});
-  let checks = $state<Record<string, boolean>>({});
-  let error = $state("");
-  let submitting = $state(false);
-
-  // Seed defaults the first time the modal renders for this verb.
-  $effect(() => {
-    void verb; // recompute when verb swaps
+  //
+  // Seeded once at mount — NOT inside a $effect. An effect would re-fire
+  // whenever the reactive schema prop is re-passed (which happens on
+  // every PanelHost re-render driven by an unrelated SSE tick) and wipe
+  // the user's typed input. The modal unmounts on close (via {#if
+  // modalVerb} in PanelHost), so a fresh open always gets fresh defaults.
+  function seedValues(): Record<string, string> {
     const v: Record<string, string> = {};
-    const c: Record<string, boolean> = {};
     for (const f of schema.fields ?? []) {
       v[f.name] = f.default ?? "";
+    }
+    return v;
+  }
+  function seedChecks(): Record<string, boolean> {
+    const c: Record<string, boolean> = {};
+    for (const f of schema.fields ?? []) {
       c[f.name] = f.default === "true";
     }
-    values = v;
-    checks = c;
-  });
+    return c;
+  }
+  let values = $state<Record<string, string>>(seedValues());
+  let checks = $state<Record<string, boolean>>(seedChecks());
+  let error = $state("");
+  let submitting = $state(false);
 
   function coerce(f: FieldSchema): unknown {
     const raw = values[f.name] ?? "";

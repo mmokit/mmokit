@@ -22,8 +22,12 @@ type BotRow struct {
 // coordinator's TopicBus, so the publisher only makes sense on a
 // coordinator-role process — host-only processes have their own
 // subscriber-less bus.
+//
+// NOTE: called BEFORE process.Start(), so coord.Roles() is empty here
+// (roles get populated inside Build()). Parse from cfg.Mode directly.
 func startBotsPublisher(ctx context.Context, coord *mmokit.Process) {
-	if !coord.Roles().Has(mmokit.RoleCoordinator) {
+	roles, err := mmokit.ParseRoles(coord.Cfg().Mode)
+	if err != nil || !roles.Has(mmokit.RoleCoordinator) {
 		return
 	}
 	go func() {
