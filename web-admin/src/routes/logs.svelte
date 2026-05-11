@@ -1,22 +1,15 @@
 <script lang="ts">
-  import { onMount } from "svelte";
-  import { apiGet, apiPost, ApiError } from "$lib/api";
-  import type { LogCategoriesResp } from "$lib/types";
   import LogTail from "../components/LogTail.svelte";
 
-  let groups = $state<LogCategoriesResp["groups"]>([]);
-  let error = $state("");
-  let loading = $state(true);
+  // Host + category filtering are both purely client-side: the server
+  // emits whatever its own logger.Logger is configured for; this page
+  // just lets you hide rows from view. Discovered sets come from
+  // LogTail's entries buffer.
 
-  // Hosts discovered by LogTail (from the entries it has seen). When a
-  // new host appears we add it to selectedHosts so its lines stay
-  // visible by default; existing selections (user-checked / unchecked)
-  // are preserved across discovery updates.
   let discoveredHosts = $state<string[]>([]);
   let selectedHosts = $state<Set<string>>(new Set());
 
   function onHostsChanged(hosts: string[]) {
-    // Add genuinely new hosts as "selected" by default.
     let dirty = false;
     const next = new Set(selectedHosts);
     for (const h of hosts) {
@@ -40,80 +33,81 @@
     selectedHosts = checked ? new Set(discoveredHosts) : new Set();
   }
 
-  // Filter passed to LogTail: undefined = no host filter (every host
-  // visible). We emit the set only when at least one host is unchecked
-  // — when ALL discovered hosts are selected the filter is a no-op.
   let hostFilter = $derived(
     selectedHosts.size === discoveredHosts.length ? undefined : selectedHosts,
   );
 
-  async function refresh() {
-    loading = true;
-    error = "";
-    try {
-      const res = await apiGet<LogCategoriesResp>("/admin/api/logs/categories");
-      groups = res.groups ?? [];
-    } catch (e) {
-      error = (e as Error).message;
-    } finally {
-      loading = false;
+  // Categories — discovered from entries the same way as hosts.
+  let discoveredCats = $state<string[]>([]);
+  let selectedCats = $state<Set<string>>(new Set());
+
+  function onCatsChanged(cats: string[]) {
+    let dirty = false;
+    const next = new Set(selectedCats);
+    for (const c of cats) {
+      if (!discoveredCats.includes(c)) {
+        next.add(c);
+        dirty = true;
+      }
     }
+    discoveredCats = cats;
+    if (dirty) selectedCats = next;
   }
 
-  // Toggle a category cluster-wide via the log.set cmdsys verb. The
-  // verb is Route: RouteAllHosts so every host's logger is updated
-  // alongside the coordinator. Optimistically reflect the new state;
-  // the response confirms.
-  async function toggle(cat: string, enabled: boolean) {
-    // Optimistic update first.
-    groups = groups.map((g) => ({
-      ...g,
-      categories: g.categories.map((c) => (c.name === cat ? { ...c, enabled } : c)),
-    }));
-    try {
-      await apiPost<{ ok: boolean; result?: unknown; error?: string }>(
-        "/admin/api/commands/log.set",
-        { Category: cat, Enabled: enabled },
-      );
-    } catch (e) {
-      const msg = e instanceof ApiError ? e.message : (e as Error).message;
-      error = msg;
-      // Revert on failure.
-      await refresh();
-    }
+  function toggleCat(cat: string, checked: boolean) {
+    const next = new Set(selectedCats);
+    if (checked) next.add(cat);
+    else next.delete(cat);
+    selectedCats = next;
   }
 
-  function setAll(group: typeof groups[number], enabled: boolean) {
-    for (const c of group.categories) {
-      void toggle(c.name, enabled);
+  // Group categories by their "prefix:" segment so the UI matches the
+  // server's logical grouping (mesh:cell, mesh:transfer → "mesh"). Cats
+  // without a colon land in the synthetic "" group.
+  let catGroups = $derived.by<{ name: string; cats: string[] }[]>(() => {
+    const by: Record<string, string[]> = {};
+    for (const c of discoveredCats) {
+      const i = c.indexOf(":");
+      const g = i > 0 ? c.slice(0, i) : "";
+      (by[g] ??= []).push(c);
     }
-  }
-
-  onMount(() => {
-    void refresh();
+    const groups = Object.keys(by).sort();
+    return groups.map((g) => ({ name: g, cats: by[g].sort() }));
   });
+
+  function setAllInGroup(name: string, checked: boolean) {
+    const next = new Set(selectedCats);
+    for (const g of catGroups) {
+      if (g.name !== name) continue;
+      for (const c of g.cats) {
+        if (checked) next.add(c);
+        else next.delete(c);
+      }
+    }
+    selectedCats = next;
+  }
+
+  function selectAllCats(checked: boolean) {
+    selectedCats = checked ? new Set(discoveredCats) : new Set();
+  }
+
+  let catFilter = $derived(
+    selectedCats.size === discoveredCats.length ? undefined : selectedCats,
+  );
 </script>
 
 <main class="p-4 h-full min-h-0 flex flex-col gap-3">
   <div class="flex items-center justify-between">
     <h2 class="text-phosphor-300 text-[11px] uppercase tracking-[0.18em] font-mono">Logs</h2>
-    <button
-      type="button"
-      class="px-2 py-0.5 rounded border border-[var(--border-subtle)] bg-white/5 text-[var(--text-default)] hover:bg-white/10 text-[11px] font-mono"
-      onclick={() => void refresh()}
-      disabled={loading}
-    >
-      refresh
-    </button>
+    <span class="text-[var(--text-dim)] text-[10.5px] font-mono">
+      filters are client-side · server decides what it emits
+    </span>
   </div>
 
-  {#if error}
-    <div class="text-ember-300 text-[11.5px] font-mono">{error}</div>
-  {/if}
-
   <div class="grow min-h-0 flex gap-3">
-    <!-- Left: host filter + category toggles -->
+    <!-- Left: host + category filters -->
     <aside class="w-[280px] shrink-0 overflow-auto bg-[var(--bg-deep)] border border-[var(--border-subtle)] rounded-lg p-3 space-y-3">
+      <!-- Hosts -->
       <div>
         <div class="flex items-center justify-between mb-1">
           <h3 class="font-mono text-[11px] text-phosphor-300 tracking-[0.12em] uppercase">
@@ -151,48 +145,74 @@
         </div>
       </div>
 
-      {#if loading && groups.length === 0}
-        <div class="text-[var(--text-dim)] text-[12px] font-mono">loading…</div>
-      {/if}
-      {#each groups as g (g.name)}
-        <div>
-          <div class="flex items-center justify-between mb-1">
-            <h3 class="font-mono text-[11px] text-phosphor-300 tracking-[0.12em] uppercase">
-              {g.name || "(uncategorized)"}
-            </h3>
-            <div class="flex gap-1 text-[10.5px] font-mono">
-              <button
-                type="button"
-                class="px-1.5 py-0.5 rounded border border-[var(--border-subtle)] bg-white/5 text-[var(--text-muted)] hover:bg-white/10"
-                onclick={() => setAll(g, true)}
-              >all</button>
-              <button
-                type="button"
-                class="px-1.5 py-0.5 rounded border border-[var(--border-subtle)] bg-white/5 text-[var(--text-muted)] hover:bg-white/10"
-                onclick={() => setAll(g, false)}
-              >none</button>
-            </div>
-          </div>
-          <div class="space-y-0.5">
-            {#each g.categories as c (c.name)}
-              <label class="flex items-center gap-2 text-[11px] font-mono cursor-pointer">
-                <input
-                  type="checkbox"
-                  class="accent-phosphor-400"
-                  checked={c.enabled}
-                  onchange={(e) => toggle(c.name, (e.currentTarget as HTMLInputElement).checked)}
-                />
-                <span class="text-[var(--text-default)]">{c.name}</span>
-              </label>
-            {/each}
+      <!-- Categories -->
+      <div>
+        <div class="flex items-center justify-between mb-1">
+          <h3 class="font-mono text-[11px] text-phosphor-300 tracking-[0.12em] uppercase">
+            Categories
+          </h3>
+          <div class="flex gap-1 text-[10.5px] font-mono">
+            <button
+              type="button"
+              class="px-1.5 py-0.5 rounded border border-[var(--border-subtle)] bg-white/5 text-[var(--text-muted)] hover:bg-white/10"
+              onclick={() => selectAllCats(true)}
+            >all</button>
+            <button
+              type="button"
+              class="px-1.5 py-0.5 rounded border border-[var(--border-subtle)] bg-white/5 text-[var(--text-muted)] hover:bg-white/10"
+              onclick={() => selectAllCats(false)}
+            >none</button>
           </div>
         </div>
-      {/each}
+        {#each catGroups as g (g.name)}
+          <div class="mt-2">
+            <div class="flex items-center justify-between mb-1">
+              <span class="font-mono text-[10.5px] text-[var(--text-muted)] tracking-[0.1em]">
+                {g.name || "(uncategorized)"}
+              </span>
+              <div class="flex gap-1 text-[10px] font-mono">
+                <button
+                  type="button"
+                  class="px-1.5 py-0.5 rounded border border-[var(--border-faint)] bg-white/5 text-[var(--text-dim)] hover:bg-white/10"
+                  onclick={() => setAllInGroup(g.name, true)}
+                >all</button>
+                <button
+                  type="button"
+                  class="px-1.5 py-0.5 rounded border border-[var(--border-faint)] bg-white/5 text-[var(--text-dim)] hover:bg-white/10"
+                  onclick={() => setAllInGroup(g.name, false)}
+                >none</button>
+              </div>
+            </div>
+            <div class="space-y-0.5">
+              {#each g.cats as c (c)}
+                <label class="flex items-center gap-2 text-[11px] font-mono cursor-pointer">
+                  <input
+                    type="checkbox"
+                    class="accent-phosphor-400"
+                    checked={selectedCats.has(c)}
+                    onchange={(e) => toggleCat(c, (e.currentTarget as HTMLInputElement).checked)}
+                  />
+                  <span class="text-[var(--text-default)]">{c}</span>
+                </label>
+              {/each}
+            </div>
+          </div>
+        {:else}
+          <div class="text-[var(--text-dim)] text-[10.5px] italic font-mono">
+            waiting for log entries…
+          </div>
+        {/each}
+      </div>
     </aside>
 
     <!-- Right: live tail -->
     <div class="grow min-h-0">
-      <LogTail filterHosts={hostFilter} {onHostsChanged} />
+      <LogTail
+        filterHosts={hostFilter}
+        filterCats={catFilter}
+        {onHostsChanged}
+        {onCatsChanged}
+      />
     </div>
   </div>
 </main>

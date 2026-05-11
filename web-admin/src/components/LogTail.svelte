@@ -4,15 +4,18 @@
   import { stream } from "$lib/stream";
   import type { LogEntry } from "$lib/types";
 
-  // filterHosts, when non-empty, restricts visible entries to the named
-  // hosts. Empty / undefined = no host filtering.
-  // onHostsChanged fires whenever the discovered host set changes — the
-  // logs page uses this to render the host checkbox list.
+  // filterHosts / filterCats: undefined = "show all". Set (possibly
+  // empty) = explicit allowlist. Empty Set therefore means "hide
+  // everything from that dimension".
+  // onHostsChanged / onCatsChanged fire whenever the discovered set
+  // changes — the logs page uses these to render the checkbox lists.
   type Props = {
     filterHosts?: Set<string>;
+    filterCats?: Set<string>;
     onHostsChanged?: (hosts: string[]) => void;
+    onCatsChanged?: (cats: string[]) => void;
   };
-  let { filterHosts, onHostsChanged }: Props = $props();
+  let { filterHosts, filterCats, onHostsChanged, onCatsChanged }: Props = $props();
 
   const CLIENT_CAP = 1000;
 
@@ -51,31 +54,41 @@
 
   let visible = $derived.by<LogEntry[]>(() => {
     const cq = catFilter.trim().toLowerCase();
-    // filterHosts === undefined: parent says "no filter, show all".
-    // filterHosts === Set (possibly empty): parent provides a allowlist.
-    // An empty Set means "explicitly nothing matches" — used when the
-    // user clicks `none` or unchecks every host.
+    // filter* === undefined: parent says "no filter on that dimension".
+    // filter* === Set (possibly empty): explicit allowlist; empty Set
+    // means "match nothing" (used when user unchecks everything).
     const hostSet = filterHosts ?? null;
+    const catSet = filterCats ?? null;
     return entries.filter((e) => {
       if (cq && !e.cat.toLowerCase().includes(cq) && !e.msg.toLowerCase().includes(cq)) return false;
       if (hostSet && !hostSet.has(e.host)) return false;
+      if (catSet && !catSet.has(e.cat)) return false;
       return true;
     });
   });
 
-  // Publish the discovered host set upward so the logs page can render
-  // checkboxes. Recomputes when entries change. The callback is wrapped
-  // in untrack() so any state reads inside the parent's onHostsChanged
-  // don't leak into THIS effect's dependency set — otherwise the parent
-  // updating discoveredHosts/selectedHosts would re-fire this effect
-  // and trigger an infinite reactive loop.
+  // Publish the discovered host + category sets upward so the logs page
+  // can render checkbox lists. Recomputes when entries change. The
+  // callbacks are wrapped in untrack() so any state reads inside the
+  // parent's handlers don't leak into THIS effect's dependency set —
+  // otherwise the parent updating discovered*/selected* would re-fire
+  // this effect and trigger an infinite reactive loop.
   $effect(() => {
-    const cb = onHostsChanged;
-    if (!cb) return;
-    const seen = new Set<string>();
-    for (const e of entries) seen.add(e.host);
-    const sorted = Array.from(seen).sort();
-    untrack(() => cb(sorted));
+    const hostCB = onHostsChanged;
+    const catCB = onCatsChanged;
+    if (!hostCB && !catCB) return;
+    const hosts = new Set<string>();
+    const cats = new Set<string>();
+    for (const e of entries) {
+      hosts.add(e.host);
+      cats.add(e.cat);
+    }
+    const sortedHosts = Array.from(hosts).sort();
+    const sortedCats = Array.from(cats).sort();
+    untrack(() => {
+      hostCB?.(sortedHosts);
+      catCB?.(sortedCats);
+    });
   });
 
   onMount(async () => {
