@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { untrack } from "svelte";
   import { apiPost, ApiError } from "$lib/api";
   import type { Schema, FieldSchema } from "$lib/types";
 
@@ -13,21 +14,30 @@
   // Per-field input state, keyed by field name. Seeded once at mount
   // from the schema's declared defaults — the modal unmounts on close
   // (via {#if modalVerb} in PanelHost) so a fresh open gets fresh
-  // defaults.
-  const initialValues: Record<string, string> = {};
-  const initialChecks: Record<string, boolean> = {};
-  for (const f of schema.fields ?? []) {
-    initialValues[f.name] = f.default ?? "";
-    initialChecks[f.name] = f.default === "true";
-  }
+  // defaults. The schema prop reads run inside untrack so the compiler
+  // doesn't flag them as "captures initial value only" — a fresh open
+  // remounts the component, which is the actual reset mechanism.
+  const { initialValues, initialChecks, firstFocusable } = untrack(() => {
+    const vals: Record<string, string> = {};
+    const cks: Record<string, boolean> = {};
+    for (const f of schema.fields ?? []) {
+      vals[f.name] = f.default ?? "";
+      cks[f.name] = f.default === "true";
+    }
+    const first = (schema.fields ?? []).find((f) => f.kind !== "bool")?.name ?? "";
+    return { initialValues: vals, initialChecks: cks, firstFocusable: first };
+  });
   let values = $state<Record<string, string>>(initialValues);
   let checks = $state<Record<string, boolean>>(initialChecks);
   let error = $state("");
   let submitting = $state(false);
 
-  // Focus the first non-bool input when the modal opens so the user
-  // can type immediately without clicking into the form.
-  const firstFocusable = (schema.fields ?? []).find((f) => f.kind !== "bool")?.name ?? "";
+  // Programmatic focus action — replaces the `autofocus` attribute, which
+  // svelte's a11y rules disallow because it can disorient screen-reader
+  // users when applied broadly. Modal context here is explicit + intentional.
+  function focusIf(node: HTMLInputElement, should: boolean) {
+    if (should) queueMicrotask(() => node.focus());
+  }
 
   function coerce(f: FieldSchema): unknown {
     const raw = values[f.name] ?? "";
@@ -93,11 +103,18 @@
   }
 </script>
 
-<div class="fixed inset-0 bg-black/60 flex items-center justify-center z-50" onclick={onClose} role="presentation">
+<!-- Backdrop click closes the modal, but only when the click target IS the
+     backdrop itself — clicks inside the form bubble up with target=form/input
+     and are ignored. Drops the form's onclick stopPropagation hack along
+     with the a11y warnings it produced. -->
+<div
+  class="fixed inset-0 bg-black/60 flex items-center justify-center z-50"
+  onclick={(e: MouseEvent) => { if (e.target === e.currentTarget) onClose(); }}
+  role="presentation"
+>
   <form
     class="bg-[var(--bg-deep)] border border-[var(--border-subtle)] rounded-lg p-4 w-[420px] max-w-[90vw] space-y-3 shadow-xl"
     onsubmit={submit}
-    onclick={(e: Event) => e.stopPropagation()}
   >
     <div class="flex items-center justify-between">
       <h3 class="text-[13px] text-phosphor-300 font-mono tracking-tight">{verb}</h3>
@@ -127,7 +144,7 @@
             step="1"
             class="mt-1 w-full bg-white/5 border border-[var(--border-subtle)] rounded px-2 py-1 text-[var(--text-bright)] font-mono tabular-nums focus:outline-none focus:border-[var(--border-phosphor)]"
             bind:value={values[f.name]}
-            autofocus={f.name === firstFocusable}
+            use:focusIf={f.name === firstFocusable}
             placeholder={f.default}
           />
         {:else if f.kind === "float32" || f.kind === "float64"}
@@ -136,23 +153,24 @@
             step="any"
             class="mt-1 w-full bg-white/5 border border-[var(--border-subtle)] rounded px-2 py-1 text-[var(--text-bright)] font-mono tabular-nums focus:outline-none focus:border-[var(--border-phosphor)]"
             bind:value={values[f.name]}
-            autofocus={f.name === firstFocusable}
+            use:focusIf={f.name === firstFocusable}
             placeholder={f.default}
           />
         {:else if f.kind === "string"}
           <input
-            type="text"
+            type={f.secret ? "password" : "text"}
             class="mt-1 w-full bg-white/5 border border-[var(--border-subtle)] rounded px-2 py-1 text-[var(--text-bright)] font-mono focus:outline-none focus:border-[var(--border-phosphor)]"
             bind:value={values[f.name]}
-            autofocus={f.name === firstFocusable}
-            placeholder={f.default}
+            use:focusIf={f.name === firstFocusable}
+            placeholder={f.secret ? "" : f.default}
+            autocomplete={f.secret ? "new-password" : "off"}
           />
         {:else}
           <input
             type="text"
             class="mt-1 w-full bg-white/5 border border-[var(--border-subtle)] rounded px-2 py-1 text-[var(--text-bright)] font-mono focus:outline-none focus:border-[var(--border-phosphor)]"
             bind:value={values[f.name]}
-            autofocus={f.name === firstFocusable}
+            use:focusIf={f.name === firstFocusable}
             placeholder={'JSON (e.g. ["a","b"] or {"k":1})'}
           />
         {/if}

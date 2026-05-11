@@ -159,6 +159,10 @@ export type FieldSchema = {
   help?: string;
   rest?: boolean;
   complete?: string;
+  // secret marks the field as a sensitive value (password, token). The
+  // ArgsModal renders these as <input type="password">; the server-side
+  // console TTY-prompts for them. See pkg/cmdsys/schema.go::FieldSchema.
+  secret?: boolean;
 };
 
 // Schema mirrors pkg/cmdsys/schema.go::Schema.
