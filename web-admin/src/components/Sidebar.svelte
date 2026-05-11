@@ -40,6 +40,7 @@
     { id: "events",   label: "Events",   icon: List,        group: "TELEMETRY", path: "/events",   glyph: "E" },
     { id: "audit",    label: "Audit",    icon: ShieldCheck, group: "TELEMETRY", path: "/audit",    glyph: "A" },
     { id: "logs",     label: "Logs",     icon: Scroll,      group: "TELEMETRY", path: "/logs",     glyph: "L" },
+    { id: "users",    label: "Admin Users", icon: ShieldCheck, group: "CONFIG", path: "/users", glyph: "U" },
     { id: "settings", label: "Settings", icon: Settings,    group: "CONFIG",    path: "/settings", glyph: "S" },
   ];
 
