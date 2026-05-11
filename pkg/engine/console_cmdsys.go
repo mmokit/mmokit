@@ -172,18 +172,17 @@ func (a *cmdsysAdapter) Dispatch(raw string) string {
 	}
 	argsRest := strings.Join(tokens[consumed:], " ")
 
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-
 	// If the resolved verb has any secret-marked Args fields, parse the
 	// non-secret tokens against a schema with secrets stripped, prompt
 	// the user for each secret via TTY, then invoke with the typed args
-	// struct. Otherwise fall through to the legacy string-args path.
+	// struct. The dispatcher's 5s deadline starts AFTER the prompt so a
+	// slow typer doesn't blow through the budget before the handler runs.
+	// Otherwise fall through to the legacy string-args path.
 	cmd, regFound := a.Registry.Lookup(verb)
 	if regFound {
 		fullSchema, schemaErr := cmdsys.SchemaOf(cmd.Args)
 		if schemaErr == nil && hasSecretField(fullSchema) {
-			res, err := a.dispatchWithSecrets(ctx, cmd, fullSchema, argsRest)
+			res, err := a.dispatchWithSecrets(cmd, fullSchema, argsRest)
 			if err != nil {
 				return fmt.Sprintf("  error: %v\n", err)
 			}
@@ -191,6 +190,8 @@ func (a *cmdsysAdapter) Dispatch(raw string) string {
 		}
 	}
 
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
 	res, err := a.Dispatcher.Invoke(ctx, operatorCaller, verb, argsRest)
 	if err != nil {
 		if err == cmdsys.ErrUnknownVerb {
@@ -212,9 +213,10 @@ func hasSecretField(schema cmdsys.Schema) bool {
 
 // dispatchWithSecrets parses non-secret tokens against a stripped
 // schema, TTY-prompts for each secret field, and invokes the dispatcher
-// with the typed args value. Returns the dispatcher Result for normal
-// rendering.
-func (a *cmdsysAdapter) dispatchWithSecrets(ctx context.Context, cmd cmdsys.Command, fullSchema cmdsys.Schema, argsRest string) (cmdsys.Result, error) {
+// with the typed args value. The Invoke deadline is created AFTER the
+// TTY prompt completes so a slow typer doesn't burn the budget before
+// the handler runs.
+func (a *cmdsysAdapter) dispatchWithSecrets(cmd cmdsys.Command, fullSchema cmdsys.Schema, argsRest string) (cmdsys.Result, error) {
 	nonSecret := cmdsys.Schema{StructName: fullSchema.StructName}
 	for _, f := range fullSchema.Fields {
 		if !f.Secret {
@@ -243,6 +245,8 @@ func (a *cmdsysAdapter) dispatchWithSecrets(ctx context.Context, cmd cmdsys.Comm
 	if err := cmdsys.ApplyMap(typed, values); err != nil {
 		return cmdsys.Result{}, fmt.Errorf("apply args: %w", err)
 	}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
 	return a.Dispatcher.Invoke(ctx, operatorCaller, cmd.Verb, typed)
 }
 
