@@ -167,3 +167,12 @@ export type Schema = {
   fields: FieldSchema[];
 };
 
+// LogEntry mirrors pkg/admin/log_ring.go::LogEntry. Streamed via the
+// "logs" SSE topic and hydrated from GET /admin/api/logs/recent?n=N.
+export type LogEntry = {
+  host: string;   // "local" for coord, host_id for remote
+  cat: string;
+  msg: string;
+  t: string;      // ISO timestamp
+};
+
