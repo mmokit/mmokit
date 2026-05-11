@@ -7,6 +7,7 @@ import (
 	"regexp"
 	"strings"
 	"sync"
+	"time"
 )
 
 // Logger provides category-based debug logging with hierarchical groups
@@ -21,6 +22,15 @@ type Logger struct {
 	groupSet   map[string]bool
 	filters    map[string]*regexp.Regexp
 	filterSrc  map[string]string // original pattern strings for display
+	hooks      []Hook
+}
+
+// Hook receives every log line that survives the category-enabled check
+// and per-category filter. Implementations MUST be O(1) — Log() blocks
+// the calling goroutine while hooks fire. Use a bounded channel + pump
+// pattern if any real work is involved.
+type Hook interface {
+	Emit(cat, msg string, t time.Time)
 }
 
 // New creates a Logger. All categories in enabled list start on.
@@ -134,6 +144,31 @@ func (l *Logger) Disable(cats ...string) {
 	l.mu.Unlock()
 }
 
+// AddHook registers a sink for every log line. Safe to call concurrently
+// with Log. The hook fires synchronously inside Log() — implementations
+// must not block.
+func (l *Logger) AddHook(h Hook) {
+	if h == nil {
+		return
+	}
+	l.mu.Lock()
+	l.hooks = append(l.hooks, h)
+	l.mu.Unlock()
+}
+
+// RemoveHook detaches a previously-added hook by identity. No-op if the
+// hook was never added.
+func (l *Logger) RemoveHook(h Hook) {
+	l.mu.Lock()
+	for i, x := range l.hooks {
+		if x == h {
+			l.hooks = append(l.hooks[:i], l.hooks[i+1:]...)
+			break
+		}
+	}
+	l.mu.Unlock()
+}
+
 // IsEnabled checks if a category is active.
 func (l *Logger) IsEnabled(cat string) bool {
 	l.mu.RLock()
@@ -221,6 +256,7 @@ func (l *Logger) Log(cat string, format string, args ...any) {
 	l.mu.RLock()
 	on := l.enabled[cat]
 	f := l.filters[cat]
+	hooks := l.hooks
 	l.mu.RUnlock()
 	if !on {
 		return
@@ -230,4 +266,11 @@ func (l *Logger) Log(cat string, format string, args ...any) {
 		return
 	}
 	log.Printf("[%s] %s", cat, msg)
+	if len(hooks) == 0 {
+		return
+	}
+	now := time.Now()
+	for _, h := range hooks {
+		h.Emit(cat, msg, now)
+	}
 }

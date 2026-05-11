@@ -1,8 +1,11 @@
 package logger
 
 import (
+	"reflect"
 	"regexp"
+	"sync"
 	"testing"
+	"time"
 )
 
 func TestNewWithEnabledCategories(t *testing.T) {
@@ -193,6 +196,53 @@ func TestClearFilter(t *testing.T) {
 	l.ClearFilter()
 	if len(l.Filters()) != 0 {
 		t.Error("all filters should be cleared")
+	}
+}
+
+type fakeHook struct {
+	mu   sync.Mutex
+	seen []string
+}
+
+func (f *fakeHook) Emit(cat, msg string, _ time.Time) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.seen = append(f.seen, cat+":"+msg)
+}
+
+func TestLogger_AddHook_FiresWhenEnabled(t *testing.T) {
+	l := New()
+	l.RegisterCategories("mesh:cell")
+	l.Enable("mesh:cell")
+	h := &fakeHook{}
+	l.AddHook(h)
+
+	l.Log("mesh:cell", "hello %d", 42)
+	l.Log("mesh:cell", "world")
+	l.Log("other:thing", "ignored")
+
+	h.mu.Lock()
+	got := append([]string(nil), h.seen...)
+	h.mu.Unlock()
+	want := []string{"mesh:cell:hello 42", "mesh:cell:world"}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("hook saw %v, want %v", got, want)
+	}
+}
+
+func TestLogger_RemoveHook(t *testing.T) {
+	l := New()
+	l.RegisterCategories("c")
+	l.Enable("c")
+	h := &fakeHook{}
+	l.AddHook(h)
+	l.RemoveHook(h)
+	l.Log("c", "msg")
+
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	if len(h.seen) != 0 {
+		t.Fatalf("hook fired after removal: %v", h.seen)
 	}
 }
 
