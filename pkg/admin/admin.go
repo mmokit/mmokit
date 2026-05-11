@@ -61,7 +61,11 @@ type ServerOpts struct {
 	Panels       *PanelRegistry
 	Logger       *logger.Logger
 	Process      *universe.Process // for publishers; only the Process needs to live this long
-	Config       Config
+	// Bus optionally injects a pre-created topic bus. Used by mmokit so game
+	// code can publish to admin topics before the Server is constructed. If
+	// nil, NewServer creates one internally.
+	Bus    *TopicBus
+	Config Config
 }
 
 // NewServer wires the dependencies. Caller still owns the publishers' lifetime
@@ -81,7 +85,10 @@ func NewServer(opts ServerOpts) *Server {
 	for _, o := range cfg.Operators {
 		ops[strings.ToLower(o.Username)] = o
 	}
-	bus := NewTopicBus(0)
+	bus := opts.Bus
+	if bus == nil {
+		bus = NewTopicBus(0)
+	}
 	s := &Server{
 		view:       opts.View,
 		registry:   opts.Registry,
