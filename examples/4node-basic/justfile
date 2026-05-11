@@ -28,11 +28,16 @@ build-go:
 build-web:
     cd {{root}}/examples/4node-basic/web && bun install --frozen-lockfile && bun run build
 
-# build TS SDK first, then web client, then Go binary. SDK runs first so
-# the web client picks up any schema changes; the Go binary embeds web/dist
-# via go:embed so web must be built BEFORE the Go binary or the binary
-# ships with the previous build's bundle.
-build: sdk build-web build-go
+# build the admin SPA — bundle lands in pkg/admin/static/dist/ for go:embed.
+# Delegates to the root justfile so we only own the recipe in one place.
+admin-build:
+    cd {{root}} && just admin-build
+
+# build TS SDK first, then web client + admin SPA, then Go binary. SDK runs
+# first so the web client picks up any schema changes; the Go binary embeds
+# both bundles via go:embed so they must be built BEFORE the Go binary or
+# the binary ships with the previous build's bundles.
+build: sdk build-web admin-build build-go
 
 # build and run `all` preset (serves the built web/dist — no vite needed).
 # Admin dashboard is on http://localhost:9101/admin/ (login: josh / localdev).
@@ -41,9 +46,9 @@ run: build
 
 # build Go + run with vite dev server (HMR on :5173, Go backend on :8080)
 # Disables static serving on the Go side so vite is the sole asset source.
-# Uses build-go instead of build so we skip the (slow) web build — vite
-# transpiles source on the fly.
-dev *ARGS: build-go
+# We still rebuild the admin SPA — the game client uses HMR but the admin
+# dashboard is served from the embedded go:embed bundle.
+dev *ARGS: admin-build build-go
     #!/usr/bin/env bash
     set -euo pipefail
     tmux kill-session -t 4node-vite 2>/dev/null || true
