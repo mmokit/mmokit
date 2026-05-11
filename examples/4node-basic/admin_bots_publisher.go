@@ -59,7 +59,9 @@ func collectBotRows(ctx context.Context, coord *mmokit.Process) []BotRow {
 		// A bare "*" never matches — pattern needs the namespace.action shape.
 		Grants: []cmdsys.Grant{{Pattern: "*.*", Allow: true}},
 	}
-	res, err := coord.CmdDispatcher().Invoke(invokeCtx, caller, "bot.list", nil)
+	// Pass a concrete zero-value (not nil) — dispatcher.coerceArgs reflects
+	// on raw and panics on a typed-nil interface.
+	res, err := coord.CmdDispatcher().Invoke(invokeCtx, caller, "bot.list", botListArgs{})
 	if err != nil {
 		return nil
 	}
