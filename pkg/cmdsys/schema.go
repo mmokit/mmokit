@@ -25,6 +25,13 @@ type FieldSchema struct {
 	// the current values via Console.completions[Complete]. Empty means
 	// no dynamic completion for this field.
 	Complete string `json:"complete,omitempty"`
+	// Secret marks the field as a sensitive value that should not be
+	// echoed or stored in shell history. The console adapter prompts
+	// for these fields via TTY (no echo) instead of accepting them
+	// from CLI tokens; the HTTP/admin-UI path passes them in the JSON
+	// request body and surfaces a password-type form field via
+	// ArgsModal.svelte. Mark with cmd:"secret".
+	Secret bool `json:"secret,omitempty"`
 }
 
 // Schema is the reflected description of an Args or Result struct.
@@ -86,6 +93,7 @@ func schemaFields(t reflect.Type, depth int, maxDepth int) ([]FieldSchema, error
 		fs.Required = !containsFlag(tag, "optional")
 		fs.NamedOnly = containsFlag(tag, "named-only")
 		fs.Rest = containsFlag(tag, "rest")
+		fs.Secret = containsFlag(tag, "secret")
 		fs.Default = extractTagValue(tag, "default")
 		fs.Enum = extractEnum(tag)
 		fs.Help = extractTagValue(tag, "help")

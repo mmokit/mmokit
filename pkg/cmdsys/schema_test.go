@@ -306,3 +306,24 @@ func TestSchemaOf_NamedOnlyTag(t *testing.T) {
 		t.Error("C should not be named-only")
 	}
 }
+
+func TestSchemaOf_SecretTagSetsFlag(t *testing.T) {
+	type args struct {
+		Username string `cmd:"help=name"`
+		Password string `cmd:"secret,help=login password"`
+	}
+	s, err := SchemaOf(args{})
+	if err != nil {
+		t.Fatalf("SchemaOf: %v", err)
+	}
+	byName := map[string]FieldSchema{}
+	for _, f := range s.Fields {
+		byName[f.Name] = f
+	}
+	if byName["Username"].Secret {
+		t.Errorf("Username.Secret = true; want false")
+	}
+	if !byName["Password"].Secret {
+		t.Errorf("Password.Secret = false; want true")
+	}
+}
