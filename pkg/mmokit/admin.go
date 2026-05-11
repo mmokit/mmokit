@@ -12,6 +12,30 @@ import (
 // custom dashboard panels via mmokit.RegisterAdminPanel.
 type AdminPanelDef = admin.PanelDef
 
+// localLogID resolves the label stamped on in-process log entries from
+// this process. Prefers an explicit --host-id, falls back to --gateway-id,
+// then derives a role-based default ("coordinator", "gateway", "host")
+// so the log tail shows a meaningful node name rather than "local".
+func localLogID(cfg universe.Config) string {
+	if cfg.HostID != "" {
+		return cfg.HostID
+	}
+	if cfg.GatewayID != "" {
+		return cfg.GatewayID
+	}
+	roles, _ := universe.ParseRoles(cfg.Mode)
+	switch {
+	case roles.Has(universe.RoleCoordinator):
+		return "coordinator"
+	case roles.Has(universe.RoleHost):
+		return "host"
+	case roles.Has(universe.RoleGateway):
+		return "gateway"
+	default:
+		return "local"
+	}
+}
+
 // AdminConfig is the facade alias for universe.AdminConfig.
 type AdminConfig = universe.AdminConfig
 
@@ -130,6 +154,7 @@ func DefaultAdminServerFactory() func(*universe.Process) universe.AdminServer {
 			Panels:       adminPanelRegistry(c),
 			Bus:          bus,
 			LogRing:      ring,
+			LocalHostID:  localLogID(cfg),
 			Logger:       c.Log,
 			Process:      c,
 			Config: admin.Config{

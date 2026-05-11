@@ -9,9 +9,10 @@ import (
 // O(1): append to the ring (locked) and non-blocking-send to the pump
 // channel. The drain goroutine handles bus publication.
 type logPump struct {
-	ring *LogRing
-	bus  *TopicBus
-	ch   chan LogEntry
+	ring    *LogRing
+	bus     *TopicBus
+	ch      chan LogEntry
+	hostID  string
 }
 
 // pumpChannelCap is the in-process pump's buffer between Emit and the
@@ -21,18 +22,26 @@ type logPump struct {
 // /admin/api/logs/recent fetch).
 const pumpChannelCap = 1024
 
-func newLogPump(ring *LogRing, bus *TopicBus) *logPump {
+// newLogPump builds an in-process Hook+pump. hostID is the label
+// stamped on every entry — typically the coordinator's resolved
+// process ID (cfg.HostID, or "coordinator"/"local" as fallback).
+// Empty hostID falls back to "local".
+func newLogPump(ring *LogRing, bus *TopicBus, hostID string) *logPump {
+	if hostID == "" {
+		hostID = "local"
+	}
 	return &logPump{
-		ring: ring,
-		bus:  bus,
-		ch:   make(chan LogEntry, pumpChannelCap),
+		ring:   ring,
+		bus:    bus,
+		ch:     make(chan LogEntry, pumpChannelCap),
+		hostID: hostID,
 	}
 }
 
 // Emit implements logger.Hook. Always non-blocking — drops on full
 // channel rather than stalling the game loop.
 func (p *logPump) Emit(cat, msg string, t time.Time) {
-	e := LogEntry{Host: "local", Cat: cat, Msg: msg, T: t}
+	e := LogEntry{Host: p.hostID, Cat: cat, Msg: msg, T: t}
 	p.ring.Append(e)
 	select {
 	case p.ch <- e:

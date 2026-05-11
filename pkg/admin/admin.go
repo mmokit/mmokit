@@ -72,7 +72,12 @@ type ServerOpts struct {
 	// game-side wiring and the SSE pump share the same buffer. If nil,
 	// NewServer creates one sized by cfg.LogRingCap.
 	LogRing *LogRing
-	Config  Config
+	// LocalHostID is the label stamped on log entries that originate in
+	// this process (the in-process Hook path). Empty falls back to
+	// "local" — but production wiring should pass the resolved process
+	// ID (cfg.HostID, or a role-derived fallback like "coordinator").
+	LocalHostID string
+	Config      Config
 }
 
 // NewServer wires the dependencies. Caller still owns the publishers' lifetime
@@ -119,7 +124,7 @@ func NewServer(opts ServerOpts) *Server {
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	s.cancel = cancel
-	s.logPump = newLogPump(s.logRing, bus)
+	s.logPump = newLogPump(s.logRing, bus, opts.LocalHostID)
 	go s.logPump.Run(ctx)
 	if opts.Logger != nil {
 		opts.Logger.AddHook(s.logPump)
