@@ -6,24 +6,11 @@ import (
 	"github.com/zenion/mmoserver/pkg/mmokit"
 )
 
-// EconomySystem handles manual loot crate pickup. Bank transfers (deposit/
-// withdraw) and LootAll are dispatched via Commands.Defer from the input
-// handlers and do not flow through Update.
-type EconomySystem struct {
-	mmokit.SystemBase
-	gw *GameWorld
-}
-
-func (s *EconomySystem) Init() {
-	s.gw = mmokit.State[GameWorld](s.Stage())
-}
-
-func (s *EconomySystem) Update(dt float32) {
-	// Bank transfers and LootAll are dispatched via Commands.Defer from
-	// their input handlers — no drain here. PendingLootItem still flows
-	// through this system (drained below) until it is migrated.
-	s.processLootItems()
-}
+// Bank transfers, LootItem, and LootAll all dispatch via Commands.Defer
+// from their input handlers — no per-tick System lives here anymore.
+// This file holds the GameWorld methods invoked by those deferred
+// closures plus the SendBankContents helper consumed by op_bank and the
+// docked-equip path.
 
 // processTransferFor handles a single cargo<->bank transfer, dispatched
 // from the InventoryTransfer input handler via Commands.Defer.
@@ -255,59 +242,59 @@ func (gw *GameWorld) SendBankContents(connID uint32, pdata *PlayerData) {
 	})
 }
 
-func (s *EconomySystem) processLootItems() {
-	gw := s.gw
+// performLootItemFor processes a single LootItem request. Dispatched
+// via Commands.Defer from the LootItem input handler; runs at the next
+// per-system flush boundary with the ECS world unlocked.
+func (gw *GameWorld) performLootItemFor(connID uint32, crateNetID uint32, itemID uint32) {
 	pickupRange2 := float64(gw.Config.LootPickupRange) * float64(gw.Config.LootPickupRange)
 
-	for _, req := range mmokit.Drain[PendingLootItem](gw.Queue) {
-		sess := gw.Players.ByConnID(req.ConnID)
-		if sess == nil || sess.State != mmokit.StateActive {
-			continue
-		}
-		entity := mmokit.EntityFromECS(gw.stage, sess.Entity)
-		if !entity.Alive() {
-			continue
-		}
-		playerPos := mmokit.Get[mmokit.Position](entity)
-		playerInv := mmokit.Get[gamecomp.Inventory](entity)
-		if playerPos == nil || playerInv == nil {
-			continue
-		}
+	sess := gw.Players.ByConnID(connID)
+	if sess == nil || sess.State != mmokit.StateActive {
+		return
+	}
+	entity := mmokit.EntityFromECS(gw.stage, sess.Entity)
+	if !entity.Alive() {
+		return
+	}
+	playerPos := mmokit.Get[mmokit.Position](entity)
+	playerInv := mmokit.Get[gamecomp.Inventory](entity)
+	if playerPos == nil || playerInv == nil {
+		return
+	}
 
-		crateE := mmokit.EntityByNetID(gw.stage, req.CrateNetID)
-		if !crateE.Alive() || !mmokit.Has[gamecomp.LootCrate](crateE) {
-			continue
-		}
+	crateE := mmokit.EntityByNetID(gw.stage, crateNetID)
+	if !crateE.Alive() || !mmokit.Has[gamecomp.LootCrate](crateE) {
+		return
+	}
 
-		cratePos := mmokit.Get[mmokit.Position](crateE)
-		if cratePos == nil {
-			continue
-		}
-		dx := float64(playerPos.X - cratePos.X)
-		dy := float64(playerPos.Y - cratePos.Y)
-		if dx*dx+dy*dy > pickupRange2 {
-			continue
-		}
+	cratePos := mmokit.Get[mmokit.Position](crateE)
+	if cratePos == nil {
+		return
+	}
+	dx := float64(playerPos.X - cratePos.X)
+	dy := float64(playerPos.Y - cratePos.Y)
+	if dx*dx+dy*dy > pickupRange2 {
+		return
+	}
 
-		crateInv := mmokit.Get[gamecomp.Inventory](crateE)
-		if crateInv == nil {
-			continue
-		}
-		qty := crateInv.Items[req.ItemID]
-		if qty <= 0 {
-			continue
-		}
+	crateInv := mmokit.Get[gamecomp.Inventory](crateE)
+	if crateInv == nil {
+		return
+	}
+	qty := crateInv.Items[itemID]
+	if qty <= 0 {
+		return
+	}
 
-		added := playerInv.AddItem(req.ItemID, qty)
-		if added > 0 {
-			crateInv.RemoveItem(req.ItemID, added)
-			gw.eng.Log.Log(CatEconomyLoot, "loot pickup: player=%d item=%d qty=%d cargo_mass=%.1f/%.1f",
-				entity.NetID(), req.ItemID, added, playerInv.TotalMass(), playerInv.MaxMass)
-		}
+	added := playerInv.AddItem(itemID, qty)
+	if added > 0 {
+		crateInv.RemoveItem(itemID, added)
+		gw.eng.Log.Log(CatEconomyLoot, "loot pickup: player=%d item=%d qty=%d cargo_mass=%.1f/%.1f",
+			entity.NetID(), itemID, added, playerInv.TotalMass(), playerInv.MaxMass)
+	}
 
-		if crateInv.IsEmpty() {
-			gw.MarkForRemoval(crateE.Handle())
-		}
+	if crateInv.IsEmpty() {
+		gw.MarkForRemoval(crateE.Handle())
 	}
 }
 

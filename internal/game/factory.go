@@ -59,7 +59,6 @@ func GameSetup(coord *mmokit.Process) {
 	coord.AddSystem(mmokit.NewSystem(&TargetLockSystem{}))
 	coord.AddSystem(mmokit.NewSystem(&ShipDynamicsSystem{}))
 	coord.AddSystem(mmokit.NewSystem(&MiningSystem{}))
-	coord.AddSystem(mmokit.NewSystem(&EconomySystem{}))
 	coord.AddSystem(mmokit.NewSystem(&AbilitySystem{}))
 	coord.AddSystem(mmokit.NewSystem(&StatusEffectSystem{}))
 	coord.AddSystem(mmokit.NewSystem(&NPCAISystem{}))

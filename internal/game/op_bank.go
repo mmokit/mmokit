@@ -39,8 +39,8 @@ type BankResponse struct {
 
 // HandleBankRequest is the typed-op handler. Runs on the player's cell
 // engine via Process.DispatchCellRoutedOp → SubmitLoopJob, so it has
-// safe access to ECS state. Replaces the per-tick queue drain in
-// EconomySystem.processBankRequests.
+// safe access to ECS state. Replaces the per-tick queue drain that
+// preceded the typed-op migration.
 func HandleBankRequest(ctx *mmokit.OpContext, _ *BankRequest) (*BankResponse, error) {
 	stage := mmokit.OpContextStage(ctx)
 	if stage == nil {
@@ -78,10 +78,8 @@ func HandleBankRequest(ctx *mmokit.OpContext, _ *BankRequest) (*BankResponse, er
 }
 
 // nearAnyStation iterates every Station component on the cell stage and
-// returns true if any falls within range2 of pos. Mirrors the per-tick
-// query EconomySystem uses for the same check; reusing the system's
-// query directly would require coupling between the typed-op handler
-// and the system instance.
+// returns true if any falls within range2 of pos. Used by op_bank and
+// the bank-transfer deferred handler in system_economy.go.
 func nearAnyStation(gw *GameWorld, pos *mmokit.Position, range2 float64) bool {
 	filter := ecs.NewFilter2[gamecomp.Station, mmokit.Position](gw.stage.ECSWorld())
 	query := filter.Query()
