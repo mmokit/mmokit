@@ -8,7 +8,7 @@ import {
   applyDelta, BaselineStore,
   decodeLengthPrefixedStringU8,
 } from "./_core/delta-decoder-core.js";
-import type { ShipEntity, ShipStatusEffectsItem, AsteroidEntity, StationEntity, LootCrateEntity, LootCrateItemsItem, NPCEntity, NPCStatusEffectsItem, AnyEntity, DeltaWorldUpdate } from "./entities.js";
+import type { ShipEntity, ShipStatusEffectsItem, AsteroidEntity, StationEntity, LootCrateEntity, LootCrateItemsItem, NPCEntity, NPCStatusEffectsItem, POIEntity, AnyEntity, DeltaWorldUpdate } from "./entities.js";
 
 const SHIPENTITY_FIELD_SIZES = [4, 4, 2, 2, 2, 2, 2, 4, 4, 4, 4, 4, 1, 1, 1, 4, 2];
 const SHIPENTITY_HAS_VAR_TAIL = true;
@@ -99,7 +99,7 @@ function decodeLootCrateEntitySnapshot(snap: Uint8Array, initial: Uint8Array | n
   return { netID: 0, producedAtMs: 0, entityType: 3, worldX, worldY, velX, velY, radius, width, height, items };
 }
 
-const NPCENTITY_FIELD_SIZES = [4, 4, 2, 2, 2, 2, 2, 4, 4, 4, 4];
+const NPCENTITY_FIELD_SIZES = [4, 4, 2, 2, 2, 2, 2, 4, 4, 4, 4, 1, 2];
 const NPCENTITY_HAS_VAR_TAIL = true;
 
 function decodeNPCEntitySnapshot(snap: Uint8Array, initial: Uint8Array | null, existing?: NPCEntity): NPCEntity {
@@ -115,6 +115,8 @@ function decodeNPCEntitySnapshot(snap: Uint8Array, initial: Uint8Array | null, e
   const healthMax = readFloat32(snap, o); o += 4;
   const shieldCurrent = readFloat32(snap, o); o += 4;
   const shieldMax = readFloat32(snap, o); o += 4;
+  const archetype = snap[o]; o += 1;
+  const angle = unAngle(readUint16(snap, o)); o += 2;
   const statusEffectsByteLen = readUint16(snap, o); o += 2;
   const statusEffectsEnd = o + statusEffectsByteLen;
   const statusEffects: NPCStatusEffectsItem[] = [];
@@ -123,7 +125,25 @@ function decodeNPCEntitySnapshot(snap: Uint8Array, initial: Uint8Array | null, e
     const duration = unNorm(snap[o]); o += 1;
     statusEffects.push({ type, duration });
   }
-  return { netID: 0, producedAtMs: 0, entityType: 4, worldX, worldY, velX, velY, radius, width, height, healthCurrent, healthMax, shieldCurrent, shieldMax, statusEffects };
+  const state = initial ? initial[0] : (existing?.state ?? 0);
+  return { netID: 0, producedAtMs: 0, entityType: 4, worldX, worldY, velX, velY, radius, width, height, healthCurrent, healthMax, shieldCurrent, shieldMax, archetype, state, angle, statusEffects };
+}
+
+const POIENTITY_FIELD_SIZES = [4, 4, 2, 2, 2, 2, 2, 1];
+const POIENTITY_HAS_VAR_TAIL = false;
+
+function decodePOIEntitySnapshot(snap: Uint8Array, initial: Uint8Array | null, existing?: POIEntity): POIEntity {
+  let o = 0;
+  const worldX = readFloat32(snap, o); o += 4;
+  const worldY = readFloat32(snap, o); o += 4;
+  const velX = unVel(readInt16(snap, o), 2000); o += 2;
+  const velY = unVel(readInt16(snap, o), 2000); o += 2;
+  const radius = unVel(readInt16(snap, o), 500); o += 2;
+  const width = unVel(readInt16(snap, o), 500); o += 2;
+  const height = unVel(readInt16(snap, o), 500); o += 2;
+  const type = snap[o]; o += 1;
+  const status = initial ? initial[0] : (existing?.status ?? 0);
+  return { netID: 0, producedAtMs: 0, entityType: 5, worldX, worldY, velX, velY, radius, width, height, type, status };
 }
 
 export class SpaceDeltaDecoder {
@@ -184,6 +204,7 @@ export class SpaceDeltaDecoder {
       case 2: { const prev = existing && existing.entityType === 2 ? existing : undefined; const e = decodeStationEntitySnapshot(snap, initial, prev); e.netID = netID; e.producedAtMs = producedAtMs; return e; }
       case 3: { const prev = existing && existing.entityType === 3 ? existing : undefined; const e = decodeLootCrateEntitySnapshot(snap, initial, prev); e.netID = netID; e.producedAtMs = producedAtMs; return e; }
       case 4: { const prev = existing && existing.entityType === 4 ? existing : undefined; const e = decodeNPCEntitySnapshot(snap, initial, prev); e.netID = netID; e.producedAtMs = producedAtMs; return e; }
+      case 5: { const prev = existing && existing.entityType === 5 ? existing : undefined; const e = decodePOIEntitySnapshot(snap, initial, prev); e.netID = netID; e.producedAtMs = producedAtMs; return e; }
       default: return null;
     }
   }
@@ -195,6 +216,7 @@ export class SpaceDeltaDecoder {
       case 2: return STATIONENTITY_FIELD_SIZES;
       case 3: return LOOTCRATEENTITY_FIELD_SIZES;
       case 4: return NPCENTITY_FIELD_SIZES;
+      case 5: return POIENTITY_FIELD_SIZES;
       default: return [];
     }
   }
@@ -206,6 +228,7 @@ export class SpaceDeltaDecoder {
       case 2: return STATIONENTITY_HAS_VAR_TAIL;
       case 3: return LOOTCRATEENTITY_HAS_VAR_TAIL;
       case 4: return NPCENTITY_HAS_VAR_TAIL;
+      case 5: return POIENTITY_HAS_VAR_TAIL;
       default: return false;
     }
   }

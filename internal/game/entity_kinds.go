@@ -48,6 +48,14 @@ func RegisterEntityKinds(p *mmokit.Process) {
 	mmokit.RegisterKind[StationBundle](p, gamecomp.KindStation, "Station")
 
 	mmokit.RegisterKind[NPCBundle](p, gamecomp.KindNPC, "NPC",
+		// Replicate Rotation so client-side ability VFX (beams,
+		// muzzle flashes) originate from the NPC's facing barrel
+		// instead of its 0-radian "front." Same pattern as the
+		// Ship binding above; Rotation is registered for transfer
+		// globally by initEntityKinds.
+		mmokit.WithExtraBindingFn(func(w *ecs.World) system.ComponentBinding {
+			return mmokit.QAngle(ecs.NewMap1[mmokit.Rotation](w))
+		}),
 		// NPCs can be hit with status effects (ion burn, etc.) whose
 		// Source is a player entity handle. The pre-marshal hook
 		// clears Source before cross-cell transfer so the ecs.Entity
@@ -66,6 +74,8 @@ func RegisterEntityKinds(p *mmokit.Process) {
 			mmokit.WithMarshal(MarshalInventory, UnmarshalInventoryInto),
 		),
 	)
+
+	mmokit.RegisterKind[POIBundle](p, gamecomp.KindPOI, "POI")
 }
 
 // initEntityKinds populates per-stage state that depends on the running
@@ -80,4 +90,10 @@ func (gw *GameWorld) initEntityKinds() {
 	reg := gw.stage.ReplicationRegistry()
 	mmokit.RegisterComponent(reg, ecs.NewMap1[mmokit.Velocity](w))
 	mmokit.RegisterComponent(reg, ecs.NewMap1[mmokit.Rotation](w))
+	// Prime the Leashing component on the ECS world so systems can call
+	// mmokit.Has[Leashing] from inside per-tick queries. Leashing isn't on
+	// any entity bundle (it's added dynamically when the POI-wide leash
+	// trigger fires), so without priming the first Has check would try to
+	// register the component while the world is locked and panic.
+	ecs.NewMap1[gamecomp.Leashing](w)
 }

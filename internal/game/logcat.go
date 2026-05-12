@@ -31,6 +31,12 @@ const (
 
 	// persist:* — database persistence. Off by default; opt in via `on persist`.
 	CatPersistFlush = "persist:flush" // periodic dirty-player flushes (chatty)
+
+	// npcai — NPC AI state-machine transitions, acquire/engage/leash events.
+	CatNPCAI = "npcai"
+
+	// poi — POI lifecycle (spawn, roster tracking, clear/cooldown/respawn).
+	CatPOI = "poi"
 )
 
 // GameCategories lists every game-specific log category.
@@ -40,4 +46,6 @@ var GameCategories = []string{
 	CatPlayerConnect, CatPlayerSpawn, CatPlayerDock, CatPlayerEquip, CatPlayerInput,
 	CatWorldCollision, CatWorldMap, CatWorldNetwork, CatWorldTransfer, CatWorldReplica,
 	CatPersistFlush,
+	CatNPCAI,
+	CatPOI,
 }

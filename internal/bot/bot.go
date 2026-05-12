@@ -67,6 +67,11 @@ type Bot struct {
 	inputMu      sync.Mutex
 	pending      pendingInput
 	miningTarget uint32 // tracks which asteroid beam is toggled on for
+	// currentLockTarget tracks the last LockTarget the bot has sent (and
+	// not yet unlocked). When the next sendInput sees a lock-state change,
+	// it diffs against this to emit LockTarget / UnlockTarget. The v1 bot
+	// only ever holds a single lock at a time, so a scalar is sufficient.
+	currentLockTarget uint32
 
 	inputRate time.Duration
 
@@ -283,11 +288,26 @@ func (b *Bot) sendInput() {
 		})
 	}
 	if inp.lockDirty {
-		b.inputSeq++
-		b.sendTypedInput(&game.SetLockTarget{
-			Sequence:    b.inputSeq,
-			TargetNetID: inp.lockTargetID,
-		})
+		// Diff against the previously-locked target. The slot-based API
+		// separates acquire (LockTarget) from release (UnlockTarget); the
+		// bot only ever holds one slot at a time in v1.
+		prev := b.currentLockTarget
+		next := inp.lockTargetID
+		if prev != 0 && prev != next {
+			b.inputSeq++
+			b.sendTypedInput(&game.UnlockTarget{
+				Sequence: b.inputSeq,
+				NetID:    prev,
+			})
+		}
+		if next != 0 && next != prev {
+			b.inputSeq++
+			b.sendTypedInput(&game.LockTarget{
+				Sequence: b.inputSeq,
+				NetID:    next,
+			})
+		}
+		b.currentLockTarget = next
 	}
 	for slot := uint8(0); slot < 8; slot++ {
 		if inp.abilityCast&(1<<slot) == 0 {

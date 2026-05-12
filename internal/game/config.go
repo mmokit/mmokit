@@ -17,7 +17,7 @@ import (
 // ConfigVersion tracks breaking config changes. Bump this when defaults change
 // in a way that is incompatible with saved configs (e.g. unit rescale).
 // When the saved version doesn't match, defaults are used and re-saved.
-const ConfigVersion = 3
+const ConfigVersion = 5
 
 // GameConfig holds all tunable game parameters.
 type GameConfig struct {
@@ -50,10 +50,46 @@ type GameConfig struct {
 	NpcWidth            float32 `json:"npcWidth"`
 	NpcHeight           float32 `json:"npcHeight"`
 
+	// NPC archetypes
+	BrawlerHP             float32 `json:"brawler_hp"`
+	BrawlerShield         float32 `json:"brawler_shield"`
+	BrawlerMaxSpeed       float32 `json:"brawler_max_speed"`
+	BrawlerTurnRate       float32 `json:"brawler_turn_rate"`
+	BrawlerPreferredRange float32 `json:"brawler_preferred_range"`
+	BrawlerWeaponRange    float32 `json:"brawler_weapon_range"`
+	BrawlerAggroRadius    float32 `json:"brawler_aggro_radius"`
+	BrawlerDamagePerShot  float32 `json:"brawler_damage_per_shot"`
+	BrawlerFireRate       float32 `json:"brawler_fire_rate"`
+
+	SniperHP             float32 `json:"sniper_hp"`
+	SniperShield         float32 `json:"sniper_shield"`
+	SniperMaxSpeed       float32 `json:"sniper_max_speed"`
+	SniperTurnRate       float32 `json:"sniper_turn_rate"`
+	SniperPreferredRange float32 `json:"sniper_preferred_range"`
+	SniperWeaponRange    float32 `json:"sniper_weapon_range"`
+	SniperAggroRadius    float32 `json:"sniper_aggro_radius"`
+	SniperDamagePerShot  float32 `json:"sniper_damage_per_shot"`
+	SniperFireRate       float32 `json:"sniper_fire_rate"`
+
+	SwarmerHP             float32 `json:"swarmer_hp"`
+	SwarmerShield         float32 `json:"swarmer_shield"`
+	SwarmerMaxSpeed       float32 `json:"swarmer_max_speed"`
+	SwarmerTurnRate       float32 `json:"swarmer_turn_rate"`
+	SwarmerPreferredRange float32 `json:"swarmer_preferred_range"`
+	SwarmerWeaponRange    float32 `json:"swarmer_weapon_range"`
+	SwarmerAggroRadius    float32 `json:"swarmer_aggro_radius"`
+	SwarmerDamagePerShot  float32 `json:"swarmer_damage_per_shot"`
+	SwarmerFireRate       float32 `json:"swarmer_fire_rate"`
+
+	// AI shared
+	AggroDeescalationSec float32 `json:"aggro_deescalation_sec"`
+
 	// Target lock
-	LockOnTime     float32 `json:"lockOnTime"`     // seconds to achieve full lock
-	LockOnRange    float32 `json:"lockOnRange"`    // max range to maintain lock
-	MiningLockTime float32 `json:"miningLockTime"` // seconds to lock an asteroid
+	LockOnTime         float32 `json:"lockOnTime"`         // seconds to achieve full lock
+	LockOnRange        float32 `json:"lockOnRange"`        // max range to maintain lock
+	LockMaxSlotsPlayer uint8   `json:"lock_max_slots_player"`
+	LockMaxSlotsNPC    uint8   `json:"lock_max_slots_npc"`
+	MiningLockTime     float32 `json:"miningLockTime"` // seconds to lock an asteroid
 
 	// Docking
 	DockTime         float32 `json:"dockTime"`         // seconds to complete docking
@@ -69,6 +105,7 @@ type GameConfig struct {
 	// Persistence
 	PersistFlushInterval  float32 `json:"persistFlushInterval"`  // seconds between dirty player flushes
 	DisconnectGracePeriod float32 `json:"disconnectGracePeriod"` // seconds to keep entity alive after disconnect
+	RespawnGraceSec       float32 `json:"respawnGraceSec"`       // seconds player stays on death screen before auto-respawn
 
 	// Marketplace
 	MarketTaxPct         float64 `json:"marketTaxPct"`         // transaction tax (default 0.02 = 2%)
@@ -81,6 +118,18 @@ type GameConfig struct {
 	StationCell mmokit.CellCoord `json:"stationCell"` // cell where station spawns and players respawn
 	MeshCellsX  uint32           `json:"meshCellsX"`  // number of cells wide
 	MeshCellsY  uint32           `json:"meshCellsY"`  // number of cells tall
+
+	// POI
+	POIAnchorRadius                float32 `json:"poi_anchor_radius"`
+	POILeashRadius                 float32 `json:"poi_leash_radius"`
+	POIPerCellProbability          float32 `json:"poi_per_cell_probability"`
+	POIBeltClearance               float32 `json:"poi_belt_clearance"`
+	POIStationClearance            float32 `json:"poi_station_clearance"`
+	POIPlacementMargin             float32 `json:"poi_placement_margin"`
+	POIBaseClearFlux               int32   `json:"poi_base_clear_flux"`
+	POIPerKillFluxBonus            int32   `json:"poi_per_kill_flux_bonus"`
+	StationCellPOIClearCooldown    int32   `json:"station_cell_poi_clear_cooldown_sec"`
+	NonStationCellPOIClearCooldown int32   `json:"non_station_cell_poi_clear_cooldown_sec"`
 }
 
 // DefaultGameConfig returns sensible defaults for game balance.
@@ -115,10 +164,30 @@ func DefaultGameConfig() GameConfig {
 		NpcWidth:            1.7,
 		NpcHeight:           0.83,
 
+		// NPC archetypes — ranges scaled to fit the player's 100u AoI /
+		// 50u LockOnRange. Aggro radius < AoI ensures the player can
+		// always see an engaging NPC; WeaponRange ≤ player LockOnRange
+		// keeps fire visible on the player's HUD.
+		BrawlerHP: 400, BrawlerShield: 200, BrawlerMaxSpeed: 6, BrawlerTurnRate: 1.5,
+		BrawlerPreferredRange: 30, BrawlerWeaponRange: 50, BrawlerAggroRadius: 30,
+		BrawlerDamagePerShot: 2, BrawlerFireRate: 1.0,
+
+		SniperHP: 150, SniperShield: 100, SniperMaxSpeed: 8, SniperTurnRate: 2.5,
+		SniperPreferredRange: 45, SniperWeaponRange: 50, SniperAggroRadius: 30,
+		SniperDamagePerShot: 6, SniperFireRate: 0.4,
+
+		SwarmerHP: 80, SwarmerShield: 0, SwarmerMaxSpeed: 14, SwarmerTurnRate: 3.0,
+		SwarmerPreferredRange: 35, SwarmerWeaponRange: 50, SwarmerAggroRadius: 30,
+		SwarmerDamagePerShot: 1, SwarmerFireRate: 2.0,
+
+		AggroDeescalationSec: 6,
+
 		// Target lock
-		LockOnTime:     2.0,
-		LockOnRange:    50,
-		MiningLockTime: 1.5,
+		LockOnTime:         2.0,
+		LockOnRange:        50,
+		LockMaxSlotsPlayer: 4,
+		LockMaxSlotsNPC:    1,
+		MiningLockTime:     1.5,
 
 		// Docking
 		DockTime:         3.0,
@@ -134,6 +203,7 @@ func DefaultGameConfig() GameConfig {
 		// Persistence
 		PersistFlushInterval:  15.0, // seconds
 		DisconnectGracePeriod: 30.0, // seconds
+		RespawnGraceSec:       5.0,  // seconds death screen before auto-respawn
 
 		// Marketplace
 		MarketTaxPct:         0.02,
@@ -146,6 +216,18 @@ func DefaultGameConfig() GameConfig {
 		StationCell: mmokit.CellCoord{CellX: 0, CellY: 0}, // adjacent to the cross-corner mesh-test belt
 		MeshCellsX:  3,
 		MeshCellsY:  3,
+
+		// POI
+		POIAnchorRadius:                30,
+		POILeashRadius:                 120,
+		POIPerCellProbability:          0.3,
+		POIBeltClearance:               40,
+		POIStationClearance:            400,
+		POIPlacementMargin:             200,
+		POIBaseClearFlux:               500,
+		POIPerKillFluxBonus:            100,
+		StationCellPOIClearCooldown:    180,
+		NonStationCellPOIClearCooldown: 600,
 	}
 }
 

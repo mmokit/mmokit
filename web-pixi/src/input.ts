@@ -8,10 +8,12 @@ import {
   Dock,
   EntityType,
   JettisonItem,
+  LockTarget,
   Respawn,
-  SetLockTarget,
+  SetActiveTarget,
   SetMoveTarget,
   Undock,
+  UnlockTarget,
 } from "../sdk/index.js";
 
 // Ability key -> bitmask bit mapping
@@ -44,6 +46,40 @@ export function setupInput(
   onMoveCommand?: (wx: number, wy: number) => void,
 ): void {
   const chatInputEl = document.getElementById("chat-input") as HTMLInputElement;
+
+  // Helpers for the new multi-lock input split. The single SetLockTarget
+  // input was replaced by three discrete inputs in Task 1.2:
+  //   - LockTarget(netID): begin locking onto a new target (claims a slot).
+  //   - SetActiveTarget(netID): switch active among already-locked slots.
+  //   - UnlockTarget(netID): drop a locked slot.
+  function tryLockOrActivate(netID: number): void {
+    if (!state.connected || !state.client || netID === 0) return;
+    state.inputSeq++;
+    if (state.lockedTargets.has(netID)) {
+      // Already locked — clicking switches the active slot. Mirrors the
+      // EVE-style "right-click overview to make active" gesture without
+      // needing a separate keybind.
+      state.client.send(new SetActiveTarget({
+        sequence: state.inputSeq,
+        netID,
+      }));
+    } else {
+      state.client.send(new LockTarget({
+        sequence: state.inputSeq,
+        netID,
+      }));
+    }
+  }
+
+  function tryUnlock(netID: number): void {
+    if (!state.connected || !state.client || netID === 0) return;
+    if (!state.lockedTargets.has(netID)) return;
+    state.inputSeq++;
+    state.client.send(new UnlockTarget({
+      sequence: state.inputSeq,
+      netID,
+    }));
+  }
 
   function issueMove(clientX: number, clientY: number) {
     if (!state.loggedIn || state.isDead) return;
@@ -120,7 +156,9 @@ export function setupInput(
     // Block game input while ESC menu is open
     if (state.escMenuOpen) return;
 
-    // Space: lock onto current target (ships, NPCs, or asteroids)
+    // Space: lock onto current target (ships, NPCs, or asteroids). Dispatches
+    // LockTarget if not already locked, SetActiveTarget if it's an existing slot.
+    // state.lockTargetId is updated authoritatively by the server's LockSlotsMsg.
     if (e.code === "Space" && !state.isDead && state.targetId) {
       const tgt = state.entities.get(state.targetId);
       if (
@@ -129,7 +167,7 @@ export function setupInput(
           tgt.current.entityType === EntityType.NPC ||
           tgt.current.entityType === EntityType.Asteroid)
       ) {
-        state.lockTargetId = state.targetId;
+        tryLockOrActivate(state.targetId);
         audio.play(SoundId.TargetLock);
       }
     }
@@ -219,8 +257,16 @@ export function setupInput(
 
     for (const [id, ent] of state.entities) {
       if (id === state.myEntityId) continue; // can't target self
-      // Skip stations
+      // Skip stations and POI markers — neither is click-lockable.
       if (ent.current.entityType === EntityType.Station) continue;
+      if (ent.current.entityType === EntityType.POI) continue;
+      // Skip leashed NPCs — they're returning to anchor and shouldn't be
+      // re-engageable until they re-aggro. Mirrors the server's targeting
+      // gate so click + Space don't queue a lock the server will reject.
+      if (
+        ent.current.entityType === EntityType.NPC &&
+        ent.current.state === 3 /* AIStateLeash */
+      ) continue;
       const dx = ent.renderX - world.x;
       const dy = ent.renderY - world.y;
       const dist = Math.sqrt(dx * dx + dy * dy);
@@ -231,16 +277,30 @@ export function setupInput(
       }
     }
 
-    // Ctrl+click: instant lock on clicked entity (if lockable)
-    if (e.ctrlKey && bestId !== 0) {
+    // Modifier-click behaviors plus the EVE-style auto-lock on combat
+    // targets. Asteroids stay manual (Space to start mining) so plain
+    // clicks on rocks during exploration don't queue mining locks; Ships
+    // and NPCs auto-lock because the player almost always wants to engage
+    // them once they're clicked. lockTargetId is authoritative-from-server
+    // via LockSlotsMsg — these inputs just request the transition.
+    if (bestId !== 0) {
       const ent = state.entities.get(bestId);
-      if (
-        ent &&
-        (ent.current.entityType === EntityType.Ship ||
-          ent.current.entityType === EntityType.NPC ||
-          ent.current.entityType === EntityType.Asteroid)
-      ) {
-        state.lockTargetId = bestId;
+      const kind = ent?.current.entityType;
+      const lockable = kind === EntityType.Ship || kind === EntityType.NPC || kind === EntityType.Asteroid;
+      if (lockable) {
+        if (e.shiftKey) {
+          // Shift+click: unlock a locked target.
+          tryUnlock(bestId);
+        } else if (e.ctrlKey) {
+          // Ctrl+click: explicit lock/activate (works for asteroids too).
+          tryLockOrActivate(bestId);
+        } else if (kind === EntityType.Ship || kind === EntityType.NPC) {
+          // Plain click on combat target: auto-start lock. Without this,
+          // new players see only the red selection ring on an NPC and
+          // assume the game isn't responding to combat input — the lock
+          // gesture (Space-after-select or ctrl+click) is not discoverable.
+          tryLockOrActivate(bestId);
+        }
       }
     }
 
@@ -279,9 +339,12 @@ export function setupInput(
 }
 
 // Per-tick input sender. Bundled CE_PLAYER_INPUT was decomposed in
-// Plan G into discrete typed messages (SetMoveTarget / SetLockTarget /
-// CastAbility / JettisonItem). Each piece sends only when its source
-// state changes — idle players send zero input frames per tick.
+// Plan G into discrete typed messages (SetMoveTarget / CastAbility /
+// JettisonItem). Lock inputs (LockTarget / SetActiveTarget / UnlockTarget)
+// are now dispatched at the gesture site in setupInput() — they're
+// edge-triggered, not state-mirrored, so there's no per-tick reconcile
+// step. Each piece sends only when its source state changes — idle
+// players send zero input frames per tick.
 export function sendInput(state: GameState): void {
   if (!state.connected || !state.client) return;
   if (state.isDead || state.chatMode || state.isDocked || state.cellMapOpen) return;
@@ -298,17 +361,6 @@ export function sendInput(state: GameState): void {
       y: mt.y,
     }));
     mt.active = false; // consume after sending (fire-and-forget)
-  }
-
-  // Lock target: send on transition. lastSentLockTargetId mirrors the
-  // most recent value the server was told about.
-  if (state.lockTargetId !== state.lastSentLockTargetId) {
-    state.inputSeq++;
-    state.client.send(new SetLockTarget({
-      sequence: state.inputSeq,
-      targetNetID: state.lockTargetId,
-    }));
-    state.lastSentLockTargetId = state.lockTargetId;
   }
 
   // Ability presses: one CastAbility per pressed bit.

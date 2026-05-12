@@ -10,6 +10,24 @@ import (
 	"github.com/zenion/mmoserver/pkg/mmokit"
 )
 
+// activeLockTarget returns the active slot's resolved entity if the
+// active slot is locked and the target is alive, else (zero, false).
+func activeLockTarget(gw *GameWorld, lock *gamecomp.TargetLock) (mmokit.Entity, bool) {
+	if lock == nil || lock.ActiveNetID == 0 {
+		return mmokit.Entity{}, false
+	}
+	for _, s := range lock.Slots {
+		if s.TargetNetID == lock.ActiveNetID && s.Locked {
+			e := mmokit.EntityByNetID(gw.stage, s.TargetNetID)
+			if e.Alive() {
+				return e, true
+			}
+			return mmokit.Entity{}, false
+		}
+	}
+	return mmokit.Entity{}, false
+}
+
 type abilityBundle struct {
 	Input     *gamecomp.PlayerInput
 	Lock      *gamecomp.TargetLock
@@ -81,10 +99,11 @@ func (s *AbilitySystem) Update(dt float32) {
 			// activation validates the target inside executeAbility.
 			isMiningToggle := params.Type == item.AbilityTypeMiningBeam
 			if slot <= gamecomp.AbilityR && !isMiningToggle {
-				if !lock.Locked || !gw.stage.ECSWorld().Alive(lock.TargetEntity) {
+				target, ok := activeLockTarget(gw, lock)
+				if !ok {
 					continue
 				}
-				if params.Range > 0 && !s.inRange(entity, lock.TargetEntity, params.Range) {
+				if params.Range > 0 && !s.inRange(entity, target.Handle(), params.Range) {
 					continue
 				}
 			}
@@ -162,33 +181,33 @@ func (s *AbilitySystem) executeAbility(action abilityAction) bool {
 	// --- Hitscan damage abilities ---
 	case item.AbilityTypePulseLaser, item.AbilityTypePulseBarrage,
 		item.AbilityTypeRailShot, item.AbilityTypeIonOverload, item.AbilityTypePlasmaBolt:
-		target := mmokit.EntityByNetID(gw.stage, lock.TargetNetID)
-		if target.Alive() {
+		target, ok := activeLockTarget(gw, lock)
+		if ok {
 			caster := mmokit.EntityByNetID(gw.stage, action.casterNetID)
 			gw.Damage(caster, target, params.Damage, 0, action.slot, uint8(params.Type))
 			gw.eng.Log.Log(CatCombatAbility, "ability %s: %d -> %d dmg=%.0f",
-				params.Name, action.casterNetID, lock.TargetNetID, params.Damage)
+				params.Name, action.casterNetID, target.NetID(), params.Damage)
 		}
 
 	// --- Hitscan + bonus vs unshielded ---
 	case item.AbilityTypePiercingRound, item.AbilityTypePlasmaTorpedo:
-		target := mmokit.EntityByNetID(gw.stage, lock.TargetNetID)
-		if target.Alive() {
+		target, ok := activeLockTarget(gw, lock)
+		if ok {
 			caster := mmokit.EntityByNetID(gw.stage, action.casterNetID)
 			gw.Damage(caster, target, params.Damage, params.BonusDamage, action.slot, uint8(params.Type))
 			gw.eng.Log.Log(CatCombatAbility, "ability %s: %d -> %d dmg=%.0f",
-				params.Name, action.casterNetID, lock.TargetNetID, params.Damage)
+				params.Name, action.casterNetID, target.NetID(), params.Damage)
 		}
 
 	// --- DoT debuff ---
 	case item.AbilityTypeIonBurn:
-		target := mmokit.EntityByNetID(gw.stage, lock.TargetNetID)
-		if target.Alive() {
+		target, ok := activeLockTarget(gw, lock)
+		if ok {
 			caster := mmokit.EntityByNetID(gw.stage, action.casterNetID)
 			gw.ApplyStatus(caster, target, gamecomp.StatusIonBurn,
 				params.DotDuration, params.DotDPS, action.slot, uint8(params.Type))
 			gw.eng.Log.Log(CatCombatAbility, "ability %s: %d -> %d (%.1f dps for %.1fs)",
-				params.Name, action.casterNetID, lock.TargetNetID, params.DotDPS, params.DotDuration)
+				params.Name, action.casterNetID, target.NetID(), params.DotDPS, params.DotDuration)
 		}
 
 	// --- Shield restore + Fortified buff ---
@@ -223,15 +242,15 @@ func (s *AbilitySystem) executeAbility(action abilityAction) bool {
 			gw.eng.Log.Log(CatEconomyMining, "mining beam off: %d beam=%d", action.casterNetID, beamIdx)
 		} else {
 			// Toggle on — require lock and validate target is minable
-			lockTarget := mmokit.EntityFromECS(gw.stage, lock.TargetEntity)
-			if !lock.Locked || !lockTarget.Alive() || !mmokit.Has[gamecomp.Minable](lockTarget) {
+			lockTarget, ok := activeLockTarget(gw, lock)
+			if !ok || !mmokit.Has[gamecomp.Minable](lockTarget) {
 				fired = false
 				break
 			}
 			laser.Beams[beamIdx].Active = true
-			laser.Target = lock.TargetEntity
+			laser.Target = lockTarget.Handle()
 			gw.eng.Log.Log(CatEconomyMining, "mining beam on: %d beam=%d target=%d",
-				action.casterNetID, beamIdx, lock.TargetNetID)
+				action.casterNetID, beamIdx, lockTarget.NetID())
 		}
 		// Sync replicated ActiveMining immediately so clients see the toggle
 		// on the same tick, without waiting for the next MiningSystem pass.

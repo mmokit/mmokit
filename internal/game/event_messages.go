@@ -150,6 +150,38 @@ type PlayerSpawned struct {
 	OriginCellY  int32
 }
 
+// LockSlotsMsg — server→client snapshot of the receiving player's own
+// lock slots. Emitted every time slots mutate (add / remove / progress
+// completes / active changes). Sent only to the owning connection.
+type LockSlotsMsg struct {
+	Slots       []LockSlotWire
+	ActiveNetID uint32
+}
+
+// LockSlotWire is the per-slot subset replicated to the owning player.
+type LockSlotWire struct {
+	TargetNetID uint32
+	Progress    float32
+	Locked      bool
+}
+
+// LockRejectReason classifies a lock-attempt rejection.
+type LockRejectReason uint8
+
+const (
+	LockRejectedSlotsFull     LockRejectReason = 1
+	LockRejectedOutOfRange    LockRejectReason = 2
+	LockRejectedInvalidTarget LockRejectReason = 3
+)
+
+// LockRejectedMsg — server→client signal that a LockTarget request
+// failed. Client typically plays an error sound. Sent only to the
+// requesting connection.
+type LockRejectedMsg struct {
+	TargetNetID uint32
+	Reason      uint8 // LockRejectReason
+}
+
 // RegisterServerEvents registers every typed server event the space game
 // emits. Called by GameSetup so both production (cmd/server/main.go) and
 // tests (per-test newTestGameWorld → GameSetup) get the registrations.
@@ -169,6 +201,8 @@ func RegisterServerEvents() {
 		mmokit.RegisterEvent[Docked]()
 		mmokit.RegisterEvent[MapData]()
 		mmokit.RegisterEvent[CurrencyUpdate]()
+		mmokit.RegisterEvent[LockSlotsMsg]()
+		mmokit.RegisterEvent[LockRejectedMsg]()
 		mmokit.RegisterEvent[marketplace.MarketTradeNotification]()
 	})
 }

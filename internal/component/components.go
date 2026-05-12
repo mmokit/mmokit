@@ -22,6 +22,7 @@ const (
 	KindStation                // 2
 	KindLootCrate              // 3
 	KindNPC                    // 4
+	KindPOI                    // 5
 )
 
 // Health represents hit points.
@@ -52,14 +53,33 @@ type Shield struct {
 	DamageCooldown float32 // time remaining before regen resumes
 }
 
-// TargetLock holds lock-on state for targeting another entity.
+// TargetLock holds slot-based EVE-style multi-target lock state.
+//
+// Slots is a contiguous slice; iteration order = lock acquisition order.
+// ActiveNetID is the currently-selected slot's target — read by abilities
+// for default firing. MaxSlots is local-only (set per-entity at spawn:
+// 4 for player ships, 1 for NPCs). Range is the maximum lock distance.
+//
+// Slots are NOT replicated via per-entity wire — the owning player learns
+// its own slot state via LockSlotsMsg events. Other players see only the
+// reverse-direction LockedBy marker on their own entity when locked.
 type TargetLock struct {
-	TargetEntity ecs.Entity // entity being locked/locked onto
-	TargetNetID  uint32     // network ID of target
-	Progress     float32    // 0.0 to 1.0 (1.0 = locked)
-	LockTime     float32    // seconds required to achieve full lock
-	Range        float32    // max lock range
-	Locked       bool       // true when Progress >= 1.0
+	Slots       []LockSlot
+	ActiveNetID uint32  // local-only — owner learns via LockSlotsMsg
+	MaxSlots    uint8   // local-only — 4 for ships, 1 for NPCs
+	Range       float32
+}
+
+// LockSlot is one in-progress or completed lock. ScanResolution and
+// SigRadius are reserved for v2 sensor mechanics; v1 ignores them.
+type LockSlot struct {
+	TargetNetID    uint32
+	TargetEntity   ecs.Entity
+	Progress       float32 // 0..1
+	LockTime       float32 // seconds to full lock for this target
+	Locked         bool    // true when Progress >= 1.0
+	ScanResolution float32 // reserved v2 — unused
+	SigRadius      float32 // reserved v2 — unused
 }
 
 // LockedBy is a replicated "who is locking me" marker. The NetworkSystem
@@ -331,6 +351,66 @@ func (s *StatusEffects) TickDown(dt float32) {
 			i++
 		}
 	}
+}
+
+// Leashing marks an NPC currently returning to its anchor under the
+// leash mechanic. Leashing entities are invulnerable (ApplyDamage skips
+// them), untargetable (TargetLockSystem auto-drops any existing locks
+// and rejects new ones), and move at 2× speed toward their anchor.
+// Removed when the NPC reaches its anchor — at that point HP and Shield
+// are restored to Max and the NPC re-enters Idle.
+type Leashing struct{}
+
+// NPCAI is the runtime AI state on each NPC entity. Archetype is wire-
+// replicated (clients pick sprites per archetype). State is sent as a
+// thin signal so clients can visually distinguish Leash mode etc.
+// LastDamageBy fields drive the target-switching rule. All numeric
+// tunables are captured at spawn time from the active GameConfig.
+type NPCAI struct {
+	Archetype            uint8   `net:"initial,u8"`
+	State                uint8   `net:"u8"`
+	MaxSpeed             float32
+	TurnRate             float32
+	PreferredRange       float32
+	WeaponRange          float32
+	AggroRadius          float32
+	MotionPolicy         uint8
+	DamagePerShot        float32
+	FireRate             float32
+	FireCooldown         float32 // seconds remaining before next shot
+	LastDamageByNetID    uint32
+	LastDamageAtSec      float32
+	LastCombatActivityAt float32
+}
+
+// POIAnchor links an NPC back to its owning POI for leash + roster
+// tracking. POINetID is the network ID of the POI entity.
+type POIAnchor struct {
+	POINetID uint32
+}
+
+// POI status — wire-replicated so clients can tint the marker.
+const (
+	POIStatusActive   uint8 = 0
+	POIStatusCleared  uint8 = 1
+	POIStatusCooldown uint8 = 2
+)
+
+// POI types — extensible. v1 only has Combat.
+const (
+	POITypeCombat uint8 = 0
+)
+
+// POI is a first-class entity component for points-of-interest. The
+// marker is replicated to clients via Position + EntityKind + Status;
+// AnchorRadius/LeashRadius/RosterDefIdx/ClearedAt are server-local.
+type POI struct {
+	Type         uint8 `net:"initial,u8"`
+	Status       uint8 `net:"u8"`
+	AnchorRadius float32
+	LeashRadius  float32
+	ClearedAt    int64  // unix nanos (server time, not ClusterClock)
+	RosterDefIdx uint16
 }
 
 // PilotName stores the player's display name for network replication.

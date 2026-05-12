@@ -1,4 +1,4 @@
-import type { ShipEntity, AsteroidEntity, NPCEntity, StationEntity, LootCrateEntity } from "../sdk/index.js";
+import type { ShipEntity, AsteroidEntity, NPCEntity, StationEntity, LootCrateEntity, POIEntity } from "../sdk/index.js";
 import { EntityType } from "../sdk/index.js";
 import type { ClientEntity } from "./types";
 
@@ -20,6 +20,10 @@ export function getStation(ent: ClientEntity): StationEntity | undefined {
 
 export function getLootCrate(ent: ClientEntity): LootCrateEntity | undefined {
   return ent.current.entityType === EntityType.LootCrate ? ent.current : undefined;
+}
+
+export function getPoi(ent: ClientEntity): POIEntity | undefined {
+  return ent.current.entityType === EntityType.POI ? ent.current : undefined;
 }
 
 /**

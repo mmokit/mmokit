@@ -67,6 +67,16 @@ type PendingRespawn struct {
 	ConnID uint32
 }
 
+// PendingDeathMarker records that a player has transitioned to
+// StateDead — the dieKeepEntity action queues it instead of marking
+// Dormant directly, because the action runs inside the death
+// observer's locked-world query iteration (which would panic on
+// component add). postFlush drains the queue and applies the
+// Dormant marker in a phase where the world is unlocked.
+type PendingDeathMarker struct {
+	ConnID uint32
+}
+
 // DockingProgress tracks a player's in-progress docking sequence.
 type DockingProgress struct {
 	Remaining    float32 // seconds left
@@ -122,6 +132,19 @@ type GameWorld struct {
 
 	// OnPostSpawn is called after a player spawns (for topology sends, etc.)
 	OnPostSpawn func(connID uint32)
+
+	// poiRosters maps poiNetID → list of currently-alive roster member
+	// netIDs. Updated on POI spawn + respawn; mutated by POISystem on
+	// NPC death detection.
+	poiRosters map[uint32][]uint32
+
+	// autoRespawnAt maps connID → engine tick at which a dead player
+	// will be auto-respawned. The client's Respawn input cannot reach
+	// the handler (the typed-input dispatcher drops frames when the
+	// player entity is dead — there's no session-aware path yet), so
+	// the server holds a death-screen timer per dead session and
+	// enqueues a PendingRespawn when it elapses.
+	autoRespawnAt map[uint32]uint32
 }
 
 // GetStage returns the per-cell Stage this GameWorld is wired to. External
@@ -130,6 +153,19 @@ type GameWorld struct {
 // shadowing the existing field — game code in the same package reads via
 // gw.stage directly.
 func (gw *GameWorld) GetStage() *mmokit.Stage { return gw.stage }
+
+// PoiRosters returns the live roster netIDs for a POI. Used by admin
+// commands; returns nil if the POI has no tracked roster.
+func (gw *GameWorld) PoiRosters(poiNetID uint32) []uint32 {
+	return gw.poiRosters[poiNetID]
+}
+
+// POICooldownSec is the exported view of poiCooldownSec for cmdsys
+// command handlers in internal/game/commands. Returns the configured
+// cooldown (seconds) for POIs in this world's root cell — station cell
+// uses the tutorial-friendly cooldown, every other cell uses the
+// standard one.
+func (gw *GameWorld) POICooldownSec() int32 { return poiCooldownSec(gw) }
 
 // Engine returns the engine for this cell.
 func (gw *GameWorld) Engine() *mmokit.Engine { return gw.eng }
@@ -253,10 +289,10 @@ func (gw *GameWorld) ApplyEquipmentStats(entity mmokit.Entity) {
 		inv.MaxMass = gw.Config.MaxCargo
 	}
 
-	// TargetLock tuning — both fields are pure config reads with no
-	// equipment modifier today.
+	// TargetLock tuning — Range is a pure config read with no equipment
+	// modifier today. LockOnTime is consumed per-slot at LockTarget time;
+	// live locks keep their captured value.
 	if tl := mmokit.Get[gamecomp.TargetLock](entity); tl != nil {
-		tl.LockTime = gw.Config.LockOnTime
 		tl.Range = gw.Config.LockOnRange
 	}
 

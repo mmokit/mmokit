@@ -15,10 +15,25 @@ type SetMoveTarget struct {
 	X, Y     float32
 }
 
-// SetLockTarget — change of target lock. TargetNetID=0 clears the lock.
-type SetLockTarget struct {
-	Sequence    uint32
-	TargetNetID uint32
+// LockTarget — begin locking onto an entity. Server rejects if slots
+// full, target invalid, or out of range — emits LockRejectedMsg.
+type LockTarget struct {
+	Sequence uint32
+	NetID    uint32
+}
+
+// UnlockTarget — drop a specific slot. NetID=0 is a no-op.
+type UnlockTarget struct {
+	Sequence uint32
+	NetID    uint32
+}
+
+// SetActiveTarget — switch the active firing target. NetID must be
+// among locked slots and Locked=true; otherwise silently ignored.
+// NetID=0 explicitly clears active.
+type SetActiveTarget struct {
+	Sequence uint32
+	NetID    uint32
 }
 
 // CastAbility — discrete ability press. Slot identifies which equipped

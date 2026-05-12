@@ -2,7 +2,7 @@
 
 import { Transport } from "./transport.js";
 import { SpaceDeltaDecoder } from "./delta-decoder.js";
-import { TypedDispatcher, BankContents, CurrencyUpdate, Docked, DockingState, EquipResult, MapData, PlayerDied, PlayerOwnState, PlayerSpawned, TransferResult, MarketTradeNotification, CellChange, DebugInfo, OperationError, PlayerEntityAssigned, Pong, ServerConfig, WorldDelta } from "./broadcasts.js";
+import { TypedDispatcher, BankContents, CurrencyUpdate, Docked, DockingState, EquipResult, LockRejectedMsg, LockSlotsMsg, MapData, PlayerDied, PlayerOwnState, PlayerSpawned, TransferResult, MarketTradeNotification, CellChange, DebugInfo, OperationError, PlayerEntityAssigned, Pong, ServerConfig, WorldDelta } from "./broadcasts.js";
 import { AuthChangePasswordRequest, AuthChangePasswordResponse, AuthLoginRequest, AuthLoginResponse, AuthLogoutRequest, AuthLogoutResponse, AuthRegisterRequest, AuthRegisterResponse, AuthValidateTokenRequest, AuthValidateTokenResponse, BankRequest, BankResponse, MarketBrowseRequest, MarketCancelOrderRequest, MarketCreateOrderRequest, MarketInstantTradeRequest, MarketMyOrdersRequest, MarketMyOrdersResponse, MarketOrderBookResponse, MarketOrderResultResponse } from "./operations.js";
 
 export interface SpaceClientOptions {
@@ -102,6 +102,16 @@ export class SpaceClient {
   /** Subscribe to typed server event game.EquipResult (typeID 0x50af4abc). */
   onEquipResult(handler: (msg: EquipResult) => void): () => void {
     return this.typedEvents.on(EquipResult, handler);
+  }
+
+  /** Subscribe to typed server event game.LockRejectedMsg (typeID 0x8a4aea2b). */
+  onLockRejectedMsg(handler: (msg: LockRejectedMsg) => void): () => void {
+    return this.typedEvents.on(LockRejectedMsg, handler);
+  }
+
+  /** Subscribe to typed server event game.LockSlotsMsg (typeID 0x8413ac26). */
+  onLockSlotsMsg(handler: (msg: LockSlotsMsg) => void): () => void {
+    return this.typedEvents.on(LockSlotsMsg, handler);
   }
 
   /** Subscribe to typed server event game.MapData (typeID 0xc16d89a3). */

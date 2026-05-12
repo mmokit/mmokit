@@ -40,9 +40,12 @@ func TestNetworkSystem_LockedByPopulated_FromReplicaLocker(t *testing.T) {
 	attackerE := mmokit.EntityFromECS(gw.stage, attacker)
 	mmokit.Set(attackerE, mmokit.Replica{SourceCellID: "neighbor", SourceNetID: attackerNetID})
 	mmokit.Set(attackerE, gamecomp.TargetLock{
-		TargetEntity: ecs.Entity{}, // zero — matches reflect_marshal.go skip behavior
-		TargetNetID:  victimNetID,
-		Progress:     0.6,
+		Slots: []gamecomp.LockSlot{{
+			TargetEntity: ecs.Entity{}, // zero — matches reflect_marshal.go skip behavior
+			TargetNetID:  victimNetID,
+			Progress:     0.6,
+		}},
+		ActiveNetID: victimNetID,
 	})
 
 	ns := wireNetworkSystemForTest(t, gw)

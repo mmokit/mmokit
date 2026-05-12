@@ -87,6 +87,20 @@ func (gw *GameWorld) Shutdown() {
 // entity and their inventory/currency mutations already MarkDirty directly,
 // so they piggyback on FlushDirty without needing iteration here.
 func (gw *GameWorld) postTick() {
+	// Auto-respawn timer: every dead session whose timer has elapsed
+	// gets enqueued for PendingRespawn (drained in postFlush). The
+	// client's Respawn input is dropped by the typed-input dispatcher
+	// when the player entity is dead, so this is the only path.
+	if len(gw.autoRespawnAt) > 0 {
+		now := gw.eng.Tick
+		for connID, deadline := range gw.autoRespawnAt {
+			if now >= deadline {
+				mmokit.Enqueue(gw.Queue, PendingRespawn{ConnID: connID})
+				delete(gw.autoRespawnAt, connID)
+			}
+		}
+	}
+
 	if gw.flushTicks > 0 && gw.eng.Tick%gw.flushTicks == 0 {
 		gw.Players.ForEach(mmokit.StateActive, func(s *mmokit.PlayerSession) {
 			if gw.stage.ECSWorld().Alive(s.Entity) {
@@ -241,6 +255,25 @@ func (gw *GameWorld) postFlush() {
 	// Spawn loot crates from deaths that occurred this tick
 	for _, drop := range mmokit.Drain[PendingLootDrop](gw.Queue) {
 		gw.SpawnLootCrate(drop.X, drop.Y, drop.Items)
+	}
+
+	// Apply Dormant to entities that transitioned to StateDead this tick.
+	// Done here (post-FlushRemovals, world unlocked) instead of in the
+	// dieKeepEntity action because that action runs inside the death
+	// observer's locked-world query iteration.
+	for _, m := range mmokit.Drain[PendingDeathMarker](gw.Queue) {
+		sess := gw.Players.ByConnID(m.ConnID)
+		if sess == nil {
+			continue
+		}
+		entity := mmokit.EntityFromECS(gw.stage, sess.Entity)
+		if !entity.Alive() {
+			continue
+		}
+		if mmokit.Has[mmokit.Dormant](entity) {
+			continue
+		}
+		mmokit.Set(entity, mmokit.Dormant{})
 	}
 
 	// Process respawn requests (after removals so new entities are clean)
