@@ -87,6 +87,20 @@ func (gw *GameWorld) Shutdown() {
 // entity and their inventory/currency mutations already MarkDirty directly,
 // so they piggyback on FlushDirty without needing iteration here.
 func (gw *GameWorld) postTick() {
+	// Auto-respawn timer: every dead session whose timer has elapsed
+	// gets enqueued for PendingRespawn (drained in postFlush). The
+	// client's Respawn input is dropped by the typed-input dispatcher
+	// when the player entity is dead, so this is the only path.
+	if len(gw.autoRespawnAt) > 0 {
+		now := gw.eng.Tick
+		for connID, deadline := range gw.autoRespawnAt {
+			if now >= deadline {
+				mmokit.Enqueue(gw.Queue, PendingRespawn{ConnID: connID})
+				delete(gw.autoRespawnAt, connID)
+			}
+		}
+	}
+
 	if gw.flushTicks > 0 && gw.eng.Tick%gw.flushTicks == 0 {
 		gw.Players.ForEach(mmokit.StateActive, func(s *mmokit.PlayerSession) {
 			if gw.stage.ECSWorld().Alive(s.Entity) {

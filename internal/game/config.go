@@ -105,6 +105,7 @@ type GameConfig struct {
 	// Persistence
 	PersistFlushInterval  float32 `json:"persistFlushInterval"`  // seconds between dirty player flushes
 	DisconnectGracePeriod float32 `json:"disconnectGracePeriod"` // seconds to keep entity alive after disconnect
+	RespawnGraceSec       float32 `json:"respawnGraceSec"`       // seconds player stays on death screen before auto-respawn
 
 	// Marketplace
 	MarketTaxPct         float64 `json:"marketTaxPct"`         // transaction tax (default 0.02 = 2%)
@@ -199,6 +200,7 @@ func DefaultGameConfig() GameConfig {
 		// Persistence
 		PersistFlushInterval:  15.0, // seconds
 		DisconnectGracePeriod: 30.0, // seconds
+		RespawnGraceSec:       5.0,  // seconds death screen before auto-respawn
 
 		// Marketplace
 		MarketTaxPct:         0.02,

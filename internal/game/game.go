@@ -44,6 +44,7 @@ func NewGameWorld(base *mmokit.Stage, cfg *GameConfig, playerDB *PlayerRepo, cel
 		PlayerDB:      playerDB,
 		dockingStates: make(map[string]*DockingProgress),
 		poiRosters:    make(map[uint32][]uint32),
+		autoRespawnAt: make(map[uint32]uint32),
 	}
 	gw.Players = eng.Players
 
@@ -140,6 +141,28 @@ func NewGameWorld(base *mmokit.Stage, cfg *GameConfig, playerDB *PlayerRepo, cel
 			}
 			s.Entity = ecs.Entity{}
 			gw.updatePlayerCompletions()
+		},
+	})
+
+	// Auto-respawn: typed-input dispatch drops Respawn frames for dead
+	// players (the entity is removed when StateDead is entered, so the
+	// dispatcher's "entity must be alive" check rejects the frame). Hold
+	// a per-session timer; postTick enqueues PendingRespawn when it
+	// elapses. Cleaned up on any transition out of StateDead.
+	gw.Players.OnState(StateDead, mmokit.StateCallbacks{
+		OnEnter: func(s *mmokit.PlayerSession, pm *mmokit.PlayerManager) {
+			if s.ConnID == 0 {
+				return // entered dead state without a live conn (e.g. via Disconnected→Dead) — nothing to schedule
+			}
+			delay := uint32(gw.Config.RespawnGraceSec * float32(eng.Config.TickRate))
+			if delay == 0 {
+				delay = uint32(eng.Config.TickRate) // 1s minimum
+			}
+			gw.autoRespawnAt[s.ConnID] = gw.eng.Tick + delay
+			gw.eng.Log.Log(CatPlayerSpawn, "death: conn=%d auto-respawn in %dt", s.ConnID, delay)
+		},
+		OnExit: func(s *mmokit.PlayerSession, pm *mmokit.PlayerManager) {
+			delete(gw.autoRespawnAt, s.ConnID)
 		},
 	})
 

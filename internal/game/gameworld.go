@@ -127,6 +127,14 @@ type GameWorld struct {
 	// netIDs. Updated on POI spawn + respawn; mutated by POISystem on
 	// NPC death detection.
 	poiRosters map[uint32][]uint32
+
+	// autoRespawnAt maps connID → engine tick at which a dead player
+	// will be auto-respawned. The client's Respawn input cannot reach
+	// the handler (the typed-input dispatcher drops frames when the
+	// player entity is dead — there's no session-aware path yet), so
+	// the server holds a death-screen timer per dead session and
+	// enqueues a PendingRespawn when it elapses.
+	autoRespawnAt map[uint32]uint32
 }
 
 // GetStage returns the per-cell Stage this GameWorld is wired to. External

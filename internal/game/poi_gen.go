@@ -38,15 +38,17 @@ func GeneratePOIs(cell, stationCell mmokit.CellCoord, cfg *GameConfig, belts []A
 
 	margin := cfg.POIPlacementMargin
 	usable := coords.CellSize - margin*2
-	stationCenter := coords.CellSize / 2
 
 	for attempt := 0; attempt < 30; attempt++ {
 		x := margin + rng.Float32()*usable
 		y := margin + rng.Float32()*usable
 
 		if isStation {
-			dx := x - stationCenter
-			dy := y - stationCenter
+			// Stay away from the actual station entity (StationLocalX,Y),
+			// not the cell center — players spawn near the station and
+			// would otherwise log in surrounded by hostile NPCs.
+			dx := x - StationLocalX
+			dy := y - StationLocalY
 			if float32(math.Sqrt(float64(dx*dx+dy*dy))) < cfg.POIStationClearance {
 				continue
 			}
