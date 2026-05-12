@@ -3,6 +3,8 @@ package game
 import (
 	"time"
 
+	"github.com/mlange-42/ark/ecs"
+
 	gamecomp "github.com/zenion/mmoserver/internal/component"
 	"github.com/zenion/mmoserver/internal/item"
 	"github.com/zenion/mmoserver/pkg/mmokit"
@@ -22,6 +24,10 @@ type POISystem struct {
 
 func (s *POISystem) Init() {
 	s.gw = mmokit.State[GameWorld](s.Stage())
+	// Prime components the per-tick Has/Set checks would otherwise try
+	// to register inside a locked-world query.
+	w := s.Stage().ECSWorld()
+	ecs.NewMap1[gamecomp.Leashing](w)
 }
 
 // pendingPOIAction defers state-mutating work (loot-crate spawns,

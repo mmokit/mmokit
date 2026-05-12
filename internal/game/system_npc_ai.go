@@ -33,6 +33,15 @@ type NPCAISystem struct {
 
 func (s *NPCAISystem) Init() {
 	s.gw = mmokit.State[GameWorld](s.Stage())
+	// Belt-and-suspenders: prime every component the per-tick loop hits
+	// via mmokit.Has / Get so a first-touch registration never lands
+	// inside a locked-world query. initEntityKinds also primes Leashing,
+	// but this layer is the one that fires before any tick, regardless
+	// of cell-bootstrap ordering.
+	w := s.Stage().ECSWorld()
+	ecs.NewMap1[gamecomp.Leashing](w)
+	ecs.NewMap1[mmokit.Dormant](w)
+	ecs.NewMap1[gamecomp.POIAnchor](w)
 }
 
 func (s *NPCAISystem) Update(dt float32) {
@@ -199,7 +208,14 @@ func (s *NPCAISystem) tickEngage(self mmokit.Entity, ai *gamecomp.NPCAI,
 func (s *NPCAISystem) applyMotion(ai *gamecomp.NPCAI, vel *mmokit.Velocity,
 	pos *mmokit.Position, tpos *mmokit.Position, dist, dx, dy float32,
 ) {
-	const tolerance = 50.0
+	// 25% of the preferred range — generous enough to avoid jitter at
+	// the band edges but tight enough to react when the player closes
+	// to half preferred range. A fixed 50u was too wide for the small
+	// (~50u) ranges we use now.
+	tolerance := ai.PreferredRange * 0.25
+	if tolerance < 4 {
+		tolerance = 4
+	}
 	if dist < 1e-3 {
 		vel.X, vel.Y = 0, 0
 		return

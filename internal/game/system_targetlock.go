@@ -23,6 +23,11 @@ type TargetLockSystem struct {
 
 func (s *TargetLockSystem) Init() {
 	s.gw = mmokit.State[GameWorld](s.Stage())
+	// Prime components the per-tick Has checks would otherwise try to
+	// register inside a locked-world query.
+	w := s.Stage().ECSWorld()
+	ecs.NewMap1[gamecomp.Leashing](w)
+	ecs.NewMap1[mmokit.Dormant](w)
 }
 
 func (s *TargetLockSystem) Update(dt float32) {

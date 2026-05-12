@@ -69,7 +69,7 @@ func TestNPCAI_IdleToAcquireOnTargetInRange(t *testing.T) {
 	ai, phys := newWiredNPCAISystem(t, gw)
 
 	npc := gw.SpawnNPC(0, 0, ArchetypeBrawler, 0)
-	newTestPlayerAt(t, gw, 8001, 100, 0) // well inside Brawler's 800u aggro
+	newTestPlayerAt(t, gw, 8001, 50, 0) // well inside Brawler's 80u aggro
 
 	const dt = float32(0.05)
 	tickAI(ai, phys, dt, 2) // 0.1s — enough for Idle→Acquire (and possibly →Engage)
@@ -87,8 +87,8 @@ func TestNPCAI_BrawlerCharges(t *testing.T) {
 	ai, phys := newWiredNPCAISystem(t, gw)
 
 	npc := gw.SpawnNPC(0, 0, ArchetypeBrawler, 0)
-	// 400u: inside 800u aggro, outside 100u weapon range — pure motion.
-	newTestPlayerAt(t, gw, 8002, 400, 0)
+	// 70u: inside 80u aggro, outside 50u weapon range — pure motion.
+	newTestPlayerAt(t, gw, 8002, 70, 0)
 
 	const dt = float32(0.05)
 	tickAI(ai, phys, dt, 10) // 0.5s
@@ -106,8 +106,8 @@ func TestNPCAI_SniperHoldsRange(t *testing.T) {
 	ai, phys := newWiredNPCAISystem(t, gw)
 
 	npc := gw.SpawnNPC(0, 0, ArchetypeSniper, 0)
-	// 100u: well inside Sniper's 600u preferred range (kite away).
-	newTestPlayerAt(t, gw, 8003, 100, 0)
+	// 20u: well inside Sniper's 45u preferred range (kite away).
+	newTestPlayerAt(t, gw, 8003, 20, 0)
 
 	const dt = float32(0.05)
 	tickAI(ai, phys, dt, 10) // 0.5s

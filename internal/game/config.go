@@ -164,17 +164,20 @@ func DefaultGameConfig() GameConfig {
 		NpcWidth:            1.7,
 		NpcHeight:           0.83,
 
-		// NPC archetypes
+		// NPC archetypes — ranges scaled to fit the player's 100u AoI /
+		// 50u LockOnRange. Aggro radius < AoI ensures the player can
+		// always see an engaging NPC; WeaponRange ≤ player LockOnRange
+		// keeps fire visible on the player's HUD.
 		BrawlerHP: 400, BrawlerShield: 200, BrawlerMaxSpeed: 6, BrawlerTurnRate: 1.5,
-		BrawlerPreferredRange: 80, BrawlerWeaponRange: 100, BrawlerAggroRadius: 800,
+		BrawlerPreferredRange: 30, BrawlerWeaponRange: 50, BrawlerAggroRadius: 80,
 		BrawlerDamagePerShot: 8, BrawlerFireRate: 1.0,
 
 		SniperHP: 150, SniperShield: 100, SniperMaxSpeed: 8, SniperTurnRate: 2.5,
-		SniperPreferredRange: 600, SniperWeaponRange: 800, SniperAggroRadius: 800,
+		SniperPreferredRange: 45, SniperWeaponRange: 50, SniperAggroRadius: 80,
 		SniperDamagePerShot: 25, SniperFireRate: 0.4,
 
 		SwarmerHP: 80, SwarmerShield: 0, SwarmerMaxSpeed: 14, SwarmerTurnRate: 3.0,
-		SwarmerPreferredRange: 120, SwarmerWeaponRange: 150, SwarmerAggroRadius: 600,
+		SwarmerPreferredRange: 35, SwarmerWeaponRange: 50, SwarmerAggroRadius: 80,
 		SwarmerDamagePerShot: 4, SwarmerFireRate: 2.0,
 
 		AggroDeescalationSec: 6,
@@ -215,8 +218,8 @@ func DefaultGameConfig() GameConfig {
 		MeshCellsY:  3,
 
 		// POI
-		POIAnchorRadius:                80,
-		POILeashRadius:                 1500,
+		POIAnchorRadius:                30,
+		POILeashRadius:                 120,
 		POIPerCellProbability:          0.3,
 		POIBeltClearance:               40,
 		POIStationClearance:            400,
