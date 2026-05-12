@@ -1,8 +1,6 @@
 package game
 
 import (
-	"github.com/mlange-42/ark/ecs"
-
 	gamecomp "github.com/zenion/mmoserver/internal/component"
 	"github.com/zenion/mmoserver/pkg/mmokit"
 )
@@ -81,18 +79,18 @@ func HandleBankRequest(ctx *mmokit.OpContext, _ *BankRequest) (*BankResponse, er
 // returns true if any falls within range2 of pos. Used by op_bank and
 // the bank-transfer deferred handler in system_economy.go.
 func nearAnyStation(gw *GameWorld, pos *mmokit.Position, range2 float64) bool {
-	filter := ecs.NewFilter2[gamecomp.Station, mmokit.Position](gw.stage.ECSWorld())
-	query := filter.Query()
-	defer query.Close() // see entity_station.go: panic in body must not leak the world write-lock
-	for query.Next() {
-		_, sp := query.Get()
+	var near bool
+	mmokit.ForEach2(gw.stage, func(_ mmokit.Entity, _ *gamecomp.Station, sp *mmokit.Position) {
+		if near {
+			return
+		}
 		dx := float64(pos.X - sp.X)
 		dy := float64(pos.Y - sp.Y)
 		if dx*dx+dy*dy <= range2 {
-			return true
+			near = true
 		}
-	}
-	return false
+	})
+	return near
 }
 
 // buildBankContents snapshots the player's bank, docked cargo, and
