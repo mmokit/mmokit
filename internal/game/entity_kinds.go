@@ -90,10 +90,4 @@ func (gw *GameWorld) initEntityKinds() {
 	reg := gw.stage.ReplicationRegistry()
 	mmokit.RegisterComponent(reg, ecs.NewMap1[mmokit.Velocity](w))
 	mmokit.RegisterComponent(reg, ecs.NewMap1[mmokit.Rotation](w))
-	// Prime the Leashing component on the ECS world so systems can call
-	// mmokit.Has[Leashing] from inside per-tick queries. Leashing isn't on
-	// any entity bundle (it's added dynamically when the POI-wide leash
-	// trigger fires), so without priming the first Has check would try to
-	// register the component while the world is locked and panic.
-	ecs.NewMap1[gamecomp.Leashing](w)
 }

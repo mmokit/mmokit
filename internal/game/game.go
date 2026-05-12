@@ -195,11 +195,10 @@ func NewGameWorld(base *mmokit.Stage, cfg *GameConfig, playerDB *PlayerRepo, cel
 		if !entity.Alive() {
 			return
 		}
-		// Remove Dormant via raw ECS (mmokit has no Remove primitive).
-		dormantMap := ecs.NewMap1[mmokit.Dormant](gw.stage.ECSWorld())
-		if dormantMap.HasAll(s.Entity) {
-			dormantMap.Remove(s.Entity)
-		}
+		// Drop Dormant via Commands so the structural mutation routes
+		// through the framework's deferred-flush path (engine.Hooks
+		// AfterSystem) instead of poking ark directly.
+		mmokit.RemoveComponent[mmokit.Dormant](gw.stage.Commands(), entity)
 		if pos := mmokit.Get[mmokit.Position](entity); pos != nil {
 			pos.X = StationLocalX
 			pos.Y = StationLocalY
