@@ -22,6 +22,7 @@ const (
 	KindStation                // 2
 	KindLootCrate              // 3
 	KindNPC                    // 4
+	KindPOI                    // 5
 )
 
 // Health represents hit points.
@@ -386,6 +387,15 @@ type NPCAI struct {
 // tracking. POINetID is the network ID of the POI entity.
 type POIAnchor struct {
 	POINetID uint32
+}
+
+// POI is a Point-of-Interest entity component (combat-site marker).
+// Defined here as a stub for Phase 2 cross-references; full definition
+// (including Status/Type/RosterDefIdx/ClearedAt) lands in Task 3.1.
+type POI struct {
+	AnchorRadius float32
+	LeashRadius  float32
+	// Full fields landed by Task 3.1
 }
 
 // PilotName stores the player's display name for network replication.
