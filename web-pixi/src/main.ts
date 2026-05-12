@@ -25,6 +25,7 @@ import { TractorBeamRenderer } from "./effects/tractor-beam";
 import { Minimap } from "./world/minimap";
 import { createAbilityBar, updateAbilityBar } from "./ui/ability-bar";
 import { createLockOverlay, updateLockOverlay } from "./ui/lock-overlay";
+import { createLockHud, updateLockHud } from "./ui/lock-hud";
 import {
   updateHUD,
   updateStatusBars,
@@ -158,11 +159,26 @@ async function main() {
   // Ability bar (HTML overlay)
   createAbilityBar();
 
-  // Lock target overlay (HTML)
+  // Lock target overlay (HTML) — legacy single-target visual. The UNLOCK
+  // button in the overlay header sends an UnlockTarget input for the
+  // currently active slot; the server's LockSlotsMsg broadcast then
+  // updates state.lockTargetId via the network handler.
   createLockOverlay(() => {
-    state.lockTargetId = 0;
-    state.lockProgress = 0;
+    if (state.connected && state.client && state.lockTargetId !== 0) {
+      // Inline import to dodge the input.ts barrel-import cycle.
+      void import("../sdk/index.js").then(({ UnlockTarget }) => {
+        if (!state.client || state.lockTargetId === 0) return;
+        state.inputSeq++;
+        state.client.send(new UnlockTarget({
+          sequence: state.inputSeq,
+          netID: state.lockTargetId,
+        }));
+      });
+    }
   });
+
+  // Multi-lock HUD strip (HTML overlay, bottom-left).
+  createLockHud();
 
   // Loot popup overlay (HTML)
   createLootPopup();
@@ -381,6 +397,7 @@ async function main() {
     updateToasts(state);
     updateAbilityBar(state);
     updateLockOverlay(state);
+    updateLockHud(state);
     updateLootPopup(state);
     updateEscMenu(state);
 
