@@ -4,11 +4,40 @@ import type { ClientEntity, EntityDisplayObject } from "../types";
 import { getCombat } from "../entity-accessors";
 import { px } from "../view";
 
+// NPCAI.Archetype values — must match internal/game ArchetypeXxx consts.
+const ARCH_BRAWLER = 0;
+const ARCH_SNIPER = 1;
+const ARCH_SWARMER = 2;
+
+// NPCAI.State values — must match internal/game AIState* consts. We
+// only care about Leashed (returning to leash anchor) for visual fade.
+const AI_STATE_LEASH = 3;
+
+interface ArchetypeStyle {
+  color: number;
+  scale: number;
+  label: string;
+}
+
+const ARCHETYPES: Record<number, ArchetypeStyle> = {
+  [ARCH_BRAWLER]: { color: 0xff4444, scale: 1.2, label: "BRAWLER" },
+  [ARCH_SNIPER]:  { color: 0x44ccff, scale: 1.0, label: "SNIPER" },
+  [ARCH_SWARMER]: { color: 0xffdd44, scale: 0.7, label: "SWARMER" },
+};
+
+const DEFAULT_ARCH: ArchetypeStyle = { color: 0xff4444, scale: 1.0, label: "NPC" };
+
 export function createNpcDisplay(): EntityDisplayObject {
   const container = new Container();
 
+  // Archetype scale lives on a child so the bars/labels (which are anchored
+  // to the parent's UI container) don't get scaled with the hull. Only the
+  // hull graphic should grow/shrink per archetype.
+  const hullContainer = new Container();
+  container.addChild(hullContainer);
+
   const hull = new Graphics();
-  container.addChild(hull);
+  hullContainer.addChild(hull);
 
   // Screen-space container (not rotated) for bars and label
   const uiContainer = new Container();
@@ -31,12 +60,14 @@ export function createNpcDisplay(): EntityDisplayObject {
   uiContainer.addChild(hpBarBg);
   uiContainer.addChild(hpBarFill);
 
-  const color = 0xff4444;
   let lastW = 0;
   let lastH = 0;
+  let lastArchetype = -1;
+  let style: ArchetypeStyle = DEFAULT_ARCH;
 
   function drawHull(hw: number, hh: number) {
     hull.clear();
+    const color = style.color;
 
     // Angular hostile hull shape — diamond/chevron
     hull.poly([
@@ -80,11 +111,32 @@ export function createNpcDisplay(): EntityDisplayObject {
       const hw = w / 2;
       const hh = h / 2;
 
+      // Resolve archetype-specific style on first observation. Archetype is
+      // tagged `net:"initial,u8"` on the server so it arrives in the entered
+      // entity payload and never changes after spawn.
+      if (e.archetype !== lastArchetype) {
+        lastArchetype = e.archetype;
+        style = ARCHETYPES[e.archetype] ?? DEFAULT_ARCH;
+        hullContainer.scale.set(style.scale);
+        nameTag.text = style.label;
+        nameTag.style.fill = style.color;
+        // Force a hull redraw so the new color sticks.
+        lastW = -1;
+        lastH = -1;
+      }
+
       if (w !== lastW || h !== lastH) {
         lastW = w;
         lastH = h;
         drawHull(hw, hh);
       }
+
+      // Leashed NPCs (returning to anchor) fade to ~0.5 alpha and become
+      // visually un-targetable. State is replicated `net:"u8"` so it
+      // updates on every AI transition.
+      const leashed = e.state === AI_STATE_LEASH;
+      container.alpha = leashed ? 0.5 : 1.0;
+      uiContainer.alpha = leashed ? 0.5 : 1.0;
 
       // UI bars
       const barW = Math.max(w, px(40));

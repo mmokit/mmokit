@@ -219,8 +219,16 @@ export function setupInput(
 
     for (const [id, ent] of state.entities) {
       if (id === state.myEntityId) continue; // can't target self
-      // Skip stations
+      // Skip stations and POI markers — neither is click-lockable.
       if (ent.current.entityType === EntityType.Station) continue;
+      if (ent.current.entityType === EntityType.POI) continue;
+      // Skip leashed NPCs — they're returning to anchor and shouldn't be
+      // re-engageable until they re-aggro. Mirrors the server's targeting
+      // gate so click + Space don't queue a lock the server will reject.
+      if (
+        ent.current.entityType === EntityType.NPC &&
+        ent.current.state === 3 /* AIStateLeash */
+      ) continue;
       const dx = ent.renderX - world.x;
       const dy = ent.renderY - world.y;
       const dist = Math.sqrt(dx * dx + dy * dy);
