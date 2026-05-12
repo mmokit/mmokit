@@ -17,7 +17,7 @@ import (
 // ConfigVersion tracks breaking config changes. Bump this when defaults change
 // in a way that is incompatible with saved configs (e.g. unit rescale).
 // When the saved version doesn't match, defaults are used and re-saved.
-const ConfigVersion = 3
+const ConfigVersion = 5
 
 // GameConfig holds all tunable game parameters.
 type GameConfig struct {
@@ -169,16 +169,16 @@ func DefaultGameConfig() GameConfig {
 		// always see an engaging NPC; WeaponRange ≤ player LockOnRange
 		// keeps fire visible on the player's HUD.
 		BrawlerHP: 400, BrawlerShield: 200, BrawlerMaxSpeed: 6, BrawlerTurnRate: 1.5,
-		BrawlerPreferredRange: 30, BrawlerWeaponRange: 50, BrawlerAggroRadius: 80,
-		BrawlerDamagePerShot: 8, BrawlerFireRate: 1.0,
+		BrawlerPreferredRange: 30, BrawlerWeaponRange: 50, BrawlerAggroRadius: 30,
+		BrawlerDamagePerShot: 2, BrawlerFireRate: 1.0,
 
 		SniperHP: 150, SniperShield: 100, SniperMaxSpeed: 8, SniperTurnRate: 2.5,
-		SniperPreferredRange: 45, SniperWeaponRange: 50, SniperAggroRadius: 80,
-		SniperDamagePerShot: 25, SniperFireRate: 0.4,
+		SniperPreferredRange: 45, SniperWeaponRange: 50, SniperAggroRadius: 30,
+		SniperDamagePerShot: 6, SniperFireRate: 0.4,
 
 		SwarmerHP: 80, SwarmerShield: 0, SwarmerMaxSpeed: 14, SwarmerTurnRate: 3.0,
-		SwarmerPreferredRange: 35, SwarmerWeaponRange: 50, SwarmerAggroRadius: 80,
-		SwarmerDamagePerShot: 4, SwarmerFireRate: 2.0,
+		SwarmerPreferredRange: 35, SwarmerWeaponRange: 50, SwarmerAggroRadius: 30,
+		SwarmerDamagePerShot: 1, SwarmerFireRate: 2.0,
 
 		AggroDeescalationSec: 6,
 

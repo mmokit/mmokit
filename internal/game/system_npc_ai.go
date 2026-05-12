@@ -6,6 +6,7 @@ import (
 	"github.com/mlange-42/ark/ecs"
 
 	gamecomp "github.com/zenion/mmoserver/internal/component"
+	"github.com/zenion/mmoserver/internal/item"
 	"github.com/zenion/mmoserver/pkg/mmokit"
 )
 
@@ -29,6 +30,12 @@ type NPCAISystem struct {
 		Rot  *mmokit.Rotation
 		Lock *gamecomp.TargetLock
 	}]
+	// pendingLeashClears holds entities that finished leashing this tick.
+	// Drained after the Update query iteration completes — Map1.Remove is
+	// a structural archetype change and would panic if invoked inside the
+	// locked-world query. Same pattern as dieKeepEntity →
+	// PendingDeathMarker (see commit 6a2a01a).
+	pendingLeashClears []ecs.Entity
 }
 
 func (s *NPCAISystem) Init() {
@@ -67,6 +74,21 @@ func (s *NPCAISystem) Update(dt float32) {
 		case AIStateEngage:
 			s.tickEngage(self, ai, pos, vel, rot, lock, now, dt)
 		}
+	}
+
+	// Drain leash clears now that the query has released the world lock.
+	if len(s.pendingLeashClears) > 0 {
+		w := s.Stage().ECSWorld()
+		leashMap := ecs.NewMap1[gamecomp.Leashing](w)
+		for _, h := range s.pendingLeashClears {
+			if h == (ecs.Entity{}) {
+				continue
+			}
+			if leashMap.HasAll(h) {
+				leashMap.Remove(h)
+			}
+		}
+		s.pendingLeashClears = s.pendingLeashClears[:0]
 	}
 }
 
@@ -197,11 +219,38 @@ func (s *NPCAISystem) tickEngage(self mmokit.Entity, ai *gamecomp.NPCAI,
 		ai.FireCooldown -= dt
 		if ai.FireCooldown <= 0 && ai.FireRate > 0 {
 			ai.FireCooldown = 1.0 / ai.FireRate
-			dealt := s.gw.ApplyDamage(target, ai.DamagePerShot, self.NetID())
-			if dealt > 0 {
+			// Route through target.Send(&Damage{...}) so the framework
+			// auto-broadcasts the hit to AoI viewers with target + source
+			// as anchors. The client's typed-event handler (network.ts)
+			// feeds it into ability-effects.ts, which renders the beam +
+			// impact VFX keyed off AbilityType. Without this, NPC shots
+			// were silently applying damage with no visual cue.
+			msg := Damage{
+				Amount:      ai.DamagePerShot,
+				Slot:        0,
+				AbilityType: npcAbilityTypeFor(ai.Archetype),
+				Source:      self,
+			}
+			target.Send(&msg)
+			if msg.Dealt > 0 {
 				ai.LastCombatActivityAt = now
 			}
 		}
+	}
+}
+
+// npcAbilityTypeFor maps an NPC archetype to an existing player-side
+// ability type so the shared VFX dispatcher in ability-effects.ts
+// renders a sensible visual. Picked for thematic fit: Sniper → instant
+// long beam, Brawler → kinetic burst, Swarmer → fast projectile.
+func npcAbilityTypeFor(archetype uint8) uint8 {
+	switch archetype {
+	case ArchetypeSniper:
+		return uint8(item.AbilityTypeRailShot)
+	case ArchetypeSwarmer:
+		return uint8(item.AbilityTypePlasmaBolt)
+	default: // ArchetypeBrawler + future archetypes
+		return uint8(item.AbilityTypePulseLaser)
 	}
 }
 
@@ -250,15 +299,15 @@ func (s *NPCAISystem) tickLeash(self mmokit.Entity, ai *gamecomp.NPCAI,
 ) {
 	anchor := mmokit.Get[gamecomp.POIAnchor](self)
 	if anchor == nil || anchor.POINetID == 0 {
-		// No anchor (test NPC) — clear leash immediately.
-		removeLeashing(self)
+		// No anchor (test NPC) — clear leash.
+		s.pendingLeashClears = append(s.pendingLeashClears, self.Handle())
 		ai.State = AIStateIdle
 		vel.X, vel.Y = 0, 0
 		return
 	}
 	poiE := mmokit.EntityByNetID(s.gw.stage, anchor.POINetID)
 	if !poiE.Alive() {
-		removeLeashing(self)
+		s.pendingLeashClears = append(s.pendingLeashClears, self.Handle())
 		ai.State = AIStateIdle
 		vel.X, vel.Y = 0, 0
 		return
@@ -271,7 +320,7 @@ func (s *NPCAISystem) tickLeash(self mmokit.Entity, ai *gamecomp.NPCAI,
 	dx, dy := poiPos.X-pos.X, poiPos.Y-pos.Y
 	dist := float32(math.Sqrt(float64(dx*dx + dy*dy)))
 	if dist < poi.AnchorRadius {
-		removeLeashing(self)
+		s.pendingLeashClears = append(s.pendingLeashClears, self.Handle())
 		ai.State = AIStateIdle
 		vel.X, vel.Y = 0, 0
 		if h := mmokit.Get[gamecomp.Health](self); h != nil {
@@ -322,21 +371,6 @@ func (s *NPCAISystem) findNearestEnemy(self mmokit.Entity,
 		}
 	}
 	return best
-}
-
-// removeLeashing strips the Leashing tag via raw ECS. mmokit has no
-// component-removal primitive (only Get/Has/Set); the dormant-clear path
-// in internal/game/hooks.go follows the same pattern.
-func removeLeashing(e mmokit.Entity) {
-	h := e.Handle()
-	if h == (ecs.Entity{}) || e.Stage() == nil {
-		return
-	}
-	w := e.Stage().ECSWorld()
-	leashMap := ecs.NewMap1[gamecomp.Leashing](w)
-	if leashMap.HasAll(h) {
-		leashMap.Remove(h)
-	}
 }
 
 // turnTowards rotates rot.Angle toward desired by up to turnRate*dt.

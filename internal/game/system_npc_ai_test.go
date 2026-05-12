@@ -69,7 +69,7 @@ func TestNPCAI_IdleToAcquireOnTargetInRange(t *testing.T) {
 	ai, phys := newWiredNPCAISystem(t, gw)
 
 	npc := gw.SpawnNPC(0, 0, ArchetypeBrawler, 0)
-	newTestPlayerAt(t, gw, 8001, 50, 0) // well inside Brawler's 80u aggro
+	newTestPlayerAt(t, gw, 8001, 20, 0) // inside Brawler's 30u aggro
 
 	const dt = float32(0.05)
 	tickAI(ai, phys, dt, 2) // 0.1s — enough for Idle→Acquire (and possibly →Engage)
@@ -87,7 +87,15 @@ func TestNPCAI_BrawlerCharges(t *testing.T) {
 	ai, phys := newWiredNPCAISystem(t, gw)
 
 	npc := gw.SpawnNPC(0, 0, ArchetypeBrawler, 0)
-	// 70u: inside 80u aggro, outside 50u weapon range — pure motion.
+	// 70u: outside default 30u aggro AND 50u weapon range. Bump this
+	// NPC's aggro to 100u so it locks at 70u and exercises the charge
+	// motion (default tuning leaves no in-aggro / out-of-weapon zone).
+	if aiComp := mmokit.Get[gamecomp.NPCAI](mmokit.EntityFromECS(gw.stage, npc)); aiComp != nil {
+		aiComp.AggroRadius = 100
+	}
+	if lock := mmokit.Get[gamecomp.TargetLock](mmokit.EntityFromECS(gw.stage, npc)); lock != nil {
+		lock.Range = 100
+	}
 	newTestPlayerAt(t, gw, 8002, 70, 0)
 
 	const dt = float32(0.05)
@@ -127,7 +135,7 @@ func TestNPCAI_AggroDeescalation(t *testing.T) {
 	ai, phys := newWiredNPCAISystem(t, gw)
 
 	npc := gw.SpawnNPC(0, 0, ArchetypeBrawler, 0)
-	player := newTestPlayerAt(t, gw, 8004, 50, 0)
+	player := newTestPlayerAt(t, gw, 8004, 20, 0) // inside 30u aggro
 
 	const dt = float32(0.05)
 	tickAI(ai, phys, dt, 4) // 0.2s — enter Engage (acquire is near-instant at 0°)

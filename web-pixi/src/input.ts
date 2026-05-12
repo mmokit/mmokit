@@ -277,25 +277,28 @@ export function setupInput(
       }
     }
 
-    // Modifier-click behaviors. The base left-click still picks a mining
-    // target (state.targetId, set at the bottom); ctrl/shift gestures are
-    // the multi-lock controls. None of these flip state.lockTargetId
-    // directly — that's authoritative-from-server via LockSlotsMsg.
+    // Modifier-click behaviors plus the EVE-style auto-lock on combat
+    // targets. Asteroids stay manual (Space to start mining) so plain
+    // clicks on rocks during exploration don't queue mining locks; Ships
+    // and NPCs auto-lock because the player almost always wants to engage
+    // them once they're clicked. lockTargetId is authoritative-from-server
+    // via LockSlotsMsg — these inputs just request the transition.
     if (bestId !== 0) {
       const ent = state.entities.get(bestId);
-      const lockable = ent && (
-        ent.current.entityType === EntityType.Ship ||
-        ent.current.entityType === EntityType.NPC ||
-        ent.current.entityType === EntityType.Asteroid
-      );
+      const kind = ent?.current.entityType;
+      const lockable = kind === EntityType.Ship || kind === EntityType.NPC || kind === EntityType.Asteroid;
       if (lockable) {
         if (e.shiftKey) {
           // Shift+click: unlock a locked target.
           tryUnlock(bestId);
         } else if (e.ctrlKey) {
-          // Ctrl+click: lock or switch active. Same as plain click on an
-          // already-locked target, but ctrl explicitly opts in (avoids the
-          // accidental lock-spam from base click in normal target-picking).
+          // Ctrl+click: explicit lock/activate (works for asteroids too).
+          tryLockOrActivate(bestId);
+        } else if (kind === EntityType.Ship || kind === EntityType.NPC) {
+          // Plain click on combat target: auto-start lock. Without this,
+          // new players see only the red selection ring on an NPC and
+          // assume the game isn't responding to combat input — the lock
+          // gesture (Space-after-select or ctrl+click) is not discoverable.
           tryLockOrActivate(bestId);
         }
       }

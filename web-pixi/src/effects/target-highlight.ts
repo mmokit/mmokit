@@ -63,7 +63,10 @@ export class TargetHighlight {
       const crateItems = (tgt.current as { items?: Array<{ itemId: number; quantity: number }> }).items ?? [];
       if (crateItems.length > 0) {
         const lines = crateItems.slice(0, 5).map((it) => {
-          const name = RESOURCE_NAMES[it.itemId] || `item${it.itemId}`;
+          const name =
+            state.itemDefs.get(it.itemId)?.name ||
+            RESOURCE_NAMES[it.itemId] ||
+            `item${it.itemId}`;
           return `${name} x${it.quantity}`;
         });
         if (crateItems.length > 5) lines.push(`+${crateItems.length - 5} more`);

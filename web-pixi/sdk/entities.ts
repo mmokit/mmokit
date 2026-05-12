@@ -130,6 +130,7 @@ export interface NPCEntity {
   shieldCurrent: number;
   shieldMax: number;
   archetype: number;
+  angle: number;
   state: number;
   statusEffects: NPCStatusEffectsItem[];
 }

@@ -220,7 +220,10 @@ export function updateLootPopup(state: GameState): void {
       itemsContainer!.appendChild(emptyEl);
     } else {
       for (const item of items) {
-        const itemName = RESOURCE_NAMES[item.itemId] || `item${item.itemId}`;
+        const itemName =
+          stateRef?.itemDefs.get(item.itemId)?.name ||
+          RESOURCE_NAMES[item.itemId] ||
+          `item${item.itemId}`;
         const btn = document.createElement("div");
         btn.style.cssText = `
           padding: 6px 10px;

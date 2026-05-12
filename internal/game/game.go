@@ -127,6 +127,18 @@ func NewGameWorld(base *mmokit.Stage, cfg *GameConfig, playerDB *PlayerRepo, cel
 			return
 		}
 		gw.SavePlayerState(s)
+		// Overwrite the saved position with the spawn-cell coords. Without
+		// this, a cross-cell respawn (POI death in cell ≠ StationCell)
+		// would re-create the entity at the death position in the station
+		// cell's local frame, and CellBoundarySystem would immediately
+		// transfer it back to the death cell — landing the player at the
+		// POI again, where the surviving NPCs kill them on sight.
+		pdata := gw.PlayerDB.GetOrCreate(s.Username)
+		pdata.X = StationLocalX
+		pdata.Y = StationLocalY
+		pdata.CellX = gw.Config.StationCell.CellX
+		pdata.CellY = gw.Config.StationCell.CellY
+		gw.PlayerDB.MarkDirty(s.Username)
 		// Zero velocity + shield NOW (safe — existing component writes,
 		// not structural changes). Dormant is added in postFlush via
 		// PendingDeathMarker because the action runs inside the death
@@ -140,6 +152,34 @@ func NewGameWorld(base *mmokit.Stage, cfg *GameConfig, playerDB *PlayerRepo, cel
 			sh.Current = 0
 		}
 		mmokit.Enqueue(gw.Queue, PendingDeathMarker{ConnID: s.ConnID})
+	}
+
+	// removeFromWorldDead is the StateDead→StateTransferring action used
+	// when processRespawns hands a dead player off to the station cell.
+	// Skips SavePlayerState: dieKeepEntity already saved inventory and
+	// pinned pdata.{X,Y,CellX,CellY} to spawn coords. Calling Save here
+	// would overwrite that pin with the entity's death position (the
+	// entity is still parked at the POI under a Dormant marker), causing
+	// the dest cell's SpawnPlayer to spawn at the POI again.
+	removeFromWorldDead := func(s *mmokit.PlayerSession, pm *mmokit.PlayerManager) {
+		entity := mmokit.EntityFromECS(gw.stage, s.Entity)
+		if entity.Alive() {
+			if mmokit.Has[mmokit.Ghost](entity) {
+				s.Entity = ecs.Entity{}
+				if gw.PlayerSessions != nil {
+					gw.PlayerSessions.Remove(s.ConnID)
+				}
+				gw.updatePlayerCompletions()
+				return
+			}
+			gw.Spatial.Deregister(s.Entity)
+			mmokit.Despawn(entity)
+		}
+		s.Entity = ecs.Entity{}
+		if gw.PlayerSessions != nil {
+			gw.PlayerSessions.Remove(s.ConnID)
+		}
+		gw.updatePlayerCompletions()
 	}
 
 	// respawnAtSpawnpoint runs on StateDead→StateActive: removes
@@ -180,7 +220,8 @@ func NewGameWorld(base *mmokit.Stage, cfg *GameConfig, playerDB *PlayerRepo, cel
 		{From: mmokit.StateActive, To: StateDead, Action: dieKeepEntity},                       // entity kept (Dormant)
 		{From: mmokit.StateActive, To: mmokit.StateTransferring, Action: removeFromWorld},      // entity removed
 		{From: mmokit.StateActive, To: mmokit.StateDisconnected, Action: disconnectKeepEntity}, // entity persists for reconnect
-		{From: StateDead, To: mmokit.StateActive, Action: respawnAtSpawnpoint},                 // respawn
+		{From: StateDead, To: mmokit.StateActive, Action: respawnAtSpawnpoint},                 // respawn (same cell)
+		{From: StateDead, To: mmokit.StateTransferring, Action: removeFromWorldDead},           // respawn (cross-cell handoff)
 		{From: StateDead, To: mmokit.StateDisconnected},                                        // disconnect while dead
 		{From: mmokit.StateDisconnected, To: StateDead},                                        // reconnect resumes dead state
 		{From: mmokit.StateDisconnected, To: StateDocked},                                      // reconnect resumes docked state

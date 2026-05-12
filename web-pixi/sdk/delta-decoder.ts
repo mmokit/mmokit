@@ -99,7 +99,7 @@ function decodeLootCrateEntitySnapshot(snap: Uint8Array, initial: Uint8Array | n
   return { netID: 0, producedAtMs: 0, entityType: 3, worldX, worldY, velX, velY, radius, width, height, items };
 }
 
-const NPCENTITY_FIELD_SIZES = [4, 4, 2, 2, 2, 2, 2, 4, 4, 4, 4, 1];
+const NPCENTITY_FIELD_SIZES = [4, 4, 2, 2, 2, 2, 2, 4, 4, 4, 4, 1, 2];
 const NPCENTITY_HAS_VAR_TAIL = true;
 
 function decodeNPCEntitySnapshot(snap: Uint8Array, initial: Uint8Array | null, existing?: NPCEntity): NPCEntity {
@@ -116,6 +116,7 @@ function decodeNPCEntitySnapshot(snap: Uint8Array, initial: Uint8Array | null, e
   const shieldCurrent = readFloat32(snap, o); o += 4;
   const shieldMax = readFloat32(snap, o); o += 4;
   const archetype = snap[o]; o += 1;
+  const angle = unAngle(readUint16(snap, o)); o += 2;
   const statusEffectsByteLen = readUint16(snap, o); o += 2;
   const statusEffectsEnd = o + statusEffectsByteLen;
   const statusEffects: NPCStatusEffectsItem[] = [];
@@ -125,7 +126,7 @@ function decodeNPCEntitySnapshot(snap: Uint8Array, initial: Uint8Array | null, e
     statusEffects.push({ type, duration });
   }
   const state = initial ? initial[0] : (existing?.state ?? 0);
-  return { netID: 0, producedAtMs: 0, entityType: 4, worldX, worldY, velX, velY, radius, width, height, healthCurrent, healthMax, shieldCurrent, shieldMax, archetype, state, statusEffects };
+  return { netID: 0, producedAtMs: 0, entityType: 4, worldX, worldY, velX, velY, radius, width, height, healthCurrent, healthMax, shieldCurrent, shieldMax, archetype, state, angle, statusEffects };
 }
 
 const POIENTITY_FIELD_SIZES = [4, 4, 2, 2, 2, 2, 2, 1];
