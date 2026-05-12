@@ -88,14 +88,17 @@ func (gw *GameWorld) Shutdown() {
 // so they piggyback on FlushDirty without needing iteration here.
 func (gw *GameWorld) postTick() {
 	// Auto-respawn timer: every dead session whose timer has elapsed
-	// gets enqueued for PendingRespawn (drained in postFlush). The
-	// client's Respawn input is dropped by the typed-input dispatcher
-	// when the player entity is dead, so this is the only path.
+	// gets a deferred executeRespawnFor closure. The client's Respawn
+	// input is dropped by the typed-input dispatcher when the player
+	// entity is dead, so this is the only path.
 	if len(gw.autoRespawnAt) > 0 {
 		now := gw.eng.Tick
 		for connID, deadline := range gw.autoRespawnAt {
 			if now >= deadline {
-				mmokit.Enqueue(gw.Queue, PendingRespawn{ConnID: connID})
+				cid := connID
+				gw.stage.Commands().Defer(func() {
+					gw.executeRespawnFor(cid)
+				})
 				delete(gw.autoRespawnAt, connID)
 			}
 		}
@@ -252,37 +255,37 @@ func (gw *GameWorld) GetNetID(entity ecs.Entity) (uint32, bool) {
 }
 
 func (gw *GameWorld) postFlush() {
-	// Loot drops: now scheduled via Commands.Defer from verb_death.go;
-	// they fire at the next per-system flush boundary. No drain here.
-
-	// Process respawn requests (after removals so new entities are clean)
-	gw.processRespawns()
-
-	// Undock requests are now dispatched via Commands.Defer from the input
-	// handler (see startUndockingFor) — no drain here.
+	// Loot drops: scheduled via Commands.Defer from verb_death.go.
+	// Respawn requests: scheduled via Commands.Defer from the Respawn
+	// input handler and from the auto-respawn timer in postTick.
+	// Undock requests: scheduled via Commands.Defer from the Undock
+	// input handler.
+	// All of the above fire at the next per-system flush boundary —
+	// no drain here.
 }
 
-func (gw *GameWorld) processRespawns() {
-	for _, req := range mmokit.Drain[PendingRespawn](gw.Queue) {
-		connID := req.ConnID
-		s := gw.Players.ByConnID(connID)
-		if s == nil || s.State != StateDead {
-			continue
-		}
-
-		// In multi-node mode, players always respawn at the station cell.
-		// If this node doesn't have a station, transfer the respawn there.
-		if !gw.hasStation() {
-			gw.eng.Log.Log(CatPlayerConnect, "respawn transfer: conn=%d username=%s -> station node", connID, s.Username)
-			gw.stage.Bridge().RequestRespawn(connID, s.Username)
-			// Clean up player from this node
-			gw.Players.Transition(s, mmokit.StateTransferring)
-			gw.Players.Remove(s)
-			continue
-		}
-
-		gw.Players.Transition(s, mmokit.StateActive)
+// executeRespawnFor processes a single respawn request. Dispatched via
+// Commands.Defer from the Respawn input handler and from the auto-respawn
+// timer in postTick; runs at the next per-system flush boundary with the
+// ECS world unlocked.
+func (gw *GameWorld) executeRespawnFor(connID uint32) {
+	s := gw.Players.ByConnID(connID)
+	if s == nil || s.State != StateDead {
+		return
 	}
+
+	// In multi-node mode, players always respawn at the station cell.
+	// If this node doesn't have a station, transfer the respawn there.
+	if !gw.hasStation() {
+		gw.eng.Log.Log(CatPlayerConnect, "respawn transfer: conn=%d username=%s -> station node", connID, s.Username)
+		gw.stage.Bridge().RequestRespawn(connID, s.Username)
+		// Clean up player from this node.
+		gw.Players.Transition(s, mmokit.StateTransferring)
+		gw.Players.Remove(s)
+		return
+	}
+
+	gw.Players.Transition(s, mmokit.StateActive)
 }
 
 func (gw *GameWorld) clearTickState() {

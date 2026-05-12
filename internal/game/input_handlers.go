@@ -254,8 +254,11 @@ func RegisterInputs(mmo *mmokit.Process) {
 		if conn == nil {
 			return
 		}
-		gw.eng.Log.Log(CatPlayerSpawn, "respawn requested: conn=%d", conn.ConnID)
-		mmokit.Enqueue(gw.Queue, PendingRespawn{ConnID: conn.ConnID})
+		connID := conn.ConnID
+		gw.eng.Log.Log(CatPlayerSpawn, "respawn requested: conn=%d", connID)
+		gw.stage.Commands().Defer(func() {
+			gw.executeRespawnFor(connID)
+		})
 	})
 
 	mmokit.HandleClient(mmo, func(player mmokit.Entity, msg *InventoryTransfer) {
