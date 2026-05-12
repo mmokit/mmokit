@@ -85,3 +85,50 @@ func TestCommands_FlushesBetweenSystems(t *testing.T) {
 	// from above. Skip explicitly so the gap is visible.
 	t.Skip("see Task 5 TickOne test for the same property at higher abstraction")
 }
+
+// TestCommands_NestedDefer_LandsInNextFlush verifies that an op queued
+// from inside a running Defer/AddOp closure survives to the NEXT flush
+// rather than being silently dropped by the iteration's slice-header
+// snapshot. This is the contract documented on Defer: "Closures may
+// call Commands ops on this same buffer, but those ops land in the
+// NEXT system's flush, not the current one."
+//
+// Regression test for a bug where Flush did `for _, op := range c.ops`
+// and then `c.ops = c.ops[:0]`, which truncates appended-during-flush
+// ops without ever running them. Production triggers: startUndockingFor
+// and respawnAtSpawnpoint both Defer + then call RemoveComponent —
+// previously their Dormant-clear was getting lost.
+func TestCommands_NestedDefer_LandsInNextFlush(t *testing.T) {
+	c := &Commands{}
+	outerCalls := 0
+	innerCalls := 0
+
+	c.Defer(func() {
+		outerCalls++
+		// Queue an op against the SAME buffer from inside this op.
+		c.AddOp(func() {
+			innerCalls++
+		})
+	})
+
+	c.Flush()
+
+	if outerCalls != 1 {
+		t.Fatalf("outer call count = %d, want 1", outerCalls)
+	}
+	if innerCalls != 0 {
+		t.Fatalf("inner op ran in same flush; got %d calls, want 0 (must defer to next)", innerCalls)
+	}
+
+	c.Flush() // second flush should run the nested op
+
+	if innerCalls != 1 {
+		t.Fatalf("inner op did not run in next flush; got %d calls, want 1", innerCalls)
+	}
+
+	// Third flush should be a no-op — buffer must be empty now.
+	c.Flush()
+	if innerCalls != 1 {
+		t.Fatalf("inner op ran more than once across flushes; got %d, want 1", innerCalls)
+	}
+}

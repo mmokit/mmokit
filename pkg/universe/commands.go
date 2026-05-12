@@ -60,8 +60,23 @@ func (c *Commands) AddOp(op func()) {
 // via Despawn / Defer (or mmokit.AddComponent / mmokit.RemoveComponent)
 // and applied automatically.
 func (c *Commands) Flush() {
-	for _, op := range c.ops {
-		op()
+	// Iterate by index against the snapshotted length. Ops that the
+	// running closures queue (nested AddComponent / RemoveComponent /
+	// Despawn / Defer) land at indices >= n and are NOT executed in
+	// this flush — they survive to the next one. Matches the "single-
+	// pass per flush; no convergence loop" contract documented on
+	// Defer above.
+	n := len(c.ops)
+	for i := range n {
+		c.ops[i]()
 	}
-	c.ops = c.ops[:0]
+	// Compact: shift any nested-queued ops down to the front and
+	// truncate. Preserves the backing array so steady-state ticks
+	// don't allocate.
+	if extra := len(c.ops) - n; extra > 0 {
+		copy(c.ops, c.ops[n:])
+		c.ops = c.ops[:extra]
+	} else {
+		c.ops = c.ops[:0]
+	}
 }
