@@ -389,13 +389,28 @@ type POIAnchor struct {
 	POINetID uint32
 }
 
-// POI is a Point-of-Interest entity component (combat-site marker).
-// Defined here as a stub for Phase 2 cross-references; full definition
-// (including Status/Type/RosterDefIdx/ClearedAt) lands in Task 3.1.
+// POI status — wire-replicated so clients can tint the marker.
+const (
+	POIStatusActive   uint8 = 0
+	POIStatusCleared  uint8 = 1
+	POIStatusCooldown uint8 = 2
+)
+
+// POI types — extensible. v1 only has Combat.
+const (
+	POITypeCombat uint8 = 0
+)
+
+// POI is a first-class entity component for points-of-interest. The
+// marker is replicated to clients via Position + EntityKind + Status;
+// AnchorRadius/LeashRadius/RosterDefIdx/ClearedAt are server-local.
 type POI struct {
+	Type         uint8 `net:"initial,u8"`
+	Status       uint8 `net:"u8"`
 	AnchorRadius float32
 	LeashRadius  float32
-	// Full fields landed by Task 3.1
+	ClearedAt    int64  // unix nanos (server time, not ClusterClock)
+	RosterDefIdx uint16
 }
 
 // PilotName stores the player's display name for network replication.
