@@ -182,63 +182,61 @@ func (gw *GameWorld) processDockCompletions() {
 	}
 }
 
-func (gw *GameWorld) processUndocks() {
-	for _, req := range mmokit.Drain[PendingUndockRequest](gw.Queue) {
-		s := gw.Players.ByConnID(req.ConnID)
-		if s == nil || s.State != StateDocked {
-			continue
-		}
+// startUndockingFor processes a single Undock request. Dispatched via
+// Commands.Defer from the Undock input handler; runs at the next per-system
+// flush boundary with the ECS world unlocked.
+func (gw *GameWorld) startUndockingFor(connID uint32) {
+	s := gw.Players.ByConnID(connID)
+	if s == nil || s.State != StateDocked {
+		return
+	}
 
-		// Wake the entity in place: remove Dormant so AoI broadcasts pick it
-		// up again (the ship "reappears" to other pilots), nudge position
-		// off station center so the player isn't stuck inside the
-		// station's collider, and sync pdata.Cargo back into the entity's
-		// Inventory (bank deposits/withdrawals while docked mutate pdata,
-		// not the entity directly).
-		entity := mmokit.EntityFromECS(gw.stage, s.Entity)
-		if !entity.Alive() {
-			gw.eng.Log.Log(CatPlayerDock, "undock skipped: entity gone for conn=%d username=%s — falling back to spawn", req.ConnID, s.Username)
-			gw.Players.Transition(s, mmokit.StateActive)
-			continue
-		}
-		// Drop Dormant via Commands. processUndocks runs in postFlush
-		// (world unlocked) so a direct ecs.Map.Remove would also be
-		// safe here, but routing through Commands keeps game code off
-		// the raw-ark surface — the engine flushes between systems on
-		// the next tick so the entity is reachable to AoI broadcasts
-		// from that point on, preserving the prior semantics.
-		mmokit.RemoveComponent[mmokit.Dormant](gw.stage.Commands(), entity)
+	// Wake the entity in place: remove Dormant so AoI broadcasts pick it
+	// up again (the ship "reappears" to other pilots), nudge position
+	// off station center so the player isn't stuck inside the
+	// station's collider, and sync pdata.Cargo back into the entity's
+	// Inventory (bank deposits/withdrawals while docked mutate pdata,
+	// not the entity directly).
+	entity := mmokit.EntityFromECS(gw.stage, s.Entity)
+	if !entity.Alive() {
+		gw.eng.Log.Log(CatPlayerDock, "undock skipped: entity gone for conn=%d username=%s — falling back to spawn", connID, s.Username)
+		gw.Players.Transition(s, mmokit.StateActive)
+		return
+	}
+	// Drop Dormant via Commands; the engine flushes between systems on
+	// the next tick so the entity is reachable to AoI broadcasts from
+	// that point on, preserving the prior semantics.
+	mmokit.RemoveComponent[mmokit.Dormant](gw.stage.Commands(), entity)
 
-		// Sync pdata.Cargo (which the bank UI mutates while docked) back
-		// into the entity's Inventory so the in-space ship reflects what
-		// the player did at the station.
-		pdata := gw.PlayerDB.GetOrCreate(s.Username)
-		if inv := mmokit.Get[gamecomp.Inventory](entity); inv != nil {
-			inv.Items = make(map[uint32]int32, len(pdata.Cargo))
-			for id, qty := range pdata.Cargo {
-				if qty > 0 {
-					inv.Items[id] = qty
-				}
+	// Sync pdata.Cargo (which the bank UI mutates while docked) back
+	// into the entity's Inventory so the in-space ship reflects what
+	// the player did at the station.
+	pdata := gw.PlayerDB.GetOrCreate(s.Username)
+	if inv := mmokit.Get[gamecomp.Inventory](entity); inv != nil {
+		inv.Items = make(map[uint32]int32, len(pdata.Cargo))
+		for id, qty := range pdata.Cargo {
+			if qty > 0 {
+				inv.Items[id] = qty
 			}
 		}
-
-		// Reposition slightly off the station center so the ship undocks
-		// "next to" the station rather than embedded in it. Same jitter
-		// the new-player spawn uses (~17 unit ring).
-		if pos := mmokit.Get[mmokit.Position](entity); pos != nil {
-			// Pull the saved station coords as the anchor.
-			pos.X = pdata.X + (rand.Float32()-0.5)*16.7
-			pos.Y = pdata.Y + (rand.Float32()-0.5)*16.7
-		}
-		if vel := mmokit.Get[mmokit.Velocity](entity); vel != nil {
-			vel.X = 0
-			vel.Y = 0
-		}
-
-		gw.Players.Transition(s, mmokit.StateActive)
-
-		gw.eng.Log.Log(CatPlayerDock, "player undocked: conn=%d username=%s", s.ConnID, s.Username)
 	}
+
+	// Reposition slightly off the station center so the ship undocks
+	// "next to" the station rather than embedded in it. Same jitter
+	// the new-player spawn uses (~17 unit ring).
+	if pos := mmokit.Get[mmokit.Position](entity); pos != nil {
+		// Pull the saved station coords as the anchor.
+		pos.X = pdata.X + (rand.Float32()-0.5)*16.7
+		pos.Y = pdata.Y + (rand.Float32()-0.5)*16.7
+	}
+	if vel := mmokit.Get[mmokit.Velocity](entity); vel != nil {
+		vel.X = 0
+		vel.Y = 0
+	}
+
+	gw.Players.Transition(s, mmokit.StateActive)
+
+	gw.eng.Log.Log(CatPlayerDock, "player undocked: conn=%d username=%s", s.ConnID, s.Username)
 }
 
 func (gw *GameWorld) GetNetID(entity ecs.Entity) (uint32, bool) {
@@ -260,8 +258,8 @@ func (gw *GameWorld) postFlush() {
 	// Process respawn requests (after removals so new entities are clean)
 	gw.processRespawns()
 
-	// Process undock requests (after removals so SpawnPlayer is clean)
-	gw.processUndocks()
+	// Undock requests are now dispatched via Commands.Defer from the input
+	// handler (see startUndockingFor) — no drain here.
 }
 
 func (gw *GameWorld) processRespawns() {

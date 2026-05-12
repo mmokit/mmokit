@@ -236,7 +236,10 @@ func RegisterInputs(mmo *mmokit.Process) {
 		if conn == nil {
 			return
 		}
-		mmokit.Enqueue(gw.Queue, PendingUndockRequest{ConnID: conn.ConnID})
+		connID := conn.ConnID
+		gw.stage.Commands().Defer(func() {
+			gw.startUndockingFor(connID)
+		})
 	})
 
 	mmokit.HandleClient(mmo, func(player mmokit.Entity, msg *Respawn) {
