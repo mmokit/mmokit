@@ -50,6 +50,40 @@ type GameConfig struct {
 	NpcWidth            float32 `json:"npcWidth"`
 	NpcHeight           float32 `json:"npcHeight"`
 
+	// NPC archetypes
+	BrawlerHP             float32 `json:"brawler_hp"`
+	BrawlerShield         float32 `json:"brawler_shield"`
+	BrawlerMaxSpeed       float32 `json:"brawler_max_speed"`
+	BrawlerTurnRate       float32 `json:"brawler_turn_rate"`
+	BrawlerPreferredRange float32 `json:"brawler_preferred_range"`
+	BrawlerWeaponRange    float32 `json:"brawler_weapon_range"`
+	BrawlerAggroRadius    float32 `json:"brawler_aggro_radius"`
+	BrawlerDamagePerShot  float32 `json:"brawler_damage_per_shot"`
+	BrawlerFireRate       float32 `json:"brawler_fire_rate"`
+
+	SniperHP             float32 `json:"sniper_hp"`
+	SniperShield         float32 `json:"sniper_shield"`
+	SniperMaxSpeed       float32 `json:"sniper_max_speed"`
+	SniperTurnRate       float32 `json:"sniper_turn_rate"`
+	SniperPreferredRange float32 `json:"sniper_preferred_range"`
+	SniperWeaponRange    float32 `json:"sniper_weapon_range"`
+	SniperAggroRadius    float32 `json:"sniper_aggro_radius"`
+	SniperDamagePerShot  float32 `json:"sniper_damage_per_shot"`
+	SniperFireRate       float32 `json:"sniper_fire_rate"`
+
+	SwarmerHP             float32 `json:"swarmer_hp"`
+	SwarmerShield         float32 `json:"swarmer_shield"`
+	SwarmerMaxSpeed       float32 `json:"swarmer_max_speed"`
+	SwarmerTurnRate       float32 `json:"swarmer_turn_rate"`
+	SwarmerPreferredRange float32 `json:"swarmer_preferred_range"`
+	SwarmerWeaponRange    float32 `json:"swarmer_weapon_range"`
+	SwarmerAggroRadius    float32 `json:"swarmer_aggro_radius"`
+	SwarmerDamagePerShot  float32 `json:"swarmer_damage_per_shot"`
+	SwarmerFireRate       float32 `json:"swarmer_fire_rate"`
+
+	// AI shared
+	AggroDeescalationSec float32 `json:"aggro_deescalation_sec"`
+
 	// Target lock
 	LockOnTime         float32 `json:"lockOnTime"`         // seconds to achieve full lock
 	LockOnRange        float32 `json:"lockOnRange"`        // max range to maintain lock
@@ -116,6 +150,21 @@ func DefaultGameConfig() GameConfig {
 		NpcShieldRegenDelay: 3.0,
 		NpcWidth:            1.7,
 		NpcHeight:           0.83,
+
+		// NPC archetypes
+		BrawlerHP: 400, BrawlerShield: 200, BrawlerMaxSpeed: 6, BrawlerTurnRate: 1.5,
+		BrawlerPreferredRange: 80, BrawlerWeaponRange: 100, BrawlerAggroRadius: 800,
+		BrawlerDamagePerShot: 8, BrawlerFireRate: 1.0,
+
+		SniperHP: 150, SniperShield: 100, SniperMaxSpeed: 8, SniperTurnRate: 2.5,
+		SniperPreferredRange: 600, SniperWeaponRange: 800, SniperAggroRadius: 800,
+		SniperDamagePerShot: 25, SniperFireRate: 0.4,
+
+		SwarmerHP: 80, SwarmerShield: 0, SwarmerMaxSpeed: 14, SwarmerTurnRate: 3.0,
+		SwarmerPreferredRange: 120, SwarmerWeaponRange: 150, SwarmerAggroRadius: 600,
+		SwarmerDamagePerShot: 4, SwarmerFireRate: 2.0,
+
+		AggroDeescalationSec: 6,
 
 		// Target lock
 		LockOnTime:         2.0,
