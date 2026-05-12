@@ -131,8 +131,7 @@ func TestSystemBase_CommandsShortcut(t *testing.T) {
 	stage.RegisterLiveNetID(42, h)
 
 	sys := &commandsTestSystem{handle: h}
-	mmokit.WireSystem(sys, w, eng, stage)
-	sys.Init()
+	mmokit.WireSystem(sys, w, eng, stage) // also calls sys.Init()
 
 	// TickOne runs Update then Flushes — the system's queued AddComponent
 	// should land before TickOne returns.
