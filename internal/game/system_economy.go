@@ -6,15 +6,12 @@ import (
 	"github.com/zenion/mmoserver/pkg/mmokit"
 )
 
-// EconomySystem handles manual loot crate pickup, bank transfers (deposit/withdraw),
-// and selling bank items for currency.
+// EconomySystem handles manual loot crate pickup. Bank transfers (deposit/
+// withdraw) and LootAll are dispatched via Commands.Defer from the input
+// handlers and do not flow through Update.
 type EconomySystem struct {
 	mmokit.SystemBase
-	gw       *GameWorld
-	stations mmokit.Query[struct {
-		Station *gamecomp.Station
-		Pos     *mmokit.Position
-	}]
+	gw *GameWorld
 }
 
 func (s *EconomySystem) Init() {
@@ -22,129 +19,57 @@ func (s *EconomySystem) Init() {
 }
 
 func (s *EconomySystem) Update(dt float32) {
-	// Collect station positions
-	var stationPositions []mmokit.Position
-	for _, b := range s.stations.Iter {
-		stationPositions = append(stationPositions, *b.Pos)
-	}
-
-	// Process manual loot requests. LootAll is dispatched via
-	// Commands.Defer from the LootAll input handler — no drain here.
+	// Bank transfers and LootAll are dispatched via Commands.Defer from
+	// their input handlers — no drain here. PendingLootItem still flows
+	// through this system (drained below) until it is migrated.
 	s.processLootItems()
-
-	sellRange2 := s.stationRange2()
-
-	// Process bank transfers
-	s.processTransfers(stationPositions, sellRange2)
-
-	// (Bank view requests are now a typed-op — game.HandleBankRequest
-	// runs synchronously on the player's cell engine via the typed-op
-	// dispatcher, not via a per-tick queue drain. See op_bank.go.)
-	_ = sellRange2
 }
 
-func (s *EconomySystem) processTransfers(stationPositions []mmokit.Position, sellRange2 float64) {
-	gw := s.gw
-	for _, t := range mmokit.Drain[PendingTransfer](gw.Queue) {
-		sess := gw.Players.ByConnID(t.ConnID)
-		if sess == nil || sess.Username == "" {
-			continue
-		}
-		username := sess.Username
-		pdata := gw.PlayerDB.GetOrCreate(username)
-
-		// Docked players: operate on PlayerDB cargo directly
-		if sess.State == StateDocked {
-			s.processDockedTransfer(t, username, pdata)
-			continue
-		}
-
-		entity := mmokit.EntityFromECS(gw.stage, sess.Entity)
-		if !entity.Alive() {
-			continue
-		}
-		pos := mmokit.Get[mmokit.Position](entity)
-		inv := mmokit.Get[gamecomp.Inventory](entity)
-		if pos == nil || inv == nil {
-			continue
-		}
-
-		if !s.nearStation(pos, stationPositions, sellRange2) {
-			s.sendTransferResult(t.ConnID, false, "Not near a station", t.ItemID, 0, t.Deposit)
-			continue
-		}
-
-		if t.Deposit {
-			// Cargo -> Bank
-			var have int32
-			if inv.Items != nil {
-				have = inv.Items[t.ItemID]
-			}
-			if have <= 0 {
-				s.sendTransferResult(t.ConnID, false, "No items to deposit", t.ItemID, 0, true)
-				continue
-			}
-			amount := have
-			if t.Amount > 0 && t.Amount < amount {
-				amount = t.Amount
-			}
-			deposited := pdata.DepositToBank(t.ItemID, amount, gw.Config.BankMaxMass)
-			if deposited <= 0 {
-				s.sendTransferResult(t.ConnID, false, "Bank is full", t.ItemID, 0, true)
-				continue
-			}
-			inv.RemoveItem(t.ItemID, deposited)
-			gw.PlayerDB.MarkDirty(username)
-			gw.eng.Log.Log(CatEconomyBank, "bank deposit: player=%s item=%d qty=%d bank_mass=%.1f/%.1f",
-				username, t.ItemID, deposited, pdata.BankTotalMass(), gw.Config.BankMaxMass)
-			s.sendTransferResult(t.ConnID, true, "", t.ItemID, deposited, true)
-			s.sendBankContents(t.ConnID, pdata)
-		} else {
-			// Bank -> Cargo
-			var have int32
-			if pdata.Bank != nil {
-				have = pdata.Bank[t.ItemID]
-			}
-			if have <= 0 {
-				s.sendTransferResult(t.ConnID, false, "No items to withdraw", t.ItemID, 0, false)
-				continue
-			}
-			amount := have
-			if t.Amount > 0 && t.Amount < amount {
-				amount = t.Amount
-			}
-			massPerUnit := item.MassOf(t.ItemID)
-			maxByMass := int32(inv.RemainingMass() / massPerUnit)
-			if amount > maxByMass {
-				amount = maxByMass
-			}
-			if amount <= 0 {
-				s.sendTransferResult(t.ConnID, false, "Cargo is full", t.ItemID, 0, false)
-				continue
-			}
-			withdrawn := pdata.WithdrawFromBank(t.ItemID, amount)
-			inv.AddItem(t.ItemID, withdrawn)
-			gw.PlayerDB.MarkDirty(username)
-			gw.eng.Log.Log(CatEconomyBank, "bank withdraw: player=%s item=%d qty=%d bank_mass=%.1f/%.1f",
-				username, t.ItemID, withdrawn, pdata.BankTotalMass(), gw.Config.BankMaxMass)
-			s.sendTransferResult(t.ConnID, true, "", t.ItemID, withdrawn, false)
-			s.sendBankContents(t.ConnID, pdata)
-		}
+// processTransferFor handles a single cargo<->bank transfer, dispatched
+// from the InventoryTransfer input handler via Commands.Defer.
+func (gw *GameWorld) processTransferFor(t PendingTransfer) {
+	sess := gw.Players.ByConnID(t.ConnID)
+	if sess == nil || sess.Username == "" {
+		return
 	}
-}
+	username := sess.Username
+	pdata := gw.PlayerDB.GetOrCreate(username)
 
-// processDockedTransfer handles cargo<->bank transfers for docked players using PlayerDB.
-func (s *EconomySystem) processDockedTransfer(t PendingTransfer, username string, pdata *PlayerData) {
-	gw := s.gw
-	if pdata.Cargo == nil {
-		pdata.Cargo = make(map[uint32]int32)
+	// Docked players: operate on PlayerDB cargo directly.
+	if sess.State == StateDocked {
+		gw.processDockedTransfer(t, username, pdata)
+		return
+	}
+
+	entity := mmokit.EntityFromECS(gw.stage, sess.Entity)
+	if !entity.Alive() {
+		return
+	}
+	pos := mmokit.Get[mmokit.Position](entity)
+	inv := mmokit.Get[gamecomp.Inventory](entity)
+	if pos == nil || inv == nil {
+		return
+	}
+
+	// Collect station positions for nearness check (each call walks the
+	// per-cell station list; cheap and avoids per-tick state).
+	stationPositions := gw.collectStationPositions()
+	sellRange := float64(gw.Config.SellRange)
+	sellRange2 := sellRange * sellRange
+
+	if !nearStationPos(pos, stationPositions, sellRange2) {
+		gw.sendTransferResult(t.ConnID, false, "Not near a station", t.ItemID, 0, t.Deposit)
+		return
 	}
 
 	if t.Deposit {
-		// pdata.Cargo -> Bank
-		have := pdata.Cargo[t.ItemID]
+		// Cargo -> Bank
+		var have int32
+		if inv.Items != nil {
+			have = inv.Items[t.ItemID]
+		}
 		if have <= 0 {
-			s.sendTransferResult(t.ConnID, false, "No items to deposit", t.ItemID, 0, true)
+			gw.sendTransferResult(t.ConnID, false, "No items to deposit", t.ItemID, 0, true)
 			return
 		}
 		amount := have
@@ -153,7 +78,92 @@ func (s *EconomySystem) processDockedTransfer(t PendingTransfer, username string
 		}
 		deposited := pdata.DepositToBank(t.ItemID, amount, gw.Config.BankMaxMass)
 		if deposited <= 0 {
-			s.sendTransferResult(t.ConnID, false, "Bank is full", t.ItemID, 0, true)
+			gw.sendTransferResult(t.ConnID, false, "Bank is full", t.ItemID, 0, true)
+			return
+		}
+		inv.RemoveItem(t.ItemID, deposited)
+		gw.PlayerDB.MarkDirty(username)
+		gw.eng.Log.Log(CatEconomyBank, "bank deposit: player=%s item=%d qty=%d bank_mass=%.1f/%.1f",
+			username, t.ItemID, deposited, pdata.BankTotalMass(), gw.Config.BankMaxMass)
+		gw.sendTransferResult(t.ConnID, true, "", t.ItemID, deposited, true)
+		gw.SendBankContents(t.ConnID, pdata)
+	} else {
+		// Bank -> Cargo
+		var have int32
+		if pdata.Bank != nil {
+			have = pdata.Bank[t.ItemID]
+		}
+		if have <= 0 {
+			gw.sendTransferResult(t.ConnID, false, "No items to withdraw", t.ItemID, 0, false)
+			return
+		}
+		amount := have
+		if t.Amount > 0 && t.Amount < amount {
+			amount = t.Amount
+		}
+		massPerUnit := item.MassOf(t.ItemID)
+		maxByMass := int32(inv.RemainingMass() / massPerUnit)
+		if amount > maxByMass {
+			amount = maxByMass
+		}
+		if amount <= 0 {
+			gw.sendTransferResult(t.ConnID, false, "Cargo is full", t.ItemID, 0, false)
+			return
+		}
+		withdrawn := pdata.WithdrawFromBank(t.ItemID, amount)
+		inv.AddItem(t.ItemID, withdrawn)
+		gw.PlayerDB.MarkDirty(username)
+		gw.eng.Log.Log(CatEconomyBank, "bank withdraw: player=%s item=%d qty=%d bank_mass=%.1f/%.1f",
+			username, t.ItemID, withdrawn, pdata.BankTotalMass(), gw.Config.BankMaxMass)
+		gw.sendTransferResult(t.ConnID, true, "", t.ItemID, withdrawn, false)
+		gw.SendBankContents(t.ConnID, pdata)
+	}
+}
+
+// collectStationPositions returns the positions of every station entity
+// currently in this cell. Walks the ECS each call — cheap relative to
+// the per-tick query and keeps the helper stateless.
+func (gw *GameWorld) collectStationPositions() []mmokit.Position {
+	var out []mmokit.Position
+	mmokit.ForEach2[gamecomp.Station, mmokit.Position](gw.stage, func(_ mmokit.Entity, _ *gamecomp.Station, pos *mmokit.Position) {
+		out = append(out, *pos)
+	})
+	return out
+}
+
+// nearStationPos is the pure helper consumed by both the transfer path
+// and any future caller that needs station-proximity validation.
+func nearStationPos(pos *mmokit.Position, stations []mmokit.Position, range2 float64) bool {
+	for _, sp := range stations {
+		dx := float64(pos.X - sp.X)
+		dy := float64(pos.Y - sp.Y)
+		if dx*dx+dy*dy <= range2 {
+			return true
+		}
+	}
+	return false
+}
+
+// processDockedTransfer handles cargo<->bank transfers for docked players using PlayerDB.
+func (gw *GameWorld) processDockedTransfer(t PendingTransfer, username string, pdata *PlayerData) {
+	if pdata.Cargo == nil {
+		pdata.Cargo = make(map[uint32]int32)
+	}
+
+	if t.Deposit {
+		// pdata.Cargo -> Bank
+		have := pdata.Cargo[t.ItemID]
+		if have <= 0 {
+			gw.sendTransferResult(t.ConnID, false, "No items to deposit", t.ItemID, 0, true)
+			return
+		}
+		amount := have
+		if t.Amount > 0 && t.Amount < amount {
+			amount = t.Amount
+		}
+		deposited := pdata.DepositToBank(t.ItemID, amount, gw.Config.BankMaxMass)
+		if deposited <= 0 {
+			gw.sendTransferResult(t.ConnID, false, "Bank is full", t.ItemID, 0, true)
 			return
 		}
 		pdata.Cargo[t.ItemID] -= deposited
@@ -162,8 +172,8 @@ func (s *EconomySystem) processDockedTransfer(t PendingTransfer, username string
 		}
 		gw.PlayerDB.MarkDirty(username)
 		gw.eng.Log.Log(CatEconomyBank, "bank deposit (docked): player=%s item=%d qty=%d", username, t.ItemID, deposited)
-		s.sendTransferResult(t.ConnID, true, "", t.ItemID, deposited, true)
-		s.sendBankContents(t.ConnID, pdata)
+		gw.sendTransferResult(t.ConnID, true, "", t.ItemID, deposited, true)
+		gw.SendBankContents(t.ConnID, pdata)
 	} else {
 		// Bank -> pdata.Cargo
 		var have int32
@@ -171,7 +181,7 @@ func (s *EconomySystem) processDockedTransfer(t PendingTransfer, username string
 			have = pdata.Bank[t.ItemID]
 		}
 		if have <= 0 {
-			s.sendTransferResult(t.ConnID, false, "No items to withdraw", t.ItemID, 0, false)
+			gw.sendTransferResult(t.ConnID, false, "No items to withdraw", t.ItemID, 0, false)
 			return
 		}
 		amount := have
@@ -189,36 +199,19 @@ func (s *EconomySystem) processDockedTransfer(t PendingTransfer, username string
 			}
 		}
 		if amount <= 0 {
-			s.sendTransferResult(t.ConnID, false, "Cargo is full", t.ItemID, 0, false)
+			gw.sendTransferResult(t.ConnID, false, "Cargo is full", t.ItemID, 0, false)
 			return
 		}
 		withdrawn := pdata.WithdrawFromBank(t.ItemID, amount)
 		pdata.Cargo[t.ItemID] += withdrawn
 		gw.PlayerDB.MarkDirty(username)
 		gw.eng.Log.Log(CatEconomyBank, "bank withdraw (docked): player=%s item=%d qty=%d", username, t.ItemID, withdrawn)
-		s.sendTransferResult(t.ConnID, true, "", t.ItemID, withdrawn, false)
-		s.sendBankContents(t.ConnID, pdata)
+		gw.sendTransferResult(t.ConnID, true, "", t.ItemID, withdrawn, false)
+		gw.SendBankContents(t.ConnID, pdata)
 	}
 }
 
-func (s *EconomySystem) stationRange2() float64 {
-	r := float64(s.gw.Config.SellRange)
-	return r * r
-}
-
-func (s *EconomySystem) nearStation(pos *mmokit.Position, stations []mmokit.Position, range2 float64) bool {
-	for _, sp := range stations {
-		dx := float64(pos.X - sp.X)
-		dy := float64(pos.Y - sp.Y)
-		if dx*dx+dy*dy <= range2 {
-			return true
-		}
-	}
-	return false
-}
-
-func (s *EconomySystem) sendTransferResult(connID uint32, success bool, reason string, itemID uint32, qty int32, deposit bool) {
-	gw := s.gw
+func (gw *GameWorld) sendTransferResult(connID uint32, success bool, reason string, itemID uint32, qty int32, deposit bool) {
 	mmokit.SendEvent(gw.stage, connID, &TransferResult{
 		Success:  success,
 		Reason:   reason,
@@ -226,10 +219,6 @@ func (s *EconomySystem) sendTransferResult(connID uint32, success bool, reason s
 		Quantity: qty,
 		Deposit:  deposit,
 	})
-}
-
-func (s *EconomySystem) sendBankContents(connID uint32, pdata *PlayerData) {
-	s.gw.SendBankContents(connID, pdata)
 }
 
 // SendBankContents emits a typed BankContents event to one connection,

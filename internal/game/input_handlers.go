@@ -274,11 +274,14 @@ func RegisterInputs(mmo *mmokit.Process) {
 		if conn == nil {
 			return
 		}
-		mmokit.Enqueue(gw.Queue, PendingTransfer{
+		req := PendingTransfer{
 			ConnID:  conn.ConnID,
 			ItemID:  msg.ItemID,
 			Amount:  msg.Quantity,
 			Deposit: msg.Deposit,
+		}
+		gw.stage.Commands().Defer(func() {
+			gw.processTransferFor(req)
 		})
 	})
 
