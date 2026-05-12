@@ -6,42 +6,31 @@ import (
 	"github.com/zenion/mmoserver/pkg/mmokit"
 )
 
-// EquipmentSystem processes equip/unequip requests and applies stat changes.
-type EquipmentSystem struct {
-	mmokit.SystemBase
-	gw *GameWorld
-}
+// Equip/unequip used to be a per-tick System draining gw.Queue —
+// it is now a set of GameWorld methods dispatched directly from the
+// Equip input handler via stage.Commands().Defer. The system shell
+// is gone; only the request entry point + helpers remain in this
+// file. Helpers are grouped here because they only serve the equip
+// flow.
 
-func (s *EquipmentSystem) Init() {
-	s.gw = mmokit.State[GameWorld](s.Stage())
-}
-
-func (s *EquipmentSystem) Update(dt float32) {
-	gw := s.gw
-
-	for _, req := range mmokit.Drain[PendingEquipRequest](gw.Queue) {
-		s.processRequest(req)
-	}
-}
-
-func (s *EquipmentSystem) processRequest(req PendingEquipRequest) {
-	gw := s.gw
+// processEquipRequest is the entry point dispatched by the Equip
+// input handler via Commands.Defer. Routes by player state.
+func (gw *GameWorld) processEquipRequest(req PendingEquipRequest) {
 	sess := gw.Players.ByConnID(req.ConnID)
 	if sess == nil {
 		return
 	}
 	switch sess.State {
 	case mmokit.StateActive:
-		s.processActiveRequest(sess, req)
+		gw.processActiveEquipRequest(sess, req)
 	case StateDocked:
-		s.processDockedRequest(sess, req)
+		gw.processDockedEquipRequest(sess, req)
 	}
 }
 
-// processActiveRequest handles in-flight equip/unequip via the ECS
+// processActiveEquipRequest handles in-flight equip/unequip via the ECS
 // Inventory + Equipment components on the ship entity.
-func (s *EquipmentSystem) processActiveRequest(sess *mmokit.PlayerSession, req PendingEquipRequest) {
-	gw := s.gw
+func (gw *GameWorld) processActiveEquipRequest(sess *mmokit.PlayerSession, req PendingEquipRequest) {
 	entity := mmokit.EntityFromECS(gw.stage, sess.Entity)
 	if !entity.Alive() {
 		return
@@ -53,13 +42,13 @@ func (s *EquipmentSystem) processActiveRequest(sess *mmokit.PlayerSession, req P
 	}
 
 	if req.ItemID == 0 {
-		s.unequip(req.ConnID, entity, eq, inv, req.Slot)
+		gw.unequip(req.ConnID, entity, eq, inv, req.Slot)
 	} else {
-		s.equip(req.ConnID, entity, eq, inv, req.ItemID, req.Slot)
+		gw.equip(req.ConnID, entity, eq, inv, req.ItemID, req.Slot)
 	}
 }
 
-// processDockedRequest handles equip/unequip while docked, working
+// processDockedEquipRequest handles equip/unequip while docked, working
 // against pdata.Cargo and pdata.Equipment (the canonical state while
 // docked) and mirroring into the ECS Equipment component so the entity
 // stays consistent. pdata.Cargo is the only authoritative cargo store
@@ -71,8 +60,7 @@ func (s *EquipmentSystem) processActiveRequest(sess *mmokit.PlayerSession, req P
 // deposits to pdata.Bank instead of pdata.Cargo. Lets the player swap
 // gear directly between loadout and bank without round-tripping through
 // cargo.
-func (s *EquipmentSystem) processDockedRequest(sess *mmokit.PlayerSession, req PendingEquipRequest) {
-	gw := s.gw
+func (gw *GameWorld) processDockedEquipRequest(sess *mmokit.PlayerSession, req PendingEquipRequest) {
 	pdata := gw.PlayerDB.GetOrCreate(sess.Username)
 	if pdata.Cargo == nil {
 		pdata.Cargo = make(map[uint32]int32)
@@ -83,29 +71,28 @@ func (s *EquipmentSystem) processDockedRequest(sess *mmokit.PlayerSession, req P
 
 	switch {
 	case req.ItemID == 0 && req.TargetBank:
-		s.unequipDockedToBank(sess, pdata, req.Slot)
+		gw.unequipDockedToBank(sess, pdata, req.Slot)
 	case req.ItemID == 0:
-		s.unequipDocked(sess, pdata, req.Slot)
+		gw.unequipDocked(sess, pdata, req.Slot)
 	case req.TargetBank:
-		s.equipDockedFromBank(sess, pdata, req.ItemID, req.Slot)
+		gw.equipDockedFromBank(sess, pdata, req.ItemID, req.Slot)
 	default:
-		s.equipDocked(sess, pdata, req.ItemID, req.Slot)
+		gw.equipDocked(sess, pdata, req.ItemID, req.Slot)
 	}
 }
 
-func (s *EquipmentSystem) equipDocked(sess *mmokit.PlayerSession, pdata *PlayerData, itemID uint32, slot item.EquipSlot) {
-	gw := s.gw
+func (gw *GameWorld) equipDocked(sess *mmokit.PlayerSession, pdata *PlayerData, itemID uint32, slot item.EquipSlot) {
 	connID := sess.ConnID
 
 	// Validate: item is in cargo
 	if pdata.Cargo[itemID] < 1 {
-		s.sendResult(connID, false, "Item not in cargo", slot, 0, 0)
+		gw.sendEquipResult(connID, false, "Item not in cargo", slot, 0, 0)
 		return
 	}
 
 	def := item.Get(itemID)
 	if def == nil || def.Category != item.CategoryEquipment || !item.SlotCompatible(def.EquipSlot, slot) {
-		s.sendResult(connID, false, "Cannot equip to that slot", slot, 0, 0)
+		gw.sendEquipResult(connID, false, "Cannot equip to that slot", slot, 0, 0)
 		return
 	}
 
@@ -115,7 +102,7 @@ func (s *EquipmentSystem) equipDocked(sess *mmokit.PlayerSession, pdata *PlayerD
 		// Mass = current cargo - newItem (going onto ship) + oldItem (coming off into cargo)
 		newMass := pdata.CargoTotalMass() - def.MassPerUnit + oldDef.MassPerUnit
 		if newMass > gw.Config.MaxCargo {
-			s.sendResult(connID, false, "Cargo full - cannot swap", slot, oldItemID, 0)
+			gw.sendEquipResult(connID, false, "Cargo full - cannot swap", slot, oldItemID, 0)
 			return
 		}
 	}
@@ -134,7 +121,7 @@ func (s *EquipmentSystem) equipDocked(sess *mmokit.PlayerSession, pdata *PlayerD
 	// holds it; ApplyEquipmentStats reads from there at undock time).
 	if entity := mmokit.EntityFromECS(gw.stage, sess.Entity); entity.Alive() {
 		if eq := mmokit.Get[component.Equipment](entity); eq != nil {
-			s.setSlot(eq, slot, itemID)
+			setEquipmentSlot(eq, slot, itemID)
 			gw.ApplyEquipmentStats(entity)
 		}
 	}
@@ -142,25 +129,24 @@ func (s *EquipmentSystem) equipDocked(sess *mmokit.PlayerSession, pdata *PlayerD
 	gw.PlayerDB.MarkDirty(sess.Username)
 
 	gw.eng.Log.Log(CatPlayerEquip, "equip (docked): conn=%d slot=%d item=%d (was %d)", connID, slot, itemID, oldItemID)
-	s.sendResult(connID, true, "", slot, itemID, oldItemID)
-	s.sendBankContents(sess.ConnID, pdata)
+	gw.sendEquipResult(connID, true, "", slot, itemID, oldItemID)
+	gw.SendBankContents(sess.ConnID, pdata)
 }
 
 // equipDockedFromBank pulls itemID out of pdata.Bank, places it in slot,
 // and routes any swapped-out item back to pdata.Bank. Mass check: bank
 // gains (oldItem - newItem) when swapping, must fit BankMaxMass.
-func (s *EquipmentSystem) equipDockedFromBank(sess *mmokit.PlayerSession, pdata *PlayerData, itemID uint32, slot item.EquipSlot) {
-	gw := s.gw
+func (gw *GameWorld) equipDockedFromBank(sess *mmokit.PlayerSession, pdata *PlayerData, itemID uint32, slot item.EquipSlot) {
 	connID := sess.ConnID
 
 	if pdata.Bank[itemID] < 1 {
-		s.sendResult(connID, false, "Item not in bank", slot, 0, 0)
+		gw.sendEquipResult(connID, false, "Item not in bank", slot, 0, 0)
 		return
 	}
 
 	def := item.Get(itemID)
 	if def == nil || def.Category != item.CategoryEquipment || !item.SlotCompatible(def.EquipSlot, slot) {
-		s.sendResult(connID, false, "Cannot equip to that slot", slot, 0, 0)
+		gw.sendEquipResult(connID, false, "Cannot equip to that slot", slot, 0, 0)
 		return
 	}
 
@@ -170,7 +156,7 @@ func (s *EquipmentSystem) equipDockedFromBank(sess *mmokit.PlayerSession, pdata 
 		// New: bank loses newItem (going onto ship), gains oldItem (off ship).
 		newBankMass := pdata.BankTotalMass() - def.MassPerUnit + oldDef.MassPerUnit
 		if gw.Config.BankMaxMass > 0 && newBankMass > gw.Config.BankMaxMass {
-			s.sendResult(connID, false, "Bank full - cannot swap", slot, oldItemID, 0)
+			gw.sendEquipResult(connID, false, "Bank full - cannot swap", slot, oldItemID, 0)
 			return
 		}
 	}
@@ -186,27 +172,26 @@ func (s *EquipmentSystem) equipDockedFromBank(sess *mmokit.PlayerSession, pdata 
 
 	if entity := mmokit.EntityFromECS(gw.stage, sess.Entity); entity.Alive() {
 		if eq := mmokit.Get[component.Equipment](entity); eq != nil {
-			s.setSlot(eq, slot, itemID)
+			setEquipmentSlot(eq, slot, itemID)
 			gw.ApplyEquipmentStats(entity)
 		}
 	}
 
 	gw.PlayerDB.MarkDirty(sess.Username)
 	gw.eng.Log.Log(CatPlayerEquip, "equip from bank: conn=%d slot=%d item=%d (was %d)", connID, slot, itemID, oldItemID)
-	s.sendResult(connID, true, "", slot, itemID, oldItemID)
-	s.sendBankContents(connID, pdata)
+	gw.sendEquipResult(connID, true, "", slot, itemID, oldItemID)
+	gw.SendBankContents(connID, pdata)
 }
 
 // unequipDockedToBank moves the slot's item directly to pdata.Bank
 // instead of pdata.Cargo. Mass check: bank gains def.MassPerUnit, must
 // fit BankMaxMass.
-func (s *EquipmentSystem) unequipDockedToBank(sess *mmokit.PlayerSession, pdata *PlayerData, slot item.EquipSlot) {
-	gw := s.gw
+func (gw *GameWorld) unequipDockedToBank(sess *mmokit.PlayerSession, pdata *PlayerData, slot item.EquipSlot) {
 	connID := sess.ConnID
 
 	itemID := equipmentSaveSlot(&pdata.Equipment, slot)
 	if itemID == 0 {
-		s.sendResult(connID, false, "Slot is empty", slot, 0, 0)
+		gw.sendEquipResult(connID, false, "Slot is empty", slot, 0, 0)
 		return
 	}
 
@@ -214,7 +199,7 @@ func (s *EquipmentSystem) unequipDockedToBank(sess *mmokit.PlayerSession, pdata 
 	if def != nil && gw.Config.BankMaxMass > 0 {
 		newBankMass := pdata.BankTotalMass() + def.MassPerUnit
 		if newBankMass > gw.Config.BankMaxMass {
-			s.sendResult(connID, false, "Bank full", slot, itemID, 0)
+			gw.sendEquipResult(connID, false, "Bank full", slot, itemID, 0)
 			return
 		}
 	}
@@ -224,24 +209,23 @@ func (s *EquipmentSystem) unequipDockedToBank(sess *mmokit.PlayerSession, pdata 
 
 	if entity := mmokit.EntityFromECS(gw.stage, sess.Entity); entity.Alive() {
 		if eq := mmokit.Get[component.Equipment](entity); eq != nil {
-			s.setSlot(eq, slot, 0)
+			setEquipmentSlot(eq, slot, 0)
 			gw.ApplyEquipmentStats(entity)
 		}
 	}
 
 	gw.PlayerDB.MarkDirty(sess.Username)
 	gw.eng.Log.Log(CatPlayerEquip, "unequip to bank: conn=%d slot=%d item=%d", connID, slot, itemID)
-	s.sendResult(connID, true, "", slot, 0, itemID)
-	s.sendBankContents(connID, pdata)
+	gw.sendEquipResult(connID, true, "", slot, 0, itemID)
+	gw.SendBankContents(connID, pdata)
 }
 
-func (s *EquipmentSystem) unequipDocked(sess *mmokit.PlayerSession, pdata *PlayerData, slot item.EquipSlot) {
-	gw := s.gw
+func (gw *GameWorld) unequipDocked(sess *mmokit.PlayerSession, pdata *PlayerData, slot item.EquipSlot) {
 	connID := sess.ConnID
 
 	itemID := equipmentSaveSlot(&pdata.Equipment, slot)
 	if itemID == 0 {
-		s.sendResult(connID, false, "Slot is empty", slot, 0, 0)
+		gw.sendEquipResult(connID, false, "Slot is empty", slot, 0, 0)
 		return
 	}
 
@@ -249,7 +233,7 @@ func (s *EquipmentSystem) unequipDocked(sess *mmokit.PlayerSession, pdata *Playe
 	if def != nil {
 		newMass := pdata.CargoTotalMass() + def.MassPerUnit
 		if newMass > gw.Config.MaxCargo {
-			s.sendResult(connID, false, "Cargo full", slot, itemID, 0)
+			gw.sendEquipResult(connID, false, "Cargo full", slot, itemID, 0)
 			return
 		}
 	}
@@ -259,7 +243,7 @@ func (s *EquipmentSystem) unequipDocked(sess *mmokit.PlayerSession, pdata *Playe
 
 	if entity := mmokit.EntityFromECS(gw.stage, sess.Entity); entity.Alive() {
 		if eq := mmokit.Get[component.Equipment](entity); eq != nil {
-			s.setSlot(eq, slot, 0)
+			setEquipmentSlot(eq, slot, 0)
 			gw.ApplyEquipmentStats(entity)
 		}
 	}
@@ -267,17 +251,8 @@ func (s *EquipmentSystem) unequipDocked(sess *mmokit.PlayerSession, pdata *Playe
 	gw.PlayerDB.MarkDirty(sess.Username)
 
 	gw.eng.Log.Log(CatPlayerEquip, "unequip (docked): conn=%d slot=%d item=%d", connID, slot, itemID)
-	s.sendResult(connID, true, "", slot, 0, itemID)
-	s.sendBankContents(sess.ConnID, pdata)
-}
-
-// sendBankContents notifies the client that bank/cargo state has changed,
-// reusing EconomySystem's sender via the GameWorld's wired Settlement
-// machinery. Goes through the same BankContents typed-event path the bank
-// UI already listens for.
-func (s *EquipmentSystem) sendBankContents(connID uint32, pdata *PlayerData) {
-	gw := s.gw
-	gw.SendBankContents(connID, pdata)
+	gw.sendEquipResult(connID, true, "", slot, 0, itemID)
+	gw.SendBankContents(sess.ConnID, pdata)
 }
 
 // equipmentSaveSlot reads the slot value from a pdata.Equipment.
@@ -309,32 +284,30 @@ func setEquipmentSaveSlot(eq *EquipmentSave, slot item.EquipSlot, itemID uint32)
 	}
 }
 
-func (s *EquipmentSystem) equip(connID uint32, entity mmokit.Entity, eq *component.Equipment, inv *component.Inventory, itemID uint32, slot item.EquipSlot) {
-	gw := s.gw
-
+func (gw *GameWorld) equip(connID uint32, entity mmokit.Entity, eq *component.Equipment, inv *component.Inventory, itemID uint32, slot item.EquipSlot) {
 	// Validate the item exists in cargo
 	have := inv.Items[itemID]
 	if have < 1 {
-		s.sendResult(connID, false, "Item not in cargo", slot, 0, 0)
+		gw.sendEquipResult(connID, false, "Item not in cargo", slot, 0, 0)
 		return
 	}
 
 	// Validate it's equipment for the right slot
 	def := item.Get(itemID)
 	if def == nil || def.Category != item.CategoryEquipment || !item.SlotCompatible(def.EquipSlot, slot) {
-		s.sendResult(connID, false, "Cannot equip to that slot", slot, 0, 0)
+		gw.sendEquipResult(connID, false, "Cannot equip to that slot", slot, 0, 0)
 		return
 	}
 
 	// Get currently equipped item in this slot
-	oldItemID := s.getSlot(eq, slot)
+	oldItemID := equipmentSlot(eq, slot)
 
 	// If swapping: check that the old item can fit in cargo after removing the new one
 	if oldItemID != 0 {
 		oldDef := item.Get(oldItemID)
 		newMass := inv.TotalMass() - def.MassPerUnit + oldDef.MassPerUnit
 		if newMass > inv.MaxMass {
-			s.sendResult(connID, false, "Cargo full - cannot swap", slot, oldItemID, 0)
+			gw.sendEquipResult(connID, false, "Cargo full - cannot swap", slot, oldItemID, 0)
 			return
 		}
 	}
@@ -344,7 +317,7 @@ func (s *EquipmentSystem) equip(connID uint32, entity mmokit.Entity, eq *compone
 	if oldItemID != 0 {
 		inv.AddItem(oldItemID, 1)
 	}
-	s.setSlot(eq, slot, itemID)
+	setEquipmentSlot(eq, slot, itemID)
 
 	// Recalculate passive stats
 	gw.ApplyEquipmentStats(entity)
@@ -359,37 +332,36 @@ func (s *EquipmentSystem) equip(connID uint32, entity mmokit.Entity, eq *compone
 	}
 
 	gw.eng.Log.Log(CatPlayerEquip, "equip: conn=%d slot=%d item=%d (was %d)", connID, slot, itemID, oldItemID)
-	s.sendResult(connID, true, "", slot, itemID, oldItemID)
+	gw.sendEquipResult(connID, true, "", slot, itemID, oldItemID)
 }
 
-func (s *EquipmentSystem) unequip(connID uint32, entity mmokit.Entity, eq *component.Equipment, inv *component.Inventory, slot item.EquipSlot) {
-	gw := s.gw
-
-	itemID := s.getSlot(eq, slot)
+func (gw *GameWorld) unequip(connID uint32, entity mmokit.Entity, eq *component.Equipment, inv *component.Inventory, slot item.EquipSlot) {
+	itemID := equipmentSlot(eq, slot)
 	if itemID == 0 {
-		s.sendResult(connID, false, "Slot is empty", slot, 0, 0)
+		gw.sendEquipResult(connID, false, "Slot is empty", slot, 0, 0)
 		return
 	}
 
 	// Check cargo has room
 	def := item.Get(itemID)
 	if def != nil && inv.RemainingMass() < def.MassPerUnit {
-		s.sendResult(connID, false, "Cargo full", slot, itemID, 0)
+		gw.sendEquipResult(connID, false, "Cargo full", slot, itemID, 0)
 		return
 	}
 
 	// Move to cargo
-	s.setSlot(eq, slot, 0)
+	setEquipmentSlot(eq, slot, 0)
 	inv.AddItem(itemID, 1)
 
 	// Recalculate passive stats
 	gw.ApplyEquipmentStats(entity)
 
 	gw.eng.Log.Log(CatPlayerEquip, "unequip: conn=%d slot=%d item=%d", connID, slot, itemID)
-	s.sendResult(connID, true, "", slot, 0, itemID)
+	gw.sendEquipResult(connID, true, "", slot, 0, itemID)
 }
 
-func (s *EquipmentSystem) getSlot(eq *component.Equipment, slot item.EquipSlot) uint32 {
+// equipmentSlot reads itemID from an ECS Equipment slot.
+func equipmentSlot(eq *component.Equipment, slot item.EquipSlot) uint32 {
 	switch slot {
 	case item.SlotWeapon1:
 		return eq.Weapon1
@@ -403,7 +375,8 @@ func (s *EquipmentSystem) getSlot(eq *component.Equipment, slot item.EquipSlot) 
 	return 0
 }
 
-func (s *EquipmentSystem) setSlot(eq *component.Equipment, slot item.EquipSlot, itemID uint32) {
+// setEquipmentSlot writes itemID into an ECS Equipment slot.
+func setEquipmentSlot(eq *component.Equipment, slot item.EquipSlot, itemID uint32) {
 	switch slot {
 	case item.SlotWeapon1:
 		eq.Weapon1 = itemID
@@ -416,8 +389,7 @@ func (s *EquipmentSystem) setSlot(eq *component.Equipment, slot item.EquipSlot, 
 	}
 }
 
-func (s *EquipmentSystem) sendResult(connID uint32, success bool, reason string, slot item.EquipSlot, equippedID, previousID uint32) {
-	gw := s.gw
+func (gw *GameWorld) sendEquipResult(connID uint32, success bool, reason string, slot item.EquipSlot, equippedID, previousID uint32) {
 	mmokit.SendEvent(gw.stage, connID, &EquipResult{
 		Success:        success,
 		Reason:         reason,

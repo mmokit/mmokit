@@ -223,8 +223,8 @@ func (gw *GameWorld) sendTransferResult(connID uint32, success bool, reason stri
 
 // SendBankContents emits a typed BankContents event to one connection,
 // snapshotting the player's bank, docked cargo, and currency balances.
-// Used by EconomySystem and EquipmentSystem (docked equip changes touch
-// pdata.Cargo, so the client needs the refreshed view).
+// Used by the bank-transfer path and the docked equip path (docked equip
+// changes touch pdata.Cargo, so the client needs the refreshed view).
 func (gw *GameWorld) SendBankContents(connID uint32, pdata *PlayerData) {
 	var items []InventoryItem
 	for id, qty := range pdata.Bank {

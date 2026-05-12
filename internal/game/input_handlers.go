@@ -303,11 +303,14 @@ func RegisterInputs(mmo *mmokit.Process) {
 		if conn == nil {
 			return
 		}
-		mmokit.Enqueue(gw.Queue, PendingEquipRequest{
+		req := PendingEquipRequest{
 			ConnID:     conn.ConnID,
 			ItemID:     msg.ItemID,
 			Slot:       item.EquipSlot(msg.Slot),
 			TargetBank: msg.TargetBank,
+		}
+		gw.stage.Commands().Defer(func() {
+			gw.processEquipRequest(req)
 		})
 	})
 
