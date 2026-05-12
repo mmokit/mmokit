@@ -257,25 +257,6 @@ func (gw *GameWorld) postFlush() {
 		gw.SpawnLootCrate(drop.X, drop.Y, drop.Items)
 	}
 
-	// Apply Dormant to entities that transitioned to StateDead this tick.
-	// Done here (post-FlushRemovals, world unlocked) instead of in the
-	// dieKeepEntity action because that action runs inside the death
-	// observer's locked-world query iteration.
-	for _, m := range mmokit.Drain[PendingDeathMarker](gw.Queue) {
-		sess := gw.Players.ByConnID(m.ConnID)
-		if sess == nil {
-			continue
-		}
-		entity := mmokit.EntityFromECS(gw.stage, sess.Entity)
-		if !entity.Alive() {
-			continue
-		}
-		if mmokit.Has[mmokit.Dormant](entity) {
-			continue
-		}
-		mmokit.Set(entity, mmokit.Dormant{})
-	}
-
 	// Process respawn requests (after removals so new entities are clean)
 	gw.processRespawns()
 

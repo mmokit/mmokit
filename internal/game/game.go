@@ -140,18 +140,21 @@ func NewGameWorld(base *mmokit.Stage, cfg *GameConfig, playerDB *PlayerRepo, cel
 		pdata.CellY = gw.Config.StationCell.CellY
 		gw.PlayerDB.MarkDirty(s.Username)
 		// Zero velocity + shield NOW (safe — existing component writes,
-		// not structural changes). Dormant is added in postFlush via
-		// PendingDeathMarker because the action runs inside the death
-		// observer's locked-world iteration and `mmokit.Set(Dormant)`
-		// would trip the ark locked-world check (component add =
-		// archetype change = structural).
+		// not structural changes).
 		if v := mmokit.Get[mmokit.Velocity](entity); v != nil {
 			v.X, v.Y = 0, 0
 		}
 		if sh := mmokit.Get[gamecomp.Shield](entity); sh != nil {
 			sh.Current = 0
 		}
-		mmokit.Enqueue(gw.Queue, PendingDeathMarker{ConnID: s.ConnID})
+		// Add the Dormant marker via Commands so it lands at the next
+		// system flush boundary (engine.Hooks.AfterSystem). Cannot call
+		// mmokit.Set(entity, Dormant{}) directly here — this action runs
+		// inside the death observer's locked-world query iteration, and
+		// component add is a structural archetype change that would panic
+		// against the ark locked-world check. Commands defers the mutation
+		// to a safe phase without the queue+drain bookkeeping.
+		mmokit.AddComponent(gw.stage.Commands(), entity, mmokit.Dormant{})
 	}
 
 	// removeFromWorldDead is the StateDead→StateTransferring action used
