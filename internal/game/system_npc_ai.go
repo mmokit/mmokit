@@ -313,25 +313,19 @@ func (s *NPCAISystem) findNearestEnemy(self mmokit.Entity,
 ) ecs.Entity {
 	var best ecs.Entity
 	bestDist2 := radius * radius
-	world := s.gw.stage.ECSWorld()
-	filter := ecs.NewFilter2[mmokit.Position, mmokit.EntityKind](world)
-	q := filter.Query()
-	defer q.Close()
-	for q.Next() {
-		entE := q.Entity()
+	mmokit.ForEach2(s.gw.stage, func(e mmokit.Entity, ppos *mmokit.Position, kind *mmokit.EntityKind) {
+		entE := e.Handle()
 		if entE == self.Handle() {
-			continue
+			return
 		}
-		ppos, kind := q.Get()
 		if kind.Type != gamecomp.KindShip {
-			continue
+			return
 		}
-		e := mmokit.EntityFromECS(s.gw.stage, entE)
 		if mmokit.Has[mmokit.Dormant](e) {
-			continue
+			return
 		}
 		if h := mmokit.Get[gamecomp.Health](e); h == nil || h.Current <= 0 {
-			continue
+			return
 		}
 		dx, dy := ppos.X-pos.X, ppos.Y-pos.Y
 		d2 := dx*dx + dy*dy
@@ -339,7 +333,7 @@ func (s *NPCAISystem) findNearestEnemy(self mmokit.Entity,
 			bestDist2 = d2
 			best = entE
 		}
-	}
+	})
 	return best
 }
 
