@@ -30,12 +30,6 @@ type NPCAISystem struct {
 		Rot  *mmokit.Rotation
 		Lock *gamecomp.TargetLock
 	}]
-	// pendingLeashClears holds entities that finished leashing this tick.
-	// Drained after the Update query iteration completes — Map1.Remove is
-	// a structural archetype change and would panic if invoked inside the
-	// locked-world query. Same pattern as dieKeepEntity →
-	// PendingDeathMarker (see commit 6a2a01a).
-	pendingLeashClears []ecs.Entity
 }
 
 func (s *NPCAISystem) Init() {
@@ -74,21 +68,6 @@ func (s *NPCAISystem) Update(dt float32) {
 		case AIStateEngage:
 			s.tickEngage(self, ai, pos, vel, rot, lock, now, dt)
 		}
-	}
-
-	// Drain leash clears now that the query has released the world lock.
-	if len(s.pendingLeashClears) > 0 {
-		w := s.Stage().ECSWorld()
-		leashMap := ecs.NewMap1[gamecomp.Leashing](w)
-		for _, h := range s.pendingLeashClears {
-			if h == (ecs.Entity{}) {
-				continue
-			}
-			if leashMap.HasAll(h) {
-				leashMap.Remove(h)
-			}
-		}
-		s.pendingLeashClears = s.pendingLeashClears[:0]
 	}
 }
 
@@ -300,14 +279,14 @@ func (s *NPCAISystem) tickLeash(self mmokit.Entity, ai *gamecomp.NPCAI,
 	anchor := mmokit.Get[gamecomp.POIAnchor](self)
 	if anchor == nil || anchor.POINetID == 0 {
 		// No anchor (test NPC) — clear leash.
-		s.pendingLeashClears = append(s.pendingLeashClears, self.Handle())
+		mmokit.RemoveComponent[gamecomp.Leashing](s.Commands(), self)
 		ai.State = AIStateIdle
 		vel.X, vel.Y = 0, 0
 		return
 	}
 	poiE := mmokit.EntityByNetID(s.gw.stage, anchor.POINetID)
 	if !poiE.Alive() {
-		s.pendingLeashClears = append(s.pendingLeashClears, self.Handle())
+		mmokit.RemoveComponent[gamecomp.Leashing](s.Commands(), self)
 		ai.State = AIStateIdle
 		vel.X, vel.Y = 0, 0
 		return
@@ -320,7 +299,7 @@ func (s *NPCAISystem) tickLeash(self mmokit.Entity, ai *gamecomp.NPCAI,
 	dx, dy := poiPos.X-pos.X, poiPos.Y-pos.Y
 	dist := float32(math.Sqrt(float64(dx*dx + dy*dy)))
 	if dist < poi.AnchorRadius {
-		s.pendingLeashClears = append(s.pendingLeashClears, self.Handle())
+		mmokit.RemoveComponent[gamecomp.Leashing](s.Commands(), self)
 		ai.State = AIStateIdle
 		vel.X, vel.Y = 0, 0
 		if h := mmokit.Get[gamecomp.Health](self); h != nil {
