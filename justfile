@@ -204,3 +204,8 @@ admin-test:
 # svelte-check (typecheck + vite-plugin-svelte warnings as errors)
 admin-typecheck:
     cd web-admin && bun install --frozen-lockfile && bun run typecheck
+
+# Enforces the no-ark-in-game architectural invariant — fails if any
+# non-exempted file in internal/game/ imports github.com/mlange-42/ark/ecs.
+lint-no-ark:
+    ./scripts/no_ark_in_game.sh

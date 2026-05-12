@@ -261,10 +261,49 @@ For systems with constructor arguments (closures, channels, prebuilt deps), writ
 
 ### ECS (Ark v0.7.1)
 
-- `Map1[A]` through `Map12[...]` for entity creation and component access
+Ark is the storage engine. `pkg/system/`, `pkg/universe/`, `pkg/engine/` import it directly (perf-critical framework code). **`internal/game/` must NOT import `github.com/mlange-42/ark/ecs`** — game code always goes through mmokit's wrappers. The two exceptions are `internal/game/var_tail_bindings.go` and `internal/game/entity_kinds.go`, which implement framework-binding glue and need `*ecs.Map1` / `*ecs.World`. Everything else uses the wrappers described below.
+
+The `just lint-no-ark` recipe enforces the invariant — it fails the build if any non-exempted file in `internal/game/` reimports ark.
+
+- `Map1[A]` through `Map12[...]` for entity creation and component access (framework code only)
 - Use `HasAll()` not `Has()` to check components
 - `world.Alive(entity)` before accessing removed entities
-- Never spawn/remove entities during query iteration — collect in a slice, process after
+- Never spawn/remove entities during query iteration — use `Commands` (below) for deferred mutations
+
+### Deferred ECS mutations (Commands)
+
+Every structural ECS mutation from game code goes through the per-stage `Commands` buffer. Inside a system's `Update`, queue ops via `s.Commands()`; the engine flushes after each system's Update (via `engine.Hooks.AfterSystem`), so ops queued in System N are visible to System N+1 in the same tick. Outside systems (hooks, input handlers, command verbs), reach the buffer via `stage.Commands()`.
+
+API surface (in `pkg/mmokit`):
+
+- `s.Commands().Despawn(handle)` — queue entity destruction. The entity is removed at the next flush.
+- `s.Commands().Defer(func(){...})` — escape hatch for multi-step game-action logic that doesn't fit a single ECS primitive. Use for things like `SpawnLootCrate`, `startDockingFor`, `executeRespawnFor`.
+- `mmokit.AddComponent(s.Commands(), e, val)` — queue component add/overwrite (T inferred from val).
+- `mmokit.RemoveComponent[T](s.Commands(), e)` — queue component removal (T explicit).
+
+**`mmokit.Set[T]` vs `Commands.AddComponent`:** `Set` is IMMEDIATE and can only be called from non-query contexts (post-flush handlers, command verbs, hooks). Inside a `System.Update` loop, always use `Commands` — `Set` would panic against ark's locked-world rule. The deferred form's closure does the `world.Alive` check at flush time, so AddComponent-after-Despawn within the same batch is safe.
+
+The `Defer` closure runs at the next system boundary. Multi-step game-action helpers (e.g. `gw.SpawnLootCrate(x, y, items)`) are invoked from inside a Defer:
+
+```go
+gw.stage.Commands().Defer(func() { gw.SpawnLootCrate(x, y, items) })
+```
+
+The `TickQueue` / `mmokit.Enqueue` / `mmokit.Drain` / `mmokit.Peek` pattern that was used for `Pending*`-typed game-action queues is GONE. All those types were migrated to typed `Commands` ops (`AddComponent`/`RemoveComponent`/`Despawn`) or to `Defer(closure)`.
+
+### Query wrappers
+
+For one-shot queries (existence checks, find-one lookups, ad-hoc iterations), use the mmokit wrappers — all auto-close:
+
+- `mmokit.Any[T](stage) bool` — existence check.
+- `mmokit.FindOne[T](stage) (Entity, bool)` — first matching entity.
+- `mmokit.ForEach1/2/3[T](stage, fn)` — iterate every entity with T (and T2/T3).
+
+The pre-existing `mmokit.Query[Bundle]` sticky-query pattern is unchanged — it's the right abstraction for systems iterating every tick over a fixed component set. `ForEachN` is the right abstraction for one-shot lookups in helpers / spawn functions / input handlers.
+
+### EntityHandle
+
+Game code uses `mmokit.Entity` (the rich wrapper with `NetID()`, `Stage()`, `Send()`, etc.) for ECS operations. For raw entity handles (e.g. `engine.PlayerSession.Entity` fields, return types from `Stage.SpawnEntity`), use the `mmokit.EntityHandle` type alias instead of importing `ecs.Entity` directly. Both are the same underlying type — `EntityHandle` just lets game code name it without an ark import.
 
 ### Query[T] (mmokit)
 
