@@ -201,11 +201,13 @@ func (gw *GameWorld) processUndocks() {
 			gw.Players.Transition(s, mmokit.StateActive)
 			continue
 		}
-		// Remove Dormant via raw ECS (mmokit has no Remove primitive yet).
-		dormantMap := ecs.NewMap1[mmokit.Dormant](gw.stage.ECSWorld())
-		if dormantMap.HasAll(s.Entity) {
-			dormantMap.Remove(s.Entity)
-		}
+		// Drop Dormant via Commands. processUndocks runs in postFlush
+		// (world unlocked) so a direct ecs.Map.Remove would also be
+		// safe here, but routing through Commands keeps game code off
+		// the raw-ark surface — the engine flushes between systems on
+		// the next tick so the entity is reachable to AoI broadcasts
+		// from that point on, preserving the prior semantics.
+		mmokit.RemoveComponent[mmokit.Dormant](gw.stage.Commands(), entity)
 
 		// Sync pdata.Cargo (which the bank UI mutates while docked) back
 		// into the entity's Inventory so the in-space ship reflects what
