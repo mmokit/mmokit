@@ -114,3 +114,49 @@ func TestAddRemoveComponent_NoopOnDeadEntity(t *testing.T) {
 	// Should not panic.
 	stage.Commands().Flush()
 }
+
+// TestSystemBase_CommandsShortcut verifies s.Commands() returns the
+// same buffer as s.Stage().Commands() and ops queued via the shortcut
+// apply through Stage.TickOne (which mirrors the engine's per-system
+// flush contract).
+func TestSystemBase_CommandsShortcut(t *testing.T) {
+	stage, eng := newTestStage(t)
+	w := stage.ECSWorld()
+
+	mapper := ecs.NewMap2[component.Position, component.NetworkID](w)
+	h := mapper.NewEntity(
+		&component.Position{X: 0, Y: 0},
+		&component.NetworkID{ID: 42},
+	)
+	stage.RegisterLiveNetID(42, h)
+
+	sys := &commandsTestSystem{handle: h}
+	mmokit.WireSystem(sys, w, eng, stage)
+	sys.Init()
+
+	// TickOne runs Update then Flushes — the system's queued AddComponent
+	// should land before TickOne returns.
+	stage.TickOne(sys, 0.05)
+
+	velMap := ecs.NewMap1[component.Velocity](w)
+	if !velMap.HasAll(h) {
+		t.Fatal("system's queued AddComponent did not apply at TickOne")
+	}
+	v := velMap.Get(h)
+	if v.X != 7 || v.Y != 11 {
+		t.Fatalf("Velocity = %+v, want {X:7, Y:11}", *v)
+	}
+}
+
+// Minimal fake system that uses s.Commands() inside Update.
+type commandsTestSystem struct {
+	mmokit.SystemBase
+	handle ecs.Entity
+}
+
+func (s *commandsTestSystem) Init() {}
+
+func (s *commandsTestSystem) Update(dt float32) {
+	e := mmokit.EntityFromECS(s.Stage(), s.handle)
+	mmokit.AddComponent(s.Commands(), e, component.Velocity{X: 7, Y: 11})
+}

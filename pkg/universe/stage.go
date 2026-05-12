@@ -414,6 +414,19 @@ func (b *Stage) Bridge() Bridge { return b.bridge }
 // structural changes that will apply after the current system finishes.
 func (b *Stage) Commands() *Commands { return b.commands }
 
+// TickOne is a test-only helper that runs a single system's Update
+// then flushes the Commands buffer. Mirrors the engine game-loop's
+// per-system contract (sys.Update(dt); commands.Flush()) so unit
+// tests that bypass the full loop see the same mutation visibility.
+//
+// Not for production use — the game loop drives the real flush.
+func (b *Stage) TickOne(sys engine.System, dt float32) {
+	sys.Update(dt)
+	if b.commands != nil {
+		b.commands.Flush()
+	}
+}
+
 // Cell returns this node's cell coordinates.
 func (b *Stage) Cell() CellID { return b.cell }
 

@@ -23,6 +23,14 @@ type SystemBase struct {
 // — never in struct construction).
 func (b *SystemBase) Stage() *universe.Stage { return b.stage }
 
+// Commands returns the per-stage deferred-mutation buffer. Shortcut
+// for s.Stage().Commands(). Use inside Update to queue structural
+// ECS changes — Add/RemoveComponent, Despawn, Defer — that would
+// otherwise panic under ark's locked-world rule. Ops queued by
+// System N are visible to System N+1 in the same tick (the engine
+// game loop flushes via the AfterSystem hook between systems).
+func (b *SystemBase) Commands() *Commands { return b.stage.Commands() }
+
 // InitStage is called by the universe framework after SetDeps. Game code
 // must not call this directly — the framework owns stage lifecycle.
 func (b *SystemBase) InitStage(s *universe.Stage) { b.stage = s }
