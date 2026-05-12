@@ -360,6 +360,34 @@ func (s *StatusEffects) TickDown(dt float32) {
 // are restored to Max and the NPC re-enters Idle.
 type Leashing struct{}
 
+// NPCAI is the runtime AI state on each NPC entity. Archetype is wire-
+// replicated (clients pick sprites per archetype). State is sent as a
+// thin signal so clients can visually distinguish Leash mode etc.
+// LastDamageBy fields drive the target-switching rule. All numeric
+// tunables are captured at spawn time from the active GameConfig.
+type NPCAI struct {
+	Archetype            uint8   `net:"u8 initial"`
+	State                uint8   `net:"u8"`
+	MaxSpeed             float32
+	TurnRate             float32
+	PreferredRange       float32
+	WeaponRange          float32
+	AggroRadius          float32
+	MotionPolicy         uint8
+	DamagePerShot        float32
+	FireRate             float32
+	FireCooldown         float32 // seconds remaining before next shot
+	LastDamageByNetID    uint32
+	LastDamageAtSec      float32
+	LastCombatActivityAt float32
+}
+
+// POIAnchor links an NPC back to its owning POI for leash + roster
+// tracking. POINetID is the network ID of the POI entity.
+type POIAnchor struct {
+	POINetID uint32
+}
+
 // PilotName stores the player's display name for network replication.
 type PilotName struct {
 	Name string `net:"initial"`
