@@ -245,6 +245,10 @@ type Stage struct {
 	// Entity.Send). Lazily initialized via Stage.Dispatcher().
 	dispatcher *MessageDispatcher
 
+	// commands is the per-stage deferred-mutation buffer. Initialized in
+	// NewStage; flushed by the engine loop driver between systems.
+	commands *Commands
+
 	// broadcastQueue accumulates auto-broadcast events for end-of-tick
 	// AoI-filtered fanout. Populated by Stage.maybeBroadcast on the same-
 	// cell post-handler path, the cross-cell source pre-handler path, and
@@ -342,7 +346,9 @@ func NewStage(eng *engine.Engine, cell CellID, aoiRadius float32, replRegistry *
 		return 0, false
 	}
 
-	return &base
+	result := &base
+	result.commands = &Commands{world: w, stage: result}
+	return result
 }
 
 // ---------------------------------------------------------------------------
@@ -402,6 +408,11 @@ func (b *Stage) IsDrainingForMerge() bool {
 
 // Bridge returns the bridge for inter-cell communication.
 func (b *Stage) Bridge() Bridge { return b.bridge }
+
+// Commands returns the per-stage deferred-mutation buffer. Use from
+// inside system Update or any other locked-world context to queue
+// structural changes that will apply after the current system finishes.
+func (b *Stage) Commands() *Commands { return b.commands }
 
 // Cell returns this node's cell coordinates.
 func (b *Stage) Cell() CellID { return b.cell }

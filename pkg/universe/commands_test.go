@@ -4,6 +4,9 @@ import (
 	"testing"
 
 	"github.com/mlange-42/ark/ecs"
+	"github.com/zenion/mmoserver/pkg/engine"
+	"github.com/zenion/mmoserver/pkg/logger"
+	"github.com/zenion/mmoserver/pkg/net"
 )
 
 // TestCommands_Defer_ExecutesInSubmitOrder verifies that Defer closures
@@ -51,4 +54,15 @@ func TestCommands_Despawn_NoopOnDeadHandle(t *testing.T) {
 	c.Despawn(h) // queue against an already-dead handle
 	// Should not panic on flush.
 	c.flush()
+}
+
+// TestStage_HasCommands verifies the stage exposes its Commands buffer
+// after construction.
+func TestStage_HasCommands(t *testing.T) {
+	eng := engine.New(engine.DefaultConfig(), net.NewConnManager(), logger.New())
+	stage := NewStage(eng, CellID{X: 0, Y: 0}, 100, nil)
+
+	if stage.Commands() == nil {
+		t.Fatal("Stage.Commands() returned nil")
+	}
 }
