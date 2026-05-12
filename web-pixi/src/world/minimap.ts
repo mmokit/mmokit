@@ -1,7 +1,7 @@
 import { Container, Graphics } from "pixi.js";
 import { RESOURCE_COLORS_HEX } from "../constants";
 import type { GameState } from "../state";
-import { getAsteroid } from "../entity-accessors";
+import { getAsteroid, getPoi } from "../entity-accessors";
 import { zoom } from "../view";
 import { EntityType } from "../../sdk/index.js";
 
@@ -112,6 +112,17 @@ export class Minimap {
           case EntityType.NPC:
             this.gfx.rect(ex - 2, ey - 2, 4, 4).fill({ color: 0xff4444 });
             break;
+          case EntityType.POI: {
+            // POIs render as a small hollow diamond, greyed out when not Active (status != 0).
+            const poi = getPoi(ent);
+            const active = poi?.status === 0;
+            const color = active ? 0xff3344 : 0x666666;
+            const alpha = active ? 0.9 : 0.4;
+            this.gfx
+              .poly([ex, ey - 4, ex + 4, ey, ex, ey + 4, ex - 4, ey])
+              .stroke({ color, width: 1.5, alpha });
+            break;
+          }
         }
       }
     }

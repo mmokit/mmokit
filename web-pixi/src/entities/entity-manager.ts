@@ -8,6 +8,7 @@ import { createProjectileDisplay } from "./projectile";
 import { createStationDisplay } from "./station";
 import { createLootCrateDisplay } from "./loot-crate";
 import { createNpcDisplay } from "./npc";
+import { createPoiDisplay } from "./poi";
 import { EntityType } from "../../sdk/index.js";
 
 export class EntityManager {
@@ -77,6 +78,8 @@ export class EntityManager {
         return createLootCrateDisplay(e.radius || 0.4);
       case EntityType.NPC:
         return createNpcDisplay();
+      case EntityType.POI:
+        return createPoiDisplay();
     }
     // Unreachable for known SDK entity kinds — fall back to projectile-style dot.
     return createProjectileDisplay(ENTITY_COLORS[0] || 0xffffff);
