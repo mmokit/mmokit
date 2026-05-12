@@ -114,7 +114,7 @@ func (gw *GameWorld) performTransferFor(connID uint32, itemID uint32, amount int
 // the per-tick query and keeps the helper stateless.
 func (gw *GameWorld) collectStationPositions() []mmokit.Position {
 	var out []mmokit.Position
-	mmokit.ForEach2[gamecomp.Station, mmokit.Position](gw.stage, func(_ mmokit.Entity, _ *gamecomp.Station, pos *mmokit.Position) {
+	mmokit.ForEach2(gw.stage, func(_ mmokit.Entity, _ *gamecomp.Station, pos *mmokit.Position) {
 		out = append(out, *pos)
 	})
 	return out

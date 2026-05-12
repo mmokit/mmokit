@@ -39,7 +39,7 @@ func GameSetup(coord *mmokit.Process) {
 	RegisterInputs(coord)
 	// Typed-op handlers — RoutePlayerCell ops dispatched on the player's
 	// authoritative cell engine via Process.DispatchCellRoutedOp.
-	mmokit.RegisterOp[BankRequest, BankResponse](mmokit.RoutePlayerCell, HandleBankRequest)
+	mmokit.RegisterOp(mmokit.RoutePlayerCell, HandleBankRequest)
 	RegisterDamageVerb(coord)
 	RegisterMiningVerb(coord)
 	RegisterStatusVerb(coord)
