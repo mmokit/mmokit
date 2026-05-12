@@ -21,6 +21,9 @@ func RegisterAll(reg *cmdsys.Registry, coord *mmokit.Process, playerDB *game.Pla
 		func() error { return registerGive(reg, coord) },
 		func() error { return registerCurrency(reg, coord, playerDB, cfgPtr) },
 		func() error { return registerNPCSpawn(reg, coord) },
+		func() error { return registerPOIList(reg, coord) },
+		func() error { return registerPOIClear(reg, coord) },
+		func() error { return registerPOISpawn(reg, coord) },
 	}
 	for _, fn := range funcs {
 		if err := fn(); err != nil {
