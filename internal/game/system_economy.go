@@ -28,9 +28,9 @@ func (s *EconomySystem) Update(dt float32) {
 		stationPositions = append(stationPositions, *b.Pos)
 	}
 
-	// Process manual loot requests
+	// Process manual loot requests. LootAll is dispatched via
+	// Commands.Defer from the LootAll input handler — no drain here.
 	s.processLootItems()
-	s.processLootAlls()
 
 	sellRange2 := s.stationRange2()
 
@@ -322,60 +322,60 @@ func (s *EconomySystem) processLootItems() {
 	}
 }
 
-func (s *EconomySystem) processLootAlls() {
-	gw := s.gw
+// performLootAllFor processes a single LootAll request. Dispatched via
+// Commands.Defer from the LootAll input handler; runs at the next per-system
+// flush boundary with the ECS world unlocked.
+func (gw *GameWorld) performLootAllFor(connID uint32, crateNetID uint32) {
 	pickupRange2 := float64(gw.Config.LootPickupRange) * float64(gw.Config.LootPickupRange)
 
-	for _, req := range mmokit.Drain[PendingLootAll](gw.Queue) {
-		sess := gw.Players.ByConnID(req.ConnID)
-		if sess == nil || sess.State != mmokit.StateActive {
-			continue
-		}
-		entity := mmokit.EntityFromECS(gw.stage, sess.Entity)
-		if !entity.Alive() {
-			continue
-		}
-		playerPos := mmokit.Get[mmokit.Position](entity)
-		playerInv := mmokit.Get[gamecomp.Inventory](entity)
-		if playerPos == nil || playerInv == nil {
-			continue
-		}
+	sess := gw.Players.ByConnID(connID)
+	if sess == nil || sess.State != mmokit.StateActive {
+		return
+	}
+	entity := mmokit.EntityFromECS(gw.stage, sess.Entity)
+	if !entity.Alive() {
+		return
+	}
+	playerPos := mmokit.Get[mmokit.Position](entity)
+	playerInv := mmokit.Get[gamecomp.Inventory](entity)
+	if playerPos == nil || playerInv == nil {
+		return
+	}
 
-		crateE := mmokit.EntityByNetID(gw.stage, req.CrateNetID)
-		if !crateE.Alive() || !mmokit.Has[gamecomp.LootCrate](crateE) {
+	crateE := mmokit.EntityByNetID(gw.stage, crateNetID)
+	if !crateE.Alive() || !mmokit.Has[gamecomp.LootCrate](crateE) {
+		return
+	}
+
+	cratePos := mmokit.Get[mmokit.Position](crateE)
+	crateInv := mmokit.Get[gamecomp.Inventory](crateE)
+	if cratePos == nil || crateInv == nil {
+		return
+	}
+	dx := float64(playerPos.X - cratePos.X)
+	dy := float64(playerPos.Y - cratePos.Y)
+	if dx*dx+dy*dy > pickupRange2 {
+		return
+	}
+
+	playerNetID := entity.NetID()
+
+	for itemID, qty := range crateInv.Items {
+		if qty <= 0 {
 			continue
 		}
-
-		cratePos := mmokit.Get[mmokit.Position](crateE)
-		crateInv := mmokit.Get[gamecomp.Inventory](crateE)
-		if cratePos == nil || crateInv == nil {
-			continue
+		added := playerInv.AddItem(itemID, qty)
+		if added > 0 {
+			crateInv.RemoveItem(itemID, added)
+			gw.eng.Log.Log(CatEconomyLoot, "loot pickup: player=%d item=%d qty=%d cargo_mass=%.1f/%.1f",
+				playerNetID, itemID, added, playerInv.TotalMass(), playerInv.MaxMass)
 		}
-		dx := float64(playerPos.X - cratePos.X)
-		dy := float64(playerPos.Y - cratePos.Y)
-		if dx*dx+dy*dy > pickupRange2 {
-			continue
+		if playerInv.RemainingMass() <= 0 {
+			break
 		}
+	}
 
-		playerNetID := entity.NetID()
-
-		for itemID, qty := range crateInv.Items {
-			if qty <= 0 {
-				continue
-			}
-			added := playerInv.AddItem(itemID, qty)
-			if added > 0 {
-				crateInv.RemoveItem(itemID, added)
-				gw.eng.Log.Log(CatEconomyLoot, "loot pickup: player=%d item=%d qty=%d cargo_mass=%.1f/%.1f",
-					playerNetID, itemID, added, playerInv.TotalMass(), playerInv.MaxMass)
-			}
-			if playerInv.RemainingMass() <= 0 {
-				break
-			}
-		}
-
-		if crateInv.IsEmpty() {
-			gw.MarkForRemoval(crateE.Handle())
-		}
+	if crateInv.IsEmpty() {
+		gw.MarkForRemoval(crateE.Handle())
 	}
 }

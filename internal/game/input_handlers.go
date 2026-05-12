@@ -339,9 +339,10 @@ func RegisterInputs(mmo *mmokit.Process) {
 		if conn == nil {
 			return
 		}
-		mmokit.Enqueue(gw.Queue, PendingLootAll{
-			ConnID:     conn.ConnID,
-			CrateNetID: msg.CrateNetID,
+		connID := conn.ConnID
+		crateNetID := msg.CrateNetID
+		gw.stage.Commands().Defer(func() {
+			gw.performLootAllFor(connID, crateNetID)
 		})
 	})
 }
