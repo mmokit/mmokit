@@ -127,17 +127,19 @@ func NewGameWorld(base *mmokit.Stage, cfg *GameConfig, playerDB *PlayerRepo, cel
 			return
 		}
 		gw.SavePlayerState(s)
-		mmokit.Set(entity, mmokit.Dormant{})
+		// Zero velocity + shield NOW (safe — existing component writes,
+		// not structural changes). Dormant is added in postFlush via
+		// PendingDeathMarker because the action runs inside the death
+		// observer's locked-world iteration and `mmokit.Set(Dormant)`
+		// would trip the ark locked-world check (component add =
+		// archetype change = structural).
 		if v := mmokit.Get[mmokit.Velocity](entity); v != nil {
 			v.X, v.Y = 0, 0
 		}
-		// Health already 0 from ApplyDamage; pin shield to 0 too so the
-		// death overlay doesn't show a half-shield bar from regen.
-		// PlayerDied event was already sent by handlePlayerKilled before
-		// the transition fired — don't double-send.
 		if sh := mmokit.Get[gamecomp.Shield](entity); sh != nil {
 			sh.Current = 0
 		}
+		mmokit.Enqueue(gw.Queue, PendingDeathMarker{ConnID: s.ConnID})
 	}
 
 	// respawnAtSpawnpoint runs on StateDead→StateActive: removes

@@ -67,6 +67,16 @@ type PendingRespawn struct {
 	ConnID uint32
 }
 
+// PendingDeathMarker records that a player has transitioned to
+// StateDead — the dieKeepEntity action queues it instead of marking
+// Dormant directly, because the action runs inside the death
+// observer's locked-world query iteration (which would panic on
+// component add). postFlush drains the queue and applies the
+// Dormant marker in a phase where the world is unlocked.
+type PendingDeathMarker struct {
+	ConnID uint32
+}
+
 // DockingProgress tracks a player's in-progress docking sequence.
 type DockingProgress struct {
 	Remaining    float32 // seconds left
