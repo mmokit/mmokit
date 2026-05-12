@@ -122,6 +122,11 @@ type GameWorld struct {
 
 	// OnPostSpawn is called after a player spawns (for topology sends, etc.)
 	OnPostSpawn func(connID uint32)
+
+	// poiRosters maps poiNetID → list of currently-alive roster member
+	// netIDs. Updated on POI spawn + respawn; mutated by POISystem on
+	// NPC death detection.
+	poiRosters map[uint32][]uint32
 }
 
 // GetStage returns the per-cell Stage this GameWorld is wired to. External
@@ -130,6 +135,12 @@ type GameWorld struct {
 // shadowing the existing field — game code in the same package reads via
 // gw.stage directly.
 func (gw *GameWorld) GetStage() *mmokit.Stage { return gw.stage }
+
+// PoiRosters returns the live roster netIDs for a POI. Used by admin
+// commands; returns nil if the POI has no tracked roster.
+func (gw *GameWorld) PoiRosters(poiNetID uint32) []uint32 {
+	return gw.poiRosters[poiNetID]
+}
 
 // Engine returns the engine for this cell.
 func (gw *GameWorld) Engine() *mmokit.Engine { return gw.eng }

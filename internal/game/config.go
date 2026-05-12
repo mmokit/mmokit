@@ -117,6 +117,18 @@ type GameConfig struct {
 	StationCell mmokit.CellCoord `json:"stationCell"` // cell where station spawns and players respawn
 	MeshCellsX  uint32           `json:"meshCellsX"`  // number of cells wide
 	MeshCellsY  uint32           `json:"meshCellsY"`  // number of cells tall
+
+	// POI
+	POIAnchorRadius                float32 `json:"poi_anchor_radius"`
+	POILeashRadius                 float32 `json:"poi_leash_radius"`
+	POIPerCellProbability          float32 `json:"poi_per_cell_probability"`
+	POIBeltClearance               float32 `json:"poi_belt_clearance"`
+	POIStationClearance            float32 `json:"poi_station_clearance"`
+	POIPlacementMargin             float32 `json:"poi_placement_margin"`
+	POIBaseClearFlux               int32   `json:"poi_base_clear_flux"`
+	POIPerKillFluxBonus            int32   `json:"poi_per_kill_flux_bonus"`
+	StationCellPOIClearCooldown    int32   `json:"station_cell_poi_clear_cooldown_sec"`
+	NonStationCellPOIClearCooldown int32   `json:"non_station_cell_poi_clear_cooldown_sec"`
 }
 
 // DefaultGameConfig returns sensible defaults for game balance.
@@ -199,6 +211,18 @@ func DefaultGameConfig() GameConfig {
 		StationCell: mmokit.CellCoord{CellX: 0, CellY: 0}, // adjacent to the cross-corner mesh-test belt
 		MeshCellsX:  3,
 		MeshCellsY:  3,
+
+		// POI
+		POIAnchorRadius:                80,
+		POILeashRadius:                 1500,
+		POIPerCellProbability:          0.3,
+		POIBeltClearance:               40,
+		POIStationClearance:            400,
+		POIPlacementMargin:             200,
+		POIBaseClearFlux:               500,
+		POIPerKillFluxBonus:            100,
+		StationCellPOIClearCooldown:    180,
+		NonStationCellPOIClearCooldown: 600,
 	}
 }
 

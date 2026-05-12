@@ -34,6 +34,9 @@ const (
 
 	// npcai — NPC AI state-machine transitions, acquire/engage/leash events.
 	CatNPCAI = "npcai"
+
+	// poi — POI lifecycle (spawn, roster tracking, clear/cooldown/respawn).
+	CatPOI = "poi"
 )
 
 // GameCategories lists every game-specific log category.
@@ -44,4 +47,5 @@ var GameCategories = []string{
 	CatWorldCollision, CatWorldMap, CatWorldNetwork, CatWorldTransfer, CatWorldReplica,
 	CatPersistFlush,
 	CatNPCAI,
+	CatPOI,
 }
