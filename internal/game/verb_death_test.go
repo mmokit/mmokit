@@ -3,13 +3,14 @@ package game
 import (
 	"testing"
 
+	gamecomp "github.com/zenion/mmoserver/internal/component"
 	"github.com/zenion/mmoserver/pkg/mmokit"
 )
 
 // TestKilled_NPC_NoDropsIsSafe verifies the Killed handler short-circuits
 // cleanly when the dying NPC has no drop table entry. The kindType 9999
 // is unmapped in NPCDropTables, so handleNPCKilled hits the table-miss
-// path and returns without enqueuing loot.
+// path and returns without scheduling a SpawnLootCrate closure.
 func TestKilled_NPC_NoDropsIsSafe(t *testing.T) {
 	gw, _ := newTestGameWorld()
 	gw.stage.SetStateByName("game.GameWorld", gw)
@@ -24,10 +25,12 @@ func TestKilled_NPC_NoDropsIsSafe(t *testing.T) {
 
 	targetE.Send(&Killed{Killer: killerE})
 
-	// No panic, no drops, no loot crate enqueued for an unknown kind.
-	drops := mmokit.Peek[PendingLootDrop](gw.Queue)
-	if len(drops) != 0 {
-		t.Fatalf("PendingLootDrop queue: got %d, want 0 (no drop table for kind)", len(drops))
+	// Flush any deferred Commands closures. With no drop table the
+	// handler never enqueues SpawnLootCrate, so the world stays free
+	// of LootCrate entities.
+	gw.stage.Commands().Flush()
+	if mmokit.Any[gamecomp.LootCrate](gw.stage) {
+		t.Fatal("no-drop-table NPC produced a loot crate")
 	}
 }
 

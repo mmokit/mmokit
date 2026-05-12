@@ -289,10 +289,10 @@ func (gw *GameWorld) executeRespawnFor(connID uint32) {
 }
 
 func (gw *GameWorld) clearTickState() {
-	gw.Queue.ClearAll()
-
-	// Bridge.PreTick() is called by the Process's merged hooks after
-	// ClearTickState, ensuring inter-node messages survive into systems.
+	// No game-specific per-tick reset remaining — every Pending* queue
+	// has been migrated to stage.Commands().Defer. Bridge.PreTick() is
+	// called by the Process's merged hooks after ClearTickState,
+	// ensuring inter-node messages survive into systems.
 }
 
 // hasStation returns true if this node has a station entity.

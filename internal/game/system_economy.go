@@ -12,10 +12,12 @@ import (
 // closures plus the SendBankContents helper consumed by op_bank and the
 // docked-equip path.
 
-// processTransferFor handles a single cargo<->bank transfer, dispatched
+// performTransferFor handles a single cargo<->bank transfer, dispatched
 // from the InventoryTransfer input handler via Commands.Defer.
-func (gw *GameWorld) processTransferFor(t PendingTransfer) {
-	sess := gw.Players.ByConnID(t.ConnID)
+// deposit=true is cargo->bank, false is bank->cargo. amount<=0 means
+// "transfer as much as possible" (capped by source qty + dest capacity).
+func (gw *GameWorld) performTransferFor(connID uint32, itemID uint32, amount int32, deposit bool) {
+	sess := gw.Players.ByConnID(connID)
 	if sess == nil || sess.Username == "" {
 		return
 	}
@@ -24,7 +26,7 @@ func (gw *GameWorld) processTransferFor(t PendingTransfer) {
 
 	// Docked players: operate on PlayerDB cargo directly.
 	if sess.State == StateDocked {
-		gw.processDockedTransfer(t, username, pdata)
+		gw.performDockedTransfer(connID, itemID, amount, deposit, username, pdata)
 		return
 	}
 
@@ -45,65 +47,65 @@ func (gw *GameWorld) processTransferFor(t PendingTransfer) {
 	sellRange2 := sellRange * sellRange
 
 	if !nearStationPos(pos, stationPositions, sellRange2) {
-		gw.sendTransferResult(t.ConnID, false, "Not near a station", t.ItemID, 0, t.Deposit)
+		gw.sendTransferResult(connID, false, "Not near a station", itemID, 0, deposit)
 		return
 	}
 
-	if t.Deposit {
+	if deposit {
 		// Cargo -> Bank
 		var have int32
 		if inv.Items != nil {
-			have = inv.Items[t.ItemID]
+			have = inv.Items[itemID]
 		}
 		if have <= 0 {
-			gw.sendTransferResult(t.ConnID, false, "No items to deposit", t.ItemID, 0, true)
+			gw.sendTransferResult(connID, false, "No items to deposit", itemID, 0, true)
 			return
 		}
-		amount := have
-		if t.Amount > 0 && t.Amount < amount {
-			amount = t.Amount
+		qty := have
+		if amount > 0 && amount < qty {
+			qty = amount
 		}
-		deposited := pdata.DepositToBank(t.ItemID, amount, gw.Config.BankMaxMass)
+		deposited := pdata.DepositToBank(itemID, qty, gw.Config.BankMaxMass)
 		if deposited <= 0 {
-			gw.sendTransferResult(t.ConnID, false, "Bank is full", t.ItemID, 0, true)
+			gw.sendTransferResult(connID, false, "Bank is full", itemID, 0, true)
 			return
 		}
-		inv.RemoveItem(t.ItemID, deposited)
+		inv.RemoveItem(itemID, deposited)
 		gw.PlayerDB.MarkDirty(username)
 		gw.eng.Log.Log(CatEconomyBank, "bank deposit: player=%s item=%d qty=%d bank_mass=%.1f/%.1f",
-			username, t.ItemID, deposited, pdata.BankTotalMass(), gw.Config.BankMaxMass)
-		gw.sendTransferResult(t.ConnID, true, "", t.ItemID, deposited, true)
-		gw.SendBankContents(t.ConnID, pdata)
+			username, itemID, deposited, pdata.BankTotalMass(), gw.Config.BankMaxMass)
+		gw.sendTransferResult(connID, true, "", itemID, deposited, true)
+		gw.SendBankContents(connID, pdata)
 	} else {
 		// Bank -> Cargo
 		var have int32
 		if pdata.Bank != nil {
-			have = pdata.Bank[t.ItemID]
+			have = pdata.Bank[itemID]
 		}
 		if have <= 0 {
-			gw.sendTransferResult(t.ConnID, false, "No items to withdraw", t.ItemID, 0, false)
+			gw.sendTransferResult(connID, false, "No items to withdraw", itemID, 0, false)
 			return
 		}
-		amount := have
-		if t.Amount > 0 && t.Amount < amount {
-			amount = t.Amount
+		qty := have
+		if amount > 0 && amount < qty {
+			qty = amount
 		}
-		massPerUnit := item.MassOf(t.ItemID)
+		massPerUnit := item.MassOf(itemID)
 		maxByMass := int32(inv.RemainingMass() / massPerUnit)
-		if amount > maxByMass {
-			amount = maxByMass
+		if qty > maxByMass {
+			qty = maxByMass
 		}
-		if amount <= 0 {
-			gw.sendTransferResult(t.ConnID, false, "Cargo is full", t.ItemID, 0, false)
+		if qty <= 0 {
+			gw.sendTransferResult(connID, false, "Cargo is full", itemID, 0, false)
 			return
 		}
-		withdrawn := pdata.WithdrawFromBank(t.ItemID, amount)
-		inv.AddItem(t.ItemID, withdrawn)
+		withdrawn := pdata.WithdrawFromBank(itemID, qty)
+		inv.AddItem(itemID, withdrawn)
 		gw.PlayerDB.MarkDirty(username)
 		gw.eng.Log.Log(CatEconomyBank, "bank withdraw: player=%s item=%d qty=%d bank_mass=%.1f/%.1f",
-			username, t.ItemID, withdrawn, pdata.BankTotalMass(), gw.Config.BankMaxMass)
-		gw.sendTransferResult(t.ConnID, true, "", t.ItemID, withdrawn, false)
-		gw.SendBankContents(t.ConnID, pdata)
+			username, itemID, withdrawn, pdata.BankTotalMass(), gw.Config.BankMaxMass)
+		gw.sendTransferResult(connID, true, "", itemID, withdrawn, false)
+		gw.SendBankContents(connID, pdata)
 	}
 }
 
@@ -131,70 +133,73 @@ func nearStationPos(pos *mmokit.Position, stations []mmokit.Position, range2 flo
 	return false
 }
 
-// processDockedTransfer handles cargo<->bank transfers for docked players using PlayerDB.
-func (gw *GameWorld) processDockedTransfer(t PendingTransfer, username string, pdata *PlayerData) {
+// performDockedTransfer handles cargo<->bank transfers for docked
+// players, operating on PlayerDB.Cargo / PlayerDB.Bank directly (no ECS
+// entity round-trip — docked ships' Inventory is empty until undock
+// re-copies pdata.Cargo back in).
+func (gw *GameWorld) performDockedTransfer(connID uint32, itemID uint32, amount int32, deposit bool, username string, pdata *PlayerData) {
 	if pdata.Cargo == nil {
 		pdata.Cargo = make(map[uint32]int32)
 	}
 
-	if t.Deposit {
+	if deposit {
 		// pdata.Cargo -> Bank
-		have := pdata.Cargo[t.ItemID]
+		have := pdata.Cargo[itemID]
 		if have <= 0 {
-			gw.sendTransferResult(t.ConnID, false, "No items to deposit", t.ItemID, 0, true)
+			gw.sendTransferResult(connID, false, "No items to deposit", itemID, 0, true)
 			return
 		}
-		amount := have
-		if t.Amount > 0 && t.Amount < amount {
-			amount = t.Amount
+		qty := have
+		if amount > 0 && amount < qty {
+			qty = amount
 		}
-		deposited := pdata.DepositToBank(t.ItemID, amount, gw.Config.BankMaxMass)
+		deposited := pdata.DepositToBank(itemID, qty, gw.Config.BankMaxMass)
 		if deposited <= 0 {
-			gw.sendTransferResult(t.ConnID, false, "Bank is full", t.ItemID, 0, true)
+			gw.sendTransferResult(connID, false, "Bank is full", itemID, 0, true)
 			return
 		}
-		pdata.Cargo[t.ItemID] -= deposited
-		if pdata.Cargo[t.ItemID] <= 0 {
-			delete(pdata.Cargo, t.ItemID)
+		pdata.Cargo[itemID] -= deposited
+		if pdata.Cargo[itemID] <= 0 {
+			delete(pdata.Cargo, itemID)
 		}
 		gw.PlayerDB.MarkDirty(username)
-		gw.eng.Log.Log(CatEconomyBank, "bank deposit (docked): player=%s item=%d qty=%d", username, t.ItemID, deposited)
-		gw.sendTransferResult(t.ConnID, true, "", t.ItemID, deposited, true)
-		gw.SendBankContents(t.ConnID, pdata)
+		gw.eng.Log.Log(CatEconomyBank, "bank deposit (docked): player=%s item=%d qty=%d", username, itemID, deposited)
+		gw.sendTransferResult(connID, true, "", itemID, deposited, true)
+		gw.SendBankContents(connID, pdata)
 	} else {
 		// Bank -> pdata.Cargo
 		var have int32
 		if pdata.Bank != nil {
-			have = pdata.Bank[t.ItemID]
+			have = pdata.Bank[itemID]
 		}
 		if have <= 0 {
-			gw.sendTransferResult(t.ConnID, false, "No items to withdraw", t.ItemID, 0, false)
+			gw.sendTransferResult(connID, false, "No items to withdraw", itemID, 0, false)
 			return
 		}
-		amount := have
-		if t.Amount > 0 && t.Amount < amount {
-			amount = t.Amount
+		qty := have
+		if amount > 0 && amount < qty {
+			qty = amount
 		}
 		// Check cargo mass from PlayerDB
 		cargoMass := pdata.CargoTotalMass()
 		remaining := gw.Config.MaxCargo - cargoMass
-		massPerUnit := item.MassOf(t.ItemID)
+		massPerUnit := item.MassOf(itemID)
 		if massPerUnit > 0 {
 			maxByMass := int32(remaining / massPerUnit)
-			if amount > maxByMass {
-				amount = maxByMass
+			if qty > maxByMass {
+				qty = maxByMass
 			}
 		}
-		if amount <= 0 {
-			gw.sendTransferResult(t.ConnID, false, "Cargo is full", t.ItemID, 0, false)
+		if qty <= 0 {
+			gw.sendTransferResult(connID, false, "Cargo is full", itemID, 0, false)
 			return
 		}
-		withdrawn := pdata.WithdrawFromBank(t.ItemID, amount)
-		pdata.Cargo[t.ItemID] += withdrawn
+		withdrawn := pdata.WithdrawFromBank(itemID, qty)
+		pdata.Cargo[itemID] += withdrawn
 		gw.PlayerDB.MarkDirty(username)
-		gw.eng.Log.Log(CatEconomyBank, "bank withdraw (docked): player=%s item=%d qty=%d", username, t.ItemID, withdrawn)
-		gw.sendTransferResult(t.ConnID, true, "", t.ItemID, withdrawn, false)
-		gw.SendBankContents(t.ConnID, pdata)
+		gw.eng.Log.Log(CatEconomyBank, "bank withdraw (docked): player=%s item=%d qty=%d", username, itemID, withdrawn)
+		gw.sendTransferResult(connID, true, "", itemID, withdrawn, false)
+		gw.SendBankContents(connID, pdata)
 	}
 }
 

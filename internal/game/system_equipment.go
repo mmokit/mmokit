@@ -6,31 +6,32 @@ import (
 	"github.com/zenion/mmoserver/pkg/mmokit"
 )
 
-// Equip/unequip used to be a per-tick System draining gw.Queue —
-// it is now a set of GameWorld methods dispatched directly from the
-// Equip input handler via stage.Commands().Defer. The system shell
-// is gone; only the request entry point + helpers remain in this
-// file. Helpers are grouped here because they only serve the equip
-// flow.
+// Equip/unequip is a set of GameWorld methods dispatched directly from
+// the Equip input handler via stage.Commands().Defer — no per-tick
+// system shell. Helpers are grouped here because they only serve the
+// equip flow.
 
-// processEquipRequest is the entry point dispatched by the Equip
-// input handler via Commands.Defer. Routes by player state.
-func (gw *GameWorld) processEquipRequest(req PendingEquipRequest) {
-	sess := gw.Players.ByConnID(req.ConnID)
+// performEquipFor is the entry point dispatched by the Equip input
+// handler via Commands.Defer. Routes by player state. itemID=0 means
+// "unequip the slot". targetBank only matters while docked: when true,
+// equip pulls from bank and the swapped-out item returns to bank;
+// unequip deposits to bank instead of cargo.
+func (gw *GameWorld) performEquipFor(connID uint32, itemID uint32, slot item.EquipSlot, targetBank bool) {
+	sess := gw.Players.ByConnID(connID)
 	if sess == nil {
 		return
 	}
 	switch sess.State {
 	case mmokit.StateActive:
-		gw.processActiveEquipRequest(sess, req)
+		gw.performActiveEquip(sess, itemID, slot)
 	case StateDocked:
-		gw.processDockedEquipRequest(sess, req)
+		gw.performDockedEquip(sess, itemID, slot, targetBank)
 	}
 }
 
-// processActiveEquipRequest handles in-flight equip/unequip via the ECS
+// performActiveEquip handles in-flight equip/unequip via the ECS
 // Inventory + Equipment components on the ship entity.
-func (gw *GameWorld) processActiveEquipRequest(sess *mmokit.PlayerSession, req PendingEquipRequest) {
+func (gw *GameWorld) performActiveEquip(sess *mmokit.PlayerSession, itemID uint32, slot item.EquipSlot) {
 	entity := mmokit.EntityFromECS(gw.stage, sess.Entity)
 	if !entity.Alive() {
 		return
@@ -41,26 +42,26 @@ func (gw *GameWorld) processActiveEquipRequest(sess *mmokit.PlayerSession, req P
 		return
 	}
 
-	if req.ItemID == 0 {
-		gw.unequip(req.ConnID, entity, eq, inv, req.Slot)
+	if itemID == 0 {
+		gw.unequip(sess.ConnID, entity, eq, inv, slot)
 	} else {
-		gw.equip(req.ConnID, entity, eq, inv, req.ItemID, req.Slot)
+		gw.equip(sess.ConnID, entity, eq, inv, itemID, slot)
 	}
 }
 
-// processDockedEquipRequest handles equip/unequip while docked, working
+// performDockedEquip handles equip/unequip while docked, working
 // against pdata.Cargo and pdata.Equipment (the canonical state while
 // docked) and mirroring into the ECS Equipment component so the entity
 // stays consistent. pdata.Cargo is the only authoritative cargo store
 // while docked — the entity's Inventory map is empty until undock
 // copies pdata.Cargo back in (see lifecycle.processUndocks).
 //
-// req.TargetBank routes to the bank-flavored variant: equip pulls from
+// targetBank routes to the bank-flavored variant: equip pulls from
 // pdata.Bank (and any swapped-out item returns to pdata.Bank); unequip
 // deposits to pdata.Bank instead of pdata.Cargo. Lets the player swap
 // gear directly between loadout and bank without round-tripping through
 // cargo.
-func (gw *GameWorld) processDockedEquipRequest(sess *mmokit.PlayerSession, req PendingEquipRequest) {
+func (gw *GameWorld) performDockedEquip(sess *mmokit.PlayerSession, itemID uint32, slot item.EquipSlot, targetBank bool) {
 	pdata := gw.PlayerDB.GetOrCreate(sess.Username)
 	if pdata.Cargo == nil {
 		pdata.Cargo = make(map[uint32]int32)
@@ -70,14 +71,14 @@ func (gw *GameWorld) processDockedEquipRequest(sess *mmokit.PlayerSession, req P
 	}
 
 	switch {
-	case req.ItemID == 0 && req.TargetBank:
-		gw.unequipDockedToBank(sess, pdata, req.Slot)
-	case req.ItemID == 0:
-		gw.unequipDocked(sess, pdata, req.Slot)
-	case req.TargetBank:
-		gw.equipDockedFromBank(sess, pdata, req.ItemID, req.Slot)
+	case itemID == 0 && targetBank:
+		gw.unequipDockedToBank(sess, pdata, slot)
+	case itemID == 0:
+		gw.unequipDocked(sess, pdata, slot)
+	case targetBank:
+		gw.equipDockedFromBank(sess, pdata, itemID, slot)
 	default:
-		gw.equipDocked(sess, pdata, req.ItemID, req.Slot)
+		gw.equipDocked(sess, pdata, itemID, slot)
 	}
 }
 

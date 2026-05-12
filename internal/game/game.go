@@ -41,7 +41,6 @@ func NewGameWorld(base *mmokit.Stage, cfg *GameConfig, playerDB *PlayerRepo, cel
 		eng:           eng,
 		Spatial:       base.SpatialGrid(),
 		Config:        cfg,
-		Queue:         mmokit.NewTickQueue(),
 		PlayerDB:      playerDB,
 		dockingStates: make(map[string]*DockingProgress),
 		poiRosters:    make(map[uint32][]uint32),
@@ -265,8 +264,9 @@ func NewGameWorld(base *mmokit.Stage, cfg *GameConfig, playerDB *PlayerRepo, cel
 	// Auto-respawn: typed-input dispatch drops Respawn frames for dead
 	// players (the entity is removed when StateDead is entered, so the
 	// dispatcher's "entity must be alive" check rejects the frame). Hold
-	// a per-session timer; postTick enqueues PendingRespawn when it
-	// elapses. Cleaned up on any transition out of StateDead.
+	// a per-session timer; postTick schedules executeRespawnFor via
+	// Commands.Defer when it elapses. Cleaned up on any transition out
+	// of StateDead.
 	gw.Players.OnState(StateDead, mmokit.StateCallbacks{
 		OnEnter: func(s *mmokit.PlayerSession, pm *mmokit.PlayerManager) {
 			if s.ConnID == 0 {

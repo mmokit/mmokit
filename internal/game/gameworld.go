@@ -10,63 +10,6 @@ import (
 	"github.com/zenion/mmoserver/pkg/mmokit"
 )
 
-// PendingLootDrop records cargo to drop as a loot crate.
-type PendingLootDrop struct {
-	X, Y  float32
-	Items map[uint32]int32
-}
-
-// PendingTransfer records a cargo<->bank transfer request.
-type PendingTransfer struct {
-	ConnID  uint32
-	ItemID  uint32
-	Amount  int32
-	Deposit bool // true = cargo->bank, false = bank->cargo
-}
-
-// (PendingBankRequest deleted — Plan 2 Phase 3 migrated BankRequest to
-// a typed-op served synchronously on the cell loop via
-// Process.DispatchCellRoutedOp.)
-
-// PendingEquipRequest records a request to equip or unequip an item.
-// TargetBank only matters while docked: when true, equip pulls from bank
-// and the swapped-out item returns to bank; unequip deposits to bank
-// instead of cargo.
-type PendingEquipRequest struct {
-	ConnID     uint32
-	ItemID     uint32 // 0 = unequip
-	Slot       item.EquipSlot
-	TargetBank bool
-}
-
-// PendingDockRequest records a request to begin docking at a station.
-type PendingDockRequest struct {
-	ConnID uint32
-}
-
-// PendingUndockRequest records a request to undock from a station.
-type PendingUndockRequest struct {
-	ConnID uint32
-}
-
-// PendingLootItem records a request to loot a single item from a crate.
-type PendingLootItem struct {
-	ConnID     uint32
-	CrateNetID uint32
-	ItemID     uint32
-}
-
-// PendingLootAll records a request to loot all items from a crate.
-type PendingLootAll struct {
-	ConnID     uint32
-	CrateNetID uint32
-}
-
-// PendingRespawn records a respawn request.
-type PendingRespawn struct {
-	ConnID uint32
-}
-
 // DockingProgress tracks a player's in-progress docking sequence.
 type DockingProgress struct {
 	Remaining    float32 // seconds left
@@ -92,9 +35,6 @@ type GameWorld struct {
 
 	// Ticks between forced full-state sends (safety net for diffing bugs)
 	FullRefreshInterval uint32
-
-	// Queue holds all per-tick pending work (replaces individual Pending* slices).
-	Queue *mmokit.TickQueue
 
 	// Players tracks all player-connection state via the engine's PlayerManager.
 	Players *mmokit.PlayerManager
@@ -133,7 +73,7 @@ type GameWorld struct {
 	// the handler (the typed-input dispatcher drops frames when the
 	// player entity is dead — there's no session-aware path yet), so
 	// the server holds a death-screen timer per dead session and
-	// enqueues a PendingRespawn when it elapses.
+	// schedules executeRespawnFor via Commands.Defer when it elapses.
 	autoRespawnAt map[uint32]uint32
 }
 

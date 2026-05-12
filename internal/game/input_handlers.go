@@ -11,9 +11,9 @@ import (
 //
 // Pattern: each handler runs first-line state-filter via PlayerStateOf, then
 // resolves the GameWorld via gameWorldOfEntity. Continuous-state inputs
-// mutate the player's components in place; discrete actions queue Pending*
-// jobs onto gw.Queue (the existing task queue is preserved as-is — this
-// migration is about the input registration surface, not the task queue).
+// mutate the player's components in place; discrete actions schedule
+// game-world methods via stage.Commands().Defer so they run at the next
+// per-system flush boundary with the ECS world unlocked.
 func RegisterInputs(mmo *mmokit.Process) {
 	// ─── Continuous-state inputs ──────────────────────────────────────────
 	//
@@ -274,21 +274,19 @@ func RegisterInputs(mmo *mmokit.Process) {
 		if conn == nil {
 			return
 		}
-		req := PendingTransfer{
-			ConnID:  conn.ConnID,
-			ItemID:  msg.ItemID,
-			Amount:  msg.Quantity,
-			Deposit: msg.Deposit,
-		}
+		connID := conn.ConnID
+		itemID := msg.ItemID
+		amount := msg.Quantity
+		deposit := msg.Deposit
 		gw.stage.Commands().Defer(func() {
-			gw.processTransferFor(req)
+			gw.performTransferFor(connID, itemID, amount, deposit)
 		})
 	})
 
 	// (BankRequest is a typed-op now — see op_bank.go: HandleBankRequest
 	// runs on the player's cell engine via Process.DispatchCellRoutedOp.
-	// The per-tick PendingBankRequest queue + EconomySystem.processBankRequests
-	// drain are deleted — typed-op delivery is synchronous within the loop.)
+	// The per-tick queue + drain that preceded the typed-op migration
+	// are gone; typed-op delivery is synchronous within the loop.)
 
 	mmokit.HandleClient(mmo, func(player mmokit.Entity, msg *Equip) {
 		state := mmokit.PlayerStateOf(player)
@@ -303,14 +301,12 @@ func RegisterInputs(mmo *mmokit.Process) {
 		if conn == nil {
 			return
 		}
-		req := PendingEquipRequest{
-			ConnID:     conn.ConnID,
-			ItemID:     msg.ItemID,
-			Slot:       item.EquipSlot(msg.Slot),
-			TargetBank: msg.TargetBank,
-		}
+		connID := conn.ConnID
+		itemID := msg.ItemID
+		slot := item.EquipSlot(msg.Slot)
+		targetBank := msg.TargetBank
 		gw.stage.Commands().Defer(func() {
-			gw.processEquipRequest(req)
+			gw.performEquipFor(connID, itemID, slot, targetBank)
 		})
 	})
 
