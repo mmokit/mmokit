@@ -43,7 +43,7 @@ func (gw *GameWorld) startDockingFor(connID uint32) {
 
 	// Collect station positions (rare event — recomputed per call).
 	var stations []stationInfo
-	mmokit.ForEach2[gamecomp.Station, mmokit.Position](gw.stage, func(e mmokit.Entity, _ *gamecomp.Station, sp *mmokit.Position) {
+	mmokit.ForEach2(gw.stage, func(e mmokit.Entity, _ *gamecomp.Station, sp *mmokit.Position) {
 		netID := uint32(0)
 		if n := mmokit.Get[mmokit.NetworkID](e); n != nil {
 			netID = n.ID
