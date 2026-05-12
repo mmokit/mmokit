@@ -117,6 +117,11 @@ func (gw *GameWorld) ApplyDamage(target mmokit.Entity, damage float32, attackerN
 	if mmokit.Has[mmokit.Dormant](target) {
 		return 0
 	}
+	// Leashing NPCs are returning to their POI anchor and are invulnerable
+	// during the return. Mirrors the Dormant guard above.
+	if mmokit.Has[gamecomp.Leashing](target) {
+		return 0
+	}
 
 	// Check Fortified buff for damage reduction
 	if se := mmokit.Get[gamecomp.StatusEffects](target); se != nil {
@@ -140,6 +145,13 @@ func (gw *GameWorld) ApplyDamage(target mmokit.Entity, damage float32, attackerN
 
 	health.Current -= damage
 	health.LastDamagedByNetID = attackerNetID
+
+	// Stamp the attacker on NPCAI so the AI tick can decide whether to
+	// switch targets (closer-attacker rule). The AI consumes and clears
+	// the field at Engage entry — owns the time-stamp side of the contract.
+	if ai := mmokit.Get[gamecomp.NPCAI](target); ai != nil && attackerNetID != 0 {
+		ai.LastDamageByNetID = attackerNetID
+	}
 
 	gw.eng.Log.Log(CatCombatHit, "hit: attacker=%d -> target=%d damage=%.1f (shield=%.1f) hp=%.1f/%.1f",
 		attackerNetID, target.NetID(), totalDamage, shieldAbsorbed, health.Current, health.Max)

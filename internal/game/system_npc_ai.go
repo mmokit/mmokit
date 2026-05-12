@@ -142,6 +142,40 @@ func (s *NPCAISystem) tickEngage(self mmokit.Entity, ai *gamecomp.NPCAI,
 		ai.State = AIStateIdle
 		return
 	}
+
+	// Target switching: if a damage source is closer than current target,
+	// drop the lock and re-acquire on the attacker next tick. Stamped by
+	// ApplyDamage in verb_damage.go; consumed (and cleared) here.
+	if ai.LastDamageByNetID != 0 && ai.LastDamageByNetID != lock.ActiveNetID {
+		attacker := mmokit.EntityByNetID(s.gw.stage, ai.LastDamageByNetID)
+		if attacker.Alive() && !mmokit.Has[mmokit.Dormant](attacker) && !mmokit.Has[gamecomp.Leashing](attacker) {
+			if apos := mmokit.Get[mmokit.Position](attacker); apos != nil {
+				adx, ady := apos.X-pos.X, apos.Y-pos.Y
+				adist2 := adx*adx + ady*ady
+				cdx, cdy := tpos.X-pos.X, tpos.Y-pos.Y
+				cdist2 := cdx*cdx + cdy*cdy
+				if adist2 < cdist2 {
+					attackerNetID := ai.LastDamageByNetID
+					lock.Slots = lock.Slots[:0]
+					lock.Slots = append(lock.Slots, gamecomp.LockSlot{
+						TargetNetID:  attackerNetID,
+						TargetEntity: attacker.Handle(),
+						Progress:     0,
+						LockTime:     s.gw.Config.LockOnTime * 0.8,
+					})
+					lock.ActiveNetID = attackerNetID
+					ai.LastDamageByNetID = 0 // consume
+					ai.State = AIStateAcquire
+					ai.LastCombatActivityAt = now
+					s.gw.eng.Log.Log(CatNPCAI, "ai: %d target-switch to %d (closer attacker)",
+						self.NetID(), attackerNetID)
+					return
+				}
+			}
+		}
+		ai.LastDamageByNetID = 0 // consumed (no switch)
+	}
+
 	dx, dy := tpos.X-pos.X, tpos.Y-pos.Y
 	dist := float32(math.Sqrt(float64(dx*dx + dy*dy)))
 
