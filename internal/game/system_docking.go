@@ -7,96 +7,107 @@ import (
 	"github.com/zenion/mmoserver/pkg/mmokit"
 )
 
+// stationInfo is a tiny snapshot of a station entity used by startDockingFor.
+type stationInfo struct {
+	x, y  float32
+	netID uint32
+}
+
+// startDockingFor processes a single client Dock request. Dispatched via
+// Commands.Defer from the Dock input handler, so it runs at the next
+// per-system flush boundary with the ECS world unlocked. Finds the nearest
+// station within DockRange, transitions the session to StateDocking, and
+// records a DockingProgress entry the DockingSystem then ticks each frame.
+func (gw *GameWorld) startDockingFor(connID uint32) {
+	sess := gw.Players.ByConnID(connID)
+	if sess == nil {
+		return
+	}
+	// Already docking or docked?
+	if sess.State == StateDocking || sess.State == StateDocked {
+		return
+	}
+	if sess.State != mmokit.StateActive {
+		return
+	}
+
+	entity := mmokit.EntityFromECS(gw.stage, sess.Entity)
+	if !entity.Alive() {
+		return
+	}
+
+	pos := mmokit.Get[mmokit.Position](entity)
+	if pos == nil {
+		return
+	}
+
+	// Collect station positions (rare event — recomputed per call).
+	var stations []stationInfo
+	mmokit.ForEach2[gamecomp.Station, mmokit.Position](gw.stage, func(e mmokit.Entity, _ *gamecomp.Station, sp *mmokit.Position) {
+		netID := uint32(0)
+		if n := mmokit.Get[mmokit.NetworkID](e); n != nil {
+			netID = n.ID
+		}
+		stations = append(stations, stationInfo{x: sp.X, y: sp.Y, netID: netID})
+	})
+	dockRange2 := float64(gw.Config.DockRange) * float64(gw.Config.DockRange)
+
+	// Find nearest station within range.
+	var nearest *stationInfo
+	bestDist2 := math.MaxFloat64
+	for i := range stations {
+		dx := float64(pos.X - stations[i].x)
+		dy := float64(pos.Y - stations[i].y)
+		d2 := dx*dx + dy*dy
+		if d2 <= dockRange2 && d2 < bestDist2 {
+			bestDist2 = d2
+			nearest = &stations[i]
+		}
+	}
+	if nearest == nil {
+		return
+	}
+
+	// Start docking — transition to StateDocking and store DockingProgress
+	// keyed by username so it survives a mid-dock disconnect/reconnect
+	// (the new ConnID inherits the same in-flight DockingProgress).
+	gw.dockingStates[sess.Username] = &DockingProgress{
+		Remaining:    gw.Config.DockTime,
+		StationX:     nearest.x,
+		StationY:     nearest.y,
+		StationNetID: nearest.netID,
+	}
+	gw.Players.Transition(sess, StateDocking)
+
+	// Deactivate move target immediately.
+	if mt := mmokit.Get[mmokit.MoveTarget](entity); mt != nil {
+		mt.Active = false
+	}
+
+	mmokit.SendEvent(gw.stage, connID, &DockingState{
+		Docking:   true,
+		Progress:  0,
+		TotalTime: gw.Config.DockTime,
+		StationID: nearest.netID,
+	})
+	gw.eng.Log.Log(CatPlayerDock, "docking started: conn=%d station_net_id=%d", connID, nearest.netID)
+}
+
 // DockingSystem handles the docking sequence: tractor beam physics, progress
-// tracking, and docking state transitions.
+// tracking, and docking state transitions. Initial dock-request handling has
+// moved to GameWorld.startDockingFor, dispatched via Commands.Defer from the
+// Dock input handler.
 type DockingSystem struct {
 	mmokit.SystemBase
-	gw       *GameWorld
-	stations mmokit.Query[struct {
-		Station *gamecomp.Station
-		Pos     *mmokit.Position
-		NetID   *mmokit.NetworkID
-	}]
+	gw *GameWorld
 }
 
 func (s *DockingSystem) Init() {
 	s.gw = mmokit.State[GameWorld](s.Stage())
 }
 
-type stationInfo struct {
-	x, y  float32
-	netID uint32
-}
-
 func (s *DockingSystem) Update(dt float32) {
 	gw := s.gw
-
-	// Collect station positions
-	var stations []stationInfo
-	for _, b := range s.stations.Iter {
-		stations = append(stations, stationInfo{x: b.Pos.X, y: b.Pos.Y, netID: b.NetID.ID})
-	}
-	dockRange2 := float64(gw.Config.DockRange) * float64(gw.Config.DockRange)
-
-	// Process new dock requests
-	for _, req := range mmokit.Drain[PendingDockRequest](gw.Queue) {
-		sess := gw.Players.ByConnID(req.ConnID)
-		if sess == nil {
-			continue
-		}
-		// Already docking or docked?
-		if sess.State == StateDocking || sess.State == StateDocked {
-			continue
-		}
-		if sess.State != mmokit.StateActive {
-			continue
-		}
-
-		entity := mmokit.EntityFromECS(gw.stage, sess.Entity)
-		if !entity.Alive() {
-			continue
-		}
-
-		pos := mmokit.Get[mmokit.Position](entity)
-		if pos == nil {
-			continue
-		}
-
-		// Find nearest station within range
-		var nearest *stationInfo
-		bestDist2 := math.MaxFloat64
-		for i := range stations {
-			dx := float64(pos.X - stations[i].x)
-			dy := float64(pos.Y - stations[i].y)
-			d2 := dx*dx + dy*dy
-			if d2 <= dockRange2 && d2 < bestDist2 {
-				bestDist2 = d2
-				nearest = &stations[i]
-			}
-		}
-		if nearest == nil {
-			continue
-		}
-
-		// Start docking — transition to StateDocking and store DockingProgress
-		// keyed by username so it survives a mid-dock disconnect/reconnect
-		// (the new ConnID inherits the same in-flight DockingProgress).
-		gw.dockingStates[sess.Username] = &DockingProgress{
-			Remaining:    gw.Config.DockTime,
-			StationX:     nearest.x,
-			StationY:     nearest.y,
-			StationNetID: nearest.netID,
-		}
-		gw.Players.Transition(sess, StateDocking)
-
-		// Deactivate move target immediately
-		if mt := mmokit.Get[mmokit.MoveTarget](entity); mt != nil {
-			mt.Active = false
-		}
-
-		s.sendDockingState(req.ConnID, true, 0, gw.Config.DockTime, nearest.netID)
-		gw.eng.Log.Log(CatPlayerDock, "docking started: conn=%d station_net_id=%d", req.ConnID, nearest.netID)
-	}
 
 	// Tick docking timers — tractor beam physics
 	dragFactor := float32(math.Exp(float64(-gw.Config.DockDragCoeff * dt)))
