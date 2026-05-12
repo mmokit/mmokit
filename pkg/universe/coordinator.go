@@ -2382,6 +2382,9 @@ func (c *Process) createNode(cell CellID, spatialBucketSize float32, owningHost 
 	mergedHooks := engine.Hooks{
 		OnConnect:    gameHooks.OnConnect,
 		OnDisconnect: gameHooks.OnDisconnect,
+		AfterSystem: func() {
+			base.Commands().Flush()
+		},
 		PreFlush: func() {
 			// Fire stage-registered per-tick callbacks (mmokit.OnWorldTick /
 			// OnTick / OnTickEach) right after systems run, before

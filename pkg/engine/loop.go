@@ -13,9 +13,10 @@ import (
 type Hooks struct {
 	OnConnect      func(connID uint32)
 	OnDisconnect   func(connID uint32)
+	ClearTickState func()
+	AfterSystem    func() // called after each system's Update returns
 	PreFlush       func()
 	PostFlush      func()
-	ClearTickState func()
 	PostTick       func()
 }
 
@@ -59,9 +60,10 @@ func NewGameLoop(eng *Engine, systems []System, names []string, hooks Hooks) *Ga
 				hooks.OnDisconnect(connID)
 			}
 		},
+		ClearTickState: hooks.ClearTickState,
+		AfterSystem:    hooks.AfterSystem,
 		PreFlush:       hooks.PreFlush,
 		PostFlush:      hooks.PostFlush,
-		ClearTickState: hooks.ClearTickState,
 		PostTick: func() {
 			if hooks.PostTick != nil {
 				hooks.PostTick()
@@ -135,6 +137,9 @@ func (gl *GameLoop) tick(dt float32) {
 	for i, sys := range gl.systems {
 		sysStart := time.Now()
 		sys.Update(dt)
+		if gl.hooks.AfterSystem != nil {
+			gl.hooks.AfterSystem()
+		}
 		gl.sysTimings[i] = time.Since(sysStart)
 	}
 
