@@ -72,7 +72,7 @@ func TestForEach1(t *testing.T) {
 	}
 
 	count := 0
-	mmokit.ForEach1[component.Position](stage, func(e mmokit.Entity, pos *component.Position) {
+	mmokit.ForEach1(stage, func(e mmokit.Entity, pos *component.Position) {
 		count++
 	})
 	if count != 5 {
@@ -97,7 +97,7 @@ func TestForEach2(t *testing.T) {
 	stage.RegisterLiveNetID(201, h2)
 
 	count := 0
-	mmokit.ForEach2[component.Position, component.Velocity](stage,
+	mmokit.ForEach2(stage,
 		func(e mmokit.Entity, p *component.Position, v *component.Velocity) {
 			count++
 		})
@@ -120,7 +120,7 @@ func TestForEach3(t *testing.T) {
 	stage.RegisterLiveNetID(300, h)
 
 	count := 0
-	mmokit.ForEach3[component.Position, component.Velocity, component.Rotation](stage,
+	mmokit.ForEach3(stage,
 		func(e mmokit.Entity, p *component.Position, v *component.Velocity, r *component.Rotation) {
 			count++
 		})
