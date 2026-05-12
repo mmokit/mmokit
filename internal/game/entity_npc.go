@@ -14,7 +14,7 @@ type NPCBundle struct {
 	Health        *gamecomp.Health
 	Shield        *gamecomp.Shield
 	StatusEffects *gamecomp.StatusEffects
-	TargetLock    *gamecomp.TargetLock // multi-slot but always MaxSlots=1 for NPCs
+	TargetLock    *gamecomp.TargetLock `mmokit:"local"` // multi-slot but always MaxSlots=1 for NPCs
 }
 
 // SpawnNPC creates a stationary NPC ship entity at the given position.

@@ -23,7 +23,7 @@ type ShipBundle struct {
 	ShipControl   *gamecomp.ShipControl
 	Equipment     *gamecomp.Equipment
 	Inventory     *gamecomp.Inventory
-	TargetLock    *gamecomp.TargetLock
+	TargetLock    *gamecomp.TargetLock `mmokit:"local"`
 	AbilitySet    *gamecomp.AbilitySet
 	StatusEffects *gamecomp.StatusEffects
 	MoveTarget    *mmokit.MoveTarget
