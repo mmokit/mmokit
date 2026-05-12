@@ -109,11 +109,6 @@ type Hooks = engine.Hooks
 // drain admin commands, run all systems in order, flush removals, and spawn loot.
 type GameLoop = engine.GameLoop
 
-// TickQueue is a generic per-tick event queue. Each event type T gets its own
-// internal slice. Use Enqueue[T], Drain[T], and Peek[T] to interact with it.
-// All operations are single-threaded (game loop only).
-type TickQueue = engine.TickQueue
-
 // Console provides an interactive server CLI with readline support, tab completion,
 // command categories, and subcommand groups. All ECS access is scheduled via
 // engine.RunOnLoop to ensure thread safety.
@@ -826,9 +821,6 @@ var (
 	// NewEntityRegistry creates an empty EntityRegistry for registering entity types.
 	NewEntityRegistry = engine.NewEntityRegistry
 
-	// NewTickQueue creates a new per-tick typed event queue.
-	NewTickQueue = engine.NewTickQueue
-
 	// NewPlayerManager creates a PlayerManager with built-in states and transitions.
 	NewPlayerManager = engine.NewPlayerManager
 
@@ -1091,22 +1083,6 @@ func BuildReplicators(w *ecs.World, coord *universe.Process, defs ...universe.En
 		replicators.Register(system.AutoReplicator(def.Kind, bindings...))
 	}
 	return replicators
-}
-
-// Enqueue adds a typed event to a TickQueue. The event is available via
-// Drain[T] or Peek[T] until the queue is drained.
-func Enqueue[T any](q *engine.TickQueue, event T) {
-	engine.Enqueue(q, event)
-}
-
-// Drain retrieves and clears all events of type T from a TickQueue.
-func Drain[T any](q *engine.TickQueue) []T {
-	return engine.Drain[T](q)
-}
-
-// Peek returns all events of type T from a TickQueue without clearing them.
-func Peek[T any](q *engine.TickQueue) []T {
-	return engine.Peek[T](q)
 }
 
 // NewNetworkSystem returns a SystemDef that creates a ReplicationSystem
