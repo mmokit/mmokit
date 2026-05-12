@@ -10,7 +10,7 @@ import (
 )
 
 // TestCommands_Defer_ExecutesInSubmitOrder verifies that Defer closures
-// run in the order they were submitted when flush() is invoked.
+// run in the order they were submitted when Flush() is invoked.
 func TestCommands_Defer_ExecutesInSubmitOrder(t *testing.T) {
 	c := &Commands{}
 	var got []int
@@ -18,7 +18,7 @@ func TestCommands_Defer_ExecutesInSubmitOrder(t *testing.T) {
 	c.Defer(func() { got = append(got, 2) })
 	c.Defer(func() { got = append(got, 3) })
 
-	c.flush()
+	c.Flush()
 
 	if len(got) != 3 || got[0] != 1 || got[1] != 2 || got[2] != 3 {
 		t.Fatalf("Defer order = %v, want [1 2 3]", got)
@@ -32,8 +32,8 @@ func TestCommands_Flush_ClearsQueue(t *testing.T) {
 	calls := 0
 	c.Defer(func() { calls++ })
 
-	c.flush()
-	c.flush()
+	c.Flush()
+	c.Flush()
 
 	if calls != 1 {
 		t.Fatalf("Defer called %d times across two flushes, want 1", calls)
@@ -53,7 +53,7 @@ func TestCommands_Despawn_NoopOnDeadHandle(t *testing.T) {
 	c := &Commands{world: w}
 	c.Despawn(h) // queue against an already-dead handle
 	// Should not panic on flush.
-	c.flush()
+	c.Flush()
 }
 
 // TestStage_HasCommands verifies the stage exposes its Commands buffer

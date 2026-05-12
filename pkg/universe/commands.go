@@ -49,10 +49,17 @@ func (c *Commands) AddOp(op func()) {
 	c.ops = append(c.ops, op)
 }
 
-// flush applies all queued ops in submit order and clears the buffer.
-// Package-private — the engine game loop is the only caller in
-// production. Test helpers in mmokit (stage.TickOne) also call it.
-func (c *Commands) flush() {
+// Flush applies all queued ops in submit order and clears the buffer.
+// The engine game loop is the authoritative production caller (it
+// invokes Flush after every system's Update via the AfterSystem
+// hook). Tests that bypass the loop (calling sys.Update directly)
+// also call Flush manually — use stage.TickOne(sys, dt) to wrap that
+// pattern cleanly.
+//
+// Game code should never call this directly. Mutations are queued
+// via Despawn / Defer (or mmokit.AddComponent / mmokit.RemoveComponent)
+// and applied automatically.
+func (c *Commands) Flush() {
 	for _, op := range c.ops {
 		op()
 	}
