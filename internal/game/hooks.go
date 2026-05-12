@@ -254,10 +254,8 @@ func (gw *GameWorld) GetNetID(entity ecs.Entity) (uint32, bool) {
 }
 
 func (gw *GameWorld) postFlush() {
-	// Spawn loot crates from deaths that occurred this tick
-	for _, drop := range mmokit.Drain[PendingLootDrop](gw.Queue) {
-		gw.SpawnLootCrate(drop.X, drop.Y, drop.Items)
-	}
+	// Loot drops: now scheduled via Commands.Defer from verb_death.go;
+	// they fire at the next per-system flush boundary. No drain here.
 
 	// Process respawn requests (after removals so new entities are clean)
 	gw.processRespawns()

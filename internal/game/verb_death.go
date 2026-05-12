@@ -144,9 +144,13 @@ func (gw *GameWorld) handlePlayerKilled(target mmokit.Entity, killer mmokit.Enti
 		eq.Thruster = 0
 	}
 	if len(items) > 0 {
-		// Deferred — observer fires from OnTickEach iteration, where spawning new
-		// entities is unsafe. PendingLootDrop is drained in postFlush.
-		mmokit.Enqueue(gw.Queue, PendingLootDrop{X: pos.X, Y: pos.Y, Items: items})
+		// Defer — observer fires from OnTickEach iteration, where spawning
+		// new entities would panic against the ark locked-world check. The
+		// closure runs at the next Commands flush (between systems).
+		x, y, drops := pos.X, pos.Y, items
+		gw.stage.Commands().Defer(func() {
+			gw.SpawnLootCrate(x, y, drops)
+		})
 	}
 }
 
@@ -204,8 +208,12 @@ func (gw *GameWorld) handleNPCKilled(target mmokit.Entity, killer mmokit.Entity)
 
 	// Non-currency items go into a loot crate.
 	if len(items) > 0 {
-		// Deferred — observer fires from OnTickEach iteration, where spawning new
-		// entities is unsafe. PendingLootDrop is drained in postFlush.
-		mmokit.Enqueue(gw.Queue, PendingLootDrop{X: pos.X, Y: pos.Y, Items: items})
+		// Defer — observer fires from OnTickEach iteration, where spawning
+		// new entities would panic against the ark locked-world check. The
+		// closure runs at the next Commands flush (between systems).
+		x, y, drops := pos.X, pos.Y, items
+		gw.stage.Commands().Defer(func() {
+			gw.SpawnLootCrate(x, y, drops)
+		})
 	}
 }
