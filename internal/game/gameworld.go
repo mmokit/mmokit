@@ -3,8 +3,6 @@ package game
 import (
 	"maps"
 
-	"github.com/mlange-42/ark/ecs"
-
 	gamecomp "github.com/zenion/mmoserver/internal/component"
 	"github.com/zenion/mmoserver/internal/item"
 	"github.com/zenion/mmoserver/pkg/mmokit"
@@ -101,7 +99,7 @@ func (gw *GameWorld) POICooldownSec() int32 { return poiCooldownSec(gw) }
 func (gw *GameWorld) Engine() *mmokit.Engine { return gw.eng }
 
 // MarkForRemoval forwards to the Stage's engine.
-func (gw *GameWorld) MarkForRemoval(e ecs.Entity) {
+func (gw *GameWorld) MarkForRemoval(e mmokit.EntityHandle) {
 	gw.stage.MarkForRemoval(e)
 }
 

@@ -1,8 +1,6 @@
 package game
 
 import (
-	"github.com/mlange-42/ark/ecs"
-
 	gamecomp "github.com/zenion/mmoserver/internal/component"
 	"github.com/zenion/mmoserver/pkg/mmokit"
 )
@@ -49,7 +47,7 @@ func (s *NetworkSystem) Init() {
 	gw := s.gw
 
 	s.ctx = &gameNetContext{
-		lockedBy: make(map[ecs.Entity]lockerInfo),
+		lockedBy: make(map[mmokit.EntityHandle]lockerInfo),
 	}
 
 	s.locks.With(mmokit.IncludeAll())
@@ -203,7 +201,7 @@ func (s *NetworkSystem) afterTick(tick uint32) {
 
 // sendOwnState builds and sends a typed PlayerOwnState event to the owning
 // player each tick.
-func (s *NetworkSystem) sendOwnState(connID uint32, entity ecs.Entity) {
+func (s *NetworkSystem) sendOwnState(connID uint32, entity mmokit.EntityHandle) {
 	gw := s.gw
 	e := mmokit.EntityFromECS(gw.stage, entity)
 

@@ -1,8 +1,6 @@
 package game
 
 import (
-	"github.com/mlange-42/ark/ecs"
-
 	"github.com/zenion/mmoserver/pkg/mmokit"
 )
 
@@ -92,7 +90,7 @@ func registerPlayerJoin(coord *mmokit.Process) {
 		if s.State == StateDead {
 			mmokit.SendEvent(gw.stage, s.ConnID, &PlayerDied{KillerID: 0})
 			gw.eng.Log.Log(CatPlayerSpawn, "reconnect-to-dead: conn=%d username=%s", s.ConnID, s.Username)
-		} else if s.Entity != (ecs.Entity{}) && gw.stage.ECSWorld().Alive(s.Entity) {
+		} else if s.Entity != (mmokit.EntityHandle{}) && gw.stage.ECSWorld().Alive(s.Entity) {
 			// Entity preserved across grace period (Active / Docked / Docking).
 			gw.reconnectPlayer(s)
 			// State-specific welcome on reconnect into a non-Active state.

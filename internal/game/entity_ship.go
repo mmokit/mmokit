@@ -5,8 +5,6 @@ import (
 	"math/rand/v2"
 	"time"
 
-	"github.com/mlange-42/ark/ecs"
-
 	gamecomp "github.com/zenion/mmoserver/internal/component"
 	"github.com/zenion/mmoserver/internal/item"
 	"github.com/zenion/mmoserver/pkg/coords"
@@ -38,7 +36,7 @@ type ShipBundle struct {
 // If s.Entity is already alive, this is a reconnection or cross-cell transfer —
 // reuse the existing entity instead of creating a new one.
 func (gw *GameWorld) SpawnPlayer(s *mmokit.PlayerSession) {
-	if s.Entity != (ecs.Entity{}) && gw.stage.ECSWorld().Alive(s.Entity) {
+	if s.Entity != (mmokit.EntityHandle{}) && gw.stage.ECSWorld().Alive(s.Entity) {
 		gw.reconnectPlayer(s)
 		return
 	}

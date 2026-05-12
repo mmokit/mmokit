@@ -3,8 +3,6 @@ package game
 import (
 	"math"
 
-	"github.com/mlange-42/ark/ecs"
-
 	gamecomp "github.com/zenion/mmoserver/internal/component"
 	"github.com/zenion/mmoserver/pkg/mmokit"
 )
@@ -23,11 +21,6 @@ type TargetLockSystem struct {
 
 func (s *TargetLockSystem) Init() {
 	s.gw = mmokit.State[GameWorld](s.Stage())
-	// Prime components the per-tick Has checks would otherwise try to
-	// register inside a locked-world query.
-	w := s.Stage().ECSWorld()
-	ecs.NewMap1[gamecomp.Leashing](w)
-	ecs.NewMap1[mmokit.Dormant](w)
 }
 
 func (s *TargetLockSystem) Update(dt float32) {
@@ -131,6 +124,3 @@ func (s *TargetLockSystem) clearAll(lock *gamecomp.TargetLock) {
 	lock.Slots = lock.Slots[:0]
 	lock.ActiveNetID = 0
 }
-
-// Silence unused-import warning if ecs not yet referenced.
-var _ ecs.Entity

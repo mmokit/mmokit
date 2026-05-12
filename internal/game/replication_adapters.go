@@ -1,7 +1,7 @@
 package game
 
 import (
-	"github.com/mlange-42/ark/ecs"
+	"github.com/zenion/mmoserver/pkg/mmokit"
 )
 
 // ---------------------------------------------------------------------------
@@ -17,5 +17,5 @@ type lockerInfo struct {
 // gameNetContext holds precomputed per-tick shared data for handlers.
 type gameNetContext struct {
 	// lockedBy maps target entity -> most-progressed locker.
-	lockedBy map[ecs.Entity]lockerInfo
+	lockedBy map[mmokit.EntityHandle]lockerInfo
 }

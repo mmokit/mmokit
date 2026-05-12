@@ -1,8 +1,6 @@
 package game
 
 import (
-	"github.com/mlange-42/ark/ecs"
-
 	gamecomp "github.com/zenion/mmoserver/internal/component"
 	"github.com/zenion/mmoserver/pkg/mmokit"
 )
@@ -27,7 +25,7 @@ type NPCBundle struct {
 // given local position with anchor link to poiNetID. Pass poiNetID=0
 // for console-spawned test NPCs (they leash to their spawn position
 // when no POI exists).
-func (gw *GameWorld) SpawnNPC(x, y float32, archetype uint8, poiNetID uint32) ecs.Entity {
+func (gw *GameWorld) SpawnNPC(x, y float32, archetype uint8, poiNetID uint32) mmokit.EntityHandle {
 	defaults := archetypeDefaults(gw.Config, archetype)
 	br := boundingRadius(gw.Config.NpcWidth, gw.Config.NpcHeight)
 

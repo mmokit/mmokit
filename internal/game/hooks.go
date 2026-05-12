@@ -5,8 +5,6 @@ import (
 	"log"
 	"math/rand/v2"
 
-	"github.com/mlange-42/ark/ecs"
-
 	gamecomp "github.com/zenion/mmoserver/internal/component"
 	"github.com/zenion/mmoserver/pkg/mmokit"
 )
@@ -27,11 +25,11 @@ func (gw *GameWorld) Hooks() mmokit.Hooks {
 // Init is called by the Process after all nodes are created and bridges are wired.
 // It sets up replication, transfer hooks, and post-spawn callbacks.
 func (gw *GameWorld) Init() {
-	gw.stage.SetOnTransferReceived(func(entity ecs.Entity, frame *mmokit.TransferFrame) {
+	gw.stage.SetOnTransferReceived(func(entity mmokit.EntityHandle, frame *mmokit.TransferFrame) {
 		gw.FinishTransferSpawn(entity, frame)
 	})
 
-	gw.stage.SetOnPlayerTransferReceived(func(entity ecs.Entity, frame *mmokit.TransferFrame) {
+	gw.stage.SetOnPlayerTransferReceived(func(entity mmokit.EntityHandle, frame *mmokit.TransferFrame) {
 		if s := gw.eng.Players.ByConnID(frame.ConnID); s != nil {
 			gw.WireTransferPlayer(entity, s)
 		}
@@ -242,7 +240,7 @@ func (gw *GameWorld) startUndockingFor(connID uint32) {
 	gw.eng.Log.Log(CatPlayerDock, "player undocked: conn=%d username=%s", s.ConnID, s.Username)
 }
 
-func (gw *GameWorld) GetNetID(entity ecs.Entity) (uint32, bool) {
+func (gw *GameWorld) GetNetID(entity mmokit.EntityHandle) (uint32, bool) {
 	e := mmokit.EntityFromECS(gw.stage, entity)
 	// Ghost and Replica removals are silent — don't generate kill notifications
 	if mmokit.Has[mmokit.Ghost](e) || mmokit.Has[mmokit.Replica](e) {

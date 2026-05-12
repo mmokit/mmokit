@@ -3,8 +3,6 @@ package game
 import (
 	"math"
 
-	"github.com/mlange-42/ark/ecs"
-
 	gamecomp "github.com/zenion/mmoserver/internal/component"
 	"github.com/zenion/mmoserver/internal/item"
 	"github.com/zenion/mmoserver/pkg/mmokit"
@@ -36,7 +34,7 @@ type abilityBundle struct {
 }
 
 type abilityAction struct {
-	caster      ecs.Entity
+	caster      mmokit.EntityHandle
 	casterNetID uint32
 	slot        uint8
 	params      *item.AbilityParams
@@ -355,7 +353,7 @@ func (s *AbilitySystem) slotToBeamIndex(slot uint8) int {
 	return 1
 }
 
-func (s *AbilitySystem) inRange(caster, target ecs.Entity, abilityRange float32) bool {
+func (s *AbilitySystem) inRange(caster, target mmokit.EntityHandle, abilityRange float32) bool {
 	gw := s.gw
 	casterE := mmokit.EntityFromECS(gw.stage, caster)
 	targetE := mmokit.EntityFromECS(gw.stage, target)

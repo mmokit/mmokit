@@ -3,8 +3,6 @@ package game
 import (
 	"math"
 
-	"github.com/mlange-42/ark/ecs"
-
 	gamecomp "github.com/zenion/mmoserver/internal/component"
 	"github.com/zenion/mmoserver/internal/item"
 	"github.com/zenion/mmoserver/pkg/mmokit"
@@ -69,7 +67,7 @@ func (s *NPCAISystem) tickIdle(self mmokit.Entity, ai *gamecomp.NPCAI,
 	vel.X, vel.Y = 0, 0
 
 	target := s.findNearestEnemy(self, pos, ai.AggroRadius)
-	if target == (ecs.Entity{}) {
+	if target == (mmokit.EntityHandle{}) {
 		return
 	}
 
@@ -310,8 +308,8 @@ func (s *NPCAISystem) tickLeash(self mmokit.Entity, ai *gamecomp.NPCAI,
 
 func (s *NPCAISystem) findNearestEnemy(self mmokit.Entity,
 	pos *mmokit.Position, radius float32,
-) ecs.Entity {
-	var best ecs.Entity
+) mmokit.EntityHandle {
+	var best mmokit.EntityHandle
 	bestDist2 := radius * radius
 	mmokit.ForEach2(s.gw.stage, func(e mmokit.Entity, ppos *mmokit.Position, kind *mmokit.EntityKind) {
 		entE := e.Handle()

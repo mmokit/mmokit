@@ -1,8 +1,6 @@
 package game
 
 import (
-	"github.com/mlange-42/ark/ecs"
-
 	gamecomp "github.com/zenion/mmoserver/internal/component"
 	"github.com/zenion/mmoserver/pkg/mmokit"
 )
@@ -12,7 +10,7 @@ import (
 // bundle structs registered via mmokit.RegisterKind[T] (including
 // `mmokit:"local"`-tagged local-only fields). Only config-dependent
 // values that can't be expressed as zero defaults remain here.
-func (gw *GameWorld) FinishTransferSpawn(handle ecs.Entity, frame *mmokit.TransferFrame) {
+func (gw *GameWorld) FinishTransferSpawn(handle mmokit.EntityHandle, frame *mmokit.TransferFrame) {
 	entity := mmokit.EntityFromECS(gw.stage, handle)
 	switch frame.EntityType {
 	case gamecomp.KindShip:
@@ -41,7 +39,7 @@ func (gw *GameWorld) FinishTransferSpawn(handle ecs.Entity, frame *mmokit.Transf
 // Called from the universe adapter after SpawnFromTransferCore + FinishTransferSpawn.
 // Does NOT call reconnectPlayer — that sends PlayerEntityAssigned which clears client entities
 // and causes a visual blink. The adapter sends a CellChange event instead.
-func (gw *GameWorld) WireTransferPlayer(entity ecs.Entity, s *mmokit.PlayerSession) {
+func (gw *GameWorld) WireTransferPlayer(entity mmokit.EntityHandle, s *mmokit.PlayerSession) {
 	s.Entity = entity
 	gw.updatePlayerCompletions()
 }

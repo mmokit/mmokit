@@ -4,8 +4,6 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/mlange-42/ark/ecs"
-
 	gamecomp "github.com/zenion/mmoserver/internal/component"
 	"github.com/zenion/mmoserver/internal/item"
 	"github.com/zenion/mmoserver/pkg/mmokit"
@@ -71,7 +69,7 @@ func NewGameWorld(base *mmokit.Stage, cfg *GameConfig, playerDB *PlayerRepo, cel
 			if mmokit.Has[mmokit.Ghost](entity) {
 				// Transfer ghost — don't remove, let TTL expire.
 				// The ghost lingers for visual continuity until the replica arrives.
-				s.Entity = ecs.Entity{}
+				s.Entity = mmokit.EntityHandle{}
 				if gw.PlayerSessions != nil {
 					gw.PlayerSessions.Remove(s.ConnID)
 				}
@@ -82,7 +80,7 @@ func NewGameWorld(base *mmokit.Stage, cfg *GameConfig, playerDB *PlayerRepo, cel
 			gw.Spatial.Deregister(s.Entity)
 			mmokit.Despawn(entity)
 		}
-		s.Entity = ecs.Entity{}
+		s.Entity = mmokit.EntityHandle{}
 		if gw.PlayerSessions != nil {
 			gw.PlayerSessions.Remove(s.ConnID)
 		}
@@ -118,7 +116,7 @@ func NewGameWorld(base *mmokit.Stage, cfg *GameConfig, playerDB *PlayerRepo, cel
 		if mmokit.Has[mmokit.Ghost](entity) {
 			// Transfer ghost — handle as the previous removeFromWorld path
 			// did (don't add Dormant; the ghost TTL handles cleanup).
-			s.Entity = ecs.Entity{}
+			s.Entity = mmokit.EntityHandle{}
 			if gw.PlayerSessions != nil {
 				gw.PlayerSessions.Remove(s.ConnID)
 			}
@@ -167,7 +165,7 @@ func NewGameWorld(base *mmokit.Stage, cfg *GameConfig, playerDB *PlayerRepo, cel
 		entity := mmokit.EntityFromECS(gw.stage, s.Entity)
 		if entity.Alive() {
 			if mmokit.Has[mmokit.Ghost](entity) {
-				s.Entity = ecs.Entity{}
+				s.Entity = mmokit.EntityHandle{}
 				if gw.PlayerSessions != nil {
 					gw.PlayerSessions.Remove(s.ConnID)
 				}
@@ -177,7 +175,7 @@ func NewGameWorld(base *mmokit.Stage, cfg *GameConfig, playerDB *PlayerRepo, cel
 			gw.Spatial.Deregister(s.Entity)
 			mmokit.Despawn(entity)
 		}
-		s.Entity = ecs.Entity{}
+		s.Entity = mmokit.EntityHandle{}
 		if gw.PlayerSessions != nil {
 			gw.PlayerSessions.Remove(s.ConnID)
 		}
@@ -256,7 +254,7 @@ func NewGameWorld(base *mmokit.Stage, cfg *GameConfig, playerDB *PlayerRepo, cel
 				gw.Spatial.Deregister(s.Entity)
 				mmokit.Despawn(entity)
 			}
-			s.Entity = ecs.Entity{}
+			s.Entity = mmokit.EntityHandle{}
 			gw.updatePlayerCompletions()
 		},
 	})
