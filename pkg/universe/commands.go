@@ -1,0 +1,60 @@
+package universe
+
+import (
+	"github.com/mlange-42/ark/ecs"
+)
+
+// Commands is a per-stage deferred ECS mutation buffer. The engine
+// flushes it after every system's Update so ops queued in System N
+// are visible to System N+1 in the same tick. Game code should never
+// call flush() directly — only the engine loop does that.
+//
+// Operations are applied in submit order. Each op checks
+// ecs.World.Alive on its target handle and silently no-ops if the
+// entity is gone, so AddComponent-after-Despawn within the same
+// batch is safe.
+type Commands struct {
+	world *ecs.World
+	stage *Stage // nil during initial construction; set after Stage wires it
+	ops   []func()
+}
+
+// Despawn queues immediate destruction of the entity at next flush.
+// Subsequent ops on this handle within the same batch become no-ops
+// (via the world.Alive check inside each op).
+func (c *Commands) Despawn(h ecs.Entity) {
+	c.ops = append(c.ops, func() {
+		if c.world != nil && c.world.Alive(h) {
+			c.world.RemoveEntity(h)
+		}
+	})
+}
+
+// Defer schedules an arbitrary closure to run during next flush. Use
+// for game-action logic that doesn't reduce to a single ECS primitive
+// (spawning a loot crate with inventory setup, starting a docking
+// sequence, cross-cell respawn routing).
+//
+// Closures may call Commands ops on this same buffer, but those ops
+// land in the NEXT system's flush, not the current one. Single-pass
+// per flush; no convergence loop.
+func (c *Commands) Defer(fn func()) {
+	c.ops = append(c.ops, fn)
+}
+
+// AddOp is the public-but-internal hook for cross-package generic
+// ops in mmokit. Game code should use mmokit.AddComponent /
+// mmokit.RemoveComponent instead of calling this directly.
+func (c *Commands) AddOp(op func()) {
+	c.ops = append(c.ops, op)
+}
+
+// flush applies all queued ops in submit order and clears the buffer.
+// Package-private — the engine game loop is the only caller in
+// production. Test helpers in mmokit (stage.TickOne) also call it.
+func (c *Commands) flush() {
+	for _, op := range c.ops {
+		op()
+	}
+	c.ops = c.ops[:0]
+}
