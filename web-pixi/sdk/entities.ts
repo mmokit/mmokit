@@ -129,6 +129,8 @@ export interface NPCEntity {
   healthMax: number;
   shieldCurrent: number;
   shieldMax: number;
+  archetype: number;
+  state: number;
   statusEffects: NPCStatusEffectsItem[];
 }
 
@@ -138,7 +140,29 @@ export interface NPCStatusEffectsItem {
   duration: number;
 }
 
-export type AnyEntity = ShipEntity | AsteroidEntity | StationEntity | LootCrateEntity | NPCEntity;
+/** Entity kind 5. */
+export interface POIEntity {
+  netID: number;
+  entityType: 5;
+  /**
+   * Cluster-clock stamp (Unix ms) from the authoritative producer at
+   * the moment this state was emitted. Preserves the producer's
+   * timeline through any relay hops. Used as the per-entity time-base
+   * for snapshot interpolation.
+   */
+  producedAtMs: number;
+  worldX: number;
+  worldY: number;
+  velX: number;
+  velY: number;
+  radius: number;
+  width: number;
+  height: number;
+  type: number;
+  status: number;
+}
+
+export type AnyEntity = ShipEntity | AsteroidEntity | StationEntity | LootCrateEntity | NPCEntity | POIEntity;
 
 export interface DeltaWorldUpdate {
   tick: number;

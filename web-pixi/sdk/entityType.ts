@@ -10,6 +10,7 @@ export const EntityType = {
     Station: 2,
     LootCrate: 3,
     NPC: 4,
+    POI: 5,
 } as const;
 
 export type EntityTypeValue = typeof EntityType[keyof typeof EntityType];

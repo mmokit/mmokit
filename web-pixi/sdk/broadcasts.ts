@@ -241,6 +241,47 @@ export class EquipResult {
   }
 }
 
+/** Broadcast-eligible event game.LockRejectedMsg (typeID 0x8a4aea2b). */
+export class LockRejectedMsg {
+  static readonly typeID = 0x8a4aea2b;
+  targetNetID: number = 0;
+  reason: number = 0;
+
+  static decode(buf: Uint8Array): LockRejectedMsg {
+    const dv = new DataView(buf.buffer, buf.byteOffset, buf.byteLength);
+    let off = 0;
+    const m = new LockRejectedMsg();
+    m.targetNetID = dv.getUint32(off, true); off += 4;
+    m.reason = dv.getUint8(off); off += 1;
+    return m;
+  }
+}
+
+/** Broadcast-eligible event game.LockSlotsMsg (typeID 0x8413ac26). */
+export class LockSlotsMsg {
+  static readonly typeID = 0x8413ac26;
+  slots: { targetNetID: number; progress: number; locked: boolean }[] = [];
+  activeNetID: number = 0;
+
+  static decode(buf: Uint8Array): LockSlotsMsg {
+    const dv = new DataView(buf.buffer, buf.byteOffset, buf.byteLength);
+    let off = 0;
+    const m = new LockSlotsMsg();
+    {
+      const sliceLen = dv.getUint16(off, true); off += 2;
+      for (let i = 0; i < sliceLen; i++) {
+        const item: { targetNetID: number; progress: number; locked: boolean } = { targetNetID: 0, progress: 0, locked: false };
+            item.targetNetID = dv.getUint32(off, true); off += 4;
+            item.progress = dv.getFloat32(off, true); off += 4;
+            item.locked = dv.getUint8(off) !== 0; off += 1;
+        m.slots.push(item);
+      }
+    }
+    m.activeNetID = dv.getUint32(off, true); off += 4;
+    return m;
+  }
+}
+
 /** Broadcast-eligible event game.MapData (typeID 0xc16d89a3). */
 export class MapData {
   static readonly typeID = 0xc16d89a3;

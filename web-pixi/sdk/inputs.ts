@@ -113,6 +113,26 @@ export class JettisonItem {
   }
 }
 
+/** Client-input message game.LockTarget (typeID 0x23808aed). */
+export class LockTarget {
+  static readonly typeID = 0x23808aed;
+  sequence: number = 0;
+  netID: number = 0;
+
+  constructor(init?: Partial<LockTarget>) {
+    if (init) Object.assign(this, init);
+  }
+
+  encode(): Uint8Array {
+    const buf = new Uint8Array(8);
+    const dv = new DataView(buf.buffer);
+    let off = 0;
+    dv.setUint32(off, this.sequence, true); off += 4;
+    dv.setUint32(off, this.netID, true); off += 4;
+    return buf;
+  }
+}
+
 /** Client-input message game.LootAll (typeID 0xff864c74). */
 export class LootAll {
   static readonly typeID = 0xff864c74;
@@ -173,13 +193,13 @@ export class Respawn {
   }
 }
 
-/** Client-input message game.SetLockTarget (typeID 0xdb7c2327). */
-export class SetLockTarget {
-  static readonly typeID = 0xdb7c2327;
+/** Client-input message game.SetActiveTarget (typeID 0xe3c5227e). */
+export class SetActiveTarget {
+  static readonly typeID = 0xe3c5227e;
   sequence: number = 0;
-  targetNetID: number = 0;
+  netID: number = 0;
 
-  constructor(init?: Partial<SetLockTarget>) {
+  constructor(init?: Partial<SetActiveTarget>) {
     if (init) Object.assign(this, init);
   }
 
@@ -188,7 +208,7 @@ export class SetLockTarget {
     const dv = new DataView(buf.buffer);
     let off = 0;
     dv.setUint32(off, this.sequence, true); off += 4;
-    dv.setUint32(off, this.targetNetID, true); off += 4;
+    dv.setUint32(off, this.netID, true); off += 4;
     return buf;
   }
 }
@@ -231,6 +251,26 @@ export class Undock {
     const dv = new DataView(buf.buffer);
     let off = 0;
     dv.setUint32(off, this.sequence, true); off += 4;
+    return buf;
+  }
+}
+
+/** Client-input message game.UnlockTarget (typeID 0x23935f96). */
+export class UnlockTarget {
+  static readonly typeID = 0x23935f96;
+  sequence: number = 0;
+  netID: number = 0;
+
+  constructor(init?: Partial<UnlockTarget>) {
+    if (init) Object.assign(this, init);
+  }
+
+  encode(): Uint8Array {
+    const buf = new Uint8Array(8);
+    const dv = new DataView(buf.buffer);
+    let off = 0;
+    dv.setUint32(off, this.sequence, true); off += 4;
+    dv.setUint32(off, this.netID, true); off += 4;
     return buf;
   }
 }
