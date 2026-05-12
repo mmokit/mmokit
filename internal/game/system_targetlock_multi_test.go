@@ -57,8 +57,8 @@ func TestMultiLock_ParallelProgress(t *testing.T) {
 	gw, _ := newTestGameWorld()
 
 	owner := newLockOwner(t, gw, 9001, 0, 0)
-	a := gw.SpawnNPC(50, 0)
-	b := gw.SpawnNPC(-50, 0)
+	a := gw.SpawnNPC(50, 0, ArchetypeBrawler, 0)
+	b := gw.SpawnNPC(-50, 0, ArchetypeBrawler, 0)
 
 	lock := mmokit.Get[gamecomp.TargetLock](owner)
 	lock.Range = 1000
@@ -94,7 +94,7 @@ func TestMultiLock_AutoActiveOnFirstComplete(t *testing.T) {
 	gw, _ := newTestGameWorld()
 
 	owner := newLockOwner(t, gw, 9002, 0, 0)
-	a := gw.SpawnNPC(50, 0)
+	a := gw.SpawnNPC(50, 0, ArchetypeBrawler, 0)
 
 	lock := mmokit.Get[gamecomp.TargetLock](owner)
 	lock.Range = 1000
@@ -127,7 +127,7 @@ func TestMultiLock_OutOfRangeDrop(t *testing.T) {
 	gw, _ := newTestGameWorld()
 
 	owner := newLockOwner(t, gw, 9003, 0, 0)
-	a := gw.SpawnNPC(50, 0)
+	a := gw.SpawnNPC(50, 0, ArchetypeBrawler, 0)
 
 	lock := mmokit.Get[gamecomp.TargetLock](owner)
 	lock.Range = 100

@@ -366,7 +366,7 @@ type Leashing struct{}
 // LastDamageBy fields drive the target-switching rule. All numeric
 // tunables are captured at spawn time from the active GameConfig.
 type NPCAI struct {
-	Archetype            uint8   `net:"u8 initial"`
+	Archetype            uint8   `net:"initial,u8"`
 	State                uint8   `net:"u8"`
 	MaxSpeed             float32
 	TurnRate             float32
