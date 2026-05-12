@@ -157,6 +157,7 @@ func NewGameWorld(base *mmokit.Stage, cfg *GameConfig, playerDB *PlayerRepo, cel
 		if cell == cfg.StationCell {
 			gw.SpawnStation()
 		}
+		gw.spawnPOIs()
 	}
 
 	return gw

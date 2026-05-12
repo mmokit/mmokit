@@ -15,6 +15,17 @@ type POIBundle struct {
 	POI *gamecomp.POI
 }
 
+// spawnPOIs runs the per-cell POI procgen and spawns the resulting
+// entities. Called from cell bootstrap after asteroids/belts have been
+// materialized so the clearance check has real data.
+func (gw *GameWorld) spawnPOIs() {
+	belts := GenerateBelts(gw.RootCell, gw.Config.StationCell)
+	defs := GeneratePOIs(gw.RootCell, gw.Config.StationCell, gw.Config, belts)
+	for _, d := range defs {
+		gw.SpawnPOI(d.X, d.Y, d.Type, d.RosterIdx)
+	}
+}
+
 // SpawnPOI creates a POI entity at the given local position and spawns
 // its roster of NPCs anchored to it. Returns the POI's network ID.
 func (gw *GameWorld) SpawnPOI(x, y float32, poiType uint8, rosterIdx uint16) uint32 {
