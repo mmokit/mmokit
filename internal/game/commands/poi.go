@@ -5,8 +5,6 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/mlange-42/ark/ecs"
-
 	gamecomp "github.com/zenion/mmoserver/internal/component"
 	"github.com/zenion/mmoserver/internal/game"
 	"github.com/zenion/mmoserver/pkg/cmdsys"
@@ -84,14 +82,8 @@ func collectPOIRows(stage *mmokit.Stage) []POIRow {
 		return nil
 	}
 	cooldownSec := gw.POICooldownSec()
-	filter := ecs.NewFilter2[gamecomp.POI, mmokit.Position](stage.ECSWorld())
-	q := filter.Query()
-	defer q.Close()
 	var rows []POIRow
-	for q.Next() {
-		entE := q.Entity()
-		p, pos := q.Get()
-		e := mmokit.EntityFromECS(stage, entE)
+	mmokit.ForEach2(stage, func(e mmokit.Entity, p *gamecomp.POI, pos *mmokit.Position) {
 		nid := e.NetID()
 		alive := len(gw.PoiRosters(nid))
 		roster := game.RosterForIdx(p.RosterDefIdx)
@@ -119,7 +111,7 @@ func collectPOIRows(stage *mmokit.Stage) []POIRow {
 			RosterAlive:  alive,
 			RosterTotal:  total,
 		})
-	}
+	})
 	return rows
 }
 
