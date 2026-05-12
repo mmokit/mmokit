@@ -296,18 +296,8 @@ func (gw *GameWorld) clearTickState() {
 }
 
 // hasStation returns true if this node has a station entity.
-//
-// MUST close the query in all paths — ark v0.7.1 holds a world write-lock
-// for the duration of an open query, and a leaked lock causes the next
-// write-side operation (e.g. ECS.RemoveEntity in any later removal path)
-// to panic with "cannot modify a locked world". A previous version returned
-// query.Next() directly without closing, which leaked the lock forever
-// any time the filter matched.
 func (gw *GameWorld) hasStation() bool {
-	filter := ecs.NewFilter1[gamecomp.Station](gw.stage.ECSWorld())
-	query := filter.Query()
-	defer query.Close()
-	return query.Next()
+	return mmokit.Any[gamecomp.Station](gw.stage)
 }
 
 // updatePlayerCompletions refreshes the "players" completion list from connected usernames.
