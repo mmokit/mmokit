@@ -1,4 +1,3 @@
-// internal/component/aoe.go
 package component
 
 // AoESpec describes the damage payload of a telegraphed area-of-effect
@@ -15,7 +14,7 @@ package component
 type AoESpec struct {
 	Radius      float32 `net:"f32"`
 	Damage      float32 `net:"f32"`
-	OwnerNetID  uint32  `net:"auto"`
-	FactionMask uint8   `net:"auto"`
-	DamageType  uint8   `net:"auto"` // reserved for resistance system; v2 always 0
+	OwnerNetID  uint32  `net:"u32"`
+	FactionMask uint8   `net:"u8"`
+	DamageType  uint8   `net:"u8"` // reserved for resistance system; v2 always 0
 }
