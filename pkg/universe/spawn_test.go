@@ -83,3 +83,37 @@ func TestSpawn_RollsBackOnDuplicateNetIDInStrictMode(t *testing.T) {
 		t.Errorf("expected zero Entity on rollback, got netID=%d alive=%v", e2.NetID(), e2.Alive())
 	}
 }
+
+// TestSpawn_PanicsWithoutPosition verifies that omitting Position is
+// a programmer error caught at call time.
+func TestSpawn_PanicsWithoutPosition(t *testing.T) {
+	stage := newTestStage(t)
+	type marker struct{}
+	_ = ecs.NewMap1[marker](stage.ECSWorld())
+
+	defer func() {
+		r := recover()
+		if r == nil {
+			t.Fatal("expected panic when Position is missing")
+		}
+	}()
+
+	stage.Spawn(marker{})
+}
+
+// TestSpawn_PanicsOnDuplicateComponentType verifies that passing the same
+// component type twice is a programmer error caught at call time.
+func TestSpawn_PanicsOnDuplicateComponentType(t *testing.T) {
+	stage := newTestStage(t)
+
+	defer func() {
+		if r := recover(); r == nil {
+			t.Fatal("expected panic when same component type passed twice")
+		}
+	}()
+
+	stage.Spawn(
+		component.Position{X: 1, Y: 2},
+		component.Position{X: 3, Y: 4},
+	)
+}
