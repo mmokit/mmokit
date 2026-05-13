@@ -603,33 +603,20 @@ type OrderSide = orderbook.OrderSide
 // Persistence (pkg/persist + pkg/persist/postgres)
 // ---------------------------------------------------------------------------
 
-// PlayerRepository persists player state. See persist.PlayerRepository.
+// PlayerRepository persists engine-side player identity. See
+// persist.PlayerRepository. Game-specific player state (currencies,
+// cargo, equipment, etc.) is owned by game-side packages — for the
+// space game, see internal/persist.PlayerStateRepository.
 type PlayerRepository = persist.PlayerRepository
 
-// MarketRepository persists order book state. See persist.MarketRepository.
-type MarketRepository = persist.MarketRepository
-
-// ConfigRepository persists the singleton GameConfig blob.
-type ConfigRepository = persist.ConfigRepository
-
-// PlayerSnapshot is the persistence-layer representation of a player.
+// PlayerSnapshot is the engine-side persistence DTO for player
+// identity. See persist.PlayerSnapshot.
 type PlayerSnapshot = persist.PlayerSnapshot
 
-// EquipmentSnapshot is the equipped-gear subset of player state.
-type EquipmentSnapshot = persist.EquipmentSnapshot
-
-// OrderRecord is the persistence-layer representation of a market order.
-type OrderRecord = persist.OrderRecord
-
-// TradeRecord is one row of the market trade audit log.
-type TradeRecord = persist.TradeRecord
-
-// ConfigSnapshot is the persistence-layer representation of the singleton config.
-type ConfigSnapshot = persist.ConfigSnapshot
-
-// PostgresStore is the PostgreSQL-backed persistence root. Open one
-// via mmokit.OpenPostgres and pass its Players()/Market()/Config()
-// handles to the game wiring.
+// PostgresStore is the PostgreSQL-backed engine persistence root.
+// Open one via mmokit.OpenPostgres and pass its Players() handle to
+// the game wiring. Game-side repos (PlayerState, Market, Config)
+// live in a separate game-owned Store built from PostgresStore.Pool().
 type PostgresStore = postgres.Store
 
 // ---------------------------------------------------------------------------
