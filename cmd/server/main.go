@@ -10,6 +10,8 @@ import (
 	"github.com/zenion/mmoserver/internal/game"
 	gamecommands "github.com/zenion/mmoserver/internal/game/commands"
 	"github.com/zenion/mmoserver/internal/marketplace"
+	gamepersist "github.com/zenion/mmoserver/internal/persist"
+	gamepg "github.com/zenion/mmoserver/internal/persist/postgres"
 	"github.com/zenion/mmoserver/pkg/services/auth"
 	"github.com/zenion/mmoserver/pkg/coords"
 	"github.com/zenion/mmoserver/pkg/mmokit"
@@ -96,9 +98,10 @@ func main() {
 	var opRouter *mmokit.OpRouter
 	var playerSessions *mmokit.PlayerSessions
 	var gameCfg game.GameConfig
-	var configRepo mmokit.ConfigRepository
+	var configRepo gamepersist.ConfigRepository
 	var marketSvc *marketplace.Settlement
 	var store *mmokit.PostgresStore
+	var gameStore *gamepg.Store
 
 	if needsGameConfig {
 		// Open the persistence store. Defaults to the local docker-compose
@@ -109,19 +112,26 @@ func main() {
 		}
 		var err error
 		store, err = mmokit.OpenPostgres(context.Background(), postgresURL,
-			mmokit.WithExtraMigrations(auth.MigrationsFS(), ".", "auth"))
+			mmokit.WithExtraMigrations(auth.MigrationsFS(), ".", "auth"),
+			mmokit.WithExtraMigrations(gamepg.MigrationsFS(), gamepg.MigrationsRoot, gamepg.MigrationsLabel),
+		)
 		if err != nil {
 			log.Fatalf("failed to open postgres (%s): %v", postgresURL, err)
 		}
 		defer store.Close()
 		log.Printf("postgres connected at %s", postgresURL)
 
+		// Game-side repositories share the engine's pool. The engine Store
+		// owns the pool lifecycle (Close); gamepg.Store is just a typed
+		// accessor wrapper.
+		gameStore = gamepg.New(store.Pool())
+
 		// Hand the pre-opened store to the engine so services-framework kinds
 		// (auth, future) can access it via service.Context.DB without
 		// re-opening Postgres.
 		coordCfg.DBStore = store
 
-		configRepo = store.Config()
+		configRepo = gameStore.Config()
 
 		// Load game config (uses defaults if not found). Every role that isn't
 		// a pure standalone gateway needs it — pure coordinator for grid dims,
@@ -138,7 +148,7 @@ func main() {
 
 	if needsGameState {
 		playerRepo := store.Players()
-		marketRepo := store.Market()
+		marketRepo := gameStore.Market()
 
 		playerDB = game.NewPlayerRepo(playerRepo, gameLog)
 		if err := playerDB.LoadAll(context.Background()); err != nil {
