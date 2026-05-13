@@ -134,15 +134,6 @@ func main() {
 
 		coordCfg.CellsX = gameCfg.MeshCellsX
 		coordCfg.CellsY = gameCfg.MeshCellsY
-
-		// Default spawn is 30 units east of the trade station — outside
-		// DockRange (13.3) so the player sees the station and decides to
-		// dock instead of being auto-pulled. SpawnResolver overrides this
-		// for players with a saved location.
-		coordCfg.DefaultSpawn = coords.Location{
-			X: float32(gameCfg.StationCell.CellX)*coords.CellSize + game.StationLocalX + 30,
-			Y: float32(gameCfg.StationCell.CellY)*coords.CellSize + game.StationLocalY,
-		}
 	}
 
 	if needsGameState {
@@ -316,16 +307,22 @@ func main() {
 		game.GameSetup(coordinator)
 		game.InitDropTables()
 
-		coordinator.SetSpawnResolver(func(username string) (coords.Location, bool) {
-			pdata := playerDB.Get(username)
-			if pdata == nil || !pdata.HasSave {
-				return coords.Location{}, false
+		coordinator.OnResolveSpawn(func(s *mmokit.PlayerSession) coords.Location {
+			pdata := playerDB.Get(s.Username)
+			if pdata != nil && pdata.HasSave {
+				return coords.Location{
+					X: float32(pdata.CellX)*coords.CellSize + pdata.X,
+					Y: float32(pdata.CellY)*coords.CellSize + pdata.Y,
+					// Facing + Tag not yet persisted; leave zero.
+				}
 			}
+			// New player (no saved location). Spawn 30 units east of the
+			// trade station — outside DockRange (13.3) so the player sees
+			// the station and decides to dock instead of being auto-pulled.
 			return coords.Location{
-				X: float32(pdata.CellX)*coords.CellSize + pdata.X,
-				Y: float32(pdata.CellY)*coords.CellSize + pdata.Y,
-				// Facing + Tag not yet persisted; leave zero. Follow-up work.
-			}, true
+				X: float32(gameCfg.StationCell.CellX)*coords.CellSize + game.StationLocalX + 30,
+				Y: float32(gameCfg.StationCell.CellY)*coords.CellSize + game.StationLocalY,
+			}
 		})
 	}
 
