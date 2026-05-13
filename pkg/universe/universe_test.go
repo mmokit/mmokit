@@ -668,22 +668,35 @@ type recordingBridge struct {
 	NoopBridge
 }
 
-// TestOnResolveSpawn_DefaultLocation verifies the engine default (center of
-// cell (0,0)) is used when no SpawnResolver is registered.
+// TestOnResolveSpawn_DefaultLocation verifies that with no SpawnResolver
+// registered, the spawn path returns the engine default (center of cell
+// (0,0)) — exercised through Bridge.RequestRespawn.
 func TestOnResolveSpawn_DefaultLocation(t *testing.T) {
-	c := newTestCoordinator(Config{CellsX: 2, CellsY: 2})
+	c := newTestCoordinator(Config{CellsX: 1, CellsY: 1})
 
-	got := defaultSpawnLocation(c.cfg.CellSize)
+	cellID := CellID{X: 0, Y: 0}.MeshID()
+	cell := c.Cells[cellID]
+	cell.Bridge.RequestRespawn(7, "bob")
+
 	want := coords.Location{X: c.cfg.CellSize / 2, Y: c.cfg.CellSize / 2}
-	if got != want {
-		t.Fatalf("defaultSpawnLocation(%v) = %+v, want %+v", c.cfg.CellSize, got, want)
+	select {
+	case msg := <-cell.Inbox:
+		if msg.Type != MsgSpawnTransfer {
+			t.Fatalf("expected MsgSpawnTransfer, got %d", msg.Type)
+		}
+		if msg.Spawn.SpawnLocation != want {
+			t.Fatalf("SpawnLocation = %+v, want %+v (engine default)",
+				msg.Spawn.SpawnLocation, want)
+		}
+	default:
+		t.Fatal("no message in cell inbox")
 	}
 }
 
-// TestOnResolveSpawn_ReceivesSession verifies the registered resolver is
-// called with a PlayerSession carrying UserID + Username at login. Drives
-// the RequestRespawn path (the simplest call site exercising the resolver).
-func TestOnResolveSpawn_ReceivesSession(t *testing.T) {
+// TestOnResolveSpawn_RespawnReceivesSession verifies the registered resolver
+// is called with a PlayerSession carrying ConnID + Username on the respawn
+// path (Bridge.RequestRespawn).
+func TestOnResolveSpawn_RespawnReceivesSession(t *testing.T) {
 	c := newTestCoordinator(Config{CellsX: 1, CellsY: 1})
 
 	var gotSession *engine.PlayerSession

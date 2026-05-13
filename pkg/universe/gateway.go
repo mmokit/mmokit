@@ -97,7 +97,6 @@ type Gateway struct {
 
 	// Gateway-plane state. Populated during Build() from Process's
 	// corresponding fields.
-	spawnResolver SpawnResolver
 	sessionRoutes *sessionRoutes
 	httpServer    *http.Server
 

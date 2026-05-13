@@ -777,13 +777,14 @@ func (s *meshControlServer) handleInboundResolveSpawn(gatewayID string, req *mes
 	s.coord.mu.RUnlock()
 
 	resp := &meshpb.SpawnResolved{RequestId: req.RequestId, Ok: true}
-	var session engine.PlayerSession
-	session.Username = req.Username
+
+	var uid uuid.UUID
 	if req.UserId != "" {
-		if uid, err := uuid.Parse(req.UserId); err == nil {
-			session.UserID = uid
+		if parsed, err := uuid.Parse(req.UserId); err == nil {
+			uid = parsed
 		}
 	}
+	session := engine.PlayerSession{Username: req.Username, UserID: uid}
 
 	var loc coords.Location
 	if resolver != nil {
@@ -794,10 +795,8 @@ func (s *meshControlServer) handleInboundResolveSpawn(gatewayID string, req *mes
 	resp.WorldX = loc.X
 	resp.WorldY = loc.Y
 
-	if req.UserId != "" {
-		if uid, err := uuid.Parse(req.UserId); err == nil && uid != uuid.Nil {
-			s.coord.applyResolveSpawnReconnect(uid, resp)
-		}
+	if uid != uuid.Nil {
+		s.coord.applyResolveSpawnReconnect(uid, resp)
 	}
 
 	if err := s.sendCoordMessageToGateway(gatewayID, &meshpb.CoordMessage{

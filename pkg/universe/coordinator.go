@@ -1691,7 +1691,6 @@ func (c *Process) Build() {
 			topology:   newCachedTopology(c),
 			tickRate:   uint32(cfg.TickRate),
 		}
-		c.gateway.spawnResolver = c.spawnResolver
 		c.gateway.sessionRoutes = c.sessionRoutes
 		// c.httpServer is nil here — startHTTPListener() runs in Start() after Build().
 		// Phase 2 must either re-mirror after Start() calls startHTTPListener() or
@@ -2001,7 +2000,6 @@ func (c *Process) buildStandaloneGateway() {
 		tickRate:     uint32(cfg.TickRate),
 		// wsAddr: TODO — plumb via Config.GatewayWSAddr when flag lands
 	}
-	c.gateway.spawnResolver = c.spawnResolver
 	c.gateway.sessionRoutes = c.sessionRoutes
 	// c.httpServer is nil here — startHTTPListener() runs in Start() after Build().
 	// Phase 2 must either re-mirror after Start() calls startHTTPListener() or

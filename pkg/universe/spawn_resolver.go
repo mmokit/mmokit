@@ -91,17 +91,12 @@ func (g *Gateway) resolveSpawn(ctx context.Context, userID uuid.UUID, username s
 		defer cancel()
 		resp, err := g.spawnOrch.send(rpcCtx, g.controlClient, g.id, userID, username)
 		if err == nil && resp != nil {
-			out := spawnResolution{
+			return spawnResolution{
+				Location:     coords.Location{X: resp.WorldX, Y: resp.WorldY},
 				IsReconnect:  resp.IsReconnect,
 				TargetHostID: resp.TargetHostId,
 				TargetCellID: resp.TargetCellId,
 			}
-			if resp.Ok {
-				out.Location = coords.Location{X: resp.WorldX, Y: resp.WorldY}
-			} else {
-				out.Location = defaultSpawnLocation(g.cfg.CellSize)
-			}
-			return out
 		}
 		if err != nil {
 			g.log.Log(CatNetConn, "gateway: resolveSpawn RPC failed for %s: %v — using engine default", username, err)
