@@ -154,19 +154,19 @@ func TestSpawnPlayer_AttachesPlayerConn(t *testing.T) {
 		Username:      "alice",
 		SpawnLocation: coords.Location{X: 100, Y: 200},
 	}
-	e := base.SpawnPlayer(session, WithEntityKind(7))
+	e := base.SpawnPlayer(session, component.EntityKind{Type: 7})
 
-	if e == (ecs.Entity{}) {
+	if e.NetID() == 0 {
 		t.Fatal("expected non-zero entity")
 	}
-	if session.Entity != e {
-		t.Errorf("expected session.Entity to be set to %v, got %v", e, session.Entity)
+	if session.Entity != e.Handle() {
+		t.Errorf("expected session.Entity to be set to %v, got %v", e.Handle(), session.Entity)
 	}
 	pcMap := ecs.NewMap1[component.PlayerConn](base.ECSWorld())
-	if !pcMap.HasAll(e) {
+	if !pcMap.HasAll(e.Handle()) {
 		t.Fatal("expected PlayerConn component attached")
 	}
-	if pcMap.Get(e).ConnID != 42 {
-		t.Errorf("expected ConnID 42, got %d", pcMap.Get(e).ConnID)
+	if pcMap.Get(e.Handle()).ConnID != 42 {
+		t.Errorf("expected ConnID 42, got %d", pcMap.Get(e.Handle()).ConnID)
 	}
 }

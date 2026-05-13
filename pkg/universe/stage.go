@@ -1636,28 +1636,45 @@ func (b *Stage) SpawnAtLocation(loc coords.Location, opts ...SpawnOption) ecs.En
 	return b.SpawnEntity(pos, opts...)
 }
 
-// SpawnPlayer is the canonical player-spawn helper. It performs four universal
-// steps that every game's OnEnter handler needs:
+// SpawnPlayer is the canonical player-spawn helper. It performs the
+// universal steps every game's OnEnter handler needs:
 //
-//  1. Call SpawnAtLocation(session.SpawnLocation, opts...) to create the entity.
-//  2. Attach component.PlayerConn{ConnID: session.ConnID} to the entity.
-//  3. Assign session.Entity = e.
-//  4. Call SendPlayerEntityAssigned(session.ConnID, e) to notify the client.
+//  1. Translate session.SpawnLocation (world coords) to cell-local Position.
+//  2. Call Spawn(components...) with the resolved Position + PlayerConn
+//     + caller-supplied components.
+//  3. Assign session.Entity = e.Handle().
+//  4. Call SendPlayerEntityAssigned(session.ConnID, e.Handle()) to notify the client.
 //
-// When session.ConnID is 0 (no active client connection, e.g. a transferred
-// session before reconnect), SendPlayerEntityAssigned is a safe no-op —
-// ConnManager.Send ignores unknown connection IDs.
+// When session.ConnID is 0 (no active client connection), SendPlayerEntityAssigned
+// is a safe no-op — ConnManager.Send ignores unknown connection IDs.
 //
-// Per-game setup (name, game-specific components) belongs in a mmokit.Init(fn)
-// SpawnOption passed via opts; SpawnPlayer has no game-specific knowledge.
-func (b *Stage) SpawnPlayer(session *engine.PlayerSession, opts ...SpawnOption) ecs.Entity {
-	e := b.SpawnAtLocation(session.SpawnLocation, opts...)
+// Caller-supplied components must NOT include Position (injected from
+// session.SpawnLocation) or PlayerConn (injected from session.ConnID).
+// Spawn panics on duplicate-type.
+func (b *Stage) SpawnPlayer(session *engine.PlayerSession, components ...any) Entity {
+	rootCell := b.rootCell()
+	cellSize := coords.CellSize
+	minX := float32(rootCell.X) * cellSize
+	minY := float32(rootCell.Y) * cellSize
 
-	pcMap := ecs.NewMap1[component.PlayerConn](b.ECSWorld())
-	pcMap.Add(e, &component.PlayerConn{ConnID: session.ConnID})
+	// NOTE: out-of-cell-bounds check is intentionally NOT replicated here.
+	// Task 18 of the spawn-API plan rewrites SpawnAtLocation; that work
+	// owns moving the bounds-validation logic into Spawn or keeping it
+	// only on SpawnAtLocation. For now, callers must ensure SpawnLocation
+	// falls within this cell — production already does (gateway routes
+	// players to the cell that owns their spawn position).
+	pos := component.Position{
+		X: session.SpawnLocation.X - minX,
+		Y: session.SpawnLocation.Y - minY,
+	}
 
-	session.Entity = e
-	b.SendPlayerEntityAssigned(session.ConnID, e)
+	args := make([]any, 0, len(components)+2)
+	args = append(args, pos, component.PlayerConn{ConnID: session.ConnID})
+	args = append(args, components...)
+
+	e := b.Spawn(args...)
+	session.Entity = e.Handle()
+	b.SendPlayerEntityAssigned(session.ConnID, e.Handle())
 	return e
 }
 

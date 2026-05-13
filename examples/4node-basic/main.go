@@ -77,11 +77,10 @@ func main() {
 			log.Printf("4node-basic: auto-grant topology for %s: %v", session.Username, err)
 		}
 		stage.SpawnPlayer(session,
-			mmokit.WithCollider(PlayerRadius),
-			mmokit.WithEntityKind(KindPlayer),
-			mmokit.Init(func(c *PlayerComponents) {
-				c.Name.Name = session.Username
-			}),
+			mmokit.EntityKind{Type: KindPlayer},
+			mmokit.Collider{Radius: PlayerRadius},
+			PlayerName{Name: session.Username},
+			mmokit.MoveTarget{},
 		)
 	})
 
