@@ -185,9 +185,13 @@ db-reset:
     docker compose up -d postgres
 
 # run Postgres integration tests (requires `just db-up` first)
+# -p 1 serializes test packages: every pgtest suite shares one Postgres
+# database and TRUNCATEs the same tables in setup, so parallel package
+# execution would race.
 test-pg:
     POSTGRES_URL=postgres://mmo:mmo@localhost:5432/mmo?sslmode=disable \
-        go test -count=1 -tags=pgtest ./pkg/persist/... ./internal/persist/...
+        go test -p 1 -count=1 -tags=pgtest \
+            ./pkg/persist/... ./internal/persist/... ./pkg/services/...
 
 # build the admin SPA into pkg/admin/static/dist (consumed by //go:embed)
 admin-build:
