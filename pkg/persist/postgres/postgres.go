@@ -110,12 +110,6 @@ func (s *Store) Pool() *pgxpool.Pool { return s.pool }
 // Players returns the PlayerRepository implementation.
 func (s *Store) Players() persist.PlayerRepository { return &playerRepo{pool: s.pool} }
 
-// Market returns the MarketRepository implementation.
-func (s *Store) Market() persist.MarketRepository { return &marketRepo{pool: s.pool} }
-
-// Config returns the ConfigRepository implementation.
-func (s *Store) Config() persist.ConfigRepository { return &configRepo{pool: s.pool} }
-
 // AdminOperators returns the AdminOperatorRepository implementation.
 func (s *Store) AdminOperators() persist.AdminOperatorRepository {
 	return &adminOperatorRepo{pool: s.pool}
