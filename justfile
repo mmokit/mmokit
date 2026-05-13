@@ -187,7 +187,7 @@ db-reset:
 # run Postgres integration tests (requires `just db-up` first)
 test-pg:
     POSTGRES_URL=postgres://mmo:mmo@localhost:5432/mmo?sslmode=disable \
-        go test -count=1 -tags=pgtest ./pkg/persist/...
+        go test -count=1 -tags=pgtest ./pkg/persist/... ./internal/persist/...
 
 # build the admin SPA into pkg/admin/static/dist (consumed by //go:embed)
 admin-build:

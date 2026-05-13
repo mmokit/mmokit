@@ -59,6 +59,11 @@ func (r *playerRepo) SaveBatchTx(ctx context.Context, tx pgx.Tx, snapshots []*pe
 	if len(snapshots) == 0 {
 		return nil
 	}
+	for i := 1; i < len(snapshots); i++ {
+		if snapshots[i-1].Username > snapshots[i].Username {
+			return errors.New("playerRepo.SaveBatchTx: snapshots not sorted by username (deadlock prevention contract)")
+		}
+	}
 
 	batch := &pgx.Batch{}
 	for _, snap := range snapshots {
