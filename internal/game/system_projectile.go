@@ -98,8 +98,16 @@ func (s *ProjectileSystem) Update(dt float32) {
 		if victim.Alive() {
 			gw.ApplyDamage(victim, spec.Damage, spec.OwnerNetID)
 			if spec.SplashRadius > 0 {
-				mask := factionMaskFromOwner(gw, spec.OwnerNetID)
-				gw.SpawnAoEMarker(pos.X, pos.Y, 0, spec.SplashRadius, spec.SplashDamage, spec.OwnerNetID, mask)
+				// Capture splash params; defer the spawn so it runs after
+				// the entities.Iter query closes — Stage.Spawn requires an
+				// unlocked world.
+				ix, iy := pos.X, pos.Y
+				splashR, splashDmg := spec.SplashRadius, spec.SplashDamage
+				owner := spec.OwnerNetID
+				mask := factionMaskFromOwner(gw, owner)
+				s.Commands().Defer(func() {
+					gw.SpawnAoEMarker(ix, iy, 0, splashR, splashDmg, owner, mask)
+				})
 			}
 			gw.eng.Log.Log(CatCombatHit, "projectile: hit netID=%d dmg=%.0f splash=%.0f",
 				victim.NetID(), spec.Damage, spec.SplashRadius)
