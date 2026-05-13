@@ -73,6 +73,16 @@ type GameConfig struct {
 	ArtilleryCastCooldown    float32 `json:"artillery_cast_cooldown"`
 	ArtilleryInterruptDamage float32 `json:"artillery_interrupt_damage"`
 
+	KamikazeHP            float32 `json:"kamikaze_hp"`
+	KamikazeShield        float32 `json:"kamikaze_shield"`
+	KamikazeMaxSpeed      float32 `json:"kamikaze_max_speed"`
+	KamikazeTurnRate      float32 `json:"kamikaze_turn_rate"`
+	KamikazeAggroRadius   float32 `json:"kamikaze_aggro_radius"`
+	KamikazeDetonateRange float32 `json:"kamikaze_detonate_range"`
+	KamikazeBeepTime      float32 `json:"kamikaze_beep_time"`
+	KamikazeAoERadius     float32 `json:"kamikaze_aoe_radius"`
+	KamikazeAoEDamage     float32 `json:"kamikaze_aoe_damage"`
+
 	// AI shared
 	AggroDeescalationSec float32 `json:"aggro_deescalation_sec"`
 
@@ -168,6 +178,10 @@ func DefaultGameConfig() GameConfig {
 		ArtilleryWeaponRange: 1000, ArtilleryAggroRadius: 1000,
 		ArtilleryAoERadius: 50, ArtilleryAoEDamage: 50,
 		ArtilleryCastTime: 3.5, ArtilleryCastCooldown: 3.0, ArtilleryInterruptDamage: 25,
+
+		KamikazeHP: 60, KamikazeShield: 0, KamikazeMaxSpeed: 16, KamikazeTurnRate: 3.0,
+		KamikazeAggroRadius: 800, KamikazeDetonateRange: 30, KamikazeBeepTime: 0.5,
+		KamikazeAoERadius: 60, KamikazeAoEDamage: 40,
 
 		AggroDeescalationSec: 6,
 

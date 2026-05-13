@@ -65,6 +65,8 @@ func (s *NPCAISystem) Update(dt float32) {
 			s.tickEngage(self, ai, pos, vel, rot, lock, now, dt)
 		case AIStateCast:
 			s.tickCast(self, ai, pos, vel, rot, lock, now, dt)
+		case AIStateBeep:
+			s.tickBeep(self, ai, pos, vel, dt)
 		}
 	}
 }
@@ -222,6 +224,14 @@ func (s *NPCAISystem) tickEngage(self mmokit.Entity, ai *gamecomp.NPCAI,
 		}
 	}
 
+	if ai.Archetype == ArchetypeKamikaze && dist <= s.gw.Config.KamikazeDetonateRange {
+		ai.BeepTimeRemaining = s.gw.Config.KamikazeBeepTime
+		ai.State = AIStateBeep
+		vel.X, vel.Y = 0, 0
+		s.gw.eng.Log.Log(CatNPCAI, "ai: %d Kamikaze BEEP at dist=%.0f", self.NetID(), dist)
+		return
+	}
+
 	if dist <= ai.WeaponRange && angleDelta(rot.Angle, desired) < 0.26 /* ~15° */ {
 		ai.FireCooldown -= dt
 		if ai.FireCooldown <= 0 && ai.FireRate > 0 {
@@ -294,6 +304,34 @@ func (s *NPCAISystem) tickCast(self mmokit.Entity, ai *gamecomp.NPCAI,
 		ai.CastCooldown = s.gw.Config.ArtilleryCastCooldown
 		ai.State = AIStateEngage
 	}
+}
+
+// tickBeep drives a Kamikaze NPC during its detonation telegraph. The NPC
+// is stationary; when the timer elapses, an instant AoE marker is spawned
+// at the current position and the Kamikaze despawns. Death during the
+// beep window cancels the detonation entirely (no marker spawned).
+func (s *NPCAISystem) tickBeep(self mmokit.Entity, ai *gamecomp.NPCAI,
+	pos *mmokit.Position, vel *mmokit.Velocity, dt float32,
+) {
+	vel.X, vel.Y = 0, 0
+	ai.BeepTimeRemaining -= dt
+	if ai.BeepTimeRemaining > 0 {
+		return
+	}
+	// Detonate: spawn instant AoE marker at current position, despawn self.
+	// Inside a query iteration → use Commands().Defer to avoid locked-world panic.
+	px, py := pos.X, pos.Y
+	radius := s.gw.Config.KamikazeAoERadius
+	damage := s.gw.Config.KamikazeAoEDamage
+	ownerNetID := self.NetID()
+	handle := self.Handle()
+	gw := s.gw
+	s.Commands().Defer(func() {
+		gw.SpawnAoEMarker(px, py, 0, radius, damage, ownerNetID, FactionMaskAll)
+	})
+	s.Commands().Despawn(handle)
+	s.gw.eng.Log.Log(CatNPCAI, "ai: %d Kamikaze DETONATE at (%.0f,%.0f)",
+		self.NetID(), pos.X, pos.Y)
 }
 
 func (s *NPCAISystem) applyMotion(ai *gamecomp.NPCAI, vel *mmokit.Velocity,

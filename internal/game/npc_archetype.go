@@ -71,6 +71,19 @@ func archetypeDefaults(cfg *GameConfig, kind uint8) ArchetypeDefaults {
 			DamagePerShot:  0,
 			FireRate:       0,
 		}
+	case ArchetypeKamikaze:
+		return ArchetypeDefaults{
+			HP:             cfg.KamikazeHP,
+			Shield:         cfg.KamikazeShield,
+			MaxSpeed:       cfg.KamikazeMaxSpeed,
+			TurnRate:       cfg.KamikazeTurnRate,
+			PreferredRange: cfg.KamikazeDetonateRange,
+			WeaponRange:    cfg.KamikazeDetonateRange,
+			AggroRadius:    cfg.KamikazeAggroRadius,
+			MotionPolicy:   MotionCharge,
+			DamagePerShot:  0, // damage via AoE on detonation
+			FireRate:       0,
+		}
 	}
-	panic("archetypeDefaults: Kamikaze defaults not yet wired (Task 16)")
+	panic("archetypeDefaults: unknown archetype")
 }
