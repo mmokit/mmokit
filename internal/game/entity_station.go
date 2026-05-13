@@ -26,14 +26,13 @@ const (
 
 // SpawnStation creates the trade station entity in the station cell.
 func (gw *GameWorld) SpawnStation() {
-	handle := gw.stage.SpawnEntity(
+	e := gw.stage.Spawn(
 		mmokit.Position{X: StationLocalX, Y: StationLocalY},
-		mmokit.WithEntityKind(gamecomp.KindStation),
-		mmokit.WithCollider(gw.Config.StationRadius),
-		mmokit.WithComponents(),
+		mmokit.EntityKind{Type: gamecomp.KindStation},
+		mmokit.Collider{Radius: gw.Config.StationRadius},
+		gamecomp.Station{},
 	)
-	entity := mmokit.EntityFromECS(gw.stage, handle)
-	gw.eng.Log.Log(CatPlayerSpawn, "station spawned: netID=%d pos=(%.1f,%.1f)", entity.NetID(), StationLocalX, StationLocalY)
+	gw.eng.Log.Log(CatPlayerSpawn, "station spawned: netID=%d pos=(%.1f,%.1f)", e.NetID(), StationLocalX, StationLocalY)
 }
 
 // CollectStationMapData returns map marker data for all stations in the world.

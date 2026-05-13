@@ -69,20 +69,11 @@ func (gw *GameWorld) spawnAsteroidWithItem(x, y float32, itemID uint32) {
 		layer = 0
 	}
 
-	handle := gw.stage.SpawnEntity(
+	gw.stage.Spawn(
 		mmokit.Position{X: x, Y: y},
-		mmokit.WithEntityKind(gamecomp.KindAsteroid),
-		mmokit.WithCollider(radius),
-		mmokit.WithRotation(rand.Float32()*2*math.Pi),
-		mmokit.WithComponents(),
+		mmokit.EntityKind{Type: gamecomp.KindAsteroid},
+		mmokit.Collider{Radius: radius, Layer: layer},
+		mmokit.Rotation{Angle: rand.Float32() * 2 * math.Pi},
+		gamecomp.Minable{ItemID: itemID, Remaining: radius * 5},
 	)
-	entity := mmokit.EntityFromECS(gw.stage, handle)
-
-	if col := mmokit.Get[mmokit.Collider](entity); col != nil {
-		col.Layer = layer
-	}
-	if min := mmokit.Get[gamecomp.Minable](entity); min != nil {
-		min.ItemID = itemID
-		min.Remaining = radius * 5
-	}
 }

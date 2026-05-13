@@ -18,18 +18,13 @@ type LootCrateBundle struct {
 
 // SpawnLootCrate creates a loot crate entity with the given cargo.
 func (gw *GameWorld) SpawnLootCrate(x, y float32, items map[uint32]int32) {
-	handle := gw.stage.SpawnEntity(
+	e := gw.stage.Spawn(
 		mmokit.Position{X: x, Y: y},
-		mmokit.WithEntityKind(gamecomp.KindLootCrate),
-		mmokit.WithCollider(gw.Config.LootCrateRadius),
-		mmokit.WithComponents(),
+		mmokit.EntityKind{Type: gamecomp.KindLootCrate},
+		mmokit.Collider{Radius: gw.Config.LootCrateRadius},
+		gamecomp.Inventory{Items: items, MaxMass: math.MaxFloat32},
+		mmokit.Lifetime{Remaining: gw.Config.LootCrateLifetime},
+		gamecomp.LootCrate{},
 	)
-	entity := mmokit.EntityFromECS(gw.stage, handle)
-
-	mmokit.Set(entity, gamecomp.Inventory{Items: items, MaxMass: math.MaxFloat32})
-	if lt := mmokit.Get[mmokit.Lifetime](entity); lt != nil {
-		lt.Remaining = gw.Config.LootCrateLifetime
-	}
-
-	gw.eng.Log.Log(CatPlayerSpawn, "loot crate spawned: netID=%d pos=(%.0f,%.0f)", entity.NetID(), x, y)
+	gw.eng.Log.Log(CatPlayerSpawn, "loot crate spawned: netID=%d pos=(%.0f,%.0f)", e.NetID(), x, y)
 }
