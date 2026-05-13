@@ -174,7 +174,9 @@ func buildTestCluster(t *testing.T) *testCluster {
 		ConnManager:         mmokit.NewConnManager(),
 		Logger:              mmokit.NewLogger(),
 		DynamicPartitioning: mmokit.DisabledPartitionConfig(),
-		DefaultSpawn:        mmokit.Location{X: CellSize * 0.85, Y: CellSize * 0.85},
+	})
+	coord.OnResolveSpawn(func(s *mmokit.PlayerSession) mmokit.Location {
+		return mmokit.Location{X: CellSize * 0.85, Y: CellSize * 0.85}
 	})
 	coord.Build()
 
@@ -203,7 +205,6 @@ func buildTestCluster(t *testing.T) *testCluster {
 			ConnManager:         mmokit.NewConnManager(),
 			Logger:              mmokit.NewLogger(),
 			DynamicPartitioning: mmokit.DisabledPartitionConfig(),
-			DefaultSpawn:        mmokit.Location{X: CellSize * 0.85, Y: CellSize * 0.85},
 		})
 		mmokit.RegisterKind[PlayerComponents](host, KindPlayer, "Player")
 		mmokit.RegisterKind[BotComponents](host, KindBot, "Bot")

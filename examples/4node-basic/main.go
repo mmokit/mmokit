@@ -35,7 +35,10 @@ func main() {
 		AoIRadius:        AoIRadius,
 		StaticFS:         webDist,
 		StaticFSPrefix:   "web/dist",
-		DefaultSpawn:     mmokit.Location{X: CellSize * 0.85, Y: CellSize * 0.85},
+	})
+
+	process.OnResolveSpawn(func(s *mmokit.PlayerSession) mmokit.Location {
+		return mmokit.Location{X: CellSize * 0.85, Y: CellSize * 0.85}
 	})
 
 	process.OnConsoleReady(func(p *mmokit.Process, console *mmokit.Console) {
