@@ -63,6 +63,8 @@ func (s *NPCAISystem) Update(dt float32) {
 			s.tickAcquire(self, ai, pos, rot, lock, now, dt)
 		case AIStateEngage:
 			s.tickEngage(self, ai, pos, vel, rot, lock, now, dt)
+		case AIStateCast:
+			s.tickCast(self, ai, pos, vel, rot, lock, now, dt)
 		}
 	}
 }
@@ -190,6 +192,36 @@ func (s *NPCAISystem) tickEngage(self mmokit.Entity, ai *gamecomp.NPCAI,
 
 	s.applyMotion(ai, vel, pos, tpos, dist, dx, dy)
 
+	// Artillery: paint AoE marker on target position when cooldown elapses,
+	// then transition to Cast (stationary while casting). Defers spawn so
+	// the new entity is created after the entities.Iter query closes.
+	if ai.Archetype == ArchetypeArtillery {
+		if ai.CastCooldown > 0 {
+			ai.CastCooldown -= dt
+		}
+		if ai.CastCooldown <= 0 && lock.ActiveNetID != 0 {
+			cx, cy := tpos.X, tpos.Y
+			castTime := s.gw.Config.ArtilleryCastTime
+			aoeRadius := s.gw.Config.ArtilleryAoERadius
+			aoeDamage := s.gw.Config.ArtilleryAoEDamage
+			ownerNetID := self.NetID()
+			selfNetID := self.NetID()
+			aiRef := ai
+			gw := s.gw
+			s.Commands().Defer(func() {
+				marker := gw.SpawnAoEMarker(cx, cy, castTime, aoeRadius, aoeDamage, ownerNetID, FactionMaskPlayer)
+				aiRef.CastingMarkerNetID = marker.NetID()
+				aiRef.CastTimeRemaining = castTime
+				aiRef.CastDamageAccum = 0
+				aiRef.State = AIStateCast
+				gw.eng.Log.Log(CatNPCAI, "ai: %d Artillery cast START → (%.0f,%.0f) r=%.0f",
+					selfNetID, cx, cy, aoeRadius)
+			})
+			vel.X, vel.Y = 0, 0
+			return
+		}
+	}
+
 	if dist <= ai.WeaponRange && angleDelta(rot.Angle, desired) < 0.26 /* ~15° */ {
 		ai.FireCooldown -= dt
 		if ai.FireCooldown <= 0 && ai.FireRate > 0 {
@@ -220,6 +252,48 @@ func (s *NPCAISystem) tickEngage(self mmokit.Entity, ai *gamecomp.NPCAI,
 // hitscan in v2 — Artillery uses AoE markers, Kamikaze detonates.
 func npcAbilityTypeFor(archetype uint8) uint8 {
 	return uint8(item.AbilityTypePulseLaser)
+}
+
+// tickCast drives an Artillery NPC during its cast window. The NPC is
+// stationary; the AoEMarker entity ticks its own Lifetime down and
+// AoESystem resolves the damage when it hits 0. If accumulated damage
+// during the cast exceeds the interrupt threshold, the marker is
+// despawned, cast state is reset, and the NPC re-enters Engage on its
+// cast cooldown.
+func (s *NPCAISystem) tickCast(self mmokit.Entity, ai *gamecomp.NPCAI,
+	pos *mmokit.Position, vel *mmokit.Velocity, rot *mmokit.Rotation,
+	lock *gamecomp.TargetLock, now, dt float32,
+) {
+	vel.X, vel.Y = 0, 0
+
+	// Interrupt: enough damage accumulated during the cast → cancel.
+	if ai.CastDamageAccum >= s.gw.Config.ArtilleryInterruptDamage && ai.CastingMarkerNetID != 0 {
+		marker := mmokit.EntityByNetID(s.gw.stage, ai.CastingMarkerNetID)
+		if marker.Alive() {
+			s.Commands().Despawn(marker.Handle())
+		}
+		s.gw.eng.Log.Log(CatNPCAI, "ai: %d Artillery cast INTERRUPT (accum=%.1f >= %.1f)",
+			self.NetID(), ai.CastDamageAccum, s.gw.Config.ArtilleryInterruptDamage)
+		ai.CastingMarkerNetID = 0
+		ai.CastTimeRemaining = 0
+		ai.CastDamageAccum = 0
+		ai.CastCooldown = s.gw.Config.ArtilleryCastCooldown
+		ai.State = AIStateEngage
+		return
+	}
+
+	// Tick down cast timer. When it hits 0 the marker's own Lifetime is
+	// expiring this same tick and AoESystem will resolve the damage —
+	// just reset cast state and re-enter Engage on cooldown.
+	ai.CastTimeRemaining -= dt
+	if ai.CastTimeRemaining <= 0 {
+		s.gw.eng.Log.Log(CatNPCAI, "ai: %d Artillery cast COMPLETE", self.NetID())
+		ai.CastingMarkerNetID = 0
+		ai.CastTimeRemaining = 0
+		ai.CastDamageAccum = 0
+		ai.CastCooldown = s.gw.Config.ArtilleryCastCooldown
+		ai.State = AIStateEngage
+	}
 }
 
 func (s *NPCAISystem) applyMotion(ai *gamecomp.NPCAI, vel *mmokit.Velocity,

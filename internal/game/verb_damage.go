@@ -149,8 +149,14 @@ func (gw *GameWorld) ApplyDamage(target mmokit.Entity, damage float32, attackerN
 	// Stamp the attacker on NPCAI so the AI tick can decide whether to
 	// switch targets (closer-attacker rule). The AI consumes and clears
 	// the field at Engage entry — owns the time-stamp side of the contract.
-	if ai := mmokit.Get[gamecomp.NPCAI](target); ai != nil && attackerNetID != 0 {
-		ai.LastDamageByNetID = attackerNetID
+	if ai := mmokit.Get[gamecomp.NPCAI](target); ai != nil {
+		if attackerNetID != 0 {
+			ai.LastDamageByNetID = attackerNetID
+		}
+		// PVE v2: track damage during Artillery cast for interrupt threshold.
+		if ai.State == AIStateCast {
+			ai.CastDamageAccum += totalDamage
+		}
 	}
 
 	gw.eng.Log.Log(CatCombatHit, "hit: attacker=%d -> target=%d damage=%.1f (shield=%.1f) hp=%.1f/%.1f",

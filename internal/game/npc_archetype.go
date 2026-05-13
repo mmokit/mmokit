@@ -58,6 +58,19 @@ func archetypeDefaults(cfg *GameConfig, kind uint8) ArchetypeDefaults {
 			DamagePerShot:  cfg.BrawlerDamagePerShot,
 			FireRate:       cfg.BrawlerFireRate,
 		}
+	case ArchetypeArtillery:
+		return ArchetypeDefaults{
+			HP:             cfg.ArtilleryHP,
+			Shield:         cfg.ArtilleryShield,
+			MaxSpeed:       cfg.ArtilleryMaxSpeed,
+			TurnRate:       cfg.ArtilleryTurnRate,
+			PreferredRange: cfg.ArtilleryWeaponRange,
+			WeaponRange:    cfg.ArtilleryWeaponRange,
+			AggroRadius:    cfg.ArtilleryAggroRadius,
+			MotionPolicy:   MotionStationary,
+			DamagePerShot:  0,
+			FireRate:       0,
+		}
 	}
-	panic("archetypeDefaults: Artillery / Kamikaze defaults not yet wired (Tasks 13/16)")
+	panic("archetypeDefaults: Kamikaze defaults not yet wired (Task 16)")
 }

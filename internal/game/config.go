@@ -61,6 +61,18 @@ type GameConfig struct {
 	BrawlerDamagePerShot  float32 `json:"brawler_damage_per_shot"`
 	BrawlerFireRate       float32 `json:"brawler_fire_rate"`
 
+	ArtilleryHP              float32 `json:"artillery_hp"`
+	ArtilleryShield          float32 `json:"artillery_shield"`
+	ArtilleryMaxSpeed        float32 `json:"artillery_max_speed"`
+	ArtilleryTurnRate        float32 `json:"artillery_turn_rate"`
+	ArtilleryWeaponRange     float32 `json:"artillery_weapon_range"`
+	ArtilleryAggroRadius     float32 `json:"artillery_aggro_radius"`
+	ArtilleryAoERadius       float32 `json:"artillery_aoe_radius"`
+	ArtilleryAoEDamage       float32 `json:"artillery_aoe_damage"`
+	ArtilleryCastTime        float32 `json:"artillery_cast_time"`
+	ArtilleryCastCooldown    float32 `json:"artillery_cast_cooldown"`
+	ArtilleryInterruptDamage float32 `json:"artillery_interrupt_damage"`
+
 	// AI shared
 	AggroDeescalationSec float32 `json:"aggro_deescalation_sec"`
 
@@ -151,6 +163,11 @@ func DefaultGameConfig() GameConfig {
 		BrawlerHP: 400, BrawlerShield: 200, BrawlerMaxSpeed: 6, BrawlerTurnRate: 1.5,
 		BrawlerPreferredRange: 30, BrawlerWeaponRange: 50, BrawlerAggroRadius: 30,
 		BrawlerDamagePerShot: 2, BrawlerFireRate: 1.0,
+
+		ArtilleryHP: 250, ArtilleryShield: 150, ArtilleryMaxSpeed: 4, ArtilleryTurnRate: 1.5,
+		ArtilleryWeaponRange: 1000, ArtilleryAggroRadius: 1000,
+		ArtilleryAoERadius: 50, ArtilleryAoEDamage: 50,
+		ArtilleryCastTime: 3.5, ArtilleryCastCooldown: 3.0, ArtilleryInterruptDamage: 25,
 
 		AggroDeescalationSec: 6,
 
