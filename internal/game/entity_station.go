@@ -18,7 +18,7 @@ type StationBundle struct {
 // obvious first mining target on undock, far enough that StationRadius
 // doesn't overlap any asteroids in the 0_0 belt chunk (chunk centered at
 // (CellSize-15, CellSize-15) with radius 20). Exported so main.go can
-// derive Config.DefaultSpawn from StationCell + this offset.
+// derive the resolver's new-player fallback from StationCell + this offset.
 const (
 	StationLocalX float32 = 8100
 	StationLocalY float32 = 8100

@@ -66,7 +66,7 @@ func (gw *GameWorld) SpawnPlayer(s *mmokit.PlayerSession) {
 			y += float32(cellY-gw.RootCell.CellY) * coords.CellSize
 		}
 	} else {
-		// Use gateway-resolved spawn (Config.DefaultSpawn for new players),
+		// Use gateway-resolved spawn (Process.OnResolveSpawn callback),
 		// converted from world-space to this cell's local coords. Jitter so
 		// stacked first-time logins don't collide.
 		loc := s.SpawnLocation
