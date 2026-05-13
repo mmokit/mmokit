@@ -8,7 +8,7 @@ import {
   applyDelta, BaselineStore,
   decodeLengthPrefixedStringU8,
 } from "./_core/delta-decoder-core.js";
-import type { ShipEntity, ShipStatusEffectsItem, AsteroidEntity, StationEntity, LootCrateEntity, LootCrateItemsItem, NPCEntity, NPCStatusEffectsItem, POIEntity, AnyEntity, DeltaWorldUpdate } from "./entities.js";
+import type { ShipEntity, ShipStatusEffectsItem, AsteroidEntity, StationEntity, LootCrateEntity, LootCrateItemsItem, NPCEntity, NPCStatusEffectsItem, POIEntity, AoEMarkerEntity, ProjectileEntity, AnyEntity, DeltaWorldUpdate } from "./entities.js";
 
 const SHIPENTITY_FIELD_SIZES = [4, 4, 2, 2, 2, 2, 2, 4, 4, 4, 4, 4, 1, 1, 1, 4, 2];
 const SHIPENTITY_HAS_VAR_TAIL = true;
@@ -146,6 +146,48 @@ function decodePOIEntitySnapshot(snap: Uint8Array, initial: Uint8Array | null, e
   return { netID: 0, producedAtMs: 0, entityType: 5, worldX, worldY, velX, velY, radius, width, height, type, status };
 }
 
+const AOEMARKERENTITY_FIELD_SIZES = [4, 4, 2, 2, 2, 2, 2, 4, 4, 4, 1, 1];
+const AOEMARKERENTITY_HAS_VAR_TAIL = false;
+
+function decodeAoEMarkerEntitySnapshot(snap: Uint8Array, initial: Uint8Array | null, existing?: AoEMarkerEntity): AoEMarkerEntity {
+  let o = 0;
+  const worldX = readFloat32(snap, o); o += 4;
+  const worldY = readFloat32(snap, o); o += 4;
+  const velX = unVel(readInt16(snap, o), 2000); o += 2;
+  const velY = unVel(readInt16(snap, o), 2000); o += 2;
+  const radius = unVel(readInt16(snap, o), 500); o += 2;
+  const width = unVel(readInt16(snap, o), 500); o += 2;
+  const height = unVel(readInt16(snap, o), 500); o += 2;
+  const aoESpecRadius = readFloat32(snap, o); o += 4;
+  const damage = readFloat32(snap, o); o += 4;
+  const ownerNetID = readUint32(snap, o); o += 4;
+  const factionMask = snap[o]; o += 1;
+  const damageType = snap[o]; o += 1;
+  return { netID: 0, producedAtMs: 0, entityType: 6, worldX, worldY, velX, velY, radius, width, height, aoESpecRadius, damage, ownerNetID, factionMask, damageType };
+}
+
+const PROJECTILEENTITY_FIELD_SIZES = [4, 4, 2, 2, 2, 2, 2, 4, 4, 4, 4, 4, 4, 1];
+const PROJECTILEENTITY_HAS_VAR_TAIL = false;
+
+function decodeProjectileEntitySnapshot(snap: Uint8Array, initial: Uint8Array | null, existing?: ProjectileEntity): ProjectileEntity {
+  let o = 0;
+  const worldX = readFloat32(snap, o); o += 4;
+  const worldY = readFloat32(snap, o); o += 4;
+  const velX = unVel(readInt16(snap, o), 2000); o += 2;
+  const velY = unVel(readInt16(snap, o), 2000); o += 2;
+  const radius = unVel(readInt16(snap, o), 500); o += 2;
+  const width = unVel(readInt16(snap, o), 500); o += 2;
+  const height = unVel(readInt16(snap, o), 500); o += 2;
+  const ownerNetID = readUint32(snap, o); o += 4;
+  const targetNetID = readUint32(snap, o); o += 4;
+  const damage = readFloat32(snap, o); o += 4;
+  const splashRadius = readFloat32(snap, o); o += 4;
+  const splashDamage = readFloat32(snap, o); o += 4;
+  const maxTurnRate = readFloat32(snap, o); o += 4;
+  const type = snap[o]; o += 1;
+  return { netID: 0, producedAtMs: 0, entityType: 7, worldX, worldY, velX, velY, radius, width, height, ownerNetID, targetNetID, damage, splashRadius, splashDamage, maxTurnRate, type };
+}
+
 export class SpaceDeltaDecoder {
   private baselines = new BaselineStore<{ type: number; lastEntity?: AnyEntity }>();
 
@@ -205,6 +247,8 @@ export class SpaceDeltaDecoder {
       case 3: { const prev = existing && existing.entityType === 3 ? existing : undefined; const e = decodeLootCrateEntitySnapshot(snap, initial, prev); e.netID = netID; e.producedAtMs = producedAtMs; return e; }
       case 4: { const prev = existing && existing.entityType === 4 ? existing : undefined; const e = decodeNPCEntitySnapshot(snap, initial, prev); e.netID = netID; e.producedAtMs = producedAtMs; return e; }
       case 5: { const prev = existing && existing.entityType === 5 ? existing : undefined; const e = decodePOIEntitySnapshot(snap, initial, prev); e.netID = netID; e.producedAtMs = producedAtMs; return e; }
+      case 6: { const prev = existing && existing.entityType === 6 ? existing : undefined; const e = decodeAoEMarkerEntitySnapshot(snap, initial, prev); e.netID = netID; e.producedAtMs = producedAtMs; return e; }
+      case 7: { const prev = existing && existing.entityType === 7 ? existing : undefined; const e = decodeProjectileEntitySnapshot(snap, initial, prev); e.netID = netID; e.producedAtMs = producedAtMs; return e; }
       default: return null;
     }
   }
@@ -217,6 +261,8 @@ export class SpaceDeltaDecoder {
       case 3: return LOOTCRATEENTITY_FIELD_SIZES;
       case 4: return NPCENTITY_FIELD_SIZES;
       case 5: return POIENTITY_FIELD_SIZES;
+      case 6: return AOEMARKERENTITY_FIELD_SIZES;
+      case 7: return PROJECTILEENTITY_FIELD_SIZES;
       default: return [];
     }
   }
@@ -229,6 +275,8 @@ export class SpaceDeltaDecoder {
       case 3: return LOOTCRATEENTITY_HAS_VAR_TAIL;
       case 4: return NPCENTITY_HAS_VAR_TAIL;
       case 5: return POIENTITY_HAS_VAR_TAIL;
+      case 6: return AOEMARKERENTITY_HAS_VAR_TAIL;
+      case 7: return PROJECTILEENTITY_HAS_VAR_TAIL;
       default: return false;
     }
   }

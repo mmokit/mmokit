@@ -11,6 +11,8 @@ export const EntityType = {
     LootCrate: 3,
     NPC: 4,
     POI: 5,
+    AoEMarker: 6,
+    Projectile: 7,
 } as const;
 
 export type EntityTypeValue = typeof EntityType[keyof typeof EntityType];

@@ -163,7 +163,59 @@ export interface POIEntity {
   status: number;
 }
 
-export type AnyEntity = ShipEntity | AsteroidEntity | StationEntity | LootCrateEntity | NPCEntity | POIEntity;
+/** Entity kind 6. */
+export interface AoEMarkerEntity {
+  netID: number;
+  entityType: 6;
+  /**
+   * Cluster-clock stamp (Unix ms) from the authoritative producer at
+   * the moment this state was emitted. Preserves the producer's
+   * timeline through any relay hops. Used as the per-entity time-base
+   * for snapshot interpolation.
+   */
+  producedAtMs: number;
+  worldX: number;
+  worldY: number;
+  velX: number;
+  velY: number;
+  radius: number;
+  width: number;
+  height: number;
+  aoESpecRadius: number;
+  damage: number;
+  ownerNetID: number;
+  factionMask: number;
+  damageType: number;
+}
+
+/** Entity kind 7. */
+export interface ProjectileEntity {
+  netID: number;
+  entityType: 7;
+  /**
+   * Cluster-clock stamp (Unix ms) from the authoritative producer at
+   * the moment this state was emitted. Preserves the producer's
+   * timeline through any relay hops. Used as the per-entity time-base
+   * for snapshot interpolation.
+   */
+  producedAtMs: number;
+  worldX: number;
+  worldY: number;
+  velX: number;
+  velY: number;
+  radius: number;
+  width: number;
+  height: number;
+  ownerNetID: number;
+  targetNetID: number;
+  damage: number;
+  splashRadius: number;
+  splashDamage: number;
+  maxTurnRate: number;
+  type: number;
+}
+
+export type AnyEntity = ShipEntity | AsteroidEntity | StationEntity | LootCrateEntity | NPCEntity | POIEntity | AoEMarkerEntity | ProjectileEntity;
 
 export interface DeltaWorldUpdate {
   tick: number;
