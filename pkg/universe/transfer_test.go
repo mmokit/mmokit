@@ -91,11 +91,11 @@ func TestTransferFrame_DebugFlagsRoundtrip(t *testing.T) {
 func TestTransferFrame_EpochSurvivesSpawn(t *testing.T) {
 	base := newTestWorldBase(t, CellID{X: 0, Y: 0})
 
-	source := base.SpawnEntity(
+	source := base.Spawn(
 		component.Position{X: 100, Y: 100},
-		WithEntityKind(1),
-		WithCollider(5),
-	)
+		component.EntityKind{Type: 1},
+		component.Collider{Radius: 5},
+	).Handle()
 	// Simulate prior boundary crossings by bumping epoch on the live
 	// source entity before serialization.
 	base.NetworkIDMap().Get(source).Epoch = 9

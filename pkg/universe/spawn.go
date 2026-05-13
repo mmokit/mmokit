@@ -41,7 +41,7 @@ type attachFn func(stage *Stage, entity ecs.Entity, v any)
 //
 // Returns the rich Entity wrapper, not the raw ecs.Entity handle. Returns
 // the zero-value Entity when strictNetIDIndex is true and the netID collides
-// with an existing slot (matches Stage.SpawnEntity rollback semantics).
+// with an existing slot — the spawn is rolled back from the ECS world.
 func (b *Stage) Spawn(components ...any) Entity {
 	var (
 		pos         component.Position

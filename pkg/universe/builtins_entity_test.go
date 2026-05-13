@@ -162,7 +162,7 @@ func TestEntityDespawnHandler_MarksEntityForRemoval(t *testing.T) {
 
 	// Spawn an entity directly on the stage (not via game kind registration).
 	stage := coord.Cells["0_0"].Stage
-	stage.SpawnEntity(component.Position{X: 100, Y: 100})
+	stage.Spawn(component.Position{X: 100, Y: 100}, component.EntityKind{Type: 1})
 
 	// Find the netID that was assigned (it's the only entity).
 	netID := findFirstLiveNetID(t, stage)
@@ -226,8 +226,8 @@ func TestEntityListHandler_ReturnsLiveEntities(t *testing.T) {
 	}
 
 	stage := coord.Cells["0_0"].Stage
-	stage.SpawnEntity(component.Position{X: 50, Y: 75})
-	stage.SpawnEntity(component.Position{X: 200, Y: 300})
+	stage.Spawn(component.Position{X: 50, Y: 75}, component.EntityKind{Type: 1})
+	stage.Spawn(component.Position{X: 200, Y: 300}, component.EntityKind{Type: 1})
 
 	cmd, _ := coord.registry.Lookup("entity.list")
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
@@ -286,7 +286,7 @@ func TestEntityTpHandler_UpdatesPosition(t *testing.T) {
 
 	stage := coord.Cells["0_0"].Stage
 	// Spawn at (100, 200) inside cell 0_0 (cell size = 1024).
-	stage.SpawnEntity(component.Position{X: 100, Y: 200})
+	stage.Spawn(component.Position{X: 100, Y: 200}, component.EntityKind{Type: 1})
 	netID := findFirstLiveNetID(t, stage)
 
 	cmd, _ := coord.registry.Lookup("entity.tp")

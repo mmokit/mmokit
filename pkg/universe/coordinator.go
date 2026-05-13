@@ -2206,9 +2206,9 @@ func (c *Process) createNode(cell CellID, spatialBucketSize float32, owningHost 
 	// Realize all registered kind specs against this cell's Stage. Must run
 	// BEFORE the world factory so game-defined worlds can rely on
 	// EntityKindDefs being populated when their constructor runs (e.g. to
-	// spawn initial cell content via SpawnEntity + WithComponents). Also
-	// before system creation so systems like NetworkSystem see a fully-
-	// populated EntityKindDefs.
+	// spawn initial cell content via Stage.Spawn). Also before system
+	// creation so systems like NetworkSystem see a fully-populated
+	// EntityKindDefs.
 	for _, spec := range c.kindSpecs {
 		spec.realize(base)
 	}

@@ -20,12 +20,12 @@ func TestDemoteLiveToReplica_PreservesEntityAndTransitionsSlot(t *testing.T) {
 	world := base.ECSWorld()
 
 	// Spawn a Live entity the normal way.
-	ent := base.SpawnEntity(
+	ent := base.Spawn(
 		component.Position{X: 100, Y: 200},
-		WithVelocity(10, -5),
-		WithEntityKind(1),
-		WithCollider(8),
-	)
+		component.Velocity{X: 10, Y: -5},
+		component.EntityKind{Type: 1},
+		component.Collider{Radius: 8},
+	).Handle()
 	// Grab the allocated netID.
 	netID := base.NetworkIDMap().Get(ent).ID
 
@@ -124,11 +124,11 @@ func TestHandoffDriver_HardCut_QueuesDemoteForCommitTick(t *testing.T) {
 	rec := &handoffRecordingBridge{}
 	hd := NewHandoffDriver(base, rec)
 
-	ent := base.SpawnEntity(
+	ent := base.Spawn(
 		component.Position{X: 100, Y: 100},
-		WithEntityKind(1),
-		WithCollider(5),
-	)
+		component.EntityKind{Type: 1},
+		component.Collider{Radius: 5},
+	).Handle()
 	netID := base.NetworkIDMap().Get(ent).ID
 	base.QueueCrossing(CrossingEvent{
 		Entity: ent, NetID: netID, DestCellID: "cell_1_0",
@@ -185,11 +185,11 @@ func TestHandoffDriver_HardCut_SlippedCommitTickStillCommits(t *testing.T) {
 	rec := &handoffRecordingBridge{}
 	hd := NewHandoffDriver(base, rec)
 
-	ent := base.SpawnEntity(
+	ent := base.Spawn(
 		component.Position{X: 100, Y: 100},
-		WithEntityKind(1),
-		WithCollider(5),
-	)
+		component.EntityKind{Type: 1},
+		component.Collider{Radius: 5},
+	).Handle()
 	netID := base.NetworkIDMap().Get(ent).ID
 	base.QueueCrossing(CrossingEvent{
 		Entity: ent, NetID: netID, DestCellID: "cell_1_0",
@@ -212,11 +212,11 @@ func TestHandoffDriver_HardCut_AntiThrashCooldown(t *testing.T) {
 	rec := &handoffRecordingBridge{}
 	hd := NewHandoffDriver(base, rec)
 
-	ent := base.SpawnEntity(
+	ent := base.Spawn(
 		component.Position{X: 100, Y: 100},
-		WithEntityKind(1),
-		WithCollider(5),
-	)
+		component.EntityKind{Type: 1},
+		component.Collider{Radius: 5},
+	).Handle()
 	netID := base.NetworkIDMap().Get(ent).ID
 
 	base.QueueCrossing(CrossingEvent{Entity: ent, NetID: netID, DestCellID: "cell_1_0"})
@@ -262,11 +262,11 @@ func TestHandoffDriver_SendFailsWhenDestGone(t *testing.T) {
 	rec := &handoffRecordingBridge{failsForDest: "cell_1_0"}
 	hd := NewHandoffDriver(base, rec)
 
-	ent := base.SpawnEntity(
+	ent := base.Spawn(
 		component.Position{X: 100, Y: 100},
-		WithEntityKind(1),
-		WithCollider(5),
-	)
+		component.EntityKind{Type: 1},
+		component.Collider{Radius: 5},
+	).Handle()
 	netID := base.NetworkIDMap().Get(ent).ID
 	origEpoch := base.NetworkIDMap().Get(ent).Epoch
 
@@ -309,11 +309,11 @@ func TestHandoffDriver_DrainingForMerge_SkipsCrossings(t *testing.T) {
 	rec := &handoffRecordingBridge{}
 	hd := NewHandoffDriver(base, rec)
 
-	ent := base.SpawnEntity(
+	ent := base.Spawn(
 		component.Position{X: 100, Y: 100},
-		WithEntityKind(1),
-		WithCollider(5),
-	)
+		component.EntityKind{Type: 1},
+		component.Collider{Radius: 5},
+	).Handle()
 	netID := base.NetworkIDMap().Get(ent).ID
 
 	// Enter drain mode, THEN queue a crossing. It must be dropped.
@@ -339,11 +339,11 @@ func TestHandoffDriver_PlayerSessionTransfersAtCommitTick(t *testing.T) {
 	rec := &handoffRecordingBridge{}
 	hd := NewHandoffDriver(base, rec)
 
-	ent := base.SpawnEntity(
+	ent := base.Spawn(
 		component.Position{X: 100, Y: 100},
-		WithEntityKind(1),
-		WithCollider(5),
-	)
+		component.EntityKind{Type: 1},
+		component.Collider{Radius: 5},
+	).Handle()
 	netID := base.NetworkIDMap().Get(ent).ID
 
 	connID := uint32(42)
@@ -402,12 +402,12 @@ func TestHandoffDriver_LeavesSourceEntityPositionUnchanged(t *testing.T) {
 
 	// Entity just past the east boundary of cell (0,0), world-space
 	// equivalent to ~1030.
-	ent := base.SpawnEntity(
+	ent := base.Spawn(
 		component.Position{X: 1030, Y: 500},
-		WithVelocity(300, 0),
-		WithEntityKind(1),
-		WithCollider(5),
-	)
+		component.Velocity{X: 300, Y: 0},
+		component.EntityKind{Type: 1},
+		component.Collider{Radius: 5},
+	).Handle()
 	netID := base.NetworkIDMap().Get(ent).ID
 	base.QueueCrossing(CrossingEvent{
 		Entity: ent, NetID: netID, DestCellID: "cell_1_0",
@@ -459,11 +459,11 @@ func TestHandoffDriver_PositionReplicatorInRegistry_DoesNotCorruptDestSpawn(t *t
 	// Raw X=1030, normalized X=1030-1024=6.
 	const rawX = float32(1030)
 	const normX = rawX - 1024
-	ent := src.SpawnEntity(
+	ent := src.Spawn(
 		component.Position{X: rawX, Y: 500},
-		WithEntityKind(1),
-		WithCollider(5),
-	)
+		component.EntityKind{Type: 1},
+		component.Collider{Radius: 5},
+	).Handle()
 	netID := src.NetworkIDMap().Get(ent).ID
 	src.QueueCrossing(CrossingEvent{
 		Entity: ent, NetID: netID, DestCellID: "cell_1_0",
@@ -519,11 +519,11 @@ func TestHandoffDriver_DropsRedundantCrossingWhilePending(t *testing.T) {
 	rec := &handoffRecordingBridge{}
 	hd := NewHandoffDriver(base, rec)
 
-	ent := base.SpawnEntity(
+	ent := base.Spawn(
 		component.Position{X: 100, Y: 100},
-		WithEntityKind(1),
-		WithCollider(5),
-	)
+		component.EntityKind{Type: 1},
+		component.Collider{Radius: 5},
+	).Handle()
 	netID := base.NetworkIDMap().Get(ent).ID
 
 	// First crossing: handoff sent, demote queued for tick 100+HandoffLeadTicks.
@@ -566,11 +566,11 @@ func TestHandoffDriver_AcceptsNonNeighborDestination(t *testing.T) {
 	rec := &handoffRecordingBridge{}
 	hd := NewHandoffDriver(base, rec)
 
-	ent := base.SpawnEntity(
+	ent := base.Spawn(
 		component.Position{X: 100, Y: 100},
-		WithEntityKind(1),
-		WithCollider(5),
-	)
+		component.EntityKind{Type: 1},
+		component.Collider{Radius: 5},
+	).Handle()
 	netID := base.NetworkIDMap().Get(ent).ID
 
 	// cell_5_5 is far from cell_0_0 — not a Moore-neighbor.
@@ -598,11 +598,11 @@ func TestHandoffDriver_BypassCooldown(t *testing.T) {
 	rec := &handoffRecordingBridge{}
 	hd := NewHandoffDriver(base, rec)
 
-	ent := base.SpawnEntity(
+	ent := base.Spawn(
 		component.Position{X: 100, Y: 100},
-		WithEntityKind(1),
-		WithCollider(5),
-	)
+		component.EntityKind{Type: 1},
+		component.Collider{Radius: 5},
+	).Handle()
 	netID := base.NetworkIDMap().Get(ent).ID
 
 	// Each iteration simulates one teleport:
@@ -670,11 +670,11 @@ func TestHandoffDriver_DropsCrossingForReplicaInSameTickAsCommit(t *testing.T) {
 	rec := &handoffRecordingBridge{}
 	hd := NewHandoffDriver(base, rec)
 
-	ent := base.SpawnEntity(
+	ent := base.Spawn(
 		component.Position{X: 100, Y: 100},
-		WithEntityKind(1),
-		WithCollider(5),
-	)
+		component.EntityKind{Type: 1},
+		component.Collider{Radius: 5},
+	).Handle()
 	netID := base.NetworkIDMap().Get(ent).ID
 
 	// First crossing: handoff sent at tick 100, demote queued for 102.

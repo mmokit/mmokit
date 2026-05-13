@@ -36,12 +36,12 @@ func newMoveTestStage(t *testing.T, cell CellID) *Stage {
 
 func TestMoveEntityTo_SameCell_UpdatesPositionInline(t *testing.T) {
 	stage := newMoveTestStage(t, CellID{X: 0, Y: 0})
-	ent := stage.SpawnEntity(
+	ent := stage.Spawn(
 		component.Position{X: 10, Y: 10},
-		WithVelocity(5, 5),
-		WithEntityKind(1),
-		WithCollider(5),
-	)
+		component.Velocity{X: 5, Y: 5},
+		component.EntityKind{Type: 1},
+		component.Collider{Radius: 5},
+	).Handle()
 
 	if err := stage.MoveEntityTo(ent, 50, 60); err != nil {
 		t.Fatalf("MoveEntityTo: %v", err)
@@ -61,11 +61,11 @@ func TestMoveEntityTo_SameCell_UpdatesPositionInline(t *testing.T) {
 
 func TestMoveEntityTo_CrossCell_EnqueuesCrossingWithBypass(t *testing.T) {
 	stage := newMoveTestStage(t, CellID{X: 0, Y: 0})
-	ent := stage.SpawnEntity(
+	ent := stage.Spawn(
 		component.Position{X: 10, Y: 10},
-		WithEntityKind(1),
-		WithCollider(5),
-	)
+		component.EntityKind{Type: 1},
+		component.Collider{Radius: 5},
+	).Handle()
 	netID := stage.NetworkIDMap().Get(ent).ID
 
 	farX := coords.CellSize*5 + 10
@@ -99,7 +99,7 @@ func TestMoveEntityTo_CrossCell_EnqueuesCrossingWithBypass(t *testing.T) {
 
 func TestMoveEntityTo_DeadEntityReturnsError(t *testing.T) {
 	stage := newMoveTestStage(t, CellID{X: 0, Y: 0})
-	ent := stage.SpawnEntity(component.Position{X: 0, Y: 0}, WithEntityKind(1))
+	ent := stage.Spawn(component.Position{X: 0, Y: 0}, component.EntityKind{Type: 1}).Handle()
 	stage.ECSWorld().RemoveEntity(ent)
 	if err := stage.MoveEntityTo(ent, 100, 100); err == nil {
 		t.Fatal("MoveEntityTo on dead entity should return error")
@@ -108,11 +108,11 @@ func TestMoveEntityTo_DeadEntityReturnsError(t *testing.T) {
 
 func TestMoveEntityTo_MoveAsPlayer_PopulatesCrossing(t *testing.T) {
 	stage := newMoveTestStage(t, CellID{X: 0, Y: 0})
-	ent := stage.SpawnEntity(
+	ent := stage.Spawn(
 		component.Position{X: 10, Y: 10},
-		WithEntityKind(1),
-		WithCollider(5),
-	)
+		component.EntityKind{Type: 1},
+		component.Collider{Radius: 5},
+	).Handle()
 	farX := coords.CellSize*2 + 10
 	if err := stage.MoveEntityTo(ent, farX, 10, MoveAsPlayer(42, "alice")); err != nil {
 		t.Fatalf("MoveEntityTo: %v", err)

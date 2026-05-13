@@ -35,7 +35,7 @@ func newTestGameWorld() (*GameWorld, *net.ConnManager) {
 	base.SetSpatialGrid(mmokit.NewHashGrid(1000))
 	// Realize entity kinds against the stage before NewGameWorld spawns
 	// initial cell content (asteroids/station) — those calls require the
-	// kind defs to be populated for WithComponents() auto-fill.
+	// kind defs to be populated so Stage.Spawn invariant checks pass.
 	tmpCoord := pkguniverse.New(pkguniverse.Config{CellsX: 1, CellsY: 1, TickRate: 20})
 	GameSetup(tmpCoord)
 	tmpCoord.RealizeKindSpecs(base)

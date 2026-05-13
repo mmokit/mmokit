@@ -59,89 +59,6 @@ type CrossingEvent struct {
 	BypassCooldown bool       // true for explicit teleports; false for natural boundary crossings
 }
 
-// SpawnOption configures optional components when spawning an entity via Stage.SpawnEntity.
-type SpawnOption func(*spawnOpts)
-
-type spawnOpts struct {
-	velX, velY  float32
-	rotation    float32
-	collider    component.Collider
-	entityType  uint8
-	hasVel      bool
-	hasRot      bool
-	hasCollider bool
-	hasKind     bool
-	noSpatial   bool
-	postInit    []func(*ecs.World, ecs.Entity) // user-provided post-spawn callbacks
-}
-
-// WithVelocity sets the entity's velocity.
-func WithVelocity(vx, vy float32) SpawnOption {
-	return func(o *spawnOpts) {
-		o.velX, o.velY = vx, vy
-		o.hasVel = true
-	}
-}
-
-// WithCollider sets the entity's collision radius.
-func WithCollider(radius float32) SpawnOption {
-	return func(o *spawnOpts) {
-		o.collider = component.Collider{Radius: radius}
-		o.hasCollider = true
-	}
-}
-
-// WithEntityKind sets the entity's type identifier.
-func WithEntityKind(t uint8) SpawnOption {
-	return func(o *spawnOpts) {
-		o.entityType = t
-		o.hasKind = true
-	}
-}
-
-// WithRotation sets the entity's rotation angle in radians.
-func WithRotation(angle float32) SpawnOption {
-	return func(o *spawnOpts) {
-		o.rotation = angle
-		o.hasRot = true
-	}
-}
-
-// WithFacing sets the entity's facing angle from a Location.Facing value.
-// Equivalent to WithRotation — provided as a dedicated option so the
-// intent ("apply the destination's facing") is obvious at the call site
-// and so a future teleport API can reuse it without semantic drift.
-func WithFacing(radians float32) SpawnOption {
-	return func(o *spawnOpts) {
-		o.rotation = radians
-		o.hasRot = true
-	}
-}
-
-// WithoutSpatial prevents SpawnEntity from auto-registering the entity with the
-// spatial hash grid. By default, entities with a collider are registered automatically.
-func WithoutSpatial() SpawnOption {
-	return func(o *spawnOpts) { o.noSpatial = true }
-}
-
-// WithPostInit registers a callback to run after all kind components are
-// attached but before SpawnEntity returns. mmokit.Init(fn) uses this to
-// populate typed component bundles via reflection.
-//
-// Internal API; game code uses mmokit.Init(fn).
-func WithPostInit(fn func(*ecs.World, ecs.Entity)) SpawnOption {
-	return func(o *spawnOpts) {
-		o.postInit = append(o.postInit, fn)
-	}
-}
-
-// WithComponents is a no-op as of the auto-attach refactor. WithEntityKind(K)
-// now auto-attaches the kind's components automatically. Kept temporarily so
-// existing callers compile; will be deleted after that migration.
-func WithComponents() SpawnOption {
-	return func(*spawnOpts) {}
-}
-
 // Stage provides default implementations for all GameWorld interface methods.
 // Embed it in your game world struct to get working multi-node support out of the box.
 //
@@ -1500,91 +1417,6 @@ func (b *Stage) TickTransferCooldowns() {
 // Convenience spawn
 // ---------------------------------------------------------------------------
 
-// SpawnEntity creates a new entity with Position, Velocity, NetworkID,
-// EntityKind, Collider, and CellCoord. Use SpawnOptions to configure
-// velocity, collider, entity kind, and rotation.
-func (b *Stage) SpawnEntity(pos component.Position, opts ...SpawnOption) ecs.Entity {
-	o := spawnOpts{}
-	for _, opt := range opts {
-		opt(&o)
-	}
-
-	vel := component.Velocity{}
-	if o.hasVel {
-		vel.X, vel.Y = o.velX, o.velY
-	}
-
-	collider := component.Collider{Radius: 10}
-	if o.hasCollider {
-		collider = o.collider
-	}
-
-	kind := component.EntityKind{Type: 1}
-	if o.hasKind {
-		kind.Type = o.entityType
-	}
-
-	nid := b.eng.NextNetID()
-	entity := b.spawner.NewEntity(
-		&pos,
-		&vel,
-		&component.NetworkID{ID: nid},
-		&kind,
-		&collider,
-		&component.CellCoord{CellX: b.rootCell().X, CellY: b.rootCell().Y},
-	)
-
-	if o.hasRot {
-		b.rotMap.Add(entity, &component.Rotation{Angle: o.rotation})
-	}
-
-	// Auto-register with spatial grid if entity has a collider.
-	if !o.noSpatial && o.hasCollider && b.spatialGrid != nil {
-		b.spatialGrid.Register(spatial.Entry{
-			Entity: entity,
-			X:      pos.X,
-			Y:      pos.Y,
-			Radius: collider.Radius,
-		})
-	}
-
-	// Auto-add registered components for this entity kind.
-	if o.hasKind {
-		b.EnsureEntityKindComponents(entity)
-	}
-
-	// Run post-init callbacks after all kind components are attached.
-	for _, fn := range o.postInit {
-		fn(b.ECSWorld(), entity)
-	}
-
-	if b.netIDIdx != nil && nid != 0 {
-		res := b.netIDIdx.Enter(nid, entity, PresenceLive)
-		switch res.Action {
-		case ActionInstalled, ActionUpdated:
-			// Normal install; no rollback.
-		case ActionDuplicate:
-			b.eng.Log.Log(CatMeshCell,
-				"[%s] duplicate live spawn blocked: netID=%d", b.cellID, nid)
-			if b.strictNetIDIndex {
-				b.eng.ECS.RemoveEntity(entity)
-				return ecs.Entity{}
-			}
-		case ActionRejected:
-			// Local live spawns shouldn't conflict with existing Replica
-			// under normal operation; if they do, strict mode rolls back.
-			// The sanctioned Replica→Live path is PromoteReplicaToLive.
-			if b.strictNetIDIndex && b.eng.ECS.Alive(entity) {
-				b.eng.ECS.RemoveEntity(entity)
-				return ecs.Entity{}
-			}
-		}
-	}
-
-	b.eng.Log.Log(CatMeshCell, "[%s] spawned entity netID=%d at (%.0f,%.0f)", b.cellID, nid, pos.X, pos.Y)
-	return entity
-}
-
 // SpawnAtLocation spawns an entity at the given world-space Location.
 //
 // The Location must fall within this cell's world bounds; callers at the
@@ -1593,9 +1425,11 @@ func (b *Stage) SpawnEntity(pos component.Position, opts ...SpawnOption) ecs.Ent
 // CatInvariant, append a commit-log violation, panic under InvariantPanic,
 // or (under InvariantOff/InvariantLog) clamp and continue.
 //
-// Facing is NOT auto-applied — pass WithFacing(loc.Facing) if the game
-// uses rotation.
-func (b *Stage) SpawnAtLocation(loc coords.Location, opts ...SpawnOption) ecs.Entity {
+// Spawns a bare entity carrying only Position. Games that need additional
+// components (Rotation, EntityKind, etc.) should call Stage.Spawn directly
+// with the desired component set; SpawnAtLocation is a low-level convenience
+// for tests and bounds-validated placement.
+func (b *Stage) SpawnAtLocation(loc coords.Location) ecs.Entity {
 	rootCell := b.rootCell()
 	cellSize := coords.CellSize
 	minX := float32(rootCell.X) * cellSize
@@ -1633,7 +1467,7 @@ func (b *Stage) SpawnAtLocation(loc coords.Location, opts ...SpawnOption) ecs.En
 	}
 
 	pos := component.Position{X: loc.X - minX, Y: loc.Y - minY}
-	return b.SpawnEntity(pos, opts...)
+	return b.Spawn(pos).Handle()
 }
 
 // SpawnPlayer is the canonical player-spawn helper. It performs the

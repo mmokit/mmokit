@@ -90,12 +90,12 @@ func TestDrainPendingPromotes_BorderReplicaTip_WorldXCorrect(t *testing.T) {
 	// Source entity at pos.X=1030 (6px past east boundary), velX=200.
 	const srcPosX = float32(1030)
 	const velX = float32(200)
-	ent := src.SpawnEntity(
+	ent := src.Spawn(
 		component.Position{X: srcPosX, Y: 500},
-		WithVelocity(velX, 0),
-		WithEntityKind(1),
-		WithCollider(5),
-	)
+		component.Velocity{X: velX, Y: 0},
+		component.EntityKind{Type: 1},
+		component.Collider{Radius: 5},
+	).Handle()
 	netID := src.NetworkIDMap().Get(ent).ID
 	src.QueueCrossing(CrossingEvent{
 		Entity: ent, NetID: netID, DestCellID: "cell_1_0",
@@ -255,12 +255,12 @@ func TestDrainPendingPromotes_NoReplica_WorldXCorrect(t *testing.T) {
 	hd := NewHandoffDriver(src, rec)
 
 	const srcPosX = float32(1030)
-	ent := src.SpawnEntity(
+	ent := src.Spawn(
 		component.Position{X: srcPosX, Y: 500},
-		WithVelocity(200, 0),
-		WithEntityKind(1),
-		WithCollider(5),
-	)
+		component.Velocity{X: 200, Y: 0},
+		component.EntityKind{Type: 1},
+		component.Collider{Radius: 5},
+	).Handle()
 	netID := src.NetworkIDMap().Get(ent).ID
 	src.QueueCrossing(CrossingEvent{
 		Entity: ent, NetID: netID, DestCellID: "cell_1_0",
@@ -335,12 +335,12 @@ func TestDrainPendingPromotes_WithMoveTargetInRegistry_WorldXCorrect(t *testing.
 
 	const srcPosX = float32(1030)
 	const velX = float32(200)
-	ent := src.SpawnEntity(
+	ent := src.Spawn(
 		component.Position{X: srcPosX, Y: 500},
-		WithVelocity(velX, 0),
-		WithEntityKind(1),
-		WithCollider(5),
-	)
+		component.Velocity{X: velX, Y: 0},
+		component.EntityKind{Type: 1},
+		component.Collider{Radius: 5},
+	).Handle()
 	// Set MoveTarget to simulate clicking at worldX=1500.
 	// MT.CellX = floor(1500/1024) = 1, MT.LocalX = 1500 - 1024 = 476.
 	mtMap.Add(ent, &component.MoveTarget{CellX: 1, LocalX: 476, Active: true})

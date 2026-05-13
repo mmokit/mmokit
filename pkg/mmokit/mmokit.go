@@ -388,10 +388,6 @@ type NoopBridge = universe.NoopBridge
 // the current node. Used by border replication scanning.
 type NeighborInfo = universe.NeighborInfo
 
-// SpawnOption configures an optional component when spawning an entity via
-// Stage.SpawnEntity (e.g. WithVelocity, WithCollider, WithRotation).
-type SpawnOption = universe.SpawnOption
-
 // BoundarySystem normalizes entity positions into [0, CellSize) and initiates
 // cross-cell transfers when entities cross cell boundaries.
 type BoundarySystem = universe.BoundarySystem
@@ -958,28 +954,6 @@ type PostgresOption = postgres.Option
 // ---------------------------------------------------------------------------
 
 var (
-	// WithVelocity sets initial velocity when spawning via Stage.SpawnEntity.
-	WithVelocity = universe.WithVelocity
-
-	// WithCollider attaches a Collider component when spawning via Stage.SpawnEntity.
-	WithCollider = universe.WithCollider
-
-	// WithEntityKind sets the EntityKind component when spawning via Stage.SpawnEntity.
-	WithEntityKind = universe.WithEntityKind
-
-	// WithRotation sets initial rotation when spawning via Stage.SpawnEntity.
-	WithRotation = universe.WithRotation
-
-	// WithFacing sets the entity's facing angle (radians) from a Location.
-	WithFacing = universe.WithFacing
-
-	// WithComponents auto-adds zero-value components for all components registered
-	// on the entity's EntityKindDef. Requires WithEntityKind to be set.
-	WithComponents = universe.WithComponents
-
-	// WithoutSpatial prevents SpawnEntity from auto-registering with the spatial grid.
-	WithoutSpatial = universe.WithoutSpatial
-
 	// ChannelEvent is the channel byte (0x00) for game event frames.
 	ChannelEvent = net.ChannelEvent
 

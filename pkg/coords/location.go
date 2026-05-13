@@ -7,7 +7,7 @@ package coords
 // dispatch time.
 //
 // Facing is in radians, 0 = +X axis. The engine does not auto-apply it —
-// games opt in by passing mmokit.WithFacing(loc.Facing) when spawning.
+// games opt in by passing mmokit.Rotation{Angle: loc.Facing} to Stage.Spawn.
 //
 // Tag is opaque to the engine. Games that want tagged destinations
 // ("bank", "tutorial_start") populate it; games that don't leave it empty.

@@ -1,7 +1,6 @@
 package universe
 
 import (
-	"reflect"
 	"testing"
 
 	"github.com/mlange-42/ark/ecs"
@@ -46,21 +45,6 @@ func TestUpdateCellBounds_SubcellToParent_NoPositionShift(t *testing.T) {
 		t.Errorf("position = (%.0f, %.0f), want (5000, 3000) — positions should not shift during same-root-cell merge", pos.X, pos.Y)
 	}
 }
-
-func TestWithFacing_SetsRotation(t *testing.T) {
-	var o spawnOpts
-	WithFacing(1.5708).apply(&o)
-	if !o.hasRot {
-		t.Fatalf("WithFacing did not set hasRot")
-	}
-	if o.rotation != 1.5708 {
-		t.Fatalf("WithFacing rotation = %v, want 1.5708", o.rotation)
-	}
-}
-
-// test-only helper so we can apply a SpawnOption without running through
-// a full Stage.SpawnEntity. Lives in the test file.
-func (f SpawnOption) apply(o *spawnOpts) { f(o) }
 
 func TestSpawnAtLocation_ConvertsWorldToLocal(t *testing.T) {
 	// Fixture: cellSize=2000, rootCell=(1, 1). World origin of this cell is (2000, 2000).
@@ -125,23 +109,6 @@ func TestSpawnAtLocation_OutOfBounds_InvariantPanic(t *testing.T) {
 	}()
 
 	_ = wb.SpawnAtLocation(coords.Location{X: 99999, Y: 99999})
-}
-
-type kindAutoAttachMarker struct{ V float32 }
-
-func TestSpawnEntity_WithEntityKind_AutoAttachesComponents(t *testing.T) {
-	base := newTestWorldBase(t, CellID{X: 0, Y: 0})
-	def := EntityKindDef{Kind: 42, Name: "Marker"}
-	w := base.ECSWorld()
-	KindComponentByID(&def, w, ecs.ComponentID[kindAutoAttachMarker](w), reflect.TypeFor[kindAutoAttachMarker](), false)
-	base.RegisterEntityKind(def)
-
-	e := base.SpawnEntity(component.Position{X: 0, Y: 0}, WithEntityKind(42))
-
-	mp := ecs.NewMap1[kindAutoAttachMarker](base.ECSWorld())
-	if !mp.HasAll(e) {
-		t.Fatal("expected kindAutoAttachMarker to be auto-attached when WithEntityKind(42) is set")
-	}
 }
 
 func TestSpawnPlayer_AttachesPlayerConn(t *testing.T) {

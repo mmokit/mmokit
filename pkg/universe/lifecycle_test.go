@@ -135,7 +135,7 @@ func TestOnPlayerLeave_DefaultCleanupRemovesEntity(t *testing.T) {
 
 	// Manually attach an entity to the session (simulates what OnEnter / SpawnPlayer
 	// would do in a real game).
-	e := base.SpawnEntity(component.Position{X: 10, Y: 10})
+	e := base.Spawn(component.Position{X: 10, Y: 10}).Handle()
 	s.Entity = e
 
 	// Transition away from StateActive — OnExit fires the default cleanup.
@@ -173,7 +173,7 @@ func TestOnPlayerLeave_DefaultCleanupRunsBeforeUserHooks(t *testing.T) {
 
 	s := driveToActive(t, pm, 11, "bob")
 
-	e := base.SpawnEntity(component.Position{X: 5, Y: 5})
+	e := base.Spawn(component.Position{X: 5, Y: 5}).Handle()
 	s.Entity = e
 
 	if err := pm.Transition(s, engine.StateDisconnected); err != nil {

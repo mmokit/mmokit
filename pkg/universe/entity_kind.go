@@ -37,14 +37,15 @@ type kindComponent struct {
 	registerTransfer func(reg *ReplicationRegistry)
 
 	// ensureExists adds a zero-value component to an entity if it doesn't already
-	// have one. Used for auto-filling on transfer receive and WithComponents().
+	// have one. Used for auto-filling on transfer receive (Stage.Spawn requires
+	// the caller to pass kind components explicitly).
 	ensureExists func(entity ecs.Entity)
 }
 
 // KindComponentByID registers a component on an EntityKindDef from a
 // pre-resolved ecs.ID + reflect.Type. The component is included in
 // cross-cell transfers (unless localOnly=true) and auto-filled on
-// transfer receive (and on WithComponents() spawn).
+// transfer receive.
 //
 // Used by mmokit.RegisterKind[T] which walks a bundle struct via
 // reflection and resolves each field's component type via ecs.TypeID.
