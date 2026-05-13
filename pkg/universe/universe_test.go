@@ -672,13 +672,17 @@ type recordingBridge struct {
 // registered, the spawn path returns the engine default (center of cell
 // (0,0)) — exercised through Bridge.RequestRespawn.
 func TestOnResolveSpawn_DefaultLocation(t *testing.T) {
-	c := newTestCoordinator(Config{CellsX: 1, CellsY: 1})
+	prev := coords.CellSize
+	coords.SetCellSize(2000)
+	defer coords.SetCellSize(prev)
+
+	c := newTestCoordinator(Config{CellsX: 1, CellsY: 1, CellSize: 2000})
 
 	cellID := CellID{X: 0, Y: 0}.MeshID()
 	cell := c.Cells[cellID]
 	cell.Bridge.RequestRespawn(7, "bob")
 
-	want := coords.Location{X: c.cfg.CellSize / 2, Y: c.cfg.CellSize / 2}
+	want := coords.Location{X: 1000, Y: 1000}
 	select {
 	case msg := <-cell.Inbox:
 		if msg.Type != MsgSpawnTransfer {

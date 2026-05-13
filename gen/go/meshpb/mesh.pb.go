@@ -4592,26 +4592,24 @@ func (x *HostOpAck) GetError() string {
 	return ""
 }
 
-// S9: coord → gateway spawn resolver response. ok=false means no saved
-// position (use Config.DefaultSpawn). error is non-empty when the RPC itself
-// failed (e.g. no resolver registered).
+// S9: coord → gateway spawn resolver response. The coordinator always
+// returns a valid world-space Location (resolver output, or engine default
+// when no resolver is registered) — there is no error path.
 //
 // is_reconnect=true means the user has a lingering disconnected session in
 // activeUsers; the gateway must dispatch the PlayerAssignment to
 // target_host_id / target_cell_id with IsReconnect=true so the cell reattaches
 // to the existing entity instead of spawning a fresh one. world_x/world_y are
-// still set when ok=true so the gateway has a fallback if the named cell has
-// since been merged away.
+// always set so the gateway has a fallback if the named cell has since been
+// merged away.
 type SpawnResolved struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	RequestId     uint64                 `protobuf:"varint,1,opt,name=request_id,json=requestId,proto3" json:"request_id,omitempty"`
-	Ok            bool                   `protobuf:"varint,2,opt,name=ok,proto3" json:"ok,omitempty"`
-	WorldX        float32                `protobuf:"fixed32,3,opt,name=world_x,json=worldX,proto3" json:"world_x,omitempty"`
-	WorldY        float32                `protobuf:"fixed32,4,opt,name=world_y,json=worldY,proto3" json:"world_y,omitempty"`
-	Error         string                 `protobuf:"bytes,5,opt,name=error,proto3" json:"error,omitempty"`
-	IsReconnect   bool                   `protobuf:"varint,6,opt,name=is_reconnect,json=isReconnect,proto3" json:"is_reconnect,omitempty"`
-	TargetHostId  string                 `protobuf:"bytes,7,opt,name=target_host_id,json=targetHostId,proto3" json:"target_host_id,omitempty"`
-	TargetCellId  string                 `protobuf:"bytes,8,opt,name=target_cell_id,json=targetCellId,proto3" json:"target_cell_id,omitempty"`
+	WorldX        float32                `protobuf:"fixed32,2,opt,name=world_x,json=worldX,proto3" json:"world_x,omitempty"`
+	WorldY        float32                `protobuf:"fixed32,3,opt,name=world_y,json=worldY,proto3" json:"world_y,omitempty"`
+	IsReconnect   bool                   `protobuf:"varint,4,opt,name=is_reconnect,json=isReconnect,proto3" json:"is_reconnect,omitempty"`
+	TargetHostId  string                 `protobuf:"bytes,5,opt,name=target_host_id,json=targetHostId,proto3" json:"target_host_id,omitempty"`
+	TargetCellId  string                 `protobuf:"bytes,6,opt,name=target_cell_id,json=targetCellId,proto3" json:"target_cell_id,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -4653,13 +4651,6 @@ func (x *SpawnResolved) GetRequestId() uint64 {
 	return 0
 }
 
-func (x *SpawnResolved) GetOk() bool {
-	if x != nil {
-		return x.Ok
-	}
-	return false
-}
-
 func (x *SpawnResolved) GetWorldX() float32 {
 	if x != nil {
 		return x.WorldX
@@ -4672,13 +4663,6 @@ func (x *SpawnResolved) GetWorldY() float32 {
 		return x.WorldY
 	}
 	return 0
-}
-
-func (x *SpawnResolved) GetError() string {
-	if x != nil {
-		return x.Error
-	}
-	return ""
 }
 
 func (x *SpawnResolved) GetIsReconnect() bool {
@@ -5411,17 +5395,15 @@ const file_meshpb_mesh_proto_rawDesc = "" +
 	"\tHostOpAck\x12\x15\n" +
 	"\x06req_id\x18\x01 \x01(\x04R\x05reqId\x12\x0e\n" +
 	"\x02ok\x18\x02 \x01(\bR\x02ok\x12\x14\n" +
-	"\x05error\x18\x03 \x01(\tR\x05error\"\xf5\x01\n" +
+	"\x05error\x18\x03 \x01(\tR\x05error\"\xcf\x01\n" +
 	"\rSpawnResolved\x12\x1d\n" +
 	"\n" +
-	"request_id\x18\x01 \x01(\x04R\trequestId\x12\x0e\n" +
-	"\x02ok\x18\x02 \x01(\bR\x02ok\x12\x17\n" +
-	"\aworld_x\x18\x03 \x01(\x02R\x06worldX\x12\x17\n" +
-	"\aworld_y\x18\x04 \x01(\x02R\x06worldY\x12\x14\n" +
-	"\x05error\x18\x05 \x01(\tR\x05error\x12!\n" +
-	"\fis_reconnect\x18\x06 \x01(\bR\visReconnect\x12$\n" +
-	"\x0etarget_host_id\x18\a \x01(\tR\ftargetHostId\x12$\n" +
-	"\x0etarget_cell_id\x18\b \x01(\tR\ftargetCellId\"\x94\x01\n" +
+	"request_id\x18\x01 \x01(\x04R\trequestId\x12\x17\n" +
+	"\aworld_x\x18\x02 \x01(\x02R\x06worldX\x12\x17\n" +
+	"\aworld_y\x18\x03 \x01(\x02R\x06worldY\x12!\n" +
+	"\fis_reconnect\x18\x04 \x01(\bR\visReconnect\x12$\n" +
+	"\x0etarget_host_id\x18\x05 \x01(\tR\ftargetHostId\x12$\n" +
+	"\x0etarget_cell_id\x18\x06 \x01(\tR\ftargetCellId\"\x94\x01\n" +
 	"\x0fSessionRegister\x12\x1d\n" +
 	"\n" +
 	"gateway_id\x18\x01 \x01(\tR\tgatewayId\x12\x17\n" +

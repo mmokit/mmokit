@@ -773,10 +773,9 @@ func (s *meshControlServer) handleGatewayControl(stream meshpb.MeshControl_Contr
 func (s *meshControlServer) handleInboundResolveSpawn(gatewayID string, req *meshpb.ResolveSpawn) {
 	s.coord.mu.RLock()
 	resolver := s.coord.spawnResolver
-	cellSize := s.coord.cfg.CellSize
 	s.coord.mu.RUnlock()
 
-	resp := &meshpb.SpawnResolved{RequestId: req.RequestId, Ok: true}
+	resp := &meshpb.SpawnResolved{RequestId: req.RequestId}
 
 	var uid uuid.UUID
 	if req.UserId != "" {
@@ -790,7 +789,7 @@ func (s *meshControlServer) handleInboundResolveSpawn(gatewayID string, req *mes
 	if resolver != nil {
 		loc = resolver(&session)
 	} else {
-		loc = defaultSpawnLocation(cellSize)
+		loc = defaultSpawnLocation()
 	}
 	resp.WorldX = loc.X
 	resp.WorldY = loc.Y

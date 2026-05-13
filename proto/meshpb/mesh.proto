@@ -583,25 +583,23 @@ message HostOpAck {
   string error  = 3;
 }
 
-// S9: coord → gateway spawn resolver response. ok=false means no saved
-// position (use Config.DefaultSpawn). error is non-empty when the RPC itself
-// failed (e.g. no resolver registered).
+// S9: coord → gateway spawn resolver response. The coordinator always
+// returns a valid world-space Location (resolver output, or engine default
+// when no resolver is registered) — there is no error path.
 //
 // is_reconnect=true means the user has a lingering disconnected session in
 // activeUsers; the gateway must dispatch the PlayerAssignment to
 // target_host_id / target_cell_id with IsReconnect=true so the cell reattaches
 // to the existing entity instead of spawning a fresh one. world_x/world_y are
-// still set when ok=true so the gateway has a fallback if the named cell has
-// since been merged away.
+// always set so the gateway has a fallback if the named cell has since been
+// merged away.
 message SpawnResolved {
   uint64 request_id     = 1;
-  bool   ok             = 2;
-  float  world_x        = 3;
-  float  world_y        = 4;
-  string error          = 5;
-  bool   is_reconnect   = 6;
-  string target_host_id = 7;
-  string target_cell_id = 8;
+  float  world_x        = 2;
+  float  world_y        = 3;
+  bool   is_reconnect   = 4;
+  string target_host_id = 5;
+  string target_cell_id = 6;
 }
 
 // S9: coordinator tells a remote host to register (or update) a player

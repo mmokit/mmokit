@@ -180,7 +180,6 @@ func (b *cellBridge) RequestRespawn(connID uint32, username string) {
 	b.cell.Log.Log(CatMeshMsg, "[%s] requesting respawn: conn=%d user=%s", b.cell.MeshID, connID, username)
 	b.coord.mu.RLock()
 	resolver := b.coord.spawnResolver
-	cellSize := b.coord.cfg.CellSize
 	b.coord.mu.RUnlock()
 
 	var loc coords.Location
@@ -192,7 +191,7 @@ func (b *cellBridge) RequestRespawn(connID uint32, username string) {
 		session := &engine.PlayerSession{ConnID: connID, Username: username}
 		loc = resolver(session)
 	} else {
-		loc = defaultSpawnLocation(cellSize)
+		loc = defaultSpawnLocation()
 	}
 
 	targetCellID := b.coord.CellAtPosition(loc.X, loc.Y)
