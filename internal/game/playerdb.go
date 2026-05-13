@@ -2,11 +2,15 @@ package game
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
 	"sync"
 	"time"
 
+	"github.com/jackc/pgx/v5/pgxpool"
+
+	gamepersist "github.com/zenion/mmoserver/internal/persist"
 	"github.com/zenion/mmoserver/pkg/logger"
 	"github.com/zenion/mmoserver/pkg/persist"
 	pkguniverse "github.com/zenion/mmoserver/pkg/universe"
@@ -14,36 +18,53 @@ import (
 
 // PlayerRepo is an in-memory player database with async persistence
 // via PlayerFlusher. All runtime reads hit the in-memory map. The
-// backing persist.PlayerRepository is read at startup (LoadAll) and
-// written to via batched upserts on FlushDirty.
+// backing repositories are read at startup (LoadAll) and written via
+// batched upserts on FlushDirty — engine identity goes to
+// engine.players, game state goes to space.player_state, both inside
+// one pgx.Tx per flush.
 //
 // Thread-safe: the mutex protects concurrent access from the
 // marketplace service running on operation router worker goroutines.
 type PlayerRepo struct {
-	mu      sync.RWMutex
-	players map[string]*PlayerData
-	dirty   map[string]bool
-	repo    persist.PlayerRepository
-	flusher *PlayerFlusher
+	mu         sync.RWMutex
+	players    map[string]*PlayerData
+	dirty      map[string]bool
+	engineRepo persist.PlayerRepository
+	gameRepo   gamepersist.PlayerStateRepository
+	flusher    *PlayerFlusher
 }
 
-// NewPlayerRepo creates a PlayerRepo backed by the given repository.
+// NewPlayerRepo creates a PlayerRepo backed by the engine identity repo
+// (pkg/persist.PlayerRepository) and the game-state repo
+// (internal/persist.PlayerStateRepository). pool is used by the flusher
+// to open one transaction per flush so both halves commit atomically.
 // log may be nil if the caller doesn't want flush log output.
-func NewPlayerRepo(repo persist.PlayerRepository, log *logger.Logger) *PlayerRepo {
+func NewPlayerRepo(
+	pool *pgxpool.Pool,
+	engineRepo persist.PlayerRepository,
+	gameRepo gamepersist.PlayerStateRepository,
+	log *logger.Logger,
+) *PlayerRepo {
 	return &PlayerRepo{
-		players: make(map[string]*PlayerData),
-		dirty:   make(map[string]bool),
-		repo:    repo,
-		flusher: NewPlayerFlusher(repo, log),
+		players:    make(map[string]*PlayerData),
+		dirty:      make(map[string]bool),
+		engineRepo: engineRepo,
+		gameRepo:   gameRepo,
+		flusher:    NewPlayerFlusher(pool, engineRepo, gameRepo, log),
 	}
 }
 
-// LoadAll streams every player from the repository into the in-memory
-// cache. Call during startup before the game loop starts.
+// LoadAll streams every player from both repositories into the
+// in-memory cache. First pass builds skeleton PlayerData entries from
+// engine.players (identity); second pass merges currencies / cargo /
+// bank / equipment from space.player_state. Players with no game-state
+// row keep zero/empty defaults so a fresh player is indistinguishable
+// from an existing one with no balances. Call during startup before
+// the game loop starts.
 func (r *PlayerRepo) LoadAll(ctx context.Context) error {
 	count := 0
-	err := r.repo.LoadAll(ctx, func(snap *persist.PlayerSnapshot) error {
-		pd := snapshotToPlayerData(snap)
+	err := r.engineRepo.LoadAll(ctx, func(snap *persist.PlayerSnapshot) error {
+		pd := snapshotToPlayerData(snap, nil)
 		r.players[pd.Username] = pd
 		count++
 		return nil
@@ -51,6 +72,25 @@ func (r *PlayerRepo) LoadAll(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("load players: %w", err)
 	}
+
+	if r.gameRepo != nil {
+		err = r.gameRepo.LoadAll(ctx, func(snap *gamepersist.PlayerStateSnapshot) error {
+			pd, ok := r.players[snap.Username]
+			if !ok {
+				// Orphan game-state row (no matching engine identity).
+				// FK enforces this shouldn't happen, but tolerate it by
+				// skipping — the orphan will get cleaned up the next time
+				// the engine row is deleted with ON DELETE CASCADE.
+				return nil
+			}
+			mergeGameStateIntoPlayerData(pd, snap)
+			return nil
+		})
+		if err != nil && !errors.Is(err, gamepersist.ErrNotFound) {
+			return fmt.Errorf("load player state: %w", err)
+		}
+	}
+
 	if count > 0 {
 		log.Printf("persist: loaded %d players", count)
 	}
@@ -105,7 +145,7 @@ func (r *PlayerRepo) FlushDirty(ctx context.Context) (int, error) {
 		if p == nil {
 			continue
 		}
-		r.flusher.Mark(playerSnapshot(p))
+		r.flusher.Mark(enginePlayerSnapshot(p), gamePlayerStateSnapshot(p))
 	}
 	r.dirty = make(map[string]bool)
 	r.mu.Unlock()
@@ -169,55 +209,90 @@ func (r *PlayerRepo) ModifyCurrency(player string, currencyID uint32, delta int6
 	p.Currencies[currencyID] += delta
 }
 
-// playerSnapshot converts the in-memory PlayerData to the persist
-// snapshot DTO. The two types are deliberately distinct so storage
-// representation can evolve independently from the runtime type.
-func playerSnapshot(pd *PlayerData) *persist.PlayerSnapshot {
+// enginePlayerSnapshot converts the identity half of PlayerData to the
+// engine-side persist snapshot DTO. The two types are deliberately
+// distinct so storage representation can evolve independently from the
+// runtime type.
+func enginePlayerSnapshot(pd *PlayerData) *persist.PlayerSnapshot {
 	return &persist.PlayerSnapshot{
-		Username:   pd.Username,
-		CellID:     fmt.Sprintf("cell_%d_%d", pd.CellX, pd.CellY),
-		PosX:       pd.X,
-		PosY:       pd.Y,
-		Currencies: cloneU32Int64Map(pd.Currencies),
-		Cargo:      cloneU32Int32Map(pd.Cargo),
-		Bank:       cloneU32Int32Map(pd.Bank),
-		Equipment: persist.EquipmentSnapshot{
-			Weapon1:  pd.Equipment.Weapon1,
-			Weapon2:  pd.Equipment.Weapon2,
-			Shield:   pd.Equipment.Shield,
-			Thruster: pd.Equipment.Thruster,
-		},
+		Username:  pd.Username,
+		CellID:    fmt.Sprintf("cell_%d_%d", pd.CellX, pd.CellY),
+		PosX:      pd.X,
+		PosY:      pd.Y,
 		CreatedAt: pd.CreatedAt,
 		LastLogin: pd.LastLogin,
 	}
 }
 
-// snapshotToPlayerData converts a persist snapshot back to the
-// in-memory game type. CellID parse failures default to (0, 0) —
-// players at origin if the persisted cell_id is malformed.
-func snapshotToPlayerData(snap *persist.PlayerSnapshot) *PlayerData {
+// gamePlayerStateSnapshot converts the game-state half of PlayerData
+// (currencies, cargo, bank, equipment) into the game-side persist DTO.
+// The maps are deep-copied so concurrent MarkDirty/Flush doesn't race
+// on the live PlayerData maps while the snapshot is in flight.
+func gamePlayerStateSnapshot(pd *PlayerData) *gamepersist.PlayerStateSnapshot {
+	return &gamepersist.PlayerStateSnapshot{
+		Username:   pd.Username,
+		Currencies: cloneU32Int64Map(pd.Currencies),
+		Cargo:      cloneU32Int32Map(pd.Cargo),
+		Bank:       cloneU32Int32Map(pd.Bank),
+		Equipment: gamepersist.EquipmentSnapshot{
+			Weapon1:  pd.Equipment.Weapon1,
+			Weapon2:  pd.Equipment.Weapon2,
+			Shield:   pd.Equipment.Shield,
+			Thruster: pd.Equipment.Thruster,
+		},
+	}
+}
+
+// snapshotToPlayerData builds the in-memory game type from the engine
+// identity snapshot. gameSnap may be nil — when absent, currencies /
+// cargo / bank default to empty maps and equipment to its zero value,
+// so a fresh player (no space.player_state row yet) is indistinguishable
+// from one that exists but has no balances.
+//
+// CellID parse failures default to (0, 0) — players at origin if the
+// persisted cell_id is malformed.
+func snapshotToPlayerData(engineSnap *persist.PlayerSnapshot, gameSnap *gamepersist.PlayerStateSnapshot) *PlayerData {
 	var cellX, cellY int32
-	fmt.Sscanf(snap.CellID, "cell_%d_%d", &cellX, &cellY)
+	fmt.Sscanf(engineSnap.CellID, "cell_%d_%d", &cellX, &cellY)
 	pd := &PlayerData{
-		Username:   snap.Username,
-		X:          snap.PosX,
-		Y:          snap.PosY,
+		Username:   engineSnap.Username,
+		X:          engineSnap.PosX,
+		Y:          engineSnap.PosY,
 		CellX:      cellX,
 		CellY:      cellY,
-		Currencies: snap.Currencies,
-		Cargo:      snap.Cargo,
-		Bank:       snap.Bank,
-		Equipment: EquipmentSave{
-			Weapon1:  snap.Equipment.Weapon1,
-			Weapon2:  snap.Equipment.Weapon2,
-			Shield:   snap.Equipment.Shield,
-			Thruster: snap.Equipment.Thruster,
-		},
-		HasSave:   true,
-		CreatedAt: snap.CreatedAt,
-		LastLogin: snap.LastLogin,
+		Currencies: map[uint32]int64{},
+		Cargo:      map[uint32]int32{},
+		Bank:       map[uint32]int32{},
+		HasSave:    true,
+		CreatedAt:  engineSnap.CreatedAt,
+		LastLogin:  engineSnap.LastLogin,
+	}
+	if gameSnap != nil {
+		mergeGameStateIntoPlayerData(pd, gameSnap)
 	}
 	return pd
+}
+
+// mergeGameStateIntoPlayerData copies the game-state half (currencies,
+// cargo, bank, equipment) into the PlayerData. Used by both
+// snapshotToPlayerData (single-player path) and PlayerRepo.LoadAll
+// (startup two-pass merge).
+func mergeGameStateIntoPlayerData(pd *PlayerData, snap *gamepersist.PlayerStateSnapshot) {
+	if snap.Currencies != nil {
+		pd.Currencies = snap.Currencies
+	}
+	if snap.Cargo != nil {
+		pd.Cargo = snap.Cargo
+	}
+	if snap.Bank != nil {
+		pd.Bank = snap.Bank
+	}
+	pd.Equipment = EquipmentSave{
+		Weapon1:  snap.Equipment.Weapon1,
+		Weapon2:  snap.Equipment.Weapon2,
+		Shield:   snap.Equipment.Shield,
+		Thruster: snap.Equipment.Thruster,
+	}
 }
 
 // cloneU32Int64Map returns a deep copy. Used by playerSnapshot so the

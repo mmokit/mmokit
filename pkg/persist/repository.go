@@ -12,6 +12,8 @@ package persist
 import (
 	"context"
 	"time"
+
+	"github.com/jackc/pgx/v5"
 )
 
 // PlayerRepository persists engine-side player identity. The
@@ -38,6 +40,12 @@ type PlayerRepository interface {
 	// between concurrent flushers, and only the caller knows whether
 	// multiple flushes might race. An empty slice is a no-op.
 	SaveBatch(ctx context.Context, snapshots []*PlayerSnapshot) error
+
+	// SaveBatchTx upserts inside the caller-supplied transaction.
+	// Same sort-by-username deadlock-prevention contract as SaveBatch.
+	// Used by the game-side PlayerFlusher to write engine identity and
+	// game state atomically under one pgx.Tx.
+	SaveBatchTx(ctx context.Context, tx pgx.Tx, snapshots []*PlayerSnapshot) error
 
 	// LoadDebugFlags returns the persisted debug-flag names for the
 	// given user. Returns (nil, ErrNotFound) if the user doesn't exist;

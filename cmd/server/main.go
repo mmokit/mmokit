@@ -149,8 +149,9 @@ func main() {
 	if needsGameState {
 		playerRepo := store.Players()
 		marketRepo := gameStore.Market()
+		playerStateRepo := gameStore.PlayerState()
 
-		playerDB = game.NewPlayerRepo(playerRepo, gameLog)
+		playerDB = game.NewPlayerRepo(store.Pool(), playerRepo, playerStateRepo, gameLog)
 		if err := playerDB.LoadAll(context.Background()); err != nil {
 			log.Fatalf("failed to load player data: %v", err)
 		}

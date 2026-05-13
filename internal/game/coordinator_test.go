@@ -3,6 +3,7 @@ package game
 import (
 	"testing"
 
+	gamepersisttest "github.com/zenion/mmoserver/internal/persist/persisttest"
 	"github.com/zenion/mmoserver/pkg/logger"
 	"github.com/zenion/mmoserver/pkg/mmokit"
 	"github.com/zenion/mmoserver/pkg/net"
@@ -14,7 +15,7 @@ import (
 func newTestCoordinator() *pkguniverse.Process {
 	log := logger.New()
 	connMgr := net.NewConnManager()
-	playerDB := NewPlayerRepo(persisttest.NewPlayerRepoMock(), nil)
+	playerDB := NewPlayerRepo(nil, persisttest.NewPlayerRepoMock(), gamepersisttest.NewPlayerStateRepoMock(), nil)
 	playerSessions := ops.NewPlayerSessions()
 	cfg := DefaultGameConfig()
 

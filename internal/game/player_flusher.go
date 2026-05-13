@@ -6,117 +6,143 @@ import (
 	"sort"
 	"sync"
 
+	"github.com/jackc/pgx/v5/pgxpool"
+
+	gamepersist "github.com/zenion/mmoserver/internal/persist"
 	"github.com/zenion/mmoserver/pkg/logger"
 	"github.com/zenion/mmoserver/pkg/persist"
 )
 
-// PlayerFlusher owns dirty-tracking + batched upserts for player state.
-// Replaces the legacy generic AsyncWriter with a typed flush coordinator
-// that converts internal PlayerData to persist.PlayerSnapshot and
-// submits via persist.PlayerRepository.SaveBatch (which uses pgx.Batch
-// under the hood).
+// PlayerFlusher owns dirty-tracking + batched upserts spanning engine
+// identity (engine.players) and game state (space.player_state). Each
+// Flush wraps both SaveBatchTx calls in a single pgx transaction so the
+// two halves commit atomically.
 //
 // Thread safety: Mark and Flush both take mu. Flush snapshots and
-// clears the dirty map under the lock, then runs the batch outside
-// the lock so concurrent Mark calls don't block on DB latency.
+// clears the dirty maps under the lock, then runs the batch outside
+// the lock so concurrent Marks don't block on DB latency.
 type PlayerFlusher struct {
-	repo persist.PlayerRepository
-	log  *logger.Logger
+	pool       *pgxpool.Pool
+	engineRepo persist.PlayerRepository
+	gameRepo   gamepersist.PlayerStateRepository
+	log        *logger.Logger
 
-	mu    sync.Mutex
-	dirty map[string]*persist.PlayerSnapshot
+	mu             sync.Mutex
+	dirtyEngine    map[string]*persist.PlayerSnapshot
+	dirtyGameState map[string]*gamepersist.PlayerStateSnapshot
 }
 
 // NewPlayerFlusher constructs a flusher. The log argument may be nil
-// for tests that don't need flush logging.
-func NewPlayerFlusher(repo persist.PlayerRepository, log *logger.Logger) *PlayerFlusher {
+// for tests that don't need flush logging. pool may be nil in tests
+// that never call Flush.
+func NewPlayerFlusher(
+	pool *pgxpool.Pool,
+	engineRepo persist.PlayerRepository,
+	gameRepo gamepersist.PlayerStateRepository,
+	log *logger.Logger,
+) *PlayerFlusher {
 	return &PlayerFlusher{
-		repo:  repo,
-		log:   log,
-		dirty: make(map[string]*persist.PlayerSnapshot),
+		pool:           pool,
+		engineRepo:     engineRepo,
+		gameRepo:       gameRepo,
+		log:            log,
+		dirtyEngine:    make(map[string]*persist.PlayerSnapshot),
+		dirtyGameState: make(map[string]*gamepersist.PlayerStateSnapshot),
 	}
 }
 
-// Mark records that the given snapshot needs to be flushed. The
-// snapshot pointer is captured immediately — callers should pass a
-// fresh copy if they continue mutating the source.
-func (f *PlayerFlusher) Mark(snapshot *persist.PlayerSnapshot) {
-	if snapshot == nil {
+// Mark records both halves of the player. The caller MUST pass the
+// engine snapshot; gameSnap may be nil for snapshot-less callers (e.g.
+// debug-flag-only mutations), in which case only the engine half is
+// flushed for that username.
+func (f *PlayerFlusher) Mark(engineSnap *persist.PlayerSnapshot, gameSnap *gamepersist.PlayerStateSnapshot) {
+	if engineSnap == nil {
 		return
 	}
 	f.mu.Lock()
-	f.dirty[snapshot.Username] = snapshot
+	f.dirtyEngine[engineSnap.Username] = engineSnap
+	if gameSnap != nil {
+		f.dirtyGameState[engineSnap.Username] = gameSnap
+	}
 	f.mu.Unlock()
 }
 
-// Flush sends the current dirty set as one pgx.Batch upsert. Sorts by
-// username to satisfy the PlayerRepository deadlock-prevention
-// contract. Resets the dirty map on success; preserves it on error so
-// the next flush retries.
+// Flush snapshots the dirty set, opens one tx, and runs both
+// SaveBatchTx calls under it. On error the dirty maps are restored
+// so the next flush retries.
 //
-// Returns the number of snapshots flushed (0 if the dirty set was
-// empty) and any error from the underlying SaveBatch call.
+// Returns the number of engine snapshots flushed (game-state count
+// follows the same set; nil game snapshots are tolerated).
 func (f *PlayerFlusher) Flush(ctx context.Context) (int, error) {
 	f.mu.Lock()
-	if len(f.dirty) == 0 {
+	if len(f.dirtyEngine) == 0 {
 		f.mu.Unlock()
 		return 0, nil
 	}
-	snapshots := make([]*persist.PlayerSnapshot, 0, len(f.dirty))
-	for _, s := range f.dirty {
-		snapshots = append(snapshots, s)
+	engineSnaps := make([]*persist.PlayerSnapshot, 0, len(f.dirtyEngine))
+	for _, s := range f.dirtyEngine {
+		engineSnaps = append(engineSnaps, s)
 	}
-	f.dirty = make(map[string]*persist.PlayerSnapshot)
+	gameSnaps := make([]*gamepersist.PlayerStateSnapshot, 0, len(f.dirtyGameState))
+	for _, s := range f.dirtyGameState {
+		gameSnaps = append(gameSnaps, s)
+	}
+	f.dirtyEngine = make(map[string]*persist.PlayerSnapshot)
+	f.dirtyGameState = make(map[string]*gamepersist.PlayerStateSnapshot)
 	f.mu.Unlock()
 
-	sort.Slice(snapshots, func(i, j int) bool {
-		return snapshots[i].Username < snapshots[j].Username
-	})
+	sort.Slice(engineSnaps, func(i, j int) bool { return engineSnaps[i].Username < engineSnaps[j].Username })
+	sort.Slice(gameSnaps, func(i, j int) bool { return gameSnaps[i].Username < gameSnaps[j].Username })
 
-	if err := f.repo.SaveBatch(ctx, snapshots); err != nil {
-		// Restore the dirty entries so the next flush retries them.
-		f.mu.Lock()
-		for _, s := range snapshots {
-			if _, exists := f.dirty[s.Username]; !exists {
-				f.dirty[s.Username] = s
-			}
-		}
-		f.mu.Unlock()
-		return 0, fmt.Errorf("player flush: %w", err)
+	tx, err := f.pool.Begin(ctx)
+	if err != nil {
+		f.restoreDirty(engineSnaps, gameSnaps)
+		return 0, fmt.Errorf("player flush: begin tx: %w", err)
 	}
-	return len(snapshots), nil
+	committed := false
+	defer func() {
+		if !committed {
+			_ = tx.Rollback(ctx)
+		}
+	}()
+
+	if err := f.engineRepo.SaveBatchTx(ctx, tx, engineSnaps); err != nil {
+		f.restoreDirty(engineSnaps, gameSnaps)
+		return 0, fmt.Errorf("player flush: engine save: %w", err)
+	}
+	if err := f.gameRepo.SaveBatchTx(ctx, tx, gameSnaps); err != nil {
+		f.restoreDirty(engineSnaps, gameSnaps)
+		return 0, fmt.Errorf("player flush: game save: %w", err)
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		f.restoreDirty(engineSnaps, gameSnaps)
+		return 0, fmt.Errorf("player flush: commit: %w", err)
+	}
+	committed = true
+	return len(engineSnaps), nil
 }
 
-// FlushCell is a synchronous flush of every dirty player currently
-// assigned to the given cell. S6/S7 will call this from the cell
-// migration path so the destination node sees a consistent view of
-// the players being handed off. Stub for S5 — no caller yet.
-func (f *PlayerFlusher) FlushCell(ctx context.Context, cellID string) (int, error) {
+// restoreDirty re-inserts snapshots into the dirty maps after a failed
+// flush so the next call retries. Existing entries (from concurrent
+// Marks during the flush) take precedence — they're newer than the
+// in-flight snapshots.
+func (f *PlayerFlusher) restoreDirty(engineSnaps []*persist.PlayerSnapshot, gameSnaps []*gamepersist.PlayerStateSnapshot) {
 	f.mu.Lock()
-	var toFlush []*persist.PlayerSnapshot
-	for username, snapshot := range f.dirty {
-		if snapshot.CellID == cellID {
-			toFlush = append(toFlush, snapshot)
-			delete(f.dirty, username)
+	defer f.mu.Unlock()
+	for _, s := range engineSnaps {
+		if _, exists := f.dirtyEngine[s.Username]; !exists {
+			f.dirtyEngine[s.Username] = s
 		}
 	}
-	f.mu.Unlock()
-	if len(toFlush) == 0 {
-		return 0, nil
-	}
-	sort.Slice(toFlush, func(i, j int) bool {
-		return toFlush[i].Username < toFlush[j].Username
-	})
-	if err := f.repo.SaveBatch(ctx, toFlush); err != nil {
-		// Restore so the next periodic flush retries.
-		f.mu.Lock()
-		for _, s := range toFlush {
-			if _, exists := f.dirty[s.Username]; !exists {
-				f.dirty[s.Username] = s
-			}
+	for _, s := range gameSnaps {
+		if _, exists := f.dirtyGameState[s.Username]; !exists {
+			f.dirtyGameState[s.Username] = s
 		}
-		f.mu.Unlock()
-		return 0, fmt.Errorf("player flush cell %q: %w", cellID, err)
 	}
-	return len(toFlush), nil
+}
+
+// FlushCell is a stub kept for S6/S7 cell-migration safety — no caller yet.
+func (f *PlayerFlusher) FlushCell(ctx context.Context, cellID string) (int, error) {
+	return 0, nil
 }

@@ -55,7 +55,7 @@ func (r *playerRepo) LoadAll(ctx context.Context, fn func(*persist.PlayerSnapsho
 	return rows.Err()
 }
 
-func (r *playerRepo) SaveBatch(ctx context.Context, snapshots []*persist.PlayerSnapshot) error {
+func (r *playerRepo) SaveBatchTx(ctx context.Context, tx pgx.Tx, snapshots []*persist.PlayerSnapshot) error {
 	if len(snapshots) == 0 {
 		return nil
 	}
@@ -64,7 +64,7 @@ func (r *playerRepo) SaveBatch(ctx context.Context, snapshots []*persist.PlayerS
 	for _, snap := range snapshots {
 		flagsJSON, err := marshalDebugFlags(snap.DebugFlags)
 		if err != nil {
-			return fmt.Errorf("playerRepo.SaveBatch marshal flags %q: %w", snap.Username, err)
+			return fmt.Errorf("playerRepo.SaveBatchTx marshal flags %q: %w", snap.Username, err)
 		}
 		batch.Queue(`
 			INSERT INTO engine.players (
@@ -82,14 +82,32 @@ func (r *playerRepo) SaveBatch(ctx context.Context, snapshots []*persist.PlayerS
 		)
 	}
 
-	br := r.pool.SendBatch(ctx, batch)
+	br := tx.SendBatch(ctx, batch)
 	defer br.Close()
 	for i := range snapshots {
 		if _, err := br.Exec(); err != nil {
-			return fmt.Errorf("playerRepo.SaveBatch exec %d: %w", i, err)
+			return fmt.Errorf("playerRepo.SaveBatchTx exec %d: %w", i, err)
 		}
 	}
 	return nil
+}
+
+// SaveBatch wraps SaveBatchTx in a short-lived transaction so the
+// single-repo path stays a one-call API. The PlayerFlusher uses
+// SaveBatchTx directly so engine identity and game state commit atomically.
+func (r *playerRepo) SaveBatch(ctx context.Context, snapshots []*persist.PlayerSnapshot) error {
+	if len(snapshots) == 0 {
+		return nil
+	}
+	tx, err := r.pool.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("playerRepo.SaveBatch begin: %w", err)
+	}
+	if err := r.SaveBatchTx(ctx, tx, snapshots); err != nil {
+		_ = tx.Rollback(ctx)
+		return err
+	}
+	return tx.Commit(ctx)
 }
 
 func (r *playerRepo) LoadDebugFlags(ctx context.Context, username string) ([]string, error) {

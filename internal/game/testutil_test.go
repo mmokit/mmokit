@@ -2,6 +2,7 @@ package game
 
 import (
 	ecs "github.com/mlange-42/ark/ecs"
+	gamepersisttest "github.com/zenion/mmoserver/internal/persist/persisttest"
 	comp "github.com/zenion/mmoserver/pkg/component"
 	"github.com/zenion/mmoserver/pkg/coords"
 	"github.com/zenion/mmoserver/pkg/engine"
@@ -19,7 +20,7 @@ import (
 func newTestCell(cell pkguniverse.CellID) *pkguniverse.Cell {
 	log := logger.New()
 	connMgr := net.NewConnManager()
-	playerDB := NewPlayerRepo(persisttest.NewPlayerRepoMock(), nil)
+	playerDB := NewPlayerRepo(nil, persisttest.NewPlayerRepoMock(), gamepersisttest.NewPlayerStateRepoMock(), nil)
 	playerSessions := ops.NewPlayerSessions()
 	cfg := DefaultGameConfig()
 	platformCfg := engine.Config{TickRate: 20}

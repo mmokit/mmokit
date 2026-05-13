@@ -3,6 +3,8 @@ package persist
 import (
 	"context"
 	"time"
+
+	"github.com/jackc/pgx/v5"
 )
 
 // PlayerStateRepository persists per-player space-game state.
@@ -25,6 +27,12 @@ type PlayerStateRepository interface {
 	// (deadlock-prevention contract — matches PlayerRepository.SaveBatch).
 	// Empty slice is a no-op.
 	SaveBatch(ctx context.Context, snapshots []*PlayerStateSnapshot) error
+
+	// SaveBatchTx upserts inside the caller-supplied transaction.
+	// Same sort-by-username deadlock-prevention contract as SaveBatch.
+	// Used by the game-side PlayerFlusher to write engine identity and
+	// game state atomically under one pgx.Tx.
+	SaveBatchTx(ctx context.Context, tx pgx.Tx, snapshots []*PlayerStateSnapshot) error
 }
 
 // PlayerStateSnapshot is the persistence DTO for a player's game state.

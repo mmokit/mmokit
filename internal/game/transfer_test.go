@@ -6,6 +6,7 @@ import (
 	"github.com/mlange-42/ark/ecs"
 
 	gamecomp "github.com/zenion/mmoserver/internal/component"
+	gamepersisttest "github.com/zenion/mmoserver/internal/persist/persisttest"
 	"github.com/zenion/mmoserver/pkg/engine"
 	"github.com/zenion/mmoserver/pkg/mmokit"
 	"github.com/zenion/mmoserver/pkg/net"
@@ -30,7 +31,7 @@ func newTestGameWorld() (*GameWorld, *net.ConnManager) {
 	cfg := DefaultGameConfig()
 	cfg.AsteroidCount = 0 // skip spawning asteroids in tests
 	cfg.ShipShield = 200  // nonzero so the post-transfer ApplyEquipmentStats assertion is meaningful
-	playerDB := NewPlayerRepo(persisttest.NewPlayerRepoMock(), nil)
+	playerDB := NewPlayerRepo(nil, persisttest.NewPlayerRepoMock(), gamepersisttest.NewPlayerStateRepoMock(), nil)
 	base := pkguniverse.NewStage(eng, pkguniverse.CellID{}, cfg.AoIRadius, nil)
 	base.SetSpatialGrid(mmokit.NewHashGrid(1000))
 	// Realize entity kinds against the stage before NewGameWorld spawns

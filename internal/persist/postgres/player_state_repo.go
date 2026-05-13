@@ -58,20 +58,17 @@ func (r *playerStateRepo) LoadAll(ctx context.Context, fn func(*gamepersist.Play
 	return rows.Err()
 }
 
-// SaveBatch upserts every snapshot via a single pgx.Batch. Caller is
-// expected to sort snapshots by username (PlayerStateRepository
-// contract) to prevent deadlocks under concurrent flushes — we do NOT
-// re-sort here, because the contract is on the caller.
-//
-// Sanity: if the slice is unsorted we return an error rather than
-// silently risking a deadlock.
-func (r *playerStateRepo) SaveBatch(ctx context.Context, snapshots []*gamepersist.PlayerStateSnapshot) error {
+// SaveBatchTx upserts every snapshot inside the caller-supplied
+// transaction. Same sort-by-username contract as SaveBatch — callers
+// must pre-sort. Used by the game-side PlayerFlusher to write engine
+// identity and game state atomically under one pgx.Tx.
+func (r *playerStateRepo) SaveBatchTx(ctx context.Context, tx pgx.Tx, snapshots []*gamepersist.PlayerStateSnapshot) error {
 	if len(snapshots) == 0 {
 		return nil
 	}
 	for i := 1; i < len(snapshots); i++ {
 		if snapshots[i-1].Username > snapshots[i].Username {
-			return errors.New("playerStateRepo.SaveBatch: snapshots not sorted by username (deadlock prevention contract)")
+			return errors.New("playerStateRepo.SaveBatchTx: snapshots not sorted by username (deadlock prevention contract)")
 		}
 	}
 
@@ -109,15 +106,32 @@ func (r *playerStateRepo) SaveBatch(ctx context.Context, snapshots []*gamepersis
 		)
 	}
 
-	br := r.pool.SendBatch(ctx, batch)
+	br := tx.SendBatch(ctx, batch)
 	defer br.Close()
 
 	for i := range len(snapshots) {
 		if _, err := br.Exec(); err != nil {
-			return fmt.Errorf("playerStateRepo.SaveBatch upsert %q: %w", snapshots[i].Username, err)
+			return fmt.Errorf("playerStateRepo.SaveBatchTx upsert %q: %w", snapshots[i].Username, err)
 		}
 	}
 	return nil
+}
+
+// SaveBatch wraps SaveBatchTx in a short-lived transaction so the
+// single-repo path stays a one-call API.
+func (r *playerStateRepo) SaveBatch(ctx context.Context, snapshots []*gamepersist.PlayerStateSnapshot) error {
+	if len(snapshots) == 0 {
+		return nil
+	}
+	tx, err := r.pool.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("playerStateRepo.SaveBatch begin: %w", err)
+	}
+	if err := r.SaveBatchTx(ctx, tx, snapshots); err != nil {
+		_ = tx.Rollback(ctx)
+		return err
+	}
+	return tx.Commit(ctx)
 }
 
 // scanPlayerState unmarshals one player_state row into a snapshot.

@@ -12,6 +12,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/jackc/pgx/v5"
+
 	gamepersist "github.com/zenion/mmoserver/internal/persist"
 )
 
@@ -174,6 +176,11 @@ func (m *PlayerStateRepoMock) SaveBatch(ctx context.Context, snapshots []*gamepe
 		m.rows[s.Username] = clonePlayerState(s)
 	}
 	return nil
+}
+
+// SaveBatchTx delegates to SaveBatch; the in-memory mock has no tx scope.
+func (m *PlayerStateRepoMock) SaveBatchTx(ctx context.Context, _ pgx.Tx, snapshots []*gamepersist.PlayerStateSnapshot) error {
+	return m.SaveBatch(ctx, snapshots)
 }
 
 // Compile-time interface assertions.

@@ -11,6 +11,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/jackc/pgx/v5"
+
 	"github.com/zenion/mmoserver/pkg/persist"
 )
 
@@ -61,6 +63,11 @@ func (m *PlayerRepoMock) SaveBatch(ctx context.Context, snapshots []*persist.Pla
 		m.rows[s.Username] = clonePlayer(s)
 	}
 	return nil
+}
+
+// SaveBatchTx delegates to SaveBatch; the in-memory mock has no tx scope.
+func (m *PlayerRepoMock) SaveBatchTx(ctx context.Context, _ pgx.Tx, snapshots []*persist.PlayerSnapshot) error {
+	return m.SaveBatch(ctx, snapshots)
 }
 
 // LoadDebugFlags returns a copy of the persisted debug-flag list for

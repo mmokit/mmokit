@@ -10,8 +10,8 @@ import (
 	"strconv"
 	"strings"
 
+	gamepersist "github.com/zenion/mmoserver/internal/persist"
 	"github.com/zenion/mmoserver/pkg/mmokit"
-	"github.com/zenion/mmoserver/pkg/persist"
 )
 
 // ConfigVersion tracks breaking config changes. Bump this when defaults change
@@ -235,10 +235,10 @@ func DefaultGameConfig() GameConfig {
 // exists yet, returns the defaults and saves them. If the saved
 // version doesn't match ConfigVersion, discards the saved config and
 // re-saves the defaults.
-func LoadConfig(ctx context.Context, repo persist.ConfigRepository) (GameConfig, error) {
+func LoadConfig(ctx context.Context, repo gamepersist.ConfigRepository) (GameConfig, error) {
 	snap, err := repo.Load(ctx)
 	if err != nil {
-		if errors.Is(err, persist.ErrNotFound) {
+		if errors.Is(err, gamepersist.ErrNotFound) {
 			cfg := DefaultGameConfig()
 			if saveErr := SaveConfig(ctx, repo, &cfg); saveErr != nil {
 				return cfg, fmt.Errorf("save default config: %w", saveErr)
@@ -266,12 +266,12 @@ func LoadConfig(ctx context.Context, repo persist.ConfigRepository) (GameConfig,
 }
 
 // SaveConfig persists the game config via the repository synchronously.
-func SaveConfig(ctx context.Context, repo persist.ConfigRepository, cfg *GameConfig) error {
+func SaveConfig(ctx context.Context, repo gamepersist.ConfigRepository, cfg *GameConfig) error {
 	data, err := json.Marshal(cfg)
 	if err != nil {
 		return fmt.Errorf("marshal config: %w", err)
 	}
-	return repo.Save(ctx, &persist.ConfigSnapshot{
+	return repo.Save(ctx, &gamepersist.ConfigSnapshot{
 		Data:    data,
 		Version: int64(cfg.Version),
 	})
