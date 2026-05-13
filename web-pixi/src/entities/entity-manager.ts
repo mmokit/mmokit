@@ -4,11 +4,12 @@ import type { ClientEntity, EntityDisplayObject } from "../types";
 import { getAsteroid } from "../entity-accessors";
 import { createShipDisplay } from "./ship";
 import { createAsteroidDisplay } from "./asteroid";
-import { createProjectileDisplay } from "./projectile";
+import { createProjectileDisplay, createUnknownEntityDisplay } from "./projectile";
 import { createStationDisplay } from "./station";
 import { createLootCrateDisplay } from "./loot-crate";
 import { createNpcDisplay } from "./npc";
 import { createPoiDisplay } from "./poi";
+import { createAoEMarkerDisplay } from "./aoe-marker";
 import { EntityType } from "../../sdk/index.js";
 
 export class EntityManager {
@@ -80,9 +81,13 @@ export class EntityManager {
         return createNpcDisplay();
       case EntityType.POI:
         return createPoiDisplay();
+      case EntityType.AoEMarker:
+        return createAoEMarkerDisplay();
+      case EntityType.Projectile:
+        return createProjectileDisplay();
     }
-    // Unreachable for known SDK entity kinds — fall back to projectile-style dot.
-    return createProjectileDisplay(ENTITY_COLORS[0] || 0xffffff);
+    // Unreachable for known SDK entity kinds — fall back to a stub dot.
+    return createUnknownEntityDisplay(ENTITY_COLORS[0] || 0xffffff);
   }
 
   clear(): void {
