@@ -8,8 +8,10 @@ import (
 // AoEMarkerBundle declares the components an AoEMarker carries. The
 // AoESpec describes the damage payload; Lifetime ticks the cast/delay
 // window; on Lifetime expiry AoESystem applies damage and despawns.
+//
+// Position is omitted: the framework owns Position as a transfer-core
+// component and RegisterKind rejects it as a bundle field.
 type AoEMarkerBundle struct {
-	Position *mmokit.Position
 	Lifetime *mmokit.Lifetime
 	Spec     *gamecomp.AoESpec
 }
