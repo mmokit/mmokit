@@ -94,53 +94,59 @@ func (gw *GameWorld) SpawnPlayer(s *mmokit.PlayerSession) {
 
 	br := boundingRadius(gw.Config.ShipWidth, gw.Config.ShipHeight)
 
-	handle := gw.stage.SpawnEntity(
+	e := gw.stage.Spawn(
 		mmokit.Position{X: x, Y: y},
-		mmokit.WithEntityKind(gamecomp.KindShip),
-		mmokit.WithCollider(br),
-		mmokit.WithRotation(0),  // ShipDynamicsSystem reads Rotation for turn-rate steering
-		mmokit.WithComponents(), // auto-adds all registered ship components
+		mmokit.EntityKind{Type: gamecomp.KindShip},
+		mmokit.Collider{
+			Width:  gw.Config.ShipWidth,
+			Height: gw.Config.ShipHeight,
+			Layer:  gamecomp.LayerPlayer,
+			Shape:  mmokit.ShapeRect,
+			Radius: br,
+		},
+		mmokit.Rotation{},
+		mmokit.PlayerConn{ConnID: connID},
+		gamecomp.PilotName{Name: username},
+		gamecomp.ShipControl{
+			Thrust:    gw.Config.ShipThrust,
+			TurnRate:  gw.Config.ShipTurnRate,
+			TurnAccel: gw.Config.ShipTurnAccel,
+			MaxSpeed:  gw.Config.MaxSpeed,
+		},
+		gamecomp.Health{Current: gw.Config.ShipHealth, Max: gw.Config.ShipHealth},
+		gamecomp.Shield{
+			Current:    gw.Config.ShipShield,
+			Max:        gw.Config.ShipShield,
+			RegenRate:  gw.Config.ShieldRegenRate,
+			RegenDelay: gw.Config.ShieldRegenDelay,
+		},
+		gamecomp.Inventory{Items: savedCargo, MaxMass: gw.Config.MaxCargo},
+		gamecomp.TargetLock{
+			MaxSlots: gw.Config.LockMaxSlotsPlayer,
+			Range:    gw.Config.LockOnRange,
+		},
+		gamecomp.Equipment{
+			Weapon1:  equip.Weapon1,
+			Weapon2:  equip.Weapon2,
+			Shield:   equip.Shield,
+			Thruster: equip.Thruster,
+		},
+		gamecomp.AbilitySet{},
+		gamecomp.StatusEffects{},
+		mmokit.MoveTarget{},
+		gamecomp.LockedBy{},
+		gamecomp.ActiveMining{},
+		gamecomp.PlayerInput{},
+		gamecomp.MiningLaser{},
 	)
-	entity := mmokit.EntityFromECS(gw.stage, handle)
 
-	// Set collider shape details (SpawnEntity only sets radius)
-	if col := mmokit.Get[mmokit.Collider](entity); col != nil {
-		col.Width = gw.Config.ShipWidth
-		col.Height = gw.Config.ShipHeight
-		col.Layer = gamecomp.LayerPlayer
-		col.Shape = mmokit.ShapeRect
-	}
+	// Apply equipment passive stats (shield max/regen, thrust/speed).
+	gw.ApplyEquipmentStats(e)
 
-	// Wire player connection
-	mmokit.Set(entity, mmokit.PlayerConn{ConnID: connID})
-
-	// Set pilot name for replication
-	if pn := mmokit.Get[gamecomp.PilotName](entity); pn != nil {
-		pn.Name = username
-	}
-
-	// Set non-zero field values on auto-added components
-	mmokit.Set(entity, gamecomp.ShipControl{
-		Thrust:    gw.Config.ShipThrust,
-		TurnRate:  gw.Config.ShipTurnRate,
-		TurnAccel: gw.Config.ShipTurnAccel,
-		MaxSpeed:  gw.Config.MaxSpeed,
-	})
-	mmokit.Set(entity, gamecomp.Health{Current: gw.Config.ShipHealth, Max: gw.Config.ShipHealth})
-	mmokit.Set(entity, gamecomp.Shield{Current: gw.Config.ShipShield, Max: gw.Config.ShipShield, RegenRate: gw.Config.ShieldRegenRate, RegenDelay: gw.Config.ShieldRegenDelay})
-	mmokit.Set(entity, gamecomp.Inventory{Items: savedCargo, MaxMass: gw.Config.MaxCargo})
-	mmokit.Set(entity, gamecomp.TargetLock{
-		MaxSlots: gw.Config.LockMaxSlotsPlayer,
-		Range:    gw.Config.LockOnRange,
-	})
-	mmokit.Set(entity, equip)
-
-	// Apply equipment passive stats (shield max/regen, thrust/speed)
-	gw.ApplyEquipmentStats(entity)
-
+	handle := e.Handle()
 	s.Entity = handle
-	netID := entity.NetID()
-	sec := mmokit.Get[mmokit.CellCoord](entity)
+	netID := e.NetID()
+	sec := mmokit.Get[mmokit.CellCoord](e)
 	gw.eng.Log.Log(CatPlayerSpawn, "player spawned: conn=%d netID=%d pos=(%.0f,%.0f) equip=[w1=%d w2=%d sh=%d th=%d]",
 		connID, netID, x, y, equip.Weapon1, equip.Weapon2, equip.Shield, equip.Thruster)
 
