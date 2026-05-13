@@ -383,6 +383,20 @@ type NPCAI struct {
 	LastDamageByNetID    uint32
 	LastDamageAtSec      float32
 	LastCombatActivityAt float32
+
+	// PVE v2: Artillery cast state. Non-zero CastTimeRemaining means an
+	// AoEMarker is in flight; CastingMarkerNetID is its netID so interrupts
+	// can despawn it. CastDamageAccum tracks cumulative damage taken since
+	// cast start (for interrupt threshold). CastCooldown is the inter-cast
+	// gap (ticks down each frame between casts).
+	CastTimeRemaining  float32
+	CastDamageAccum    float32
+	CastingMarkerNetID uint32
+	CastCooldown       float32
+
+	// PVE v2: Kamikaze beep state. >0 = beeping; on reaching 0 the kamikaze
+	// spawns its detonate AoEMarker and despawns itself.
+	BeepTimeRemaining float32
 }
 
 // POIAnchor links an NPC back to its owning POI for leash + roster

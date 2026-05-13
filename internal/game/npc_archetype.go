@@ -14,6 +14,8 @@ const (
 	AIStateAcquire uint8 = 1
 	AIStateEngage  uint8 = 2
 	AIStateLeash   uint8 = 3
+	AIStateCast    uint8 = 4 // PVE v2: Artillery casting an AoE
+	AIStateBeep    uint8 = 5 // PVE v2: Kamikaze charging detonation
 )
 
 // MotionPolicy — how an NPC moves while in Engage. Applied per-archetype.
