@@ -86,6 +86,13 @@ func (b *Stage) Spawn(components ...any) Entity {
 	b.netIDMap.Add(entity, &component.NetworkID{ID: nid})
 	b.cellMap.Add(entity, &component.CellCoord{CellX: b.rootCell().X, CellY: b.rootCell().Y})
 
+	// Velocity defaults to zero when not supplied. Several systems (physics,
+	// AI, replication) Query on *Velocity and silently exclude entities
+	// missing it — legacy SpawnEntity always auto-attached zero Velocity.
+	if _, gotVel := seen[reflect.TypeFor[component.Velocity]()]; !gotVel {
+		b.velMap.Add(entity, &component.Velocity{})
+	}
+
 	if hasCollider && b.spatialGrid != nil {
 		var radius float32
 		if b.colliderMap.HasAll(entity) {

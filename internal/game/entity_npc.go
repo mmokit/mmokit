@@ -30,7 +30,6 @@ func (gw *GameWorld) SpawnNPC(x, y float32, archetype uint8, poiNetID uint32) mm
 
 	components := []any{
 		mmokit.Position{X: x, Y: y},
-		mmokit.Velocity{},
 		mmokit.EntityKind{Type: gamecomp.KindNPC},
 		mmokit.Collider{
 			Width:  gw.Config.NpcWidth,
