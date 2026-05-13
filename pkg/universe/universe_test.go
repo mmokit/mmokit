@@ -40,15 +40,9 @@ func newTestCoordinator(cfg Config) *Process {
 	}
 	c := New(cfg)
 	c.Build()
-	// Ensure a default spawn so login routing works in the test fixture.
-	// The test doesn't care about saved positions; any point inside a
-	// live cell is fine — CellAtPosition resolves to whichever cell owns it.
-	if c.cfg.DefaultSpawn.IsZero() {
-		c.cfg.DefaultSpawn = coords.Location{
-			X: c.cfg.CellSize / 2,
-			Y: c.cfg.CellSize / 2,
-		}
-	}
+	// Tests rely on the engine default (center of cell (0,0)) — no resolver
+	// is registered. Any test that needs a specific location calls
+	// c.OnResolveSpawn(...) explicitly.
 	return c
 }
 
@@ -532,14 +526,13 @@ func TestBridge_RequestRespawn(t *testing.T) {
 	c := newTestCoordinator(grid)
 
 	targetID := string(CellID{X: 0, Y: 0}.MeshID())
-	// Point the default spawn into the target cell — RequestRespawn uses the
-	// same resolution path as login (SpawnResolver → CellAtPosition).
 	targetCell, err := ParseCellID(targetID)
 	if err != nil {
 		t.Fatalf("ParseCellID: %v", err)
 	}
 	minX, minY, maxX, maxY := targetCell.WorldBounds(coords.CellSize)
-	c.cfg.DefaultSpawn = coords.Location{X: (minX + maxX) / 2, Y: (minY + maxY) / 2}
+	want := coords.Location{X: (minX + maxX) / 2, Y: (minY + maxY) / 2}
+	c.OnResolveSpawn(func(_ *engine.PlayerSession) coords.Location { return want })
 
 	otherID := string(CellID{X: 1, Y: 0}.MeshID())
 	other := c.Cells[MeshCellID(otherID)]
@@ -555,9 +548,9 @@ func TestBridge_RequestRespawn(t *testing.T) {
 		if msg.Spawn.ConnID != 77 || msg.Spawn.Username != "charlie" {
 			t.Fatalf("unexpected spawn: %+v", msg.Spawn)
 		}
-		if msg.Spawn.SpawnLocation != c.cfg.DefaultSpawn {
-			t.Fatalf("SpawnLocation = %+v, want %+v (DefaultSpawn)",
-				msg.Spawn.SpawnLocation, c.cfg.DefaultSpawn)
+		if msg.Spawn.SpawnLocation != want {
+			t.Fatalf("SpawnLocation = %+v, want %+v",
+				msg.Spawn.SpawnLocation, want)
 		}
 	default:
 		t.Fatal("no message in target node inbox")
@@ -673,4 +666,52 @@ func TestCellID_MeshID(t *testing.T) {
 
 type recordingBridge struct {
 	NoopBridge
+}
+
+// TestOnResolveSpawn_DefaultLocation verifies the engine default (center of
+// cell (0,0)) is used when no SpawnResolver is registered.
+func TestOnResolveSpawn_DefaultLocation(t *testing.T) {
+	c := newTestCoordinator(Config{CellsX: 2, CellsY: 2})
+
+	got := defaultSpawnLocation(c.cfg.CellSize)
+	want := coords.Location{X: c.cfg.CellSize / 2, Y: c.cfg.CellSize / 2}
+	if got != want {
+		t.Fatalf("defaultSpawnLocation(%v) = %+v, want %+v", c.cfg.CellSize, got, want)
+	}
+}
+
+// TestOnResolveSpawn_ReceivesSession verifies the registered resolver is
+// called with a PlayerSession carrying UserID + Username at login. Drives
+// the RequestRespawn path (the simplest call site exercising the resolver).
+func TestOnResolveSpawn_ReceivesSession(t *testing.T) {
+	c := newTestCoordinator(Config{CellsX: 1, CellsY: 1})
+
+	var gotSession *engine.PlayerSession
+	want := coords.Location{X: 100, Y: 200}
+	c.OnResolveSpawn(func(s *engine.PlayerSession) coords.Location {
+		gotSession = s
+		return want
+	})
+
+	cellID := CellID{X: 0, Y: 0}.MeshID()
+	cell := c.Cells[cellID]
+	cell.Bridge.RequestRespawn(42, "alice")
+
+	select {
+	case msg := <-cell.Inbox:
+		if msg.Spawn.SpawnLocation != want {
+			t.Fatalf("SpawnLocation = %+v, want %+v", msg.Spawn.SpawnLocation, want)
+		}
+		if gotSession == nil {
+			t.Fatal("resolver was not invoked")
+		}
+		if gotSession.Username != "alice" {
+			t.Fatalf("session.Username = %q, want alice", gotSession.Username)
+		}
+		if gotSession.ConnID != 42 {
+			t.Fatalf("session.ConnID = %d, want 42", gotSession.ConnID)
+		}
+	default:
+		t.Fatal("no message in cell inbox")
+	}
 }

@@ -66,11 +66,6 @@ type Gateway struct {
 	// Set by standalone gateway mode; empty in embedded mode.
 	wsAddr string
 
-	// defaultSpawn is the fallback spawn position when no resolver is registered
-	// or the resolver returns ok=false. Copied from Config.DefaultSpawn at
-	// Gateway construction time (standalone mode) or read via coord.cfg (embedded).
-	defaultSpawn coords.Location
-
 	// spawnOrch tracks in-flight ResolveSpawn RPC requests (standalone mode only).
 	spawnOrch *spawnOrchestrator
 

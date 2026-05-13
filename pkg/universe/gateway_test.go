@@ -35,7 +35,7 @@ func TestCellAtPosition_RoutesFreshLoginToOwningCell(t *testing.T) {
 		x, y float32
 		want string
 	}{
-		// DefaultSpawn from examples/4node-basic/main.go post-Task-13:
+		// Spawn from examples/4node-basic/main.go (registered via OnResolveSpawn):
 		// {X: CellSize * 0.85, Y: CellSize * 0.85} with CellSize=2000.
 		{"default_spawn_corner_of_0_0", 2000 * 0.85, 2000 * 0.85, "cell_0_0"},
 		{"center_of_0_0", 1000, 1000, "cell_0_0"},
@@ -79,7 +79,7 @@ func TestCellAtPosition_OutOfBoundsReturnsEmpty(t *testing.T) {
 		name string
 		x, y float32
 	}{
-		// The original bug: DefaultSpawn from mmokit.WorldCenterOfCell(0, 0)
+		// The original bug: spawn from mmokit.WorldCenterOfCell(0, 0)
 		// evaluated with stale CellSize=8192 → (4096, 4096). Outside the
 		// 2x2 grid of 2000-cells.
 		{"stale_cellSize_bug_point", 4096, 4096},

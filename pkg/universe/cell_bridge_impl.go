@@ -1,6 +1,9 @@
 package universe
 
-import "github.com/zenion/mmoserver/pkg/coords"
+import (
+	"github.com/zenion/mmoserver/pkg/coords"
+	"github.com/zenion/mmoserver/pkg/engine"
+)
 
 // cellBridge implements Bridge for multi-cell mode.
 type cellBridge struct {
@@ -177,14 +180,19 @@ func (b *cellBridge) RequestRespawn(connID uint32, username string) {
 	b.cell.Log.Log(CatMeshMsg, "[%s] requesting respawn: conn=%d user=%s", b.cell.MeshID, connID, username)
 	b.coord.mu.RLock()
 	resolver := b.coord.spawnResolver
-	defaultSpawn := b.coord.cfg.DefaultSpawn
+	cellSize := b.coord.cfg.CellSize
 	b.coord.mu.RUnlock()
 
-	loc := defaultSpawn
+	var loc coords.Location
 	if resolver != nil {
-		if resolved, ok := resolver(username); ok {
-			loc = resolved
-		}
+		// Respawn: we don't have UserID at this layer (the cell bridge takes
+		// only connID + username). The resolver still gets a session with the
+		// fields available; games that need UserID for respawn should add it
+		// at a higher level.
+		session := &engine.PlayerSession{ConnID: connID, Username: username}
+		loc = resolver(session)
+	} else {
+		loc = defaultSpawnLocation(cellSize)
 	}
 
 	targetCellID := b.coord.CellAtPosition(loc.X, loc.Y)

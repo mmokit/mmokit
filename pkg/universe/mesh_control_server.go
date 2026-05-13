@@ -11,6 +11,8 @@ import (
 
 	"github.com/google/uuid"
 	meshpb "github.com/zenion/mmoserver/gen/go/meshpb"
+	"github.com/zenion/mmoserver/pkg/coords"
+	"github.com/zenion/mmoserver/pkg/engine"
 	"github.com/zenion/mmoserver/pkg/logger"
 	"github.com/zenion/mmoserver/pkg/service"
 )
@@ -771,18 +773,26 @@ func (s *meshControlServer) handleGatewayControl(stream meshpb.MeshControl_Contr
 func (s *meshControlServer) handleInboundResolveSpawn(gatewayID string, req *meshpb.ResolveSpawn) {
 	s.coord.mu.RLock()
 	resolver := s.coord.spawnResolver
+	cellSize := s.coord.cfg.CellSize
 	s.coord.mu.RUnlock()
 
-	resp := &meshpb.SpawnResolved{RequestId: req.RequestId}
-	if resolver != nil {
-		if loc, ok := resolver(req.Username); ok {
-			resp.Ok = true
-			resp.WorldX = loc.X
-			resp.WorldY = loc.Y
+	resp := &meshpb.SpawnResolved{RequestId: req.RequestId, Ok: true}
+	var session engine.PlayerSession
+	session.Username = req.Username
+	if req.UserId != "" {
+		if uid, err := uuid.Parse(req.UserId); err == nil {
+			session.UserID = uid
 		}
-	} else {
-		resp.Error = "no spawn resolver registered on coordinator"
 	}
+
+	var loc coords.Location
+	if resolver != nil {
+		loc = resolver(&session)
+	} else {
+		loc = defaultSpawnLocation(cellSize)
+	}
+	resp.WorldX = loc.X
+	resp.WorldY = loc.Y
 
 	if req.UserId != "" {
 		if uid, err := uuid.Parse(req.UserId); err == nil && uid != uuid.Nil {

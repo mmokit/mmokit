@@ -10,23 +10,29 @@ import (
 	"github.com/google/uuid"
 	meshpb "github.com/zenion/mmoserver/gen/go/meshpb"
 	"github.com/zenion/mmoserver/pkg/coords"
+	"github.com/zenion/mmoserver/pkg/engine"
 )
 
-// SpawnResolver resolves a username to an absolute world-space Location.
-// Called once per login on the process that owns playerDB (typically the
-// coordinator). Returns ok=false when the user has no saved location —
-// the gateway then falls back to Config.DefaultSpawn.
+// SpawnResolver decides the world-space spawn location for a player session
+// at login (or post-death respawn). Called once per login on the process that
+// owns the coordinator. The returned Location is fed into CellAtPosition so
+// the gateway can route the PlayerAssignment to the owning cell.
 //
-// The resolver is topology-blind: it returns world-space coords only.
-// The gateway calls CellAtPosition(loc.X, loc.Y) at dispatch time to find
-// the current owning cell, so split/merge between the resolver call and
-// dispatch is handled naturally.
-type SpawnResolver func(username string) (coords.Location, bool)
+// The resolver is topology-blind: it returns world-space coords only. The
+// gateway calls CellAtPosition(loc.X, loc.Y) at dispatch time to pick the
+// current owning cell, so split/merge between resolver call and dispatch is
+// handled naturally.
+//
+// Games own the entire decision: DB lookup, faction-based zones, group
+// respawn — whatever logic the game needs lives inside this callback. If no
+// resolver is registered, the engine defaults to the center of cell (0,0)
+// derived from Config.CellSize.
+type SpawnResolver func(session *engine.PlayerSession) coords.Location
 
-// SetSpawnResolver registers the spawn resolver on the coordinator.
-// Called from game setup code (typically inside the needsGameState block).
-// Must be called before Start().
-func (c *Process) SetSpawnResolver(r SpawnResolver) {
+// OnResolveSpawn registers the spawn resolver on the coordinator. Must be
+// called before Start(). At most one resolver is registered; later calls
+// overwrite earlier ones.
+func (c *Process) OnResolveSpawn(r SpawnResolver) {
 	c.mu.Lock()
 	c.spawnResolver = r
 	c.mu.Unlock()
@@ -58,27 +64,26 @@ type spawnResolution struct {
 	TargetCellID string
 }
 
-// resolveSpawn returns the spawn location for username and (in standalone
-// mode) any reconnect-routing override discovered via the coordinator's
-// activeUsers index.
+// resolveSpawn returns the spawn location for the (userID, username) pair and
+// (in standalone mode) any reconnect-routing override discovered via the
+// coordinator's activeUsers index.
 //
 //  1. Embedded coordinator with resolver → call inline (zero RPC overhead).
 //     Reconnect detection happens later in dispatchPlayerAssignment.
 //  2. Standalone gateway → send ResolveSpawn RPC with 2s deadline. The
-//     coordinator may piggyback reconnect info on the response.
-//  3. Resolver absent, returns ok=false, or RPC fails → use DefaultSpawn.
+//     coordinator runs the resolver and may piggyback reconnect info.
+//  3. No resolver registered or RPC fails → fall back to the engine default
+//     (center of cell (0,0), computed from cfg.CellSize).
 func (g *Gateway) resolveSpawn(ctx context.Context, userID uuid.UUID, username string) spawnResolution {
 	if g.coord != nil {
 		g.coord.mu.RLock()
 		resolver := g.coord.spawnResolver
-		defaultSpawn := g.coord.cfg.DefaultSpawn
 		g.coord.mu.RUnlock()
 		if resolver != nil {
-			if loc, ok := resolver(username); ok {
-				return spawnResolution{Location: loc}
-			}
+			session := &engine.PlayerSession{UserID: userID, Username: username}
+			return spawnResolution{Location: resolver(session)}
 		}
-		return spawnResolution{Location: defaultSpawn}
+		return spawnResolution{Location: defaultSpawnLocation(g.coord.cfg.CellSize)}
 	}
 
 	if g.controlClient != nil {
@@ -94,15 +99,22 @@ func (g *Gateway) resolveSpawn(ctx context.Context, userID uuid.UUID, username s
 			if resp.Ok {
 				out.Location = coords.Location{X: resp.WorldX, Y: resp.WorldY}
 			} else {
-				out.Location = g.defaultSpawn
+				out.Location = defaultSpawnLocation(g.cfg.CellSize)
 			}
 			return out
 		}
 		if err != nil {
-			g.log.Log(CatNetConn, "gateway: resolveSpawn RPC failed for %s: %v — using DefaultSpawn", username, err)
+			g.log.Log(CatNetConn, "gateway: resolveSpawn RPC failed for %s: %v — using engine default", username, err)
 		}
 	}
-	return spawnResolution{Location: g.defaultSpawn}
+	return spawnResolution{Location: defaultSpawnLocation(g.cfg.CellSize)}
+}
+
+// defaultSpawnLocation returns the center of cell (0,0) for the given cell
+// size. Used when no SpawnResolver is registered (or the standalone RPC
+// fails). Topology-blind — the gateway still routes via CellAtPosition.
+func defaultSpawnLocation(cellSize float32) coords.Location {
+	return coords.Location{X: cellSize / 2, Y: cellSize / 2}
 }
 
 // ── spawnOrchestrator ─────────────────────────────────────────────────────────

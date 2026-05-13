@@ -215,12 +215,6 @@ type Config struct {
 	// routes or override defaults. Runs last so game routes win.
 	HTTPRoutes func(mux *http.ServeMux)
 
-	// DefaultSpawn is the world-space login/respawn location used when no
-	// SpawnResolver is registered or the resolver returns ok=false.
-	// Topology-independent: the gateway resolves the current owning cell
-	// via CellAtPosition at dispatch time.
-	DefaultSpawn coords.Location
-
 	// InvariantMode controls how invariant-check violations are handled.
 	// Zero value is InvariantOff; tests and dev should set Panic, prod
 	// typically sets Log. See integrity.go for the full enum.
@@ -2003,7 +1997,6 @@ func (c *Process) buildStandaloneGateway() {
 		authStates:   make(map[uint32]connAuthState),
 		topology:     newCachedTopology(nil), // populated by PeerList broadcasts
 		hostNetwork:  hn,
-		defaultSpawn: cfg.DefaultSpawn,
 		spawnOrch:    newSpawnOrchestrator(),
 		tickRate:     uint32(cfg.TickRate),
 		// wsAddr: TODO — plumb via Config.GatewayWSAddr when flag lands
