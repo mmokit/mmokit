@@ -213,7 +213,11 @@ func (hd *HandoffDriver) Tick(currentClusterTick uint64) {
 			hd.bridge.OnPlayerTransfer(d.connID, d.destCellID)
 			if sess := hd.base.eng.Players.ByConnID(d.connID); sess != nil {
 				_ = hd.base.eng.Players.Transition(sess, engine.StateTransferring)
-				hd.base.eng.Players.Remove(sess)
+				// RemoveTransferred (not Remove) so onSessionRemoved
+				// doesn't fire — see player_manager.go for why a
+				// transfer-out must NOT scrub coord.activeUsers
+				// (destination cell takes over the entry).
+				hd.base.eng.Players.RemoveTransferred(sess)
 			}
 		}
 		hd.base.eng.Log.Log(CatMeshTransfer,

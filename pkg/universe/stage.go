@@ -717,6 +717,7 @@ func (b *Stage) SerializeEntityCore(entity ecs.Entity) *TransferFrame {
 			if s := b.eng.Players.ByConnID(f.ConnID); s != nil {
 				f.Username = s.Username
 				f.DebugFlags = uint32(s.DebugFlags)
+				f.UserID = s.UserID
 			}
 			// Populate the SessionKey from the VCM if this is node mode.
 			// Without this, the destination cannot remap the player to a

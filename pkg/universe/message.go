@@ -40,8 +40,12 @@ type PlayerAssignment struct {
 }
 
 // SessionTransfer carries an entity-less player session during cell splits.
+// UserID is the auth identity stamped at login; carried across the split so
+// the destination cell can populate PlayerSession.UserID and subsequent
+// SavePlayerState calls don't panic in PlayerRepo.Bind on a zero UserID.
 type SessionTransfer struct {
 	ConnID   uint32
+	UserID   uuid.UUID
 	Username string
 	StateTag string // state name (e.g., "docked", "dead")
 	Data     any    // game-specific session data

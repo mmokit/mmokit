@@ -370,6 +370,9 @@ func (c *Cell) processMessage(msg CellMessage) {
 			c.Log.Log(CatMeshMsg, "[%s] msg MsgSessionTransfer conn=%d user=%s state=%s",
 				c.MeshID, st.ConnID, st.Username, st.StateTag)
 			c.Engine.Players.RegisterSessionTransfer(st.ConnID, st.Username, st.StateTag, st.Data)
+			if sess := c.Engine.Players.ByConnID(st.ConnID); sess != nil {
+				sess.UserID = st.UserID
+			}
 		}
 
 	case MsgBorderFrame:
@@ -412,7 +415,7 @@ func (c *Cell) processMessage(msg CellMessage) {
 		// this host. SpawnFromTransferCore performs the matching remap
 		// when it decodes the blob (idempotent RegisterSession returns
 		// the same localID for the same key).
-		if srcConnID, gwID, gwConnID, username := PeekTransferPlayer(msg.Handoff.TransferBlob); srcConnID != 0 {
+		if srcConnID, gwID, gwConnID, username, userID := PeekTransferPlayer(msg.Handoff.TransferBlob); srcConnID != 0 {
 			localID := srcConnID
 			if gwConnID != 0 && c.Stage != nil && c.Stage.coord != nil && c.Stage.coord.vcm != nil {
 				key := SessionKey{GatewayID: gwID, ConnID: gwConnID}
@@ -423,6 +426,20 @@ func (c *Cell) processMessage(msg CellMessage) {
 				localID = c.Stage.coord.vcm.RegisterSession(key, username, 0, c.MeshID)
 			}
 			c.Engine.Players.RegisterTransferSession(localID, username)
+			// Stamp the auth identity on the just-registered session.
+			// Without this, the next handoff out of this cell panics in
+			// PlayerRepo.Bind on a zero UserID (the source-cell
+			// removeFromWorld action calls SavePlayerState, which Binds).
+			if s := c.Engine.Players.ByConnID(localID); s != nil {
+				s.UserID = userID
+			}
+			// Refresh the cluster-wide UUID-keyed activeUsers entry so
+			// a tab refresh post-transfer routes to the reconnect path
+			// instead of fresh-login spawn (which would duplicate the
+			// player entity for the 30-second grace window).
+			if c.Stage != nil && c.Stage.coord != nil {
+				c.Stage.coord.touchActiveUser(userID, username, gwID, gwConnID, c.Stage.coord.HostForCellID(c.MeshID), c.MeshID)
+			}
 		}
 
 		// H2 hard-cut: queue a promote for the CommitTick carried in the

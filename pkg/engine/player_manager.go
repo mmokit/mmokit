@@ -251,6 +251,30 @@ func (pm *PlayerManager) Remove(s *PlayerSession) {
 	}
 }
 
+// RemoveTransferred is a transfer-specific variant of Remove that scrubs the
+// session from this host's internal maps WITHOUT firing onSessionRemoved.
+// Used by handoff_driver when a player crosses a cell boundary: the player
+// hasn't actually left the cluster, they've just moved to another cell. The
+// destination cell takes ownership via RegisterTransferSession and updates
+// the coordinator's activeUsers index in turn. Firing onSessionRemoved here
+// would tear down activeUsers[userID] (the canonical UUID-keyed location
+// record), and since the destination's touchActiveUser races against this
+// delete via the shared coord.mu, a no-op reconnect post-transfer would
+// silently fall through to fresh-login spawn — duplicating the player
+// entity until grace expires.
+func (pm *PlayerManager) RemoveTransferred(s *PlayerSession) {
+	if s == nil {
+		return
+	}
+	delete(pm.sessions, s.ID)
+	if s.ConnID != 0 {
+		delete(pm.byConnID, s.ConnID)
+	}
+	if s.Username != "" {
+		delete(pm.byUsername, s.Username)
+	}
+}
+
 // AllSessions returns all sessions (for inspection during splits).
 func (pm *PlayerManager) AllSessions() []*PlayerSession {
 	result := make([]*PlayerSession, 0, len(pm.sessions))

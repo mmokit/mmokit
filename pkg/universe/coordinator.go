@@ -1155,6 +1155,49 @@ func (c *Process) registerAuthenticatedSession(userID uuid.UUID, username, gatew
 	c.mu.Unlock()
 }
 
+// touchActiveUser updates the activeUsers entry for a player who just landed
+// on this Process via cross-cell transfer (boundary handoff or split/merge/
+// migrate populate). Preserves GatewayID + ConnID (the client-facing
+// gateway side hasn't changed across the transfer) and refreshes HostID +
+// CellID to point at the new authoritative cell.
+//
+// If no entry exists yet (the source cell's notifySessionRemoved scrubbed
+// it before our touch, or this is a fresh transfer on a process that never
+// saw the original auth), the entry is recreated from the GatewayID +
+// GatewayConnID carried in the TransferFrame. Without this call, a tab
+// refresh after a cell crossing would see activeUsers[userID]==nil, miss
+// the reconnect-routing path, and spawn a fresh duplicate entity that
+// shadows the lingering grace-period session for ~30s — the exploit the
+// player reported, since killing the clone yields the original's gear.
+func (c *Process) touchActiveUser(userID uuid.UUID, username, gatewayID string, gatewayConnID uint32, hostID string, cellID MeshCellID) {
+	if userID == uuid.Nil {
+		return
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.activeUsers == nil {
+		c.activeUsers = make(map[uuid.UUID]*activeUser)
+	}
+	if c.userIDByConn == nil {
+		c.userIDByConn = make(map[uint32]uuid.UUID)
+	}
+	au := c.activeUsers[userID]
+	if au == nil {
+		au = &activeUser{
+			UserID:    userID,
+			Username:  username,
+			GatewayID: gatewayID,
+			ConnID:    gatewayConnID,
+		}
+		c.activeUsers[userID] = au
+		if gatewayConnID != 0 {
+			c.userIDByConn[gatewayConnID] = userID
+		}
+	}
+	au.HostID = hostID
+	au.CellID = cellID
+}
+
 // activeUserLocked returns a *PlayerLocation-shaped view of the active user
 // indexed by user_id. Caller must hold c.mu (read or write).
 func (c *Process) activeUserLocked(userID uuid.UUID) *PlayerLocation {
@@ -2194,6 +2237,7 @@ func (c *Process) createNode(cell CellID, spatialBucketSize float32, owningHost 
 		if s := eng.Players.ByConnID(frame.ConnID); s != nil {
 			s.Entity = entity
 			s.DebugFlags = engine.DebugFlag(frame.DebugFlags)
+			s.UserID = frame.UserID
 		}
 	}
 

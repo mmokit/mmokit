@@ -173,6 +173,21 @@ func (b *cellBridge) CellOwnerAtPos(worldX, worldY float32) string {
 
 func (b *cellBridge) OnPlayerTransfer(connID uint32, destCellID MeshCellID) {
 	b.coord.setPlayerNode(connID, destCellID)
+	// Refresh the gateway's cached localSession.cellID so the next WS
+	// disconnect routes its event to the destination cell (not the stale
+	// origin). Without this, the disconnect event is dispatched to the
+	// pre-transfer cell, which already scrubbed the connID via
+	// RemoveTransferred — the destination cell never sees the disconnect,
+	// the session stays StateActive instead of StateDisconnected, and
+	// the next refresh is treated as a fresh login (kick + spawn duplicate).
+	// Cross-host transfers go through notifyPlayerMigrated which already
+	// fires OnUpstreamSwitch; this branch covers the same-host path that
+	// grpcBridge.OnPlayerTransfer routes through us.
+	if b.coord != nil && b.coord.gateway != nil {
+		if sess := b.coord.gateway.lookupSession(connID); sess != nil {
+			b.coord.gateway.OnUpstreamSwitch(connID, sess.hostID, destCellID, sess.epoch)
+		}
+	}
 	b.cell.Log.Log(CatMeshTransfer, "[%s] player transfer: conn=%d -> %s", b.cell.MeshID, connID, destCellID)
 }
 

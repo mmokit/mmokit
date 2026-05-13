@@ -521,6 +521,10 @@ func (e *cellTransferExecutor) populateCell(cell *Cell, proto *meshpb.CellTransf
 						// must be set here, not in
 						// onPlayerTransferReceived.
 						sess.DebugFlags = engine.DebugFlag(frame.DebugFlags)
+						sess.UserID = frame.UserID
+					}
+					if cell.Stage != nil && cell.Stage.coord != nil {
+						cell.Stage.coord.touchActiveUser(frame.UserID, frame.Username, frame.GatewayID, frame.GatewayConnID, cell.Stage.coord.HostForCellID(cell.MeshID), cell.MeshID)
 					}
 					adoptedUsers = append(adoptedUsers, frame.Username)
 				}
@@ -563,6 +567,10 @@ func (e *cellTransferExecutor) populateCell(cell *Cell, proto *meshpb.CellTransf
 			// doesn't strand transferred players with no overlay
 			// updates after split/merge/migrate.
 			sess.DebugFlags = engine.DebugFlag(spawnedFrame.DebugFlags)
+			sess.UserID = spawnedFrame.UserID
+		}
+		if cell.Stage != nil && cell.Stage.coord != nil {
+			cell.Stage.coord.touchActiveUser(spawnedFrame.UserID, spawnedFrame.Username, spawnedFrame.GatewayID, spawnedFrame.GatewayConnID, cell.Stage.coord.HostForCellID(cell.MeshID), cell.MeshID)
 		}
 		adoptedUsers = append(adoptedUsers, spawnedFrame.Username)
 
@@ -592,6 +600,9 @@ func (e *cellTransferExecutor) populateCell(cell *Cell, proto *meshpb.CellTransf
 		// repro (player has a live entity), but a follow-up should add
 		// GatewayID + GatewayConnID to SessionTransfer + meshpb.
 		cell.Engine.Players.RegisterSessionTransfer(st.ConnID, st.Username, st.StateTag, st.Data)
+		if sess := cell.Engine.Players.ByConnID(st.ConnID); sess != nil {
+			sess.UserID = st.UserID
+		}
 	}
 	return adoptedUsers, nil
 }
@@ -1010,6 +1021,7 @@ func serializeEntitylessSessions(src *Cell) [][]byte {
 		}
 		st := SessionTransfer{
 			ConnID:   sess.ConnID,
+			UserID:   sess.UserID,
 			Username: sess.Username,
 			StateTag: src.Engine.Players.StateName(sess.State),
 			// Data is opaque []byte by convention. The auth-service rollout
