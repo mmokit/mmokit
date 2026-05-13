@@ -98,6 +98,7 @@ export interface LootCrateEntity {
   radius: number;
   width: number;
   height: number;
+  remaining: number;
   items: LootCrateItemsItem[];
 }
 
@@ -181,6 +182,7 @@ export interface AoEMarkerEntity {
   radius: number;
   width: number;
   height: number;
+  remaining: number;
   aoESpecRadius: number;
   damage: number;
   ownerNetID: number;
@@ -206,6 +208,7 @@ export interface ProjectileEntity {
   radius: number;
   width: number;
   height: number;
+  remaining: number;
   ownerNetID: number;
   targetNetID: number;
   damage: number;

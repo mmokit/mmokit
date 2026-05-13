@@ -6,23 +6,19 @@ import { px } from "../view";
 
 // AoEMarker renders the telegraphed-AoE cast/detonate visual: an outer
 // ring drawn at the AoE radius (intent) plus an inner disc that grows
-// from 0 → radius over the marker's expected lifetime (commitment).
+// from 0 → radius over the marker's lifetime (commitment).
 //
-// The server doesn't replicate the per-tick remaining lifetime, so the
-// client treats first observation as t=0 and uses a default-cast-time
-// fallback if the marker disappears faster than expected. The visual
-// only needs to communicate "danger zone, growing soon" — it doesn't
-// need to be perfectly synced with server detonation.
+// The server replicates Lifetime.Remaining (f32 seconds) so the inner
+// disc tracks actual cast progress rather than a client-side heuristic.
+//
+// On first observation we capture initialLifetime = remaining. Each
+// render frame: progress = 1 - (remaining / initialLifetime), clamped
+// [0, 1]. Inner disc radius = aoeRadius * progress.
 //
 // Instant-resolve markers (Kamikaze detonate, projectile splash) have
 // lifetime=0 server-side and despawn the same tick they appear. The
 // client may never observe them; that's fine — damage is server-side,
 // the visual layer is handled by ability/impact effects elsewhere.
-
-// Default expected cast time, used when the marker outlives the assumed
-// duration (we cap inner disc at full radius). Most v2 telegraphed AoE
-// casts are 0.5–2.0s; pick 1.5s as a sane mid-range default.
-const DEFAULT_CAST_SECONDS = 1.5;
 
 const COLOR_FILL = 0xff3322;
 const COLOR_STROKE = 0xff5544;
@@ -37,7 +33,7 @@ export function createAoEMarkerDisplay(): EntityDisplayObject {
   container.addChild(innerDisc);
 
   let lastRadius = 0;
-  let spawnMs = 0; // performance.now() at first observation
+  let initialLifetime = -1; // seconds; set on first observation
 
   function redrawOuter(radius: number) {
     outerRing.clear();
@@ -65,17 +61,26 @@ export function createAoEMarkerDisplay(): EntityDisplayObject {
       // AoESpec.Radius is the actual damage radius. The entity's
       // `radius` collider field is the broad-phase trigger; for the
       // telegraphed visual we want the damage radius.
-      const radius = e.aoESpecRadius || 0;
-      if (radius <= 0) return;
+      const aoeRadius = e.aoESpecRadius || 0;
+      if (aoeRadius <= 0) return;
 
-      if (spawnMs === 0) spawnMs = now;
-      if (radius !== lastRadius) {
-        lastRadius = radius;
-        redrawOuter(radius);
+      // Capture initial lifetime on first observation.
+      const remaining = e.remaining ?? 0;
+      if (initialLifetime < 0) {
+        initialLifetime = remaining > 0 ? remaining : 0;
       }
-      const elapsedSec = (now - spawnMs) / 1000;
-      const progress = elapsedSec / DEFAULT_CAST_SECONDS;
-      redrawInner(radius, progress);
+
+      if (aoeRadius !== lastRadius) {
+        lastRadius = aoeRadius;
+        redrawOuter(aoeRadius);
+      }
+
+      // progress: 0 at cast start → 1 at detonation.
+      // If initialLifetime is 0 (instant marker), show fully filled disc.
+      const progress =
+        initialLifetime > 0 ? 1 - remaining / initialLifetime : 1;
+
+      redrawInner(aoeRadius, Math.max(0, Math.min(1, progress)));
 
       // Subtle pulse on the outer ring — telegraphs that the cast is
       // active. Range stays gentle so it doesn't compete with the

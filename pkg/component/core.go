@@ -51,7 +51,7 @@ type EntityKind struct {
 
 // Lifetime tracks remaining time before despawn.
 type Lifetime struct {
-	Remaining float32 // seconds
+	Remaining float32 `net:"f32"` // seconds
 }
 
 // PlayerConn links a player entity to its network connection.

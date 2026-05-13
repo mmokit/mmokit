@@ -76,7 +76,7 @@ function decodeStationEntitySnapshot(snap: Uint8Array, initial: Uint8Array | nul
   return { netID: 0, producedAtMs: 0, entityType: 2, worldX, worldY, velX, velY, radius, width, height };
 }
 
-const LOOTCRATEENTITY_FIELD_SIZES = [4, 4, 2, 2, 2, 2, 2];
+const LOOTCRATEENTITY_FIELD_SIZES = [4, 4, 2, 2, 2, 2, 2, 4];
 const LOOTCRATEENTITY_HAS_VAR_TAIL = true;
 
 function decodeLootCrateEntitySnapshot(snap: Uint8Array, initial: Uint8Array | null, existing?: LootCrateEntity): LootCrateEntity {
@@ -88,6 +88,7 @@ function decodeLootCrateEntitySnapshot(snap: Uint8Array, initial: Uint8Array | n
   const radius = unVel(readInt16(snap, o), 500); o += 2;
   const width = unVel(readInt16(snap, o), 500); o += 2;
   const height = unVel(readInt16(snap, o), 500); o += 2;
+  const remaining = readFloat32(snap, o); o += 4;
   const itemsByteLen = readUint16(snap, o); o += 2;
   const itemsEnd = o + itemsByteLen;
   const items: LootCrateItemsItem[] = [];
@@ -96,7 +97,7 @@ function decodeLootCrateEntitySnapshot(snap: Uint8Array, initial: Uint8Array | n
     const quantity = readUint32(snap, o); o += 4;
     items.push({ itemId, quantity });
   }
-  return { netID: 0, producedAtMs: 0, entityType: 3, worldX, worldY, velX, velY, radius, width, height, items };
+  return { netID: 0, producedAtMs: 0, entityType: 3, worldX, worldY, velX, velY, radius, width, height, remaining, items };
 }
 
 const NPCENTITY_FIELD_SIZES = [4, 4, 2, 2, 2, 2, 2, 4, 4, 4, 4, 1, 2];
@@ -146,7 +147,7 @@ function decodePOIEntitySnapshot(snap: Uint8Array, initial: Uint8Array | null, e
   return { netID: 0, producedAtMs: 0, entityType: 5, worldX, worldY, velX, velY, radius, width, height, type, status };
 }
 
-const AOEMARKERENTITY_FIELD_SIZES = [4, 4, 2, 2, 2, 2, 2, 4, 4, 4, 1, 1];
+const AOEMARKERENTITY_FIELD_SIZES = [4, 4, 2, 2, 2, 2, 2, 4, 4, 4, 4, 1, 1];
 const AOEMARKERENTITY_HAS_VAR_TAIL = false;
 
 function decodeAoEMarkerEntitySnapshot(snap: Uint8Array, initial: Uint8Array | null, existing?: AoEMarkerEntity): AoEMarkerEntity {
@@ -158,15 +159,16 @@ function decodeAoEMarkerEntitySnapshot(snap: Uint8Array, initial: Uint8Array | n
   const radius = unVel(readInt16(snap, o), 500); o += 2;
   const width = unVel(readInt16(snap, o), 500); o += 2;
   const height = unVel(readInt16(snap, o), 500); o += 2;
+  const remaining = readFloat32(snap, o); o += 4;
   const aoESpecRadius = readFloat32(snap, o); o += 4;
   const damage = readFloat32(snap, o); o += 4;
   const ownerNetID = readUint32(snap, o); o += 4;
   const factionMask = snap[o]; o += 1;
   const damageType = snap[o]; o += 1;
-  return { netID: 0, producedAtMs: 0, entityType: 6, worldX, worldY, velX, velY, radius, width, height, aoESpecRadius, damage, ownerNetID, factionMask, damageType };
+  return { netID: 0, producedAtMs: 0, entityType: 6, worldX, worldY, velX, velY, radius, width, height, remaining, aoESpecRadius, damage, ownerNetID, factionMask, damageType };
 }
 
-const PROJECTILEENTITY_FIELD_SIZES = [4, 4, 2, 2, 2, 2, 2, 4, 4, 4, 4, 4, 4, 1];
+const PROJECTILEENTITY_FIELD_SIZES = [4, 4, 2, 2, 2, 2, 2, 4, 4, 4, 4, 4, 4, 4, 1];
 const PROJECTILEENTITY_HAS_VAR_TAIL = false;
 
 function decodeProjectileEntitySnapshot(snap: Uint8Array, initial: Uint8Array | null, existing?: ProjectileEntity): ProjectileEntity {
@@ -178,6 +180,7 @@ function decodeProjectileEntitySnapshot(snap: Uint8Array, initial: Uint8Array | 
   const radius = unVel(readInt16(snap, o), 500); o += 2;
   const width = unVel(readInt16(snap, o), 500); o += 2;
   const height = unVel(readInt16(snap, o), 500); o += 2;
+  const remaining = readFloat32(snap, o); o += 4;
   const ownerNetID = readUint32(snap, o); o += 4;
   const targetNetID = readUint32(snap, o); o += 4;
   const damage = readFloat32(snap, o); o += 4;
@@ -185,7 +188,7 @@ function decodeProjectileEntitySnapshot(snap: Uint8Array, initial: Uint8Array | 
   const splashDamage = readFloat32(snap, o); o += 4;
   const maxTurnRate = readFloat32(snap, o); o += 4;
   const type = snap[o]; o += 1;
-  return { netID: 0, producedAtMs: 0, entityType: 7, worldX, worldY, velX, velY, radius, width, height, ownerNetID, targetNetID, damage, splashRadius, splashDamage, maxTurnRate, type };
+  return { netID: 0, producedAtMs: 0, entityType: 7, worldX, worldY, velX, velY, radius, width, height, remaining, ownerNetID, targetNetID, damage, splashRadius, splashDamage, maxTurnRate, type };
 }
 
 export class SpaceDeltaDecoder {
