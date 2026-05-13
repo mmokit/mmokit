@@ -172,7 +172,7 @@ func findMissingRequiredComponents(
 ) []string {
 	var missing []string
 	u := w.Unsafe()
-	for _, c := range def.requiredFieldTypes() {
+	for _, c := range def.requiredTypes {
 		if _, ok := seen[c]; ok {
 			continue
 		}

@@ -30,13 +30,6 @@ type EntityKindDef struct {
 	NetworkBindings []system.ComponentBinding
 }
 
-// requiredFieldTypes returns the reflect.Types of every non-local Bundle
-// field this kind declares — the set Spawn's debug invariant uses to verify
-// callers attached every required component.
-func (def *EntityKindDef) requiredFieldTypes() []reflect.Type {
-	return def.requiredTypes
-}
-
 // kindComponent holds closures for one component's registration across subsystems.
 type kindComponent struct {
 	// registerTransfer registers this component with a ReplicationRegistry

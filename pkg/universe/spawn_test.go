@@ -136,8 +136,9 @@ func TestSpawn_PanicsOnMissingRequiredKindComponent(t *testing.T) {
 	// Register a kind that requires `health`.
 	w := stage.ECSWorld()
 	def := EntityKindDef{Kind: 99, Name: "TestKind"}
-	id := ecs.TypeID(w, reflect.TypeOf(health{}))
-	KindComponentByID(&def, w, id, reflect.TypeOf(health{}), false)
+	healthType := reflect.TypeFor[health]()
+	id := ecs.TypeID(w, healthType)
+	KindComponentByID(&def, w, id, healthType, false)
 	stage.RegisterEntityKind(def)
 
 	defer func() {
