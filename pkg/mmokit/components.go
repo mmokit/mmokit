@@ -7,11 +7,15 @@ import (
 // Get returns a pointer to the entity's component of type T, or nil if the
 // entity is dead or does not have the component.
 func Get[T any](e Entity) *T {
-	h := e.resolveHandle()
-	if h == (ecs.Entity{}) || e.stage == nil {
+	stage := e.Stage()
+	if stage == nil {
 		return nil
 	}
-	m := ecs.NewMap1[T](e.stage.ECSWorld())
+	h := e.Handle()
+	if h == (ecs.Entity{}) {
+		return nil
+	}
+	m := ecs.NewMap1[T](stage.ECSWorld())
 	if !m.HasAll(h) {
 		return nil
 	}
@@ -20,11 +24,15 @@ func Get[T any](e Entity) *T {
 
 // Has reports whether the entity has a component of type T.
 func Has[T any](e Entity) bool {
-	h := e.resolveHandle()
-	if h == (ecs.Entity{}) || e.stage == nil {
+	stage := e.Stage()
+	if stage == nil {
 		return false
 	}
-	m := ecs.NewMap1[T](e.stage.ECSWorld())
+	h := e.Handle()
+	if h == (ecs.Entity{}) {
+		return false
+	}
+	m := ecs.NewMap1[T](stage.ECSWorld())
 	return m.HasAll(h)
 }
 
@@ -33,17 +41,21 @@ func Has[T any](e Entity) bool {
 // use-after-free diagnostic when called on a non-zero netID whose
 // underlying ECS handle is no longer alive (foundation deferral c).
 func Set[T any](e Entity, v T) {
-	h := e.resolveHandle()
-	if h == (ecs.Entity{}) || e.stage == nil {
+	stage := e.Stage()
+	if stage == nil {
 		return
 	}
-	if !e.stage.ECSWorld().Alive(h) {
-		if e.netID != 0 && e.stage.Engine() != nil {
-			e.stage.Engine().Log.Log("mmokit", "Set: entity netID=%d not alive (probable use-after-free)", e.netID)
+	h := e.Handle()
+	if h == (ecs.Entity{}) {
+		return
+	}
+	if !stage.ECSWorld().Alive(h) {
+		if e.NetID() != 0 && stage.Engine() != nil {
+			stage.Engine().Log.Log("mmokit", "Set: entity netID=%d not alive (probable use-after-free)", e.NetID())
 		}
 		return
 	}
-	m := ecs.NewMap1[T](e.stage.ECSWorld())
+	m := ecs.NewMap1[T](stage.ECSWorld())
 	if m.HasAll(h) {
 		*m.Get(h) = v
 		return

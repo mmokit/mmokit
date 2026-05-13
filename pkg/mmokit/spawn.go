@@ -56,12 +56,13 @@ func Spawn(stage *pkguniverse.Stage, kind KindID, pos Pos, components ...any) En
 // the next FlushRemovals in the simulation tick. Safe on dead/zero entities
 // (no-op).
 func Despawn(e Entity) {
-	if e.stage == nil {
+	stage := e.Stage()
+	if stage == nil {
 		return
 	}
-	h := e.resolveHandle()
+	h := e.Handle()
 	if h == (ecs.Entity{}) {
 		return
 	}
-	e.stage.MarkForRemoval(h)
+	stage.MarkForRemoval(h)
 }

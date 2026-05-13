@@ -90,32 +90,3 @@ func SendEventToAll[T any](eng *Engine, msg *T) {
 	})
 }
 
-// Send delivers msg to the entity. If the entity is local on its stage, the
-// registered handler runs synchronously before Send returns. If the entity
-// is a replica (lives elsewhere), Send is fire-and-forget — the handler runs
-// on the authoritative stage when the wire message arrives.
-//
-// Send is a no-op on a zero-value Entity, an Entity with no stage, or a nil
-// or typed-nil-pointer msg.
-func (e Entity) Send(msg any) {
-	if e.stage == nil || e.netID == 0 || msg == nil {
-		return
-	}
-	v := reflect.ValueOf(msg)
-	if !v.IsValid() {
-		return
-	}
-	// Box into a pointer so handlers can mutate result fields.
-	var msgPtr any
-	if v.Kind() == reflect.Pointer {
-		if v.IsNil() {
-			return
-		}
-		msgPtr = msg
-	} else {
-		ptr := reflect.New(v.Type())
-		ptr.Elem().Set(v)
-		msgPtr = ptr.Interface()
-	}
-	e.stage.RouteTypedMessage(e.netID, msgPtr)
-}
