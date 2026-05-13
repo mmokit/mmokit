@@ -498,7 +498,7 @@ func (s *AbilitySystem) tickChannels(dt float32) {
 	}
 	var ends []endCandidate
 
-	mmokit.ForEach1[gamecomp.Channeling](s.Stage(), func(caster mmokit.Entity, ch *gamecomp.Channeling) {
+	mmokit.ForEach1(s.Stage(), func(caster mmokit.Entity, ch *gamecomp.Channeling) {
 		if !caster.Alive() {
 			ends = append(ends, endCandidate{caster, ch.SlotID})
 			return

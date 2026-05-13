@@ -122,6 +122,9 @@ type GameConfig struct {
 	MeshCellsY  uint32           `json:"meshCellsY"`  // number of cells tall
 
 	// POI
+	StationPOIOffsetX float32 `json:"station_poi_offset_x"`
+	StationPOIOffsetY float32 `json:"station_poi_offset_y"`
+
 	POIAnchorRadius                float32 `json:"poi_anchor_radius"`
 	POILeashRadius                 float32 `json:"poi_leash_radius"`
 	POIPerCellProbability          float32 `json:"poi_per_cell_probability"`
@@ -221,6 +224,8 @@ func DefaultGameConfig() GameConfig {
 		MeshCellsY:  3,
 
 		// POI
+		StationPOIOffsetX:              0,
+		StationPOIOffsetY:              -1100,
 		POIAnchorRadius:                30,
 		POILeashRadius:                 120,
 		POIPerCellProbability:          0.3,

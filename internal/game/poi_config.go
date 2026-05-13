@@ -22,7 +22,9 @@ var rosters = []RosterDef{
 	{
 		Name: "Starter Arena",
 		Members: []RosterMember{
-			{Archetype: ArchetypeBrawler, Count: 2, SpreadRadius: 25},
+			{Archetype: ArchetypeArtillery, Count: 1, SpreadRadius: 40},
+			{Archetype: ArchetypeBrawler,   Count: 2, SpreadRadius: 25},
+			{Archetype: ArchetypeKamikaze,  Count: 3, SpreadRadius: 30},
 		},
 	},
 }

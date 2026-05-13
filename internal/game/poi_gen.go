@@ -32,7 +32,16 @@ func GeneratePOIs(cell, stationCell mmokit.CellCoord, cfg *GameConfig, belts []A
 
 	isStation := cell == stationCell
 
-	if !isStation && rng.Float32() > cfg.POIPerCellProbability {
+	if isStation {
+		return []POIDef{{
+			X:         StationLocalX + cfg.StationPOIOffsetX,
+			Y:         StationLocalY + cfg.StationPOIOffsetY,
+			Type:      0, // combat
+			RosterIdx: 0,
+		}}
+	}
+
+	if rng.Float32() > cfg.POIPerCellProbability {
 		return nil
 	}
 
@@ -42,17 +51,6 @@ func GeneratePOIs(cell, stationCell mmokit.CellCoord, cfg *GameConfig, belts []A
 	for attempt := 0; attempt < 30; attempt++ {
 		x := margin + rng.Float32()*usable
 		y := margin + rng.Float32()*usable
-
-		if isStation {
-			// Stay away from the actual station entity (StationLocalX,Y),
-			// not the cell center — players spawn near the station and
-			// would otherwise log in surrounded by hostile NPCs.
-			dx := x - StationLocalX
-			dy := y - StationLocalY
-			if float32(math.Sqrt(float64(dx*dx+dy*dy))) < cfg.POIStationClearance {
-				continue
-			}
-		}
 
 		// Stay away from belt centers.
 		bad := false
