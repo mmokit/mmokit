@@ -81,9 +81,17 @@ func (b *SystemBase) SetDeps(w *ecs.World, eng *Engine) {
 }
 
 // SystemDef pairs a name with a factory that creates a fresh system instance.
+//
+// Configure is an optional one-time hook invoked by the framework at
+// AddSystem time, before any cell is built. The argument is the *Process
+// the system is being registered on; type-erased to any so engine doesn't
+// import universe. Use Configure for process-level setup that belongs
+// with the system (e.g. HandleClient handler registration) — runs once
+// per registration regardless of how many cells instantiate the system.
 type SystemDef struct {
-	Name    string
-	Factory func() System
+	Name      string
+	Factory   func() System
+	Configure func(host any)
 }
 
 // Named overrides the auto-derived system name.

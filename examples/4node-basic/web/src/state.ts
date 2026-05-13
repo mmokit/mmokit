@@ -67,7 +67,6 @@ export interface GameState {
   camY: number;
 
   // Input / move target.
-  inputSeq: number;
   moveTargetX: number;
   moveTargetY: number;
   moveTargetActive: boolean;
@@ -100,7 +99,6 @@ export const state: GameState = {
   aoiRadius: 0,
   camX: 0,
   camY: 0,
-  inputSeq: 0,
   moveTargetX: 0,
   moveTargetY: 0,
   moveTargetActive: false,

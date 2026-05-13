@@ -29,6 +29,8 @@ const (
 )
 
 func (s *SineWaveSystem) Init() {
+	mmokit.RegisterEvent[WaveStateMsg]()
+
 	const count = 60
 	const span = 1200.0
 	for i := range count {

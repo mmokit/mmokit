@@ -700,10 +700,29 @@ func NewPhysicsSystem() SystemDef {
 }
 
 // NewClickToMoveSystem returns a SystemDef for click-to-move entity movement.
+//
+// Registering this system also installs the default HandleClient handler
+// for MoveTargetMsg: an active player's MoveTarget is set to (msg.X, msg.Y)
+// on every inbound frame. Games that need a different wire shape (extra
+// fields, sequence/ack semantics, stop semantics, ...) should skip this
+// helper and wire ClickToMoveSystem + their own HandleClient manually.
 func NewClickToMoveSystem() SystemDef {
 	return SystemDef{
 		Name:    "ClickToMove",
 		Factory: func() engine.System { return &ClickToMoveSystem{} },
+		Configure: func(host any) {
+			p := host.(*universe.Process)
+			HandleClient(p, func(player Entity, msg *MoveTargetMsg) {
+				if PlayerStateOf(player) != StateActive {
+					return
+				}
+				mt := Get[MoveTarget](player)
+				if mt == nil {
+					return
+				}
+				mt.SetTarget(msg.X, msg.Y)
+			})
+		},
 	}
 }
 

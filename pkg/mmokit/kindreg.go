@@ -212,6 +212,9 @@ func RegisterKind[T any](
 		if ct.Kind() != reflect.Struct {
 			panic(fmt.Sprintf("mmokit.RegisterKind: bundle field %s.%s must point to a struct (got *%v)", bundleType.Name(), f.Name, ct.Kind()))
 		}
+		if universe.IsTransferCore(ct) {
+			panic(fmt.Sprintf("mmokit.RegisterKind: bundle field %s.%s is a transfer-core component (%s); the framework owns its wire format — remove it from the bundle", bundleType.Name(), f.Name, ct.Name()))
+		}
 		ov, hasOv := overrideByType[ct]
 		// Resolve LocalOnly from struct tag OR LocalOnly() option.
 		local := tag == "local"

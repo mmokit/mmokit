@@ -69,6 +69,17 @@ var transferCoreTypes = map[reflect.Type]bool{
 	reflect.TypeFor[component.CellCoord](): true,
 }
 
+// IsTransferCore reports whether t is a framework-owned component already
+// carried by TransferFrame's top-level fields (Position / Velocity / Rotation
+// / CellCoord). RegisterKind rejects these as bundle fields because the
+// framework owns their wire format end-to-end: TransferFrame serializes them
+// across cells, EngineBindings replicates them to clients, and Stage.Spawn
+// either requires them (Position) or defaults them (Velocity). Declaring one
+// in a bundle does nothing useful and risks double-encoding on the wire.
+func IsTransferCore(t reflect.Type) bool {
+	return transferCoreTypes[t]
+}
+
 // RegisterComponent registers an ECS component for automatic replication and
 // transfer. It creates a ComponentReplicator with Scan, Apply, and Add closures
 // that capture the typed *ecs.Map1[T].

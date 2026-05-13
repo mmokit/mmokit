@@ -21,10 +21,9 @@ import (
 var webFS embed.FS
 
 func main() {
-	mmokit.RegisterEvent[WaveStateMsg]()
-
 	process := mmokit.New(mmokit.Config{
 		Name:          "simple",
+		TickRate:      20,
 		WebDir:        "embed",
 		StaticFS:      webFS,
 		AnonymousAuth: true,

@@ -271,6 +271,66 @@ func TestRegisterKind_NonPointerField(t *testing.T) {
 	RegisterKind[badBundle](mmo, 107, "BadKind")
 }
 
+type badPositionBundle struct {
+	Name *kindRegTestNameComp
+	Pos  *Position
+}
+
+type badVelocityBundle struct {
+	Name *kindRegTestNameComp
+	Vel  *Velocity
+}
+
+type badRotationBundle struct {
+	Name *kindRegTestNameComp
+	Rot  *Rotation
+}
+
+type badCellCoordBundle struct {
+	Name *kindRegTestNameComp
+	Cell *CellCoord
+}
+
+func TestRegisterKind_RejectsTransferCore(t *testing.T) {
+	t.Run("Position", func(t *testing.T) {
+		assertTransferCorePanic(t, 200, "BadPositionKind", func(p *universe.Process, kind uint8, name string) {
+			RegisterKind[badPositionBundle](p, kind, name)
+		})
+	})
+	t.Run("Velocity", func(t *testing.T) {
+		assertTransferCorePanic(t, 201, "BadVelocityKind", func(p *universe.Process, kind uint8, name string) {
+			RegisterKind[badVelocityBundle](p, kind, name)
+		})
+	})
+	t.Run("Rotation", func(t *testing.T) {
+		assertTransferCorePanic(t, 202, "BadRotationKind", func(p *universe.Process, kind uint8, name string) {
+			RegisterKind[badRotationBundle](p, kind, name)
+		})
+	})
+	t.Run("CellCoord", func(t *testing.T) {
+		assertTransferCorePanic(t, 203, "BadCellCoordKind", func(p *universe.Process, kind uint8, name string) {
+			RegisterKind[badCellCoordBundle](p, kind, name)
+		})
+	})
+}
+
+func assertTransferCorePanic(t *testing.T, kind uint8, name string, register func(*universe.Process, uint8, string)) {
+	t.Helper()
+	mmo := newTestProcess(t)
+	defer func() {
+		mmo.Shutdown()
+		r := recover()
+		if r == nil {
+			t.Fatalf("expected panic on bundle with transfer-core field")
+		}
+		msg := formatAny(r)
+		if !contains(msg, "transfer-core") {
+			t.Errorf("expected panic to mention 'transfer-core', got %q", msg)
+		}
+	}()
+	register(mmo, kind, name)
+}
+
 func TestRegisterKind_DashTag(t *testing.T) {
 	type dashBundle struct {
 		Name    *kindRegTestNameComp

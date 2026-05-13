@@ -420,14 +420,22 @@ func entityListHandler(coord *Process) cmdsys.HandlerFunc {
 
 			rows, err := runOnCell(ctx, c, func() ([]entityRow, error) {
 				w := stage.ECSWorld()
-				filter := ecs.NewFilter2[component.NetworkID, component.EntityKind](w)
+				filter := ecs.NewFilter1[component.NetworkID](w)
 				query := filter.Query()
 				defer query.Close()
 
+				kindMap := stage.EntityKindMap()
+				posMap := stage.PositionMap()
+
 				var out []entityRow
 				for query.Next() {
-					nid, kind := query.Get()
-					kindName := resolveKindName(stage, kind.Type)
+					nid := query.Get()
+					entity := query.Entity()
+
+					var kindName string
+					if kindMap.HasAll(entity) {
+						kindName = resolveKindName(stage, kindMap.Get(entity).Type)
+					}
 					if args.Kind != "" && kindName != args.Kind {
 						continue
 					}
@@ -437,9 +445,7 @@ func entityListHandler(coord *Process) cmdsys.HandlerFunc {
 						continue
 					}
 
-					entity := query.Entity()
 					var worldX, worldY float32
-					posMap := stage.PositionMap()
 					if posMap.HasAll(entity) {
 						pos := posMap.Get(entity)
 						worldX, worldY = localToWorld(cX, cY, pos.X, pos.Y)
@@ -536,17 +542,23 @@ func entitySummaryHandler(coord *Process) cmdsys.HandlerFunc {
 			stage := c.Stage
 			cellCounts, err := runOnCell(ctx, c, func() (map[string]int32, error) {
 				w := stage.ECSWorld()
-				filter := ecs.NewFilter2[component.NetworkID, component.EntityKind](w)
+				filter := ecs.NewFilter1[component.NetworkID](w)
 				query := filter.Query()
 				defer query.Close()
+				kindMap := stage.EntityKindMap()
 				out := make(map[string]int32)
 				for query.Next() {
-					nid, kind := query.Get()
+					nid := query.Get()
 					_, pres, found := stage.LookupNetID(nid.ID)
 					if !found || pres != PresenceLive {
 						continue
 					}
-					out[resolveKindName(stage, kind.Type)]++
+					entity := query.Entity()
+					var kindName string
+					if kindMap.HasAll(entity) {
+						kindName = resolveKindName(stage, kindMap.Get(entity).Type)
+					}
+					out[kindName]++
 				}
 				return out, nil
 			})

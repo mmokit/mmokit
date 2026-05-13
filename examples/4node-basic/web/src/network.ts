@@ -86,11 +86,9 @@ export function connect(name: string): void {
 
 export function sendMoveTarget(): void {
   if (!state.playerNetID || !state.client) return;
-  state.inputSeq++;
   state.client.send(new MoveTargetMsg({
-    sequence: state.inputSeq,
-    targetX: state.moveTargetX,
-    targetY: state.moveTargetY,
+    x: state.moveTargetX,
+    y: state.moveTargetY,
   }));
 }
 

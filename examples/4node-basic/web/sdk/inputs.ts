@@ -7,24 +7,22 @@
 // SpaceClient.send(msg) wraps the encoded body in the [0x00][u32 typeID]
 // [u32 bodyLen][body] frame consumed by the server's HandleClient dispatch.
 
-/** Client-input message main.MoveTargetMsg (typeID 0xe346f147). */
+/** Client-input message mmokit.MoveTargetMsg (typeID 0x266f16ab). */
 export class MoveTargetMsg {
-  static readonly typeID = 0xe346f147;
-  sequence: number = 0;
-  targetX: number = 0;
-  targetY: number = 0;
+  static readonly typeID = 0x266f16ab;
+  x: number = 0;
+  y: number = 0;
 
   constructor(init?: Partial<MoveTargetMsg>) {
     if (init) Object.assign(this, init);
   }
 
   encode(): Uint8Array {
-    const buf = new Uint8Array(12);
+    const buf = new Uint8Array(8);
     const dv = new DataView(buf.buffer);
     let off = 0;
-    dv.setUint32(off, this.sequence, true); off += 4;
-    dv.setFloat32(off, this.targetX, true); off += 4;
-    dv.setFloat32(off, this.targetY, true); off += 4;
+    dv.setFloat32(off, this.x, true); off += 4;
+    dv.setFloat32(off, this.y, true); off += 4;
     return buf;
   }
 }

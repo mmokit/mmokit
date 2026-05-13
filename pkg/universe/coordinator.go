@@ -898,6 +898,9 @@ func (c *Process) registerAllBuiltins() {
 //	mmo.AddSystem(mmokit.NewSystem(&BotSystem{}))
 //	mmo.AddSystem(mmokit.NewSystem(&BotSystem{}).Named("AILogic"))
 func (c *Process) AddSystem(def engine.SystemDef) {
+	if def.Configure != nil {
+		def.Configure(c)
+	}
 	c.systemDefs = append(c.systemDefs, def)
 }
 

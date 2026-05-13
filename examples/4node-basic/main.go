@@ -10,16 +10,6 @@ import (
 	"github.com/zenion/mmoserver/examples/4node-basic/services/echo"
 )
 
-// MoveTargetMsg is the click-to-move target update sent by the client and
-// dispatched to the HandleClient handler below. Mirrors the reflect-codec
-// wire layout in pkg/universe/reflect_marshal.go: fields encoded in source
-// order, little-endian, no padding.
-type MoveTargetMsg struct {
-	Sequence uint32
-	TargetX  float32
-	TargetY  float32
-}
-
 //go:embed all:web/dist
 var webDist embed.FS
 
@@ -90,17 +80,6 @@ func main() {
 	if err := process.RegisterService(echo.Kind); err != nil {
 		log.Fatalf("4node-basic: register echo service: %v", err)
 	}
-
-	mmokit.HandleClient(process, func(player mmokit.Entity, msg *MoveTargetMsg) {
-		if mmokit.PlayerStateOf(player) != mmokit.StateActive {
-			return
-		}
-		mt := mmokit.Get[mmokit.MoveTarget](player)
-		if mt == nil {
-			return
-		}
-		mt.SetTarget(msg.TargetX, msg.TargetY)
-	})
 
 	process.AddSystem(mmokit.NewClickToMoveSystem())
 	process.AddSystem(mmokit.NewPhysicsSystem())

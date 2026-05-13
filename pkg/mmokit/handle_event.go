@@ -18,9 +18,10 @@ var (
 // frame on the wire; the SDK codegen iterates this registry to emit per-event
 // TS decoder classes and per-event onXxx handlers.
 //
-// Panics on duplicate registration of the same Go type. Two distinct types
-// hashing to the same typeID is also a panic — collision should never happen
-// at codebase scale; if it does, rename one type.
+// Idempotent for the same Go type — safe to call from per-cell System.Init()
+// where it would otherwise fire N times. Two distinct types hashing to the
+// same typeID is a panic — collision should never happen at codebase scale;
+// if it does, rename one type.
 func RegisterEvent[T any]() {
 	t := reflect.TypeFor[T]()
 	id := TypeIDOf(t)
@@ -28,7 +29,7 @@ func RegisterEvent[T any]() {
 	seMu.Lock()
 	defer seMu.Unlock()
 	if _, ok := seSet[t]; ok {
-		panic(fmt.Sprintf("RegisterEvent: type %s registered twice", t.String()))
+		return
 	}
 	if existing, ok := seByType[id]; ok && existing != t {
 		panic(fmt.Sprintf("RegisterEvent: typeID collision between %s and %s (id=%#x)",
