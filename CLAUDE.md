@@ -144,7 +144,7 @@ Four layers of runtime guards that catch wrong states at the point of violation 
 - HTTP: `GET /events?n=N&commit=ID&cell=CELLID&since=DUR` returns the matching events as a JSON array.
 - Endpoints are registered on the gateway HTTP mux (RoleGateway processes) AND on an optional admin HTTP listener bound by `Config.AdminListen` / `--admin-listen=:9101` — used on pure-coordinator processes (where commits actually run) because they don't bind the client HTTP port. See `examples/4node-basic just distributed` for the canonical distributed setup.
 
-**netIDIndex (`netid_index.go`):** per-cell `map[netID] → {entity, presence}` where presence ∈ `{Live, Replica}` (the Shadow presence was removed when the hard-cut handoff landed). Every spawn path must call `Enter(netID, entity, presence)`: `SpawnFromTransferCore` (takes presence as an arg), `upsertBorderReplica` (PresenceReplica), `Stage.SpawnEntity` (local spawn, PresenceLive). Authority transitions go through the sanctioned primitives `Demote(netID)` (Live → Replica at handoff-commit on the source) and `Promote(netID)` (Replica → Live at handoff-commit on the destination). `OnEntityRemoved` fires `Exit(netID)` during `FlushRemovals`. The transition policy is a compact 2×2 table (see `TestNetIDIndex_Transitions`): e.g. `Replica→Live = ActionReplaced` (swap entity, remove prev), `Live→Live = ActionRejected`. `Config.StrictNetIDIndex` controls enforcement — false = observational (log only), true = reject duplicates and roll back the offending spawn. 4node-basic ships with `StrictNetIDIndex: true` after commit `e4ede97` closed the handoff-race root cause.
+**netIDIndex (`netid_index.go`):** per-cell `map[netID] → {entity, presence}` where presence ∈ `{Live, Replica}` (the Shadow presence was removed when the hard-cut handoff landed). Every spawn path must call `Enter(netID, entity, presence)`: `SpawnFromTransferCore` (takes presence as an arg), `upsertBorderReplica` (PresenceReplica), `Stage.Spawn` (local spawn, PresenceLive). Authority transitions go through the sanctioned primitives `Demote(netID)` (Live → Replica at handoff-commit on the source) and `Promote(netID)` (Replica → Live at handoff-commit on the destination). `OnEntityRemoved` fires `Exit(netID)` during `FlushRemovals`. The transition policy is a compact 2×2 table (see `TestNetIDIndex_Transitions`): e.g. `Replica→Live = ActionReplaced` (swap entity, remove prev), `Live→Live = ActionRejected`. `Config.StrictNetIDIndex` controls enforcement — false = observational (log only), true = reject duplicates and roll back the offending spawn. 4node-basic ships with `StrictNetIDIndex: true` after commit `e4ede97` closed the handoff-race root cause.
 
 **Log categories (all `events:*` auto-registered on Process.New):**
 - `integrity` — invariant violation details
@@ -174,7 +174,11 @@ mmokit.RegisterKind[MyComponents](coord, KindFoo, "Foo", bindings)
 //   mmokit.WithField[MyComp]( mmokit.WithMarshal(...), mmokit.WithBinding(...) )
 //   mmokit.WithExtraBinding(b)  // kind-scoped extra (e.g. QAngle for Rotation)
 coord.OnPlayerJoin(func(s *mmokit.PlayerSession, stage *mmokit.Stage) {
-    stage.SpawnPlayer(s, mmokit.WithEntityKind(KindFoo), ...)
+    stage.SpawnPlayer(s,
+        mmokit.EntityKind{Type: KindFoo},
+        mmokit.Collider{Radius: 5},
+        // every other component value the kind needs — pass by value
+    )
 })
 coord.SetPlayerRouter(func(username string) string {  // determines which cell hosts each player
     return coord.CellAtPosition(spawnX, spawnY)
@@ -303,7 +307,7 @@ The pre-existing `mmokit.Query[Bundle]` sticky-query pattern is unchanged — it
 
 ### EntityHandle
 
-Game code uses `mmokit.Entity` (the rich wrapper with `NetID()`, `Stage()`, `Send()`, etc.) for ECS operations. For raw entity handles (e.g. `engine.PlayerSession.Entity` fields, return types from `Stage.SpawnEntity`), use the `mmokit.EntityHandle` type alias instead of importing `ecs.Entity` directly. Both are the same underlying type — `EntityHandle` just lets game code name it without an ark import.
+Game code uses `mmokit.Entity` (the rich wrapper with `NetID()`, `Stage()`, `Send()`, etc.) for ECS operations — `Stage.Spawn` returns it directly. For raw entity handles (e.g. `engine.PlayerSession.Entity` fields), use the `mmokit.EntityHandle` type alias instead of importing `ecs.Entity` directly, or call `e.Handle()` on an `mmokit.Entity`. `EntityHandle` is just a rename for `ecs.Entity` that lets game code avoid an ark import.
 
 ### Query[T] (mmokit)
 
@@ -339,7 +343,9 @@ Note: `pkg/system/` files cannot import `pkg/mmokit` (circular dependency). Use 
 
 ### Entity Files
 
-Each entity type has its own file (`internal/game/entity_*.go`) containing only spawn functions (e.g., `SpawnPlayer`, `SpawnAsteroid`) and a typed `XxxBundle` struct whose pointer fields enumerate its components (with `mmokit:"local"` for local-only). Entity kinds are registered in `internal/game/entity_kinds.go` via `RegisterEntityKinds` calling `mmokit.RegisterKind[XxxBundle]` per kind. Spawn functions use `gw.SpawnEntity()` with `mmokit.WithComponents()` to auto-add all registered kind components.
+Each entity type has its own file (`internal/game/entity_*.go`) containing only spawn functions (e.g., `SpawnPlayer`, `SpawnAsteroid`) and a typed `XxxBundle` struct whose pointer fields enumerate its components (with `mmokit:"local"` for fields that aren't serialized over the wire). Entity kinds are registered in `internal/game/entity_kinds.go` via `RegisterEntityKinds` calling `mmokit.RegisterKind[XxxBundle]` per kind. Spawn functions call `gw.stage.Spawn(components...)` — every component value passed at the call site, no auto-attach, no post-spawn `Set` walls.
+
+**Spawning entities.** `stage.Spawn(components ...any) Entity` is the canonical entity-creation API. Pass every component by value: `mmokit.Position{X: x, Y: y}`, `mmokit.EntityKind{Type: KindFoo}`, `mmokit.Collider{Width: w, Height: h, Radius: r, Layer: L, Shape: S}`, plus the game-specific components the bundle declares. Position is required (panics if missing); EntityKind is optional (kindless spawns are legal); a duplicate component type is a programmer error (panics). Velocity defaults to zero when not supplied. Spawn returns the rich `mmokit.Entity` wrapper, not the raw handle. Under `InvariantPanic` mode (dev/test default per `Config.InvariantMode`), kinded spawns missing any non-`mmokit:"local"` Bundle component panic at spawn time — forcing silent zero-fill bugs to surface immediately. For player spawning, `stage.SpawnPlayer(session, components...)` injects Position (from `session.SpawnLocation`) and PlayerConn (from `session.ConnID`) and otherwise behaves identically to `Spawn`.
 
 Current entity types: ship, asteroid, lootcrate, npc, station.
 
