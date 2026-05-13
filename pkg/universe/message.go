@@ -28,7 +28,7 @@ type SpawnTransfer struct {
 }
 
 // PlayerAssignment is sent by the gateway to a cell after successful auth.
-// UserID is the canonical identity from auth_users; SessionToken is the
+// UserID is the canonical identity from auth.users; SessionToken is the
 // opaque session token bound to that login.
 type PlayerAssignment struct {
 	ConnID        uint32

@@ -1,5 +1,7 @@
-DROP TABLE IF EXISTS auth_audit_log;
-DROP TABLE IF EXISTS auth_sessions;
-DROP TABLE IF EXISTS auth_identities;
-DROP TABLE IF EXISTS auth_passwords;
-DROP TABLE IF EXISTS auth_users;
+DROP TABLE IF EXISTS auth.capabilities;
+DROP TABLE IF EXISTS auth.audit_log;
+DROP TABLE IF EXISTS auth.sessions;
+DROP TABLE IF EXISTS auth.identities;
+DROP TABLE IF EXISTS auth.passwords;
+DROP TABLE IF EXISTS auth.users;
+DROP SCHEMA IF EXISTS auth;

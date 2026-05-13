@@ -7,7 +7,7 @@
 //   - per-IP token-bucket rate limiting
 //   - per-account lockout (DB-persistent)
 //   - audit log
-//   - schema seam for OIDC v2 (auth_identities table present from day one)
+//   - schema seam for OIDC v2 (auth.identities table present from day one)
 //
 // Auth is wire-protocol-agnostic. Per-connection / per-message authentication
 // (UDP AEAD, DTLS, sequence + replay window) is the gateway's concern; the

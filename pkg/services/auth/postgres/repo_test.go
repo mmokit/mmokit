@@ -17,7 +17,7 @@ import (
 )
 
 // openTestRepo opens a Repo backed by the test Postgres instance.
-// The auth migrations are applied via WithExtraMigrations. The auth_*
+// The auth migrations are applied via WithExtraMigrations. The auth.*
 // tables are truncated on every call so each test starts with a clean slate.
 func openTestRepo(t *testing.T) *Repo {
 	t.Helper()
@@ -42,7 +42,7 @@ func openTestPool(t *testing.T) *pgxpool.Pool {
 
 	pool := store.Pool()
 	if _, err := pool.Exec(ctx,
-		`TRUNCATE auth_capabilities, auth_audit_log, auth_sessions, auth_identities, auth_passwords, auth_users`,
+		`TRUNCATE auth.capabilities, auth.audit_log, auth.sessions, auth.identities, auth.passwords, auth.users`,
 	); err != nil {
 		t.Fatalf("truncate auth tables: %v", err)
 	}

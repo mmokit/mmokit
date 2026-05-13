@@ -35,7 +35,7 @@ type SessionID uint64
 type PlayerSession struct {
 	ID             SessionID
 	ConnID         uint32      // 0 = no active connection
-	UserID         uuid.UUID   // canonical identity from auth_users (zero = unauthenticated)
+	UserID         uuid.UUID   // canonical identity from auth.users (zero = unauthenticated)
 	Username       string
 	State          PlayerState
 	Entity         ecs.Entity  // zero-value when no entity exists

@@ -531,7 +531,7 @@ type Process struct {
 	mu            sync.RWMutex
 	players       map[string]*PlayerLocation // username -> location (active + disconnected)
 	// activeUsers indexes the same logical record by canonical user_id from
-	// auth_users. The auth-service path stamps userID in the gateway's
+	// auth.users. The auth-service path stamps userID in the gateway's
 	// authState; cell-side callers only have username, so both indexes are
 	// kept consistent on every notifySession* mutation.
 	activeUsers map[uuid.UUID]*activeUser

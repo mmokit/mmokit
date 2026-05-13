@@ -45,7 +45,7 @@ func (r *Repo) CreateUser(ctx context.Context, u auth.User, password string) (au
 	defer tx.Rollback(ctx) //nolint:errcheck
 
 	err = tx.QueryRow(ctx, `
-		INSERT INTO auth_users (username, email)
+		INSERT INTO auth.users (username, email)
 		VALUES ($1, NULLIF($2, ''))
 		RETURNING user_id, username, COALESCE(email,''), email_verified, mfa_enabled,
 		          status, failed_attempts, COALESCE(locked_until, 'epoch'::timestamptz),
@@ -62,7 +62,7 @@ func (r *Repo) CreateUser(ctx context.Context, u auth.User, password string) (au
 		return out, err
 	}
 	if _, err := tx.Exec(ctx, `
-		INSERT INTO auth_passwords (user_id, password_hash) VALUES ($1, $2)
+		INSERT INTO auth.passwords (user_id, password_hash) VALUES ($1, $2)
 	`, out.UserID, password); err != nil {
 		return out, err
 	}
@@ -83,7 +83,7 @@ func (r *Repo) fetchUser(ctx context.Context, where string, arg any) (auth.User,
 		SELECT user_id, username, COALESCE(email,''), email_verified, mfa_enabled,
 		       status, failed_attempts, COALESCE(locked_until, 'epoch'::timestamptz),
 		       COALESCE(last_login_at, 'epoch'::timestamptz), created_at, updated_at
-		FROM auth_users `+where, arg,
+		FROM auth.users `+where, arg,
 	).Scan(&u.UserID, &u.Username, &u.Email, &u.EmailVerified, &u.MFAEnabled,
 		&u.Status, &u.FailedAttempts, &u.LockedUntil, &u.LastLoginAt,
 		&u.CreatedAt, &u.UpdatedAt)
@@ -95,7 +95,7 @@ func (r *Repo) fetchUser(ctx context.Context, where string, arg any) (auth.User,
 
 func (r *Repo) UpdateUserLogin(ctx context.Context, id uuid.UUID, at time.Time) error {
 	_, err := r.pool.Exec(ctx, `
-		UPDATE auth_users
+		UPDATE auth.users
 		SET last_login_at = $2, failed_attempts = 0, locked_until = NULL, updated_at = NOW()
 		WHERE user_id = $1
 	`, id, at)
@@ -106,7 +106,7 @@ func (r *Repo) IncrementFailedAttempts(ctx context.Context, id uuid.UUID, thresh
 	var count int
 	var locked time.Time
 	err := r.pool.QueryRow(ctx, `
-		UPDATE auth_users
+		UPDATE auth.users
 		SET failed_attempts = failed_attempts + 1,
 		    locked_until = CASE
 		        WHEN failed_attempts + 1 >= $2 THEN NOW() + make_interval(secs => $3)
@@ -121,7 +121,7 @@ func (r *Repo) IncrementFailedAttempts(ctx context.Context, id uuid.UUID, thresh
 
 func (r *Repo) ResetFailedAttempts(ctx context.Context, id uuid.UUID) error {
 	_, err := r.pool.Exec(ctx, `
-		UPDATE auth_users
+		UPDATE auth.users
 		SET failed_attempts = 0, locked_until = NULL, updated_at = NOW()
 		WHERE user_id = $1
 	`, id)
@@ -130,7 +130,7 @@ func (r *Repo) ResetFailedAttempts(ctx context.Context, id uuid.UUID) error {
 
 func (r *Repo) SetUserStatus(ctx context.Context, id uuid.UUID, status string, locked time.Time) error {
 	_, err := r.pool.Exec(ctx, `
-		UPDATE auth_users
+		UPDATE auth.users
 		SET status = $2, locked_until = NULLIF($3, 'epoch'::timestamptz), updated_at = NOW()
 		WHERE user_id = $1
 	`, id, status, locked)
@@ -145,7 +145,7 @@ func (r *Repo) GetPassword(ctx context.Context, id uuid.UUID) (auth.PasswordCred
 	var p auth.PasswordCredential
 	err := r.pool.QueryRow(ctx, `
 		SELECT user_id, password_hash, hash_algorithm, changed_at
-		FROM auth_passwords WHERE user_id = $1
+		FROM auth.passwords WHERE user_id = $1
 	`, id).Scan(&p.UserID, &p.PasswordHash, &p.HashAlgorithm, &p.ChangedAt)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return p, auth.ErrUserNotFound
@@ -155,7 +155,7 @@ func (r *Repo) GetPassword(ctx context.Context, id uuid.UUID) (auth.PasswordCred
 
 func (r *Repo) UpdatePassword(ctx context.Context, id uuid.UUID, newHash string) error {
 	_, err := r.pool.Exec(ctx, `
-		UPDATE auth_passwords SET password_hash = $2, changed_at = NOW() WHERE user_id = $1
+		UPDATE auth.passwords SET password_hash = $2, changed_at = NOW() WHERE user_id = $1
 	`, id, newHash)
 	return err
 }
@@ -167,7 +167,7 @@ func (r *Repo) UpdatePassword(ctx context.Context, id uuid.UUID, newHash string)
 func (r *Repo) CreateSession(ctx context.Context, s auth.Session) error {
 	metaJSON, _ := json.Marshal(s.ClientMeta)
 	_, err := r.pool.Exec(ctx, `
-		INSERT INTO auth_sessions (token_hash, user_id, expires_at, client_meta)
+		INSERT INTO auth.sessions (token_hash, user_id, expires_at, client_meta)
 		VALUES ($1, $2, $3, $4)
 	`, s.TokenHash, s.UserID, s.ExpiresAt, metaJSON)
 	return err
@@ -180,7 +180,7 @@ func (r *Repo) GetSession(ctx context.Context, tokenHash []byte) (auth.Session, 
 	err := r.pool.QueryRow(ctx, `
 		SELECT token_hash, user_id, issued_at, expires_at, last_used_at,
 		       revoked_at, COALESCE(client_meta::text, '{}')
-		FROM auth_sessions WHERE token_hash = $1
+		FROM auth.sessions WHERE token_hash = $1
 	`, tokenHash).Scan(&s.TokenHash, &s.UserID, &s.IssuedAt, &s.ExpiresAt,
 		&s.LastUsedAt, &revokedAt, &meta)
 	if errors.Is(err, pgx.ErrNoRows) {
@@ -198,7 +198,7 @@ func (r *Repo) GetSession(ctx context.Context, tokenHash []byte) (auth.Session, 
 
 func (r *Repo) SlideSession(ctx context.Context, tokenHash []byte, newExpiry time.Time) error {
 	_, err := r.pool.Exec(ctx, `
-		UPDATE auth_sessions SET expires_at = $2, last_used_at = NOW()
+		UPDATE auth.sessions SET expires_at = $2, last_used_at = NOW()
 		WHERE token_hash = $1 AND revoked_at IS NULL
 	`, tokenHash, newExpiry)
 	return err
@@ -206,7 +206,7 @@ func (r *Repo) SlideSession(ctx context.Context, tokenHash []byte, newExpiry tim
 
 func (r *Repo) RevokeSession(ctx context.Context, tokenHash []byte) error {
 	_, err := r.pool.Exec(ctx, `
-		UPDATE auth_sessions SET revoked_at = NOW()
+		UPDATE auth.sessions SET revoked_at = NOW()
 		WHERE token_hash = $1 AND revoked_at IS NULL
 	`, tokenHash)
 	return err
@@ -214,7 +214,7 @@ func (r *Repo) RevokeSession(ctx context.Context, tokenHash []byte) error {
 
 func (r *Repo) RevokeAllSessionsExcept(ctx context.Context, id uuid.UUID, keep []byte) (int, error) {
 	tag, err := r.pool.Exec(ctx, `
-		UPDATE auth_sessions SET revoked_at = NOW()
+		UPDATE auth.sessions SET revoked_at = NOW()
 		WHERE user_id = $1 AND token_hash != $2 AND revoked_at IS NULL
 	`, id, keep)
 	return int(tag.RowsAffected()), err
@@ -222,7 +222,7 @@ func (r *Repo) RevokeAllSessionsExcept(ctx context.Context, id uuid.UUID, keep [
 
 func (r *Repo) RevokeAllSessionsForUser(ctx context.Context, id uuid.UUID) (int, error) {
 	tag, err := r.pool.Exec(ctx, `
-		UPDATE auth_sessions SET revoked_at = NOW()
+		UPDATE auth.sessions SET revoked_at = NOW()
 		WHERE user_id = $1 AND revoked_at IS NULL
 	`, id)
 	return int(tag.RowsAffected()), err
@@ -234,7 +234,7 @@ func (r *Repo) ListActiveSessions(ctx context.Context, id uuid.UUID) ([]auth.Ses
 	rows, err := r.pool.Query(ctx, `
 		SELECT token_hash, user_id, issued_at, expires_at, last_used_at,
 		       COALESCE(client_meta::text, '{}')
-		FROM auth_sessions WHERE user_id = $1 AND revoked_at IS NULL
+		FROM auth.sessions WHERE user_id = $1 AND revoked_at IS NULL
 		ORDER BY issued_at DESC
 	`, id)
 	if err != nil {
@@ -261,7 +261,7 @@ func (r *Repo) ListActiveSessions(ctx context.Context, id uuid.UUID) ([]auth.Ses
 
 func (r *Repo) DeleteExpiredSessions(ctx context.Context, retention time.Duration) (int, error) {
 	tag, err := r.pool.Exec(ctx, `
-		DELETE FROM auth_sessions
+		DELETE FROM auth.sessions
 		WHERE revoked_at IS NOT NULL OR expires_at < NOW() - make_interval(secs => $1)
 	`, retention.Seconds())
 	return int(tag.RowsAffected()), err
@@ -269,7 +269,7 @@ func (r *Repo) DeleteExpiredSessions(ctx context.Context, retention time.Duratio
 
 func (r *Repo) DeleteOldAuditRows(ctx context.Context, olderThan time.Duration) (int, error) {
 	tag, err := r.pool.Exec(ctx, `
-		DELETE FROM auth_audit_log
+		DELETE FROM auth.audit_log
 		WHERE occurred_at < NOW() - make_interval(secs => $1)
 	`, olderThan.Seconds())
 	return int(tag.RowsAffected()), err
@@ -292,7 +292,7 @@ func (r *Repo) Audit(ctx context.Context, ev auth.AuditEvent) error {
 		uid = &u
 	}
 	_, err := r.pool.Exec(ctx, `
-		INSERT INTO auth_audit_log
+		INSERT INTO auth.audit_log
 		    (event, user_id, username_attempted, ip_addr, user_agent, gateway_id, metadata)
 		VALUES ($1, $2, NULLIF($3,''), $4::INET, NULLIF($5,''), NULLIF($6,''), $7)
 	`, ev.Event, uid, ev.UsernameAttempted, ipStr, ev.UserAgent, ev.GatewayID, metaJSON)
@@ -308,7 +308,7 @@ func (r *Repo) RecentAudit(ctx context.Context, id uuid.UUID, limit int) ([]auth
 		       COALESCE(user_agent,''),
 		       COALESCE(gateway_id,''),
 		       COALESCE(metadata::text, '{}')
-		FROM auth_audit_log WHERE user_id = $1
+		FROM auth.audit_log WHERE user_id = $1
 		ORDER BY occurred_at DESC LIMIT $2
 	`, id, limit)
 	if err != nil {
@@ -340,7 +340,7 @@ func (r *Repo) HasCapability(ctx context.Context, userID uuid.UUID, capability s
 	var exists bool
 	err := r.pool.QueryRow(ctx, `
 		SELECT EXISTS(
-		  SELECT 1 FROM auth_capabilities
+		  SELECT 1 FROM auth.capabilities
 		   WHERE user_id = $1 AND capability = $2
 		     AND (expires_at IS NULL OR expires_at > NOW())
 		)`, userID, capability).Scan(&exists)
@@ -353,7 +353,7 @@ func (r *Repo) GrantCapability(ctx context.Context, c auth.Capability) error {
 		expires = c.ExpiresAt
 	}
 	_, err := r.pool.Exec(ctx, `
-		INSERT INTO auth_capabilities (user_id, capability, granted_by, expires_at)
+		INSERT INTO auth.capabilities (user_id, capability, granted_by, expires_at)
 		VALUES ($1, $2, $3, $4)
 		ON CONFLICT (user_id, capability) DO UPDATE
 		  SET granted_at = NOW(), granted_by = EXCLUDED.granted_by, expires_at = EXCLUDED.expires_at`,
@@ -362,7 +362,7 @@ func (r *Repo) GrantCapability(ctx context.Context, c auth.Capability) error {
 }
 
 func (r *Repo) RevokeCapability(ctx context.Context, userID uuid.UUID, capability string) error {
-	tag, err := r.pool.Exec(ctx, `DELETE FROM auth_capabilities WHERE user_id=$1 AND capability=$2`, userID, capability)
+	tag, err := r.pool.Exec(ctx, `DELETE FROM auth.capabilities WHERE user_id=$1 AND capability=$2`, userID, capability)
 	if err != nil {
 		return err
 	}
@@ -375,7 +375,7 @@ func (r *Repo) RevokeCapability(ctx context.Context, userID uuid.UUID, capabilit
 func (r *Repo) ListCapabilities(ctx context.Context, userID uuid.UUID) ([]auth.Capability, error) {
 	rows, err := r.pool.Query(ctx, `
 		SELECT user_id, capability, granted_at, granted_by, expires_at
-		  FROM auth_capabilities
+		  FROM auth.capabilities
 		 WHERE user_id=$1
 		   AND (expires_at IS NULL OR expires_at > NOW())
 		 ORDER BY capability`, userID)

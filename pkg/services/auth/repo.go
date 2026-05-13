@@ -17,7 +17,7 @@ var (
 	ErrCapabilityNotFound = errors.New("auth: capability grant not found")
 )
 
-// User is the canonical identity record. Mirrors auth_users.
+// User is the canonical identity record. Mirrors auth.users.
 type User struct {
 	UserID         uuid.UUID
 	Username       string  // always lowercase
@@ -32,7 +32,7 @@ type User struct {
 	UpdatedAt      time.Time
 }
 
-// PasswordCredential mirrors auth_passwords (one per user in v1).
+// PasswordCredential mirrors auth.passwords (one per user in v1).
 type PasswordCredential struct {
 	UserID        uuid.UUID
 	PasswordHash  string  // argon2id encoded
@@ -40,7 +40,7 @@ type PasswordCredential struct {
 	ChangedAt     time.Time
 }
 
-// Session mirrors auth_sessions.
+// Session mirrors auth.sessions.
 type Session struct {
 	TokenHash  []byte  // sha256(raw_token)
 	UserID     uuid.UUID
@@ -51,7 +51,7 @@ type Session struct {
 	ClientMeta map[string]string  // ip, ua, gateway_id
 }
 
-// Capability is a single granted capability row. Mirrors auth_capabilities.
+// Capability is a single granted capability row. Mirrors auth.capabilities.
 type Capability struct {
 	UserID     uuid.UUID
 	Capability string
@@ -64,7 +64,7 @@ type Capability struct {
 	ExpiresAt  time.Time // zero value = no expiry
 }
 
-// AuditEvent mirrors auth_audit_log row inputs.
+// AuditEvent mirrors auth.audit_log row inputs.
 type AuditEvent struct {
 	Event             string
 	UserID            uuid.UUID  // zero value when unknown
