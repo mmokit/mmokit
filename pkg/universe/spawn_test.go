@@ -56,3 +56,30 @@ func TestSpawn_AttachesEveryComponent(t *testing.T) {
 		t.Errorf("marker component missing or wrong: %+v", mkMap.Get(e.Handle()))
 	}
 }
+
+// TestSpawn_RollsBackOnDuplicateNetIDInStrictMode verifies that under
+// strictNetIDIndex, a Spawn that collides on netID rolls back the entity
+// and returns the zero-value Entity, matching SpawnEntity's behavior.
+func TestSpawn_RollsBackOnDuplicateNetIDInStrictMode(t *testing.T) {
+	stage := newTestStage(t)
+	stage.strictNetIDIndex = true
+
+	// First spawn — succeeds.
+	e1 := stage.Spawn(component.Position{X: 1, Y: 2})
+	if e1.NetID() == 0 {
+		t.Fatal("expected first spawn to succeed")
+	}
+
+	// Force the NEXT spawn's netID to collide. The engine hands out monotonic
+	// netIDs from NextNetID() (atomic counter, base + 1, 2, 3, ...) so the
+	// next call after e1 will return e1.NetID()+1. Pre-register that value
+	// as Live so the upcoming Spawn's Enter(...) returns ActionDuplicate.
+	nextNID := e1.NetID() + 1
+	stage.netIDIdx.Enter(nextNID, ecs.Entity{}, PresenceLive)
+
+	// Second spawn — would collide. Under strict mode, Spawn must roll back.
+	e2 := stage.Spawn(component.Position{X: 3, Y: 4})
+	if e2.NetID() != 0 {
+		t.Errorf("expected zero Entity on rollback, got netID=%d alive=%v", e2.NetID(), e2.Alive())
+	}
+}

@@ -28,13 +28,27 @@ type attachFn func(stage *Stage, entity ecs.Entity, v any)
 // passed twice is a programmer error; Spawn panics. Order of args has no
 // semantic effect.
 //
-// Returns the rich Entity wrapper, not the raw ecs.Entity handle.
+// Perf trade-off: each component is attached via a separate world.Unsafe().Add()
+// call, causing one archetype migration per component. Typical 8-component
+// spawns pay 8× the archetype-move cost vs the legacy Map6.NewEntity path.
+// Acceptable at the spawn rates this game runs at (~100/s × 24µs ≈ 0.002% CPU
+// per the spec's perf analysis); revisit before Phase 4 deletes the Map6 path
+// if profiling shows otherwise. See
+// docs/superpowers/specs/2026-05-13-entity-spawn-api-design.md step 6 +
+// perf-analysis section.
+// TODO(spawn-api-phase-4): if profiling regresses, replace the per-component
+// u.Add() walk with a bulk-archetype API (ark exposes Unsafe().AddBatch).
+//
+// Returns the rich Entity wrapper, not the raw ecs.Entity handle. Returns
+// the zero-value Entity when strictNetIDIndex is true and the netID collides
+// with an existing slot (matches Stage.SpawnEntity rollback semantics).
 func (b *Stage) Spawn(components ...any) Entity {
 	var (
-		pos     component.Position
-		hasPos  bool
-		kind    component.EntityKind
-		hasKind bool
+		pos         component.Position
+		hasPos      bool
+		kind        component.EntityKind
+		hasKind     bool
+		hasCollider bool
 	)
 	seen := make(map[reflect.Type]struct{}, len(components))
 	for _, c := range components {
@@ -50,6 +64,8 @@ func (b *Stage) Spawn(components ...any) Entity {
 		case component.EntityKind:
 			kind = v
 			hasKind = true
+		case component.Collider:
+			hasCollider = true
 		}
 	}
 	if !hasPos {
@@ -67,16 +83,13 @@ func (b *Stage) Spawn(components ...any) Entity {
 	}
 
 	// NetworkID + CellCoord are framework-owned, not user-supplied.
-	netIDMap := ecs.NewMap1[component.NetworkID](w)
-	netIDMap.Add(entity, &component.NetworkID{ID: nid})
-	cellMap := ecs.NewMap1[component.CellCoord](w)
-	cellMap.Add(entity, &component.CellCoord{CellX: b.rootCell().X, CellY: b.rootCell().Y})
+	b.netIDMap.Add(entity, &component.NetworkID{ID: nid})
+	b.cellMap.Add(entity, &component.CellCoord{CellX: b.rootCell().X, CellY: b.rootCell().Y})
 
-	if hasKind && b.spatialGrid != nil {
-		colMap := ecs.NewMap1[component.Collider](w)
+	if hasCollider && b.spatialGrid != nil {
 		var radius float32
-		if colMap.HasAll(entity) {
-			radius = colMap.Get(entity).Radius
+		if b.colliderMap.HasAll(entity) {
+			radius = b.colliderMap.Get(entity).Radius
 		}
 		b.spatialGrid.Register(spatial.Entry{
 			Entity: entity,
@@ -86,9 +99,29 @@ func (b *Stage) Spawn(components ...any) Entity {
 		})
 	}
 	_ = kind // invariant check lands in Task 3
+	_ = hasKind
 
 	if b.netIDIdx != nil && nid != 0 {
-		b.netIDIdx.Enter(nid, entity, PresenceLive)
+		res := b.netIDIdx.Enter(nid, entity, PresenceLive)
+		switch res.Action {
+		case ActionInstalled, ActionUpdated:
+			// Normal install; no rollback.
+		case ActionDuplicate:
+			b.eng.Log.Log(CatMeshCell,
+				"[%s] duplicate live spawn blocked: netID=%d", b.cellID, nid)
+			if b.strictNetIDIndex {
+				b.eng.ECS.RemoveEntity(entity)
+				return Entity{}
+			}
+		case ActionRejected:
+			// Local live spawns shouldn't conflict with existing Replica
+			// under normal operation; if they do, strict mode rolls back.
+			// The sanctioned Replica→Live path is PromoteReplicaToLive.
+			if b.strictNetIDIndex && b.eng.ECS.Alive(entity) {
+				b.eng.ECS.RemoveEntity(entity)
+				return Entity{}
+			}
+		}
 	}
 
 	b.eng.Log.Log(CatMeshCell, "[%s] spawned entity netID=%d at (%.0f,%.0f)", b.cellID, nid, pos.X, pos.Y)
