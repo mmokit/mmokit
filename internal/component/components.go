@@ -17,12 +17,14 @@ const (
 // matching TypeScript const block from the same kind registry, so the
 // authoritative source of truth is the RegisterKind call sites.
 const (
-	KindShip      uint8 = iota // 0
-	KindAsteroid               // 1
-	KindStation                // 2
-	KindLootCrate              // 3
-	KindNPC                    // 4
-	KindPOI                    // 5
+	KindShip       uint8 = iota // 0
+	KindAsteroid                // 1
+	KindStation                 // 2
+	KindLootCrate               // 3
+	KindNPC                     // 4
+	KindPOI                     // 5
+	KindAoEMarker               // 6
+	KindProjectile              // 7
 )
 
 // Health represents hit points.
