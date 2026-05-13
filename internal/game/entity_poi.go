@@ -27,21 +27,19 @@ func (gw *GameWorld) spawnPOIs() {
 // SpawnPOI creates a POI entity at the given local position and spawns
 // its roster of NPCs anchored to it. Returns the POI's network ID.
 func (gw *GameWorld) SpawnPOI(x, y float32, poiType uint8, rosterIdx uint16) uint32 {
-	handle := gw.stage.SpawnEntity(
+	e := gw.stage.Spawn(
 		mmokit.Position{X: x, Y: y},
-		mmokit.WithEntityKind(gamecomp.KindPOI),
-		mmokit.WithComponents(),
+		mmokit.EntityKind{Type: gamecomp.KindPOI},
+		gamecomp.POI{
+			Type:         poiType,
+			Status:       gamecomp.POIStatusActive,
+			AnchorRadius: gw.Config.POIAnchorRadius,
+			LeashRadius:  gw.Config.POILeashRadius,
+			RosterDefIdx: rosterIdx,
+		},
 	)
-	entity := mmokit.EntityFromECS(gw.stage, handle)
-	mmokit.Set(entity, gamecomp.POI{
-		Type:         poiType,
-		Status:       gamecomp.POIStatusActive,
-		AnchorRadius: gw.Config.POIAnchorRadius,
-		LeashRadius:  gw.Config.POILeashRadius,
-		RosterDefIdx: rosterIdx,
-	})
 
-	poiNetID := entity.NetID()
+	poiNetID := e.NetID()
 	gw.spawnPOIRoster(x, y, poiNetID, rosterIdx)
 	gw.poiRosters[poiNetID] = gw.collectRosterNetIDs(poiNetID)
 
