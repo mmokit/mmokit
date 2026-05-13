@@ -10,7 +10,6 @@ import (
 	"github.com/zenion/mmoserver/pkg/coords"
 	"github.com/zenion/mmoserver/pkg/engine"
 	"github.com/zenion/mmoserver/pkg/logger"
-	"github.com/zenion/mmoserver/pkg/mmokit"
 	"github.com/zenion/mmoserver/pkg/net"
 	"github.com/zenion/mmoserver/pkg/spatial"
 	pkguniverse "github.com/zenion/mmoserver/pkg/universe"
@@ -44,7 +43,12 @@ func spawnTestEntity(t *testing.T, stage *pkguniverse.Stage, netID uint32) ecs.E
 }
 
 // testKindID is the kind ID used by Spawn-related tests.
-const testKindID mmokit.KindID = 99
+const testKindID uint8 = 99
+
+// testKindHealth is the kind-registered component for testKindID. Tests that
+// only need a "some kind exists" sentinel don't pass it at spawn — under the
+// default InvariantOff mode the framework doesn't require kind components.
+type testKindHealth struct{ Current, Max int32 }
 
 // registerTestKind registers a single-component entity kind (testKindHealth)
 // on the stage so Spawn(stage, testKindID, ...) can attach it.

@@ -51,7 +51,7 @@ func TestHandleAll_RegistersOnAllStages(t *testing.T) {
 		t.Fatalf("expected 2 cells, got %d", len(p.Cells))
 	}
 	for _, cell := range p.Cells {
-		e := mmokit.Spawn(cell.Stage, testKindID, mmokit.Pos{})
+		e := cell.Stage.Spawn(mmokit.Position{}, mmokit.EntityKind{Type: testKindID})
 		e.Send(&allPing{N: 1})
 	}
 
@@ -85,7 +85,7 @@ func TestHandleAll_LateRegistrationStillWorks(t *testing.T) {
 	})
 
 	for _, cell := range p.Cells {
-		e := mmokit.Spawn(cell.Stage, testKindID, mmokit.Pos{})
+		e := cell.Stage.Spawn(mmokit.Position{}, mmokit.EntityKind{Type: testKindID})
 		e.Send(&allPing{N: 1})
 	}
 

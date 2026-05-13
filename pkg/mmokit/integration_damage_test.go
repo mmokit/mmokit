@@ -24,7 +24,7 @@ type intDamage struct {
 	Dealt  float32
 }
 
-const intKind mmokit.KindID = 200
+const intKind uint8 = 200
 
 // registerIntKind registers intKind with intHealth as a kind component.
 func registerIntKind(t *testing.T, stage *pkguniverse.Stage) {
@@ -53,7 +53,11 @@ func TestIntegration_Damage_SameCell(t *testing.T) {
 		msg.Dealt = msg.Amount
 	})
 
-	target := mmokit.Spawn(stage, intKind, mmokit.Pos{}, intHealth{Current: 100, Max: 100})
+	target := stage.Spawn(
+		mmokit.Position{},
+		mmokit.EntityKind{Type: intKind},
+		intHealth{Current: 100, Max: 100},
+	)
 
 	target.Send(&intDamage{Amount: 25})
 
@@ -77,7 +81,11 @@ func TestIntegration_Damage_CrossCell(t *testing.T) {
 		msg.Dealt = msg.Amount
 	})
 
-	target := mmokit.Spawn(cellA, intKind, mmokit.Pos{}, intHealth{Current: 100, Max: 100})
+	target := cellA.Spawn(
+		mmokit.Position{},
+		mmokit.EntityKind{Type: intKind},
+		intHealth{Current: 100, Max: 100},
+	)
 
 	pushBorderReplicaTo(t, cellA, cellB, target.NetID())
 

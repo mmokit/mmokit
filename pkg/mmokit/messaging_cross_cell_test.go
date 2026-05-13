@@ -22,7 +22,7 @@ func TestCrossCellSend_RoutesToAuthoritativeCell(t *testing.T) {
 	registerTestKind(t, cellB)
 
 	// Spawn live on cell A.
-	a := mmokit.Spawn(cellA, testKindID, mmokit.Pos{X: 0, Y: 0})
+	a := cellA.Spawn(mmokit.Position{X: 0, Y: 0}, mmokit.EntityKind{Type: testKindID})
 
 	// Push a border replica of `a` onto cell B.
 	pushBorderReplicaTo(t, cellA, cellB, a.NetID())

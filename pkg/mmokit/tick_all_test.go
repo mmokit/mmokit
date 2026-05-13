@@ -59,7 +59,7 @@ func TestOnTickAll_FiresPerEntityOnAllStages(t *testing.T) {
 	// Spawn one entity per cell with tickComp. Each must increment 4 times.
 	entities := []mmokit.Entity{}
 	for _, cell := range p.Cells {
-		e := mmokit.Spawn(cell.Stage, testKindID, mmokit.Pos{})
+		e := cell.Stage.Spawn(mmokit.Position{}, mmokit.EntityKind{Type: testKindID})
 		mmokit.Set(e, tickComp{N: 0})
 		entities = append(entities, e)
 		runTicks(t, cell.Stage, 4)
@@ -93,7 +93,7 @@ func TestOnTickEachAll_BundleAccessOnAllStages(t *testing.T) {
 
 	entities := []mmokit.Entity{}
 	for _, cell := range p.Cells {
-		e := mmokit.Spawn(cell.Stage, testKindID, mmokit.Pos{})
+		e := cell.Stage.Spawn(mmokit.Position{}, mmokit.EntityKind{Type: testKindID})
 		mmokit.Set(e, tickAccum{Acc: 0})
 		mmokit.Set(e, tickRate{Rate: 2})
 		entities = append(entities, e)

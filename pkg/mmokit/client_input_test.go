@@ -157,7 +157,7 @@ func TestDispatchClientInput_FiresHandler(t *testing.T) {
 	eng := stage.Engine()
 
 	// Spawn a player entity so a PlayerSession can point at it.
-	playerEnt := mmokit.Spawn(stage, testKindID, mmokit.Pos{})
+	playerEnt := stage.Spawn(mmokit.Position{}, mmokit.EntityKind{Type: testKindID})
 
 	// Register a transport on the engine's ConnMgr so DrainInput has
 	// somewhere to read from.
@@ -239,7 +239,7 @@ func TestDispatchClientInput_DropsUntrustedTypeID(t *testing.T) {
 	stage := cell.Stage
 	eng := stage.Engine()
 
-	playerEnt := mmokit.Spawn(stage, testKindID, mmokit.Pos{})
+	playerEnt := stage.Spawn(mmokit.Position{}, mmokit.EntityKind{Type: testKindID})
 
 	tr := &fakeInputTransport{}
 	connMgr := eng.ConnMgr.(*net.ConnManager)
@@ -285,7 +285,7 @@ func TestDispatchClientInput_DropsMalformedFrame(t *testing.T) {
 	stage := cell.Stage
 	eng := stage.Engine()
 
-	playerEnt := mmokit.Spawn(stage, testKindID, mmokit.Pos{})
+	playerEnt := stage.Spawn(mmokit.Position{}, mmokit.EntityKind{Type: testKindID})
 
 	tr := &fakeInputTransport{}
 	connMgr := eng.ConnMgr.(*net.ConnManager)

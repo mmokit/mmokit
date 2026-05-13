@@ -11,7 +11,7 @@ type pingMsg struct{ Note string }
 func TestHandle_RegistersHandlerInvokedBySend(t *testing.T) {
 	stage, _ := newTestStage(t)
 	registerTestKind(t, stage)
-	e := mmokit.Spawn(stage, testKindID, mmokit.Pos{})
+	e := stage.Spawn(mmokit.Position{}, mmokit.EntityKind{Type: testKindID})
 
 	var got string
 	mmokit.Handle(stage, func(target mmokit.Entity, msg *pingMsg) {
@@ -36,7 +36,7 @@ type damageMsg struct {
 func TestSend_HandlerMutatesMessage(t *testing.T) {
 	stage, _ := newTestStage(t)
 	registerTestKind(t, stage)
-	e := mmokit.Spawn(stage, testKindID, mmokit.Pos{})
+	e := stage.Spawn(mmokit.Position{}, mmokit.EntityKind{Type: testKindID})
 
 	mmokit.Handle(stage, func(target mmokit.Entity, msg *damageMsg) {
 		msg.Dealt = msg.Amount

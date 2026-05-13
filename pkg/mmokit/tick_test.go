@@ -28,8 +28,8 @@ type tickComp struct{ N int }
 func TestOnTick_FiresPerEntityWithComponent(t *testing.T) {
 	stage, _ := newTestStage(t)
 	registerTestKind(t, stage)
-	a := mmokit.Spawn(stage, testKindID, mmokit.Pos{})
-	b := mmokit.Spawn(stage, testKindID, mmokit.Pos{})
+	a := stage.Spawn(mmokit.Position{}, mmokit.EntityKind{Type: testKindID})
+	b := stage.Spawn(mmokit.Position{}, mmokit.EntityKind{Type: testKindID})
 	mmokit.Set(a, tickComp{N: 0})
 	mmokit.Set(b, tickComp{N: 0})
 
@@ -53,7 +53,7 @@ type tickRate struct{ Rate float32 }
 func TestOnTickEach_BundleAccess(t *testing.T) {
 	stage, _ := newTestStage(t)
 	registerTestKind(t, stage)
-	e := mmokit.Spawn(stage, testKindID, mmokit.Pos{})
+	e := stage.Spawn(mmokit.Position{}, mmokit.EntityKind{Type: testKindID})
 	mmokit.Set(e, tickAccum{Acc: 0})
 	mmokit.Set(e, tickRate{Rate: 2})
 
