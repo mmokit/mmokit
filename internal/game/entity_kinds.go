@@ -76,6 +76,8 @@ func RegisterEntityKinds(p *mmokit.Process) {
 	)
 
 	mmokit.RegisterKind[POIBundle](p, gamecomp.KindPOI, "POI")
+
+	mmokit.RegisterKind[AoEMarkerBundle](p, gamecomp.KindAoEMarker, "AoEMarker")
 }
 
 // initEntityKinds populates per-stage state that depends on the running

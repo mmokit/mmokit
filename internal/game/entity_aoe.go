@@ -1,0 +1,43 @@
+package game
+
+import (
+	gamecomp "github.com/zenion/mmoserver/internal/component"
+	"github.com/zenion/mmoserver/pkg/mmokit"
+)
+
+// AoEMarkerBundle declares the components an AoEMarker carries. The
+// AoESpec describes the damage payload; Lifetime ticks the cast/delay
+// window; on Lifetime expiry AoESystem applies damage and despawns.
+type AoEMarkerBundle struct {
+	Position *mmokit.Position
+	Lifetime *mmokit.Lifetime
+	Spec     *gamecomp.AoESpec
+}
+
+// SpawnAoEMarker creates an AoEMarker at (x, y) with the given cast
+// duration and damage payload. Returns the spawned entity so callers
+// (e.g. Artillery cast) can store the handle for cancellation.
+//
+// For instant-resolve markers (Kamikaze detonate, projectile splash),
+// pass lifetime = 0 — AoESystem resolves on the next pass within the
+// same tick (registered after the spawner system in factory.go).
+func (gw *GameWorld) SpawnAoEMarker(
+	x, y float32,
+	lifetime float32,
+	radius, damage float32,
+	ownerNetID uint32,
+	factionMask uint8,
+) mmokit.Entity {
+	return gw.stage.Spawn(
+		mmokit.EntityKind{Type: gamecomp.KindAoEMarker},
+		mmokit.Position{X: x, Y: y},
+		mmokit.Lifetime{Remaining: lifetime},
+		gamecomp.AoESpec{
+			Radius:      radius,
+			Damage:      damage,
+			OwnerNetID:  ownerNetID,
+			FactionMask: factionMask,
+			DamageType:  0,
+		},
+	)
+}
