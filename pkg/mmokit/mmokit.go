@@ -426,10 +426,10 @@ type EntityKindDef = universe.EntityKindDef
 // All fields are optional (omit what your game doesn't need).
 type ConsoleOpts = universe.ConsoleOpts
 
-// SpawnResolver resolves a username to a world-space spawn position. Called
-// once per login on the process owning playerDB (typically the coordinator).
-// Returns ok=false when the user has no saved position; the gateway then
-// falls back to Config.DefaultSpawn.
+// SpawnResolver decides the world-space spawn location for a player session
+// at login (or post-death respawn). Games own the full decision (DB lookup,
+// faction-based zones, fallback). Register via Process.OnResolveSpawn. If no
+// resolver is registered, the engine defaults to the center of cell (0,0).
 type SpawnResolver = universe.SpawnResolver
 
 // ---------------------------------------------------------------------------
