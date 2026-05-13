@@ -12,6 +12,8 @@ import (
 	"testing/fstest"
 	"time"
 
+	"github.com/google/uuid"
+
 	"github.com/zenion/mmoserver/pkg/persist"
 )
 
@@ -51,6 +53,7 @@ func TestPlayerRepo_RoundTrip(t *testing.T) {
 
 	now := time.Now().UTC().Truncate(time.Microsecond)
 	snap := &persist.PlayerSnapshot{
+		UserID:    uuid.New(),
 		Username:  "alice",
 		CellID:    "cell_2_1",
 		PosX:      123.5,
@@ -62,9 +65,12 @@ func TestPlayerRepo_RoundTrip(t *testing.T) {
 		t.Fatalf("SaveBatch: %v", err)
 	}
 
-	loaded, err := repo.Load(ctx, "alice")
+	loaded, err := repo.Load(ctx, snap.UserID)
 	if err != nil {
 		t.Fatalf("Load: %v", err)
+	}
+	if loaded.UserID != snap.UserID {
+		t.Errorf("UserID = %v, want %v", loaded.UserID, snap.UserID)
 	}
 	if loaded.Username != snap.Username {
 		t.Errorf("Username = %q, want %q", loaded.Username, snap.Username)
@@ -86,12 +92,45 @@ func TestPlayerRepo_RoundTrip(t *testing.T) {
 	}
 }
 
+func TestPlayerRepo_LoadByUsername(t *testing.T) {
+	s := openTestStore(t)
+	ctx := context.Background()
+	repo := s.Players()
+
+	now := time.Now().UTC().Truncate(time.Microsecond)
+	snap := &persist.PlayerSnapshot{
+		UserID:    uuid.New(),
+		Username:  "bob",
+		CellID:    "cell_0_0",
+		CreatedAt: now,
+		LastLogin: now,
+	}
+	if err := repo.SaveBatch(ctx, []*persist.PlayerSnapshot{snap}); err != nil {
+		t.Fatalf("SaveBatch: %v", err)
+	}
+
+	loaded, err := repo.LoadByUsername(ctx, "bob")
+	if err != nil {
+		t.Fatalf("LoadByUsername: %v", err)
+	}
+	if loaded.UserID != snap.UserID {
+		t.Errorf("UserID = %v, want %v", loaded.UserID, snap.UserID)
+	}
+	if loaded.Username != "bob" {
+		t.Errorf("Username = %q, want %q", loaded.Username, "bob")
+	}
+
+	if _, err := repo.LoadByUsername(ctx, "nobody"); !errors.Is(err, persist.ErrNotFound) {
+		t.Fatalf("LoadByUsername(unknown): expected ErrNotFound, got %v", err)
+	}
+}
+
 func TestPlayerRepo_LoadNotFound(t *testing.T) {
 	s := openTestStore(t)
 	ctx := context.Background()
 	repo := s.Players()
 
-	snap, err := repo.Load(ctx, "nonexistent")
+	snap, err := repo.Load(ctx, uuid.New())
 	if !errors.Is(err, persist.ErrNotFound) {
 		t.Fatalf("expected ErrNotFound, got %v", err)
 	}
@@ -106,11 +145,16 @@ func TestPlayerRepo_LoadAll(t *testing.T) {
 	repo := s.Players()
 
 	now := time.Now().UTC().Truncate(time.Microsecond)
+	uidAlice, uidBob, uidCharlie := uuid.New(), uuid.New(), uuid.New()
 	players := []*persist.PlayerSnapshot{
-		{Username: "alice", CellID: "cell_0_0", PosX: 1, PosY: 2, CreatedAt: now, LastLogin: now},
-		{Username: "bob", CellID: "cell_1_0", PosX: 3, PosY: 4, CreatedAt: now, LastLogin: now},
-		{Username: "charlie", CellID: "cell_1_1", PosX: 5, PosY: 6, CreatedAt: now, LastLogin: now},
+		{UserID: uidAlice, Username: "alice", CellID: "cell_0_0", PosX: 1, PosY: 2, CreatedAt: now, LastLogin: now},
+		{UserID: uidBob, Username: "bob", CellID: "cell_1_0", PosX: 3, PosY: 4, CreatedAt: now, LastLogin: now},
+		{UserID: uidCharlie, Username: "charlie", CellID: "cell_1_1", PosX: 5, PosY: 6, CreatedAt: now, LastLogin: now},
 	}
+	// Pre-sort by UserID so SaveBatch's contract is satisfied.
+	sort.Slice(players, func(i, j int) bool {
+		return players[i].UserID.String() < players[j].UserID.String()
+	})
 	if err := repo.SaveBatch(ctx, players); err != nil {
 		t.Fatalf("SaveBatch: %v", err)
 	}
@@ -126,15 +170,21 @@ func TestPlayerRepo_LoadAll(t *testing.T) {
 	if len(loaded) != 3 {
 		t.Fatalf("LoadAll returned %d players, want 3", len(loaded))
 	}
-	sort.Slice(loaded, func(i, j int) bool {
-		return loaded[i].Username < loaded[j].Username
-	})
-	for i, want := range players {
-		if loaded[i].Username != want.Username {
-			t.Errorf("[%d] Username = %q, want %q", i, loaded[i].Username, want.Username)
+	byUser := make(map[uuid.UUID]*persist.PlayerSnapshot, len(loaded))
+	for _, p := range loaded {
+		byUser[p.UserID] = p
+	}
+	for _, want := range players {
+		got := byUser[want.UserID]
+		if got == nil {
+			t.Errorf("LoadAll missed user %s (username=%s)", want.UserID, want.Username)
+			continue
 		}
-		if loaded[i].CellID != want.CellID {
-			t.Errorf("[%d] CellID = %q, want %q", i, loaded[i].CellID, want.CellID)
+		if got.Username != want.Username {
+			t.Errorf("[%s] Username = %q, want %q", want.UserID, got.Username, want.Username)
+		}
+		if got.CellID != want.CellID {
+			t.Errorf("[%s] CellID = %q, want %q", want.UserID, got.CellID, want.CellID)
 		}
 	}
 }
@@ -176,9 +226,12 @@ func TestPlayerRepo_SaveBatchUnsorted(t *testing.T) {
 	repo := s.Players()
 
 	now := time.Now().UTC()
+	// Pick two UUIDs whose string form is in deliberately reversed order.
+	high := uuid.MustParse("ffffffff-ffff-ffff-ffff-ffffffffffff")
+	low := uuid.MustParse("00000000-0000-0000-0000-000000000001")
 	snapshots := []*persist.PlayerSnapshot{
-		{Username: "zoe", CellID: "cell_0_0", CreatedAt: now, LastLogin: now},
-		{Username: "alice", CellID: "cell_0_0", CreatedAt: now, LastLogin: now},
+		{UserID: high, Username: "zoe", CellID: "cell_0_0", CreatedAt: now, LastLogin: now},
+		{UserID: low, Username: "alice", CellID: "cell_0_0", CreatedAt: now, LastLogin: now},
 	}
 	err := repo.SaveBatch(ctx, snapshots)
 	if err == nil {
@@ -196,7 +249,9 @@ func TestPlayerRepo_SaveBatchUpsert(t *testing.T) {
 	repo := s.Players()
 
 	now := time.Now().UTC().Truncate(time.Microsecond)
+	userID := uuid.New()
 	snap := &persist.PlayerSnapshot{
+		UserID:    userID,
 		Username:  "dave",
 		CellID:    "cell_0_0",
 		PosX:      10,
@@ -209,7 +264,8 @@ func TestPlayerRepo_SaveBatchUpsert(t *testing.T) {
 	}
 
 	snap2 := &persist.PlayerSnapshot{
-		Username:  "dave",
+		UserID:    userID,
+		Username:  "dave-renamed", // verify the username column upserts too
 		CellID:    "cell_1_1",
 		PosX:      99,
 		PosY:      77,
@@ -220,9 +276,12 @@ func TestPlayerRepo_SaveBatchUpsert(t *testing.T) {
 		t.Fatalf("second SaveBatch: %v", err)
 	}
 
-	loaded, err := repo.Load(ctx, "dave")
+	loaded, err := repo.Load(ctx, userID)
 	if err != nil {
 		t.Fatalf("Load: %v", err)
+	}
+	if loaded.Username != "dave-renamed" {
+		t.Errorf("Username = %q, want %q (upsert should overwrite)", loaded.Username, "dave-renamed")
 	}
 	if loaded.CellID != "cell_1_1" {
 		t.Errorf("CellID = %q, want %q (upsert should overwrite)", loaded.CellID, "cell_1_1")
@@ -238,8 +297,10 @@ func TestPlayerRepo_DebugFlagsRoundtrip(t *testing.T) {
 	repo := s.Players()
 
 	const username = "alice-debug"
+	userID := uuid.New()
 	now := time.Now().UTC().Truncate(time.Microsecond)
 	if err := repo.SaveBatch(ctx, []*persist.PlayerSnapshot{{
+		UserID:    userID,
 		Username:  username,
 		CellID:    "cell_0_0",
 		PosX:      100,
@@ -284,9 +345,12 @@ func TestPlayerRepo_DebugFlagsRoundtrip(t *testing.T) {
 		t.Errorf("after clear: got %v, want []", got)
 	}
 
-	// Unknown user.
+	// Unknown user: Load returns ErrNotFound and Save returns ErrNotFound.
 	if _, err := repo.LoadDebugFlags(ctx, "no-such-user"); !errors.Is(err, persist.ErrNotFound) {
-		t.Errorf("unknown user: got %v, want ErrNotFound", err)
+		t.Errorf("LoadDebugFlags unknown: got %v, want ErrNotFound", err)
+	}
+	if err := repo.SaveDebugFlags(ctx, "no-such-user", []string{"topology"}); !errors.Is(err, persist.ErrNotFound) {
+		t.Errorf("SaveDebugFlags unknown: got %v, want ErrNotFound", err)
 	}
 }
 
@@ -296,8 +360,10 @@ func TestPlayerRepo_LoadIncludesDebugFlags(t *testing.T) {
 	repo := s.Players()
 
 	const username = "alice-debug-load"
+	userID := uuid.New()
 	now := time.Now().UTC().Truncate(time.Microsecond)
 	if err := repo.SaveBatch(ctx, []*persist.PlayerSnapshot{{
+		UserID:     userID,
 		Username:   username,
 		CellID:     "cell_0_0",
 		PosX:       100,
@@ -308,7 +374,7 @@ func TestPlayerRepo_LoadIncludesDebugFlags(t *testing.T) {
 	}}); err != nil {
 		t.Fatalf("SaveBatch: %v", err)
 	}
-	snap, err := repo.Load(ctx, username)
+	snap, err := repo.Load(ctx, userID)
 	if err != nil {
 		t.Fatalf("Load: %v", err)
 	}

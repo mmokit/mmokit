@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	gamepersist "github.com/zenion/mmoserver/internal/persist"
@@ -61,14 +62,18 @@ func reset(t *testing.T, pool *pgxpool.Pool) {
 	}
 }
 
-// seedEnginePlayer inserts an engine.players row for the given username
-// so a game-side player_state row referencing it can satisfy the FK.
-func seedEnginePlayer(t *testing.T, pool *pgxpool.Pool, username string) {
+// seedEnginePlayer inserts an engine.players row for the given user_id +
+// username so a game-side player_state row referencing it can satisfy
+// the FK. Returns the user_id so callers can key their PlayerStateSnapshots
+// off it.
+func seedEnginePlayer(t *testing.T, pool *pgxpool.Pool, username string) uuid.UUID {
 	t.Helper()
+	uid := uuid.New()
 	if _, err := pool.Exec(context.Background(),
-		`INSERT INTO engine.players (username) VALUES ($1)`, username); err != nil {
+		`INSERT INTO engine.players (user_id, username) VALUES ($1, $2)`, uid, username); err != nil {
 		t.Fatalf("seed engine player %q: %v", username, err)
 	}
+	return uid
 }
 
 // ---------------------------------------------------------------------------
@@ -80,10 +85,10 @@ func TestPlayerStateRepo_RoundTrip(t *testing.T) {
 	ctx := context.Background()
 	repo := store.PlayerState()
 
-	seedEnginePlayer(t, pool, "alice")
+	uid := seedEnginePlayer(t, pool, "alice")
 
 	snap := &gamepersist.PlayerStateSnapshot{
-		Username:   "alice",
+		UserID:     uid,
 		Currencies: map[uint32]int64{1: 500, 2: 1200},
 		Cargo:      map[uint32]int32{10: 3, 11: 7},
 		Bank:       map[uint32]int32{20: 1, 21: 99},
@@ -98,12 +103,12 @@ func TestPlayerStateRepo_RoundTrip(t *testing.T) {
 		t.Fatalf("SaveBatch: %v", err)
 	}
 
-	loaded, err := repo.Load(ctx, "alice")
+	loaded, err := repo.Load(ctx, uid)
 	if err != nil {
 		t.Fatalf("Load: %v", err)
 	}
-	if loaded.Username != snap.Username {
-		t.Errorf("Username = %q, want %q", loaded.Username, snap.Username)
+	if loaded.UserID != uid {
+		t.Errorf("UserID = %v, want %v", loaded.UserID, uid)
 	}
 	if loaded.Currencies[1] != 500 || loaded.Currencies[2] != 1200 {
 		t.Errorf("Currencies = %v, want %v", loaded.Currencies, snap.Currencies)
@@ -124,7 +129,7 @@ func TestPlayerStateRepo_LoadNotFound(t *testing.T) {
 	ctx := context.Background()
 	repo := store.PlayerState()
 
-	snap, err := repo.Load(ctx, "nonexistent")
+	snap, err := repo.Load(ctx, uuid.New())
 	if !errors.Is(err, gamepersist.ErrNotFound) {
 		t.Fatalf("expected ErrNotFound, got %v", err)
 	}
@@ -138,22 +143,35 @@ func TestPlayerStateRepo_LoadAll(t *testing.T) {
 	ctx := context.Background()
 	repo := store.PlayerState()
 
-	usernames := []string{"alice", "bob", "charlie"}
-	for _, u := range usernames {
-		seedEnginePlayer(t, pool, u)
+	type seed struct {
+		username string
+		uid      uuid.UUID
+		currency int64
 	}
-	snapshots := []*gamepersist.PlayerStateSnapshot{
-		{Username: "alice", Currencies: map[uint32]int64{1: 10}},
-		{Username: "bob", Currencies: map[uint32]int64{1: 20}},
-		{Username: "charlie", Currencies: map[uint32]int64{1: 30}},
+	seeds := []seed{
+		{username: "alice", currency: 10},
+		{username: "bob", currency: 20},
+		{username: "charlie", currency: 30},
 	}
+	for i := range seeds {
+		seeds[i].uid = seedEnginePlayer(t, pool, seeds[i].username)
+	}
+	snapshots := make([]*gamepersist.PlayerStateSnapshot, 0, len(seeds))
+	for _, sd := range seeds {
+		snapshots = append(snapshots, &gamepersist.PlayerStateSnapshot{
+			UserID:     sd.uid,
+			Currencies: map[uint32]int64{1: sd.currency},
+		})
+	}
+	// SaveBatch contract: sort by UserID.
+	sortSnapshots(snapshots)
 	if err := repo.SaveBatch(ctx, snapshots); err != nil {
 		t.Fatalf("SaveBatch: %v", err)
 	}
 
-	seen := make(map[string]int64)
+	seen := make(map[uuid.UUID]int64)
 	if err := repo.LoadAll(ctx, func(s *gamepersist.PlayerStateSnapshot) error {
-		seen[s.Username] = s.Currencies[1]
+		seen[s.UserID] = s.Currencies[1]
 		return nil
 	}); err != nil {
 		t.Fatalf("LoadAll: %v", err)
@@ -161,13 +179,23 @@ func TestPlayerStateRepo_LoadAll(t *testing.T) {
 	if len(seen) != 3 {
 		t.Fatalf("LoadAll returned %d players, want 3", len(seen))
 	}
-	for _, u := range usernames {
-		if _, ok := seen[u]; !ok {
-			t.Errorf("LoadAll missed user %q", u)
+	for _, sd := range seeds {
+		got, ok := seen[sd.uid]
+		if !ok {
+			t.Errorf("LoadAll missed user %q (uid=%s)", sd.username, sd.uid)
+			continue
+		}
+		if got != sd.currency {
+			t.Errorf("LoadAll[%s]: got currency=%d, want %d", sd.username, got, sd.currency)
 		}
 	}
-	if seen["alice"] != 10 || seen["bob"] != 20 || seen["charlie"] != 30 {
-		t.Errorf("LoadAll currencies = %v", seen)
+}
+
+func sortSnapshots(snapshots []*gamepersist.PlayerStateSnapshot) {
+	for i := 1; i < len(snapshots); i++ {
+		for j := i; j > 0 && snapshots[j-1].UserID.String() > snapshots[j].UserID.String(); j-- {
+			snapshots[j-1], snapshots[j] = snapshots[j], snapshots[j-1]
+		}
 	}
 }
 
@@ -189,10 +217,10 @@ func TestPlayerStateRepo_SaveBatchUpsert(t *testing.T) {
 	ctx := context.Background()
 	repo := store.PlayerState()
 
-	seedEnginePlayer(t, pool, "dave")
+	uid := seedEnginePlayer(t, pool, "dave")
 
 	first := &gamepersist.PlayerStateSnapshot{
-		Username:   "dave",
+		UserID:     uid,
 		Currencies: map[uint32]int64{1: 100},
 		Cargo:      map[uint32]int32{10: 1},
 		Bank:       map[uint32]int32{20: 5},
@@ -203,7 +231,7 @@ func TestPlayerStateRepo_SaveBatchUpsert(t *testing.T) {
 	}
 
 	second := &gamepersist.PlayerStateSnapshot{
-		Username:   "dave",
+		UserID:     uid,
 		Currencies: map[uint32]int64{1: 999},
 		Cargo:      map[uint32]int32{10: 42, 11: 7},
 		Bank:       map[uint32]int32{20: 50},
@@ -213,7 +241,7 @@ func TestPlayerStateRepo_SaveBatchUpsert(t *testing.T) {
 		t.Fatalf("second SaveBatch: %v", err)
 	}
 
-	loaded, err := repo.Load(ctx, "dave")
+	loaded, err := repo.Load(ctx, uid)
 	if err != nil {
 		t.Fatalf("Load: %v", err)
 	}
@@ -236,27 +264,26 @@ func TestPlayerStateRepo_FK_CascadesOnEngineDelete(t *testing.T) {
 	ctx := context.Background()
 	repo := store.PlayerState()
 
-	const username = "eve"
-	seedEnginePlayer(t, pool, username)
+	uid := seedEnginePlayer(t, pool, "eve")
 	if err := repo.SaveBatch(ctx, []*gamepersist.PlayerStateSnapshot{{
-		Username:   username,
+		UserID:     uid,
 		Currencies: map[uint32]int64{1: 42},
 	}}); err != nil {
 		t.Fatalf("SaveBatch: %v", err)
 	}
 
 	// Sanity: row exists before the engine row is removed.
-	if _, err := repo.Load(ctx, username); err != nil {
+	if _, err := repo.Load(ctx, uid); err != nil {
 		t.Fatalf("Load before delete: %v", err)
 	}
 
 	if _, err := pool.Exec(ctx,
-		`DELETE FROM engine.players WHERE username = $1`, username); err != nil {
+		`DELETE FROM engine.players WHERE user_id = $1`, uid); err != nil {
 		t.Fatalf("delete engine player: %v", err)
 	}
 
 	// FK ON DELETE CASCADE must have wiped the game state row.
-	if _, err := repo.Load(ctx, username); !errors.Is(err, gamepersist.ErrNotFound) {
+	if _, err := repo.Load(ctx, uid); !errors.Is(err, gamepersist.ErrNotFound) {
 		t.Fatalf("expected ErrNotFound after engine row delete (CASCADE), got %v", err)
 	}
 }
