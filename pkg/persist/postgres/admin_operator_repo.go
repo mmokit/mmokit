@@ -22,7 +22,7 @@ const adminOperatorSelectColumns = `username, password_hash, grants, created_at,
 
 func (r *adminOperatorRepo) GetByUsername(ctx context.Context, username string) (*persist.AdminOperator, error) {
 	row := r.pool.QueryRow(ctx,
-		`SELECT `+adminOperatorSelectColumns+` FROM admin_operators WHERE username = $1`,
+		`SELECT `+adminOperatorSelectColumns+` FROM engine.admin_operators WHERE username = $1`,
 		username,
 	)
 	op, err := scanAdminOperator(row)
@@ -41,7 +41,7 @@ func (r *adminOperatorRepo) Create(ctx context.Context, op *persist.AdminOperato
 		return fmt.Errorf("adminOperatorRepo.Create marshal grants: %w", err)
 	}
 	_, err = r.pool.Exec(ctx,
-		`INSERT INTO admin_operators (username, password_hash, grants) VALUES ($1, $2, $3::jsonb)`,
+		`INSERT INTO engine.admin_operators (username, password_hash, grants) VALUES ($1, $2, $3::jsonb)`,
 		op.Username, op.PasswordHash, grantsJSON,
 	)
 	if err != nil {
@@ -52,7 +52,7 @@ func (r *adminOperatorRepo) Create(ctx context.Context, op *persist.AdminOperato
 
 func (r *adminOperatorRepo) List(ctx context.Context) ([]*persist.AdminOperator, error) {
 	rows, err := r.pool.Query(ctx,
-		`SELECT `+adminOperatorSelectColumns+` FROM admin_operators ORDER BY username`,
+		`SELECT `+adminOperatorSelectColumns+` FROM engine.admin_operators ORDER BY username`,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("adminOperatorRepo.List: %w", err)
@@ -75,7 +75,7 @@ func (r *adminOperatorRepo) List(ctx context.Context) ([]*persist.AdminOperator,
 
 func (r *adminOperatorRepo) Delete(ctx context.Context, username string) error {
 	if _, err := r.pool.Exec(ctx,
-		`DELETE FROM admin_operators WHERE username = $1`, username,
+		`DELETE FROM engine.admin_operators WHERE username = $1`, username,
 	); err != nil {
 		return fmt.Errorf("adminOperatorRepo.Delete %q: %w", username, err)
 	}
@@ -84,7 +84,7 @@ func (r *adminOperatorRepo) Delete(ctx context.Context, username string) error {
 
 func (r *adminOperatorRepo) UpdatePasswordHash(ctx context.Context, username, hash string) error {
 	tag, err := r.pool.Exec(ctx,
-		`UPDATE admin_operators SET password_hash = $1, updated_at = NOW() WHERE username = $2`,
+		`UPDATE engine.admin_operators SET password_hash = $1, updated_at = NOW() WHERE username = $2`,
 		hash, username,
 	)
 	if err != nil {
@@ -98,7 +98,7 @@ func (r *adminOperatorRepo) UpdatePasswordHash(ctx context.Context, username, ha
 
 func (r *adminOperatorRepo) Count(ctx context.Context) (int, error) {
 	var n int
-	if err := r.pool.QueryRow(ctx, `SELECT COUNT(*) FROM admin_operators`).Scan(&n); err != nil {
+	if err := r.pool.QueryRow(ctx, `SELECT COUNT(*) FROM engine.admin_operators`).Scan(&n); err != nil {
 		return 0, fmt.Errorf("adminOperatorRepo.Count: %w", err)
 	}
 	return n, nil
