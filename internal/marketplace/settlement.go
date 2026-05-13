@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"time"
 
+	gamepersist "github.com/zenion/mmoserver/internal/persist"
 	"github.com/zenion/mmoserver/pkg/mmokit"
-	"github.com/zenion/mmoserver/pkg/persist"
 )
 
 // logCatMarket is the log category used by the marketplace service.
@@ -36,7 +36,7 @@ type Settlement struct {
 	cfg        mmokit.OrderBookConfig
 	currencyID uint32 // settlement currency item ID
 	log        *mmokit.Logger
-	market     persist.MarketRepository
+	market     gamepersist.MarketRepository
 
 	// notify sends a typed trade-fill notification to an online player.
 	// Wired by the host process to mmokit.SendEvent against the cell stage
@@ -51,7 +51,7 @@ func NewSettlement(
 	cfg mmokit.OrderBookConfig,
 	currencyID uint32,
 	log *mmokit.Logger,
-	market persist.MarketRepository,
+	market gamepersist.MarketRepository,
 	notify func(username string, msg *MarketTradeNotification),
 ) *Settlement {
 	return &Settlement{
@@ -476,7 +476,7 @@ func (st *Settlement) LoadAll(ctx context.Context) error {
 	}
 
 	count := 0
-	err = st.market.LoadActiveOrders(ctx, func(rec *persist.OrderRecord) error {
+	err = st.market.LoadActiveOrders(ctx, func(rec *gamepersist.OrderRecord) error {
 		st.ob.InsertLoadedOrder(recordToOrder(rec))
 		count++
 		return nil
@@ -495,8 +495,8 @@ func (st *Settlement) LoadAll(ctx context.Context) error {
 // seconds; the repository type uses time.Time. ExpiresAt == 0 means
 // "never expires" → return a zero-value time so the persist layer
 // writes NULL.
-func orderToRecord(o *mmokit.Order) *persist.OrderRecord {
-	rec := &persist.OrderRecord{
+func orderToRecord(o *mmokit.Order) *gamepersist.OrderRecord {
+	rec := &gamepersist.OrderRecord{
 		ID:         o.ID,
 		Side:       uint8(o.Side),
 		Owner:      o.Owner,
@@ -515,7 +515,7 @@ func orderToRecord(o *mmokit.Order) *persist.OrderRecord {
 
 // recordToOrder is the inverse of orderToRecord. Used during LoadAll
 // to rebuild the in-memory book from persisted records.
-func recordToOrder(r *persist.OrderRecord) *mmokit.Order {
+func recordToOrder(r *gamepersist.OrderRecord) *mmokit.Order {
 	o := &mmokit.Order{
 		ID:         r.ID,
 		Side:       mmokit.OrderSide(r.Side),
@@ -536,8 +536,8 @@ func recordToOrder(r *persist.OrderRecord) *mmokit.Order {
 // tradeToRecord converts an in-memory mmokit.Trade to a persist
 // TradeRecord. The trade ID is dropped — market_trades.id is
 // BIGSERIAL and never referenced from memory.
-func tradeToRecord(t *mmokit.Trade) *persist.TradeRecord {
-	return &persist.TradeRecord{
+func tradeToRecord(t *mmokit.Trade) *gamepersist.TradeRecord {
+	return &gamepersist.TradeRecord{
 		ItemID:     t.ItemID,
 		LocationID: t.LocationID,
 		Price:      t.Price,
