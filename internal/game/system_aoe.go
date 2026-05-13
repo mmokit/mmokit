@@ -45,16 +45,14 @@ func (s *AoESystem) Update(dt float32) {
 			continue
 		}
 		marker := mmokit.EntityFromECS(gw.stage, entity)
-		s.resolveMarker(marker, b.Pos, b.Spec)
+		s.resolveMarker(b.Pos, b.Spec)
 		s.Commands().Despawn(marker.Handle())
 	}
 }
 
 // resolveMarker queries the spatial grid and applies damage to all
 // eligible victims in radius. Owner is always skipped.
-func (s *AoESystem) resolveMarker(marker mmokit.Entity,
-	pos *mmokit.Position, spec *gamecomp.AoESpec,
-) {
+func (s *AoESystem) resolveMarker(pos *mmokit.Position, spec *gamecomp.AoESpec) {
 	gw := s.gw
 	r2 := spec.Radius * spec.Radius
 
