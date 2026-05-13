@@ -225,6 +225,31 @@ func (s *AbilitySystem) executeAbility(action abilityAction) bool {
 		gw.eng.Log.Log(CatCombatAbility, "ability %s: %d speed x%.1f for %.1fs",
 			params.Name, action.casterNetID, params.SpeedMult, params.BoostDuration)
 
+	// --- Projectile weapons (PVE v2) ---
+	case item.AbilityTypePlasmaShot:
+		s.fireProjectile(casterE, params, gamecomp.ProjectileTypePlasma)
+		gw.eng.Log.Log(CatCombatAbility, "ability %s: %d fired projectile dmg=%.0f speed=%.0f",
+			params.Name, action.casterNetID, params.Damage, params.ProjectileSpeed)
+
+	case item.AbilityTypeMortarShell:
+		s.fireProjectile(casterE, params, gamecomp.ProjectileTypeMortar)
+		gw.eng.Log.Log(CatCombatAbility, "ability %s: %d fired mortar dmg=%.0f splash=%.0f",
+			params.Name, action.casterNetID, params.Damage, params.SplashRadius)
+
+	// --- Homing missile — requires active target lock (Task 20) ---
+	case item.AbilityTypeHomingMissile:
+		if _, ok := activeLockTarget(gw, lock); !ok {
+			// No active lock — refuse cast. Returning false skips the
+			// cooldown assignment in Update, so the ability stays ready.
+			gw.eng.Log.Log(CatCombatAbility, "ability %s: %d cancelled (no lock)",
+				params.Name, action.casterNetID)
+			fired = false
+			break
+		}
+		s.fireProjectile(casterE, params, gamecomp.ProjectileTypeMissile)
+		gw.eng.Log.Log(CatCombatAbility, "ability %s: %d fired homing missile dmg=%.0f",
+			params.Name, action.casterNetID, params.Damage)
+
 	// --- Mining beam toggle ---
 	case item.AbilityTypeMiningBeam:
 		laser := mmokit.Get[gamecomp.MiningLaser](casterE)
@@ -342,6 +367,67 @@ func (s *AbilitySystem) executeAbility(action abilityAction) bool {
 	// see Plan F notes. MiningBeam toggle now broadcasts via BeamToggle
 	// (Plan G).
 	return fired
+}
+
+// fireProjectile creates a Projectile entity travelling in the caster's
+// facing direction (or toward the active target if a lock is present).
+// projType is one of gamecomp.ProjectileType* — purely a visual variant
+// hint for the client renderer.
+//
+// Called from the deferred-execution stage of AbilitySystem.Update, so
+// the world lock from the query iteration has been released and it is
+// safe to spawn entities directly.
+func (s *AbilitySystem) fireProjectile(
+	caster mmokit.Entity, params *item.AbilityParams, projType uint8,
+) {
+	gw := s.gw
+	casterPos := mmokit.Get[mmokit.Position](caster)
+	casterRot := mmokit.Get[mmokit.Rotation](caster)
+	if casterPos == nil || casterRot == nil {
+		return
+	}
+
+	// Default direction: muzzle-forward.
+	dirX := float32(math.Cos(float64(casterRot.Angle)))
+	dirY := float32(math.Sin(float64(casterRot.Angle)))
+	var targetNetID uint32
+
+	// If a lock is active, aim at the target's current position.
+	if lock := mmokit.Get[gamecomp.TargetLock](caster); lock != nil {
+		if target, ok := activeLockTarget(gw, lock); ok {
+			if tpos := mmokit.Get[mmokit.Position](target); tpos != nil {
+				dx := tpos.X - casterPos.X
+				dy := tpos.Y - casterPos.Y
+				norm := float32(math.Sqrt(float64(dx*dx + dy*dy)))
+				if norm > 1e-3 {
+					dirX, dirY = dx/norm, dy/norm
+				}
+				if projType == gamecomp.ProjectileTypeMissile {
+					targetNetID = target.NetID()
+				}
+			}
+		}
+	}
+
+	lifetime := float32(0)
+	if params.ProjectileSpeed > 0 {
+		lifetime = params.Range / params.ProjectileSpeed
+	}
+
+	spec := gamecomp.ProjectileSpec{
+		OwnerNetID:   caster.NetID(),
+		TargetNetID:  targetNetID,
+		Damage:       params.Damage,
+		SplashRadius: params.SplashRadius,
+		SplashDamage: params.SplashDamage,
+		MaxTurnRate:  params.HomingMaxTurnRate,
+		Type:         projType,
+	}
+	gw.SpawnProjectile(
+		casterPos.X, casterPos.Y,
+		dirX*params.ProjectileSpeed, dirY*params.ProjectileSpeed,
+		lifetime, spec,
+	)
 }
 
 // slotToBeamIndex maps an ability slot to a mining beam index.

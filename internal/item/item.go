@@ -52,6 +52,12 @@ const (
 	AbilityTypePlasmaBolt    AbilityType = 7 // hitscan damage
 	AbilityTypePlasmaTorpedo AbilityType = 8 // hitscan damage + bonus vs unshielded
 
+	// PVE v2 — travel-time / projectile weapons.
+	AbilityTypePlasmaShot    AbilityType = 9  // travel-time projectile, single target
+	AbilityTypeHomingMissile AbilityType = 10 // homing projectile, splash on impact
+	AbilityTypeSustainedBeam AbilityType = 11 // channeled hitscan with arc lock (Task 21)
+	AbilityTypeMortarShell   AbilityType = 12 // lobbed projectile with telegraphed splash
+
 	// Shield abilities
 	AbilityTypeEmergencyShield AbilityType = 20 // restore shield + Fortified buff
 	AbilityTypeHardenedShield  AbilityType = 21 // restore shield + stronger Fortified buff
@@ -89,6 +95,18 @@ type AbilityParams struct {
 	MiningRate  float32 // units/sec for continuous extraction
 	MiningRange float32 // max mining distance
 	MiningYield float32 // bonus resource amount for extract pulse
+
+	// Projectile / splash / homing fields (PVE v2)
+	ProjectileSpeed   float32 // u/s; for projectile-firing abilities
+	SplashRadius      float32 // u; 0 = single-target
+	SplashDamage      float32 // damage applied at splash radius
+	HomingMaxTurnRate float32 // rad/s; 0 = no homing
+	RequiresLock      bool    // true = ability is refused (no cooldown) if no active TargetLock
+
+	// Channel-related fields (used by Task 21's SustainedBeam handler).
+	ChannelDuration float32 // seconds of max channel
+	ChannelTickRate float32 // ticks per second of damage
+	BeamHalfArcRad  float32 // ±arc tolerance from caster facing; lose channel if target leaves arc
 }
 
 // EquipData defines the abilities and passive stats granted by an equipment item.
@@ -210,6 +228,52 @@ func doInit() {
 			Secondary: &AbilityParams{
 				Type: AbilityTypePlasmaTorpedo, Name: "Plasma Torpedo",
 				Damage: 60, BonusDamage: 30, Range: 30.0, Cooldown: 20.0,
+			},
+		},
+	})
+	// PVE v2 — projectile weapons. Pairs PlasmaShot (primary, fast
+	// travel-time bolts) with HomingMissile (secondary, lock-required
+	// homing splash munition).
+	register(&ItemDef{
+		ID: 107, Name: "Plasma Cannon", Category: CategoryEquipment,
+		MassPerUnit: 5.0, EquipSlot: SlotWeapon,
+		Equip: &EquipData{
+			Primary: AbilityParams{
+				Type: AbilityTypePlasmaShot, Name: "Plasma Shot",
+				Damage: 25, Range: 700, Cooldown: 1.5,
+				ProjectileSpeed: 700,
+			},
+			Secondary: &AbilityParams{
+				Type: AbilityTypeHomingMissile, Name: "Homing Missile",
+				Damage: 80, Range: 1500, Cooldown: 8,
+				ProjectileSpeed:   200,
+				SplashRadius:      30,
+				SplashDamage:      20,
+				HomingMaxTurnRate: 2.09,
+				RequiresLock:      true,
+			},
+		},
+	})
+	// PVE v2 — channeled + lobbed weapons. Pairs SustainedBeam
+	// (primary; channeled, Task 21) with MortarShell (secondary; lobbed
+	// splash munition with no lock requirement).
+	register(&ItemDef{
+		ID: 108, Name: "Beam-Mortar Battery", Category: CategoryEquipment,
+		MassPerUnit: 5.0, EquipSlot: SlotWeapon,
+		Equip: &EquipData{
+			Primary: AbilityParams{
+				Type: AbilityTypeSustainedBeam, Name: "Sustained Beam",
+				Damage: 4, Range: 500, Cooldown: 4,
+				ChannelDuration: 3,
+				ChannelTickRate: 10,
+				BeamHalfArcRad:  0.5236,
+			},
+			Secondary: &AbilityParams{
+				Type: AbilityTypeMortarShell, Name: "Mortar Shell",
+				Damage: 80, Range: 600, Cooldown: 6,
+				ProjectileSpeed: 400,
+				SplashRadius:    80,
+				SplashDamage:    60,
 			},
 		},
 	})
