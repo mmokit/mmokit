@@ -85,7 +85,7 @@ func TestOnTickEachAll_BundleAccessOnAllStages(t *testing.T) {
 		A *tickAccum
 		R *tickRate
 	}
-	mmokit.OnTickEachAll[bundle](p, func(e mmokit.Entity, b *bundle, dt float32) {
+	mmokit.OnTickEachAll(p, func(e mmokit.Entity, b *bundle, dt float32) {
 		b.A.Acc += b.R.Rate * dt
 	})
 
