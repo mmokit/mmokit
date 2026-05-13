@@ -8,7 +8,7 @@ import (
 	"github.com/google/uuid"
 )
 
-// MuteGlobalChannelID is the sentinel UUID used in the chat_mutes
+// MuteGlobalChannelID is the sentinel UUID used in the chat.mutes
 // composite PK to represent a global (channel-wide) mute. Avoids
 // Postgres NULL-in-PK semantics.
 var MuteGlobalChannelID = uuid.MustParse("00000000-0000-0000-0000-000000000000")
@@ -21,7 +21,7 @@ var (
 	ErrMuteNotFound     = errors.New("chat: mute not found")
 )
 
-// Channel mirrors chat_channels.
+// Channel mirrors chat.channels.
 type Channel struct {
 	ChannelID       uuid.UUID
 	Slug            string
@@ -34,7 +34,7 @@ type Channel struct {
 	UpdatedAt       time.Time
 }
 
-// ChannelMember mirrors chat_channel_members.
+// ChannelMember mirrors chat.channel_members.
 type ChannelMember struct {
 	ChannelID    uuid.UUID
 	UserID       uuid.UUID
@@ -45,7 +45,7 @@ type ChannelMember struct {
 	BannedReason string
 }
 
-// Mute mirrors chat_mutes. ChannelID == MuteGlobalChannelID denotes
+// Mute mirrors chat.mutes. ChannelID == MuteGlobalChannelID denotes
 // a global mute for that user across all channels.
 type Mute struct {
 	UserID    uuid.UUID

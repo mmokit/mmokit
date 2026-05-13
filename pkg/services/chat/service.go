@@ -31,7 +31,7 @@ type Service struct {
 	membership  map[uuid.UUID]map[uuid.UUID]string // channelID → userID → role
 	userChans   map[uuid.UUID]map[uuid.UUID]struct{}
 	mutes       map[muteKey]Mute
-	bans        map[banKey]banEntry               // {channelID,userID} → ban info; hydrated from chat_channel_members at Init
+	bans        map[banKey]banEntry               // {channelID,userID} → ban info; hydrated from chat.channel_members at Init
 	online      map[uuid.UUID]uint32              // userID → connID
 	connIndex   map[uint32]uuid.UUID              // connID → userID
 	usernames   map[uuid.UUID]string              // userID → username (cached at session-enter)
@@ -55,7 +55,7 @@ type Service struct {
 type muteKey struct{ UserID, ChannelID uuid.UUID }
 type slowModeKey struct{ ChannelID, UserID uuid.UUID }
 
-// banKey identifies a per-channel ban. Hydrated from chat_channel_members
+// banKey identifies a per-channel ban. Hydrated from chat.channel_members
 // rows whose banned_until > NOW at Init. Helpers for ban-check land in
 // Phase 9; the underlying state lives here so HandleJoin (Phase 6.2) can
 // consult it.

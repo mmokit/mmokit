@@ -17,7 +17,7 @@ import (
 )
 
 // openTestRepo opens a chat.Repository backed by the test Postgres instance.
-// The chat migrations are applied via WithExtraMigrations. The chat_*
+// The chat migrations are applied via WithExtraMigrations. The chat.*
 // tables are truncated on every call so each test starts with a clean slate.
 func openTestRepo(t *testing.T) (chat.Repository, func()) {
 	t.Helper()
@@ -33,7 +33,7 @@ func openTestRepo(t *testing.T) (chat.Repository, func()) {
 		t.Fatalf("Open: %v", err)
 	}
 	pool := store.Pool()
-	if _, err := pool.Exec(ctx, `TRUNCATE chat_channels, chat_channel_members, chat_mutes`); err != nil {
+	if _, err := pool.Exec(ctx, `TRUNCATE chat.channels, chat.channel_members, chat.mutes`); err != nil {
 		t.Fatalf("truncate chat tables: %v", err)
 	}
 	return chatpg.New(pool), store.Close

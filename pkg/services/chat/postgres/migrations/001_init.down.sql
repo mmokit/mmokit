@@ -1,3 +1,4 @@
-DROP TABLE IF EXISTS chat_mutes;
-DROP TABLE IF EXISTS chat_channel_members;
-DROP TABLE IF EXISTS chat_channels;
+DROP TABLE IF EXISTS chat.mutes;
+DROP TABLE IF EXISTS chat.channel_members;
+DROP TABLE IF EXISTS chat.channels;
+DROP SCHEMA IF EXISTS chat;

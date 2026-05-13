@@ -129,7 +129,7 @@ func (s *Service) HandleUnregisterChannel(opCtx *ops.OpContext, req *ChatUnregis
 		return errResp[ChatUnregisterChannelResponse](ChatErrorChannelNotFound, "channel not found", 0)
 	}
 
-	// Persist deletion (cascades chat_channel_members rows on the FK).
+	// Persist deletion (cascades chat.channel_members rows on the FK).
 	if err := s.repo.DeleteChannel(context.Background(), chID); err != nil && err != ErrChannelNotFound {
 		return errResp[ChatUnregisterChannelResponse](ChatErrorInternal, "delete: "+err.Error(), 0)
 	}
