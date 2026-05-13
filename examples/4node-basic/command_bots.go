@@ -240,17 +240,17 @@ func spawnBotsOnLoop(cell *mmokit.Cell, count int) int {
 		ty := minY + padY + rng.Float32()*(sizeY-2*padY)
 		retarget := uint16(rng.Intn(100))
 		botName := fmt.Sprintf("bot_%s_%06d", cell.MeshID, base+i)
-		stage.SpawnEntity(
+		mt := mmokit.MoveTarget{}
+		mt.SetTarget(tx, ty)
+		stage.Spawn(
 			mmokit.Position{X: x - minX, Y: y - minY},
-			mmokit.WithCollider(PlayerRadius),
-			mmokit.WithEntityKind(KindBot),
-			mmokit.Init(func(c *BotComponents) {
-				c.Name.Name = botName
-				c.MoveTarget.SetTarget(tx, ty)
-				// Phase the initial countdown so bots from the same spawn batch
-				// don't all retarget on the same tick.
-				c.Behavior.TicksUntilRetarget = retarget
-			}),
+			mmokit.Collider{Radius: PlayerRadius},
+			mmokit.EntityKind{Type: KindBot},
+			PlayerName{Name: botName},
+			mt,
+			// Phase the initial countdown so bots from the same spawn batch
+			// don't all retarget on the same tick.
+			BotBehavior{TicksUntilRetarget: retarget},
 		)
 		spawned++
 	}

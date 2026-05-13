@@ -33,7 +33,7 @@ func (s *SineWaveSystem) Init() {
 	const span = 1200.0
 	for i := range count {
 		x := float32(i) * (span / float32(count-1))
-		s.Stage().SpawnEntity(mmokit.Position{X: x, Y: 0})
+		s.Stage().Spawn(mmokit.Position{X: x, Y: 0})
 	}
 }
 
