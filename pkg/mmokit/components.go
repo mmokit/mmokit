@@ -36,6 +36,24 @@ func Has[T any](e Entity) bool {
 	return m.HasAll(h)
 }
 
+// Prime registers component type T with the stage's ECS world so
+// subsequent Has/Get calls — including ones inside locked-world query
+// iterations — never trigger ark's lazy first-touch registration.
+//
+// Call from System.Init() (which runs pre-tick, world unlocked) for
+// every dynamically-added component the system queries via Has/Get
+// but does NOT carry in its own bundle. Components included in any
+// entity kind's bundle are auto-primed by RegisterKind and don't
+// need this. The panic this prevents is:
+//
+//	panic: attempt to register a new component in a locked world
+func Prime[T any](stage *Stage) {
+	if stage == nil {
+		return
+	}
+	_ = ecs.NewMap1[T](stage.ECSWorld())
+}
+
 // Set installs the component on the entity, adding it if absent or
 // overwriting if present. No-op on dead entities — but logs a
 // use-after-free diagnostic when called on a non-zero netID whose

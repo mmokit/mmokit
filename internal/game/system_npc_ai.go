@@ -32,6 +32,13 @@ type NPCAISystem struct {
 
 func (s *NPCAISystem) Init() {
 	s.gw = mmokit.State[GameWorld](s.Stage())
+	// Prime components hit via mmokit.Has / Get inside Update's query
+	// loop. Leashing is added dynamically by system_poi (not in any
+	// entity bundle), so without priming the first Has[Leashing] check
+	// would try to register the component while the world is locked
+	// by Query.Iter and panic.
+	mmokit.Prime[gamecomp.Leashing](s.Stage())
+	mmokit.Prime[mmokit.Dormant](s.Stage())
 }
 
 func (s *NPCAISystem) Update(dt float32) {
