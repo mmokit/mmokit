@@ -1,6 +1,6 @@
 // Package persist defines the engine-side persistence interfaces.
 //
-// PlayerRepository persists per-player identity (username, cell,
+// PlayerRepository persists per-player identity (user_id, username, cell,
 // position, debug flags, login timestamps). Game-specific player
 // state — currencies, cargo, bank, equipment, marketplace, game
 // config — lives in a separate game-owned package (e.g.
@@ -13,6 +13,7 @@ import (
 	"context"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 )
 
@@ -21,11 +22,19 @@ import (
 // in-memory game type (internal/game.PlayerData) and PlayerSnapshot
 // happens in the game-domain layer. This separation lets storage
 // representation evolve independently from the runtime type.
+//
+// Keyed on the immutable UserID (UUID); Username is a denormalized
+// display column that may change over time.
 type PlayerRepository interface {
-	// Load fetches a player snapshot by username. Returns
-	// (nil, ErrNotFound) when the username is unknown; (nil, err) for
+	// Load fetches a player snapshot by user_id. Returns
+	// (nil, ErrNotFound) when the id is unknown; (nil, err) for
 	// any other error.
-	Load(ctx context.Context, username string) (*PlayerSnapshot, error)
+	Load(ctx context.Context, userID uuid.UUID) (*PlayerSnapshot, error)
+
+	// LoadByUsername fetches a player snapshot by display name.
+	// Used by console/admin lookups where only the username is
+	// known. Returns (nil, ErrNotFound) when the username is unknown.
+	LoadByUsername(ctx context.Context, username string) (*PlayerSnapshot, error)
 
 	// LoadAll streams every player record, calling fn for each.
 	// Used at game startup to warm the in-memory PlayerRepo cache.
@@ -35,14 +44,14 @@ type PlayerRepository interface {
 
 	// SaveBatch upserts multiple player snapshots in a single
 	// round-trip via pgx.Batch (or equivalent). The caller MUST sort
-	// snapshots by Username before calling — the repository does NOT
+	// snapshots by UserID before calling — the repository does NOT
 	// sort internally because deadlock prevention is a contract
 	// between concurrent flushers, and only the caller knows whether
 	// multiple flushes might race. An empty slice is a no-op.
 	SaveBatch(ctx context.Context, snapshots []*PlayerSnapshot) error
 
 	// SaveBatchTx upserts inside the caller-supplied transaction.
-	// Same sort-by-username deadlock-prevention contract as SaveBatch.
+	// Same sort-by-UserID deadlock-prevention contract as SaveBatch.
 	// Used by the game-side PlayerFlusher to write engine identity and
 	// game state atomically under one pgx.Tx.
 	SaveBatchTx(ctx context.Context, tx pgx.Tx, snapshots []*PlayerSnapshot) error
@@ -67,9 +76,10 @@ type PlayerRepository interface {
 
 // PlayerSnapshot is the engine-side persistence DTO for player
 // identity. Game-specific state (currencies, cargo, bank, equipment,
-// etc.) lives in a separate game-owned table joined by username; see
+// etc.) lives in a separate game-owned table joined by user_id; see
 // internal/persist for the space game's PlayerStateSnapshot.
 type PlayerSnapshot struct {
+	UserID    uuid.UUID
 	Username  string
 	CellID    string // e.g. "cell_2_1"
 	PosX      float32

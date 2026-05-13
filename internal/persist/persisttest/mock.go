@@ -12,6 +12,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
 	gamepersist "github.com/zenion/mmoserver/internal/persist"
@@ -129,20 +130,21 @@ func (m *ConfigRepoMock) Save(ctx context.Context, snapshot *gamepersist.ConfigS
 	return nil
 }
 
-// PlayerStateRepoMock is an in-memory PlayerStateRepository.
+// PlayerStateRepoMock is an in-memory PlayerStateRepository, keyed by
+// UserID (mirroring the Postgres PK).
 type PlayerStateRepoMock struct {
 	mu   sync.Mutex
-	rows map[string]*gamepersist.PlayerStateSnapshot
+	rows map[uuid.UUID]*gamepersist.PlayerStateSnapshot
 }
 
 func NewPlayerStateRepoMock() *PlayerStateRepoMock {
-	return &PlayerStateRepoMock{rows: make(map[string]*gamepersist.PlayerStateSnapshot)}
+	return &PlayerStateRepoMock{rows: make(map[uuid.UUID]*gamepersist.PlayerStateSnapshot)}
 }
 
-func (m *PlayerStateRepoMock) Load(ctx context.Context, username string) (*gamepersist.PlayerStateSnapshot, error) {
+func (m *PlayerStateRepoMock) Load(ctx context.Context, userID uuid.UUID) (*gamepersist.PlayerStateSnapshot, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	rec, ok := m.rows[username]
+	rec, ok := m.rows[userID]
 	if !ok {
 		return nil, gamepersist.ErrNotFound
 	}
@@ -151,11 +153,21 @@ func (m *PlayerStateRepoMock) Load(ctx context.Context, username string) (*gamep
 
 func (m *PlayerStateRepoMock) LoadAll(ctx context.Context, fn func(*gamepersist.PlayerStateSnapshot) error) error {
 	m.mu.Lock()
-	keys := make([]string, 0, len(m.rows))
+	keys := make([]uuid.UUID, 0, len(m.rows))
 	for k := range m.rows {
 		keys = append(keys, k)
 	}
-	slices.Sort(keys)
+	slices.SortFunc(keys, func(a, b uuid.UUID) int {
+		as, bs := a.String(), b.String()
+		switch {
+		case as < bs:
+			return -1
+		case as > bs:
+			return 1
+		default:
+			return 0
+		}
+	})
 	snapshots := make([]*gamepersist.PlayerStateSnapshot, len(keys))
 	for i, k := range keys {
 		snapshots[i] = clonePlayerState(m.rows[k])
@@ -173,7 +185,7 @@ func (m *PlayerStateRepoMock) SaveBatch(ctx context.Context, snapshots []*gamepe
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	for _, s := range snapshots {
-		m.rows[s.Username] = clonePlayerState(s)
+		m.rows[s.UserID] = clonePlayerState(s)
 	}
 	return nil
 }

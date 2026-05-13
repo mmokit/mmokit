@@ -4,18 +4,19 @@ import (
 	"context"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 )
 
 // PlayerStateRepository persists per-player space-game state.
 // Implementation: internal/persist/postgres.
 //
-// Keyed by username, FK to engine.players(username) ON DELETE CASCADE.
+// Keyed by user_id (UUID), FK to engine.players(user_id) ON DELETE CASCADE.
 type PlayerStateRepository interface {
-	// Load returns the player's game state by username.
-	// Returns (nil, ErrNotFound) when the username has no game state row;
+	// Load returns the player's game state by user_id.
+	// Returns (nil, ErrNotFound) when the user has no game state row;
 	// callers should treat this as "fresh player, all-zero state".
-	Load(ctx context.Context, username string) (*PlayerStateSnapshot, error)
+	Load(ctx context.Context, userID uuid.UUID) (*PlayerStateSnapshot, error)
 
 	// LoadAll streams every player state row. Used at game startup
 	// to warm the in-memory game-state cache. Iteration order is
@@ -23,13 +24,13 @@ type PlayerStateRepository interface {
 	LoadAll(ctx context.Context, fn func(*PlayerStateSnapshot) error) error
 
 	// SaveBatch upserts multiple snapshots in a single pgx.Batch
-	// round-trip. Caller MUST sort by Username before calling
+	// round-trip. Caller MUST sort by UserID before calling
 	// (deadlock-prevention contract — matches PlayerRepository.SaveBatch).
 	// Empty slice is a no-op.
 	SaveBatch(ctx context.Context, snapshots []*PlayerStateSnapshot) error
 
 	// SaveBatchTx upserts inside the caller-supplied transaction.
-	// Same sort-by-username deadlock-prevention contract as SaveBatch.
+	// Same sort-by-UserID deadlock-prevention contract as SaveBatch.
 	// Used by the game-side PlayerFlusher to write engine identity and
 	// game state atomically under one pgx.Tx.
 	SaveBatchTx(ctx context.Context, tx pgx.Tx, snapshots []*PlayerStateSnapshot) error
@@ -38,9 +39,9 @@ type PlayerStateRepository interface {
 // PlayerStateSnapshot is the persistence DTO for a player's game state.
 // Identity columns (cell, position, login times, debug flags) live in
 // engine.players via pkg/persist.PlayerSnapshot — this struct holds
-// ONLY the game-side JSONB fields keyed off the same username.
+// ONLY the game-side JSONB fields keyed off the same user_id.
 type PlayerStateSnapshot struct {
-	Username   string
+	UserID     uuid.UUID
 	Currencies map[uint32]int64 // currency_id -> balance
 	Cargo      map[uint32]int32 // item_id -> quantity
 	Bank       map[uint32]int32 // item_id -> quantity

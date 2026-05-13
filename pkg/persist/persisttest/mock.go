@@ -11,25 +11,47 @@ import (
 	"sync"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
 	"github.com/zenion/mmoserver/pkg/persist"
 )
 
-// PlayerRepoMock is an in-memory PlayerRepository.
+// PlayerRepoMock is an in-memory PlayerRepository. Primary index is
+// keyed on UserID; byUsername is a secondary index for LoadByUsername
+// and the username-keyed debug-flag helpers (the underlying schema
+// has UNIQUE(username) so the lookup is still single-row).
 type PlayerRepoMock struct {
-	mu   sync.Mutex
-	rows map[string]*persist.PlayerSnapshot
+	mu         sync.Mutex
+	rows       map[uuid.UUID]*persist.PlayerSnapshot
+	byUsername map[string]uuid.UUID
 }
 
 func NewPlayerRepoMock() *PlayerRepoMock {
-	return &PlayerRepoMock{rows: make(map[string]*persist.PlayerSnapshot)}
+	return &PlayerRepoMock{
+		rows:       make(map[uuid.UUID]*persist.PlayerSnapshot),
+		byUsername: make(map[string]uuid.UUID),
+	}
 }
 
-func (m *PlayerRepoMock) Load(ctx context.Context, username string) (*persist.PlayerSnapshot, error) {
+func (m *PlayerRepoMock) Load(ctx context.Context, userID uuid.UUID) (*persist.PlayerSnapshot, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	rec, ok := m.rows[username]
+	rec, ok := m.rows[userID]
+	if !ok {
+		return nil, persist.ErrNotFound
+	}
+	return clonePlayer(rec), nil
+}
+
+func (m *PlayerRepoMock) LoadByUsername(ctx context.Context, username string) (*persist.PlayerSnapshot, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	uid, ok := m.byUsername[username]
+	if !ok {
+		return nil, persist.ErrNotFound
+	}
+	rec, ok := m.rows[uid]
 	if !ok {
 		return nil, persist.ErrNotFound
 	}
@@ -38,11 +60,22 @@ func (m *PlayerRepoMock) Load(ctx context.Context, username string) (*persist.Pl
 
 func (m *PlayerRepoMock) LoadAll(ctx context.Context, fn func(*persist.PlayerSnapshot) error) error {
 	m.mu.Lock()
-	keys := make([]string, 0, len(m.rows))
+	keys := make([]uuid.UUID, 0, len(m.rows))
 	for k := range m.rows {
 		keys = append(keys, k)
 	}
-	slices.Sort(keys)
+	// Stable iteration order — UUIDs sorted by string form.
+	slices.SortFunc(keys, func(a, b uuid.UUID) int {
+		as, bs := a.String(), b.String()
+		switch {
+		case as < bs:
+			return -1
+		case as > bs:
+			return 1
+		default:
+			return 0
+		}
+	})
 	snapshots := make([]*persist.PlayerSnapshot, len(keys))
 	for i, k := range keys {
 		snapshots[i] = clonePlayer(m.rows[k])
@@ -60,7 +93,13 @@ func (m *PlayerRepoMock) SaveBatch(ctx context.Context, snapshots []*persist.Pla
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	for _, s := range snapshots {
-		m.rows[s.Username] = clonePlayer(s)
+		// Maintain the byUsername index — drop any prior username for
+		// this user_id (rename support), then re-point.
+		if prev, ok := m.rows[s.UserID]; ok && prev.Username != s.Username {
+			delete(m.byUsername, prev.Username)
+		}
+		m.rows[s.UserID] = clonePlayer(s)
+		m.byUsername[s.Username] = s.UserID
 	}
 	return nil
 }
@@ -76,8 +115,12 @@ func (m *PlayerRepoMock) SaveBatchTx(ctx context.Context, _ pgx.Tx, snapshots []
 func (m *PlayerRepoMock) LoadDebugFlags(ctx context.Context, username string) ([]string, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	rec, ok := m.rows[username]
+	uid, ok := m.byUsername[username]
 	if !ok {
+		return nil, persist.ErrNotFound
+	}
+	rec := m.rows[uid]
+	if rec == nil {
 		return nil, persist.ErrNotFound
 	}
 	if len(rec.DebugFlags) == 0 {
@@ -86,16 +129,21 @@ func (m *PlayerRepoMock) LoadDebugFlags(ctx context.Context, username string) ([
 	return slices.Clone(rec.DebugFlags), nil
 }
 
-// SaveDebugFlags writes the flag list to the user's snapshot. Creates
-// a minimal snapshot if the user doesn't exist, mirroring the Postgres
-// UPSERT semantics.
+// SaveDebugFlags writes the flag list to the user's snapshot.
+//
+// The Postgres implementation requires the row to exist (we can't
+// fabricate a user_id). Mirror that semantic here: return ErrNotFound
+// for unknown usernames.
 func (m *PlayerRepoMock) SaveDebugFlags(ctx context.Context, username string, flags []string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	rec, ok := m.rows[username]
+	uid, ok := m.byUsername[username]
 	if !ok {
-		rec = &persist.PlayerSnapshot{Username: username}
-		m.rows[username] = rec
+		return persist.ErrNotFound
+	}
+	rec, ok := m.rows[uid]
+	if !ok {
+		return persist.ErrNotFound
 	}
 	if len(flags) == 0 {
 		rec.DebugFlags = nil
@@ -111,11 +159,11 @@ func (m *PlayerRepoMock) LoadAllDebugFlags(ctx context.Context) (map[string][]st
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	out := make(map[string][]string)
-	for username, rec := range m.rows {
-		if len(rec.DebugFlags) == 0 {
+	for _, rec := range m.rows {
+		if rec == nil || len(rec.DebugFlags) == 0 {
 			continue
 		}
-		out[username] = slices.Clone(rec.DebugFlags)
+		out[rec.Username] = slices.Clone(rec.DebugFlags)
 	}
 	return out, nil
 }

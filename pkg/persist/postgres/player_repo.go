@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
@@ -18,9 +19,24 @@ type playerRepo struct {
 
 var _ persist.PlayerRepository = (*playerRepo)(nil)
 
-const playerSelectColumns = `username, cell_id, pos_x, pos_y, created_at, last_login, debug_flags`
+const playerSelectColumns = `user_id, username, cell_id, pos_x, pos_y, created_at, last_login, debug_flags`
 
-func (r *playerRepo) Load(ctx context.Context, username string) (*persist.PlayerSnapshot, error) {
+func (r *playerRepo) Load(ctx context.Context, userID uuid.UUID) (*persist.PlayerSnapshot, error) {
+	row := r.pool.QueryRow(ctx,
+		`SELECT `+playerSelectColumns+` FROM engine.players WHERE user_id = $1`,
+		userID,
+	)
+	snap, err := scanPlayerRow(row)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, persist.ErrNotFound
+		}
+		return nil, fmt.Errorf("playerRepo.Load %s: %w", userID, err)
+	}
+	return snap, nil
+}
+
+func (r *playerRepo) LoadByUsername(ctx context.Context, username string) (*persist.PlayerSnapshot, error) {
 	row := r.pool.QueryRow(ctx,
 		`SELECT `+playerSelectColumns+` FROM engine.players WHERE username = $1`,
 		username,
@@ -30,7 +46,7 @@ func (r *playerRepo) Load(ctx context.Context, username string) (*persist.Player
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, persist.ErrNotFound
 		}
-		return nil, fmt.Errorf("playerRepo.Load %q: %w", username, err)
+		return nil, fmt.Errorf("playerRepo.LoadByUsername %q: %w", username, err)
 	}
 	return snap, nil
 }
@@ -60,8 +76,8 @@ func (r *playerRepo) SaveBatchTx(ctx context.Context, tx pgx.Tx, snapshots []*pe
 		return nil
 	}
 	for i := 1; i < len(snapshots); i++ {
-		if snapshots[i-1].Username > snapshots[i].Username {
-			return errors.New("playerRepo.SaveBatchTx: snapshots not sorted by username (deadlock prevention contract)")
+		if snapshots[i-1].UserID.String() > snapshots[i].UserID.String() {
+			return errors.New("playerRepo.SaveBatchTx: snapshots not sorted by user_id (deadlock prevention contract)")
 		}
 	}
 
@@ -69,20 +85,21 @@ func (r *playerRepo) SaveBatchTx(ctx context.Context, tx pgx.Tx, snapshots []*pe
 	for _, snap := range snapshots {
 		flagsJSON, err := marshalDebugFlags(snap.DebugFlags)
 		if err != nil {
-			return fmt.Errorf("playerRepo.SaveBatchTx marshal flags %q: %w", snap.Username, err)
+			return fmt.Errorf("playerRepo.SaveBatchTx marshal flags %s: %w", snap.UserID, err)
 		}
 		batch.Queue(`
 			INSERT INTO engine.players (
-				username, cell_id, pos_x, pos_y, created_at, last_login, debug_flags, updated_at
-			) VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb, NOW())
-			ON CONFLICT (username) DO UPDATE SET
+				user_id, username, cell_id, pos_x, pos_y, created_at, last_login, debug_flags, updated_at
+			) VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb, NOW())
+			ON CONFLICT (user_id) DO UPDATE SET
+			    username = EXCLUDED.username,
 			    cell_id = EXCLUDED.cell_id,
 			    pos_x = EXCLUDED.pos_x,
 			    pos_y = EXCLUDED.pos_y,
 			    last_login = EXCLUDED.last_login,
 			    debug_flags = EXCLUDED.debug_flags,
 			    updated_at = NOW()`,
-			snap.Username, snap.CellID, snap.PosX, snap.PosY,
+			snap.UserID, snap.Username, snap.CellID, snap.PosX, snap.PosY,
 			snap.CreatedAt, snap.LastLogin, flagsJSON,
 		)
 	}
@@ -115,6 +132,11 @@ func (r *playerRepo) SaveBatch(ctx context.Context, snapshots []*persist.PlayerS
 	return tx.Commit(ctx)
 }
 
+// LoadDebugFlags / SaveDebugFlags / LoadAllDebugFlags remain keyed on
+// username — they back console admin commands that take a display name.
+// username is UNIQUE on engine.players so the filter is still a single-row
+// lookup.
+
 func (r *playerRepo) LoadDebugFlags(ctx context.Context, username string) ([]string, error) {
 	var flagsBytes []byte
 	err := r.pool.QueryRow(ctx,
@@ -142,14 +164,21 @@ func (r *playerRepo) SaveDebugFlags(ctx context.Context, username string, flags 
 	if err != nil {
 		return fmt.Errorf("playerRepo.SaveDebugFlags marshal %q: %w", username, err)
 	}
-	if _, err := r.pool.Exec(ctx,
-		`INSERT INTO engine.players (username, debug_flags) VALUES ($1, $2::jsonb)
-		 ON CONFLICT (username) DO UPDATE SET
-		     debug_flags = EXCLUDED.debug_flags,
-		     updated_at = NOW()`,
+	// SaveDebugFlags updates an existing player's flag list — the row
+	// must already exist (engine.players requires user_id, which we
+	// don't have here). Treat a no-row update as ErrNotFound so callers
+	// can surface "no such user" rather than silently no-op.
+	tag, err := r.pool.Exec(ctx,
+		`UPDATE engine.players
+		 SET debug_flags = $2::jsonb, updated_at = NOW()
+		 WHERE username = $1`,
 		username, flagsJSON,
-	); err != nil {
+	)
+	if err != nil {
 		return fmt.Errorf("playerRepo.SaveDebugFlags %q: %w", username, err)
+	}
+	if tag.RowsAffected() == 0 {
+		return persist.ErrNotFound
 	}
 	return nil
 }
@@ -188,6 +217,7 @@ func scanPlayerRow(row pgxScanner) (*persist.PlayerSnapshot, error) {
 	var snap persist.PlayerSnapshot
 	var flagsBytes []byte
 	if err := row.Scan(
+		&snap.UserID,
 		&snap.Username,
 		&snap.CellID,
 		&snap.PosX,
