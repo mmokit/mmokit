@@ -84,7 +84,7 @@ func (f *shipDynamicsTestFixture) rot() *mmokit.Rotation {
 // runTicks advances the system by n ticks of dt seconds each.
 func (f *shipDynamicsTestFixture) runTicks(dt float32, n int) {
 	for range n {
-		f.sys.Update(dt)
+		f.gw.stage.TickOne(f.sys, dt)
 	}
 }
 
@@ -104,7 +104,7 @@ func TestShipTurn_RampUpFromRest(t *testing.T) {
 
 	// After one tick, angVel should be turnAccel*dt (0.4), not the old
 	// system's turnRate clamp (0.2).
-	f.sys.Update(dt)
+	f.gw.stage.TickOne(f.sys, dt)
 	expectedAfter1 := turnAccel * dt
 	if diff := math.Abs(float64(ship.AngularVel - expectedAfter1)); diff > 1e-5 {
 		t.Fatalf("after 1 tick: AngularVel = %f, want %f", ship.AngularVel, expectedAfter1)
@@ -112,7 +112,7 @@ func TestShipTurn_RampUpFromRest(t *testing.T) {
 
 	// After another tick it should still be accelerating (no instant snap).
 	prev := ship.AngularVel
-	f.sys.Update(dt)
+	f.gw.stage.TickOne(f.sys, dt)
 	if ship.AngularVel <= prev {
 		t.Fatalf("after 2 ticks: AngularVel = %f should be > %f (still accelerating)",
 			ship.AngularVel, prev)
@@ -144,7 +144,7 @@ func TestShipTurn_ReachesMaxOnLargeTurn(t *testing.T) {
 	// Run long enough to reach cruise: accel phase ~0.5s, then cruise.
 	var peak float32
 	for range 30 {
-		f.sys.Update(dt)
+		f.gw.stage.TickOne(f.sys, dt)
 		if ship.AngularVel > peak {
 			peak = ship.AngularVel
 		}
@@ -199,7 +199,7 @@ func TestShipTurn_DirectionReversal(t *testing.T) {
 	f.setTarget(0, -1000)
 
 	// One tick of braking must reduce positive angVel.
-	f.sys.Update(dt)
+	f.gw.stage.TickOne(f.sys, dt)
 	if ship.AngularVel >= initial {
 		t.Errorf("after reversal tick: AngularVel = %f, expected < %f", ship.AngularVel, initial)
 	}

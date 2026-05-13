@@ -45,7 +45,7 @@ func TestPOI_ClearSpawnsLootCrate(t *testing.T) {
 	}
 
 	// Tick once to run POISystem.
-	sys.Update(0.05)
+	gw.stage.TickOne(sys, 0.05)
 
 	poiE := mmokit.EntityByNetID(gw.stage, poiNetID)
 	poi := mmokit.Get[gamecomp.POI](poiE)
@@ -78,7 +78,7 @@ func TestPOI_RosterWideLeash(t *testing.T) {
 	pos := mmokit.Get[mmokit.Position](firstE)
 	pos.X = 2000 + gw.Config.POILeashRadius + 100
 
-	sys.Update(0.05) // POISystem evaluates leash trigger
+	gw.stage.TickOne(sys, 0.05) // POISystem evaluates leash trigger
 
 	// All roster members should now have Leashing.
 	for _, nid := range roster {

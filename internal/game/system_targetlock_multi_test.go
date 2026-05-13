@@ -71,7 +71,7 @@ func TestMultiLock_ParallelProgress(t *testing.T) {
 	// 1.0 second of simulated time at 50ms per tick.
 	const dt = float32(0.05)
 	for range 20 {
-		sys.Update(dt)
+		gw.stage.TickOne(sys, dt)
 	}
 
 	lock = mmokit.Get[gamecomp.TargetLock](owner)
@@ -109,7 +109,7 @@ func TestMultiLock_AutoActiveOnFirstComplete(t *testing.T) {
 	// 0.2s of simulated time at 50ms per tick — enough to push 0.9 past 1.0.
 	const dt = float32(0.05)
 	for range 4 {
-		sys.Update(dt)
+		gw.stage.TickOne(sys, dt)
 	}
 
 	lock = mmokit.Get[gamecomp.TargetLock](owner)
@@ -141,7 +141,7 @@ func TestMultiLock_OutOfRangeDrop(t *testing.T) {
 	pos.X = 500
 
 	sys := newWiredTargetLockSystem(t, gw)
-	sys.Update(0.05)
+	gw.stage.TickOne(sys, 0.05)
 
 	lock = mmokit.Get[gamecomp.TargetLock](owner)
 	if len(lock.Slots) != 0 {

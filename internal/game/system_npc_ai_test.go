@@ -54,11 +54,12 @@ func newTestPlayerAt(t *testing.T, gw *GameWorld, netID uint32, x, y float32) ec
 
 // tickAI advances the AI + Physics systems by n steps of dt seconds each.
 // Mirrors the engine game loop ordering: AI sets velocity, Physics
-// integrates velocity into position.
-func tickAI(ai *NPCAISystem, phys *mmokit.PhysicsSystem, dt float32, n int) {
+// integrates velocity into position. Uses stage.TickOne so Commands
+// queued in either system flush between systems just like in production.
+func tickAI(stage *mmokit.Stage, ai *NPCAISystem, phys *mmokit.PhysicsSystem, dt float32, n int) {
 	for range n {
-		ai.Update(dt)
-		phys.Update(dt)
+		stage.TickOne(ai, dt)
+		stage.TickOne(phys, dt)
 	}
 }
 
@@ -72,7 +73,7 @@ func TestNPCAI_IdleToAcquireOnTargetInRange(t *testing.T) {
 	newTestPlayerAt(t, gw, 8001, 20, 0) // inside Brawler's 30u aggro
 
 	const dt = float32(0.05)
-	tickAI(ai, phys, dt, 2) // 0.1s — enough for Idle→Acquire (and possibly →Engage)
+	tickAI(gw.stage, ai, phys, dt, 2) // 0.1s — enough for Idle→Acquire (and possibly →Engage)
 
 	aiComp := mmokit.Get[gamecomp.NPCAI](mmokit.EntityFromECS(gw.stage, npc))
 	if aiComp.State != AIStateAcquire && aiComp.State != AIStateEngage {
@@ -99,7 +100,7 @@ func TestNPCAI_BrawlerCharges(t *testing.T) {
 	newTestPlayerAt(t, gw, 8002, 70, 0)
 
 	const dt = float32(0.05)
-	tickAI(ai, phys, dt, 10) // 0.5s
+	tickAI(gw.stage, ai, phys, dt, 10) // 0.5s
 
 	pos := mmokit.Get[mmokit.Position](mmokit.EntityFromECS(gw.stage, npc))
 	if pos.X <= 0 {
@@ -118,7 +119,7 @@ func TestNPCAI_SniperHoldsRange(t *testing.T) {
 	newTestPlayerAt(t, gw, 8003, 20, 0)
 
 	const dt = float32(0.05)
-	tickAI(ai, phys, dt, 10) // 0.5s
+	tickAI(gw.stage, ai, phys, dt, 10) // 0.5s
 
 	pos := mmokit.Get[mmokit.Position](mmokit.EntityFromECS(gw.stage, npc))
 	if pos.X >= 0 {
@@ -138,7 +139,7 @@ func TestNPCAI_AggroDeescalation(t *testing.T) {
 	player := newTestPlayerAt(t, gw, 8004, 20, 0) // inside 30u aggro
 
 	const dt = float32(0.05)
-	tickAI(ai, phys, dt, 4) // 0.2s — enter Engage (acquire is near-instant at 0°)
+	tickAI(gw.stage, ai, phys, dt, 4) // 0.2s — enter Engage (acquire is near-instant at 0°)
 
 	npcAI := mmokit.Get[gamecomp.NPCAI](mmokit.EntityFromECS(gw.stage, npc))
 	if npcAI.State == AIStateIdle {
@@ -151,7 +152,7 @@ func TestNPCAI_AggroDeescalation(t *testing.T) {
 	pp.X = 5000
 	npcAI.LastDamageByNetID = 0 // belt-and-suspenders
 
-	tickAI(ai, phys, dt, 160) // 8s — longer than AggroDeescalationSec (6s)
+	tickAI(gw.stage, ai, phys, dt, 160) // 8s — longer than AggroDeescalationSec (6s)
 
 	npcAI = mmokit.Get[gamecomp.NPCAI](mmokit.EntityFromECS(gw.stage, npc))
 	if npcAI.State != AIStateIdle {
