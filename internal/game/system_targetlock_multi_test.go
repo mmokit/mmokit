@@ -10,8 +10,8 @@ import (
 )
 
 // netIDOfECS reads the NetworkID off an ecs.Entity. Test helper for the
-// multi-lock cases below — gw.SpawnNPC returns ecs.Entity, but the lock
-// slots key on netID, so we need the bridge.
+// multi-lock cases below — lock slots key on netID, and TargetEntity is
+// typed ecs.Entity, so we need the bridge from the rich mmokit.Entity.
 func netIDOfECS(gw *GameWorld, h ecs.Entity) uint32 {
 	w := gw.stage.ECSWorld()
 	id := ecs.NewMap1[mmokit.NetworkID](w).Get(h)
@@ -63,8 +63,8 @@ func TestMultiLock_ParallelProgress(t *testing.T) {
 	lock := mmokit.Get[gamecomp.TargetLock](owner)
 	lock.Range = 1000
 	lock.Slots = []gamecomp.LockSlot{
-		{TargetNetID: netIDOfECS(gw, a), TargetEntity: a, Progress: 0, LockTime: 2.0},
-		{TargetNetID: netIDOfECS(gw, b), TargetEntity: b, Progress: 0, LockTime: 2.0},
+		{TargetNetID: netIDOfECS(gw, a.Handle()), TargetEntity: a.Handle(), Progress: 0, LockTime: 2.0},
+		{TargetNetID: netIDOfECS(gw, b.Handle()), TargetEntity: b.Handle(), Progress: 0, LockTime: 2.0},
 	}
 
 	sys := newWiredTargetLockSystem(t, gw)
@@ -99,7 +99,7 @@ func TestMultiLock_AutoActiveOnFirstComplete(t *testing.T) {
 	lock := mmokit.Get[gamecomp.TargetLock](owner)
 	lock.Range = 1000
 	lock.Slots = []gamecomp.LockSlot{
-		{TargetNetID: netIDOfECS(gw, a), TargetEntity: a, Progress: 0.9, LockTime: 1.0},
+		{TargetNetID: netIDOfECS(gw, a.Handle()), TargetEntity: a.Handle(), Progress: 0.9, LockTime: 1.0},
 	}
 	if lock.ActiveNetID != 0 {
 		t.Fatalf("precondition: ActiveNetID should be 0, got %d", lock.ActiveNetID)
@@ -116,8 +116,8 @@ func TestMultiLock_AutoActiveOnFirstComplete(t *testing.T) {
 	if !lock.Slots[0].Locked {
 		t.Fatal("slot did not complete")
 	}
-	if lock.ActiveNetID != netIDOfECS(gw, a) {
-		t.Errorf("ActiveNetID = %d, want %d", lock.ActiveNetID, netIDOfECS(gw, a))
+	if lock.ActiveNetID != netIDOfECS(gw, a.Handle()) {
+		t.Errorf("ActiveNetID = %d, want %d", lock.ActiveNetID, netIDOfECS(gw, a.Handle()))
 	}
 }
 
@@ -132,12 +132,11 @@ func TestMultiLock_OutOfRangeDrop(t *testing.T) {
 	lock := mmokit.Get[gamecomp.TargetLock](owner)
 	lock.Range = 100
 	lock.Slots = []gamecomp.LockSlot{
-		{TargetNetID: netIDOfECS(gw, a), TargetEntity: a, Progress: 0.5, LockTime: 1.0},
+		{TargetNetID: netIDOfECS(gw, a.Handle()), TargetEntity: a.Handle(), Progress: 0.5, LockTime: 1.0},
 	}
 
 	// Move target out of range before ticking.
-	aE := mmokit.EntityFromECS(gw.stage, a)
-	pos := mmokit.Get[mmokit.Position](aE)
+	pos := mmokit.Get[mmokit.Position](a)
 	pos.X = 500
 
 	sys := newWiredTargetLockSystem(t, gw)

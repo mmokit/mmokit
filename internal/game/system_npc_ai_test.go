@@ -75,7 +75,7 @@ func TestNPCAI_IdleToAcquireOnTargetInRange(t *testing.T) {
 	const dt = float32(0.05)
 	tickAI(gw.stage, ai, phys, dt, 2) // 0.1s — enough for Idle→Acquire (and possibly →Engage)
 
-	aiComp := mmokit.Get[gamecomp.NPCAI](mmokit.EntityFromECS(gw.stage, npc))
+	aiComp := mmokit.Get[gamecomp.NPCAI](npc)
 	if aiComp.State != AIStateAcquire && aiComp.State != AIStateEngage {
 		t.Errorf("Brawler should acquire/engage; state=%d", aiComp.State)
 	}
@@ -91,10 +91,10 @@ func TestNPCAI_BrawlerCharges(t *testing.T) {
 	// 70u: outside default 30u aggro AND 50u weapon range. Bump this
 	// NPC's aggro to 100u so it locks at 70u and exercises the charge
 	// motion (default tuning leaves no in-aggro / out-of-weapon zone).
-	if aiComp := mmokit.Get[gamecomp.NPCAI](mmokit.EntityFromECS(gw.stage, npc)); aiComp != nil {
+	if aiComp := mmokit.Get[gamecomp.NPCAI](npc); aiComp != nil {
 		aiComp.AggroRadius = 100
 	}
-	if lock := mmokit.Get[gamecomp.TargetLock](mmokit.EntityFromECS(gw.stage, npc)); lock != nil {
+	if lock := mmokit.Get[gamecomp.TargetLock](npc); lock != nil {
 		lock.Range = 100
 	}
 	newTestPlayerAt(t, gw, 8002, 70, 0)
@@ -102,7 +102,7 @@ func TestNPCAI_BrawlerCharges(t *testing.T) {
 	const dt = float32(0.05)
 	tickAI(gw.stage, ai, phys, dt, 10) // 0.5s
 
-	pos := mmokit.Get[mmokit.Position](mmokit.EntityFromECS(gw.stage, npc))
+	pos := mmokit.Get[mmokit.Position](npc)
 	if pos.X <= 0 {
 		t.Errorf("Brawler should have moved toward target (+x); pos.X=%.2f", pos.X)
 	}
@@ -121,7 +121,7 @@ func TestNPCAI_SniperHoldsRange(t *testing.T) {
 	const dt = float32(0.05)
 	tickAI(gw.stage, ai, phys, dt, 10) // 0.5s
 
-	pos := mmokit.Get[mmokit.Position](mmokit.EntityFromECS(gw.stage, npc))
+	pos := mmokit.Get[mmokit.Position](npc)
 	if pos.X >= 0 {
 		t.Errorf("Sniper too close → should kite (-x); pos.X=%.2f", pos.X)
 	}
@@ -141,7 +141,7 @@ func TestNPCAI_AggroDeescalation(t *testing.T) {
 	const dt = float32(0.05)
 	tickAI(gw.stage, ai, phys, dt, 4) // 0.2s — enter Engage (acquire is near-instant at 0°)
 
-	npcAI := mmokit.Get[gamecomp.NPCAI](mmokit.EntityFromECS(gw.stage, npc))
+	npcAI := mmokit.Get[gamecomp.NPCAI](npc)
 	if npcAI.State == AIStateIdle {
 		t.Fatal("NPC didn't engage during warmup")
 	}
@@ -154,7 +154,7 @@ func TestNPCAI_AggroDeescalation(t *testing.T) {
 
 	tickAI(gw.stage, ai, phys, dt, 160) // 8s — longer than AggroDeescalationSec (6s)
 
-	npcAI = mmokit.Get[gamecomp.NPCAI](mmokit.EntityFromECS(gw.stage, npc))
+	npcAI = mmokit.Get[gamecomp.NPCAI](npc)
 	if npcAI.State != AIStateIdle {
 		t.Errorf("expected Idle after deescalation; got %d", npcAI.State)
 	}

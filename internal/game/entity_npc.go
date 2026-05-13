@@ -25,54 +25,52 @@ type NPCBundle struct {
 // given local position with anchor link to poiNetID. Pass poiNetID=0
 // for console-spawned test NPCs (they leash to their spawn position
 // when no POI exists).
-func (gw *GameWorld) SpawnNPC(x, y float32, archetype uint8, poiNetID uint32) mmokit.EntityHandle {
-	defaults := archetypeDefaults(gw.Config, archetype)
-	br := boundingRadius(gw.Config.NpcWidth, gw.Config.NpcHeight)
+func (gw *GameWorld) SpawnNPC(x, y float32, archetype uint8, poiNetID uint32) mmokit.Entity {
+	d := archetypeDefaults(gw.Config, archetype)
 
-	handle := gw.stage.SpawnEntity(
+	components := []any{
 		mmokit.Position{X: x, Y: y},
-		mmokit.WithEntityKind(gamecomp.KindNPC),
-		mmokit.WithCollider(br),
-		mmokit.WithRotation(0),
-		mmokit.WithComponents(),
-	)
-	entity := mmokit.EntityFromECS(gw.stage, handle)
-
-	if col := mmokit.Get[mmokit.Collider](entity); col != nil {
-		col.Width = gw.Config.NpcWidth
-		col.Height = gw.Config.NpcHeight
-		col.Layer = gamecomp.LayerPlayer
-		col.Shape = mmokit.ShapeRect
+		mmokit.Velocity{},
+		mmokit.EntityKind{Type: gamecomp.KindNPC},
+		mmokit.Collider{
+			Width:  gw.Config.NpcWidth,
+			Height: gw.Config.NpcHeight,
+			Layer:  gamecomp.LayerPlayer,
+			Shape:  mmokit.ShapeRect,
+			Radius: boundingRadius(gw.Config.NpcWidth, gw.Config.NpcHeight),
+		},
+		mmokit.Rotation{},
+		gamecomp.Health{Current: d.HP, Max: d.HP},
+		gamecomp.Shield{
+			Current:    d.Shield,
+			Max:        d.Shield,
+			RegenRate:  gw.Config.NpcShieldRegenRate,
+			RegenDelay: gw.Config.NpcShieldRegenDelay,
+		},
+		gamecomp.StatusEffects{},
+		gamecomp.TargetLock{
+			MaxSlots: gw.Config.LockMaxSlotsNPC,
+			Range:    d.AggroRadius, // NPCs lock anything they can aggro
+		},
+		gamecomp.NPCAI{
+			Archetype:      archetype,
+			State:          AIStateIdle,
+			MaxSpeed:       d.MaxSpeed,
+			TurnRate:       d.TurnRate,
+			PreferredRange: d.PreferredRange,
+			WeaponRange:    d.WeaponRange,
+			AggroRadius:    d.AggroRadius,
+			MotionPolicy:   d.MotionPolicy,
+			DamagePerShot:  d.DamagePerShot,
+			FireRate:       d.FireRate,
+		},
 	}
-
-	mmokit.Set(entity, gamecomp.Health{Current: defaults.HP, Max: defaults.HP})
-	mmokit.Set(entity, gamecomp.Shield{
-		Current:    defaults.Shield,
-		Max:        defaults.Shield,
-		RegenRate:  gw.Config.NpcShieldRegenRate,
-		RegenDelay: gw.Config.NpcShieldRegenDelay,
-	})
-	mmokit.Set(entity, gamecomp.TargetLock{
-		MaxSlots: gw.Config.LockMaxSlotsNPC,
-		Range:    defaults.AggroRadius, // NPCs lock anything they can aggro
-	})
-	mmokit.Set(entity, gamecomp.NPCAI{
-		Archetype:      archetype,
-		State:          AIStateIdle,
-		MaxSpeed:       defaults.MaxSpeed,
-		TurnRate:       defaults.TurnRate,
-		PreferredRange: defaults.PreferredRange,
-		WeaponRange:    defaults.WeaponRange,
-		AggroRadius:    defaults.AggroRadius,
-		MotionPolicy:   defaults.MotionPolicy,
-		DamagePerShot:  defaults.DamagePerShot,
-		FireRate:       defaults.FireRate,
-	})
 	if poiNetID != 0 {
-		mmokit.Set(entity, gamecomp.POIAnchor{POINetID: poiNetID})
+		components = append(components, gamecomp.POIAnchor{POINetID: poiNetID})
 	}
 
+	e := gw.stage.Spawn(components...)
 	gw.eng.Log.Log(CatPlayerSpawn, "npc spawned: netID=%d archetype=%d pos=(%.0f,%.0f) anchor=%d",
-		entity.NetID(), archetype, x, y, poiNetID)
-	return handle
+		e.NetID(), archetype, x, y, poiNetID)
+	return e
 }

@@ -64,8 +64,7 @@ func registerNPCSpawn(reg *cmdsys.Registry, coord *mmokit.Process) error {
 			localY := args.Y - minY
 
 			return mmokit.CmdOnLoop(ctx, cell.Engine, func() (NPCSpawnResult, error) {
-				handle := gw.SpawnNPC(localX, localY, archetype, 0)
-				e := mmokit.EntityFromECS(cell.Stage, handle)
+				e := gw.SpawnNPC(localX, localY, archetype, 0)
 				return NPCSpawnResult{
 					NetID:     e.NetID(),
 					Archetype: strings.ToLower(args.Archetype),
