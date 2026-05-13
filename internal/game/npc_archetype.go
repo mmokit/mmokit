@@ -87,3 +87,34 @@ func archetypeDefaults(cfg *GameConfig, kind uint8) ArchetypeDefaults {
 	}
 	panic("archetypeDefaults: unknown archetype")
 }
+
+// FairnessFactor describes how dodgeable a telegraphed AoE is:
+//
+//	FairnessStrict — base-speed player at marker center clears the radius
+//	FairnessEffort — base-speed gets you partway, Afterburner clears it
+//	FairnessFocusFire — not spatially dodgeable; counter-play is to
+//	                    kill or interrupt before resolution
+type FairnessFactor float32
+
+const (
+	FairnessStrict    FairnessFactor = 1.0
+	FairnessEffort    FairnessFactor = 0.4
+	FairnessFocusFire FairnessFactor = 0.0
+)
+
+// archetypeAoEParams returns (radius, castTime, fairness) for archetypes
+// that emit telegraphed AoEs. Returns zero values for archetypes that
+// don't (Brawler — pure hitscan).
+func archetypeAoEParams(cfg *GameConfig, arch uint8) (radius, castTime float32, fairness FairnessFactor) {
+	switch arch {
+	case ArchetypeArtillery:
+		return cfg.ArtilleryAoERadius, cfg.ArtilleryCastTime, FairnessEffort
+	case ArchetypeKamikaze:
+		return cfg.KamikazeAoERadius, cfg.KamikazeBeepTime, FairnessFocusFire
+	}
+	return 0, 0, FairnessStrict
+}
+
+// PlayerBaseSpeedForFairness is the reference speed used in the
+// fair-by-design invariant. Matches the in-game ship base MaxSpeed.
+const PlayerBaseSpeedForFairness float32 = 6
