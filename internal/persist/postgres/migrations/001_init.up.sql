@@ -2,10 +2,12 @@ CREATE SCHEMA IF NOT EXISTS space;
 
 -- Per-player space-game state. Identity columns live in engine.players;
 -- this table hangs off the FK with ON DELETE CASCADE so removing an
--- engine player wipes their game state automatically.
+-- engine player wipes their game state automatically. Keyed by the
+-- immutable user_id (UUID) so a rename in auth.users doesn't have to
+-- ripple through every game schema.
 CREATE TABLE IF NOT EXISTS space.player_state (
-    username   TEXT        PRIMARY KEY
-                           REFERENCES engine.players(username) ON DELETE CASCADE,
+    user_id    UUID        PRIMARY KEY
+                           REFERENCES engine.players(user_id) ON DELETE CASCADE,
     currencies JSONB       NOT NULL DEFAULT '{}'::jsonb,
     cargo      JSONB       NOT NULL DEFAULT '{}'::jsonb,
     bank       JSONB       NOT NULL DEFAULT '{}'::jsonb,

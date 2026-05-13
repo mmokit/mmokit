@@ -2,9 +2,15 @@ CREATE SCHEMA IF NOT EXISTS engine;
 
 -- Engine player identity. Game-specific state lives in <game>.player_state
 -- in the per-game schema (e.g. space.player_state) with FK on
--- engine.players(username) ON DELETE CASCADE.
+-- engine.players(user_id) ON DELETE CASCADE.
+--
+-- Identity PK is the immutable user_id (UUID) so renames don't cascade
+-- through every dependent table. Username is denormalized here with a
+-- UNIQUE constraint so login / admin lookups by display name don't have
+-- to JOIN against auth.users.
 CREATE TABLE IF NOT EXISTS engine.players (
-    username    TEXT        PRIMARY KEY,
+    user_id     UUID        PRIMARY KEY,
+    username    TEXT        NOT NULL UNIQUE,
     cell_id     TEXT        NOT NULL DEFAULT '',
     pos_x       REAL        NOT NULL DEFAULT 0,
     pos_y       REAL        NOT NULL DEFAULT 0,
