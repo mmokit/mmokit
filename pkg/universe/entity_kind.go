@@ -16,10 +16,25 @@ type EntityKindDef struct {
 	Name       string // human-readable name for schema export (e.g. "Player")
 	components []kindComponent
 
+	// requiredTypes lists the reflect.Type of every non-local Bundle field
+	// declared by this kind. Stage.Spawn uses this under InvariantPanic to
+	// verify callers attached every required component (catches the
+	// "forgot to Set Health, NPC spawns dead-on-arrival" bug-class).
+	// Fields tagged mmokit:"local" are excluded — they are transfer-local
+	// state added on the receive side, not caller-required.
+	requiredTypes []reflect.Type
+
 	// NetworkBindings stores ComponentBinding values for the network
 	// replication AutoReplicator. Populated by mmokit.RegisterKind[T]'s
 	// bundle-walker when realizing each stage.
 	NetworkBindings []system.ComponentBinding
+}
+
+// requiredFieldTypes returns the reflect.Types of every non-local Bundle
+// field this kind declares — the set Spawn's debug invariant uses to verify
+// callers attached every required component.
+func (def *EntityKindDef) requiredFieldTypes() []reflect.Type {
+	return def.requiredTypes
 }
 
 // kindComponent holds closures for one component's registration across subsystems.
@@ -69,6 +84,9 @@ func KindComponentByID(
 		}
 	}
 	def.components = append(def.components, kc)
+	if !localOnly {
+		def.requiredTypes = append(def.requiredTypes, t)
+	}
 }
 
 // Components returns the number of registered components.

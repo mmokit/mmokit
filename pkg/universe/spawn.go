@@ -98,8 +98,14 @@ func (b *Stage) Spawn(components ...any) Entity {
 			Radius: radius,
 		})
 	}
-	_ = kind // invariant check lands in Task 3
-	_ = hasKind
+	if hasKind && b.coord != nil && b.coord.invariantMode == InvariantPanic {
+		if def, ok := b.entityKinds[kind.Type]; ok {
+			if missing := findMissingRequiredComponents(b.ECSWorld(), entity, def, seen); len(missing) > 0 {
+				panic(fmt.Sprintf("universe.Stage.Spawn: kind %q (%d) missing required components: %v",
+					def.Name, def.Kind, missing))
+			}
+		}
+	}
 
 	if b.netIDIdx != nil && nid != 0 {
 		res := b.netIDIdx.Enter(nid, entity, PresenceLive)
@@ -154,4 +160,27 @@ func buildAttachFn(t reflect.Type) attachFn {
 		ptr := u.Get(e, id)
 		reflect.NewAt(t, unsafe.Pointer(ptr)).Elem().Set(reflect.ValueOf(v))
 	}
+}
+
+// findMissingRequiredComponents returns the names of Bundle fields registered
+// on the kind that are not present in `seen` (the set of component types
+// passed to Spawn). Skips fields tagged mmokit:"local" — those are
+// transfer-local and not user-required (KindComponentByID excludes them
+// from requiredTypes at registration time).
+func findMissingRequiredComponents(
+	w *ecs.World, entity ecs.Entity, def *EntityKindDef, seen map[reflect.Type]struct{},
+) []string {
+	var missing []string
+	u := w.Unsafe()
+	for _, c := range def.requiredFieldTypes() {
+		if _, ok := seen[c]; ok {
+			continue
+		}
+		id := ecs.TypeID(w, c)
+		if u.Has(entity, id) {
+			continue
+		}
+		missing = append(missing, c.Name())
+	}
+	return missing
 }

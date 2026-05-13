@@ -1,6 +1,7 @@
 package universe
 
 import (
+	"reflect"
 	"testing"
 
 	"github.com/mlange-42/ark/ecs"
@@ -115,5 +116,40 @@ func TestSpawn_PanicsOnDuplicateComponentType(t *testing.T) {
 	stage.Spawn(
 		component.Position{X: 1, Y: 2},
 		component.Position{X: 3, Y: 4},
+	)
+}
+
+// TestSpawn_PanicsOnMissingRequiredKindComponent verifies that under
+// InvariantPanic mode, kinded spawns missing a required Bundle component
+// fail loudly at spawn time.
+func TestSpawn_PanicsOnMissingRequiredKindComponent(t *testing.T) {
+	stage := newTestStage(t)
+	if stage.coord == nil {
+		stage.coord = &Process{invariantMode: InvariantPanic}
+	} else {
+		stage.coord.invariantMode = InvariantPanic
+	}
+
+	type health struct{ HP int32 }
+	_ = ecs.NewMap1[health](stage.ECSWorld())
+
+	// Register a kind that requires `health`.
+	w := stage.ECSWorld()
+	def := EntityKindDef{Kind: 99, Name: "TestKind"}
+	id := ecs.TypeID(w, reflect.TypeOf(health{}))
+	KindComponentByID(&def, w, id, reflect.TypeOf(health{}), false)
+	stage.RegisterEntityKind(def)
+
+	defer func() {
+		r := recover()
+		if r == nil {
+			t.Fatal("expected panic when kinded spawn omits required component")
+		}
+	}()
+
+	stage.Spawn(
+		component.Position{},
+		component.EntityKind{Type: 99},
+		// missing health — should panic
 	)
 }
