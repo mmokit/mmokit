@@ -5,7 +5,6 @@ package postgres
 import (
 	"context"
 	"errors"
-	"maps"
 	"os"
 	"sort"
 	"strings"
@@ -17,8 +16,10 @@ import (
 )
 
 // openTestStore opens the live Postgres pointed at by POSTGRES_URL.
-// Skips the test if the env var is unset. TRUNCATEs all tables so each
-// test starts clean.
+// Skips the test if the env var is unset. TRUNCATEs all engine tables
+// so each test starts clean. CASCADE drops any rows in game-side tables
+// (e.g. space.player_state) that FK to engine.players — harmless when
+// the game schema is absent.
 func openTestStore(t *testing.T) *Store {
 	t.Helper()
 	url := os.Getenv("POSTGRES_URL")
@@ -32,7 +33,7 @@ func openTestStore(t *testing.T) *Store {
 	}
 	t.Cleanup(s.Close)
 	if _, err := s.pool.Exec(ctx, `
-		TRUNCATE players, game_config, market_orders, market_trades, admin_operators RESTART IDENTITY
+		TRUNCATE engine.players, engine.admin_operators RESTART IDENTITY CASCADE
 	`); err != nil {
 		t.Fatalf("truncate: %v", err)
 	}
@@ -54,15 +55,6 @@ func TestPlayerRepo_RoundTrip(t *testing.T) {
 		CellID:    "cell_2_1",
 		PosX:      123.5,
 		PosY:      -45.25,
-		Currencies: map[uint32]int64{1: 1000, 2: 50},
-		Cargo:      map[uint32]int32{100: 5, 101: 10},
-		Bank:       map[uint32]int32{200: 25},
-		Equipment: persist.EquipmentSnapshot{
-			Weapon1:  1,
-			Weapon2:  2,
-			Shield:   3,
-			Thruster: 4,
-		},
 		CreatedAt: now.Add(-1 * time.Hour),
 		LastLogin: now,
 	}
@@ -92,18 +84,6 @@ func TestPlayerRepo_RoundTrip(t *testing.T) {
 	if !loaded.CreatedAt.Equal(snap.CreatedAt) {
 		t.Errorf("CreatedAt = %v, want %v", loaded.CreatedAt, snap.CreatedAt)
 	}
-	if !maps.Equal(loaded.Currencies, snap.Currencies) {
-		t.Errorf("Currencies = %v, want %v", loaded.Currencies, snap.Currencies)
-	}
-	if !maps.Equal(loaded.Cargo, snap.Cargo) {
-		t.Errorf("Cargo = %v, want %v", loaded.Cargo, snap.Cargo)
-	}
-	if !maps.Equal(loaded.Bank, snap.Bank) {
-		t.Errorf("Bank = %v, want %v", loaded.Bank, snap.Bank)
-	}
-	if loaded.Equipment != snap.Equipment {
-		t.Errorf("Equipment = %+v, want %+v", loaded.Equipment, snap.Equipment)
-	}
 }
 
 func TestPlayerRepo_LoadNotFound(t *testing.T) {
@@ -125,10 +105,11 @@ func TestPlayerRepo_LoadAll(t *testing.T) {
 	ctx := context.Background()
 	repo := s.Players()
 
+	now := time.Now().UTC().Truncate(time.Microsecond)
 	players := []*persist.PlayerSnapshot{
-		{Username: "alice", CellID: "cell_0_0", PosX: 1, PosY: 2, CreatedAt: time.Now().UTC().Truncate(time.Microsecond), LastLogin: time.Now().UTC().Truncate(time.Microsecond)},
-		{Username: "bob", CellID: "cell_1_0", PosX: 3, PosY: 4, CreatedAt: time.Now().UTC().Truncate(time.Microsecond), LastLogin: time.Now().UTC().Truncate(time.Microsecond)},
-		{Username: "charlie", CellID: "cell_1_1", PosX: 5, PosY: 6, CreatedAt: time.Now().UTC().Truncate(time.Microsecond), LastLogin: time.Now().UTC().Truncate(time.Microsecond)},
+		{Username: "alice", CellID: "cell_0_0", PosX: 1, PosY: 2, CreatedAt: now, LastLogin: now},
+		{Username: "bob", CellID: "cell_1_0", PosX: 3, PosY: 4, CreatedAt: now, LastLogin: now},
+		{Username: "charlie", CellID: "cell_1_1", PosX: 5, PosY: 6, CreatedAt: now, LastLogin: now},
 	}
 	if err := repo.SaveBatch(ctx, players); err != nil {
 		t.Fatalf("SaveBatch: %v", err)
@@ -216,22 +197,24 @@ func TestPlayerRepo_SaveBatchUpsert(t *testing.T) {
 
 	now := time.Now().UTC().Truncate(time.Microsecond)
 	snap := &persist.PlayerSnapshot{
-		Username:   "dave",
-		CellID:     "cell_0_0",
-		Currencies: map[uint32]int64{1: 100},
-		CreatedAt:  now,
-		LastLogin:  now,
+		Username:  "dave",
+		CellID:    "cell_0_0",
+		PosX:      10,
+		PosY:      20,
+		CreatedAt: now,
+		LastLogin: now,
 	}
 	if err := repo.SaveBatch(ctx, []*persist.PlayerSnapshot{snap}); err != nil {
 		t.Fatalf("first SaveBatch: %v", err)
 	}
 
 	snap2 := &persist.PlayerSnapshot{
-		Username:   "dave",
-		CellID:     "cell_0_0",
-		Currencies: map[uint32]int64{1: 200},
-		CreatedAt:  now,
-		LastLogin:  now,
+		Username:  "dave",
+		CellID:    "cell_1_1",
+		PosX:      99,
+		PosY:      77,
+		CreatedAt: now,
+		LastLogin: now,
 	}
 	if err := repo.SaveBatch(ctx, []*persist.PlayerSnapshot{snap2}); err != nil {
 		t.Fatalf("second SaveBatch: %v", err)
@@ -241,8 +224,11 @@ func TestPlayerRepo_SaveBatchUpsert(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Load: %v", err)
 	}
-	if loaded.Currencies[1] != 200 {
-		t.Errorf("Currencies[1] = %d, want 200 (upsert should overwrite, not accumulate)", loaded.Currencies[1])
+	if loaded.CellID != "cell_1_1" {
+		t.Errorf("CellID = %q, want %q (upsert should overwrite)", loaded.CellID, "cell_1_1")
+	}
+	if loaded.PosX != 99 || loaded.PosY != 77 {
+		t.Errorf("Pos = (%v, %v), want (99, 77) (upsert should overwrite)", loaded.PosX, loaded.PosY)
 	}
 }
 
@@ -254,15 +240,12 @@ func TestPlayerRepo_DebugFlagsRoundtrip(t *testing.T) {
 	const username = "alice-debug"
 	now := time.Now().UTC().Truncate(time.Microsecond)
 	if err := repo.SaveBatch(ctx, []*persist.PlayerSnapshot{{
-		Username:   username,
-		CellID:     "cell_0_0",
-		PosX:       100,
-		PosY:       100,
-		Currencies: map[uint32]int64{},
-		Cargo:      map[uint32]int32{},
-		Bank:       map[uint32]int32{},
-		CreatedAt:  now,
-		LastLogin:  now,
+		Username:  username,
+		CellID:    "cell_0_0",
+		PosX:      100,
+		PosY:      100,
+		CreatedAt: now,
+		LastLogin: now,
 	}}); err != nil {
 		t.Fatalf("seed SaveBatch: %v", err)
 	}
@@ -319,9 +302,6 @@ func TestPlayerRepo_LoadIncludesDebugFlags(t *testing.T) {
 		CellID:     "cell_0_0",
 		PosX:       100,
 		PosY:       100,
-		Currencies: map[uint32]int64{},
-		Cargo:      map[uint32]int32{},
-		Bank:       map[uint32]int32{},
 		CreatedAt:  now,
 		LastLogin:  now,
 		DebugFlags: []string{"topology"},
@@ -334,344 +314,6 @@ func TestPlayerRepo_LoadIncludesDebugFlags(t *testing.T) {
 	}
 	if len(snap.DebugFlags) != 1 || snap.DebugFlags[0] != "topology" {
 		t.Errorf("Load did not roundtrip DebugFlags: got %v", snap.DebugFlags)
-	}
-}
-
-func TestPlayerRepo_SaveBatchEmptyMaps(t *testing.T) {
-	s := openTestStore(t)
-	ctx := context.Background()
-	repo := s.Players()
-
-	now := time.Now().UTC().Truncate(time.Microsecond)
-	snap := &persist.PlayerSnapshot{
-		Username:   "eve",
-		CellID:     "cell_0_0",
-		Currencies: nil,
-		Cargo:      nil,
-		Bank:       nil,
-		CreatedAt:  now,
-		LastLogin:  now,
-	}
-	if err := repo.SaveBatch(ctx, []*persist.PlayerSnapshot{snap}); err != nil {
-		t.Fatalf("SaveBatch: %v", err)
-	}
-
-	loaded, err := repo.Load(ctx, "eve")
-	if err != nil {
-		t.Fatalf("Load: %v", err)
-	}
-	if loaded.Currencies == nil {
-		t.Error("Currencies is nil, want non-nil empty map")
-	}
-	if loaded.Cargo == nil {
-		t.Error("Cargo is nil, want non-nil empty map")
-	}
-	if loaded.Bank == nil {
-		t.Error("Bank is nil, want non-nil empty map")
-	}
-	if len(loaded.Currencies) != 0 {
-		t.Errorf("Currencies len = %d, want 0", len(loaded.Currencies))
-	}
-	if len(loaded.Cargo) != 0 {
-		t.Errorf("Cargo len = %d, want 0", len(loaded.Cargo))
-	}
-	if len(loaded.Bank) != 0 {
-		t.Errorf("Bank len = %d, want 0", len(loaded.Bank))
-	}
-}
-
-// ---------------------------------------------------------------------------
-// MarketRepository tests
-// ---------------------------------------------------------------------------
-
-// makeOrder returns an order with a caller-assigned ID. The caller
-// owns ID allocation under the new MarketRepository contract.
-func makeOrder(id uint64) *persist.OrderRecord {
-	return &persist.OrderRecord{
-		ID:         id,
-		Side:       0,
-		Owner:      "testplayer",
-		LocationID: 1,
-		ItemID:     42,
-		Price:      1000,
-		Quantity:   10,
-		OrigQty:    10,
-		CreatedAt:  time.Now().UTC().Truncate(time.Microsecond),
-	}
-}
-
-func TestMarketRepo_PlaceOrderAndLoadMaxID(t *testing.T) {
-	s := openTestStore(t)
-	ctx := context.Background()
-	repo := s.Market()
-
-	if err := repo.PlaceOrder(ctx, makeOrder(100)); err != nil {
-		t.Fatalf("PlaceOrder 100: %v", err)
-	}
-	if err := repo.PlaceOrder(ctx, makeOrder(250)); err != nil {
-		t.Fatalf("PlaceOrder 250: %v", err)
-	}
-
-	maxID, err := repo.LoadMaxOrderID(ctx)
-	if err != nil {
-		t.Fatalf("LoadMaxOrderID: %v", err)
-	}
-	if maxID != 250 {
-		t.Errorf("LoadMaxOrderID = %d, want 250", maxID)
-	}
-
-	// Empty case: TRUNCATE happened in openTestStore, so LoadMaxOrderID
-	// on a fresh store should return 0. Use a second store to verify.
-	s2 := openTestStore(t)
-	maxID2, err := s2.Market().LoadMaxOrderID(ctx)
-	if err != nil {
-		t.Fatalf("LoadMaxOrderID (empty): %v", err)
-	}
-	if maxID2 != 0 {
-		t.Errorf("LoadMaxOrderID on empty table = %d, want 0", maxID2)
-	}
-}
-
-func TestMarketRepo_UpdateQuantity(t *testing.T) {
-	s := openTestStore(t)
-	ctx := context.Background()
-	repo := s.Market()
-
-	const id uint64 = 42
-	if err := repo.PlaceOrder(ctx, makeOrder(id)); err != nil {
-		t.Fatalf("PlaceOrder: %v", err)
-	}
-	if err := repo.UpdateQuantity(ctx, id, 5); err != nil {
-		t.Fatalf("UpdateQuantity: %v", err)
-	}
-
-	var loaded *persist.OrderRecord
-	if err := repo.LoadActiveOrders(ctx, func(o *persist.OrderRecord) error {
-		if o.ID == id {
-			loaded = o
-		}
-		return nil
-	}); err != nil {
-		t.Fatalf("LoadActiveOrders: %v", err)
-	}
-	if loaded == nil {
-		t.Fatal("order not found after UpdateQuantity")
-	}
-	if loaded.Quantity != 5 {
-		t.Errorf("Quantity = %d, want 5", loaded.Quantity)
-	}
-}
-
-func TestMarketRepo_DeleteOrder(t *testing.T) {
-	s := openTestStore(t)
-	ctx := context.Background()
-	repo := s.Market()
-
-	const id uint64 = 7
-	if err := repo.PlaceOrder(ctx, makeOrder(id)); err != nil {
-		t.Fatalf("PlaceOrder: %v", err)
-	}
-	if err := repo.DeleteOrder(ctx, id); err != nil {
-		t.Fatalf("DeleteOrder: %v", err)
-	}
-
-	var count int
-	if err := repo.LoadActiveOrders(ctx, func(*persist.OrderRecord) error {
-		count++
-		return nil
-	}); err != nil {
-		t.Fatalf("LoadActiveOrders: %v", err)
-	}
-	if count != 0 {
-		t.Errorf("LoadActiveOrders returned %d orders after delete, want 0", count)
-	}
-}
-
-func TestMarketRepo_DeleteOrderUnknownID(t *testing.T) {
-	s := openTestStore(t)
-	ctx := context.Background()
-	repo := s.Market()
-
-	if err := repo.DeleteOrder(ctx, 99999999); err != nil {
-		t.Fatalf("DeleteOrder with unknown ID: expected nil, got %v", err)
-	}
-}
-
-func TestMarketRepo_RecordTrade(t *testing.T) {
-	s := openTestStore(t)
-	ctx := context.Background()
-	repo := s.Market()
-
-	trade := &persist.TradeRecord{
-		ItemID:     42,
-		LocationID: 1,
-		Price:      1000,
-		Quantity:   5,
-		Buyer:      "alice",
-		Seller:     "bob",
-		OccurredAt: time.Now().UTC().Truncate(time.Microsecond),
-	}
-	if err := repo.RecordTrade(ctx, trade); err != nil {
-		t.Fatalf("RecordTrade: %v", err)
-	}
-
-	var count int
-	if err := s.pool.QueryRow(ctx, `SELECT COUNT(*) FROM market_trades`).Scan(&count); err != nil {
-		t.Fatalf("count query: %v", err)
-	}
-	if count != 1 {
-		t.Errorf("market_trades count = %d, want 1", count)
-	}
-}
-
-func TestMarketRepo_LoadActiveOrdersFiltersExpired(t *testing.T) {
-	s := openTestStore(t)
-	ctx := context.Background()
-	repo := s.Market()
-
-	now := time.Now().UTC()
-
-	// Already expired — should NOT appear.
-	expired := makeOrder(1)
-	expired.ExpiresAt = now.Add(-1 * time.Hour)
-	if err := repo.PlaceOrder(ctx, expired); err != nil {
-		t.Fatalf("PlaceOrder expired: %v", err)
-	}
-
-	// Never expires (zero ExpiresAt) — should appear.
-	neverExpires := makeOrder(2)
-	if err := repo.PlaceOrder(ctx, neverExpires); err != nil {
-		t.Fatalf("PlaceOrder neverExpires: %v", err)
-	}
-
-	// Future expiry — should appear.
-	futureExpiry := makeOrder(3)
-	futureExpiry.ExpiresAt = now.Add(1 * time.Hour)
-	if err := repo.PlaceOrder(ctx, futureExpiry); err != nil {
-		t.Fatalf("PlaceOrder futureExpiry: %v", err)
-	}
-
-	var count int
-	if err := repo.LoadActiveOrders(ctx, func(*persist.OrderRecord) error {
-		count++
-		return nil
-	}); err != nil {
-		t.Fatalf("LoadActiveOrders: %v", err)
-	}
-	if count != 2 {
-		t.Errorf("LoadActiveOrders returned %d orders, want 2 (expired filtered out)", count)
-	}
-}
-
-func TestMarketRepo_LoadActiveOrdersOrderedByID(t *testing.T) {
-	s := openTestStore(t)
-	ctx := context.Background()
-	repo := s.Market()
-
-	for i := uint64(1); i <= 3; i++ {
-		if err := repo.PlaceOrder(ctx, makeOrder(i)); err != nil {
-			t.Fatalf("PlaceOrder %d: %v", i, err)
-		}
-	}
-
-	var ids []uint64
-	if err := repo.LoadActiveOrders(ctx, func(o *persist.OrderRecord) error {
-		ids = append(ids, o.ID)
-		return nil
-	}); err != nil {
-		t.Fatalf("LoadActiveOrders: %v", err)
-	}
-	if len(ids) != 3 {
-		t.Fatalf("expected 3 orders, got %d", len(ids))
-	}
-	for i := 1; i < len(ids); i++ {
-		if ids[i] <= ids[i-1] {
-			t.Errorf("IDs not strictly monotonic at index %d: %v", i, ids)
-		}
-	}
-}
-
-// ---------------------------------------------------------------------------
-// ConfigRepository tests
-// ---------------------------------------------------------------------------
-
-func TestConfigRepo_LoadEmpty(t *testing.T) {
-	s := openTestStore(t)
-	ctx := context.Background()
-	repo := s.Config()
-
-	snap, err := repo.Load(ctx)
-	if !errors.Is(err, persist.ErrNotFound) {
-		t.Fatalf("expected ErrNotFound, got %v", err)
-	}
-	if snap != nil {
-		t.Fatalf("expected nil snapshot, got %+v", snap)
-	}
-}
-
-func TestConfigRepo_RoundTrip(t *testing.T) {
-	s := openTestStore(t)
-	ctx := context.Background()
-	repo := s.Config()
-
-	in := &persist.ConfigSnapshot{
-		Data:    []byte("hello world"),
-		Version: 42,
-	}
-	if err := repo.Save(ctx, in); err != nil {
-		t.Fatalf("Save: %v", err)
-	}
-
-	loaded, err := repo.Load(ctx)
-	if err != nil {
-		t.Fatalf("Load: %v", err)
-	}
-	if string(loaded.Data) != string(in.Data) {
-		t.Errorf("Data = %q, want %q", loaded.Data, in.Data)
-	}
-	if loaded.Version != in.Version {
-		t.Errorf("Version = %d, want %d", loaded.Version, in.Version)
-	}
-}
-
-func TestConfigRepo_SaveOverwrites(t *testing.T) {
-	s := openTestStore(t)
-	ctx := context.Background()
-	repo := s.Config()
-
-	if err := repo.Save(ctx, &persist.ConfigSnapshot{Data: []byte("v1"), Version: 1}); err != nil {
-		t.Fatalf("Save v1: %v", err)
-	}
-	if err := repo.Save(ctx, &persist.ConfigSnapshot{Data: []byte("v2"), Version: 2}); err != nil {
-		t.Fatalf("Save v2: %v", err)
-	}
-
-	loaded, err := repo.Load(ctx)
-	if err != nil {
-		t.Fatalf("Load: %v", err)
-	}
-	if loaded.Version != 2 {
-		t.Errorf("Version = %d, want 2 (second save should overwrite)", loaded.Version)
-	}
-	if string(loaded.Data) != "v2" {
-		t.Errorf("Data = %q, want %q", loaded.Data, "v2")
-	}
-}
-
-func TestConfigRepo_SingletonEnforced(t *testing.T) {
-	s := openTestStore(t)
-	ctx := context.Background()
-
-	_, err := s.pool.Exec(ctx,
-		`INSERT INTO game_config (id, data, version) VALUES (2, $1, $2)`,
-		[]byte{}, int64(0),
-	)
-	if err == nil {
-		t.Fatal("expected CHECK constraint violation for id=2, got nil error")
-	}
-	msg := strings.ToLower(err.Error())
-	if !strings.Contains(msg, "game_config_singleton") && !strings.Contains(msg, "check") {
-		t.Errorf("error message %q should mention game_config_singleton or check", err.Error())
 	}
 }
 
