@@ -1,4 +1,3 @@
-DROP TABLE IF EXISTS market_trades;
-DROP TABLE IF EXISTS market_orders;
-DROP TABLE IF EXISTS game_config;
-DROP TABLE IF EXISTS players;
+DROP TABLE IF EXISTS engine.admin_operators;
+DROP TABLE IF EXISTS engine.players;
+DROP SCHEMA IF EXISTS engine;
