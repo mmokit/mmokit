@@ -108,25 +108,6 @@ func TestNPCAI_BrawlerCharges(t *testing.T) {
 	}
 }
 
-// TestNPCAI_SniperHoldsRange — Sniper (MotionHoldRange) must kite away
-// when a target is well inside its 600u preferred range.
-func TestNPCAI_SniperHoldsRange(t *testing.T) {
-	gw, _ := newTestGameWorld()
-	ai, phys := newWiredNPCAISystem(t, gw)
-
-	npc := gw.SpawnNPC(0, 0, ArchetypeSniper, 0)
-	// 20u: well inside Sniper's 45u preferred range (kite away).
-	newTestPlayerAt(t, gw, 8003, 20, 0)
-
-	const dt = float32(0.05)
-	tickAI(gw.stage, ai, phys, dt, 10) // 0.5s
-
-	pos := mmokit.Get[mmokit.Position](npc)
-	if pos.X >= 0 {
-		t.Errorf("Sniper too close → should kite (-x); pos.X=%.2f", pos.X)
-	}
-}
-
 // TestNPCAI_AggroDeescalation — AI returns to Idle after
 // AggroDeescalationSec (default 6s) of no damage activity. The target
 // is teleported out of weapon range mid-test so the NPC stops stamping

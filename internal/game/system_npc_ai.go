@@ -216,30 +216,15 @@ func (s *NPCAISystem) tickEngage(self mmokit.Entity, ai *gamecomp.NPCAI,
 
 // npcAbilityTypeFor maps an NPC archetype to an existing player-side
 // ability type so the shared VFX dispatcher in ability-effects.ts
-// renders a sensible visual. Picked for thematic fit: Sniper → instant
-// long beam, Brawler → kinetic burst, Swarmer → fast projectile.
+// renders a sensible visual. Brawler is the only archetype that fires
+// hitscan in v2 — Artillery uses AoE markers, Kamikaze detonates.
 func npcAbilityTypeFor(archetype uint8) uint8 {
-	switch archetype {
-	case ArchetypeSniper:
-		return uint8(item.AbilityTypeRailShot)
-	case ArchetypeSwarmer:
-		return uint8(item.AbilityTypePlasmaBolt)
-	default: // ArchetypeBrawler + future archetypes
-		return uint8(item.AbilityTypePulseLaser)
-	}
+	return uint8(item.AbilityTypePulseLaser)
 }
 
 func (s *NPCAISystem) applyMotion(ai *gamecomp.NPCAI, vel *mmokit.Velocity,
 	pos *mmokit.Position, tpos *mmokit.Position, dist, dx, dy float32,
 ) {
-	// 25% of the preferred range — generous enough to avoid jitter at
-	// the band edges but tight enough to react when the player closes
-	// to half preferred range. A fixed 50u was too wide for the small
-	// (~50u) ranges we use now.
-	tolerance := ai.PreferredRange * 0.25
-	if tolerance < 4 {
-		tolerance = 4
-	}
 	if dist < 1e-3 {
 		vel.X, vel.Y = 0, 0
 		return
@@ -248,24 +233,8 @@ func (s *NPCAISystem) applyMotion(ai *gamecomp.NPCAI, vel *mmokit.Velocity,
 	switch ai.MotionPolicy {
 	case MotionCharge:
 		vel.X, vel.Y = ux*ai.MaxSpeed, uy*ai.MaxSpeed
-	case MotionHoldRange:
-		if dist < ai.PreferredRange-tolerance {
-			vel.X, vel.Y = -ux*ai.MaxSpeed, -uy*ai.MaxSpeed
-		} else if dist > ai.PreferredRange+tolerance {
-			vel.X, vel.Y = ux*ai.MaxSpeed, uy*ai.MaxSpeed
-		} else {
-			vel.X, vel.Y = 0, 0
-		}
-	case MotionEncircle:
-		tx, ty := -uy, ux
-		radial := float32(0)
-		if dist < ai.PreferredRange-tolerance {
-			radial = -1
-		} else if dist > ai.PreferredRange+tolerance {
-			radial = 1
-		}
-		vel.X = (tx + ux*radial) * ai.MaxSpeed
-		vel.Y = (ty + uy*radial) * ai.MaxSpeed
+	case MotionStationary:
+		vel.X, vel.Y = 0, 0
 	}
 }
 

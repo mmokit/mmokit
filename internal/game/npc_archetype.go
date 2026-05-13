@@ -1,11 +1,11 @@
 package game
 
-// NPCArchetype enumerates the v1 enemy archetypes. Values are wire-stable
+// NPCArchetype enumerates the v2 enemy archetypes. Values are wire-stable
 // (replicated via NPCAI.Archetype) — append new variants at the end.
 const (
-	ArchetypeBrawler uint8 = 0
-	ArchetypeSniper  uint8 = 1
-	ArchetypeSwarmer uint8 = 2
+	ArchetypeBrawler   uint8 = 0
+	ArchetypeArtillery uint8 = 1
+	ArchetypeKamikaze  uint8 = 2
 )
 
 // NPCAIState — current state-machine slot for an NPC.
@@ -18,9 +18,8 @@ const (
 
 // MotionPolicy — how an NPC moves while in Engage. Applied per-archetype.
 const (
-	MotionCharge    uint8 = 0
-	MotionHoldRange uint8 = 1
-	MotionEncircle  uint8 = 2
+	MotionCharge     uint8 = 0
+	MotionStationary uint8 = 1 // Artillery between casts; no retreat
 )
 
 // ArchetypeDefaults holds the spawn-time defaults for an archetype.
@@ -57,32 +56,6 @@ func archetypeDefaults(cfg *GameConfig, kind uint8) ArchetypeDefaults {
 			DamagePerShot:  cfg.BrawlerDamagePerShot,
 			FireRate:       cfg.BrawlerFireRate,
 		}
-	case ArchetypeSniper:
-		return ArchetypeDefaults{
-			HP:             cfg.SniperHP,
-			Shield:         cfg.SniperShield,
-			MaxSpeed:       cfg.SniperMaxSpeed,
-			TurnRate:       cfg.SniperTurnRate,
-			PreferredRange: cfg.SniperPreferredRange,
-			WeaponRange:    cfg.SniperWeaponRange,
-			AggroRadius:    cfg.SniperAggroRadius,
-			MotionPolicy:   MotionHoldRange,
-			DamagePerShot:  cfg.SniperDamagePerShot,
-			FireRate:       cfg.SniperFireRate,
-		}
-	case ArchetypeSwarmer:
-		return ArchetypeDefaults{
-			HP:             cfg.SwarmerHP,
-			Shield:         cfg.SwarmerShield,
-			MaxSpeed:       cfg.SwarmerMaxSpeed,
-			TurnRate:       cfg.SwarmerTurnRate,
-			PreferredRange: cfg.SwarmerPreferredRange,
-			WeaponRange:    cfg.SwarmerWeaponRange,
-			AggroRadius:    cfg.SwarmerAggroRadius,
-			MotionPolicy:   MotionEncircle,
-			DamagePerShot:  cfg.SwarmerDamagePerShot,
-			FireRate:       cfg.SwarmerFireRate,
-		}
 	}
-	panic("unknown archetype")
+	panic("archetypeDefaults: Artillery / Kamikaze defaults not yet wired (Tasks 13/16)")
 }

@@ -13,7 +13,7 @@ import (
 type NPCSpawnArgs struct {
 	X         float32 `cmd:"help=world X coordinate"`
 	Y         float32 `cmd:"help=world Y coordinate"`
-	Archetype string  `cmd:"help=brawler | sniper | swarmer"`
+	Archetype string  `cmd:"help=brawler"`
 }
 
 type NPCSpawnResult struct {
@@ -32,7 +32,7 @@ func registerNPCSpawn(reg *cmdsys.Registry, coord *mmokit.Process) error {
 		Verb:        "npc.spawn",
 		Capability:  "npc.spawn",
 		Description: "spawn a test NPC at world (X,Y) of the given archetype (no POI anchor)",
-		Examples:    []string{"npc.spawn 100 200 brawler", "npc.spawn 0 0 sniper"},
+		Examples:    []string{"npc.spawn 100 200 brawler"},
 		// RouteLocal: the handler resolves the destination cell from (X,Y)
 		// internally via coord.CellAtPosition. Mirrors entity.spawn —
 		// RouteSpecificCell would require a CellID arg in the schema.
@@ -81,11 +81,7 @@ func resolveArchetype(name string) (uint8, error) {
 	switch strings.ToLower(strings.TrimSpace(name)) {
 	case "brawler":
 		return game.ArchetypeBrawler, nil
-	case "sniper":
-		return game.ArchetypeSniper, nil
-	case "swarmer":
-		return game.ArchetypeSwarmer, nil
 	default:
-		return 0, fmt.Errorf("unknown archetype %q (valid: brawler | sniper | swarmer)", name)
+		return 0, fmt.Errorf("unknown archetype %q (valid: brawler)", name)
 	}
 }

@@ -61,26 +61,6 @@ type GameConfig struct {
 	BrawlerDamagePerShot  float32 `json:"brawler_damage_per_shot"`
 	BrawlerFireRate       float32 `json:"brawler_fire_rate"`
 
-	SniperHP             float32 `json:"sniper_hp"`
-	SniperShield         float32 `json:"sniper_shield"`
-	SniperMaxSpeed       float32 `json:"sniper_max_speed"`
-	SniperTurnRate       float32 `json:"sniper_turn_rate"`
-	SniperPreferredRange float32 `json:"sniper_preferred_range"`
-	SniperWeaponRange    float32 `json:"sniper_weapon_range"`
-	SniperAggroRadius    float32 `json:"sniper_aggro_radius"`
-	SniperDamagePerShot  float32 `json:"sniper_damage_per_shot"`
-	SniperFireRate       float32 `json:"sniper_fire_rate"`
-
-	SwarmerHP             float32 `json:"swarmer_hp"`
-	SwarmerShield         float32 `json:"swarmer_shield"`
-	SwarmerMaxSpeed       float32 `json:"swarmer_max_speed"`
-	SwarmerTurnRate       float32 `json:"swarmer_turn_rate"`
-	SwarmerPreferredRange float32 `json:"swarmer_preferred_range"`
-	SwarmerWeaponRange    float32 `json:"swarmer_weapon_range"`
-	SwarmerAggroRadius    float32 `json:"swarmer_aggro_radius"`
-	SwarmerDamagePerShot  float32 `json:"swarmer_damage_per_shot"`
-	SwarmerFireRate       float32 `json:"swarmer_fire_rate"`
-
 	// AI shared
 	AggroDeescalationSec float32 `json:"aggro_deescalation_sec"`
 
@@ -171,14 +151,6 @@ func DefaultGameConfig() GameConfig {
 		BrawlerHP: 400, BrawlerShield: 200, BrawlerMaxSpeed: 6, BrawlerTurnRate: 1.5,
 		BrawlerPreferredRange: 30, BrawlerWeaponRange: 50, BrawlerAggroRadius: 30,
 		BrawlerDamagePerShot: 2, BrawlerFireRate: 1.0,
-
-		SniperHP: 150, SniperShield: 100, SniperMaxSpeed: 8, SniperTurnRate: 2.5,
-		SniperPreferredRange: 45, SniperWeaponRange: 50, SniperAggroRadius: 30,
-		SniperDamagePerShot: 6, SniperFireRate: 0.4,
-
-		SwarmerHP: 80, SwarmerShield: 0, SwarmerMaxSpeed: 14, SwarmerTurnRate: 3.0,
-		SwarmerPreferredRange: 35, SwarmerWeaponRange: 50, SwarmerAggroRadius: 30,
-		SwarmerDamagePerShot: 1, SwarmerFireRate: 2.0,
 
 		AggroDeescalationSec: 6,
 
