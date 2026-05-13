@@ -62,7 +62,7 @@ func (gw *GameWorld) performActiveEquip(sess *mmokit.PlayerSession, itemID uint3
 // gear directly between loadout and bank without round-tripping through
 // cargo.
 func (gw *GameWorld) performDockedEquip(sess *mmokit.PlayerSession, itemID uint32, slot item.EquipSlot, targetBank bool) {
-	pdata := gw.PlayerDB.GetOrCreate(sess.Username)
+	pdata := gw.PlayerDB.Bind(sess)
 	if pdata.Cargo == nil {
 		pdata.Cargo = make(map[uint32]int32)
 	}

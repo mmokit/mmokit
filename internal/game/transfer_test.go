@@ -182,6 +182,59 @@ func TestFinishTransferSpawn_Ship(t *testing.T) {
 	if !mmokit.Has[gamecomp.TargetLock](e) {
 		t.Error("TargetLock should be present (default)")
 	}
+	// TargetLock is `mmokit:"local"` so MaxSlots+Range are NOT serialized
+	// across the wire. FinishTransferSpawn → ApplyEquipmentStats must
+	// restore them from config so the next LockTarget input doesn't trip
+	// the `len(Slots) >= MaxSlots` gate and bounce as SlotsFull.
+	tl := mmokit.Get[gamecomp.TargetLock](e)
+	if tl.MaxSlots != gw.Config.LockMaxSlotsPlayer {
+		t.Errorf("TargetLock.MaxSlots: got %d, want %d (config)", tl.MaxSlots, gw.Config.LockMaxSlotsPlayer)
+	}
+	if tl.Range != gw.Config.LockOnRange {
+		t.Errorf("TargetLock.Range: got %f, want %f (config)", tl.Range, gw.Config.LockOnRange)
+	}
+}
+
+// TestSpawnFromTransferCore_FiresOnTransferReceived guards against
+// regressions where the stage's onTransferReceived hook is left unwired
+// (the bug that made TargetLock.MaxSlots stay zero on every cross-cell
+// crossing). Calls SpawnFromTransferCore — the production cross-cell path
+// — and asserts MaxSlots came out non-zero, which can only happen if
+// FinishTransferSpawn → ApplyEquipmentStats actually ran.
+func TestSpawnFromTransferCore_FiresOnTransferReceived(t *testing.T) {
+	gw, cm := newTestGameWorld()
+
+	connID := addMockConn(gw, cm)
+	gw.Players.RegisterTransferSession(connID, "transferred")
+
+	frame := &mmokit.TransferFrame{
+		NetworkID:  4242,
+		EntityType: gamecomp.KindShip,
+		ConnID:     connID,
+		Username:   "transferred",
+		PosX:       10, PosY: 20,
+		CellX: 0, CellY: 0,
+		Rotation: 0,
+		Collider: mmokit.Collider{Radius: 5, Shape: mmokit.ShapeRect},
+	}
+	blob, err := mmokit.MarshalTransferFrame(frame)
+	if err != nil {
+		t.Fatalf("MarshalTransferFrame: %v", err)
+	}
+
+	handle, _, err := gw.stage.SpawnFromTransferCore(blob, pkguniverse.PresenceLive)
+	if err != nil {
+		t.Fatalf("SpawnFromTransferCore: %v", err)
+	}
+	e := mmokit.EntityFromECS(gw.stage, handle)
+
+	tl := mmokit.Get[gamecomp.TargetLock](e)
+	if tl == nil {
+		t.Fatal("TargetLock missing after transfer — EnsureEntityKindComponents not run")
+	}
+	if tl.MaxSlots != gw.Config.LockMaxSlotsPlayer {
+		t.Fatalf("TargetLock.MaxSlots: got %d, want %d — onTransferReceived hook not wired", tl.MaxSlots, gw.Config.LockMaxSlotsPlayer)
+	}
 }
 
 // ---------------------------------------------------------------------------

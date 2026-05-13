@@ -40,7 +40,10 @@ func registerCurrency(reg *cmdsys.Registry, coord *mmokit.Process, playerDB *gam
 			}
 			target := mmokit.ResolvePlayerTarget(env, username)
 
-			pdata := playerDB.GetOrCreate(username)
+			pdata := playerDB.Get(username)
+			if pdata == nil {
+				return nil, fmt.Errorf("player %q not loaded — they must have logged in at least once", username)
+			}
 			if pdata.Currencies == nil {
 				pdata.Currencies = make(map[uint32]int64)
 			}

@@ -45,10 +45,9 @@ func (gw *GameWorld) SpawnPlayer(s *mmokit.PlayerSession) {
 	// Check for saved player data
 	var x, y float32
 	var savedCargo map[uint32]int32
-	username := s.Username
-	pdata := gw.PlayerDB.GetOrCreate(username)
+	pdata := gw.PlayerDB.Bind(s)
 	pdata.LastLogin = time.Now()
-	gw.PlayerDB.MarkDirty(username)
+	gw.PlayerDB.MarkDirtyByUserID(pdata.UserID)
 
 	if pdata.HasSave {
 		x = pdata.X
@@ -106,7 +105,7 @@ func (gw *GameWorld) SpawnPlayer(s *mmokit.PlayerSession) {
 		},
 		mmokit.Rotation{},
 		mmokit.PlayerConn{ConnID: connID},
-		gamecomp.PilotName{Name: username},
+		gamecomp.PilotName{Name: s.Username},
 		gamecomp.ShipControl{
 			Thrust:    gw.Config.ShipThrust,
 			TurnRate:  gw.Config.ShipTurnRate,
@@ -244,7 +243,7 @@ func (gw *GameWorld) reconnectPlayer(s *mmokit.PlayerSession) {
 	mmokit.SendEvent(gw.stage, connID, &MapData{Stations: mapStations})
 
 	// Send currency balances
-	pdata := gw.PlayerDB.GetOrCreate(s.Username)
+	pdata := gw.PlayerDB.Bind(s)
 	for curID, bal := range pdata.Currencies {
 		mmokit.SendEvent(gw.stage, connID, &CurrencyUpdate{
 			CurrencyID: curID,

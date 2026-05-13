@@ -130,12 +130,12 @@ func NewGameWorld(base *mmokit.Stage, cfg *GameConfig, playerDB *PlayerRepo, cel
 		// cell's local frame, and CellBoundarySystem would immediately
 		// transfer it back to the death cell — landing the player at the
 		// POI again, where the surviving NPCs kill them on sight.
-		pdata := gw.PlayerDB.GetOrCreate(s.Username)
+		pdata := gw.PlayerDB.Bind(s)
 		pdata.X = StationLocalX
 		pdata.Y = StationLocalY
 		pdata.CellX = gw.Config.StationCell.CellX
 		pdata.CellY = gw.Config.StationCell.CellY
-		gw.PlayerDB.MarkDirty(s.Username)
+		gw.PlayerDB.MarkDirtyByUserID(pdata.UserID)
 		// Zero velocity + shield NOW (safe — existing component writes,
 		// not structural changes).
 		if v := mmokit.Get[mmokit.Velocity](entity); v != nil {
@@ -288,6 +288,12 @@ func NewGameWorld(base *mmokit.Stage, cfg *GameConfig, playerDB *PlayerRepo, cel
 
 	// Initialize entity kinds (transfer replication + component auto-fill).
 	gw.initEntityKinds()
+
+	// Wire per-stage transfer callbacks. Must run after gw is fully built so
+	// the closures captured here see the populated GameWorld. Replaces the
+	// orphaned GameWorld.Init() that the world.Init() removal in spec
+	// 2026-05-08-stage-on-systembase-design left without a caller.
+	gw.wireStageCallbacks()
 
 	// Spawn initial content for this cell (skip for split-created worlds —
 	// entities arrive via transfer from the parent cell)

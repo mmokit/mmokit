@@ -60,6 +60,8 @@ func RegisterInputs(mmo *mmokit.Process) {
 			}
 		}
 		if uint8(len(lock.Slots)) >= lock.MaxSlots {
+			gw.eng.Log.Log(CatCombatLock, "lock: REJECT SlotsFull player=%d target=%d len(Slots)=%d MaxSlots=%d Range=%.1f",
+				player.NetID(), msg.NetID, len(lock.Slots), lock.MaxSlots, lock.Range)
 			sendLockRejected(gw, player, msg.NetID, LockRejectedSlotsFull)
 			return
 		}

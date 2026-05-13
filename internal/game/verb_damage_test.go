@@ -128,11 +128,23 @@ func newTestNPC(t *testing.T, gw *GameWorld, netID uint32, kindType uint8) uint3
 // kill-credit path. Registers the player session in PlayerDB so the
 // killCreditHandler can find it via Players.ByConnID. ConnID equals
 // netID — the unit tests just need a stable association.
+//
+// Production gateway-side login sets s.UserID before any cell hook
+// fires. Tests skip the gateway entirely, so we mint a stable
+// deterministic UUID (uuid.NewSHA1 on username) and call PlayerDB.Bind
+// here to populate the in-memory cache the way real OnEnter would.
+// Without that, downstream `playerDB.Get(username)` lookups in tests
+// would miss because nothing else creates the cache entry.
 func newTestPlayerShip(t *testing.T, gw *GameWorld, netID uint32, username string) uint32 {
 	t.Helper()
 	connID := netID
 	id := newTestShip(t, gw, netID, 100, 0)
 	mmokit.Set(mmokit.EntityByNetID(gw.stage, id), mmokit.PlayerConn{ConnID: connID})
 	gw.Players.RegisterPlayer(connID, username)
+	s := gw.Players.ByConnID(connID)
+	if s != nil {
+		s.UserID = testUserID(username)
+		gw.PlayerDB.Bind(s)
+	}
 	return id
 }

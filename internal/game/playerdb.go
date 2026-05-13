@@ -8,9 +8,11 @@ import (
 	"sync"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	gamepersist "github.com/zenion/mmoserver/internal/persist"
+	"github.com/zenion/mmoserver/pkg/engine"
 	"github.com/zenion/mmoserver/pkg/logger"
 	"github.com/zenion/mmoserver/pkg/persist"
 	pkguniverse "github.com/zenion/mmoserver/pkg/universe"
@@ -23,12 +25,16 @@ import (
 // engine.players, game state goes to space.player_state, both inside
 // one pgx.Tx per flush.
 //
+// Keyed by the immutable UserID; byUsername is a secondary index for
+// the username-based admin/console lookups.
+//
 // Thread-safe: the mutex protects concurrent access from the
 // marketplace service running on operation router worker goroutines.
 type PlayerRepo struct {
 	mu         sync.RWMutex
-	players    map[string]*PlayerData
-	dirty      map[string]bool
+	players    map[uuid.UUID]*PlayerData
+	byUsername map[string]uuid.UUID
+	dirty      map[uuid.UUID]bool
 	engineRepo persist.PlayerRepository
 	gameRepo   gamepersist.PlayerStateRepository
 	flusher    *PlayerFlusher
@@ -46,8 +52,9 @@ func NewPlayerRepo(
 	log *logger.Logger,
 ) *PlayerRepo {
 	return &PlayerRepo{
-		players:    make(map[string]*PlayerData),
-		dirty:      make(map[string]bool),
+		players:    make(map[uuid.UUID]*PlayerData),
+		byUsername: make(map[string]uuid.UUID),
+		dirty:      make(map[uuid.UUID]bool),
 		engineRepo: engineRepo,
 		gameRepo:   gameRepo,
 		flusher:    NewPlayerFlusher(pool, engineRepo, gameRepo, log),
@@ -65,7 +72,8 @@ func (r *PlayerRepo) LoadAll(ctx context.Context) error {
 	count := 0
 	err := r.engineRepo.LoadAll(ctx, func(snap *persist.PlayerSnapshot) error {
 		pd := snapshotToPlayerData(snap, nil)
-		r.players[pd.Username] = pd
+		r.players[pd.UserID] = pd
+		r.byUsername[pd.Username] = pd.UserID
 		count++
 		return nil
 	})
@@ -75,7 +83,7 @@ func (r *PlayerRepo) LoadAll(ctx context.Context) error {
 
 	if r.gameRepo != nil {
 		err = r.gameRepo.LoadAll(ctx, func(snap *gamepersist.PlayerStateSnapshot) error {
-			pd, ok := r.players[snap.Username]
+			pd, ok := r.players[snap.UserID]
 			if !ok {
 				// Orphan game-state row (no matching engine identity).
 				// FK enforces this shouldn't happen, but tolerate it by
@@ -98,34 +106,88 @@ func (r *PlayerRepo) LoadAll(ctx context.Context) error {
 }
 
 // Get returns the player data for a username, or nil if not found.
+// Username-keyed lookups go through the byUsername secondary index;
+// callers who already have a session should prefer Bind or GetByUserID.
 func (r *PlayerRepo) Get(username string) *PlayerData {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
-	return r.players[username]
+	uid, ok := r.byUsername[username]
+	if !ok {
+		return nil
+	}
+	return r.players[uid]
 }
 
-// GetOrCreate returns existing player data or creates a new entry.
-// New players are automatically marked dirty.
-func (r *PlayerRepo) GetOrCreate(username string) *PlayerData {
+// GetByUserID returns the player data for a UserID, or nil if not found.
+func (r *PlayerRepo) GetByUserID(userID uuid.UUID) *PlayerData {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	return r.players[userID]
+}
+
+// Bind is the canonical "session→PlayerData" entry point. Returns the
+// existing PlayerData if one is already cached for s.UserID; otherwise
+// creates a new in-memory entry, indexes it by both UserID and Username,
+// and marks it dirty so the flusher persists it on the next cycle.
+//
+// Callers MUST have a session whose UserID is non-zero — Bind panics if
+// it isn't, because we can't safely fabricate an identity from just a
+// display name (the schema FK requires user_id to match a real auth
+// principal). Tests must populate UserID on their PlayerSession before
+// calling Bind.
+func (r *PlayerRepo) Bind(s *engine.PlayerSession) *PlayerData {
+	if s == nil {
+		panic("PlayerRepo.Bind: nil session")
+	}
+	if s.UserID == uuid.Nil {
+		panic(fmt.Sprintf("PlayerRepo.Bind: session for %q has zero UserID — auth must populate it before bind", s.Username))
+	}
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	if p, ok := r.players[username]; ok {
+	if p, ok := r.players[s.UserID]; ok {
+		// Keep the secondary index pointing at the current username in
+		// case the display name changed since the snapshot was loaded.
+		if p.Username != s.Username && s.Username != "" {
+			delete(r.byUsername, p.Username)
+			p.Username = s.Username
+			r.byUsername[s.Username] = s.UserID
+			r.dirty[s.UserID] = true
+		}
 		return p
 	}
 	p := &PlayerData{
-		Username:  username,
+		UserID:    s.UserID,
+		Username:  s.Username,
 		CreatedAt: time.Now(),
 	}
-	r.players[username] = p
-	r.dirty[username] = true
+	r.players[s.UserID] = p
+	if s.Username != "" {
+		r.byUsername[s.Username] = s.UserID
+	}
+	r.dirty[s.UserID] = true
 	return p
 }
 
 // MarkDirty flags a player for persistence on the next flush.
+// Resolves the username through byUsername; no-op when the user is
+// unknown to this repo.
 func (r *PlayerRepo) MarkDirty(username string) {
 	r.mu.Lock()
-	r.dirty[username] = true
-	r.mu.Unlock()
+	defer r.mu.Unlock()
+	if uid, ok := r.byUsername[username]; ok {
+		r.dirty[uid] = true
+	}
+}
+
+// MarkDirtyByUserID flags a player for persistence by their UserID.
+// Preferred when the caller already has a session or PlayerData in
+// hand (avoids the byUsername round-trip).
+func (r *PlayerRepo) MarkDirtyByUserID(userID uuid.UUID) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if _, ok := r.players[userID]; ok {
+		r.dirty[userID] = true
+	}
 }
 
 // FlushDirty snapshots all dirty players and submits them as one
@@ -140,20 +202,20 @@ func (r *PlayerRepo) FlushDirty(ctx context.Context) (int, error) {
 		r.mu.Unlock()
 		return 0, nil
 	}
-	for username := range r.dirty {
-		p := r.players[username]
+	for uid := range r.dirty {
+		p := r.players[uid]
 		if p == nil {
 			continue
 		}
 		r.flusher.Mark(enginePlayerSnapshot(p), gamePlayerStateSnapshot(p))
 	}
-	r.dirty = make(map[string]bool)
+	r.dirty = make(map[uuid.UUID]bool)
 	r.mu.Unlock()
 	return r.flusher.Flush(ctx)
 }
 
-// All returns the full player map (for shutdown save-all).
-func (r *PlayerRepo) All() map[string]*PlayerData {
+// All returns the full player map keyed by UserID (for shutdown save-all).
+func (r *PlayerRepo) All() map[uuid.UUID]*PlayerData {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 	return r.players
@@ -163,7 +225,11 @@ func (r *PlayerRepo) All() map[string]*PlayerData {
 func (r *PlayerRepo) GetBankBalance(player string, itemID uint32) int32 {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
-	p := r.players[player]
+	uid, ok := r.byUsername[player]
+	if !ok {
+		return 0
+	}
+	p := r.players[uid]
 	if p == nil || p.Bank == nil {
 		return 0
 	}
@@ -174,7 +240,11 @@ func (r *PlayerRepo) GetBankBalance(player string, itemID uint32) int32 {
 func (r *PlayerRepo) ModifyBank(player string, fn func(bank map[uint32]int32)) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	p := r.players[player]
+	uid, ok := r.byUsername[player]
+	if !ok {
+		return
+	}
+	p := r.players[uid]
 	if p == nil {
 		return
 	}
@@ -188,7 +258,11 @@ func (r *PlayerRepo) ModifyBank(player string, fn func(bank map[uint32]int32)) {
 func (r *PlayerRepo) GetCurrency(player string, currencyID uint32) int64 {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
-	p := r.players[player]
+	uid, ok := r.byUsername[player]
+	if !ok {
+		return 0
+	}
+	p := r.players[uid]
 	if p == nil {
 		return 0
 	}
@@ -199,7 +273,11 @@ func (r *PlayerRepo) GetCurrency(player string, currencyID uint32) int64 {
 func (r *PlayerRepo) ModifyCurrency(player string, currencyID uint32, delta int64) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	p := r.players[player]
+	uid, ok := r.byUsername[player]
+	if !ok {
+		return
+	}
+	p := r.players[uid]
 	if p == nil {
 		return
 	}
@@ -215,6 +293,7 @@ func (r *PlayerRepo) ModifyCurrency(player string, currencyID uint32, delta int6
 // runtime type.
 func enginePlayerSnapshot(pd *PlayerData) *persist.PlayerSnapshot {
 	return &persist.PlayerSnapshot{
+		UserID:    pd.UserID,
 		Username:  pd.Username,
 		CellID:    fmt.Sprintf("cell_%d_%d", pd.CellX, pd.CellY),
 		PosX:      pd.X,
@@ -230,7 +309,7 @@ func enginePlayerSnapshot(pd *PlayerData) *persist.PlayerSnapshot {
 // on the live PlayerData maps while the snapshot is in flight.
 func gamePlayerStateSnapshot(pd *PlayerData) *gamepersist.PlayerStateSnapshot {
 	return &gamepersist.PlayerStateSnapshot{
-		Username:   pd.Username,
+		UserID:     pd.UserID,
 		Currencies: cloneU32Int64Map(pd.Currencies),
 		Cargo:      cloneU32Int32Map(pd.Cargo),
 		Bank:       cloneU32Int32Map(pd.Bank),
@@ -255,6 +334,7 @@ func snapshotToPlayerData(engineSnap *persist.PlayerSnapshot, gameSnap *gamepers
 	var cellX, cellY int32
 	fmt.Sscanf(engineSnap.CellID, "cell_%d_%d", &cellX, &cellY)
 	pd := &PlayerData{
+		UserID:     engineSnap.UserID,
 		Username:   engineSnap.Username,
 		X:          engineSnap.PosX,
 		Y:          engineSnap.PosY,
@@ -351,7 +431,7 @@ func (l repoLocator) Get(username string) (pkguniverse.PlayerDataAccessor, func(
 	if pd == nil {
 		return nil, nil, false
 	}
-	return pd, func() { l.repo.MarkDirty(username) }, true
+	return pd, func() { l.repo.MarkDirtyByUserID(pd.UserID) }, true
 }
 
 // ListOffline returns every persisted player as a PlayerDataAccessor

@@ -71,7 +71,7 @@ func HandleBankRequest(ctx *mmokit.OpContext, _ *BankRequest) (*BankResponse, er
 		}
 	}
 
-	pdata := gw.PlayerDB.GetOrCreate(sess.Username)
+	pdata := gw.PlayerDB.Bind(sess)
 	return &BankResponse{Contents: buildBankContents(gw, pdata)}, nil
 }
 

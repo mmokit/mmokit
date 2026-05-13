@@ -22,9 +22,16 @@ func (gw *GameWorld) Hooks() mmokit.Hooks {
 	}
 }
 
-// Init is called by the Process after all nodes are created and bridges are wired.
-// It sets up replication, transfer hooks, and post-spawn callbacks.
-func (gw *GameWorld) Init() {
+// wireStageCallbacks installs the per-cell transfer-receive hooks on this
+// GameWorld's stage. Called from NewGameWorld; once world.Init() was
+// removed from the framework lifecycle (spec 2026-05-08-stage-on-systembase),
+// this is the canonical place to register stage callbacks — there's no
+// post-construction phase that fires for cell states.
+//
+// Without this, gw.FinishTransferSpawn never runs on real cross-cell
+// handoffs and config-only fields on `mmokit:"local"` components (e.g.
+// TargetLock.MaxSlots, TargetLock.Range) stay zero after every transfer.
+func (gw *GameWorld) wireStageCallbacks() {
 	gw.stage.SetOnTransferReceived(func(entity mmokit.EntityHandle, frame *mmokit.TransferFrame) {
 		gw.FinishTransferSpawn(entity, frame)
 	})
@@ -53,9 +60,6 @@ func (gw *GameWorld) Init() {
 		// player whose DebugFlags carry the topology bit. No explicit
 		// per-connect send needed.
 	})
-
-	// OnPostSpawn is no longer needed for topology — see comment above.
-	gw.OnPostSpawn = nil
 }
 
 // Shutdown saves all connected players and flushes dirty data.
@@ -145,10 +149,10 @@ func (gw *GameWorld) processDockCompletions() {
 		// also saved at station coords so an offline-recovered session
 		// respawns at the station.
 		gw.SavePlayerState(s)
-		pdata := gw.PlayerDB.GetOrCreate(s.Username)
+		pdata := gw.PlayerDB.Bind(s)
 		pdata.X = ds.StationX
 		pdata.Y = ds.StationY
-		gw.PlayerDB.MarkDirty(s.Username)
+		gw.PlayerDB.MarkDirtyByUserID(pdata.UserID)
 
 		// Park the entity at station center, zero out motion, and mark
 		// Dormant. Dormant excludes the entity from AoI broadcasts (other
@@ -212,7 +216,7 @@ func (gw *GameWorld) startUndockingFor(connID uint32) {
 	// Sync pdata.Cargo (which the bank UI mutates while docked) back
 	// into the entity's Inventory so the in-space ship reflects what
 	// the player did at the station.
-	pdata := gw.PlayerDB.GetOrCreate(s.Username)
+	pdata := gw.PlayerDB.Bind(s)
 	if inv := mmokit.Get[gamecomp.Inventory](entity); inv != nil {
 		inv.Items = make(map[uint32]int32, len(pdata.Cargo))
 		for id, qty := range pdata.Cargo {

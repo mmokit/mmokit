@@ -22,7 +22,7 @@ func (gw *GameWorld) performTransferFor(connID uint32, itemID uint32, amount int
 		return
 	}
 	username := sess.Username
-	pdata := gw.PlayerDB.GetOrCreate(username)
+	pdata := gw.PlayerDB.Bind(sess)
 
 	// Docked players: operate on PlayerDB cargo directly.
 	if sess.State == StateDocked {

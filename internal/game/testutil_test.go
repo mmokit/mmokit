@@ -2,6 +2,9 @@ package game
 
 import (
 	ecs "github.com/mlange-42/ark/ecs"
+
+	"github.com/google/uuid"
+
 	gamepersisttest "github.com/zenion/mmoserver/internal/persist/persisttest"
 	comp "github.com/zenion/mmoserver/pkg/component"
 	"github.com/zenion/mmoserver/pkg/coords"
@@ -14,6 +17,19 @@ import (
 	"github.com/zenion/mmoserver/pkg/spatial"
 	pkguniverse "github.com/zenion/mmoserver/pkg/universe"
 )
+
+// testUserIDNamespace is a fixed UUID namespace used to derive a
+// deterministic UserID from a test username via uuid.NewSHA1. Tests
+// that pass "alice" always get the same UserID, so test sessions and
+// PlayerDB lookups stay in agreement across helper boundaries.
+var testUserIDNamespace = uuid.MustParse("00000000-0000-0000-0000-000000000001")
+
+// testUserID returns a deterministic UserID for a test username.
+// Mirrors what the production gateway populates from auth.users at
+// login time — see hooks.go's OnEnter contract.
+func testUserID(username string) uuid.UUID {
+	return uuid.NewSHA1(testUserIDNamespace, []byte(username))
+}
 
 // newTestCell creates a Node for the given cell suitable for unit tests.
 // It does NOT start the game loop or any goroutines.

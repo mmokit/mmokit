@@ -78,7 +78,10 @@ func TestKillCredit_FullChain(t *testing.T) {
 	// credits the player's currency balance.
 	runTickCallbacks(t, gw.stage, 1)
 
-	pdata := gw.PlayerDB.GetOrCreate("alice")
+	pdata := gw.PlayerDB.Get("alice")
+	if pdata == nil {
+		t.Fatal("PlayerDB.Get(alice) returned nil; newTestPlayerShip should have bound the session")
+	}
 	if got := pdata.GetCurrency(item.CreditsItemID); got != int64(dropAmount) {
 		t.Fatalf("KillCredit didn't credit currency: got=%d want=%d", got, dropAmount)
 	}

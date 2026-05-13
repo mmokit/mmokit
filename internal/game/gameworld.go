@@ -105,15 +105,14 @@ func (gw *GameWorld) MarkForRemoval(e mmokit.EntityHandle) {
 
 // SavePlayerState persists the current entity state to the player database.
 func (gw *GameWorld) SavePlayerState(s *mmokit.PlayerSession) {
-	username := s.Username
-	if username == "" {
+	if s.Username == "" {
 		return
 	}
 	entity := mmokit.EntityFromECS(gw.stage, s.Entity)
 	if !entity.Alive() {
 		return
 	}
-	pdata := gw.PlayerDB.GetOrCreate(username)
+	pdata := gw.PlayerDB.Bind(s)
 	if pos := mmokit.Get[mmokit.Position](entity); pos != nil {
 		pdata.X = pos.X
 		pdata.Y = pos.Y
@@ -140,7 +139,7 @@ func (gw *GameWorld) SavePlayerState(s *mmokit.PlayerSession) {
 		}
 	}
 	pdata.HasSave = true
-	gw.PlayerDB.MarkDirty(username)
+	gw.PlayerDB.MarkDirtyByUserID(pdata.UserID)
 }
 
 // syncActiveMining updates the replicated ActiveMining component from the
@@ -217,11 +216,23 @@ func (gw *GameWorld) ApplyEquipmentStats(entity mmokit.Entity) {
 		inv.MaxMass = gw.Config.MaxCargo
 	}
 
-	// TargetLock tuning — Range is a pure config read with no equipment
-	// modifier today. LockOnTime is consumed per-slot at LockTarget time;
-	// live locks keep their captured value.
+	// TargetLock tuning — Range and MaxSlots are pure config reads with no
+	// equipment modifier today. Both MUST be re-applied here because
+	// TargetLock is `mmokit:"local"` (Slots contain stale ecs.Entity
+	// handles after a cross-cell transfer, so the component travels as
+	// zero-value); without re-syncing MaxSlots, the post-transfer player
+	// has MaxSlots=0 and every LockTarget input bounces as SlotsFull.
+	// LockOnTime is consumed per-slot at LockTarget time; live locks keep
+	// their captured value.
 	if tl := mmokit.Get[gamecomp.TargetLock](entity); tl != nil {
 		tl.Range = gw.Config.LockOnRange
+		tl.MaxSlots = gw.Config.LockMaxSlotsPlayer
+		// Slot entity handles don't survive a cross-cell transfer — clear
+		// them rather than letting the next system tick re-resolve. This
+		// also forecloses any path where stale slots could persist past
+		// the boundary and exhaust MaxSlots on the new cell.
+		tl.Slots = tl.Slots[:0]
+		tl.ActiveNetID = 0
 	}
 
 	// Movement stats from thruster. All three are re-synced from config

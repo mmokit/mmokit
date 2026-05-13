@@ -6,6 +6,7 @@ import (
 	"sort"
 	"sync"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	gamepersist "github.com/zenion/mmoserver/internal/persist"
@@ -28,8 +29,8 @@ type PlayerFlusher struct {
 	log        *logger.Logger
 
 	mu             sync.Mutex
-	dirtyEngine    map[string]*persist.PlayerSnapshot
-	dirtyGameState map[string]*gamepersist.PlayerStateSnapshot
+	dirtyEngine    map[uuid.UUID]*persist.PlayerSnapshot
+	dirtyGameState map[uuid.UUID]*gamepersist.PlayerStateSnapshot
 }
 
 // NewPlayerFlusher constructs a flusher. The log argument may be nil
@@ -46,23 +47,23 @@ func NewPlayerFlusher(
 		engineRepo:     engineRepo,
 		gameRepo:       gameRepo,
 		log:            log,
-		dirtyEngine:    make(map[string]*persist.PlayerSnapshot),
-		dirtyGameState: make(map[string]*gamepersist.PlayerStateSnapshot),
+		dirtyEngine:    make(map[uuid.UUID]*persist.PlayerSnapshot),
+		dirtyGameState: make(map[uuid.UUID]*gamepersist.PlayerStateSnapshot),
 	}
 }
 
 // Mark records both halves of the player. The caller MUST pass the
 // engine snapshot; gameSnap may be nil for snapshot-less callers (e.g.
 // debug-flag-only mutations), in which case only the engine half is
-// flushed for that username.
+// flushed for that user.
 func (f *PlayerFlusher) Mark(engineSnap *persist.PlayerSnapshot, gameSnap *gamepersist.PlayerStateSnapshot) {
 	if engineSnap == nil {
 		return
 	}
 	f.mu.Lock()
-	f.dirtyEngine[engineSnap.Username] = engineSnap
+	f.dirtyEngine[engineSnap.UserID] = engineSnap
 	if gameSnap != nil {
-		f.dirtyGameState[engineSnap.Username] = gameSnap
+		f.dirtyGameState[engineSnap.UserID] = gameSnap
 	}
 	f.mu.Unlock()
 }
@@ -87,12 +88,12 @@ func (f *PlayerFlusher) Flush(ctx context.Context) (int, error) {
 	for _, s := range f.dirtyGameState {
 		gameSnaps = append(gameSnaps, s)
 	}
-	f.dirtyEngine = make(map[string]*persist.PlayerSnapshot)
-	f.dirtyGameState = make(map[string]*gamepersist.PlayerStateSnapshot)
+	f.dirtyEngine = make(map[uuid.UUID]*persist.PlayerSnapshot)
+	f.dirtyGameState = make(map[uuid.UUID]*gamepersist.PlayerStateSnapshot)
 	f.mu.Unlock()
 
-	sort.Slice(engineSnaps, func(i, j int) bool { return engineSnaps[i].Username < engineSnaps[j].Username })
-	sort.Slice(gameSnaps, func(i, j int) bool { return gameSnaps[i].Username < gameSnaps[j].Username })
+	sort.Slice(engineSnaps, func(i, j int) bool { return engineSnaps[i].UserID.String() < engineSnaps[j].UserID.String() })
+	sort.Slice(gameSnaps, func(i, j int) bool { return gameSnaps[i].UserID.String() < gameSnaps[j].UserID.String() })
 
 	tx, err := f.pool.Begin(ctx)
 	if err != nil {
@@ -131,13 +132,13 @@ func (f *PlayerFlusher) restoreDirty(engineSnaps []*persist.PlayerSnapshot, game
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	for _, s := range engineSnaps {
-		if _, exists := f.dirtyEngine[s.Username]; !exists {
-			f.dirtyEngine[s.Username] = s
+		if _, exists := f.dirtyEngine[s.UserID]; !exists {
+			f.dirtyEngine[s.UserID] = s
 		}
 	}
 	for _, s := range gameSnaps {
-		if _, exists := f.dirtyGameState[s.Username]; !exists {
-			f.dirtyGameState[s.Username] = s
+		if _, exists := f.dirtyGameState[s.UserID]; !exists {
+			f.dirtyGameState[s.UserID] = s
 		}
 	}
 }

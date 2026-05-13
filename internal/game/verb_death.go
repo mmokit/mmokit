@@ -72,9 +72,9 @@ func killCreditHandler(killer mmokit.Entity, msg *KillCredit) {
 	if s == nil || s.Username == "" {
 		return
 	}
-	pdata := gw.PlayerDB.GetOrCreate(s.Username)
+	pdata := gw.PlayerDB.Bind(s)
 	pdata.AddCurrency(msg.Currency, msg.Amount)
-	gw.PlayerDB.MarkDirty(s.Username)
+	gw.PlayerDB.MarkDirtyByUserID(pdata.UserID)
 
 	gw.eng.Log.Log(CatEconomyLoot, "kill credit: player=%s currency=%d amount=%d balance=%d",
 		s.Username, msg.Currency, msg.Amount, pdata.GetCurrency(msg.Currency))
@@ -110,11 +110,11 @@ func (gw *GameWorld) handlePlayerKilled(target mmokit.Entity, killer mmokit.Enti
 	if s := gw.Players.ByConnID(connID); s != nil {
 		if s.Username != "" {
 			// Clear saved state so respawn places them near the station.
-			pdata := gw.PlayerDB.GetOrCreate(s.Username)
+			pdata := gw.PlayerDB.Bind(s)
 			pdata.Cargo = nil
 			pdata.Equipment = EquipmentSave{}
 			pdata.HasSave = false
-			gw.PlayerDB.MarkDirty(s.Username)
+			gw.PlayerDB.MarkDirtyByUserID(pdata.UserID)
 		}
 		gw.Players.Transition(s, StateDead)
 	}

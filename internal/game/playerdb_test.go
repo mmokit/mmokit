@@ -2,6 +2,8 @@ package game
 
 import (
 	"testing"
+
+	"github.com/google/uuid"
 )
 
 func TestPlayerDataAccessor_RoundTrip(t *testing.T) {
@@ -20,9 +22,11 @@ func TestPlayerDataAccessor_RoundTrip(t *testing.T) {
 }
 
 func TestRepoLocator_HitAndMiss(t *testing.T) {
+	uid := uuid.New()
 	r := &PlayerRepo{
-		players: map[string]*PlayerData{"alice": {Username: "alice", CellX: 1, CellY: 2}},
-		dirty:   map[string]bool{},
+		players:    map[uuid.UUID]*PlayerData{uid: {UserID: uid, Username: "alice", CellX: 1, CellY: 2}},
+		byUsername: map[string]uuid.UUID{"alice": uid},
+		dirty:      map[uuid.UUID]bool{},
 	}
 	loc := r.Locator()
 
@@ -39,7 +43,7 @@ func TestRepoLocator_HitAndMiss(t *testing.T) {
 		t.Fatalf("accessor returned wrong PlayerData: %+v", acc)
 	}
 	mark()
-	if !r.dirty["alice"] {
+	if !r.dirty[uid] {
 		t.Fatal("DirtyMark did not mark alice dirty")
 	}
 }

@@ -47,7 +47,10 @@ func TestKillCredit_SameCell_CreditsCurrency(t *testing.T) {
 
 	killerE.Send(&KillCredit{Currency: 1, Amount: 50})
 
-	pdata := gw.PlayerDB.GetOrCreate("alice")
+	pdata := gw.PlayerDB.Get("alice")
+	if pdata == nil {
+		t.Fatal("PlayerDB.Get(alice) returned nil; newTestPlayerShip should have bound the session")
+	}
 	if got := pdata.GetCurrency(1); got != 50 {
 		t.Fatalf("currency balance: got %d, want 50", got)
 	}

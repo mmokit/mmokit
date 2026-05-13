@@ -3,6 +3,8 @@ package game
 import (
 	"time"
 
+	"github.com/google/uuid"
+
 	"github.com/zenion/mmoserver/internal/item"
 )
 
@@ -20,19 +22,24 @@ func (e EquipmentSave) IsZero() bool {
 }
 
 // PlayerData holds persistent player state that survives disconnect/death.
+//
+// UserID is the immutable identity (matches engine.PlayerSession.UserID,
+// which the gateway resolves from auth.users at login). Username is the
+// mutable display name; lookups go through PlayerRepo.byUsername.
 type PlayerData struct {
-	Username  string           `json:"username"`
-	X         float32          `json:"x"`
-	Y         float32          `json:"y"`
-	CellX     int32            `json:"cell_x"`
-	CellY     int32            `json:"cell_y"`
+	UserID     uuid.UUID        `json:"user_id"`
+	Username   string           `json:"username"`
+	X          float32          `json:"x"`
+	Y          float32          `json:"y"`
+	CellX      int32            `json:"cell_x"`
+	CellY      int32            `json:"cell_y"`
 	Currencies map[uint32]int64 `json:"currencies,omitempty"`
-	Cargo     map[uint32]int32 `json:"cargo,omitempty"`
-	Bank      map[uint32]int32 `json:"bank,omitempty"`
-	Equipment EquipmentSave    `json:"equipment,omitempty"`
-	HasSave   bool             `json:"has_save"`
-	CreatedAt time.Time        `json:"created_at"`
-	LastLogin time.Time        `json:"last_login"`
+	Cargo      map[uint32]int32 `json:"cargo,omitempty"`
+	Bank       map[uint32]int32 `json:"bank,omitempty"`
+	Equipment  EquipmentSave    `json:"equipment,omitempty"`
+	HasSave    bool             `json:"has_save"`
+	CreatedAt  time.Time        `json:"created_at"`
+	LastLogin  time.Time        `json:"last_login"`
 }
 
 // DepositToBank moves items from an external source into the bank.
