@@ -1,13 +1,12 @@
 // Package persisttest provides in-memory implementations of the
-// persist repository interfaces for game-domain tests. Real database
-// integration coverage lives in pkg/persist/postgres/postgres_test.go
-// (gated on -tags=pgtest).
+// engine-side persist repository interfaces for game-domain tests.
+// Real database integration coverage lives in
+// pkg/persist/postgres/postgres_test.go (gated on -tags=pgtest).
 package persisttest
 
 import (
 	"context"
 	"fmt"
-	"maps"
 	"slices"
 	"sync"
 	"time"
@@ -114,118 +113,6 @@ func (m *PlayerRepoMock) LoadAllDebugFlags(ctx context.Context) (map[string][]st
 	return out, nil
 }
 
-// MarketRepoMock is an in-memory MarketRepository. Tracks the
-// highest order id seen so LoadMaxOrderID can return it for orderbook
-// counter recovery.
-type MarketRepoMock struct {
-	mu     sync.Mutex
-	maxID  uint64
-	orders map[uint64]*persist.OrderRecord
-	trades []*persist.TradeRecord
-}
-
-func NewMarketRepoMock() *MarketRepoMock {
-	return &MarketRepoMock{
-		orders: make(map[uint64]*persist.OrderRecord),
-	}
-}
-
-func (m *MarketRepoMock) PlaceOrder(ctx context.Context, o *persist.OrderRecord) error {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	cp := *o
-	m.orders[o.ID] = &cp
-	if o.ID > m.maxID {
-		m.maxID = o.ID
-	}
-	return nil
-}
-
-func (m *MarketRepoMock) LoadMaxOrderID(ctx context.Context) (uint64, error) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	return m.maxID, nil
-}
-
-func (m *MarketRepoMock) UpdateQuantity(ctx context.Context, id uint64, newQty int32) error {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	if o, ok := m.orders[id]; ok {
-		o.Quantity = newQty
-	}
-	return nil
-}
-
-func (m *MarketRepoMock) DeleteOrder(ctx context.Context, id uint64) error {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	delete(m.orders, id)
-	return nil
-}
-
-func (m *MarketRepoMock) RecordTrade(ctx context.Context, t *persist.TradeRecord) error {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	cp := *t
-	m.trades = append(m.trades, &cp)
-	return nil
-}
-
-func (m *MarketRepoMock) LoadActiveOrders(ctx context.Context, fn func(*persist.OrderRecord) error) error {
-	m.mu.Lock()
-	ids := make([]uint64, 0, len(m.orders))
-	for id := range m.orders {
-		ids = append(ids, id)
-	}
-	slices.Sort(ids)
-	snapshot := make([]*persist.OrderRecord, len(ids))
-	for i, id := range ids {
-		cp := *m.orders[id]
-		snapshot[i] = &cp
-	}
-	m.mu.Unlock()
-	now := time.Now()
-	for _, o := range snapshot {
-		if !o.ExpiresAt.IsZero() && !o.ExpiresAt.After(now) {
-			continue
-		}
-		if err := fn(o); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-// ConfigRepoMock is an in-memory ConfigRepository.
-type ConfigRepoMock struct {
-	mu  sync.Mutex
-	rec *persist.ConfigSnapshot
-}
-
-func NewConfigRepoMock() *ConfigRepoMock {
-	return &ConfigRepoMock{}
-}
-
-func (m *ConfigRepoMock) Load(ctx context.Context) (*persist.ConfigSnapshot, error) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	if m.rec == nil {
-		return nil, persist.ErrNotFound
-	}
-	cp := *m.rec
-	cp.Data = append([]byte(nil), m.rec.Data...)
-	return &cp, nil
-}
-
-func (m *ConfigRepoMock) Save(ctx context.Context, snapshot *persist.ConfigSnapshot) error {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	cp := *snapshot
-	cp.Data = append([]byte(nil), snapshot.Data...)
-	m.rec = &cp
-	return nil
-}
-
 // AdminOperatorRepoMock is an in-memory AdminOperatorRepository.
 type AdminOperatorRepoMock struct {
 	mu   sync.Mutex
@@ -316,8 +203,6 @@ func cloneAdminOperator(src *persist.AdminOperator) *persist.AdminOperator {
 // Compile-time interface assertions.
 var (
 	_ persist.PlayerRepository        = (*PlayerRepoMock)(nil)
-	_ persist.MarketRepository        = (*MarketRepoMock)(nil)
-	_ persist.ConfigRepository        = (*ConfigRepoMock)(nil)
 	_ persist.AdminOperatorRepository = (*AdminOperatorRepoMock)(nil)
 )
 
@@ -328,15 +213,6 @@ func clonePlayer(src *persist.PlayerSnapshot) *persist.PlayerSnapshot {
 		return nil
 	}
 	cp := *src
-	if src.Currencies != nil {
-		cp.Currencies = maps.Clone(src.Currencies)
-	}
-	if src.Cargo != nil {
-		cp.Cargo = maps.Clone(src.Cargo)
-	}
-	if src.Bank != nil {
-		cp.Bank = maps.Clone(src.Bank)
-	}
 	if src.DebugFlags != nil {
 		cp.DebugFlags = slices.Clone(src.DebugFlags)
 	}
