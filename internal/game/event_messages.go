@@ -151,8 +151,11 @@ type PlayerSpawned struct {
 }
 
 // LockSlotsMsg — server→client snapshot of the receiving player's own
-// lock slots. Emitted every time slots mutate (add / remove / progress
-// completes / active changes). Sent only to the owning connection.
+// lock slots. Emitted every time slots mutate (add / remove / active
+// changes) and every tick a slot is in-progress — the per-tick push is
+// what drives the client lock-on-ring animation; without it the ring
+// snaps from 0%→100% at the lock-complete instant. Sent only to the
+// owning connection.
 type LockSlotsMsg struct {
 	Slots       []LockSlotWire
 	ActiveNetID uint32

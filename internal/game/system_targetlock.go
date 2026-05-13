@@ -85,18 +85,19 @@ func (s *TargetLockSystem) Update(dt float32) {
 				continue
 			}
 
-			// Tick lock progress.
+			// Tick lock progress. Each tick of a not-yet-locked slot
+			// mutates Progress, so flag dirty so LockSlotsMsg ships the
+			// new value to the owning client every tick — the lock-on-ring
+			// animates smoothly off these samples (without the per-tick
+			// push it snaps 0%→100% at the moment the slot flips Locked).
 			if !slot.Locked {
-				prevLocked := slot.Locked
 				slot.Progress += dt / slot.LockTime
+				dirty = true
 				if slot.Progress >= 1.0 {
 					slot.Progress = 1.0
 					slot.Locked = true
 					gw.eng.Log.Log(CatCombatLock, "lock: LOCKED owner=%d target=%d",
 						owner.NetID(), slot.TargetNetID)
-				}
-				if slot.Locked != prevLocked {
-					dirty = true
 					// First newly-locked slot becomes active when none set.
 					if lock.ActiveNetID == 0 {
 						lock.ActiveNetID = slot.TargetNetID

@@ -1,9 +1,11 @@
 import type { GameState } from "../state";
 
-// Horizontal strip in the bottom-left corner showing one icon per locked
-// (or in-progress) slot from LockSlotsMsg. Active slot gets a highlighted
-// border; in-progress slots draw a partial radial fill. Cap at 4 visible
-// to match server-side MaxLockSlots.
+// Horizontal strip showing one icon per locked (or in-progress) slot from
+// LockSlotsMsg. Active slot gets a highlighted border; in-progress slots
+// draw a partial radial fill. Cap at 4 visible to match server-side
+// MaxLockSlots. Positioned above the bottom-left #controls hint so the
+// two HUD elements don't overlap. Each slot accepts left-click to switch
+// active and right-click to unlock that target.
 
 const MAX_SLOTS = 4;
 
@@ -11,13 +13,25 @@ let stripEl: HTMLElement | null = null;
 let slotEls: HTMLElement[] = [];
 let rejectFlashEl: HTMLElement | null = null;
 
-export function createLockHud(): void {
+// Click handlers wired in createLockHud(); rebuildable so the callers
+// don't have to thread state through the module level.
+let onActivateSlot: ((netID: number) => void) | null = null;
+let onUnlockSlot: ((netID: number) => void) | null = null;
+
+export function createLockHud(handlers?: {
+  onActivate?: (netID: number) => void;
+  onUnlock?: (netID: number) => void;
+}): void {
+  onActivateSlot = handlers?.onActivate ?? null;
+  onUnlockSlot = handlers?.onUnlock ?? null;
+
   stripEl = document.createElement("div");
   stripEl.id = "lock-hud-strip";
+  // bottom offset clears the two-row #controls hint (index.html line ~715).
   stripEl.style.cssText = `
     position: fixed;
-    bottom: 24px;
-    left: 24px;
+    bottom: 90px;
+    left: 10px;
     display: flex;
     gap: 8px;
     z-index: 90;
@@ -40,7 +54,24 @@ export function createLockHud(): void {
       color: #ccc;
       font-size: 9px;
       overflow: hidden;
+      pointer-events: auto;
+      cursor: pointer;
     `;
+    // Stash the slot index on the element so click handlers can pull the
+    // current netID out of state.lockSlots[i] at click time (the strip's
+    // contents shift as slots are added/removed).
+    slot.dataset.slotIdx = String(i);
+    slot.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const id = slot.dataset.netId ? Number(slot.dataset.netId) : 0;
+      if (id !== 0 && onActivateSlot) onActivateSlot(id);
+    });
+    slot.addEventListener("contextmenu", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const id = slot.dataset.netId ? Number(slot.dataset.netId) : 0;
+      if (id !== 0 && onUnlockSlot) onUnlockSlot(id);
+    });
 
     // Progress bar along the bottom edge — fills 0..100% during locking.
     const progress = document.createElement("div");
@@ -107,13 +138,11 @@ export function createLockHud(): void {
   document.body.appendChild(rejectFlashEl);
 }
 
+// Mirrors internal/game/event_messages.go LockRejectReason (1-indexed).
 const REJECT_REASONS: Record<number, string> = {
-  0: "Lock rejected",
-  1: "Out of range",
-  2: "No line of sight",
-  3: "Already locked",
-  4: "Locks full",
-  5: "Target invalid",
+  1: "Locks full",
+  2: "Out of range",
+  3: "Invalid target",
 };
 
 export function updateLockHud(state: GameState): void {
@@ -127,9 +156,17 @@ export function updateLockHud(state: GameState): void {
     const s = slots[i];
     if (!s) {
       el.style.display = "none";
+      delete el.dataset.netId;
       continue;
     }
     el.style.display = "block";
+    // Update the click-target netID for this slot every frame so
+    // left-click=activate and right-click=unlock target the slot the
+    // user actually sees.
+    el.dataset.netId = String(s.targetNetID);
+    el.title = s.locked
+      ? "Click: set active · Right-click: unlock"
+      : `Locking ${Math.floor(s.progress * 100)}%`;
 
     const isActive = s.targetNetID === active && active !== 0;
     const locked = s.locked;

@@ -177,8 +177,27 @@ async function main() {
     }
   });
 
-  // Multi-lock HUD strip (HTML overlay, bottom-left).
-  createLockHud();
+  // Multi-lock HUD strip (HTML overlay, bottom-left). Slot icons accept
+  // left-click=set active and right-click=unlock; both dispatch through
+  // the same SDK message types the keyboard path uses.
+  createLockHud({
+    onActivate: (netID) => {
+      if (!state.connected || !state.client) return;
+      void import("../sdk/index.js").then(({ SetActiveTarget }) => {
+        if (!state.client) return;
+        state.inputSeq++;
+        state.client.send(new SetActiveTarget({ sequence: state.inputSeq, netID }));
+      });
+    },
+    onUnlock: (netID) => {
+      if (!state.connected || !state.client) return;
+      void import("../sdk/index.js").then(({ UnlockTarget }) => {
+        if (!state.client) return;
+        state.inputSeq++;
+        state.client.send(new UnlockTarget({ sequence: state.inputSeq, netID }));
+      });
+    },
+  });
 
   // Loot popup overlay (HTML)
   createLootPopup();

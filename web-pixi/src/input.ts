@@ -158,17 +158,25 @@ export function setupInput(
 
     // Space: lock onto current target (ships, NPCs, or asteroids). Dispatches
     // LockTarget if not already locked, SetActiveTarget if it's an existing slot.
+    // Shift+Space drops the currently-active locked slot.
     // state.lockTargetId is updated authoritatively by the server's LockSlotsMsg.
-    if (e.code === "Space" && !state.isDead && state.targetId) {
-      const tgt = state.entities.get(state.targetId);
-      if (
-        tgt &&
-        (tgt.current.entityType === EntityType.Ship ||
-          tgt.current.entityType === EntityType.NPC ||
-          tgt.current.entityType === EntityType.Asteroid)
-      ) {
-        tryLockOrActivate(state.targetId);
-        audio.play(SoundId.TargetLock);
+    if (e.code === "Space" && !state.isDead) {
+      if (e.shiftKey) {
+        if (state.lockTargetId !== 0) {
+          tryUnlock(state.lockTargetId);
+          audio.play(SoundId.TargetLock);
+        }
+      } else if (state.targetId) {
+        const tgt = state.entities.get(state.targetId);
+        if (
+          tgt &&
+          (tgt.current.entityType === EntityType.Ship ||
+            tgt.current.entityType === EntityType.NPC ||
+            tgt.current.entityType === EntityType.Asteroid)
+        ) {
+          tryLockOrActivate(state.targetId);
+          audio.play(SoundId.TargetLock);
+        }
       }
     }
 
