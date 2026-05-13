@@ -52,10 +52,20 @@ type AbilitySystem struct {
 func (s *AbilitySystem) Init() {
 	s.gw = mmokit.State[GameWorld](s.Stage())
 	s.deferred = make([]abilityAction, 0, 16)
+	// Channeling is not part of any kind bundle — prime it so Has/Get
+	// inside the tickChannels query iteration doesn't trigger ark's
+	// locked-world first-touch registration panic.
+	mmokit.Prime[gamecomp.Channeling](s.Stage())
 }
 
 func (s *AbilitySystem) Update(dt float32) {
 	gw := s.gw
+
+	// Resolve in-flight SustainedBeam channels first: per-tick damage,
+	// arc/range validation, channel-end cleanup. Runs before the main
+	// dispatch loop so a freshly-started channel (queued via Commands
+	// on the previous tick) becomes visible here as soon as it's flushed.
+	s.tickChannels(dt)
 
 	s.deferred = s.deferred[:0]
 
@@ -235,6 +245,35 @@ func (s *AbilitySystem) executeAbility(action abilityAction) bool {
 		s.fireProjectile(casterE, params, gamecomp.ProjectileTypeMortar)
 		gw.eng.Log.Log(CatCombatAbility, "ability %s: %d fired mortar dmg=%.0f splash=%.0f",
 			params.Name, action.casterNetID, params.Damage, params.SplashRadius)
+
+	// --- Sustained beam channel (PVE v2, Task 21) ---
+	case item.AbilityTypeSustainedBeam:
+		// Pressing the key while already channeling is a no-op — don't
+		// reset the channel and don't refund the press by setting a
+		// cooldown. The channel ends on its own when RemainingTime
+		// hits zero, the target leaves range/arc, or dies.
+		if mmokit.Has[gamecomp.Channeling](casterE) {
+			fired = false
+			break
+		}
+		target, ok := activeLockTarget(gw, lock)
+		if !ok {
+			fired = false
+			break
+		}
+		mmokit.AddComponent(s.Commands(), casterE, gamecomp.Channeling{
+			SlotID:        action.slot,
+			RemainingTime: params.ChannelDuration,
+			NextTickIn:    0, // fire first tick immediately
+			TargetNetID:   target.NetID(),
+		})
+		gw.eng.Log.Log(CatCombatAbility, "ability %s: %d START -> %d duration=%.1fs tickrate=%.1fHz",
+			params.Name, action.casterNetID, target.NetID(),
+			params.ChannelDuration, params.ChannelTickRate)
+		// Cooldown is applied on channel END (in tickChannels), not on
+		// press — return false so Update skips the per-slot cooldown
+		// assignment.
+		fired = false
 
 	// --- Homing missile — requires active target lock (Task 20) ---
 	case item.AbilityTypeHomingMissile:
@@ -437,6 +476,109 @@ func (s *AbilitySystem) slotToBeamIndex(slot uint8) int {
 		return 0
 	}
 	return 1
+}
+
+// tickChannels resolves all in-flight Channeling components for the
+// stage. Each tick we decrement the channel timers, validate the target
+// (alive, in range, inside ±BeamHalfArcRad of caster facing), and apply
+// per-tick damage at params.ChannelTickRate. On channel end (timeout,
+// target loss, target-out-of-arc, or target-out-of-range) the Channeling
+// component is removed and the post-channel cooldown is set.
+//
+// ECS structural mutations (component removal) are queued through
+// Commands so they apply after the iteration's world lock releases.
+// Per-tick damage is dispatched via gw.Damage which mutates Health /
+// Shield component values (locked-world-safe — no structural change).
+func (s *AbilitySystem) tickChannels(dt float32) {
+	gw := s.gw
+
+	type endCandidate struct {
+		caster mmokit.Entity
+		slot   uint8
+	}
+	var ends []endCandidate
+
+	mmokit.ForEach1[gamecomp.Channeling](s.Stage(), func(caster mmokit.Entity, ch *gamecomp.Channeling) {
+		if !caster.Alive() {
+			ends = append(ends, endCandidate{caster, ch.SlotID})
+			return
+		}
+
+		ch.RemainingTime -= dt
+		ch.NextTickIn -= dt
+
+		// Channel duration expired.
+		if ch.RemainingTime <= 0 {
+			ends = append(ends, endCandidate{caster, ch.SlotID})
+			return
+		}
+
+		// Resolve current params from the caster's equipment — the
+		// ChannelTickRate / BeamHalfArcRad / Range / Damage values all
+		// live there. If the equipment is gone, end the channel.
+		equip := mmokit.Get[gamecomp.Equipment](caster)
+		if equip == nil {
+			ends = append(ends, endCandidate{caster, ch.SlotID})
+			return
+		}
+		params := resolveAbilityParams(equip, ch.SlotID)
+		if params == nil || params.Type != item.AbilityTypeSustainedBeam {
+			ends = append(ends, endCandidate{caster, ch.SlotID})
+			return
+		}
+
+		target := mmokit.EntityByNetID(gw.stage, ch.TargetNetID)
+		if !target.Alive() {
+			ends = append(ends, endCandidate{caster, ch.SlotID})
+			return
+		}
+
+		casterPos := mmokit.Get[mmokit.Position](caster)
+		casterRot := mmokit.Get[mmokit.Rotation](caster)
+		tpos := mmokit.Get[mmokit.Position](target)
+		if casterPos == nil || casterRot == nil || tpos == nil {
+			ends = append(ends, endCandidate{caster, ch.SlotID})
+			return
+		}
+
+		dx, dy := tpos.X-casterPos.X, tpos.Y-casterPos.Y
+		dist := float32(math.Sqrt(float64(dx*dx + dy*dy)))
+		if params.Range > 0 && dist > params.Range {
+			ends = append(ends, endCandidate{caster, ch.SlotID})
+			return
+		}
+
+		desired := float32(math.Atan2(float64(dy), float64(dx)))
+		if angleDelta(casterRot.Angle, desired) > params.BeamHalfArcRad {
+			ends = append(ends, endCandidate{caster, ch.SlotID})
+			return
+		}
+
+		// Per-tick damage gate.
+		if ch.NextTickIn <= 0 && params.ChannelTickRate > 0 {
+			gw.Damage(caster, target, params.Damage, 0, ch.SlotID, uint8(params.Type))
+			ch.NextTickIn = 1.0 / params.ChannelTickRate
+		}
+	})
+
+	// End all flagged channels OUTSIDE the iteration so the structural
+	// mutations (RemoveComponent) and cooldown writes happen on a
+	// non-locked world.
+	for _, end := range ends {
+		caster := end.caster
+		if caster.Alive() {
+			if ab := mmokit.Get[gamecomp.AbilitySet](caster); ab != nil {
+				if equip := mmokit.Get[gamecomp.Equipment](caster); equip != nil {
+					if p := resolveAbilityParams(equip, end.slot); p != nil {
+						ab.Cooldowns[end.slot] = p.Cooldown
+					}
+				}
+			}
+			gw.eng.Log.Log(CatCombatAbility, "ability SustainedBeam: %d END slot=%d",
+				caster.NetID(), end.slot)
+		}
+		mmokit.RemoveComponent[gamecomp.Channeling](s.Commands(), caster)
+	}
 }
 
 func (s *AbilitySystem) inRange(caster, target mmokit.EntityHandle, abilityRange float32) bool {
