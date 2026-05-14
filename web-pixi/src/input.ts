@@ -10,6 +10,7 @@ import {
   EntityType,
   JettisonItem,
   Respawn,
+  SelectTarget,
   SetMoveTarget,
   Undock,
 } from "../sdk/index.js";
@@ -129,21 +130,59 @@ export function setupInput(
 ): void {
   const chatInputEl = document.getElementById("chat-input") as HTMLInputElement;
 
-  // Selection wiring lands in Task 13. For now, lock/unlock/activate are
-  // stubs — kept as named helpers so call sites below remain readable
-  // until Task 13 replaces them with SelectTarget dispatch.
-  function tryLockOrActivate(_netID: number): void {
-    // TODO(task-13): send SelectTarget(_netID)
+  // Selection helpers — dispatch SelectTarget(netID) on lock/activate and
+  // SelectTarget(0) on clear. state.selectedNetID is updated optimistically;
+  // the server's authoritative Selection component drives final UI state.
+  function tryLockOrActivate(netID: number): void {
+    if (!state.client || netID === 0) return;
+    state.inputSeq++;
+    state.client.send(new SelectTarget({
+      sequence: state.inputSeq,
+      netID,
+    }));
+    state.selectedNetID = netID; // optimistic
+    audio.play(SoundId.TargetLock); // repurposed as "select" blip
   }
 
   function tryUnlock(_netID: number): void {
-    // TODO(task-13): send SelectTarget(0) to clear selection
+    if (state.selectedNetID === 0) return; // already empty
+    if (state.client) {
+      state.inputSeq++;
+      state.client.send(new SelectTarget({
+        sequence: state.inputSeq,
+        netID: 0,
+      }));
+    }
+    state.selectedNetID = 0;
   }
 
-  // Tab cycle becomes a no-op until Task 13 reimplements it on top of
-  // the Selection model (cycle visible enemies, dispatch SelectTarget).
+  // Tab: cycle through visible asteroid/NPC entities in selection order
+  // (sorted by netID for stable cycling). Skips self; wraps at the end.
   function cycleEnemyTarget(): void {
-    // TODO(task-13): cycle visible enemies via SelectTarget
+    if (!state.client) return;
+    const candidates: number[] = [];
+    for (const [netID, ent] of state.entities) {
+      if (netID === state.myEntityId) continue;
+      const kind = ent.current?.entityType;
+      if (kind === EntityType.Asteroid || kind === EntityType.NPC) {
+        candidates.push(netID);
+      }
+    }
+    if (candidates.length === 0) return;
+    candidates.sort((a, b) => a - b); // stable order
+    let nextIdx = 0;
+    if (state.selectedNetID !== 0) {
+      const idx = candidates.indexOf(state.selectedNetID);
+      nextIdx = idx === -1 ? 0 : (idx + 1) % candidates.length;
+    }
+    const next = candidates[nextIdx];
+    state.inputSeq++;
+    state.client.send(new SelectTarget({
+      sequence: state.inputSeq,
+      netID: next,
+    }));
+    state.selectedNetID = next;
+    audio.play(SoundId.TargetLock);
   }
 
   function issueMove(clientX: number, clientY: number) {
@@ -242,13 +281,12 @@ export function setupInput(
     if (state.escMenuOpen) return;
 
     // Space: select current target (ships, NPCs, or asteroids). Shift+Space
-    // clears the current selection. Selection dispatch is stubbed pending
-    // Task 13; the helpers below are no-ops for now.
+    // clears the current selection. The select/unlock helpers handle the
+    // SelectTarget dispatch + select-blip sound internally.
     if (e.code === "Space" && !state.isDead) {
       if (e.shiftKey) {
         if (state.selectedNetID !== 0) {
           tryUnlock(state.selectedNetID);
-          audio.play(SoundId.TargetLock);
         }
       } else if (state.targetId) {
         const tgt = state.entities.get(state.targetId);
@@ -259,7 +297,6 @@ export function setupInput(
             tgt.current.entityType === EntityType.Asteroid)
         ) {
           tryLockOrActivate(state.targetId);
-          audio.play(SoundId.TargetLock);
         }
       }
     }
@@ -355,9 +392,14 @@ export function setupInput(
 
   window.addEventListener("mousedown", (e) => {
     if (e.button === 2 && !state.cellMapOpen) {
-      // Right-click during an active skillshot aim cancels the aim
-      // rather than initiating movement. Mirrors the EVE / SC2
-      // convention: aim+right-click escapes the targeting cursor.
+      // Right-click priority 1: clear selection.
+      if (state.selectedNetID !== 0) {
+        tryUnlock(state.selectedNetID);
+        return;
+      }
+      // Right-click priority 2: cancel active skillshot aim.
+      // Mirrors the EVE / SC2 convention: aim+right-click escapes the
+      // targeting cursor.
       if (state.aimingSlot) {
         state.aimingSlot = 0;
         return;
@@ -403,25 +445,17 @@ export function setupInput(
       }
     }
 
-    // Modifier-click behaviors. Selection dispatch is stubbed pending
-    // Task 13; the calls below are no-ops for now (helpers preserved so
-    // the dispatch sites stay intact for the Task 13 rewrite).
+    // Selection (plain click): set the player's selected target. Asteroids,
+    // NPCs, and ships are all selectable. Shift+click clears the selection;
+    // right-click (handled above in button === 2) also clears.
     if (bestId !== 0) {
       const ent = state.entities.get(bestId);
       const kind = ent?.current.entityType;
-      const lockable = kind === EntityType.Ship || kind === EntityType.NPC || kind === EntityType.Asteroid;
-      if (lockable) {
+      const selectable = kind === EntityType.Ship || kind === EntityType.NPC || kind === EntityType.Asteroid;
+      if (selectable) {
         if (e.shiftKey) {
-          // Shift+click: unlock a locked target.
           tryUnlock(bestId);
-        } else if (e.ctrlKey) {
-          // Ctrl+click: explicit lock/activate (works for asteroids too).
-          tryLockOrActivate(bestId);
-        } else if (kind === EntityType.Ship || kind === EntityType.NPC) {
-          // Plain click on combat target: auto-start lock. Without this,
-          // new players see only the red selection ring on an NPC and
-          // assume the game isn't responding to combat input — the lock
-          // gesture (Space-after-select or ctrl+click) is not discoverable.
+        } else {
           tryLockOrActivate(bestId);
         }
       }
@@ -471,6 +505,14 @@ export function setupInput(
 export function sendInput(state: GameState): void {
   if (!state.connected || !state.client) return;
   if (state.isDead || state.chatMode || state.isDocked || state.cellMapOpen) return;
+
+  // Auto-clear optimistic selection when the selected entity has left
+  // the AoI delta (died, despawned, or moved out of range). The server
+  // will eventually echo Selection.cleared but client-side clearing
+  // here avoids stale ring UI while we wait for that echo.
+  if (state.selectedNetID !== 0 && !state.entities.has(state.selectedNetID)) {
+    state.selectedNetID = 0;
+  }
 
   // Movement: send on the tick the player issues a new click. Active=false
   // is also dispatched once when the click is released.
