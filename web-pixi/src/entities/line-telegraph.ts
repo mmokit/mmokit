@@ -1,14 +1,15 @@
 import { Container, Graphics } from "pixi.js";
-import type { LanceTelegraphEntity } from "../../sdk/index.js";
+import type { LineTelegraphEntity } from "../../sdk/index.js";
 import { EntityType } from "../../sdk/index.js";
 import type { ClientEntity, EntityDisplayObject } from "../types";
 import { px } from "../view";
 
-// LanceTelegraph renders an MMO-style ground indicator for the Lancer's
-// charge windup: a filled red rectangle showing exactly where the lance
-// will sweep, with a brighter "fill sweep" growing along the path as the
-// windup completes. WoW / Albion ground-marker convention — stay out of
-// the red zone.
+// LineTelegraph renders an MMO-style ground indicator for telegraphed
+// line attacks (Lancer charge windup, Brawler line-cone windup): a
+// filled red rectangle showing exactly where the attack will sweep,
+// with a brighter "fill sweep" growing along the path as the windup
+// completes. WoW / Albion ground-marker convention — stay out of the
+// red zone.
 //
 // Layers (back to front):
 //   - dangerZone: dim red fill across the full charge path (you will be
@@ -27,7 +28,7 @@ const COLOR_DANGER = 0xff2211;
 const COLOR_SWEEP = 0xff5533;
 const COLOR_OUTLINE = 0xff8855;
 
-export function createLanceTelegraphDisplay(): EntityDisplayObject {
+export function createLineTelegraphDisplay(): EntityDisplayObject {
   const container = new Container();
   const dangerZone = new Graphics();
   const sweepFill = new Graphics();
@@ -60,8 +61,8 @@ export function createLanceTelegraphDisplay(): EntityDisplayObject {
   return {
     container,
     update(ent: ClientEntity, _isMe: boolean, now: number) {
-      if (ent.current.entityType !== EntityType.LanceTelegraph) return;
-      const e = ent.current as LanceTelegraphEntity;
+      if (ent.current.entityType !== EntityType.LineTelegraph) return;
+      const e = ent.current as LineTelegraphEntity;
       const length = e.length || 30;
       const halfW = e.halfWidth || 3;
       const remaining = e.remaining ?? 0;

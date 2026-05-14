@@ -25,7 +25,7 @@ const (
 	KindPOI                         // 5
 	KindAoEMarker                   // 6
 	KindProjectile                  // 7
-	KindLanceTelegraph              // 8
+	KindLineTelegraph              // 8
 )
 
 // Health represents hit points.
@@ -406,7 +406,7 @@ type NPCAI struct {
 	CastCooldown       float32
 
 	// PVE v2: Lancer windup + charge tracking. WindupRemaining > 0 means a
-	// telegraph is in flight at LanceTelegraphNetID; ChargeRemaining > 0
+	// telegraph is in flight at LineTelegraphNetID; ChargeRemaining > 0
 	// means the lancer is actively dashing in ChargeDirAngle direction.
 	// RecoverRemaining > 0 means the lancer just finished a charge and is
 	// vulnerable. ChargeHit ensures one-shot-per-charge damage application.
@@ -414,7 +414,7 @@ type NPCAI struct {
 	ChargeRemaining     float32
 	RecoverRemaining    float32
 	ChargeDirAngle      float32 // radians; locked at windup-end
-	LanceTelegraphNetID uint32
+	LineTelegraphNetID uint32
 	ChargeHit           bool
 }
 

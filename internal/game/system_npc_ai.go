@@ -310,8 +310,8 @@ func (s *NPCAISystem) tickEngage(self mmokit.Entity, ai *gamecomp.NPCAI,
 		gw := s.gw
 		aiRef := ai
 		s.Commands().Defer(func() {
-			marker := gw.SpawnLanceTelegraph(px2, py2, chargeDir, chargeLen, halfW, windup, ownerNetID)
-			aiRef.LanceTelegraphNetID = marker.NetID()
+			marker := gw.SpawnLineTelegraph(px2, py2, chargeDir, chargeLen, halfW, windup, ownerNetID)
+			aiRef.LineTelegraphNetID = marker.NetID()
 		})
 
 		ai.WindupRemaining = s.gw.Config.LancerWindupTime
@@ -414,12 +414,12 @@ func (s *NPCAISystem) tickLanceWindup(self mmokit.Entity, ai *gamecomp.NPCAI,
 	if ai.WindupRemaining > 0 {
 		return
 	}
-	if ai.LanceTelegraphNetID != 0 {
-		marker := mmokit.EntityByNetID(s.gw.stage, ai.LanceTelegraphNetID)
+	if ai.LineTelegraphNetID != 0 {
+		marker := mmokit.EntityByNetID(s.gw.stage, ai.LineTelegraphNetID)
 		if marker.Alive() {
 			s.Commands().Despawn(marker.Handle())
 		}
-		ai.LanceTelegraphNetID = 0
+		ai.LineTelegraphNetID = 0
 	}
 	ai.ChargeRemaining = s.gw.Config.LancerChargeTime
 	ai.State = AIStateLanceCharge

@@ -81,13 +81,14 @@ func RegisterEntityKinds(p *mmokit.Process) {
 
 	mmokit.RegisterKind[ProjectileBundle](p, gamecomp.KindProjectile, "Projectile")
 
-	// LanceTelegraph: line-shaped windup telegraph for the Lancer
-	// archetype. Replicate Rotation so the client renderer can draw the
+	// LineTelegraph: line-shaped windup telegraph shared by the Lancer
+	// (charge attack) and Brawler (line-cone special) archetypes.
+	// Replicate Rotation so the client renderer can draw the
 	// rectangle in the committed charge direction (otherwise the line
 	// would be aligned to velocity, which is zero for a stationary
 	// telegraph). Same QAngle binding pattern as Ship/NPC; Rotation is
 	// registered for transfer globally by initEntityKinds.
-	mmokit.RegisterKind[LanceTelegraphBundle](p, gamecomp.KindLanceTelegraph, "LanceTelegraph",
+	mmokit.RegisterKind[LineTelegraphBundle](p, gamecomp.KindLineTelegraph, "LineTelegraph",
 		mmokit.WithExtraBindingFn(func(w *ecs.World) system.ComponentBinding {
 			return mmokit.QAngle(ecs.NewMap1[mmokit.Rotation](w))
 		}),

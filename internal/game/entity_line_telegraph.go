@@ -5,7 +5,7 @@ import (
 	"github.com/zenion/mmoserver/pkg/mmokit"
 )
 
-// LanceTelegraphBundle declares the components a LanceTelegraph entity
+// LineTelegraphBundle declares the components a LineTelegraph entity
 // carries. Position and Rotation are framework-owned transfer-core
 // components: they're passed by value to Spawn() but must NOT appear as
 // bundle fields — RegisterKind rejects them (see entity_aoe.go and
@@ -13,16 +13,17 @@ import (
 //
 // Lifetime ticks the windup; the Spec carries length + width for the
 // client renderer.
-type LanceTelegraphBundle struct {
+type LineTelegraphBundle struct {
 	Lifetime *mmokit.Lifetime
-	Spec     *gamecomp.LanceTelegraphSpec
+	Spec     *gamecomp.LineTelegraphSpec
 }
 
-// SpawnLanceTelegraph creates a LanceTelegraph at (x, y) pointing in
+// SpawnLineTelegraph creates a LineTelegraph at (x, y) pointing in
 // `dirAngle` radians. The marker self-expires after `windupTime`
-// seconds via LifetimeSystem. The Lancer also tracks the entity netID
-// so it can despawn the marker early if the charge is interrupted.
-func (gw *GameWorld) SpawnLanceTelegraph(
+// seconds via LifetimeSystem. The owner (Lancer or Brawler) also tracks
+// the entity netID so it can despawn the marker early if the windup is
+// interrupted.
+func (gw *GameWorld) SpawnLineTelegraph(
 	x, y, dirAngle, length, halfWidth, windupTime float32,
 	ownerNetID uint32,
 ) mmokit.Entity {
@@ -36,12 +37,12 @@ func (gw *GameWorld) SpawnLanceTelegraph(
 		gridRadius = 2
 	}
 	return gw.stage.Spawn(
-		mmokit.EntityKind{Type: gamecomp.KindLanceTelegraph},
+		mmokit.EntityKind{Type: gamecomp.KindLineTelegraph},
 		mmokit.Position{X: x, Y: y},
 		mmokit.Rotation{Angle: dirAngle},
 		mmokit.Lifetime{Remaining: windupTime},
 		mmokit.Collider{Radius: gridRadius, Width: gridRadius * 2, Height: gridRadius * 2, Shape: mmokit.ShapeCircle},
-		gamecomp.LanceTelegraphSpec{
+		gamecomp.LineTelegraphSpec{
 			Length:     length,
 			HalfWidth:  halfWidth,
 			OwnerNetID: ownerNetID,
