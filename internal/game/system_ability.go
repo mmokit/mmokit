@@ -237,12 +237,12 @@ func (s *AbilitySystem) executeAbility(action abilityAction) bool {
 
 	// --- Projectile weapons (PVE v2) ---
 	case item.AbilityTypePlasmaShot:
-		s.fireProjectile(casterE, params, gamecomp.ProjectileTypePlasma)
+		s.fireProjectile(casterE, params, gamecomp.ProjectileTypePlasma, 0)
 		gw.eng.Log.Log(CatCombatAbility, "ability %s: %d fired projectile dmg=%.0f speed=%.0f",
 			params.Name, action.casterNetID, params.Damage, params.ProjectileSpeed)
 
 	case item.AbilityTypeMortarShell:
-		s.fireProjectile(casterE, params, gamecomp.ProjectileTypeMortar)
+		s.fireProjectile(casterE, params, gamecomp.ProjectileTypeMortar, 0)
 		gw.eng.Log.Log(CatCombatAbility, "ability %s: %d fired mortar dmg=%.0f splash=%.0f",
 			params.Name, action.casterNetID, params.Damage, params.SplashRadius)
 
@@ -285,7 +285,7 @@ func (s *AbilitySystem) executeAbility(action abilityAction) bool {
 			fired = false
 			break
 		}
-		s.fireProjectile(casterE, params, gamecomp.ProjectileTypeMissile)
+		s.fireProjectile(casterE, params, gamecomp.ProjectileTypeMissile, 0)
 		gw.eng.Log.Log(CatCombatAbility, "ability %s: %d fired homing missile dmg=%.0f",
 			params.Name, action.casterNetID, params.Damage)
 
@@ -417,7 +417,7 @@ func (s *AbilitySystem) executeAbility(action abilityAction) bool {
 // the world lock from the query iteration has been released and it is
 // safe to spawn entities directly.
 func (s *AbilitySystem) fireProjectile(
-	caster mmokit.Entity, params *item.AbilityParams, projType uint8,
+	caster mmokit.Entity, params *item.AbilityParams, projType uint8, pierceCount uint8,
 ) {
 	gw := s.gw
 	casterPos := mmokit.Get[mmokit.Position](caster)
@@ -461,6 +461,7 @@ func (s *AbilitySystem) fireProjectile(
 		SplashDamage: params.SplashDamage,
 		MaxTurnRate:  params.HomingMaxTurnRate,
 		Type:         projType,
+		PierceCount:  pierceCount,
 	}
 	gw.SpawnProjectile(
 		casterPos.X, casterPos.Y,
