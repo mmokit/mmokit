@@ -21,6 +21,7 @@ type NPCAISystem struct {
 	mmokit.SystemBase
 	gw         *GameWorld
 	elapsedSec float32
+	nearby     []mmokit.SpatialEntry // reusable scratch buffer for resolveBrawlerSpecial
 	entities   mmokit.Query[struct {
 		AI   *gamecomp.NPCAI
 		Pos  *mmokit.Position
@@ -324,6 +325,48 @@ func (s *NPCAISystem) tickEngage(self mmokit.Entity, ai *gamecomp.NPCAI,
 		return
 	}
 
+	// Brawler special: telegraphed line-cone attack. Runs alongside the
+	// existing hitscan auto-attack (below). On cooldown the special triggers
+	// first, halts the brawler for a visible windup, then resolves a
+	// rectangle hit-check against any player inside the telegraph footprint.
+	if ai.Archetype == ArchetypeBrawler {
+		if ai.SpecialCooldown > 0 {
+			ai.SpecialCooldown -= dt
+		}
+		if ai.SpecialWindup > 0 {
+			ai.SpecialWindup -= dt
+			if ai.SpecialWindup <= 0 {
+				// Resolve the special: hitscan along SpecialDirAngle for
+				// BrawlerSpecialLength × (2 × BrawlerSpecialHalfWidth).
+				s.resolveBrawlerSpecial(self, ai, pos)
+				ai.SpecialCooldown = s.gw.Config.BrawlerSpecialCooldown
+			}
+			// While windup is active, Brawler stays still (visible commit).
+			vel.X, vel.Y = 0, 0
+			return
+		}
+		if ai.SpecialCooldown <= 0 && lock.ActiveNetID != 0 && dist <= s.gw.Config.BrawlerSpecialLength {
+			// Snapshot direction toward target's CURRENT position.
+			chargeDir := float32(math.Atan2(float64(dy), float64(dx)))
+			chargeLen := s.gw.Config.BrawlerSpecialLength
+			halfW := s.gw.Config.BrawlerSpecialHalfWidth
+			windup := s.gw.Config.BrawlerSpecialWindupTime
+			px, py := pos.X, pos.Y
+			ownerNetID := self.NetID()
+			gw := s.gw
+			aiRef := ai
+			s.Commands().Defer(func() {
+				marker := gw.SpawnLineTelegraph(px, py, chargeDir, chargeLen, halfW, windup, ownerNetID)
+				aiRef.SpecialTelegraphNetID = marker.NetID()
+			})
+			ai.SpecialWindup = windup
+			ai.SpecialDirAngle = chargeDir
+			vel.X, vel.Y = 0, 0
+			s.gw.eng.Log.Log(CatNPCAI, "ai: %d Brawler SPECIAL windup toward %.2f rad", self.NetID(), chargeDir)
+			return
+		}
+	}
+
 	if dist <= ai.WeaponRange && angleDelta(rot.Angle, desired) < 0.26 /* ~15° */ {
 		ai.FireCooldown -= dt
 		if ai.FireCooldown <= 0 && ai.FireRate > 0 {
@@ -345,6 +388,67 @@ func (s *NPCAISystem) tickEngage(self mmokit.Entity, ai *gamecomp.NPCAI,
 				ai.LastCombatActivityAt = now
 			}
 		}
+	}
+}
+
+// resolveBrawlerSpecial fires the line-cone attack at the end of the
+// windup. Hitscan along SpecialDirAngle: any player entity inside the
+// rectangle (length=BrawlerSpecialLength, half-width=
+// BrawlerSpecialHalfWidth) takes BrawlerSpecialDamage. Despawns the
+// in-flight telegraph entity (it expires this tick anyway, but explicit
+// cleanup avoids a 1-tick overlap).
+func (s *NPCAISystem) resolveBrawlerSpecial(
+	self mmokit.Entity, ai *gamecomp.NPCAI, pos *mmokit.Position,
+) {
+	if ai.SpecialTelegraphNetID != 0 {
+		m := mmokit.EntityByNetID(s.gw.stage, ai.SpecialTelegraphNetID)
+		if m.Alive() {
+			s.Commands().Despawn(m.Handle())
+		}
+		ai.SpecialTelegraphNetID = 0
+	}
+
+	cfg := s.gw.Config
+	cos := float32(math.Cos(float64(ai.SpecialDirAngle)))
+	sin := float32(math.Sin(float64(ai.SpecialDirAngle)))
+
+	// Search a radius covering the full beam length.
+	s.nearby = s.gw.Spatial.QueryRadius(
+		pos.X+cos*cfg.BrawlerSpecialLength*0.5,
+		pos.Y+sin*cfg.BrawlerSpecialLength*0.5,
+		cfg.BrawlerSpecialLength*0.5+cfg.BrawlerSpecialHalfWidth,
+		s.nearby[:0],
+	)
+
+	ownerNetID := self.NetID()
+	for _, entry := range s.nearby {
+		v := mmokit.EntityFromECS(s.gw.stage, entry.Entity)
+		if !v.Alive() || v.NetID() == ownerNetID {
+			continue
+		}
+		// Only damage players for Brawler special (NPCs are friendlies).
+		if !mmokit.Has[mmokit.PlayerConn](v) {
+			continue
+		}
+		vpos := mmokit.Get[mmokit.Position](v)
+		if vpos == nil {
+			continue
+		}
+		rx, ry := vpos.X-pos.X, vpos.Y-pos.Y
+		parallel := rx*cos + ry*sin
+		if parallel < 0 || parallel > cfg.BrawlerSpecialLength {
+			continue
+		}
+		perp := rx*(-sin) + ry*cos
+		if perp < 0 {
+			perp = -perp
+		}
+		if perp > cfg.BrawlerSpecialHalfWidth {
+			continue
+		}
+		s.gw.Damage(self, v, cfg.BrawlerSpecialDamage, 0, 0, npcAbilityTypeFor(ai.Archetype))
+		s.gw.eng.Log.Log(CatNPCAI, "ai: %d Brawler special HIT netID=%d dmg=%.0f",
+			ownerNetID, v.NetID(), cfg.BrawlerSpecialDamage)
 	}
 }
 
