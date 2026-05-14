@@ -71,6 +71,19 @@ const (
 	AbilityTypeExtractPulse AbilityType = 41 // bonus extraction burst
 )
 
+// TargetingMode describes how an ability resolves its target. The
+// per-ability targeting model — see docs/superpowers/specs/
+// 2026-05-14-skillshot-combat-design.md for the full design.
+type TargetingMode uint8
+
+const (
+	TargetingSelf             TargetingMode = 0 // no aim, no target (default — abilities missing classification will Self-cast, visible bug)
+	TargetingLockOn           TargetingMode = 1 // requires active TargetLock
+	TargetingSkillshotLine    TargetingMode = 2 // direction from caster toward cursor; fires Projectile
+	TargetingSkillshotGround  TargetingMode = 3 // cursor position; drops AoEMarker
+	TargetingSkillshotChannel TargetingMode = 4 // held; beam tracks cursor direction
+)
+
 // AbilityParams defines the stats for a single ability granted by equipment.
 type AbilityParams struct {
 	Type        AbilityType
@@ -107,6 +120,10 @@ type AbilityParams struct {
 	ChannelDuration float32 // seconds of max channel
 	ChannelTickRate float32 // ticks per second of damage
 	BeamHalfArcRad  float32 // ±arc tolerance from caster facing; lose channel if target leaves arc
+
+	// PVE v3 — skillshot combat
+	Mode            TargetingMode // how this ability resolves its target
+	GroundCastDelay float32       // SkillshotGround: seconds the AoE marker waits before detonating (~0.6s for player abilities)
 }
 
 // EquipData defines the abilities and passive stats granted by an equipment item.
@@ -186,10 +203,12 @@ func doInit() {
 			Primary: AbilityParams{
 				Type: AbilityTypePulseLaser, Name: "Pulse Shot",
 				Damage: 30.0, Range: 30.0, Cooldown: 1.0,
+				Mode: TargetingSkillshotLine,
 			},
 			Secondary: &AbilityParams{
 				Type: AbilityTypePulseBarrage, Name: "Pulse Barrage",
 				Damage: 50.0, Range: 50.0, Cooldown: 3.0,
+				Mode: TargetingSkillshotLine,
 			},
 		},
 	})
@@ -200,10 +219,12 @@ func doInit() {
 			Primary: AbilityParams{
 				Type: AbilityTypeRailShot, Name: "Rail Shot",
 				Damage: 50, Range: 33.3, Cooldown: 3.0,
+				Mode: TargetingSkillshotLine,
 			},
 			Secondary: &AbilityParams{
 				Type: AbilityTypePiercingRound, Name: "Piercing Round",
 				Damage: 50, BonusDamage: 20, Range: 26.7, Cooldown: 10.0,
+				Mode: TargetingSkillshotLine,
 			},
 		},
 	})
@@ -214,10 +235,12 @@ func doInit() {
 			Primary: AbilityParams{
 				Type: AbilityTypeIonBurn, Name: "Ion Burn",
 				Range: 16.7, Cooldown: 8.0, DotDPS: 6.0, DotDuration: 4.0,
+				Mode: TargetingLockOn,
 			},
 			Secondary: &AbilityParams{
 				Type: AbilityTypeIonOverload, Name: "Ion Overload",
 				Damage: 40, Range: 20.0, Cooldown: 12.0,
+				Mode: TargetingSkillshotLine,
 			},
 		},
 	})
@@ -228,10 +251,12 @@ func doInit() {
 			Primary: AbilityParams{
 				Type: AbilityTypePlasmaBolt, Name: "Plasma Bolt",
 				Damage: 20, Range: 23.3, Cooldown: 4.0,
+				Mode: TargetingSkillshotLine,
 			},
 			Secondary: &AbilityParams{
 				Type: AbilityTypePlasmaTorpedo, Name: "Plasma Torpedo",
 				Damage: 60, BonusDamage: 30, Range: 30.0, Cooldown: 20.0,
+				Mode: TargetingLockOn,
 			},
 		},
 	})
@@ -246,6 +271,7 @@ func doInit() {
 				Type: AbilityTypePlasmaShot, Name: "Plasma Shot",
 				Damage: 30, Range: 40, Cooldown: 1.0,
 				ProjectileSpeed: 50,
+				Mode:            TargetingSkillshotLine,
 			},
 			Secondary: &AbilityParams{
 				Type: AbilityTypeHomingMissile, Name: "Homing Missile",
@@ -255,6 +281,7 @@ func doInit() {
 				SplashDamage:      20,
 				HomingMaxTurnRate: 2.09,
 				RequiresLock:      true,
+				Mode:              TargetingLockOn,
 			},
 		},
 	})
@@ -271,6 +298,7 @@ func doInit() {
 				ChannelDuration: 3,
 				ChannelTickRate: 10,
 				BeamHalfArcRad:  0.5236,
+				Mode:            TargetingSkillshotChannel,
 			},
 			Secondary: &AbilityParams{
 				Type: AbilityTypeMortarShell, Name: "Mortar Shell",
@@ -278,6 +306,8 @@ func doInit() {
 				ProjectileSpeed: 40,
 				SplashRadius:    6,
 				SplashDamage:    40,
+				Mode:            TargetingSkillshotGround,
+				GroundCastDelay: 0.6,
 			},
 		},
 	})
@@ -290,10 +320,12 @@ func doInit() {
 			Primary: AbilityParams{
 				Type: AbilityTypeMiningBeam, Name: "Mining Beam",
 				MiningRate: 1.0, MiningRange: 10.0, Cooldown: 0,
+				Mode: TargetingLockOn,
 			},
 			Secondary: &AbilityParams{
 				Type: AbilityTypeExtractPulse, Name: "Extract Pulse",
 				MiningYield: 2.0, MiningRange: 10.0, Cooldown: 3.0,
+				Mode: TargetingLockOn,
 			},
 		},
 	})
@@ -304,10 +336,12 @@ func doInit() {
 			Primary: AbilityParams{
 				Type: AbilityTypeMiningBeam, Name: "Mining Beam",
 				MiningRate: 2.5, MiningRange: 13.3, Cooldown: 0,
+				Mode: TargetingLockOn,
 			},
 			Secondary: &AbilityParams{
 				Type: AbilityTypeExtractPulse, Name: "Extract Pulse",
 				MiningYield: 5.0, MiningRange: 13.3, Cooldown: 2.5,
+				Mode: TargetingLockOn,
 			},
 		},
 	})
@@ -320,6 +354,7 @@ func doInit() {
 			Primary: AbilityParams{
 				Type: AbilityTypeEmergencyShield, Name: "Emergency Shield",
 				Cooldown: 15.0, ShieldRestore: 35, DmgReduction: 0.3, BuffDuration: 5.0,
+				Mode: TargetingSelf,
 			},
 			ShieldMax: 50, ShieldRegenRate: 1.7,
 		},
@@ -331,6 +366,7 @@ func doInit() {
 			Primary: AbilityParams{
 				Type: AbilityTypeHardenedShield, Name: "Hardened Shield",
 				Cooldown: 20.0, ShieldRestore: 55, DmgReduction: 0.5, BuffDuration: 6.0,
+				Mode: TargetingSelf,
 			},
 			ShieldMax: 75, ShieldRegenRate: 1.0,
 		},
@@ -344,6 +380,7 @@ func doInit() {
 			Primary: AbilityParams{
 				Type: AbilityTypeAfterburner, Name: "Afterburner",
 				Cooldown: 10.0, SpeedMult: 2.5, BoostDuration: 1.5,
+				Mode: TargetingSelf,
 			},
 		},
 	})
@@ -354,6 +391,7 @@ func doInit() {
 			Primary: AbilityParams{
 				Type: AbilityTypeMicroWarp, Name: "Micro Warp",
 				Cooldown: 18.0, SpeedMult: 4.0, BoostDuration: 0.8,
+				Mode: TargetingSelf,
 			},
 			ThrustBonus: 3.3, MaxSpeedBonus: 6.7,
 		},
