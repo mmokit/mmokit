@@ -485,10 +485,48 @@ func (s *AbilitySystem) dispatchSkillshotLine(action abilityAction, casterE mmok
 }
 
 // dispatchSkillshotGround handles TargetingSkillshotGround abilities — an
-// AoE marker dropped at the cursor position (aimX/aimY). Implementation
-// lands in Task 11.
+// AoE marker dropped at the cursor position (aimX/aimY), clamped to the
+// ability's Range. The marker lives for GroundCastDelay seconds before
+// AoESystem resolves it as an explosion.
 func (s *AbilitySystem) dispatchSkillshotGround(action abilityAction, casterE mmokit.Entity) bool {
-	return false // implemented in Task 11
+	gw := s.gw
+	params := action.params
+
+	casterPos := mmokit.Get[mmokit.Position](casterE)
+	if casterPos == nil {
+		return false
+	}
+
+	// Clamp cursor to ability range.
+	dx := action.aimX - casterPos.X
+	dy := action.aimY - casterPos.Y
+	dist := float32(math.Sqrt(float64(dx*dx + dy*dy)))
+	aimX, aimY := action.aimX, action.aimY
+	if dist > params.Range && dist > 0 {
+		scale := params.Range / dist
+		aimX = casterPos.X + dx*scale
+		aimY = casterPos.Y + dy*scale
+	}
+
+	// GroundCastDelay: time the marker lives before exploding.
+	delay := params.GroundCastDelay
+	if delay <= 0 {
+		delay = 0.6 // fallback default
+	}
+
+	px, py := aimX, aimY
+	radius := params.SplashRadius
+	damage := params.SplashDamage
+	ownerNetID := casterE.NetID()
+	mask := factionMaskFromOwner(gw, ownerNetID)
+
+	s.Commands().Defer(func() {
+		gw.SpawnAoEMarker(px, py, delay, radius, damage, ownerNetID, mask)
+	})
+
+	gw.eng.Log.Log(CatCombatAbility, "ability %s: %d ground-cast at (%.0f,%.0f) r=%.0f delay=%.1fs",
+		params.Name, action.casterNetID, px, py, radius, delay)
+	return true
 }
 
 // dispatchSkillshotChannel handles TargetingSkillshotChannel abilities —
