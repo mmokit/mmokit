@@ -207,7 +207,7 @@ func doInit() {
 			},
 			Secondary: &AbilityParams{
 				Type: AbilityTypePulseBarrage, Name: "Pulse Barrage",
-				Damage: 50.0, Range: 50.0, Cooldown: 3.0,
+				Damage: 20.0, Range: 40.0, Cooldown: 4.0,
 				Mode: TargetingSkillshotLine,
 			},
 		},
@@ -218,12 +218,12 @@ func doInit() {
 		Equip: &EquipData{
 			Primary: AbilityParams{
 				Type: AbilityTypeRailShot, Name: "Rail Shot",
-				Damage: 50, Range: 33.3, Cooldown: 3.0,
+				Damage: 50, Range: 60, Cooldown: 3.0,
 				Mode: TargetingSkillshotLine,
 			},
 			Secondary: &AbilityParams{
 				Type: AbilityTypePiercingRound, Name: "Piercing Round",
-				Damage: 50, BonusDamage: 20, Range: 26.7, Cooldown: 10.0,
+				Damage: 40, BonusDamage: 15, Range: 35, Cooldown: 8.0,
 				Mode: TargetingSkillshotLine,
 			},
 		},
@@ -239,7 +239,7 @@ func doInit() {
 			},
 			Secondary: &AbilityParams{
 				Type: AbilityTypeIonOverload, Name: "Ion Overload",
-				Damage: 40, Range: 20.0, Cooldown: 12.0,
+				Damage: 40, Range: 30.0, Cooldown: 8.0,
 				Mode: TargetingSkillshotLine,
 			},
 		},
@@ -250,7 +250,7 @@ func doInit() {
 		Equip: &EquipData{
 			Primary: AbilityParams{
 				Type: AbilityTypePlasmaBolt, Name: "Plasma Bolt",
-				Damage: 20, Range: 23.3, Cooldown: 4.0,
+				Damage: 25, Range: 35, Cooldown: 3.0,
 				Mode: TargetingSkillshotLine,
 			},
 			Secondary: &AbilityParams{
