@@ -37,6 +37,7 @@ import { updateBankPanel } from "./ui/bank";
 import { createLootPopup, updateLootPopup } from "./ui/loot-popup";
 import { createMarketPanel, updateMarketPanel } from "./ui/market";
 import { CellMap } from "./ui/cell-map";
+import { SelectionPanel } from "./ui/selection-panel";
 
 async function main() {
   const state = createInitialState();
@@ -164,6 +165,11 @@ async function main() {
 
   // Marketplace panel overlay (HTML)
   createMarketPanel();
+
+  // Selection panel sidebar (HTML overlay; shows info for state.selectedNetID).
+  const gameUiRoot =
+    (document.getElementById("game-ui") as HTMLElement | null) ?? document.body;
+  const selectionPanel = new SelectionPanel(gameUiRoot);
 
   // Minimap (PixiJS overlay on app.stage, zIndex 100)
   const minimap = new Minimap(app.stage);
@@ -389,6 +395,7 @@ async function main() {
     updateAbilityBar(state);
     updateLootPopup(state);
     updateEscMenu(state);
+    selectionPanel.update(state);
 
     // Minimap
     minimap.update(state, app.screen.width, app.screen.height);

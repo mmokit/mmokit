@@ -441,9 +441,47 @@
         /* Right-edge HUD chrome (status indicator, logout button) shifts
            left by the cargo panel width so it stays visible. */
         body.cargo-open:not(.docked) #status,
-        body.cargo-open:not(.docked) #logout-btn {
+        body.cargo-open:not(.docked) #logout-btn,
+        body.cargo-open:not(.docked) #selection-panel {
             transform: translateX(-300px);
         }
+
+        /* Selection panel — top-right info card for state.selectedNetID.
+           Sits below the status indicator + logout button (which occupy
+           ~top: 10..46px on the right edge). pointer-events:none keeps it
+           from intercepting clicks on the canvas. */
+        .selection-panel {
+            position: absolute;
+            top: 80px;
+            right: 16px;
+            width: 200px;
+            background: rgba(8, 12, 20, 0.85);
+            border: 1px solid rgba(120, 180, 240, 0.4);
+            border-radius: 4px;
+            padding: 8px 12px;
+            color: #cde;
+            font-family: monospace;
+            font-size: 12px;
+            pointer-events: none;
+            z-index: 50;
+        }
+        .selection-empty { color: #678; font-style: italic; }
+        .selection-name { font-size: 14px; color: #fff; margin-bottom: 2px; }
+        .selection-type { color: #9ab; margin-bottom: 6px; }
+        .selection-hp-row {
+            display: flex; align-items: center; gap: 6px; margin-bottom: 4px;
+        }
+        .selection-hp-outer {
+            flex: 1;
+            height: 10px;
+            background: rgba(40, 8, 8, 0.6);
+            border: 1px solid #722;
+            border-radius: 2px;
+            overflow: hidden;
+        }
+        .selection-hp-bar { height: 100%; background: #f55; transition: width 100ms; }
+        .selection-hp-text { color: #cde; font-size: 11px; min-width: 50px; text-align: right; }
+        .selection-distance { color: #789; font-size: 11px; }
 
         /* ESC menu */
         #esc-menu {
