@@ -193,6 +193,31 @@ func RegisterInputs(mmo *mmokit.Process) {
 		}
 	})
 
+	// ChannelAim — cursor-tracking update for an in-flight skillshot
+	// channel (SustainedBeam). Writes AimX/AimY onto the player's
+	// Channeling component so tickChannels hitscans along the latest
+	// cursor direction. Silently dropped if the player isn't channeling
+	// or the slot doesn't match the active channel.
+	mmokit.HandleClient(mmo, func(player mmokit.Entity, msg *ChannelAim) {
+		state := mmokit.PlayerStateOf(player)
+		if state != mmokit.StateActive {
+			return
+		}
+		input := mmokit.Get[gamecomp.PlayerInput](player)
+		if input != nil {
+			input.Sequence = msg.Sequence
+		}
+		ch := mmokit.Get[gamecomp.Channeling](player)
+		if ch == nil {
+			return // not channeling — drop silently
+		}
+		if ch.SlotID != msg.Slot {
+			return // mismatched slot — drop
+		}
+		ch.AimX = msg.AimX
+		ch.AimY = msg.AimY
+	})
+
 	// JettisonItem — discrete cargo jettison.
 	mmokit.HandleClient(mmo, func(player mmokit.Entity, msg *JettisonItem) {
 		state := mmokit.PlayerStateOf(player)

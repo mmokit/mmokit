@@ -46,14 +46,16 @@ type abilityAction struct {
 // AbilitySystem processes ability casts using equipment-driven ability parameters.
 type AbilitySystem struct {
 	mmokit.SystemBase
-	gw       *GameWorld
-	entities mmokit.Query[abilityBundle]
-	deferred []abilityAction
+	gw            *GameWorld
+	entities      mmokit.Query[abilityBundle]
+	deferred      []abilityAction
+	nearbyChannel []mmokit.SpatialEntry // reusable scratch for tickChannels hitscan
 }
 
 func (s *AbilitySystem) Init() {
 	s.gw = mmokit.State[GameWorld](s.Stage())
 	s.deferred = make([]abilityAction, 0, 16)
+	s.nearbyChannel = make([]mmokit.SpatialEntry, 0, 32)
 	// Channeling is not part of any kind bundle — prime it so Has/Get
 	// inside the tickChannels query iteration doesn't trigger ark's
 	// locked-world first-touch registration panic.
@@ -262,35 +264,6 @@ func (s *AbilitySystem) dispatchByType(action abilityAction, casterE mmokit.Enti
 			params.BoostDuration, params.SpeedMult, action.slot, uint8(params.Type))
 		gw.eng.Log.Log(CatCombatAbility, "ability %s: %d speed x%.1f for %.1fs",
 			params.Name, action.casterNetID, params.SpeedMult, params.BoostDuration)
-
-	// --- Sustained beam channel (PVE v2, Task 21) ---
-	case item.AbilityTypeSustainedBeam:
-		// Pressing the key while already channeling is a no-op — don't
-		// reset the channel and don't refund the press by setting a
-		// cooldown. The channel ends on its own when RemainingTime
-		// hits zero, the target leaves range/arc, or dies.
-		if mmokit.Has[gamecomp.Channeling](casterE) {
-			fired = false
-			break
-		}
-		target, ok := activeLockTarget(gw, lock)
-		if !ok {
-			fired = false
-			break
-		}
-		mmokit.AddComponent(s.Commands(), casterE, gamecomp.Channeling{
-			SlotID:        action.slot,
-			RemainingTime: params.ChannelDuration,
-			NextTickIn:    0, // fire first tick immediately
-			TargetNetID:   target.NetID(),
-		})
-		gw.eng.Log.Log(CatCombatAbility, "ability %s: %d START -> %d duration=%.1fs tickrate=%.1fHz",
-			params.Name, action.casterNetID, target.NetID(),
-			params.ChannelDuration, params.ChannelTickRate)
-		// Cooldown is applied on channel END (in tickChannels), not on
-		// press — return false so Update skips the per-slot cooldown
-		// assignment.
-		fired = false
 
 	// --- Homing missile — requires active target lock (Task 20) ---
 	case item.AbilityTypeHomingMissile:
@@ -531,9 +504,32 @@ func (s *AbilitySystem) dispatchSkillshotGround(action abilityAction, casterE mm
 
 // dispatchSkillshotChannel handles TargetingSkillshotChannel abilities —
 // a beam that tracks cursor direction (aimX/aimY) for the channel duration.
-// Implementation lands in Task 12.
+// Pressing the key while already channeling is a no-op (don't restart);
+// the channel ends on timeout, caster death, or facing too far off-aim
+// (see tickChannels). Returns false so Update skips the per-press
+// cooldown assignment — cooldown is set on channel END in tickChannels.
 func (s *AbilitySystem) dispatchSkillshotChannel(action abilityAction, casterE mmokit.Entity) bool {
-	return false // implemented in Task 12
+	gw := s.gw
+	params := action.params
+
+	// Already channeling? No-op.
+	if mmokit.Has[gamecomp.Channeling](casterE) {
+		return false
+	}
+
+	mmokit.AddComponent(s.Commands(), casterE, gamecomp.Channeling{
+		SlotID:        action.slot,
+		RemainingTime: params.ChannelDuration,
+		NextTickIn:    0, // fire first tick immediately
+		AimX:          action.aimX,
+		AimY:          action.aimY,
+	})
+
+	gw.eng.Log.Log(CatCombatAbility, "ability %s: %d channel START aim=(%.0f,%.0f) duration=%.1fs",
+		params.Name, action.casterNetID, action.aimX, action.aimY, params.ChannelDuration)
+
+	// Returning false keeps the cooldown at 0 — channel end (in tickChannels) sets it.
+	return false
 }
 
 // fireProjectile creates a Projectile entity travelling in the supplied
@@ -616,11 +612,13 @@ func (s *AbilitySystem) slotToBeamIndex(slot uint8) int {
 }
 
 // tickChannels resolves all in-flight Channeling components for the
-// stage. Each tick we decrement the channel timers, validate the target
-// (alive, in range, inside ±BeamHalfArcRad of caster facing), and apply
-// per-tick damage at params.ChannelTickRate. On channel end (timeout,
-// target loss, target-out-of-arc, or target-out-of-range) the Channeling
-// component is removed and the post-channel cooldown is set.
+// stage. Each tick we decrement the channel timers, compute the aim
+// direction from the player's cursor coords (AimX/AimY — updated by
+// the ChannelAim wire handler), validate the caster's facing is within
+// ±BeamHalfArcRad of the aim direction, then hitscan along the beam
+// line to find the closest valid victim within params.Range. On
+// channel end (timeout, caster death, facing too far off-aim) the
+// Channeling component is removed and the post-channel cooldown is set.
 //
 // ECS structural mutations (component removal) are queued through
 // Commands so they apply after the iteration's world lock releases.
@@ -650,6 +648,13 @@ func (s *AbilitySystem) tickChannels(dt float32) {
 			return
 		}
 
+		casterPos := mmokit.Get[mmokit.Position](caster)
+		casterRot := mmokit.Get[mmokit.Rotation](caster)
+		if casterPos == nil || casterRot == nil {
+			ends = append(ends, endCandidate{caster, ch.SlotID})
+			return
+		}
+
 		// Resolve current params from the caster's equipment — the
 		// ChannelTickRate / BeamHalfArcRad / Range / Damage values all
 		// live there. If the equipment is gone, end the channel.
@@ -664,38 +669,80 @@ func (s *AbilitySystem) tickChannels(dt float32) {
 			return
 		}
 
-		target := mmokit.EntityByNetID(gw.stage, ch.TargetNetID)
-		if !target.Alive() {
-			ends = append(ends, endCandidate{caster, ch.SlotID})
+		// Aim direction from cursor coords carried on the Channeling
+		// component (ChannelAim wire handler updates this each tick).
+		dx := ch.AimX - casterPos.X
+		dy := ch.AimY - casterPos.Y
+		aimNorm := float32(math.Sqrt(float64(dx*dx + dy*dy)))
+		if aimNorm < 1e-3 {
+			// Cursor on top of ship → no clear aim; skip tick but don't end.
 			return
 		}
+		aimAngle := float32(math.Atan2(float64(dy), float64(dx)))
 
-		casterPos := mmokit.Get[mmokit.Position](caster)
-		casterRot := mmokit.Get[mmokit.Rotation](caster)
-		tpos := mmokit.Get[mmokit.Position](target)
-		if casterPos == nil || casterRot == nil || tpos == nil {
-			ends = append(ends, endCandidate{caster, ch.SlotID})
-			return
-		}
-
-		dx, dy := tpos.X-casterPos.X, tpos.Y-casterPos.Y
-		dist := float32(math.Sqrt(float64(dx*dx + dy*dy)))
-		if params.Range > 0 && dist > params.Range {
-			ends = append(ends, endCandidate{caster, ch.SlotID})
-			return
-		}
-
-		desired := float32(math.Atan2(float64(dy), float64(dx)))
-		if angleDelta(casterRot.Angle, desired) > params.BeamHalfArcRad {
+		// Player can be rotated separately from cursor — drop the
+		// channel if the player's facing is way off the aim direction.
+		// BeamHalfArcRad is the allowed slack between facing and aim.
+		if angleDelta(casterRot.Angle, aimAngle) > params.BeamHalfArcRad {
 			ends = append(ends, endCandidate{caster, ch.SlotID})
 			return
 		}
 
 		// Per-tick damage gate.
-		if ch.NextTickIn <= 0 && params.ChannelTickRate > 0 {
-			gw.Damage(caster, target, params.Damage, 0, ch.SlotID, uint8(params.Type))
-			ch.NextTickIn = 1.0 / params.ChannelTickRate
+		if ch.NextTickIn > 0 || params.ChannelTickRate <= 0 {
+			return
 		}
+
+		// Hitscan along the aim line — find the closest non-owner entity
+		// within params.Range and ±4u of the beam line.
+		s.nearbyChannel = gw.Spatial.QueryRadius(
+			casterPos.X+dx/aimNorm*params.Range*0.5, // midpoint of the beam line
+			casterPos.Y+dy/aimNorm*params.Range*0.5,
+			params.Range*0.5+8, // search radius covering the full beam length
+			s.nearbyChannel[:0],
+		)
+
+		ownerNetID := caster.NetID()
+		var victim mmokit.Entity
+		victimDist := params.Range + 1
+		for _, entry := range s.nearbyChannel {
+			e := mmokit.EntityFromECS(gw.stage, entry.Entity)
+			if !e.Alive() || e.NetID() == ownerNetID {
+				continue
+			}
+			if !mmokit.Has[gamecomp.NPCAI](e) && !mmokit.Has[mmokit.PlayerConn](e) {
+				continue
+			}
+			epos := mmokit.Get[mmokit.Position](e)
+			if epos == nil {
+				continue
+			}
+			rx, ry := epos.X-casterPos.X, epos.Y-casterPos.Y
+			parallel := rx*dx/aimNorm + ry*dy/aimNorm
+			if parallel < 0 || parallel > params.Range {
+				continue
+			}
+			// perpendicular distance = |r · n| where n is unit normal
+			nx, ny := -dy/aimNorm, dx/aimNorm
+			perp := rx*nx + ry*ny
+			if perp < 0 {
+				perp = -perp
+			}
+			if perp > 4 {
+				continue
+			}
+			if parallel < victimDist {
+				victimDist = parallel
+				victim = e
+			}
+		}
+
+		if victim.Alive() {
+			gw.Damage(caster, victim, params.Damage, 0, ch.SlotID, uint8(params.Type))
+			gw.eng.Log.Log(CatCombatHit, "channel: %d -> %d dmg=%.0f",
+				ownerNetID, victim.NetID(), params.Damage)
+		}
+		ch.NextTickIn = 1.0 / params.ChannelTickRate
 	})
 
 	// End all flagged channels OUTSIDE the iteration so the structural
