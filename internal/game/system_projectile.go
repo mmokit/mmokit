@@ -78,32 +78,59 @@ func (s *ProjectileSystem) Update(dt float32) {
 		}
 
 		if victim.Alive() {
-			caster := mmokit.EntityByNetID(gw.stage, spec.OwnerNetID)
-			if caster.Alive() {
-				// gw.Damage emits a Damage broadcast (Plan F Phase 2 auto-broadcast),
-				// so AoI viewers see the impact and render the proper VFX via
-				// web-pixi/src/effects/ability-effects.ts case 9/10/12.
-				gw.Damage(caster, victim, spec.Damage, 0, 0 /*slot*/, projectileAbilityType(spec.Type))
-			} else {
-				// Owner gone — apply damage anyway, just no broadcast attribution.
-				gw.ApplyDamage(victim, spec.Damage, spec.OwnerNetID)
+			victimNetID := victim.NetID()
+
+			// Skip already-pierced victims so the same target can't take
+			// multiple hits from one line shot.
+			alreadyHit := false
+			for _, id := range spec.PiercedNetIDs {
+				if id == victimNetID {
+					alreadyHit = true
+					break
+				}
 			}
-			if spec.SplashRadius > 0 {
-				// Capture splash params; defer the spawn so it runs after
-				// the entities.Iter query closes — Stage.Spawn requires an
-				// unlocked world.
-				ix, iy := pos.X, pos.Y
-				splashR, splashDmg := spec.SplashRadius, spec.SplashDamage
-				owner := spec.OwnerNetID
-				mask := factionMaskFromOwner(gw, owner)
-				s.Commands().Defer(func() {
-					gw.SpawnAoEMarker(ix, iy, 0, splashR, splashDmg, owner, mask)
-				})
+			if !alreadyHit {
+				caster := mmokit.EntityByNetID(gw.stage, spec.OwnerNetID)
+				if caster.Alive() {
+					// gw.Damage emits a Damage broadcast (Plan F Phase 2 auto-broadcast),
+					// so AoI viewers see the impact and render the proper VFX via
+					// web-pixi/src/effects/ability-effects.ts case 9/10/12.
+					gw.Damage(caster, victim, spec.Damage, 0, 0 /*slot*/, projectileAbilityType(spec.Type))
+				} else {
+					// Owner gone — apply damage anyway, just no broadcast attribution.
+					gw.ApplyDamage(victim, spec.Damage, spec.OwnerNetID)
+				}
+				if spec.SplashRadius > 0 {
+					// Capture splash params; defer the spawn so it runs after
+					// the entities.Iter query closes — Stage.Spawn requires an
+					// unlocked world.
+					ix, iy := pos.X, pos.Y
+					splashR, splashDmg := spec.SplashRadius, spec.SplashDamage
+					owner := spec.OwnerNetID
+					mask := factionMaskFromOwner(gw, owner)
+					s.Commands().Defer(func() {
+						gw.SpawnAoEMarker(ix, iy, 0, splashR, splashDmg, owner, mask)
+					})
+				}
+				gw.eng.Log.Log(CatCombatHit, "projectile: hit netID=%d dmg=%.0f pierce=%d",
+					victimNetID, spec.Damage, spec.PierceCount)
+
+				if spec.PierceCount > 0 {
+					// Record + continue. Append to first free slot in PiercedNetIDs.
+					for i := range spec.PiercedNetIDs {
+						if spec.PiercedNetIDs[i] == 0 {
+							spec.PiercedNetIDs[i] = victimNetID
+							break
+						}
+					}
+					spec.PierceCount--
+					// Don't despawn — the projectile keeps flying.
+					continue
+				}
+
+				s.Commands().Despawn(proj.Handle())
+				continue
 			}
-			gw.eng.Log.Log(CatCombatHit, "projectile: hit netID=%d dmg=%.0f splash=%.0f",
-				victim.NetID(), spec.Damage, spec.SplashRadius)
-			s.Commands().Despawn(proj.Handle())
-			continue
 		}
 
 		// Lifetime expiry (no hit)
