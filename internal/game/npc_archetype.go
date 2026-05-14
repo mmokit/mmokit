@@ -10,12 +10,13 @@ const (
 
 // NPCAIState — current state-machine slot for an NPC.
 const (
-	AIStateIdle    uint8 = 0
-	AIStateAcquire uint8 = 1
-	AIStateEngage  uint8 = 2
-	AIStateLeash   uint8 = 3
-	AIStateCast    uint8 = 4 // PVE v2: Artillery casting an AoE
-	AIStateBeep    uint8 = 5 // PVE v2: Kamikaze charging detonation
+	AIStateIdle     uint8 = 0
+	AIStateAcquire  uint8 = 1
+	AIStateEngage   uint8 = 2
+	AIStateLeash    uint8 = 3
+	AIStateCast     uint8 = 4 // PVE v2: Artillery casting an AoE
+	AIStateBeep     uint8 = 5 // PVE v2: Kamikaze charging detonation
+	AIStateApproach uint8 = 6 // PVE v2: alerted, moving toward target before lock
 )
 
 // MotionPolicy — how an NPC moves while in Engage. Applied per-archetype.
@@ -36,6 +37,7 @@ type ArchetypeDefaults struct {
 	PreferredRange float32
 	WeaponRange    float32
 	AggroRadius    float32
+	LockRange      float32 // PVE v2: must be within this to start locking. 0 = lock at AggroRadius (legacy behavior).
 	MotionPolicy   uint8
 	DamagePerShot  float32
 	FireRate       float32
@@ -54,6 +56,7 @@ func archetypeDefaults(cfg *GameConfig, kind uint8) ArchetypeDefaults {
 			PreferredRange: cfg.BrawlerPreferredRange,
 			WeaponRange:    cfg.BrawlerWeaponRange,
 			AggroRadius:    cfg.BrawlerAggroRadius,
+			LockRange:      cfg.BrawlerAggroRadius, // same as aggro → no approach state (legacy)
 			MotionPolicy:   MotionCharge,
 			DamagePerShot:  cfg.BrawlerDamagePerShot,
 			FireRate:       cfg.BrawlerFireRate,
@@ -67,6 +70,7 @@ func archetypeDefaults(cfg *GameConfig, kind uint8) ArchetypeDefaults {
 			PreferredRange: cfg.ArtilleryWeaponRange,
 			WeaponRange:    cfg.ArtilleryWeaponRange,
 			AggroRadius:    cfg.ArtilleryAggroRadius,
+			LockRange:      50, // ~half of aggro — approach before locking
 			MotionPolicy:   MotionStationary,
 			DamagePerShot:  0,
 			FireRate:       0,
@@ -80,6 +84,7 @@ func archetypeDefaults(cfg *GameConfig, kind uint8) ArchetypeDefaults {
 			PreferredRange: cfg.KamikazeDetonateRange,
 			WeaponRange:    cfg.KamikazeDetonateRange,
 			AggroRadius:    cfg.KamikazeAggroRadius,
+			LockRange:      30, // ~half of aggro — approach before locking
 			MotionPolicy:   MotionCharge,
 			DamagePerShot:  0, // damage via AoE on detonation
 			FireRate:       0,

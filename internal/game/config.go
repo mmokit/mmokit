@@ -178,13 +178,13 @@ func DefaultGameConfig() GameConfig {
 		BrawlerDamagePerShot: 2, BrawlerFireRate: 1.0,
 
 		ArtilleryHP: 250, ArtilleryShield: 150, ArtilleryMaxSpeed: 4, ArtilleryTurnRate: 1.5,
-		ArtilleryWeaponRange: 1000, ArtilleryAggroRadius: 1000,
-		ArtilleryAoERadius: 50, ArtilleryAoEDamage: 50,
+		ArtilleryWeaponRange: 70, ArtilleryAggroRadius: 80,
+		ArtilleryAoERadius: 5, ArtilleryAoEDamage: 50,
 		ArtilleryCastTime: 3.5, ArtilleryCastCooldown: 3.0, ArtilleryInterruptDamage: 25,
 
 		KamikazeHP: 60, KamikazeShield: 0, KamikazeMaxSpeed: 16, KamikazeTurnRate: 3.0,
-		KamikazeAggroRadius: 800, KamikazeDetonateRange: 30, KamikazeBeepTime: 0.5,
-		KamikazeAoERadius: 60, KamikazeAoEDamage: 40,
+		KamikazeAggroRadius: 60, KamikazeDetonateRange: 4, KamikazeBeepTime: 0.5,
+		KamikazeAoERadius: 6, KamikazeAoEDamage: 40,
 
 		AggroDeescalationSec: 6,
 
@@ -225,7 +225,7 @@ func DefaultGameConfig() GameConfig {
 
 		// POI
 		StationPOIOffsetX:              0,
-		StationPOIOffsetY:              -1100,
+		StationPOIOffsetY:              -200,
 		POIAnchorRadius:                30,
 		POILeashRadius:                 120,
 		POIPerCellProbability:          0.3,

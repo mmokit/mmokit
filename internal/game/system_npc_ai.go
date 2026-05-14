@@ -59,6 +59,8 @@ func (s *NPCAISystem) Update(dt float32) {
 		switch ai.State {
 		case AIStateIdle:
 			s.tickIdle(self, ai, pos, vel, lock, now, dt)
+		case AIStateApproach:
+			s.tickApproach(self, ai, pos, vel, rot, lock, now, dt)
 		case AIStateAcquire:
 			s.tickAcquire(self, ai, pos, rot, lock, now, dt)
 		case AIStateEngage:
@@ -82,6 +84,28 @@ func (s *NPCAISystem) tickIdle(self mmokit.Entity, ai *gamecomp.NPCAI,
 		return
 	}
 
+	// If LockRange is unset (0) or equals AggroRadius, lock immediately
+	// (legacy Brawler behavior). Otherwise transition to Approach — move
+	// toward target until within LockRange, then start the lock.
+	if ai.LockRange <= 0 || ai.LockRange >= ai.AggroRadius {
+		s.startLockOn(self, ai, lock, target, now)
+		return
+	}
+
+	// Approach: don't lock yet. Move toward target.
+	ai.State = AIStateApproach
+	ai.LastCombatActivityAt = now
+	tEnt := mmokit.EntityFromECS(s.gw.stage, target)
+	s.gw.eng.Log.Log(CatNPCAI, "ai: %d Idle→Approach (target %d seen, will lock within %.0f)",
+		self.NetID(), tEnt.NetID(), ai.LockRange)
+}
+
+// startLockOn captures the Idle→Acquire transition body — the lock slot
+// setup and state change. Used by both direct-lock (Idle) and by Approach
+// when the target gets close enough.
+func (s *NPCAISystem) startLockOn(self mmokit.Entity, ai *gamecomp.NPCAI,
+	lock *gamecomp.TargetLock, target mmokit.EntityHandle, now float32,
+) {
 	tEnt := mmokit.EntityFromECS(s.gw.stage, target)
 	tNetID := tEnt.NetID()
 	lock.Slots = lock.Slots[:0]
@@ -94,8 +118,50 @@ func (s *NPCAISystem) tickIdle(self mmokit.Entity, ai *gamecomp.NPCAI,
 	lock.ActiveNetID = tNetID
 	ai.State = AIStateAcquire
 	ai.LastCombatActivityAt = now
-	s.gw.eng.Log.Log(CatNPCAI, "ai: %d Idle→Acquire target=%d",
-		self.NetID(), tNetID)
+	s.gw.eng.Log.Log(CatNPCAI, "ai: %d → Acquire target=%d", self.NetID(), tNetID)
+}
+
+// tickApproach: NPC has seen a target but is not yet close enough to lock.
+// Moves toward the target at full speed and rotates to face. Transitions
+// to Acquire when within LockRange; falls back to Idle if the target is
+// lost (moved out of aggro or died).
+func (s *NPCAISystem) tickApproach(self mmokit.Entity, ai *gamecomp.NPCAI,
+	pos *mmokit.Position, vel *mmokit.Velocity, rot *mmokit.Rotation,
+	lock *gamecomp.TargetLock, now, dt float32,
+) {
+	// Re-scan for nearest enemy (target might have moved or died).
+	target := s.findNearestEnemy(self, pos, ai.AggroRadius)
+	if target == (mmokit.EntityHandle{}) {
+		// Lost target — back to Idle.
+		ai.State = AIStateIdle
+		vel.X, vel.Y = 0, 0
+		return
+	}
+
+	tEnt := mmokit.EntityFromECS(s.gw.stage, target)
+	tpos := mmokit.Get[mmokit.Position](tEnt)
+	if tpos == nil {
+		ai.State = AIStateIdle
+		return
+	}
+
+	dx, dy := tpos.X-pos.X, tpos.Y-pos.Y
+	dist := float32(math.Sqrt(float64(dx*dx + dy*dy)))
+
+	// Close enough → start the lock.
+	if dist <= ai.LockRange {
+		s.startLockOn(self, ai, lock, target, now)
+		return
+	}
+
+	// Move toward target at full speed; also rotate to face.
+	if dist > 1e-3 {
+		ux, uy := dx/dist, dy/dist
+		vel.X = ux * ai.MaxSpeed
+		vel.Y = uy * ai.MaxSpeed
+		desired := float32(math.Atan2(float64(uy), float64(ux)))
+		turnTowards(rot, desired, ai.TurnRate, dt)
+	}
 }
 
 func (s *NPCAISystem) tickAcquire(self mmokit.Entity, ai *gamecomp.NPCAI,

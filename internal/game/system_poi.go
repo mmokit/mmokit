@@ -120,7 +120,7 @@ func (s *POISystem) tickActive(poi *gamecomp.POI, pos *mmokit.Position, poiNetID
 		if ai != nil && ai.LastDamageByNetID != 0 {
 			rosterCombatActivity = true
 		}
-		if ai != nil && (ai.State == AIStateEngage || ai.State == AIStateAcquire) {
+		if ai != nil && (ai.State == AIStateEngage || ai.State == AIStateAcquire || ai.State == AIStateApproach) {
 			rosterCombatActivity = true
 		}
 	}

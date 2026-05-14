@@ -59,6 +59,7 @@ func (gw *GameWorld) SpawnNPC(x, y float32, archetype uint8, poiNetID uint32) mm
 			PreferredRange: d.PreferredRange,
 			WeaponRange:    d.WeaponRange,
 			AggroRadius:    d.AggroRadius,
+			LockRange:      d.LockRange,
 			MotionPolicy:   d.MotionPolicy,
 			DamagePerShot:  d.DamagePerShot,
 			FireRate:       d.FireRate,

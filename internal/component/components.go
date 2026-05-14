@@ -376,6 +376,7 @@ type NPCAI struct {
 	PreferredRange       float32
 	WeaponRange          float32
 	AggroRadius          float32
+	LockRange            float32 // PVE v2: required proximity to transition Approach → Acquire
 	MotionPolicy         uint8
 	DamagePerShot        float32
 	FireRate             float32
