@@ -13,12 +13,16 @@ const SLOT_COLORS: Record<number, number> = {
   5: 0xffff44,              // F thruster
 };
 
-// AimIndicator renders the active aim preview for whichever slot is
-// being aimed. One Graphics, redrawn each frame from state.aimingSlot
-// + state.cursorWorldX/Y. SkillshotLine/Channel draw a beam from the
-// ship out to its range cap along the cursor vector; SkillshotGround
-// draws a clamped damage circle at the cursor plus a range ring around
-// the ship. Self / LockOn skip the preview — handleAbilityPress fires
+// AimIndicator renders two related previews from one Graphics, redrawn
+// each frame:
+//   1. Aim preview while state.aimingSlot != 0 (before fire) — beam for
+//      SkillshotLine/Channel, clamped damage circle + range ring for
+//      SkillshotGround. Dim alpha; will be replaced by either a fire or
+//      a cancel.
+//   2. Live channel beam while state.channelingSlot != 0 — solid bright
+//      beam tracking the cursor while a SkillshotChannel (SustainedBeam)
+//      is held; matches the server's tickChannels hitscan direction.
+// Self / LockOn skip the preview entirely — handleAbilityPress fires
 // those immediately without an aim phase.
 export class AimIndicator {
   private gfx: Graphics;
@@ -30,8 +34,54 @@ export class AimIndicator {
 
   update(state: GameState): void {
     this.gfx.clear();
-    if (state.aimingSlot === 0) return;
-    const slot = state.aimingSlot - 1;
+
+    // Channeling takes precedence — once a channel is in flight, aimingSlot
+    // has already been cleared by fireSkillshot, but we still want a live
+    // beam visual until the channel ends.
+    if (state.channelingSlot !== 0) {
+      this.drawChannelBeam(state, state.channelingSlot - 1);
+      return;
+    }
+    if (state.aimingSlot !== 0) {
+      this.drawAimPreview(state, state.aimingSlot - 1);
+    }
+  }
+
+  private drawChannelBeam(state: GameState, slot: number): void {
+    const params = abilityParamsForSlot(state, slot);
+    if (!params) return;
+    const me = state.entities.get(state.myEntityId);
+    if (!me) return;
+
+    const sx = me.renderX;
+    const sy = me.renderY;
+    const dx = state.cursorWorldX - sx;
+    const dy = state.cursorWorldY - sy;
+    const dist = Math.sqrt(dx * dx + dy * dy);
+    if (dist < 1e-3) return;
+    const range = params.range || 30;
+    const color = SLOT_COLORS[slot] ?? 0xffffff;
+
+    const nx = dx / dist;
+    const ny = dy / dist;
+    const ex = sx + nx * range;
+    const ey = sy + ny * range;
+    // Channel beam: brighter + thicker than aim preview, with a slow pulse.
+    const halfW = px(8);
+    const pxX = -ny * halfW;
+    const pxY = nx * halfW;
+    this.gfx
+      .poly([
+        sx + pxX, sy + pxY,
+        ex + pxX, ey + pxY,
+        ex - pxX, ey - pxY,
+        sx - pxX, sy - pxY,
+      ])
+      .fill({ color, alpha: 0.35 });
+    this.gfx.moveTo(sx, sy).lineTo(ex, ey).stroke({ color, width: px(3), alpha: 1.0 });
+  }
+
+  private drawAimPreview(state: GameState, slot: number): void {
     const params = abilityParamsForSlot(state, slot);
     if (!params) return;
 

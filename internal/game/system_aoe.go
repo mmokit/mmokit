@@ -51,12 +51,19 @@ func (s *AoESystem) Update(dt float32) {
 }
 
 // resolveMarker queries the spatial grid and applies damage to all
-// eligible victims in radius. Owner is always skipped.
+// eligible victims in radius. Owner is always skipped. Damage is routed
+// through gw.Damage (not ApplyDamage) so the Damage event auto-broadcasts
+// to AoI viewers — clients render the hit visual + sound mapped from
+// spec.AbilityType. If the caster has despawned (owner died mid-flight),
+// damage still applies via ApplyDamage fallback so the AoE isn't silently
+// neutered.
 func (s *AoESystem) resolveMarker(pos *mmokit.Position, spec *gamecomp.AoESpec) {
 	gw := s.gw
 	r2 := spec.Radius * spec.Radius
 
 	s.nearby = gw.Spatial.QueryRadius(pos.X, pos.Y, spec.Radius, s.nearby[:0])
+
+	caster := mmokit.EntityByNetID(gw.stage, spec.OwnerNetID)
 
 	hits := 0
 	for _, entry := range s.nearby {
@@ -78,11 +85,15 @@ func (s *AoESystem) resolveMarker(pos *mmokit.Position, spec *gamecomp.AoESpec) 
 		if !s.factionMatch(victim, spec.FactionMask) {
 			continue
 		}
-		gw.ApplyDamage(victim, spec.Damage, spec.OwnerNetID)
+		if caster.Alive() {
+			gw.Damage(caster, victim, spec.Damage, 0, 0, spec.AbilityType)
+		} else {
+			gw.ApplyDamage(victim, spec.Damage, spec.OwnerNetID)
+		}
 		hits++
 	}
-	gw.eng.Log.Log(CatCombatHit, "aoe: resolved at (%.0f,%.0f) r=%.0f dmg=%.0f hits=%d",
-		pos.X, pos.Y, spec.Radius, spec.Damage, hits)
+	gw.eng.Log.Log(CatCombatHit, "aoe: resolved at (%.0f,%.0f) r=%.0f dmg=%.0f hits=%d ability=%d",
+		pos.X, pos.Y, spec.Radius, spec.Damage, hits, spec.AbilityType)
 }
 
 // factionMatch returns true if the victim's faction matches the spec's

@@ -87,7 +87,7 @@ func TestAoESystem_NotExpired_NoDamage(t *testing.T) {
 	npc := spawnAoETestNPC(t, gw, 5001, 100, 100)
 
 	// Marker with positive lifetime — must not resolve yet.
-	gw.SpawnAoEMarker(100, 100, 1.0, 50, 40, 0, FactionMaskAll)
+	gw.SpawnAoEMarker(100, 100, 1.0, 50, 40, 0, FactionMaskAll, 0)
 
 	gw.stage.TickOne(sys, 0.1)
 
@@ -106,7 +106,7 @@ func TestAoESystem_Expired_DamagesInRadius(t *testing.T) {
 	inside := spawnAoETestNPC(t, gw, 6001, 100, 100)  // at center
 	outside := spawnAoETestNPC(t, gw, 6002, 300, 300) // ~283u away — outside r=50
 
-	gw.SpawnAoEMarker(100, 100, 0, 50, 40, 0, FactionMaskAll)
+	gw.SpawnAoEMarker(100, 100, 0, 50, 40, 0, FactionMaskAll, 0)
 
 	gw.stage.TickOne(sys, 0.1)
 
@@ -126,7 +126,7 @@ func TestAoESystem_OwnerNotDamaged(t *testing.T) {
 
 	owner := spawnAoETestNPC(t, gw, 7001, 100, 100)
 
-	gw.SpawnAoEMarker(100, 100, 0, 50, 40, owner.NetID(), FactionMaskAll)
+	gw.SpawnAoEMarker(100, 100, 0, 50, 40, owner.NetID(), FactionMaskAll, 0)
 
 	gw.stage.TickOne(sys, 0.1)
 
@@ -144,7 +144,7 @@ func TestAoESystem_FactionMask_NPCOnly(t *testing.T) {
 	npc := spawnAoETestNPC(t, gw, 8001, 100, 100)
 	player := spawnAoETestPlayer(t, gw, 8002, 1, 110, 110)
 
-	gw.SpawnAoEMarker(100, 100, 0, 50, 40, 0, FactionMaskNPC)
+	gw.SpawnAoEMarker(100, 100, 0, 50, 40, 0, FactionMaskNPC, 0)
 
 	gw.stage.TickOne(sys, 0.1)
 

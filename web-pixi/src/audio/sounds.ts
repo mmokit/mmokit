@@ -37,6 +37,11 @@ export const ABILITY_TYPE_SOUNDS: Record<number, SoundId> = {
   6: SoundId.IonBurn,         // IonOverload
   7: SoundId.PlasmaTorpedo,   // PlasmaBolt
   8: SoundId.PlasmaTorpedo,   // PlasmaTorpedo
+  // PVE v2 weapons
+  9: SoundId.PlasmaTorpedo,   // PlasmaShot — fast plasma launch
+  10: SoundId.MissileLaunch,  // HomingMissile — literally a missile
+  11: SoundId.IonBurn,        // SustainedBeam — closest continuous-beam sound
+  12: SoundId.PlasmaTorpedo,  // MortarShell — heavy projectile launch
   // Shield abilities
   20: SoundId.ShieldActivate, // EmergencyShield
   21: SoundId.ShieldActivate, // HardenedShield

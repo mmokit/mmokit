@@ -17,4 +17,8 @@ type AoESpec struct {
 	OwnerNetID  uint32  `net:"u32"`
 	FactionMask uint8   `net:"u8"`
 	DamageType  uint8   `net:"u8"` // reserved for resistance system; v2 always 0
+	// AbilityType identifies the ability that produced this AoE (item.AbilityType).
+	// AoESystem stamps it on the Damage message so the client dispatches the
+	// right hit visual + sound. 0 = generic AoE (legacy / Kamikaze splash).
+	AbilityType uint8 `net:"u8"`
 }

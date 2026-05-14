@@ -103,13 +103,15 @@ func (s *ProjectileSystem) Update(dt float32) {
 				if spec.SplashRadius > 0 {
 					// Capture splash params; defer the spawn so it runs after
 					// the entities.Iter query closes — Stage.Spawn requires an
-					// unlocked world.
+					// unlocked world. The projectile's AbilityType maps the
+					// splash hit to the same VFX/sound as the direct impact.
 					ix, iy := pos.X, pos.Y
 					splashR, splashDmg := spec.SplashRadius, spec.SplashDamage
 					owner := spec.OwnerNetID
 					mask := factionMaskFromOwner(gw, owner)
+					abilityType := projectileAbilityType(spec.Type)
 					s.Commands().Defer(func() {
-						gw.SpawnAoEMarker(ix, iy, 0, splashR, splashDmg, owner, mask)
+						gw.SpawnAoEMarker(ix, iy, 0, splashR, splashDmg, owner, mask, abilityType)
 					})
 				}
 				gw.eng.Log.Log(CatCombatHit, "projectile: hit netID=%d dmg=%.0f pierce=%d",

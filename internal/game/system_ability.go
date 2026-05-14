@@ -492,9 +492,10 @@ func (s *AbilitySystem) dispatchSkillshotGround(action abilityAction, casterE mm
 	damage := params.SplashDamage
 	ownerNetID := casterE.NetID()
 	mask := factionMaskFromOwner(gw, ownerNetID)
+	abilityType := uint8(params.Type)
 
 	s.Commands().Defer(func() {
-		gw.SpawnAoEMarker(px, py, delay, radius, damage, ownerNetID, mask)
+		gw.SpawnAoEMarker(px, py, delay, radius, damage, ownerNetID, mask, abilityType)
 	})
 
 	gw.eng.Log.Log(CatCombatAbility, "ability %s: %d ground-cast at (%.0f,%.0f) r=%.0f delay=%.1fs",

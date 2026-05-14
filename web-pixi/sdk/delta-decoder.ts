@@ -147,7 +147,7 @@ function decodePOIEntitySnapshot(snap: Uint8Array, initial: Uint8Array | null, e
   return { netID: 0, producedAtMs: 0, entityType: 5, worldX, worldY, velX, velY, radius, width, height, type, status };
 }
 
-const AOEMARKERENTITY_FIELD_SIZES = [4, 4, 2, 2, 2, 2, 2, 4, 4, 4, 4, 1, 1];
+const AOEMARKERENTITY_FIELD_SIZES = [4, 4, 2, 2, 2, 2, 2, 4, 4, 4, 4, 1, 1, 1];
 const AOEMARKERENTITY_HAS_VAR_TAIL = false;
 
 function decodeAoEMarkerEntitySnapshot(snap: Uint8Array, initial: Uint8Array | null, existing?: AoEMarkerEntity): AoEMarkerEntity {
@@ -165,7 +165,8 @@ function decodeAoEMarkerEntitySnapshot(snap: Uint8Array, initial: Uint8Array | n
   const ownerNetID = readUint32(snap, o); o += 4;
   const factionMask = snap[o]; o += 1;
   const damageType = snap[o]; o += 1;
-  return { netID: 0, producedAtMs: 0, entityType: 6, worldX, worldY, velX, velY, radius, width, height, remaining, aoESpecRadius, damage, ownerNetID, factionMask, damageType };
+  const abilityType = snap[o]; o += 1;
+  return { netID: 0, producedAtMs: 0, entityType: 6, worldX, worldY, velX, velY, radius, width, height, remaining, aoESpecRadius, damage, ownerNetID, factionMask, damageType, abilityType };
 }
 
 const PROJECTILEENTITY_FIELD_SIZES = [4, 4, 2, 2, 2, 2, 2, 4, 4, 4, 4, 4, 4, 4, 1, 1];

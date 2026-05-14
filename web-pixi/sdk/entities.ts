@@ -188,6 +188,7 @@ export interface AoEMarkerEntity {
   ownerNetID: number;
   factionMask: number;
   damageType: number;
+  abilityType: number;
 }
 
 /** Entity kind 7. */

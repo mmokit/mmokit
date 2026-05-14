@@ -29,6 +29,7 @@ func (gw *GameWorld) SpawnAoEMarker(
 	radius, damage float32,
 	ownerNetID uint32,
 	factionMask uint8,
+	abilityType uint8,
 ) mmokit.Entity {
 	return gw.stage.Spawn(
 		mmokit.EntityKind{Type: gamecomp.KindAoEMarker},
@@ -46,6 +47,7 @@ func (gw *GameWorld) SpawnAoEMarker(
 			OwnerNetID:  ownerNetID,
 			FactionMask: factionMask,
 			DamageType:  0,
+			AbilityType: abilityType,
 		},
 	)
 }

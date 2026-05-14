@@ -281,8 +281,9 @@ func (s *NPCAISystem) tickEngage(self mmokit.Entity, ai *gamecomp.NPCAI,
 			selfNetID := self.NetID()
 			aiRef := ai
 			gw := s.gw
+			abilityType := npcAbilityTypeFor(ai.Archetype)
 			s.Commands().Defer(func() {
-				marker := gw.SpawnAoEMarker(cx, cy, castTime, aoeRadius, aoeDamage, ownerNetID, FactionMaskPlayer)
+				marker := gw.SpawnAoEMarker(cx, cy, castTime, aoeRadius, aoeDamage, ownerNetID, FactionMaskPlayer, abilityType)
 				aiRef.CastingMarkerNetID = marker.NetID()
 				aiRef.CastTimeRemaining = castTime
 				aiRef.CastDamageAccum = 0
