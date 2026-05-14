@@ -12,17 +12,45 @@ export class CastAbility {
   static readonly typeID = 0x16eb7722;
   sequence: number = 0;
   slot: number = 0;
+  aimX: number = 0;
+  aimY: number = 0;
 
   constructor(init?: Partial<CastAbility>) {
     if (init) Object.assign(this, init);
   }
 
   encode(): Uint8Array {
-    const buf = new Uint8Array(5);
+    const buf = new Uint8Array(13);
     const dv = new DataView(buf.buffer);
     let off = 0;
     dv.setUint32(off, this.sequence, true); off += 4;
     dv.setUint8(off, this.slot); off += 1;
+    dv.setFloat32(off, this.aimX, true); off += 4;
+    dv.setFloat32(off, this.aimY, true); off += 4;
+    return buf;
+  }
+}
+
+/** Client-input message game.ChannelAim (typeID 0x03173a27). */
+export class ChannelAim {
+  static readonly typeID = 0x3173a27;
+  sequence: number = 0;
+  slot: number = 0;
+  aimX: number = 0;
+  aimY: number = 0;
+
+  constructor(init?: Partial<ChannelAim>) {
+    if (init) Object.assign(this, init);
+  }
+
+  encode(): Uint8Array {
+    const buf = new Uint8Array(13);
+    const dv = new DataView(buf.buffer);
+    let off = 0;
+    dv.setUint32(off, this.sequence, true); off += 4;
+    dv.setUint8(off, this.slot); off += 1;
+    dv.setFloat32(off, this.aimX, true); off += 4;
+    dv.setFloat32(off, this.aimY, true); off += 4;
     return buf;
   }
 }

@@ -7,7 +7,7 @@ export * from "./entities.js";
 export { SpaceDeltaDecoder } from "./delta-decoder.js";
 export { Transport } from "./transport.js";
 export { BankContents, BeamToggle, CellChange, CurrencyUpdate, Damage, DebugInfo, Docked, DockingState, EquipResult, Killed, LockRejectedMsg, LockSlotsMsg, MapData, MarketTradeNotification, MineExtract, OperationError, PlayerDied, PlayerEntityAssigned, PlayerOwnState, PlayerSpawned, Pong, ServerConfig, Status, TransferResult, TypedDispatcher, WorldDelta } from "./broadcasts.js";
-export { CastAbility, Dock, Equip, InventoryTransfer, JettisonItem, LockTarget, LootAll, LootItem, Ping, Respawn, SetActiveTarget, SetMoveTarget, Undock, UnlockTarget } from "./inputs.js";
+export { CastAbility, ChannelAim, Dock, Equip, InventoryTransfer, JettisonItem, LockTarget, LootAll, LootItem, Ping, Respawn, SetActiveTarget, SetMoveTarget, Undock, UnlockTarget } from "./inputs.js";
 export { AuthChangePasswordRequest, AuthChangePasswordResponse, AuthLoginRequest, AuthLoginResponse, AuthLogoutRequest, AuthLogoutResponse, AuthRegisterRequest, AuthRegisterResponse, AuthValidateTokenRequest, AuthValidateTokenResponse, BankRequest, BankResponse, MarketBrowseRequest, MarketCancelOrderRequest, MarketCreateOrderRequest, MarketInstantTradeRequest, MarketMyOrdersRequest, MarketMyOrdersResponse, MarketOrderBookResponse, MarketOrderResultResponse } from "./operations.js";
 export { EntityType } from "./entityType.js";
 export type { EntityTypeValue } from "./entityType.js";

@@ -8,7 +8,7 @@ import {
   applyDelta, BaselineStore,
   decodeLengthPrefixedStringU8,
 } from "./_core/delta-decoder-core.js";
-import type { ShipEntity, ShipStatusEffectsItem, AsteroidEntity, StationEntity, LootCrateEntity, LootCrateItemsItem, NPCEntity, NPCStatusEffectsItem, POIEntity, AoEMarkerEntity, ProjectileEntity, LanceTelegraphEntity, AnyEntity, DeltaWorldUpdate } from "./entities.js";
+import type { ShipEntity, ShipStatusEffectsItem, AsteroidEntity, StationEntity, LootCrateEntity, LootCrateItemsItem, NPCEntity, NPCStatusEffectsItem, POIEntity, AoEMarkerEntity, ProjectileEntity, LineTelegraphEntity, AnyEntity, DeltaWorldUpdate } from "./entities.js";
 
 const SHIPENTITY_FIELD_SIZES = [4, 4, 2, 2, 2, 2, 2, 4, 4, 4, 4, 4, 1, 1, 1, 4, 2];
 const SHIPENTITY_HAS_VAR_TAIL = true;
@@ -168,7 +168,7 @@ function decodeAoEMarkerEntitySnapshot(snap: Uint8Array, initial: Uint8Array | n
   return { netID: 0, producedAtMs: 0, entityType: 6, worldX, worldY, velX, velY, radius, width, height, remaining, aoESpecRadius, damage, ownerNetID, factionMask, damageType };
 }
 
-const PROJECTILEENTITY_FIELD_SIZES = [4, 4, 2, 2, 2, 2, 2, 4, 4, 4, 4, 4, 4, 4, 1];
+const PROJECTILEENTITY_FIELD_SIZES = [4, 4, 2, 2, 2, 2, 2, 4, 4, 4, 4, 4, 4, 4, 1, 1];
 const PROJECTILEENTITY_HAS_VAR_TAIL = false;
 
 function decodeProjectileEntitySnapshot(snap: Uint8Array, initial: Uint8Array | null, existing?: ProjectileEntity): ProjectileEntity {
@@ -188,13 +188,14 @@ function decodeProjectileEntitySnapshot(snap: Uint8Array, initial: Uint8Array | 
   const splashDamage = readFloat32(snap, o); o += 4;
   const maxTurnRate = readFloat32(snap, o); o += 4;
   const type = snap[o]; o += 1;
-  return { netID: 0, producedAtMs: 0, entityType: 7, worldX, worldY, velX, velY, radius, width, height, remaining, ownerNetID, targetNetID, damage, splashRadius, splashDamage, maxTurnRate, type };
+  const pierceCount = snap[o]; o += 1;
+  return { netID: 0, producedAtMs: 0, entityType: 7, worldX, worldY, velX, velY, radius, width, height, remaining, ownerNetID, targetNetID, damage, splashRadius, splashDamage, maxTurnRate, type, pierceCount };
 }
 
-const LANCETELEGRAPHENTITY_FIELD_SIZES = [4, 4, 2, 2, 2, 2, 2, 4, 4, 4, 4, 2];
-const LANCETELEGRAPHENTITY_HAS_VAR_TAIL = false;
+const LINETELEGRAPHENTITY_FIELD_SIZES = [4, 4, 2, 2, 2, 2, 2, 4, 4, 4, 4, 2];
+const LINETELEGRAPHENTITY_HAS_VAR_TAIL = false;
 
-function decodeLanceTelegraphEntitySnapshot(snap: Uint8Array, initial: Uint8Array | null, existing?: LanceTelegraphEntity): LanceTelegraphEntity {
+function decodeLineTelegraphEntitySnapshot(snap: Uint8Array, initial: Uint8Array | null, existing?: LineTelegraphEntity): LineTelegraphEntity {
   let o = 0;
   const worldX = readFloat32(snap, o); o += 4;
   const worldY = readFloat32(snap, o); o += 4;
@@ -272,7 +273,7 @@ export class SpaceDeltaDecoder {
       case 5: { const prev = existing && existing.entityType === 5 ? existing : undefined; const e = decodePOIEntitySnapshot(snap, initial, prev); e.netID = netID; e.producedAtMs = producedAtMs; return e; }
       case 6: { const prev = existing && existing.entityType === 6 ? existing : undefined; const e = decodeAoEMarkerEntitySnapshot(snap, initial, prev); e.netID = netID; e.producedAtMs = producedAtMs; return e; }
       case 7: { const prev = existing && existing.entityType === 7 ? existing : undefined; const e = decodeProjectileEntitySnapshot(snap, initial, prev); e.netID = netID; e.producedAtMs = producedAtMs; return e; }
-      case 8: { const prev = existing && existing.entityType === 8 ? existing : undefined; const e = decodeLanceTelegraphEntitySnapshot(snap, initial, prev); e.netID = netID; e.producedAtMs = producedAtMs; return e; }
+      case 8: { const prev = existing && existing.entityType === 8 ? existing : undefined; const e = decodeLineTelegraphEntitySnapshot(snap, initial, prev); e.netID = netID; e.producedAtMs = producedAtMs; return e; }
       default: return null;
     }
   }
@@ -287,7 +288,7 @@ export class SpaceDeltaDecoder {
       case 5: return POIENTITY_FIELD_SIZES;
       case 6: return AOEMARKERENTITY_FIELD_SIZES;
       case 7: return PROJECTILEENTITY_FIELD_SIZES;
-      case 8: return LANCETELEGRAPHENTITY_FIELD_SIZES;
+      case 8: return LINETELEGRAPHENTITY_FIELD_SIZES;
       default: return [];
     }
   }
@@ -302,7 +303,7 @@ export class SpaceDeltaDecoder {
       case 5: return POIENTITY_HAS_VAR_TAIL;
       case 6: return AOEMARKERENTITY_HAS_VAR_TAIL;
       case 7: return PROJECTILEENTITY_HAS_VAR_TAIL;
-      case 8: return LANCETELEGRAPHENTITY_HAS_VAR_TAIL;
+      case 8: return LINETELEGRAPHENTITY_HAS_VAR_TAIL;
       default: return false;
     }
   }

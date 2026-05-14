@@ -216,10 +216,11 @@ export interface ProjectileEntity {
   splashDamage: number;
   maxTurnRate: number;
   type: number;
+  pierceCount: number;
 }
 
 /** Entity kind 8. */
-export interface LanceTelegraphEntity {
+export interface LineTelegraphEntity {
   netID: number;
   entityType: 8;
   /**
@@ -243,7 +244,7 @@ export interface LanceTelegraphEntity {
   angle: number;
 }
 
-export type AnyEntity = ShipEntity | AsteroidEntity | StationEntity | LootCrateEntity | NPCEntity | POIEntity | AoEMarkerEntity | ProjectileEntity | LanceTelegraphEntity;
+export type AnyEntity = ShipEntity | AsteroidEntity | StationEntity | LootCrateEntity | NPCEntity | POIEntity | AoEMarkerEntity | ProjectileEntity | LineTelegraphEntity;
 
 export interface DeltaWorldUpdate {
   tick: number;
