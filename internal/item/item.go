@@ -82,6 +82,7 @@ const (
 	TargetingSkillshotLine    TargetingMode = 2 // direction from caster toward cursor; fires Projectile
 	TargetingSkillshotGround  TargetingMode = 3 // cursor position; drops AoEMarker
 	TargetingSkillshotChannel TargetingMode = 4 // held; beam tracks cursor direction
+	TargetingCursorPick       TargetingMode = 5 // cursor-pick: server picks nearest enemy near cursor at fire
 )
 
 // AbilityParams defines the stats for a single ability granted by equipment.
@@ -239,7 +240,7 @@ func doInit() {
 			Primary: AbilityParams{
 				Type: AbilityTypeIonBurn, Name: "Ion Burn",
 				Range: 16.7, Cooldown: 8.0, DotDPS: 6.0, DotDuration: 4.0,
-				Mode: TargetingLockOn,
+				Mode: TargetingCursorPick,
 			},
 			Secondary: &AbilityParams{
 				Type: AbilityTypeIonOverload, Name: "Ion Overload",
@@ -262,7 +263,7 @@ func doInit() {
 			Secondary: &AbilityParams{
 				Type: AbilityTypePlasmaTorpedo, Name: "Plasma Torpedo",
 				Damage: 60, BonusDamage: 30, Range: 30.0, Cooldown: 20.0,
-				Mode: TargetingLockOn,
+				Mode: TargetingCursorPick,
 			},
 		},
 	})
@@ -287,7 +288,7 @@ func doInit() {
 				SplashDamage:      20,
 				HomingMaxTurnRate: 2.09,
 				RequiresLock:      true,
-				Mode:              TargetingLockOn,
+				Mode:              TargetingCursorPick,
 			},
 		},
 	})
