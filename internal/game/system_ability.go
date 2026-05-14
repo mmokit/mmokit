@@ -39,6 +39,8 @@ type abilityAction struct {
 	slot        uint8
 	params      *item.AbilityParams
 	abilities   *gamecomp.AbilitySet
+	aimX        float32 // PVE v3: cursor world coords from CastAbility wire msg
+	aimY        float32
 }
 
 // AbilitySystem processes ability casts using equipment-driven ability parameters.
@@ -173,13 +175,35 @@ func resolveAbilityParams(equip *gamecomp.Equipment, slot uint8) *item.AbilityPa
 
 func (s *AbilitySystem) executeAbility(action abilityAction) bool {
 	gw := s.gw
-	entity := action.caster
-	casterE := mmokit.EntityFromECS(gw.stage, entity)
-
+	casterE := mmokit.EntityFromECS(gw.stage, action.caster)
 	if !casterE.Alive() {
 		return false
 	}
+	params := action.params
 
+	switch params.Mode {
+	case item.TargetingSkillshotLine:
+		return s.dispatchSkillshotLine(action, casterE)
+	case item.TargetingSkillshotGround:
+		return s.dispatchSkillshotGround(action, casterE)
+	case item.TargetingSkillshotChannel:
+		return s.dispatchSkillshotChannel(action, casterE)
+	}
+
+	// TargetingSelf and TargetingLockOn fall through to the existing
+	// per-Type dispatch — these abilities have bespoke handlers (shield
+	// buffs, thruster effects, mining beam toggle, lock-on hitscan/DoT,
+	// homing-missile-with-lock, plasma torpedo) that are too varied for
+	// a generic dispatch.
+	return s.dispatchByType(action, casterE)
+}
+
+// dispatchByType handles TargetingSelf and TargetingLockOn abilities via
+// a per-AbilityType switch. Skillshot modes are routed elsewhere by
+// executeAbility before reaching this function.
+func (s *AbilitySystem) dispatchByType(action abilityAction, casterE mmokit.Entity) bool {
+	gw := s.gw
+	entity := action.caster
 	lock := mmokit.Get[gamecomp.TargetLock](casterE)
 	params := action.params
 
@@ -406,6 +430,27 @@ func (s *AbilitySystem) executeAbility(action abilityAction) bool {
 	// see Plan F notes. MiningBeam toggle now broadcasts via BeamToggle
 	// (Plan G).
 	return fired
+}
+
+// dispatchSkillshotLine handles TargetingSkillshotLine abilities — a
+// projectile fired in the direction from caster to cursor (aimX/aimY).
+// Implementation lands in Task 10.
+func (s *AbilitySystem) dispatchSkillshotLine(action abilityAction, casterE mmokit.Entity) bool {
+	return false // implemented in Task 10
+}
+
+// dispatchSkillshotGround handles TargetingSkillshotGround abilities — an
+// AoE marker dropped at the cursor position (aimX/aimY). Implementation
+// lands in Task 11.
+func (s *AbilitySystem) dispatchSkillshotGround(action abilityAction, casterE mmokit.Entity) bool {
+	return false // implemented in Task 11
+}
+
+// dispatchSkillshotChannel handles TargetingSkillshotChannel abilities —
+// a beam that tracks cursor direction (aimX/aimY) for the channel duration.
+// Implementation lands in Task 12.
+func (s *AbilitySystem) dispatchSkillshotChannel(action abilityAction, casterE mmokit.Entity) bool {
+	return false // implemented in Task 12
 }
 
 // fireProjectile creates a Projectile entity travelling in the caster's
