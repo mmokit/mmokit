@@ -202,9 +202,8 @@ func (s *AbilitySystem) executeAbility(action abilityAction) bool {
 
 	// TargetingSelf and TargetingLockOn fall through to the existing
 	// per-Type dispatch — these abilities have bespoke handlers (shield
-	// buffs, thruster effects, mining beam toggle, lock-on hitscan/DoT,
-	// homing-missile-with-lock, plasma torpedo) that are too varied for
-	// a generic dispatch.
+	// buffs, thruster effects, mining beam toggle, lock-on hitscan) that
+	// are too varied for a generic dispatch.
 	return s.dispatchByType(action, casterE)
 }
 
@@ -232,24 +231,13 @@ func (s *AbilitySystem) dispatchByType(action abilityAction, casterE mmokit.Enti
 		}
 
 	// --- Hitscan + bonus vs unshielded ---
-	case item.AbilityTypePiercingRound, item.AbilityTypePlasmaTorpedo:
+	case item.AbilityTypePiercingRound:
 		target, ok := activeLockTarget(gw, lock)
 		if ok {
 			caster := mmokit.EntityByNetID(gw.stage, action.casterNetID)
 			gw.Damage(caster, target, params.Damage, params.BonusDamage, action.slot, uint8(params.Type))
 			gw.eng.Log.Log(CatCombatAbility, "ability %s: %d -> %d dmg=%.0f",
 				params.Name, action.casterNetID, target.NetID(), params.Damage)
-		}
-
-	// --- DoT debuff ---
-	case item.AbilityTypeIonBurn:
-		target, ok := activeLockTarget(gw, lock)
-		if ok {
-			caster := mmokit.EntityByNetID(gw.stage, action.casterNetID)
-			gw.ApplyStatus(caster, target, gamecomp.StatusIonBurn,
-				params.DotDuration, params.DotDPS, action.slot, uint8(params.Type))
-			gw.eng.Log.Log(CatCombatAbility, "ability %s: %d -> %d (%.1f dps for %.1fs)",
-				params.Name, action.casterNetID, target.NetID(), params.DotDPS, params.DotDuration)
 		}
 
 	// --- Shield restore + Fortified buff ---
@@ -268,28 +256,6 @@ func (s *AbilitySystem) dispatchByType(action abilityAction, casterE mmokit.Enti
 			params.BoostDuration, params.SpeedMult, action.slot, uint8(params.Type))
 		gw.eng.Log.Log(CatCombatAbility, "ability %s: %d speed x%.1f for %.1fs",
 			params.Name, action.casterNetID, params.SpeedMult, params.BoostDuration)
-
-	// --- Homing missile — requires active target lock (Task 20) ---
-	case item.AbilityTypeHomingMissile:
-		target, ok := activeLockTarget(gw, lock)
-		if !ok {
-			// No active lock — refuse cast. Returning false skips the
-			// cooldown assignment in Update, so the ability stays ready.
-			gw.eng.Log.Log(CatCombatAbility, "ability %s: %d cancelled (no lock)",
-				params.Name, action.casterNetID)
-			fired = false
-			break
-		}
-		tpos := mmokit.Get[mmokit.Position](target)
-		cpos := mmokit.Get[mmokit.Position](casterE)
-		if tpos == nil || cpos == nil {
-			fired = false
-			break
-		}
-		dx, dy := tpos.X-cpos.X, tpos.Y-cpos.Y
-		s.fireProjectile(casterE, params, gamecomp.ProjectileTypeMissile, 0, dx, dy)
-		gw.eng.Log.Log(CatCombatAbility, "ability %s: %d fired homing missile dmg=%.0f",
-			params.Name, action.casterNetID, params.Damage)
 
 	// --- Mining beam toggle ---
 	case item.AbilityTypeMiningBeam:
