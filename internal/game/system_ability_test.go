@@ -231,3 +231,133 @@ func TestProjectilePierce_HitsTwoTargets(t *testing.T) {
 		t.Errorf("expected t3 damaged (3rd and final hit): HP=%.1f", hp.Current)
 	}
 }
+
+// TestCursorPick_PicksNearestEnemyToCursor — HomingMissile (CursorPick
+// mode on PlasmaCannon secondary slot) fires with aim coords pointing
+// at NPC `a`; the server picks `a` (nearest to cursor), not `b`. The
+// projectile homes onto its assigned target so only `a` takes damage.
+func TestCursorPick_PicksNearestEnemyToCursor(t *testing.T) {
+	gw, _ := newTestGameWorld()
+	mmokit.Handle(gw.stage, damageHandler)
+
+	abSys := wireAbilitySystem(t, gw)
+	projSys := wireProjectileSystem(t, gw)
+
+	player := spawnAbilityTestPlayer(t, gw, 5001, 1, 0, 0,
+		item.PlasmaCannon, 0)
+	// Both NPCs are inside the cursorPick search radius (5u) of NPC a's
+	// position, and both are inside HomingMissile.Range=50 from caster.
+	// Aim is exactly on a → server must pick a.
+	a := spawnAbilityTestNPC(t, gw, 5002, 20, 0)
+	b := spawnAbilityTestNPC(t, gw, 5003, 22, 3)
+
+	aX, aY := a.Pos()
+	setAbilityCast(t, player, gamecomp.AbilityW, aX, aY)
+
+	// Tick 1: AbilitySystem dispatches cursor-pick, spawns homing missile
+	// targeting a.
+	gw.stage.TickOne(abSys, 0.05)
+
+	// HomingMissile speed=30 u/s; target a is at 20u → ~0.67s travel.
+	// Use small ticks so the projectile's hit-radius query catches a.
+	for range 20 {
+		gw.stage.TickOne(projSys, 0.05)
+		if hp := mmokit.Get[gamecomp.Health](a); hp.Current < 100 {
+			break
+		}
+	}
+
+	if hp := mmokit.Get[gamecomp.Health](a); hp.Current >= 100 {
+		t.Fatalf("expected target a (cursor-picked) damaged; got HP=%.1f", hp.Current)
+	}
+	if hp := mmokit.Get[gamecomp.Health](b); hp.Current < 100 {
+		t.Fatalf("expected target b NOT damaged; got HP=%.1f", hp.Current)
+	}
+}
+
+// TestCursorPick_EmptySpaceMisses — aim in empty space far from any
+// entity. dispatchCursorPick returns false → executeAbility's caller
+// does NOT stamp the cooldown, so AbilitySet.Cooldowns[slot] stays 0.
+func TestCursorPick_EmptySpaceMisses(t *testing.T) {
+	gw, _ := newTestGameWorld()
+	mmokit.Handle(gw.stage, damageHandler)
+
+	abSys := wireAbilitySystem(t, gw)
+
+	player := spawnAbilityTestPlayer(t, gw, 5101, 1, 0, 0,
+		item.PlasmaCannon, 0)
+
+	// Aim far from any spawned entity; cursorPick's 5u radius is empty.
+	setAbilityCast(t, player, gamecomp.AbilityW, 500.0, 500.0)
+
+	gw.stage.TickOne(abSys, 0.05)
+
+	ab := mmokit.Get[gamecomp.AbilitySet](player)
+	if ab == nil {
+		t.Fatal("player missing AbilitySet component")
+	}
+	if ab.Cooldowns[gamecomp.AbilityW] > 0 {
+		t.Fatalf("expected slot W cooldown refunded (miss), got %v",
+			ab.Cooldowns[gamecomp.AbilityW])
+	}
+}
+
+// TestSelection_LeftClickSetsSelection — Selection round-trip: set
+// EntityNetID, verify read; clear, verify cleared. Mirrors the
+// SelectTarget wire-input handler's effect on the player's Selection
+// component without exercising the full network path.
+func TestSelection_LeftClickSetsSelection(t *testing.T) {
+	gw, _ := newTestGameWorld()
+
+	player := spawnAbilityTestPlayer(t, gw, 5201, 1, 0, 0, 0, 0)
+	target := spawnAbilityTestNPC(t, gw, 5202, 10, 0)
+
+	sel := mmokit.Get[gamecomp.Selection](player)
+	if sel == nil {
+		t.Fatal("player missing Selection component")
+	}
+
+	sel.EntityNetID = target.NetID()
+	if got := mmokit.Get[gamecomp.Selection](player).EntityNetID; got != target.NetID() {
+		t.Fatalf("expected selection=%v got %v", target.NetID(), got)
+	}
+
+	sel.EntityNetID = 0
+	if got := mmokit.Get[gamecomp.Selection](player).EntityNetID; got != 0 {
+		t.Fatalf("expected cleared selection; got %v", got)
+	}
+}
+
+// TestMining_RequiresSelection — without a selection, MiningBeam toggle
+// dispatch is refused by the inside-dispatchByType selection gate;
+// MiningLaser.Beams[0].Active stays false and the replicated
+// ActiveMining mirror is not flipped on.
+func TestMining_RequiresSelection(t *testing.T) {
+	gw, _ := newTestGameWorld()
+
+	abSys := wireAbilitySystem(t, gw)
+
+	player := spawnAbilityTestPlayer(t, gw, 5301, 1, 0, 0,
+		item.StarterMiningLaser, 0)
+	// Attach MiningLaser + ActiveMining so the toggle path doesn't bail
+	// out early on missing components — we want the test to hit the
+	// selection-required branch specifically.
+	mmokit.Set(player, gamecomp.MiningLaser{})
+	mmokit.Set(player, gamecomp.ActiveMining{})
+	// No selection set — sel.EntityNetID == 0 → toggle should bail.
+
+	setAbilityCast(t, player, gamecomp.AbilityQ, 0, 0)
+	gw.stage.TickOne(abSys, 0.05)
+
+	laser := mmokit.Get[gamecomp.MiningLaser](player)
+	if laser == nil {
+		t.Fatal("player missing MiningLaser component after spawn")
+	}
+	if laser.Beams[0].Active {
+		t.Fatal("expected MiningBeam slot 0 NOT active without selection")
+	}
+	active := mmokit.Get[gamecomp.ActiveMining](player)
+	if active != nil && active.Beam0Active {
+		t.Fatal("expected ActiveMining.Beam0Active still false without selection")
+	}
+}
