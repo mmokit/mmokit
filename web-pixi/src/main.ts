@@ -2,7 +2,7 @@ import { Application, Container } from "pixi.js";
 import { TICK_INTERVAL } from "./constants";
 import { interpolateEntities } from "./interpolation";
 import { createInitialState } from "./state";
-import { setupInput, sendInput } from "./input";
+import { setupInput, sendInput, tickChannelAim } from "./input";
 import { connect } from "./network";
 import { authLogout } from "./auth";
 import { setupLogin, showLogin, type LoginResult } from "./ui/login";
@@ -329,6 +329,12 @@ async function main() {
   // needing to plumb a callback through every UI event.
   let lastSidebarWidth = sidebarWidth();
 
+  // ChannelAim streaming throttle. Per-frame in the render loop would
+  // flood the server at 60+ Hz; 50ms gives ~20 Hz aim updates, matching
+  // the server tick rate. tickChannelAim is a no-op when no channel is
+  // active, so this cost is essentially free off-channel.
+  let lastChannelAimTime = 0;
+
   // Main game loop via PixiJS ticker
   app.ticker.add(() => {
     if (!state.loggedIn) return;
@@ -348,6 +354,13 @@ async function main() {
       state.fps = state.frameCount;
       state.frameCount = 0;
       state.lastFpsTime = now;
+    }
+
+    // ChannelAim stream (50ms throttle ≈ 20 Hz). No-op when no
+    // SkillshotChannel ability is active.
+    if (now - lastChannelAimTime > 50) {
+      tickChannelAim(state);
+      lastChannelAimTime = now;
     }
 
     // Interpolation

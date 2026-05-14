@@ -5,6 +5,7 @@ import { SoundId } from "./audio/sounds";
 import { abilityParamsForSlot, getAbilityRange, TargetingMode } from "./ui/ability-bar";
 import {
   CastAbility,
+  ChannelAim,
   Dock,
   EntityType,
   JettisonItem,
@@ -57,12 +58,44 @@ function handleAbilityPress(state: GameState, slot: number): void {
 // fireSkillshot sends a CastAbility with the live cursor world coords.
 // LockOn/Self abilities ignore the aim coords server-side; passing them
 // uniformly keeps the wire path uniform.
+//
+// For SkillshotChannel abilities, also primes the per-frame ChannelAim
+// streamer (tickChannelAim) by setting state.channelingSlot + an
+// end-time deadline so the client stops sending once the channel window
+// elapses. Server independently enforces its own ChannelDuration —
+// these timers should agree but the server is authoritative.
 function fireSkillshot(state: GameState, slot: number): void {
   if (!state.connected || !state.client) return;
+  const params = abilityParamsForSlot(state, slot);
   state.inputSeq++;
   state.client.send(new CastAbility({
     sequence: state.inputSeq,
     slot,
+    aimX: state.cursorWorldX,
+    aimY: state.cursorWorldY,
+  }));
+  if (params?.mode === TargetingMode.SkillshotChannel) {
+    state.channelingSlot = slot + 1;
+    state.channelEndsAt = performance.now() + (params.channelDuration ?? 3000);
+  }
+}
+
+// tickChannelAim streams the live cursor coords to the server while a
+// SkillshotChannel ability is active. The server's tickChannels reads
+// the latest aim each tick to update the beam direction. Called from
+// the main render loop on a 50ms throttle (~20 Hz). Self-clears when
+// the client-side channel window expires; server's own timeout is the
+// authoritative end of the channel.
+export function tickChannelAim(state: GameState): void {
+  if (!state.channelingSlot || !state.connected || !state.client) return;
+  if (performance.now() >= state.channelEndsAt) {
+    state.channelingSlot = 0;
+    return;
+  }
+  state.inputSeq++;
+  state.client.send(new ChannelAim({
+    sequence: state.inputSeq,
+    slot: state.channelingSlot - 1,
     aimX: state.cursorWorldX,
     aimY: state.cursorWorldY,
   }));

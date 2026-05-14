@@ -119,6 +119,14 @@ export interface GameState {
   quickcastMask: number; // bitmask: bit N = slot N+1 is quickcast (skip aim-confirm)
   cursorWorldX: number; // live cursor world coords (updated by input.ts each mousemove)
   cursorWorldY: number;
+  /**
+   * Active channel slot — set when a SkillshotChannel ability begins, cleared
+   * when channelEndsAt elapses (or the server cuts the channel short). Encoded
+   * as 1..6 so 0 == "not channeling", matching aimingSlot's convention.
+   */
+  channelingSlot: number;
+  /** performance.now() ms when the active channel auto-ends client-side. */
+  channelEndsAt: number;
 
   // Cargo/Economy/Equipment
   cargoPanelOpen: boolean;
@@ -246,6 +254,8 @@ export function createInitialState(): GameState {
     quickcastMask: parseInt(localStorage.getItem("skillshot.quickcast") ?? "0", 10),
     cursorWorldX: 0,
     cursorWorldY: 0,
+    channelingSlot: 0,
+    channelEndsAt: 0,
 
     cargoPanelOpen: true,
     jettisonRequest: 0,

@@ -46,6 +46,13 @@ export interface AbilityInfo {
   color?: string;
   mode: TargetingMode;
   splashRadius?: number;
+  /**
+   * Total channel duration in ms for SkillshotChannel abilities. Used by
+   * input.ts to time out client-side ChannelAim streaming; server has its
+   * own ChannelDuration that's authoritative — this is just a hint so the
+   * client stops sending when its channel runs out.
+   */
+  channelDuration?: number;
 }
 
 export const ITEM_ABILITIES: Record<number, { primary: AbilityInfo; secondary?: AbilityInfo; passive?: string[] }> = {
@@ -129,6 +136,7 @@ export const ITEM_ABILITIES: Record<number, { primary: AbilityInfo; secondary?: 
       desc: "Channeled beam. Keep target inside the firing arc to keep dealing damage.",
       stats: ["Damage: 4/tick × 10/s", "Channel: 3s", "Range: 30", "Cooldown: 4s post-channel"],
       mode: TargetingMode.SkillshotChannel,
+      channelDuration: 3000,
     },
     secondary: {
       name: "Mortar", title: "Mortar Shell", range: 40,
