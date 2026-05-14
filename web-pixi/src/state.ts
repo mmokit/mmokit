@@ -113,6 +113,10 @@ export interface GameState {
   abilityCooldowns: Map<number, { remaining: number; total: number }>;
   moveTarget: { x: number; y: number; active: boolean };
   rightMouseDown: boolean;
+  aimingSlot: number; // 0 = not aiming; 1..6 = currently aiming this slot index
+  quickcastMask: number; // bitmask: bit N = slot N+1 is quickcast (skip aim-confirm)
+  cursorWorldX: number; // live cursor world coords (updated by input.ts each mousemove)
+  cursorWorldY: number;
 
   // Cargo/Economy/Equipment
   cargoPanelOpen: boolean;
@@ -237,6 +241,10 @@ export function createInitialState(): GameState {
     abilityCooldowns: new Map(),
     moveTarget: { x: 0, y: 0, active: false },
     rightMouseDown: false,
+    aimingSlot: 0,
+    quickcastMask: parseInt(localStorage.getItem("skillshot.quickcast") ?? "0", 10),
+    cursorWorldX: 0,
+    cursorWorldY: 0,
 
     cargoPanelOpen: true,
     jettisonRequest: 0,

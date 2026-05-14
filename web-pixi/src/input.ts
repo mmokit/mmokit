@@ -291,6 +291,12 @@ export function setupInput(
   window.addEventListener("mousemove", (e) => {
     state.mouseX = e.clientX;
     state.mouseY = e.clientY;
+    // Keep cursor world coords up to date — read by CastAbility sends for
+    // skillshot aim direction/position. Uses the same screenToWorld helper
+    // wired by main.ts (camera.screenToWorld) so it tracks zoom/pan exactly.
+    const world = screenToWorld(e.clientX, e.clientY);
+    state.cursorWorldX = world.x;
+    state.cursorWorldY = world.y;
     if (state.rightMouseDown) {
       issueMove(e.clientX, e.clientY);
     }
@@ -435,6 +441,8 @@ export function sendInput(state: GameState): void {
       state.client.send(new CastAbility({
         sequence: state.inputSeq,
         slot,
+        aimX: state.cursorWorldX,
+        aimY: state.cursorWorldY,
       }));
     }
   }
