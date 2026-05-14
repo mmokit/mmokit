@@ -5,9 +5,11 @@ import { getCombat } from "../entity-accessors";
 import { px } from "../view";
 
 // NPCAI.Archetype values — must match internal/game ArchetypeXxx consts.
+// PVE v2: Sniper/Swarmer were replaced by Artillery/Kamikaze at the same
+// wire values (1, 2).
 const ARCH_BRAWLER = 0;
-const ARCH_SNIPER = 1;
-const ARCH_SWARMER = 2;
+const ARCH_ARTILLERY = 1;
+const ARCH_KAMIKAZE = 2;
 
 // NPCAI.State values — must match internal/game AIState* consts. We
 // only care about Leashed (returning to leash anchor) for visual fade.
@@ -20,9 +22,9 @@ interface ArchetypeStyle {
 }
 
 const ARCHETYPES: Record<number, ArchetypeStyle> = {
-  [ARCH_BRAWLER]: { color: 0xff4444, scale: 1.2, label: "BRAWLER" },
-  [ARCH_SNIPER]:  { color: 0x44ccff, scale: 1.0, label: "SNIPER" },
-  [ARCH_SWARMER]: { color: 0xffdd44, scale: 0.7, label: "SWARMER" },
+  [ARCH_BRAWLER]:   { color: 0xff4444, scale: 1.2, label: "BRAWLER" },
+  [ARCH_ARTILLERY]: { color: 0xcc66ff, scale: 1.3, label: "ARTILLERY" },
+  [ARCH_KAMIKAZE]:  { color: 0xffaa22, scale: 0.7, label: "KAMIKAZE" },
 };
 
 const DEFAULT_ARCH: ArchetypeStyle = { color: 0xff4444, scale: 1.0, label: "NPC" };
@@ -113,10 +115,13 @@ export function createNpcDisplay(): EntityDisplayObject {
 
       // Resolve archetype-specific style on first observation. Archetype is
       // tagged `net:"initial,u8"` on the server so it arrives in the entered
-      // entity payload and never changes after spawn.
-      if (e.archetype !== lastArchetype) {
-        lastArchetype = e.archetype;
-        style = ARCHETYPES[e.archetype] ?? DEFAULT_ARCH;
+      // entity payload and never changes after spawn. Skip the update if the
+      // value isn't decoded yet — avoids a brief "NPC" placeholder flash on
+      // the first frame when the SDK delta hasn't fully populated the field.
+      const arch = e.archetype;
+      if (arch !== undefined && arch !== null && ARCHETYPES[arch] !== undefined && arch !== lastArchetype) {
+        lastArchetype = arch;
+        style = ARCHETYPES[arch];
         hullContainer.scale.set(style.scale);
         nameTag.text = style.label;
         nameTag.style.fill = style.color;
@@ -124,6 +129,10 @@ export function createNpcDisplay(): EntityDisplayObject {
         lastW = -1;
         lastH = -1;
       }
+      // Hide the label until we've resolved a valid archetype — prevents the
+      // DEFAULT_ARCH "NPC" placeholder from rendering on entities that just
+      // entered AoI but haven't decoded their initial payload yet.
+      nameTag.visible = lastArchetype !== -1;
 
       if (w !== lastW || h !== lastH) {
         lastW = w;
