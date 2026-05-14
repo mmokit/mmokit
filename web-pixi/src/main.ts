@@ -380,6 +380,16 @@ async function main() {
     moveIndicator.update(state, now);
     abilityEffectRenderer.update(state, now);
     tractorBeamRenderer.update(state, now);
+    // Re-derive cursor world coords every frame from the latest screen
+    // position + camera transform. The mousemove handler only fires on
+    // actual pointer movement; without this, a stationary cursor + moving
+    // ship would leave aim indicator + CastAbility sends pointing at a
+    // stale world location.
+    {
+      const cursorWorld = camera.screenToWorld(state.mouseX, state.mouseY);
+      state.cursorWorldX = cursorWorld.x;
+      state.cursorWorldY = cursorWorld.y;
+    }
     aimIndicator.update(state);
     selectionOutline.update(state);
 

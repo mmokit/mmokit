@@ -376,16 +376,15 @@ export function setupInput(
     }
   });
 
-  // Mouse tracking + right-click drag movement
+  // Mouse tracking + right-click drag movement.
+  // NOTE: cursorWorldX/Y is NOT computed here — the screen→world transform
+  // also depends on the camera, which moves with the ship. If we only
+  // updated on mousemove, holding the cursor still while the ship flew
+  // would leave the aim indicator "locked" at a stale world point.
+  // main.ts re-derives cursorWorldX/Y every frame from state.mouseX/Y.
   window.addEventListener("mousemove", (e) => {
     state.mouseX = e.clientX;
     state.mouseY = e.clientY;
-    // Keep cursor world coords up to date — read by CastAbility sends for
-    // skillshot aim direction/position. Uses the same screenToWorld helper
-    // wired by main.ts (camera.screenToWorld) so it tracks zoom/pan exactly.
-    const world = screenToWorld(e.clientX, e.clientY);
-    state.cursorWorldX = world.x;
-    state.cursorWorldY = world.y;
     if (state.rightMouseDown) {
       issueMove(e.clientX, e.clientY);
     }
