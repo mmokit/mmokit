@@ -17,7 +17,7 @@ import (
 // ConfigVersion tracks breaking config changes. Bump this when defaults change
 // in a way that is incompatible with saved configs (e.g. unit rescale).
 // When the saved version doesn't match, defaults are used and re-saved.
-const ConfigVersion = 6
+const ConfigVersion = 7
 
 // GameConfig holds all tunable game parameters.
 type GameConfig struct {
@@ -164,7 +164,7 @@ func DefaultGameConfig() GameConfig {
 		StationRadius:       5.0,
 		LootCrateRadius:     0.4,
 		LootCrateLifetime:   60.0,
-		LootPickupRange:     3.0,
+		LootPickupRange:     5.0,
 		BankMaxMass:         10000,
 		NpcHealth:           100,
 		NpcShield:           50,
@@ -177,11 +177,11 @@ func DefaultGameConfig() GameConfig {
 		// 50u LockOnRange. Aggro radius < AoI ensures the player can
 		// always see an engaging NPC; WeaponRange ≤ player LockOnRange
 		// keeps fire visible on the player's HUD.
-		BrawlerHP: 400, BrawlerShield: 200, BrawlerMaxSpeed: 6, BrawlerTurnRate: 1.5,
+		BrawlerHP: 120, BrawlerShield: 60, BrawlerMaxSpeed: 6, BrawlerTurnRate: 1.5,
 		BrawlerPreferredRange: 30, BrawlerWeaponRange: 50, BrawlerAggroRadius: 30,
-		BrawlerDamagePerShot: 2, BrawlerFireRate: 1.0,
+		BrawlerDamagePerShot: 8, BrawlerFireRate: 1.0,
 
-		ArtilleryHP: 250, ArtilleryShield: 150, ArtilleryMaxSpeed: 4, ArtilleryTurnRate: 1.5,
+		ArtilleryHP: 80, ArtilleryShield: 40, ArtilleryMaxSpeed: 4, ArtilleryTurnRate: 1.5,
 		ArtilleryWeaponRange: 70, ArtilleryAggroRadius: 80,
 		ArtilleryAoERadius: 12, ArtilleryAoEDamage: 50,
 		ArtilleryCastTime: 3.5, ArtilleryCastCooldown: 3.0, ArtilleryInterruptDamage: 25,
@@ -190,7 +190,7 @@ func DefaultGameConfig() GameConfig {
 		// visible line telegraph, then dash through fast. Heavy damage on
 		// contact. Counter-play is sidestep during telegraph + punish
 		// during the 1.5s recovery window.
-		LancerHP: 120, LancerShield: 50, LancerMaxSpeed: 14, LancerTurnRate: 2.5,
+		LancerHP: 60, LancerShield: 20, LancerMaxSpeed: 14, LancerTurnRate: 2.5,
 		LancerAggroRadius: 60, LancerLockRange: 40, LancerLanceRange: 30,
 		LancerWindupTime: 1.0, LancerChargeSpeed: 50, LancerChargeTime: 0.8,
 		LancerChargeWidth: 3, LancerChargeDamage: 35, LancerRecoverTime: 1.5,

@@ -18,8 +18,8 @@ let stateRef: GameState | null = null;
 let lastRenderedCrateId = 0;
 let lastRenderedItemsSig = "";
 
-const LOOT_RANGE_OPEN = 90;
-const LOOT_RANGE_CLOSE = 120; // hysteresis to prevent flicker
+const LOOT_RANGE_OPEN = 6; // matches server LootPickupRange + small UX margin
+const LOOT_RANGE_CLOSE = 10; // hysteresis to prevent flicker
 
 export function createLootPopup(): void {
   popupEl = document.createElement("div");

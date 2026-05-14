@@ -81,6 +81,44 @@ export function setupInput(
     }));
   }
 
+  // cycleEnemyTarget picks the next enemy NPC by netID and sends a
+  // LockTarget for it. Stable cycle order means repeated Tab presses
+  // reach every visible enemy in sequence. If no enemy is currently
+  // locked, locks the lowest-netID enemy first.
+  function cycleEnemyTarget(): void {
+    if (!state.connected || !state.client) return;
+    if (!state.myEntityId) return;
+
+    // Gather all visible NPC entities, sorted by netID for a stable cycle.
+    // Skip leashed NPCs — they're returning to anchor and can't be locked
+    // (server rejects), so cycling onto them would waste a Tab press.
+    const enemies: number[] = [];
+    for (const [id, ent] of state.entities) {
+      if (ent.current.entityType !== EntityType.NPC) continue;
+      if (ent.current.state === 3 /* AIStateLeash */) continue;
+      enemies.push(id);
+    }
+    if (enemies.length === 0) return;
+    enemies.sort((a, b) => a - b);
+
+    // Find index of current active locked target; pick the next one (wraps).
+    let nextIdx = 0;
+    if (state.lockTargetId) {
+      const curIdx = enemies.indexOf(state.lockTargetId);
+      if (curIdx >= 0) {
+        nextIdx = (curIdx + 1) % enemies.length;
+      }
+    }
+    const nextId = enemies[nextIdx];
+    if (nextId === state.lockTargetId) return; // single enemy, no cycle
+
+    // Use the existing lock/activate helper — it routes to LockTarget or
+    // SetActiveTarget depending on whether the slot is already held. The
+    // server replies via LockSlotsMsg, which updates state.lockTargetId.
+    tryLockOrActivate(nextId);
+    audio.play(SoundId.TargetLock);
+  }
+
   function issueMove(clientX: number, clientY: number) {
     if (!state.loggedIn || state.isDead) return;
     const world = screenToWorld(clientX, clientY);
@@ -121,21 +159,37 @@ export function setupInput(
       }
     }
 
-    // Tab: toggle cell map
-    if (e.code === "Tab" && !state.isDead) {
+    // Tab: cycle through visible enemy targets (MMO-standard targeting).
+    // Suppressed while the cell map is open so Tab doesn't accidentally
+    // cycle targets through the map overlay; Escape or M close the map.
+    if (e.code === "Tab" && !state.isDead && !state.cellMapOpen) {
+      e.preventDefault();
+      cycleEnemyTarget();
+      return;
+    }
+
+    // M (when not docked): toggle cell map. The docked branch below
+    // routes M to the marketplace — docked/undocked are mutually
+    // exclusive so the bindings don't collide.
+    if (e.code === "KeyM" && !state.isDead && !state.isDocked) {
       e.preventDefault();
       state.cellMapOpen = !state.cellMapOpen;
       return;
     }
 
-    // Block all game input while cell map is open (only Tab/Escape pass through)
-    if (state.cellMapOpen) return;
+    // Block all game input while cell map is open (Escape/M close it; the
+    // M-toggle above handles that path before this gate).
+    if (state.cellMapOpen) {
+      if (e.code === "Escape") {
+        state.cellMapOpen = false;
+        e.preventDefault();
+      }
+      return;
+    }
 
     // Escape: close panels in priority order, or open esc menu
     if (e.code === "Escape" && !state.isDead) {
-      if (state.cellMapOpen) {
-        state.cellMapOpen = false;
-      } else if (state.marketPanelOpen) {
+      if (state.marketPanelOpen) {
         state.marketPanelOpen = false;
       } else if (state.lootCrateId) {
         state.lootCrateId = 0;

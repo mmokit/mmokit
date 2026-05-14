@@ -185,11 +185,11 @@ func doInit() {
 		Equip: &EquipData{
 			Primary: AbilityParams{
 				Type: AbilityTypePulseLaser, Name: "Pulse Shot",
-				Damage: 30.0, Range: 30.0, Cooldown: 2.0,
+				Damage: 30.0, Range: 30.0, Cooldown: 1.0,
 			},
 			Secondary: &AbilityParams{
 				Type: AbilityTypePulseBarrage, Name: "Pulse Barrage",
-				Damage: 50.0, Range: 50.0, Cooldown: 5.0,
+				Damage: 50.0, Range: 50.0, Cooldown: 3.0,
 			},
 		},
 	})
@@ -199,7 +199,7 @@ func doInit() {
 		Equip: &EquipData{
 			Primary: AbilityParams{
 				Type: AbilityTypeRailShot, Name: "Rail Shot",
-				Damage: 35, Range: 33.3, Cooldown: 6.0,
+				Damage: 50, Range: 33.3, Cooldown: 3.0,
 			},
 			Secondary: &AbilityParams{
 				Type: AbilityTypePiercingRound, Name: "Piercing Round",
@@ -244,7 +244,7 @@ func doInit() {
 		Equip: &EquipData{
 			Primary: AbilityParams{
 				Type: AbilityTypePlasmaShot, Name: "Plasma Shot",
-				Damage: 25, Range: 40, Cooldown: 1.5,
+				Damage: 30, Range: 40, Cooldown: 1.0,
 				ProjectileSpeed: 50,
 			},
 			Secondary: &AbilityParams{
