@@ -46,16 +46,18 @@ type abilityAction struct {
 // AbilitySystem processes ability casts using equipment-driven ability parameters.
 type AbilitySystem struct {
 	mmokit.SystemBase
-	gw            *GameWorld
-	entities      mmokit.Query[abilityBundle]
-	deferred      []abilityAction
-	nearbyChannel []mmokit.SpatialEntry // reusable scratch for tickChannels hitscan
+	gw               *GameWorld
+	entities         mmokit.Query[abilityBundle]
+	deferred         []abilityAction
+	nearbyChannel    []mmokit.SpatialEntry // reusable scratch for tickChannels hitscan
+	cursorPickNearby []mmokit.SpatialEntry // reusable scratch for dispatchCursorPick
 }
 
 func (s *AbilitySystem) Init() {
 	s.gw = mmokit.State[GameWorld](s.Stage())
 	s.deferred = make([]abilityAction, 0, 16)
 	s.nearbyChannel = make([]mmokit.SpatialEntry, 0, 32)
+	s.cursorPickNearby = make([]mmokit.SpatialEntry, 0, 32)
 	// Channeling is not part of any kind bundle — prime it so Has/Get
 	// inside the tickChannels query iteration doesn't trigger ark's
 	// locked-world first-touch registration panic.
@@ -194,6 +196,8 @@ func (s *AbilitySystem) executeAbility(action abilityAction) bool {
 		return s.dispatchSkillshotGround(action, casterE)
 	case item.TargetingSkillshotChannel:
 		return s.dispatchSkillshotChannel(action, casterE)
+	case item.TargetingCursorPick:
+		return s.dispatchCursorPick(action, casterE)
 	}
 
 	// TargetingSelf and TargetingLockOn fall through to the existing
@@ -531,6 +535,136 @@ func (s *AbilitySystem) dispatchSkillshotChannel(action abilityAction, casterE m
 
 	// Returning false keeps the cooldown at 0 — channel end (in tickChannels) sets it.
 	return false
+}
+
+// dispatchCursorPick runs the per-ability effect on whichever enemy is
+// nearest the cursor at fire time, within params.Range of the caster.
+// No selection required. If nothing is under the cursor (within 5u of
+// the aim point), returns false so the caller refunds the cooldown.
+func (s *AbilitySystem) dispatchCursorPick(action abilityAction, casterE mmokit.Entity) bool {
+	gw := s.gw
+	params := action.params
+
+	casterPos := mmokit.Get[mmokit.Position](casterE)
+	if casterPos == nil {
+		return false
+	}
+	ownerNetID := casterE.NetID()
+
+	// Search radius around cursor: small, so the player is forced to
+	// hover roughly over the target. 5u is generous enough to forgive
+	// a slightly-off click, tight enough that empty-space clicks miss.
+	const pickRadius float32 = 5.0
+	s.cursorPickNearby = gw.Spatial.QueryRadius(
+		action.aimX, action.aimY, pickRadius,
+		s.cursorPickNearby[:0],
+	)
+
+	var best mmokit.Entity
+	bestDist2 := float32(pickRadius * pickRadius)
+	for _, entry := range s.cursorPickNearby {
+		cand := mmokit.EntityFromECS(gw.stage, entry.Entity)
+		if !cand.Alive() || cand.NetID() == ownerNetID {
+			continue
+		}
+		// Damage-eligible: NPC enemies for now (no PvP).
+		if !mmokit.Has[gamecomp.NPCAI](cand) {
+			continue
+		}
+		cpos := mmokit.Get[mmokit.Position](cand)
+		if cpos == nil {
+			continue
+		}
+		// Range from caster (not from cursor) gates the ability.
+		rx, ry := cpos.X-casterPos.X, cpos.Y-casterPos.Y
+		if params.Range > 0 && rx*rx+ry*ry > params.Range*params.Range {
+			continue
+		}
+		// Pick the one closest to the cursor.
+		cx, cy := cpos.X-action.aimX, cpos.Y-action.aimY
+		d2 := cx*cx + cy*cy
+		if d2 < bestDist2 {
+			bestDist2 = d2
+			best = cand
+		}
+	}
+	if !best.Alive() {
+		gw.eng.Log.Log(CatCombatAbility, "ability %s: %d cursor-pick MISS aim=(%.0f,%.0f)",
+			params.Name, action.casterNetID, action.aimX, action.aimY)
+		return false // refund cooldown
+	}
+
+	targetNetID := best.NetID()
+	gw.eng.Log.Log(CatCombatAbility, "ability %s: %d cursor-pick HIT target=%d",
+		params.Name, action.casterNetID, targetNetID)
+
+	// Per-ability effect — replicates the old LockOn dispatchByType
+	// logic but reads `best` instead of activeLockTarget(lock).
+	switch params.Type {
+	case item.AbilityTypeHomingMissile:
+		bpos := mmokit.Get[mmokit.Position](best)
+		if bpos == nil {
+			return false
+		}
+		dx, dy := bpos.X-casterPos.X, bpos.Y-casterPos.Y
+		s.fireProjectileToward(casterE, params, gamecomp.ProjectileTypeMissile, targetNetID, dx, dy)
+		return true
+	case item.AbilityTypePlasmaTorpedo:
+		bpos := mmokit.Get[mmokit.Position](best)
+		if bpos == nil {
+			return false
+		}
+		dx, dy := bpos.X-casterPos.X, bpos.Y-casterPos.Y
+		s.fireProjectileToward(casterE, params, gamecomp.ProjectileTypePlasma, targetNetID, dx, dy)
+		return true
+	case item.AbilityTypeIonBurn:
+		// Apply DoT to the picked target. Replicates the old LockOn
+		// IonBurn path verbatim (no hitscan damage — DoT only), just with
+		// `best` as the target.
+		gw.ApplyStatus(casterE, best, gamecomp.StatusIonBurn,
+			params.DotDuration, params.DotDPS, action.slot, uint8(params.Type))
+		return true
+	}
+	return false
+}
+
+// fireProjectileToward — same as fireProjectile but stamps an explicit
+// TargetNetID so the projectile homes/tracks the cursor-pick target.
+// fireProjectile (used by dispatchSkillshotLine) infers TargetNetID from
+// the caster's TargetLock; cursor-pick has no lock, so the target is
+// supplied directly.
+func (s *AbilitySystem) fireProjectileToward(
+	caster mmokit.Entity, params *item.AbilityParams,
+	projType uint8, targetNetID uint32, dirX, dirY float32,
+) {
+	gw := s.gw
+	casterPos := mmokit.Get[mmokit.Position](caster)
+	if casterPos == nil {
+		return
+	}
+	norm := float32(math.Sqrt(float64(dirX*dirX + dirY*dirY)))
+	if norm < 1e-3 {
+		return
+	}
+	dirX, dirY = dirX/norm, dirY/norm
+	lifetime := float32(0)
+	if params.ProjectileSpeed > 0 {
+		lifetime = params.Range / params.ProjectileSpeed
+	}
+	spec := gamecomp.ProjectileSpec{
+		OwnerNetID:   caster.NetID(),
+		TargetNetID:  targetNetID,
+		Damage:       params.Damage,
+		SplashRadius: params.SplashRadius,
+		SplashDamage: params.SplashDamage,
+		MaxTurnRate:  params.HomingMaxTurnRate,
+		Type:         projType,
+	}
+	gw.SpawnProjectile(
+		casterPos.X, casterPos.Y,
+		dirX*params.ProjectileSpeed, dirY*params.ProjectileSpeed,
+		lifetime, spec,
+	)
 }
 
 // fireProjectile creates a Projectile entity travelling in the supplied
