@@ -36,6 +36,14 @@ type SetActiveTarget struct {
 	NetID    uint32
 }
 
+// SelectTarget — left-click sets the player's selection to NetID; NetID=0
+// clears (right-click). Server validates the target is alive + in AoI;
+// invalid requests are dropped silently (no error event).
+type SelectTarget struct {
+	Sequence uint32
+	NetID    uint32
+}
+
 // CastAbility — discrete ability press. Slot identifies which equipped
 // ability fired. AimX/AimY carry the cursor world position; meaning
 // depends on the ability's TargetingMode:

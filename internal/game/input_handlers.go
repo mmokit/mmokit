@@ -193,6 +193,34 @@ func RegisterInputs(mmo *mmokit.Process) {
 		}
 	})
 
+	// SelectTarget — left-click selects an entity; right-click sends
+	// NetID=0 to clear. Selection drives ability dispatch (Tasks 3-7
+	// wire abilities to read the player's Selection.EntityNetID).
+	// Invalid / dead targets drop silently.
+	mmokit.HandleClient(mmo, func(player mmokit.Entity, msg *SelectTarget) {
+		if !player.Alive() {
+			return
+		}
+		sel := mmokit.Get[gamecomp.Selection](player)
+		if sel == nil {
+			return
+		}
+		if msg.NetID == 0 {
+			sel.EntityNetID = 0
+			return
+		}
+		gw := gameWorldFromStage(player.Stage())
+		if gw == nil {
+			return
+		}
+		target := mmokit.EntityByNetID(gw.stage, msg.NetID)
+		if !target.Alive() {
+			return
+		}
+		sel.EntityNetID = msg.NetID
+		gw.eng.Log.Log(CatCombatLock, "select: player=%d netID=%d", player.NetID(), msg.NetID)
+	})
+
 	// ChannelAim — cursor-tracking update for an in-flight skillshot
 	// channel (SustainedBeam). Writes AimX/AimY onto the player's
 	// Channeling component so tickChannels hitscans along the latest
