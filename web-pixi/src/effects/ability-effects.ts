@@ -312,6 +312,70 @@ export class AbilityEffectRenderer {
         break;
       }
 
+      // --- PlasmaShot — travel-time projectile rendered server-side; muzzle flash only ---
+      case 9: {
+        this.effects.push({
+          type: "impact",
+          entityId: event.casterId,
+          x: mX,
+          y: mY,
+          startTime: now,
+          duration: 120,
+          color: 0x33ddff,
+          radius: px(8),
+        } satisfies ImpactEffect);
+        break;
+      }
+
+      // --- HomingMissile — projectile rendered server-side; muzzle flash only ---
+      case 10: {
+        this.effects.push({
+          type: "impact",
+          entityId: event.casterId,
+          x: mX,
+          y: mY,
+          startTime: now,
+          duration: 150,
+          color: 0xffaa33,
+          radius: px(10),
+        } satisfies ImpactEffect);
+        break;
+      }
+
+      // --- SustainedBeam — channeled hitscan beam ---
+      case 11: {
+        this.effects.push({
+          type: "beam",
+          fromId: event.casterId,
+          toId: event.targetId,
+          fromX: mX,
+          fromY: mY,
+          toX: tX,
+          toY: tY,
+          startTime: now,
+          duration: 200,
+          color: 0xff44aa,
+          width: px(3),
+          slot: event.slot,
+        } satisfies BeamEffect);
+        break;
+      }
+
+      // --- MortarShell — lobbed projectile rendered server-side; muzzle flash only ---
+      case 12: {
+        this.effects.push({
+          type: "impact",
+          entityId: event.casterId,
+          x: mX,
+          y: mY,
+          startTime: now,
+          duration: 150,
+          color: 0xffee33,
+          radius: px(10),
+        } satisfies ImpactEffect);
+        break;
+      }
+
       // --- Shield abilities — shield bubble ---
       case 20: // EmergencyShield
       case 21: // HardenedShield

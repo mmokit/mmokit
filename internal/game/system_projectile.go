@@ -16,9 +16,6 @@ import (
 // vector is rotated toward the target each tick capped by Spec.MaxTurnRate
 // (rad/s). If the target is gone, TargetNetID is zeroed and the projectile
 // continues straight.
-//
-// Missile acceleration: if Spec.Type == ProjectileTypeMissile, speed
-// ramps from initial up to a cruise speed (~350 u/s) at +150 u/s².
 type ProjectileSystem struct {
 	mmokit.SystemBase
 	gw       *GameWorld
@@ -32,9 +29,7 @@ type ProjectileSystem struct {
 }
 
 const (
-	projectileMissileCruiseSpeed float32 = 350
-	projectileMissileAccel       float32 = 150 // u/s²
-	projectileHitRadius          float32 = 4   // collision query radius
+	projectileHitRadius float32 = 4 // collision query radius
 )
 
 func (s *ProjectileSystem) Init() {
@@ -55,20 +50,6 @@ func (s *ProjectileSystem) Update(dt float32) {
 				spec.TargetNetID = 0
 			} else if tpos := mmokit.Get[mmokit.Position](target); tpos != nil {
 				s.steerToward(vel, pos, tpos, spec.MaxTurnRate, dt)
-			}
-		}
-
-		// Missile acceleration
-		if spec.Type == gamecomp.ProjectileTypeMissile {
-			speed := float32(math.Sqrt(float64(vel.X*vel.X + vel.Y*vel.Y)))
-			if speed > 1e-3 && speed < projectileMissileCruiseSpeed {
-				newSpeed := speed + projectileMissileAccel*dt
-				if newSpeed > projectileMissileCruiseSpeed {
-					newSpeed = projectileMissileCruiseSpeed
-				}
-				ratio := newSpeed / speed
-				vel.X *= ratio
-				vel.Y *= ratio
 			}
 		}
 

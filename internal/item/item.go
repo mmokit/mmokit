@@ -244,14 +244,14 @@ func doInit() {
 		Equip: &EquipData{
 			Primary: AbilityParams{
 				Type: AbilityTypePlasmaShot, Name: "Plasma Shot",
-				Damage: 25, Range: 700, Cooldown: 1.5,
-				ProjectileSpeed: 700,
+				Damage: 25, Range: 40, Cooldown: 1.5,
+				ProjectileSpeed: 50,
 			},
 			Secondary: &AbilityParams{
 				Type: AbilityTypeHomingMissile, Name: "Homing Missile",
-				Damage: 80, Range: 1500, Cooldown: 8,
-				ProjectileSpeed:   200,
-				SplashRadius:      30,
+				Damage: 60, Range: 50, Cooldown: 8,
+				ProjectileSpeed:   30,
+				SplashRadius:      3,
 				SplashDamage:      20,
 				HomingMaxTurnRate: 2.09,
 				RequiresLock:      true,
@@ -267,17 +267,17 @@ func doInit() {
 		Equip: &EquipData{
 			Primary: AbilityParams{
 				Type: AbilityTypeSustainedBeam, Name: "Sustained Beam",
-				Damage: 4, Range: 500, Cooldown: 4,
+				Damage: 4, Range: 30, Cooldown: 4,
 				ChannelDuration: 3,
 				ChannelTickRate: 10,
 				BeamHalfArcRad:  0.5236,
 			},
 			Secondary: &AbilityParams{
 				Type: AbilityTypeMortarShell, Name: "Mortar Shell",
-				Damage: 80, Range: 600, Cooldown: 6,
-				ProjectileSpeed: 400,
-				SplashRadius:    80,
-				SplashDamage:    60,
+				Damage: 60, Range: 40, Cooldown: 6,
+				ProjectileSpeed: 40,
+				SplashRadius:    6,
+				SplashDamage:    40,
 			},
 		},
 	})

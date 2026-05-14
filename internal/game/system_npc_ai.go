@@ -410,7 +410,15 @@ func (s *NPCAISystem) applyMotion(ai *gamecomp.NPCAI, vel *mmokit.Velocity,
 	ux, uy := dx/dist, dy/dist
 	switch ai.MotionPolicy {
 	case MotionCharge:
-		vel.X, vel.Y = ux*ai.MaxSpeed, uy*ai.MaxSpeed
+		// Charge until within preferred firing distance; stop there so the
+		// NPC doesn't physically overlap the player and oscillate at sub-tick
+		// distances. Kamikaze sets PreferredRange == DetonateRange so it
+		// charges right up to the beep trigger — that still works.
+		if dist > ai.PreferredRange {
+			vel.X, vel.Y = ux*ai.MaxSpeed, uy*ai.MaxSpeed
+		} else {
+			vel.X, vel.Y = 0, 0
+		}
 	case MotionStationary:
 		vel.X, vel.Y = 0, 0
 	}

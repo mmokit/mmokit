@@ -83,6 +83,31 @@ export const ITEM_ABILITIES: Record<number, { primary: AbilityInfo; secondary?: 
       stats: ["Damage: 60 (+30 no shield)", "Range: 900", "Cooldown: 20s"],
     },
   },
+  // PVE v2 weapons (W2 slot)
+  107: { // Plasma Cannon
+    primary: {
+      name: "Plasma", title: "Plasma Shot", range: 40,
+      desc: "Fast travel-time projectile. Lead your target.",
+      stats: ["Damage: 25", "Speed: 50/s", "Range: 40", "Cooldown: 1.5s"],
+    },
+    secondary: {
+      name: "Missile", title: "Homing Missile", range: 50,
+      desc: "Locks on and chases. Splashes on impact. Requires a target lock.",
+      stats: ["Damage: 60", "Splash: 20 in 3u", "Speed: 30/s", "Range: 50", "Cooldown: 8s"],
+    },
+  },
+  108: { // Beam-Mortar Battery
+    primary: {
+      name: "Beam", title: "Sustained Beam", range: 30,
+      desc: "Channeled beam. Keep target inside the firing arc to keep dealing damage.",
+      stats: ["Damage: 4/tick × 10/s", "Channel: 3s", "Range: 30", "Cooldown: 4s post-channel"],
+    },
+    secondary: {
+      name: "Mortar", title: "Mortar Shell", range: 40,
+      desc: "Lobbed projectile with splash on impact. Great vs clustered enemies.",
+      stats: ["Direct: 60", "Splash: 40 in 6u", "Speed: 40/s", "Range: 40", "Cooldown: 6s"],
+    },
+  },
   // Shield items (D)
   110: { // Standard Shield Gen
     primary: {
