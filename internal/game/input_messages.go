@@ -37,12 +37,28 @@ type SetActiveTarget struct {
 }
 
 // CastAbility — discrete ability press. Slot identifies which equipped
-// ability fired (0 = primary weapon, etc.). Replaces the pre-split
-// `ability_cast` bitmask in PlayerInputMsg — the client now sends one
-// CastAbility per press instead of OR-ing bits into a per-tick snapshot.
+// ability fired. AimX/AimY carry the cursor world position; meaning
+// depends on the ability's TargetingMode:
+//   Self            — ignored
+//   LockOn          — ignored (server reads TargetLock.ActiveNetID)
+//   SkillshotLine   — direction = (AimX - shipX, AimY - shipY), normalized
+//   SkillshotGround — drop the AoE at (AimX, AimY), clamped to ability range
+//   SkillshotChannel — initial aim point; updates via ChannelAim while held
 type CastAbility struct {
 	Sequence uint32
 	Slot     uint8
+	AimX     float32
+	AimY     float32
+}
+
+// ChannelAim — cursor update for an in-flight SkillshotChannel ability.
+// Client sends one per tick while the channel is held; server applies
+// to the player's Channeling component AimX/AimY fields.
+type ChannelAim struct {
+	Sequence uint32
+	Slot     uint8
+	AimX     float32
+	AimY     float32
 }
 
 // JettisonItem — discrete cargo jettison.
