@@ -291,11 +291,28 @@ func (gw *GameWorld) performLootItemFor(connID uint32, crateNetID uint32, itemID
 		return
 	}
 
-	added := playerInv.AddItem(itemID, qty)
-	if added > 0 {
-		crateInv.RemoveItem(itemID, added)
-		gw.eng.Log.Log(CatEconomyLoot, "loot pickup: player=%d item=%d qty=%d cargo_mass=%.1f/%.1f",
-			entity.NetID(), itemID, added, playerInv.TotalMass(), playerInv.MaxMass)
+	if item.IsCurrency(itemID) {
+		// Currencies route to PlayerData.Currencies, not cargo inventory.
+		if sess.Username != "" {
+			pdata := gw.PlayerDB.Bind(sess)
+			pdata.AddCurrency(itemID, int64(qty))
+			gw.PlayerDB.MarkDirtyByUserID(pdata.UserID)
+			mmokit.SendEvent(gw.stage, connID, &CurrencyUpdate{
+				CurrencyID: itemID,
+				Balance:    pdata.GetCurrency(itemID),
+				Earned:     int64(qty),
+			})
+		}
+		crateInv.RemoveItem(itemID, qty)
+		gw.eng.Log.Log(CatEconomyLoot, "loot pickup: player=%d currency=%d qty=%d",
+			entity.NetID(), itemID, qty)
+	} else {
+		added := playerInv.AddItem(itemID, qty)
+		if added > 0 {
+			crateInv.RemoveItem(itemID, added)
+			gw.eng.Log.Log(CatEconomyLoot, "loot pickup: player=%d item=%d qty=%d cargo_mass=%.1f/%.1f",
+				entity.NetID(), itemID, added, playerInv.TotalMass(), playerInv.MaxMass)
+		}
 	}
 
 	if crateInv.IsEmpty() {
@@ -341,8 +358,32 @@ func (gw *GameWorld) performLootAllFor(connID uint32, crateNetID uint32) {
 
 	playerNetID := entity.NetID()
 
+	// Currencies don't go through the cargo inventory — they route into
+	// PlayerData.Currencies. Bind once and reuse for any currency items.
+	var pdata *PlayerData
+	if sess.Username != "" {
+		pdata = gw.PlayerDB.Bind(sess)
+	}
+
 	for itemID, qty := range crateInv.Items {
 		if qty <= 0 {
+			continue
+		}
+		if item.IsCurrency(itemID) {
+			// Currencies route to PlayerData.Currencies; the inventory's
+			// mass system doesn't apply (MassPerUnit=0 for currencies).
+			if pdata != nil {
+				pdata.AddCurrency(itemID, int64(qty))
+				gw.PlayerDB.MarkDirtyByUserID(pdata.UserID)
+				mmokit.SendEvent(gw.stage, connID, &CurrencyUpdate{
+					CurrencyID: itemID,
+					Balance:    pdata.GetCurrency(itemID),
+					Earned:     int64(qty),
+				})
+			}
+			crateInv.RemoveItem(itemID, qty)
+			gw.eng.Log.Log(CatEconomyLoot, "loot pickup: player=%d currency=%d qty=%d",
+				playerNetID, itemID, qty)
 			continue
 		}
 		added := playerInv.AddItem(itemID, qty)

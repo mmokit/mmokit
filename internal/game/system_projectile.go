@@ -4,6 +4,7 @@ import (
 	"math"
 
 	gamecomp "github.com/zenion/mmoserver/internal/component"
+	"github.com/zenion/mmoserver/internal/item"
 	"github.com/zenion/mmoserver/pkg/mmokit"
 )
 
@@ -77,7 +78,16 @@ func (s *ProjectileSystem) Update(dt float32) {
 		}
 
 		if victim.Alive() {
-			gw.ApplyDamage(victim, spec.Damage, spec.OwnerNetID)
+			caster := mmokit.EntityByNetID(gw.stage, spec.OwnerNetID)
+			if caster.Alive() {
+				// gw.Damage emits a Damage broadcast (Plan F Phase 2 auto-broadcast),
+				// so AoI viewers see the impact and render the proper VFX via
+				// web-pixi/src/effects/ability-effects.ts case 9/10/12.
+				gw.Damage(caster, victim, spec.Damage, 0, 0 /*slot*/, projectileAbilityType(spec.Type))
+			} else {
+				// Owner gone — apply damage anyway, just no broadcast attribution.
+				gw.ApplyDamage(victim, spec.Damage, spec.OwnerNetID)
+			}
 			if spec.SplashRadius > 0 {
 				// Capture splash params; defer the spawn so it runs after
 				// the entities.Iter query closes — Stage.Spawn requires an
@@ -131,6 +141,21 @@ func (s *ProjectileSystem) steerToward(
 	newHeading := curHeading + delta
 	vel.X = speed * float32(math.Cos(float64(newHeading)))
 	vel.Y = speed * float32(math.Sin(float64(newHeading)))
+}
+
+// projectileAbilityType maps a ProjectileType to the AbilityType that
+// owns it, so the per-hit Damage broadcast carries the right abilityType
+// for the client's ability-effects.ts dispatch (cases 9/10/12).
+func projectileAbilityType(projType uint8) uint8 {
+	switch projType {
+	case gamecomp.ProjectileTypePlasma:
+		return uint8(item.AbilityTypePlasmaShot)
+	case gamecomp.ProjectileTypeMissile:
+		return uint8(item.AbilityTypeHomingMissile)
+	case gamecomp.ProjectileTypeMortar:
+		return uint8(item.AbilityTypeMortarShell)
+	}
+	return 0
 }
 
 // factionMaskFromOwner returns the AoE FactionMask appropriate for a

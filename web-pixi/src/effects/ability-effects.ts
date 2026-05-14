@@ -312,33 +312,34 @@ export class AbilityEffectRenderer {
         break;
       }
 
-      // --- PlasmaShot — travel-time projectile rendered server-side; muzzle flash only ---
+      // --- PlasmaShot — impact at target (projectile body is server-rendered) ---
       case 9: {
         this.effects.push({
           type: "impact",
-          entityId: event.casterId,
-          x: mX,
-          y: mY,
+          entityId: event.targetId,
+          x: tX,
+          y: tY,
           startTime: now,
-          duration: 120,
+          duration: 200,
           color: 0x33ddff,
-          radius: px(8),
+          radius: px(10),
         } satisfies ImpactEffect);
         break;
       }
 
-      // --- HomingMissile — projectile rendered server-side; muzzle flash only ---
+      // --- HomingMissile — explosion at target (has splash) ---
       case 10: {
         this.effects.push({
           type: "impact",
-          entityId: event.casterId,
-          x: mX,
-          y: mY,
+          entityId: event.targetId,
+          x: tX,
+          y: tY,
           startTime: now,
-          duration: 150,
+          duration: 300,
           color: 0xffaa33,
-          radius: px(10),
+          radius: px(18),
         } satisfies ImpactEffect);
+        spawnExplosion(state.explosions, tX, tY, px(20), px(20), false);
         break;
       }
 
@@ -361,18 +362,19 @@ export class AbilityEffectRenderer {
         break;
       }
 
-      // --- MortarShell — lobbed projectile rendered server-side; muzzle flash only ---
+      // --- MortarShell — big explosion at target ---
       case 12: {
         this.effects.push({
           type: "impact",
-          entityId: event.casterId,
-          x: mX,
-          y: mY,
+          entityId: event.targetId,
+          x: tX,
+          y: tY,
           startTime: now,
-          duration: 150,
+          duration: 350,
           color: 0xffee33,
-          radius: px(10),
+          radius: px(25),
         } satisfies ImpactEffect);
+        spawnExplosion(state.explosions, tX, tY, px(30), px(30), false);
         break;
       }
 
