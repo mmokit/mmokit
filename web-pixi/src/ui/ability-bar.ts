@@ -21,6 +21,20 @@ const SLOT_COLORS: Record<number, string> = {
   5: "#ff4",  // F (thruster)
 };
 
+// Targeting mode mirrors the server-side AbilityType.Mode enum.
+// Duplicated on client because the SDK only emits the item registry,
+// not the underlying TargetingMode enum. Values MUST match the Go-side
+// declaration exactly (Self=0, LockOn=1, SkillshotLine=2,
+// SkillshotGround=3, SkillshotChannel=4) — out-of-sync values silently
+// break the aim-state machine dispatch.
+export const enum TargetingMode {
+  Self = 0,
+  LockOn = 1,
+  SkillshotLine = 2,
+  SkillshotGround = 3,
+  SkillshotChannel = 4,
+}
+
 // Client-side ability data per equipment item ID
 // Matches server item registry in internal/item/item.go
 export interface AbilityInfo {
@@ -30,6 +44,8 @@ export interface AbilityInfo {
   stats: string[];
   range: number;
   color?: string;
+  mode: TargetingMode;
+  splashRadius?: number;
 }
 
 export const ITEM_ABILITIES: Record<number, { primary: AbilityInfo; secondary?: AbilityInfo; passive?: string[] }> = {
@@ -39,11 +55,13 @@ export const ITEM_ABILITIES: Record<number, { primary: AbilityInfo; secondary?: 
       name: "Pulse", title: "Pulse Shot", range: 500,
       desc: "Rapid-fire energy pulse at the locked target.",
       stats: ["Damage: 15", "Range: 500", "Cooldown: 2s"],
+      mode: TargetingMode.SkillshotLine,
     },
     secondary: {
       name: "Barrage", title: "Pulse Barrage", range: 400,
       desc: "Fires a concentrated burst of pulse energy.",
       stats: ["Damage: 25", "Range: 400", "Cooldown: 5s"],
+      mode: TargetingMode.SkillshotLine,
     },
   },
   101: { // Railgun System
@@ -51,11 +69,13 @@ export const ITEM_ABILITIES: Record<number, { primary: AbilityInfo; secondary?: 
       name: "Rail", title: "Rail Shot", range: 1000,
       desc: "High-damage single shot. Long range, long cooldown.",
       stats: ["Damage: 35", "Range: 1000", "Cooldown: 6s"],
+      mode: TargetingMode.SkillshotLine,
     },
     secondary: {
       name: "Pierce", title: "Piercing Round", range: 800,
       desc: "Armor-piercing round. Bonus damage vs unshielded.",
       stats: ["Damage: 50 (+20 no shield)", "Range: 800", "Cooldown: 10s"],
+      mode: TargetingMode.SkillshotLine,
     },
   },
   // Weapon 2 items (E + R)
@@ -64,11 +84,13 @@ export const ITEM_ABILITIES: Record<number, { primary: AbilityInfo; secondary?: 
       name: "Ion", title: "Ion Burn", range: 500,
       desc: "Applies a damage-over-time burn to the target.",
       stats: ["DPS: 6", "Duration: 4s", "Range: 500", "Cooldown: 8s"],
+      mode: TargetingMode.LockOn,
     },
     secondary: {
       name: "Overld", title: "Ion Overload", range: 600,
       desc: "Releases a concentrated ion discharge.",
       stats: ["Damage: 40", "Range: 600", "Cooldown: 12s"],
+      mode: TargetingMode.SkillshotLine,
     },
   },
   106: { // Plasma System
@@ -76,11 +98,13 @@ export const ITEM_ABILITIES: Record<number, { primary: AbilityInfo; secondary?: 
       name: "Plasma", title: "Plasma Bolt", range: 700,
       desc: "Versatile plasma projectile.",
       stats: ["Damage: 20", "Range: 700", "Cooldown: 4s"],
+      mode: TargetingMode.SkillshotLine,
     },
     secondary: {
       name: "Torp", title: "Plasma Torpedo", range: 900,
       desc: "Slow but devastating. Bonus damage vs unshielded.",
       stats: ["Damage: 60 (+30 no shield)", "Range: 900", "Cooldown: 20s"],
+      mode: TargetingMode.LockOn,
     },
   },
   // PVE v2 weapons (W2 slot)
@@ -89,11 +113,14 @@ export const ITEM_ABILITIES: Record<number, { primary: AbilityInfo; secondary?: 
       name: "Plasma", title: "Plasma Shot", range: 40,
       desc: "Fast travel-time projectile. Lead your target.",
       stats: ["Damage: 25", "Speed: 50/s", "Range: 40", "Cooldown: 1.5s"],
+      mode: TargetingMode.SkillshotLine,
     },
     secondary: {
       name: "Missile", title: "Homing Missile", range: 50,
       desc: "Locks on and chases. Splashes on impact. Requires a target lock.",
       stats: ["Damage: 60", "Splash: 20 in 3u", "Speed: 30/s", "Range: 50", "Cooldown: 8s"],
+      mode: TargetingMode.LockOn,
+      splashRadius: 3,
     },
   },
   108: { // Beam-Mortar Battery
@@ -101,11 +128,14 @@ export const ITEM_ABILITIES: Record<number, { primary: AbilityInfo; secondary?: 
       name: "Beam", title: "Sustained Beam", range: 30,
       desc: "Channeled beam. Keep target inside the firing arc to keep dealing damage.",
       stats: ["Damage: 4/tick × 10/s", "Channel: 3s", "Range: 30", "Cooldown: 4s post-channel"],
+      mode: TargetingMode.SkillshotChannel,
     },
     secondary: {
       name: "Mortar", title: "Mortar Shell", range: 40,
       desc: "Lobbed projectile with splash on impact. Great vs clustered enemies.",
       stats: ["Direct: 60", "Splash: 40 in 6u", "Speed: 40/s", "Range: 40", "Cooldown: 6s"],
+      mode: TargetingMode.SkillshotGround,
+      splashRadius: 6,
     },
   },
   // Shield items (D)
@@ -114,6 +144,7 @@ export const ITEM_ABILITIES: Record<number, { primary: AbilityInfo; secondary?: 
       name: "Shield", title: "Emergency Shield", range: 0,
       desc: "Regenerates shield over time and reduces incoming damage.",
       stats: ["Heal: 7/s for 5s (35 total)", "Dmg Reduction: 30%", "Duration: 5s", "Cooldown: 15s"],
+      mode: TargetingMode.Self,
     },
     passive: ["Shield: +50", "Regen: 1.7/s"],
   },
@@ -122,6 +153,7 @@ export const ITEM_ABILITIES: Record<number, { primary: AbilityInfo; secondary?: 
       name: "Harden", title: "Hardened Shield", range: 0,
       desc: "Strong shield regeneration with heavy damage reduction.",
       stats: ["Heal: 9.2/s for 6s (55 total)", "Dmg Reduction: 50%", "Duration: 6s", "Cooldown: 20s"],
+      mode: TargetingMode.Self,
     },
     passive: ["Shield: +75", "Regen: 1.0/s"],
   },
@@ -131,6 +163,7 @@ export const ITEM_ABILITIES: Record<number, { primary: AbilityInfo; secondary?: 
       name: "Boost", title: "Afterburner", range: 0,
       desc: "Temporary speed boost for escape or pursuit.",
       stats: ["Speed: 2.5x", "Duration: 1.5s", "Cooldown: 10s"],
+      mode: TargetingMode.Self,
     },
   },
   121: { // Micro Warp Drive
@@ -138,6 +171,7 @@ export const ITEM_ABILITIES: Record<number, { primary: AbilityInfo; secondary?: 
       name: "Warp", title: "Micro Warp", range: 0,
       desc: "Extreme speed burst for a very short time.",
       stats: ["Speed: 4.0x", "Duration: 0.8s", "Cooldown: 18s"],
+      mode: TargetingMode.Self,
     },
     passive: ["Thrust: +100", "Max Speed: +200"],
   },
@@ -147,11 +181,13 @@ export const ITEM_ABILITIES: Record<number, { primary: AbilityInfo; secondary?: 
       name: "Mine", title: "Mining Beam", range: 300,
       desc: "Toggle continuous mining beam on a locked asteroid.",
       stats: ["Rate: 5.0/s", "Range: 300", "No cooldown"],
+      mode: TargetingMode.LockOn,
     },
     secondary: {
       name: "Pulse", title: "Extract Pulse", range: 300,
       desc: "Extract a bonus chunk of resources while mining.",
       stats: ["Yield: 15.0", "Range: 300", "Cooldown: 3s"],
+      mode: TargetingMode.LockOn,
     },
   },
   131: { // Deep Core Mining Laser
@@ -159,11 +195,13 @@ export const ITEM_ABILITIES: Record<number, { primary: AbilityInfo; secondary?: 
       name: "Mine", title: "Mining Beam", range: 400,
       desc: "Toggle continuous mining beam on a locked asteroid.",
       stats: ["Rate: 8.0/s", "Range: 400", "No cooldown"],
+      mode: TargetingMode.LockOn,
     },
     secondary: {
       name: "Pulse", title: "Extract Pulse", range: 400,
       desc: "Extract a large bonus chunk of resources while mining.",
       stats: ["Yield: 20.0", "Range: 400", "Cooldown: 2.5s"],
+      mode: TargetingMode.LockOn,
     },
   },
 };
@@ -196,6 +234,14 @@ function getAbilityForSlot(state: GameState, slot: number): AbilityInfo | null {
 export function getAbilityRange(state: GameState, slot: number): number {
   const info = getAbilityForSlot(state, slot);
   return info ? info.range : 0;
+}
+
+// abilityParamsForSlot is the public accessor used by input.ts to drive
+// the aim-state machine. Mirrors the private getAbilityForSlot but is
+// exported so input dispatch logic can branch on .mode and .splashRadius
+// without reaching into the internal slot lookup.
+export function abilityParamsForSlot(state: GameState, slot: number): AbilityInfo | null {
+  return getAbilityForSlot(state, slot);
 }
 
 // Mining laser item IDs that have Extract Pulse as secondary

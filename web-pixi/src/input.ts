@@ -2,7 +2,7 @@ import { px } from "./view";
 import type { GameState } from "./state";
 import { audio } from "./audio/audio-manager";
 import { SoundId } from "./audio/sounds";
-import { getAbilityRange } from "./ui/ability-bar";
+import { abilityParamsForSlot, getAbilityRange, TargetingMode } from "./ui/ability-bar";
 import {
   CastAbility,
   Dock,
@@ -15,6 +15,58 @@ import {
   Undock,
   UnlockTarget,
 } from "../sdk/index.js";
+
+// handleAbilityPress drives the aim-state machine for one slot.
+//   - Self / LockOn / on-cooldown / quickcast-mode → fire immediately
+//   - Skillshot mode → enter aim-state, render preview (Task 19)
+//   - Same-slot press while aiming → fire (release equivalent)
+//   - Different-slot press while aiming → swap aim to new slot
+// state.aimingSlot is 1-indexed (slot+1) so 0 means "not aiming".
+function handleAbilityPress(state: GameState, slot: number): void {
+  const params = abilityParamsForSlot(state, slot);
+  if (!params) return;
+
+  // Cooldown gate (visual handled by ability-bar.ts; server enforces).
+  const cd = state.abilityCooldowns.get(slot);
+  if (cd && cd.remaining > 0) return;
+
+  const isSkillshot =
+    params.mode === TargetingMode.SkillshotLine ||
+    params.mode === TargetingMode.SkillshotGround ||
+    params.mode === TargetingMode.SkillshotChannel;
+  const quickcast = (state.quickcastMask & (1 << slot)) !== 0;
+
+  // Same-slot press while aiming → confirm and fire (release equivalent).
+  if (state.aimingSlot === slot + 1) {
+    fireSkillshot(state, slot);
+    state.aimingSlot = 0;
+    return;
+  }
+
+  // Self / LockOn / quickcast → immediate fire, no aim state.
+  if (!isSkillshot || quickcast) {
+    fireSkillshot(state, slot);
+    state.aimingSlot = 0;
+    return;
+  }
+
+  // Skillshot + not quickcast: enter (or swap to) aim-state.
+  state.aimingSlot = slot + 1;
+}
+
+// fireSkillshot sends a CastAbility with the live cursor world coords.
+// LockOn/Self abilities ignore the aim coords server-side; passing them
+// uniformly keeps the wire path uniform.
+function fireSkillshot(state: GameState, slot: number): void {
+  if (!state.connected || !state.client) return;
+  state.inputSeq++;
+  state.client.send(new CastAbility({
+    sequence: state.inputSeq,
+    slot,
+    aimX: state.cursorWorldX,
+    aimY: state.cursorWorldY,
+  }));
+}
 
 // Ability key -> bitmask bit mapping
 const ABILITY_KEYS: Record<string, number> = {
@@ -187,9 +239,13 @@ export function setupInput(
       return;
     }
 
-    // Escape: close panels in priority order, or open esc menu
+    // Escape: close panels in priority order, or open esc menu.
+    // Aim-state takes highest priority — Escape during a skillshot aim
+    // cancels the aim without disturbing any panel state below it.
     if (e.code === "Escape" && !state.isDead) {
-      if (state.marketPanelOpen) {
+      if (state.aimingSlot) {
+        state.aimingSlot = 0;
+      } else if (state.marketPanelOpen) {
         state.marketPanelOpen = false;
       } else if (state.lootCrateId) {
         state.lootCrateId = 0;
@@ -234,13 +290,18 @@ export function setupInput(
       }
     }
 
-    // Ability keys (press, not hold)
+    // Ability keys (press, not hold). The aim-state machine in
+    // handleAbilityPress decides whether to fire immediately or enter
+    // an aim-confirm state (skillshot abilities without quickcast).
     if (!state.isDead && ABILITY_KEYS[e.code] !== undefined) {
-      state.abilityPresses |= ABILITY_KEYS[e.code];
-
-      // Check if targeted ability is out of range → trigger range ring
       const bit = ABILITY_KEYS[e.code];
       const slot = Math.log2(bit);
+      e.preventDefault();
+
+      // Out-of-range visual feedback for lock-on abilities — kept from
+      // the legacy path so players see the red range ring before the
+      // cast attempt. Skillshots don't need this (preview ring renders
+      // in aim-state, Task 19).
       const range = getAbilityRange(state, slot);
       if (range > 0) {
         const me = state.entities.get(state.myEntityId);
@@ -254,6 +315,8 @@ export function setupInput(
           }
         }
       }
+
+      handleAbilityPress(state, slot);
     }
 
     // C: toggle cargo panel
@@ -285,6 +348,20 @@ export function setupInput(
 
   window.addEventListener("keyup", (e) => {
     if (state.loggedIn && !state.chatMode) state.keys[e.code] = false;
+
+    // Aim-confirm-on-release: tap-and-hold gesture. While aiming a
+    // skillshot, releasing the aim key fires immediately with the
+    // current cursor coords. Same-key re-press also fires (handled in
+    // handleAbilityPress) — this branch covers the more natural
+    // "press-aim-release" cadence.
+    if (state.loggedIn && !state.chatMode && state.aimingSlot && ABILITY_KEYS[e.code] !== undefined) {
+      const bit = ABILITY_KEYS[e.code];
+      const slot = Math.log2(bit);
+      if (state.aimingSlot === slot + 1) {
+        fireSkillshot(state, slot);
+        state.aimingSlot = 0;
+      }
+    }
   });
 
   // Mouse tracking + right-click drag movement
@@ -304,6 +381,13 @@ export function setupInput(
 
   window.addEventListener("mousedown", (e) => {
     if (e.button === 2 && !state.cellMapOpen) {
+      // Right-click during an active skillshot aim cancels the aim
+      // rather than initiating movement. Mirrors the EVE / SC2
+      // convention: aim+right-click escapes the targeting cursor.
+      if (state.aimingSlot) {
+        state.aimingSlot = 0;
+        return;
+      }
       state.rightMouseDown = true;
       issueMove(e.clientX, e.clientY);
     }
@@ -431,21 +515,10 @@ export function sendInput(state: GameState): void {
     mt.active = false; // consume after sending (fire-and-forget)
   }
 
-  // Ability presses: one CastAbility per pressed bit.
-  if (state.abilityPresses !== 0) {
-    const presses = state.abilityPresses;
-    state.abilityPresses = 0;
-    for (let slot = 0; slot < 8; slot++) {
-      if ((presses & (1 << slot)) === 0) continue;
-      state.inputSeq++;
-      state.client.send(new CastAbility({
-        sequence: state.inputSeq,
-        slot,
-        aimX: state.cursorWorldX,
-        aimY: state.cursorWorldY,
-      }));
-    }
-  }
+  // Ability presses: dispatched immediately by the aim-state machine in
+  // handleAbilityPress / fireSkillshot — sendInput no longer batches
+  // them per-tick. Skillshot aim+confirm needs zero latency, and the
+  // server tolerates >1 CastAbility per tick (cooldowns gate the rate).
 
   // Jettison: discrete one-shot.
   if (state.jettisonRequest !== 0) {

@@ -109,7 +109,9 @@ export interface GameState {
   chatMode: boolean;
 
   // Combat
-  abilityPresses: number; // bitmask of abilities pressed this frame
+  // Note: ability presses are dispatched immediately by input.ts's
+  // aim-state machine (handleAbilityPress); there's no per-tick
+  // batched abilityPresses bitmask anymore.
   abilityCooldowns: Map<number, { remaining: number; total: number }>;
   moveTarget: { x: number; y: number; active: boolean };
   rightMouseDown: boolean;
@@ -237,7 +239,6 @@ export function createInitialState(): GameState {
     keys: {},
     chatMode: false,
 
-    abilityPresses: 0,
     abilityCooldowns: new Map(),
     moveTarget: { x: 0, y: 0, active: false },
     rightMouseDown: false,
