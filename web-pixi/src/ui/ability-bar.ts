@@ -443,10 +443,10 @@ export function updateAbilityBar(state: GameState): void {
 
   rebuildSlotContent(state);
 
-  // Calculate distance to lock target for range checks
+  // Calculate distance to selected target for range checks
   let distToTarget = Infinity;
   const myEnt = state.entities.get(state.myEntityId);
-  const lockEnt = state.lockTargetId ? state.entities.get(state.lockTargetId) : null;
+  const lockEnt = state.selectedNetID ? state.entities.get(state.selectedNetID) : null;
   if (myEnt && lockEnt) {
     const dx = lockEnt.renderX - myEnt.renderX;
     const dy = lockEnt.renderY - myEnt.renderY;

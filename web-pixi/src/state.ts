@@ -78,31 +78,11 @@ export interface GameState {
   // Targeting/Input
   targetId: number; // mining target
   /**
-   * Active combat lock target — the slot currently driving weapons / HUD.
-   * Mirrors LockSlotsMsg.activeNetID. Set via SetActiveTarget input on
-   * click-to-switch among already-locked slots.
+   * Currently selected entity (0 = nothing selected). Mirrors the server's
+   * Selection.EntityNetID. Set via SelectTarget input (Task 13). Drives the
+   * combat range checks, ability-bar visuals, and selection-ring overlay.
    */
-  lockTargetId: number;
-  /**
-   * Locking progress for the in-progress slot (0..1). Currently sourced
-   * from PlayerOwnState.lockProgress for back-compat with the legacy HUD;
-   * the per-slot HUD strip reads slot.progress out of lockSlots instead.
-   */
-  lockProgress: number;
-  /**
-   * Multi-lock state, populated from LockSlotsMsg. Each slot mirrors a
-   * server-side LockSlot ({targetNetID, progress, locked}). When locked=true
-   * the slot has completed its lock-on cycle and is weapons-eligible.
-   */
-  lockSlots: { targetNetID: number; progress: number; locked: boolean }[];
-  /** Set of currently-locked targetNetIDs (locked=true slots), for fast lookup in click handlers. */
-  lockedTargets: Set<number>;
-  /**
-   * Brief flash overlay triggered by LockRejectedMsg — until the timestamp
-   * elapses the HUD shows a "lock rejected" toast. Cleared by the HUD
-   * after the flash duration.
-   */
-  lockRejectFlash: { targetNetID: number; reason: number; until: number } | null;
+  selectedNetID: number;
   mouseX: number;
   mouseY: number;
   keys: Record<string, boolean>;
@@ -237,11 +217,7 @@ export function createInitialState(): GameState {
     dockingStationId: 0,
 
     targetId: 0,
-    lockTargetId: 0,
-    lockProgress: 0,
-    lockSlots: [],
-    lockedTargets: new Set<number>(),
-    lockRejectFlash: null,
+    selectedNetID: 0,
     mouseX: 0,
     mouseY: 0,
     keys: {},

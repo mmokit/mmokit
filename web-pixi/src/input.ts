@@ -9,12 +9,9 @@ import {
   Dock,
   EntityType,
   JettisonItem,
-  LockTarget,
   Respawn,
-  SetActiveTarget,
   SetMoveTarget,
   Undock,
-  UnlockTarget,
 } from "../sdk/index.js";
 
 // handleAbilityPress drives the aim-state machine for one slot.
@@ -132,76 +129,21 @@ export function setupInput(
 ): void {
   const chatInputEl = document.getElementById("chat-input") as HTMLInputElement;
 
-  // Helpers for the new multi-lock input split. The single SetLockTarget
-  // input was replaced by three discrete inputs in Task 1.2:
-  //   - LockTarget(netID): begin locking onto a new target (claims a slot).
-  //   - SetActiveTarget(netID): switch active among already-locked slots.
-  //   - UnlockTarget(netID): drop a locked slot.
-  function tryLockOrActivate(netID: number): void {
-    if (!state.connected || !state.client || netID === 0) return;
-    state.inputSeq++;
-    if (state.lockedTargets.has(netID)) {
-      // Already locked — clicking switches the active slot. Mirrors the
-      // EVE-style "right-click overview to make active" gesture without
-      // needing a separate keybind.
-      state.client.send(new SetActiveTarget({
-        sequence: state.inputSeq,
-        netID,
-      }));
-    } else {
-      state.client.send(new LockTarget({
-        sequence: state.inputSeq,
-        netID,
-      }));
-    }
+  // Selection wiring lands in Task 13. For now, lock/unlock/activate are
+  // stubs — kept as named helpers so call sites below remain readable
+  // until Task 13 replaces them with SelectTarget dispatch.
+  function tryLockOrActivate(_netID: number): void {
+    // TODO(task-13): send SelectTarget(_netID)
   }
 
-  function tryUnlock(netID: number): void {
-    if (!state.connected || !state.client || netID === 0) return;
-    if (!state.lockedTargets.has(netID)) return;
-    state.inputSeq++;
-    state.client.send(new UnlockTarget({
-      sequence: state.inputSeq,
-      netID,
-    }));
+  function tryUnlock(_netID: number): void {
+    // TODO(task-13): send SelectTarget(0) to clear selection
   }
 
-  // cycleEnemyTarget picks the next enemy NPC by netID and sends a
-  // LockTarget for it. Stable cycle order means repeated Tab presses
-  // reach every visible enemy in sequence. If no enemy is currently
-  // locked, locks the lowest-netID enemy first.
+  // Tab cycle becomes a no-op until Task 13 reimplements it on top of
+  // the Selection model (cycle visible enemies, dispatch SelectTarget).
   function cycleEnemyTarget(): void {
-    if (!state.connected || !state.client) return;
-    if (!state.myEntityId) return;
-
-    // Gather all visible NPC entities, sorted by netID for a stable cycle.
-    // Skip leashed NPCs — they're returning to anchor and can't be locked
-    // (server rejects), so cycling onto them would waste a Tab press.
-    const enemies: number[] = [];
-    for (const [id, ent] of state.entities) {
-      if (ent.current.entityType !== EntityType.NPC) continue;
-      if (ent.current.state === 3 /* AIStateLeash */) continue;
-      enemies.push(id);
-    }
-    if (enemies.length === 0) return;
-    enemies.sort((a, b) => a - b);
-
-    // Find index of current active locked target; pick the next one (wraps).
-    let nextIdx = 0;
-    if (state.lockTargetId) {
-      const curIdx = enemies.indexOf(state.lockTargetId);
-      if (curIdx >= 0) {
-        nextIdx = (curIdx + 1) % enemies.length;
-      }
-    }
-    const nextId = enemies[nextIdx];
-    if (nextId === state.lockTargetId) return; // single enemy, no cycle
-
-    // Use the existing lock/activate helper — it routes to LockTarget or
-    // SetActiveTarget depending on whether the slot is already held. The
-    // server replies via LockSlotsMsg, which updates state.lockTargetId.
-    tryLockOrActivate(nextId);
-    audio.play(SoundId.TargetLock);
+    // TODO(task-13): cycle visible enemies via SelectTarget
   }
 
   function issueMove(clientX: number, clientY: number) {
@@ -299,14 +241,13 @@ export function setupInput(
     // Block game input while ESC menu is open
     if (state.escMenuOpen) return;
 
-    // Space: lock onto current target (ships, NPCs, or asteroids). Dispatches
-    // LockTarget if not already locked, SetActiveTarget if it's an existing slot.
-    // Shift+Space drops the currently-active locked slot.
-    // state.lockTargetId is updated authoritatively by the server's LockSlotsMsg.
+    // Space: select current target (ships, NPCs, or asteroids). Shift+Space
+    // clears the current selection. Selection dispatch is stubbed pending
+    // Task 13; the helpers below are no-ops for now.
     if (e.code === "Space" && !state.isDead) {
       if (e.shiftKey) {
-        if (state.lockTargetId !== 0) {
-          tryUnlock(state.lockTargetId);
+        if (state.selectedNetID !== 0) {
+          tryUnlock(state.selectedNetID);
           audio.play(SoundId.TargetLock);
         }
       } else if (state.targetId) {
@@ -338,7 +279,7 @@ export function setupInput(
       const range = getAbilityRange(state, slot);
       if (range > 0) {
         const me = state.entities.get(state.myEntityId);
-        const lockEnt = state.lockTargetId ? state.entities.get(state.lockTargetId) : null;
+        const lockEnt = state.selectedNetID ? state.entities.get(state.selectedNetID) : null;
         if (me && lockEnt) {
           const dx = lockEnt.renderX - me.renderX;
           const dy = lockEnt.renderY - me.renderY;
@@ -462,12 +403,9 @@ export function setupInput(
       }
     }
 
-    // Modifier-click behaviors plus the EVE-style auto-lock on combat
-    // targets. Asteroids stay manual (Space to start mining) so plain
-    // clicks on rocks during exploration don't queue mining locks; Ships
-    // and NPCs auto-lock because the player almost always wants to engage
-    // them once they're clicked. lockTargetId is authoritative-from-server
-    // via LockSlotsMsg — these inputs just request the transition.
+    // Modifier-click behaviors. Selection dispatch is stubbed pending
+    // Task 13; the calls below are no-ops for now (helpers preserved so
+    // the dispatch sites stay intact for the Task 13 rewrite).
     if (bestId !== 0) {
       const ent = state.entities.get(bestId);
       const kind = ent?.current.entityType;
@@ -525,11 +463,11 @@ export function setupInput(
 
 // Per-tick input sender. Bundled CE_PLAYER_INPUT was decomposed in
 // Plan G into discrete typed messages (SetMoveTarget / CastAbility /
-// JettisonItem). Lock inputs (LockTarget / SetActiveTarget / UnlockTarget)
-// are now dispatched at the gesture site in setupInput() — they're
-// edge-triggered, not state-mirrored, so there's no per-tick reconcile
-// step. Each piece sends only when its source state changes — idle
-// players send zero input frames per tick.
+// JettisonItem). Selection inputs (Task 13) are dispatched at the
+// gesture site in setupInput() — they're edge-triggered, not
+// state-mirrored, so there's no per-tick reconcile step. Each piece
+// sends only when its source state changes — idle players send zero
+// input frames per tick.
 export function sendInput(state: GameState): void {
   if (!state.connected || !state.client) return;
   if (state.isDead || state.chatMode || state.isDocked || state.cellMapOpen) return;

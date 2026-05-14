@@ -25,8 +25,6 @@ import {
   BankRequest,
   WorldDelta,
   EntityType,
-  LockSlotsMsg,
-  LockRejectedMsg,
 } from "../sdk/index.js";
 import { CELL_SIZE } from "./constants";
 import { updateEntityFromServer } from "./interpolation";
@@ -141,14 +139,7 @@ function applyDeltaUpdate(state: GameState, update: DeltaWorldUpdate): void {
     if (id === state.targetId) state.targetId = 0;
     if (id === state.lootCrateId) state.lootCrateId = 0;
     if (id === state.pendingLootCrateId) state.pendingLootCrateId = 0;
-    if (id === state.lockTargetId) {
-      state.lockTargetId = 0;
-      state.lockProgress = 0;
-    }
-    if (state.lockedTargets.has(id)) {
-      state.lockedTargets.delete(id);
-      state.lockSlots = state.lockSlots.filter((s) => s.targetNetID !== id);
-    }
+    if (id === state.selectedNetID) state.selectedNetID = 0;
   }
   // Exited entities left our AoI but still exist on the server — drop from
   // local map without spawning explosions.
@@ -157,14 +148,7 @@ function applyDeltaUpdate(state: GameState, update: DeltaWorldUpdate): void {
     if (id === state.targetId) state.targetId = 0;
     if (id === state.lootCrateId) state.lootCrateId = 0;
     if (id === state.pendingLootCrateId) state.pendingLootCrateId = 0;
-    if (id === state.lockTargetId) {
-      state.lockTargetId = 0;
-      state.lockProgress = 0;
-    }
-    if (state.lockedTargets.has(id)) {
-      state.lockedTargets.delete(id);
-      state.lockSlots = state.lockSlots.filter((s) => s.targetNetID !== id);
-    }
+    if (id === state.selectedNetID) state.selectedNetID = 0;
   }
 }
 
@@ -261,10 +245,7 @@ export function connect(state: GameState, callbacks: NetworkCallbacks): void {
     state.deathTime = performance.now();
     state.killerEntityId = died.killerID;
     state.targetId = 0;
-    state.lockTargetId = 0;
-    state.lockProgress = 0;
-    state.lockSlots = [];
-    state.lockedTargets = new Set<number>();
+    state.selectedNetID = 0;
     state.cargoPanelOpen = false;
     state.bankPanelOpen = false;
     state.marketPanelOpen = false;
@@ -363,43 +344,8 @@ export function connect(state: GameState, callbacks: NetworkCallbacks): void {
     // client-side renderer is follow-up polish.
   });
 
-  // --- Multi-lock state (LockSlotsMsg / LockRejectedMsg) ---
-  // The authoritative source of truth for which targets are locked +
-  // which is active. PlayerOwnState.lockTargetID below is kept only for
-  // back-compat reticle visuals (single-target HUD overlay); the slot
-  // strip + click-to-lock handlers all read from state.lockSlots / state.lockedTargets.
-  client.typedEvents.on(LockSlotsMsg, (msg: LockSlotsMsg) => {
-    state.lockSlots = msg.slots.map((s) => ({
-      targetNetID: s.targetNetID,
-      progress: s.progress,
-      locked: s.locked,
-    }));
-    state.lockedTargets = new Set<number>(
-      msg.slots.filter((s) => s.locked).map((s) => s.targetNetID),
-    );
-    state.lockTargetId = msg.activeNetID;
-    // Drive the legacy single-target overlay's progress off the active slot.
-    const activeSlot = msg.slots.find((s) => s.targetNetID === msg.activeNetID);
-    state.lockProgress = activeSlot ? activeSlot.progress : 0;
-  });
-
-  client.typedEvents.on(LockRejectedMsg, (msg: LockRejectedMsg) => {
-    state.lockRejectFlash = {
-      targetNetID: msg.targetNetID,
-      reason: msg.reason,
-      until: performance.now() + 1500,
-    };
-    // Audible feedback so the player knows the input bounced.
-    audio.play(SoundId.TargetLock);
-    console.warn(`lock rejected for netID=${msg.targetNetID}, reason=${msg.reason}`);
-  });
-
   // --- Per-viewer player-own state (cooldowns/cargo/equipment) ---
   client.onPlayerOwnState((own: PlayerOwnState) => {
-    // Lock progress/target are driven by LockSlotsMsg now; PlayerOwnState
-    // still carries the legacy single-target fields and we ignore them
-    // for the multi-lock HUD (kept here as documentation, not bound).
-    void own.lockTargetID;
     state.abilityCooldowns.clear();
     for (const cd of own.abilityCooldowns) {
       state.abilityCooldowns.set(cd.slot, {

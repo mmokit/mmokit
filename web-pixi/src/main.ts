@@ -16,17 +16,12 @@ import { EntityManager } from "./entities/entity-manager";
 import { ThrusterRenderer } from "./effects/thruster";
 import { ExplosionRenderer } from "./effects/explosion";
 import { MiningLaserRenderer } from "./effects/mining-laser";
-import { TargetHighlight } from "./effects/target-highlight";
-import { LockOnRing } from "./effects/lock-on-ring";
-import { BeingLockedRing } from "./effects/being-locked-ring";
 import { MoveIndicator } from "./effects/move-indicator";
 import { AbilityEffectRenderer } from "./effects/ability-effects";
 import { TractorBeamRenderer } from "./effects/tractor-beam";
 import { AimIndicator } from "./effects/aim-indicator";
 import { Minimap } from "./world/minimap";
 import { createAbilityBar, updateAbilityBar } from "./ui/ability-bar";
-import { createLockOverlay, updateLockOverlay } from "./ui/lock-overlay";
-import { createLockHud, updateLockHud } from "./ui/lock-hud";
 import {
   updateHUD,
   updateStatusBars,
@@ -150,9 +145,6 @@ async function main() {
   const thrusterRenderer = new ThrusterRenderer(particleContainer);
   const explosionRenderer = new ExplosionRenderer(particleContainer);
   const miningLaserRenderer = new MiningLaserRenderer(effectsContainer);
-  const targetHighlight = new TargetHighlight(effectsContainer);
-  const lockOnRing = new LockOnRing(effectsContainer);
-  const beingLockedRing = new BeingLockedRing(effectsContainer);
   const moveIndicator = new MoveIndicator(effectsContainer);
   const abilityEffectRenderer = new AbilityEffectRenderer(effectsContainer);
   const tractorBeamRenderer = new TractorBeamRenderer(effectsContainer);
@@ -161,45 +153,9 @@ async function main() {
   // Ability bar (HTML overlay)
   createAbilityBar();
 
-  // Lock target overlay (HTML) — legacy single-target visual. The UNLOCK
-  // button in the overlay header sends an UnlockTarget input for the
-  // currently active slot; the server's LockSlotsMsg broadcast then
-  // updates state.lockTargetId via the network handler.
-  createLockOverlay(() => {
-    if (state.connected && state.client && state.lockTargetId !== 0) {
-      // Inline import to dodge the input.ts barrel-import cycle.
-      void import("../sdk/index.js").then(({ UnlockTarget }) => {
-        if (!state.client || state.lockTargetId === 0) return;
-        state.inputSeq++;
-        state.client.send(new UnlockTarget({
-          sequence: state.inputSeq,
-          netID: state.lockTargetId,
-        }));
-      });
-    }
-  });
-
-  // Multi-lock HUD strip (HTML overlay, bottom-left). Slot icons accept
-  // left-click=set active and right-click=unlock; both dispatch through
-  // the same SDK message types the keyboard path uses.
-  createLockHud({
-    onActivate: (netID) => {
-      if (!state.connected || !state.client) return;
-      void import("../sdk/index.js").then(({ SetActiveTarget }) => {
-        if (!state.client) return;
-        state.inputSeq++;
-        state.client.send(new SetActiveTarget({ sequence: state.inputSeq, netID }));
-      });
-    },
-    onUnlock: (netID) => {
-      if (!state.connected || !state.client) return;
-      void import("../sdk/index.js").then(({ UnlockTarget }) => {
-        if (!state.client) return;
-        state.inputSeq++;
-        state.client.send(new UnlockTarget({ sequence: state.inputSeq, netID }));
-      });
-    },
-  });
+  // Lock overlay + multi-lock HUD removed in Task 12. The Selection
+  // model (Task 13) replaces the lock-slot UI with a single
+  // selectedNetID; new visuals land in Tasks 14-16.
 
   // Loot popup overlay (HTML)
   createLootPopup();
@@ -409,9 +365,6 @@ async function main() {
     thrusterRenderer.update(state, dt);
     explosionRenderer.update(state.explosions, now);
     miningLaserRenderer.update(state, now);
-    targetHighlight.update(state, now);
-    lockOnRing.update(state, now);
-    beingLockedRing.update(state, now);
     if (state.rightMouseDown && state.loggedIn && !state.isDead) {
       const world = camera.screenToWorld(state.mouseX, state.mouseY);
       moveIndicator.pin(world.x, world.y);
@@ -431,8 +384,6 @@ async function main() {
     updateMarketPanel(state);
     updateToasts(state);
     updateAbilityBar(state);
-    updateLockOverlay(state);
-    updateLockHud(state);
     updateLootPopup(state);
     updateEscMenu(state);
 
