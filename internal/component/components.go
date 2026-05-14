@@ -416,6 +416,15 @@ type NPCAI struct {
 	ChargeDirAngle      float32 // radians; locked at windup-end
 	LineTelegraphNetID uint32
 	ChargeHit           bool
+
+	// PVE v3: Brawler special-attack state. SpecialCooldown ticks down each
+	// frame between specials; SpecialWindup > 0 means a telegraph is in
+	// flight; SpecialDirAngle is the locked aim direction; SpecialTelegraphNetID
+	// is the in-flight LineTelegraph entity netID so we can despawn it on death.
+	SpecialCooldown       float32
+	SpecialWindup         float32
+	SpecialDirAngle       float32
+	SpecialTelegraphNetID uint32
 }
 
 // POIAnchor links an NPC back to its owning POI for leash + roster

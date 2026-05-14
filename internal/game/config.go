@@ -17,7 +17,7 @@ import (
 // ConfigVersion tracks breaking config changes. Bump this when defaults change
 // in a way that is incompatible with saved configs (e.g. unit rescale).
 // When the saved version doesn't match, defaults are used and re-saved.
-const ConfigVersion = 7
+const ConfigVersion = 8
 
 // GameConfig holds all tunable game parameters.
 type GameConfig struct {
@@ -60,6 +60,12 @@ type GameConfig struct {
 	BrawlerAggroRadius    float32 `json:"brawler_aggro_radius"`
 	BrawlerDamagePerShot  float32 `json:"brawler_damage_per_shot"`
 	BrawlerFireRate       float32 `json:"brawler_fire_rate"`
+
+	BrawlerSpecialCooldown   float32 `json:"brawler_special_cooldown"`
+	BrawlerSpecialWindupTime float32 `json:"brawler_special_windup_time"`
+	BrawlerSpecialLength     float32 `json:"brawler_special_length"`
+	BrawlerSpecialHalfWidth  float32 `json:"brawler_special_half_width"`
+	BrawlerSpecialDamage     float32 `json:"brawler_special_damage"`
 
 	ArtilleryHP              float32 `json:"artillery_hp"`
 	ArtilleryShield          float32 `json:"artillery_shield"`
@@ -180,6 +186,12 @@ func DefaultGameConfig() GameConfig {
 		BrawlerHP: 120, BrawlerShield: 60, BrawlerMaxSpeed: 6, BrawlerTurnRate: 1.5,
 		BrawlerPreferredRange: 30, BrawlerWeaponRange: 50, BrawlerAggroRadius: 30,
 		BrawlerDamagePerShot: 8, BrawlerFireRate: 1.0,
+
+		BrawlerSpecialCooldown:   6.0,
+		BrawlerSpecialWindupTime: 0.8,
+		BrawlerSpecialLength:     50,
+		BrawlerSpecialHalfWidth:  5,
+		BrawlerSpecialDamage:     25,
 
 		ArtilleryHP: 80, ArtilleryShield: 40, ArtilleryMaxSpeed: 4, ArtilleryTurnRate: 1.5,
 		ArtilleryWeaponRange: 70, ArtilleryAggroRadius: 80,
