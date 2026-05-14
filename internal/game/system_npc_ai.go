@@ -9,9 +9,8 @@ import (
 )
 
 // NPCAISystem drives the per-NPC state machine each tick. Acquires
-// targets, applies motion policy in Engage, manages leash return, and
-// fires weapons. Runs AFTER TargetLockSystem so locks are progress-ticked
-// before the AI consults them.
+// targets via NPCAI.TargetNetID (no TargetLock indirection), applies
+// motion policy in Engage, manages leash return, and fires weapons.
 //
 // Time is tracked locally via elapsedSec (monotonic dt accumulation) —
 // only the deltas matter for deescalation, and the Stage/Process layer
@@ -23,11 +22,10 @@ type NPCAISystem struct {
 	elapsedSec float32
 	nearby     []mmokit.SpatialEntry // reusable scratch buffer for resolveBrawlerSpecial
 	entities   mmokit.Query[struct {
-		AI   *gamecomp.NPCAI
-		Pos  *mmokit.Position
-		Vel  *mmokit.Velocity
-		Rot  *mmokit.Rotation
-		Lock *gamecomp.TargetLock
+		AI  *gamecomp.NPCAI
+		Pos *mmokit.Position
+		Vel *mmokit.Velocity
+		Rot *mmokit.Rotation
 	}]
 }
 
@@ -48,7 +46,7 @@ func (s *NPCAISystem) Update(dt float32) {
 	now := s.elapsedSec
 
 	for e, b := range s.entities.Iter {
-		ai, pos, vel, rot, lock := b.AI, b.Pos, b.Vel, b.Rot, b.Lock
+		ai, pos, vel, rot := b.AI, b.Pos, b.Vel, b.Rot
 		self := mmokit.EntityFromECS(gw.stage, e)
 
 		// Leashing entities are driven below; skip state-driven logic here.
@@ -59,19 +57,19 @@ func (s *NPCAISystem) Update(dt float32) {
 
 		switch ai.State {
 		case AIStateIdle:
-			s.tickIdle(self, ai, pos, vel, lock, now, dt)
+			s.tickIdle(self, ai, pos, vel, now, dt)
 		case AIStateApproach:
-			s.tickApproach(self, ai, pos, vel, rot, lock, now, dt)
+			s.tickApproach(self, ai, pos, vel, rot, now, dt)
 		case AIStateAcquire:
-			s.tickAcquire(self, ai, pos, rot, lock, now, dt)
+			s.tickAcquire(self, ai, pos, rot, now, dt)
 		case AIStateEngage:
-			s.tickEngage(self, ai, pos, vel, rot, lock, now, dt)
+			s.tickEngage(self, ai, pos, vel, rot, now, dt)
 		case AIStateCast:
-			s.tickCast(self, ai, pos, vel, rot, lock, now, dt)
+			s.tickCast(self, ai, pos, vel, rot, now, dt)
 		case AIStateLanceWindup:
 			s.tickLanceWindup(self, ai, vel, rot, dt)
 		case AIStateLanceCharge:
-			s.tickLanceCharge(self, ai, pos, vel, rot, lock, dt)
+			s.tickLanceCharge(self, ai, pos, vel, rot, dt)
 		case AIStateLanceRecover:
 			s.tickLanceRecover(self, ai, vel, dt)
 		}
@@ -79,7 +77,7 @@ func (s *NPCAISystem) Update(dt float32) {
 }
 
 func (s *NPCAISystem) tickIdle(self mmokit.Entity, ai *gamecomp.NPCAI,
-	pos *mmokit.Position, vel *mmokit.Velocity, lock *gamecomp.TargetLock,
+	pos *mmokit.Position, vel *mmokit.Velocity,
 	now, dt float32,
 ) {
 	vel.X, vel.Y = 0, 0
@@ -93,7 +91,7 @@ func (s *NPCAISystem) tickIdle(self mmokit.Entity, ai *gamecomp.NPCAI,
 	// (legacy Brawler behavior). Otherwise transition to Approach — move
 	// toward target until within LockRange, then start the lock.
 	if ai.LockRange <= 0 || ai.LockRange >= ai.AggroRadius {
-		s.startLockOn(self, ai, lock, target, now)
+		s.startLockOn(self, ai, target, now)
 		return
 	}
 
@@ -105,22 +103,15 @@ func (s *NPCAISystem) tickIdle(self mmokit.Entity, ai *gamecomp.NPCAI,
 		self.NetID(), tEnt.NetID(), ai.LockRange)
 }
 
-// startLockOn captures the Idle→Acquire transition body — the lock slot
-// setup and state change. Used by both direct-lock (Idle) and by Approach
-// when the target gets close enough.
+// startLockOn captures the Idle→Acquire transition body — sets the NPC's
+// engage target and flips state. Used by both direct-lock (Idle) and by
+// Approach when the target gets close enough.
 func (s *NPCAISystem) startLockOn(self mmokit.Entity, ai *gamecomp.NPCAI,
-	lock *gamecomp.TargetLock, target mmokit.EntityHandle, now float32,
+	target mmokit.EntityHandle, now float32,
 ) {
 	tEnt := mmokit.EntityFromECS(s.gw.stage, target)
 	tNetID := tEnt.NetID()
-	lock.Slots = lock.Slots[:0]
-	lock.Slots = append(lock.Slots, gamecomp.LockSlot{
-		TargetNetID:  tNetID,
-		TargetEntity: target,
-		Progress:     0,
-		LockTime:     s.gw.Config.LockOnTime * 0.8, // NPCs lock a bit faster
-	})
-	lock.ActiveNetID = tNetID
+	ai.TargetNetID = tNetID
 	ai.State = AIStateAcquire
 	ai.LastCombatActivityAt = now
 	s.gw.eng.Log.Log(CatNPCAI, "ai: %d → Acquire target=%d", self.NetID(), tNetID)
@@ -132,7 +123,7 @@ func (s *NPCAISystem) startLockOn(self mmokit.Entity, ai *gamecomp.NPCAI,
 // lost (moved out of aggro or died).
 func (s *NPCAISystem) tickApproach(self mmokit.Entity, ai *gamecomp.NPCAI,
 	pos *mmokit.Position, vel *mmokit.Velocity, rot *mmokit.Rotation,
-	lock *gamecomp.TargetLock, now, dt float32,
+	now, dt float32,
 ) {
 	// Re-scan for nearest enemy (target might have moved or died).
 	target := s.findNearestEnemy(self, pos, ai.AggroRadius)
@@ -155,7 +146,7 @@ func (s *NPCAISystem) tickApproach(self mmokit.Entity, ai *gamecomp.NPCAI,
 
 	// Close enough → start the lock.
 	if dist <= ai.LockRange {
-		s.startLockOn(self, ai, lock, target, now)
+		s.startLockOn(self, ai, target, now)
 		return
 	}
 
@@ -170,15 +161,15 @@ func (s *NPCAISystem) tickApproach(self mmokit.Entity, ai *gamecomp.NPCAI,
 }
 
 func (s *NPCAISystem) tickAcquire(self mmokit.Entity, ai *gamecomp.NPCAI,
-	pos *mmokit.Position, rot *mmokit.Rotation, lock *gamecomp.TargetLock,
+	pos *mmokit.Position, rot *mmokit.Rotation,
 	now, dt float32,
 ) {
-	if len(lock.Slots) == 0 || lock.ActiveNetID == 0 {
+	if ai.TargetNetID == 0 {
 		ai.State = AIStateIdle
 		s.gw.eng.Log.Log(CatNPCAI, "ai: %d Acquire→Idle (no target)", self.NetID())
 		return
 	}
-	target := mmokit.EntityByNetID(s.gw.stage, lock.ActiveNetID)
+	target := mmokit.EntityByNetID(s.gw.stage, ai.TargetNetID)
 	if !target.Alive() {
 		ai.State = AIStateIdle
 		return
@@ -197,14 +188,14 @@ func (s *NPCAISystem) tickAcquire(self mmokit.Entity, ai *gamecomp.NPCAI,
 
 func (s *NPCAISystem) tickEngage(self mmokit.Entity, ai *gamecomp.NPCAI,
 	pos *mmokit.Position, vel *mmokit.Velocity, rot *mmokit.Rotation,
-	lock *gamecomp.TargetLock, now, dt float32,
+	now, dt float32,
 ) {
-	if lock.ActiveNetID == 0 {
+	if ai.TargetNetID == 0 {
 		ai.State = AIStateIdle
 		vel.X, vel.Y = 0, 0
 		return
 	}
-	target := mmokit.EntityByNetID(s.gw.stage, lock.ActiveNetID)
+	target := mmokit.EntityByNetID(s.gw.stage, ai.TargetNetID)
 	if !target.Alive() || mmokit.Has[mmokit.Dormant](target) {
 		ai.State = AIStateIdle
 		vel.X, vel.Y = 0, 0
@@ -212,8 +203,7 @@ func (s *NPCAISystem) tickEngage(self mmokit.Entity, ai *gamecomp.NPCAI,
 	}
 	if now-ai.LastCombatActivityAt > s.gw.Config.AggroDeescalationSec {
 		ai.State = AIStateIdle
-		lock.Slots = lock.Slots[:0]
-		lock.ActiveNetID = 0
+		ai.TargetNetID = 0
 		vel.X, vel.Y = 0, 0
 		s.gw.eng.Log.Log(CatNPCAI, "ai: %d Engage→Idle (deescalation)", self.NetID())
 		return
@@ -227,7 +217,7 @@ func (s *NPCAISystem) tickEngage(self mmokit.Entity, ai *gamecomp.NPCAI,
 	// Target switching: if a damage source is closer than current target,
 	// drop the lock and re-acquire on the attacker next tick. Stamped by
 	// ApplyDamage in verb_damage.go; consumed (and cleared) here.
-	if ai.LastDamageByNetID != 0 && ai.LastDamageByNetID != lock.ActiveNetID {
+	if ai.LastDamageByNetID != 0 && ai.LastDamageByNetID != ai.TargetNetID {
 		attacker := mmokit.EntityByNetID(s.gw.stage, ai.LastDamageByNetID)
 		if attacker.Alive() && !mmokit.Has[mmokit.Dormant](attacker) && !mmokit.Has[gamecomp.Leashing](attacker) {
 			if apos := mmokit.Get[mmokit.Position](attacker); apos != nil {
@@ -237,14 +227,7 @@ func (s *NPCAISystem) tickEngage(self mmokit.Entity, ai *gamecomp.NPCAI,
 				cdist2 := cdx*cdx + cdy*cdy
 				if adist2 < cdist2 {
 					attackerNetID := ai.LastDamageByNetID
-					lock.Slots = lock.Slots[:0]
-					lock.Slots = append(lock.Slots, gamecomp.LockSlot{
-						TargetNetID:  attackerNetID,
-						TargetEntity: attacker.Handle(),
-						Progress:     0,
-						LockTime:     s.gw.Config.LockOnTime * 0.8,
-					})
-					lock.ActiveNetID = attackerNetID
+					ai.TargetNetID = attackerNetID
 					ai.LastDamageByNetID = 0 // consume
 					ai.State = AIStateAcquire
 					ai.LastCombatActivityAt = now
@@ -272,7 +255,7 @@ func (s *NPCAISystem) tickEngage(self mmokit.Entity, ai *gamecomp.NPCAI,
 		if ai.CastCooldown > 0 {
 			ai.CastCooldown -= dt
 		}
-		if ai.CastCooldown <= 0 && lock.ActiveNetID != 0 {
+		if ai.CastCooldown <= 0 && ai.TargetNetID != 0 {
 			cx, cy := tpos.X, tpos.Y
 			castTime := s.gw.Config.ArtilleryCastTime
 			aoeRadius := s.gw.Config.ArtilleryAoERadius
@@ -346,7 +329,7 @@ func (s *NPCAISystem) tickEngage(self mmokit.Entity, ai *gamecomp.NPCAI,
 			vel.X, vel.Y = 0, 0
 			return
 		}
-		if ai.SpecialCooldown <= 0 && lock.ActiveNetID != 0 && dist <= s.gw.Config.BrawlerSpecialLength {
+		if ai.SpecialCooldown <= 0 && ai.TargetNetID != 0 && dist <= s.gw.Config.BrawlerSpecialLength {
 			// Snapshot direction toward target's CURRENT position.
 			chargeDir := float32(math.Atan2(float64(dy), float64(dx)))
 			chargeLen := s.gw.Config.BrawlerSpecialLength
@@ -470,7 +453,7 @@ func npcAbilityTypeFor(archetype uint8) uint8 {
 // cast cooldown.
 func (s *NPCAISystem) tickCast(self mmokit.Entity, ai *gamecomp.NPCAI,
 	pos *mmokit.Position, vel *mmokit.Velocity, rot *mmokit.Rotation,
-	lock *gamecomp.TargetLock, now, dt float32,
+	now, dt float32,
 ) {
 	vel.X, vel.Y = 0, 0
 
@@ -537,7 +520,7 @@ func (s *NPCAISystem) tickLanceWindup(self mmokit.Entity, ai *gamecomp.NPCAI,
 // the lancer enters LanceRecover (vulnerable cooldown window).
 func (s *NPCAISystem) tickLanceCharge(self mmokit.Entity, ai *gamecomp.NPCAI,
 	pos *mmokit.Position, vel *mmokit.Velocity, rot *mmokit.Rotation,
-	lock *gamecomp.TargetLock, dt float32,
+	dt float32,
 ) {
 	ux := float32(math.Cos(float64(ai.ChargeDirAngle)))
 	uy := float32(math.Sin(float64(ai.ChargeDirAngle)))
@@ -545,8 +528,8 @@ func (s *NPCAISystem) tickLanceCharge(self mmokit.Entity, ai *gamecomp.NPCAI,
 	vel.Y = uy * s.gw.Config.LancerChargeSpeed
 	rot.Angle = ai.ChargeDirAngle
 
-	if !ai.ChargeHit && lock.ActiveNetID != 0 {
-		target := mmokit.EntityByNetID(s.gw.stage, lock.ActiveNetID)
+	if !ai.ChargeHit && ai.TargetNetID != 0 {
+		target := mmokit.EntityByNetID(s.gw.stage, ai.TargetNetID)
 		if target.Alive() {
 			tpos := mmokit.Get[mmokit.Position](target)
 			if tpos != nil {

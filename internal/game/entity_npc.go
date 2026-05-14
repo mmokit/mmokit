@@ -7,16 +7,16 @@ import (
 
 // NPCBundle is the entity-kind component bundle for NPC enemy ships.
 // NPCs do not carry LockedBy — the combat-warning ring belongs only on
-// the local player's own ship. Leashing is intentionally NOT in the
-// bundle: it's a transient state marker added/removed dynamically by
-// the leash subsystem. Adding it as a bundle field would attach it at
-// spawn time (via EnsureEntityKindComponents), which would tag every
-// fresh NPC as currently leashing.
+// the local player's own ship. NPCs no longer carry TargetLock either —
+// they track their engage target via NPCAI.TargetNetID. Leashing is
+// intentionally NOT in the bundle: it's a transient state marker added/
+// removed dynamically by the leash subsystem. Adding it as a bundle
+// field would attach it at spawn time (via EnsureEntityKindComponents),
+// which would tag every fresh NPC as currently leashing.
 type NPCBundle struct {
 	Health        *gamecomp.Health
 	Shield        *gamecomp.Shield
 	StatusEffects *gamecomp.StatusEffects
-	TargetLock    *gamecomp.TargetLock `mmokit:"local"` // multi-slot but always MaxSlots=1 for NPCs
 	NPCAI         *gamecomp.NPCAI
 	POIAnchor     *gamecomp.POIAnchor `mmokit:"local"`
 }
@@ -47,10 +47,6 @@ func (gw *GameWorld) SpawnNPC(x, y float32, archetype uint8, poiNetID uint32) mm
 			RegenDelay: gw.Config.NpcShieldRegenDelay,
 		},
 		gamecomp.StatusEffects{},
-		gamecomp.TargetLock{
-			MaxSlots: gw.Config.LockMaxSlotsNPC,
-			Range:    d.AggroRadius, // NPCs lock anything they can aggro
-		},
 		gamecomp.NPCAI{
 			Archetype:      archetype,
 			State:          AIStateIdle,

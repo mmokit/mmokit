@@ -425,6 +425,12 @@ type NPCAI struct {
 	SpecialWindup         float32
 	SpecialDirAngle       float32
 	SpecialTelegraphNetID uint32
+
+	// TargetNetID — the NPC's current engage target. Replaces the old
+	// TargetLock.ActiveNetID indirection. Updated each tick by the
+	// closest-enemy logic in tickEngage; consumed by dispatch methods
+	// (tickEngage hitscan, tickCast for Artillery, etc.).
+	TargetNetID uint32
 }
 
 // POIAnchor links an NPC back to its owning POI for leash + roster

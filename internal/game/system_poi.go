@@ -160,12 +160,10 @@ func (s *POISystem) applyLeash(poiNetID uint32, ids []uint32) {
 			continue
 		}
 		ai := mmokit.Get[gamecomp.NPCAI](e)
-		lock := mmokit.Get[gamecomp.TargetLock](e)
-		if ai != nil && lock != nil {
+		if ai != nil {
 			mmokit.Set(e, gamecomp.Leashing{})
 			ai.State = AIStateLeash
-			lock.Slots = lock.Slots[:0]
-			lock.ActiveNetID = 0
+			ai.TargetNetID = 0
 		}
 	}
 }

@@ -94,9 +94,6 @@ func TestNPCAI_BrawlerCharges(t *testing.T) {
 	if aiComp := mmokit.Get[gamecomp.NPCAI](npc); aiComp != nil {
 		aiComp.AggroRadius = 100
 	}
-	if lock := mmokit.Get[gamecomp.TargetLock](npc); lock != nil {
-		lock.Range = 100
-	}
 	newTestPlayerAt(t, gw, 8002, 70, 0)
 
 	const dt = float32(0.05)
