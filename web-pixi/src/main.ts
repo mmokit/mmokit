@@ -253,7 +253,7 @@ async function main() {
 
   // Initialize audio (preloads all sounds) and ESC menu
   audio.init();
-  initEscMenu();
+  initEscMenu(state);
 
   // Login flow — authenticate FIRST (cookie set), THEN open WS so the
   // upgrade carries the cookie and the gateway can validate + bind the

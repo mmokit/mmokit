@@ -477,6 +477,28 @@
         #esc-menu-panel .menu-hint {
             color: #556; font-size: 11px; text-align: center; margin-top: 16px;
         }
+        .quickcast-row {
+            display: flex; align-items: center; justify-content: space-between;
+            margin-top: 18px; padding-top: 14px;
+            border-top: 1px solid rgba(255, 255, 255, 0.08);
+        }
+        .quickcast-label {
+            color: #aab; font-size: 13px; min-width: 70px;
+        }
+        .quickcast-slots {
+            display: flex; gap: 8px; flex: 1; justify-content: flex-end;
+        }
+        .quickcast-slot {
+            display: flex; align-items: center; gap: 4px;
+            color: #aab; font-size: 12px; cursor: pointer;
+            user-select: none;
+        }
+        .quickcast-slot input[type="checkbox"] {
+            accent-color: #4af; cursor: pointer; margin: 0;
+        }
+        .quickcast-slot span {
+            color: #4af; font-family: monospace;
+        }
 
         /* Marketplace panel */
         #marketplace-panel {

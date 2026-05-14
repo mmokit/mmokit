@@ -1,9 +1,10 @@
 import { audio } from "../audio/audio-manager";
 import type { GameState } from "../state";
+import { buildQuickcastSettings } from "./quickcast-settings";
 
 let initialized = false;
 
-export function initEscMenu(): void {
+export function initEscMenu(state: GameState): void {
   if (initialized) return;
   initialized = true;
 
@@ -39,6 +40,16 @@ export function initEscMenu(): void {
     audio.setSfxVolume(v / 100);
     sfxVal.textContent = String(v);
   });
+
+  // Quickcast section — inserted before the "Press ESC to close" hint
+  // so it appears between the volume sliders and the footer.
+  const panel = document.getElementById("esc-menu-panel");
+  const hint = panel?.querySelector(".menu-hint");
+  if (panel && hint) {
+    panel.insertBefore(buildQuickcastSettings(state), hint);
+  } else if (panel) {
+    panel.appendChild(buildQuickcastSettings(state));
+  }
 }
 
 export function updateEscMenu(state: GameState): void {
