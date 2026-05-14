@@ -22,6 +22,7 @@ type ShipBundle struct {
 	Equipment     *gamecomp.Equipment
 	Inventory     *gamecomp.Inventory
 	TargetLock    *gamecomp.TargetLock `mmokit:"local"`
+	Selection     *gamecomp.Selection  `mmokit:"local"`
 	AbilitySet    *gamecomp.AbilitySet
 	StatusEffects *gamecomp.StatusEffects
 	MoveTarget    *mmokit.MoveTarget
@@ -133,6 +134,7 @@ func (gw *GameWorld) SpawnPlayer(s *mmokit.PlayerSession) {
 			MaxSlots: gw.Config.LockMaxSlotsPlayer,
 			Range:    gw.Config.LockOnRange,
 		},
+		gamecomp.Selection{EntityNetID: 0},
 		gamecomp.Equipment{
 			Weapon1:  equip.Weapon1,
 			Weapon2:  equip.Weapon2,
