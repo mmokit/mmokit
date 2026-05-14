@@ -85,21 +85,21 @@ func runFighterAI(ctx context.Context, b *bot.Bot, wg *sync.WaitGroup) {
 		// Move toward target
 		b.MoveTo(target.X, target.Y)
 
-		// Lock on
-		b.LockTarget(target.ID)
+		// Select target — instant under the selection model (no progress
+		// ramp). Selection is the wire-format equivalent of the old "lock"
+		// for LockOn-targeted abilities.
+		b.SelectTarget(target.ID)
 
-		// Check own state for lock progress and shield
-		own := b.OwnState()
 		me := b.MyEntity()
 		if me == nil {
 			continue
 		}
 
-		// Fire abilities when locked
-		if own.LockProgress >= 1.0 {
-			b.CastAbility(abilitySlots[abilityIdx%len(abilitySlots)])
-			abilityIdx++
-		}
+		// Fire abilities immediately — selection is instant, so the next
+		// CastAbility consumes the freshly-set Selection.EntityNetID on
+		// the server side.
+		b.CastAbility(abilitySlots[abilityIdx%len(abilitySlots)])
+		abilityIdx++
 
 		// Defensive: use emergency shields when shield is low
 		if me.MaxShield > 0 && me.Shield/me.MaxShield < 0.3 {

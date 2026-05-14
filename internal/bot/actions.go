@@ -26,14 +26,14 @@ const (
 // matching typed-input messages on the wire (one HandleClient frame per
 // stateful field that changed since last tick).
 type pendingInput struct {
-	moveX        float32
-	moveY        float32
-	moveActive   bool
-	moveDirty    bool // true when MoveTo / StopMove fired since last send
-	lockTargetID uint32
-	lockDirty    bool // true when LockTarget / ClearLock fired since last send
-	abilityCast  uint32
-	jettison     uint32
+	moveX       float32
+	moveY       float32
+	moveActive  bool
+	moveDirty   bool // true when MoveTo / StopMove fired since last send
+	selectNetID uint32
+	selectDirty bool // true when SelectTarget / ClearSelection fired since last send
+	abilityCast uint32
+	jettison    uint32
 }
 
 // MoveTo sets a move-to destination.
@@ -54,19 +54,22 @@ func (b *Bot) StopMove() {
 	b.inputMu.Unlock()
 }
 
-// LockTarget sets the combat lock-on target.
-func (b *Bot) LockTarget(netID uint32) {
+// SelectTarget sets the player's selection to netID. The server-side
+// selection model is single-target with no per-slot multi-lock — this
+// replaces the legacy LockTarget/UnlockTarget pair.
+func (b *Bot) SelectTarget(netID uint32) {
 	b.inputMu.Lock()
-	b.pending.lockTargetID = netID
-	b.pending.lockDirty = true
+	b.pending.selectNetID = netID
+	b.pending.selectDirty = true
 	b.inputMu.Unlock()
 }
 
-// ClearLock clears the combat lock-on target.
-func (b *Bot) ClearLock() {
+// ClearSelection clears the player's selection (server-side equivalent
+// of right-click on the web client).
+func (b *Bot) ClearSelection() {
 	b.inputMu.Lock()
-	b.pending.lockTargetID = 0
-	b.pending.lockDirty = true
+	b.pending.selectNetID = 0
+	b.pending.selectDirty = true
 	b.inputMu.Unlock()
 }
 
@@ -77,12 +80,12 @@ func (b *Bot) CastAbility(slot int) {
 	b.inputMu.Unlock()
 }
 
-// StartMining locks an asteroid and activates the mining beam (Weapon2 primary = E).
+// StartMining selects an asteroid and activates the mining beam (Weapon2 primary = E).
 // Safe to call repeatedly — only sends the toggle once per target.
 func (b *Bot) StartMining(targetNetID uint32) {
 	b.inputMu.Lock()
-	b.pending.lockTargetID = targetNetID
-	b.pending.lockDirty = true
+	b.pending.selectNetID = targetNetID
+	b.pending.selectDirty = true
 	if b.miningTarget != targetNetID {
 		b.pending.abilityCast |= 1 << uint(AbilityE) // mining beam toggle on
 		b.miningTarget = targetNetID

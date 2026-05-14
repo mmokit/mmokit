@@ -67,11 +67,11 @@ type Bot struct {
 	inputMu      sync.Mutex
 	pending      pendingInput
 	miningTarget uint32 // tracks which asteroid beam is toggled on for
-	// currentLockTarget tracks the last LockTarget the bot has sent (and
-	// not yet unlocked). When the next sendInput sees a lock-state change,
-	// it diffs against this to emit LockTarget / UnlockTarget. The v1 bot
-	// only ever holds a single lock at a time, so a scalar is sufficient.
-	currentLockTarget uint32
+	// selectedNetID tracks the last SelectTarget the bot has sent. The
+	// selection-model rewrite collapsed the multi-slot lock state into a
+	// single per-player Selection.EntityNetID; the bot mirrors that with
+	// one scalar and only re-emits SelectTarget when the value changes.
+	selectedNetID uint32
 
 	inputRate time.Duration
 
@@ -273,7 +273,7 @@ func (b *Bot) sendInput() {
 	b.pending.abilityCast = 0
 	b.pending.jettison = 0
 	b.pending.moveDirty = false
-	b.pending.lockDirty = false
+	b.pending.selectDirty = false
 	b.inputMu.Unlock()
 
 	// One typed message per stateful field that changed since last tick,
@@ -287,27 +287,20 @@ func (b *Bot) sendInput() {
 			Y:        inp.moveY,
 		})
 	}
-	if inp.lockDirty {
-		// Diff against the previously-locked target. The slot-based API
-		// separates acquire (LockTarget) from release (UnlockTarget); the
-		// bot only ever holds one slot at a time in v1.
-		prev := b.currentLockTarget
-		next := inp.lockTargetID
-		if prev != 0 && prev != next {
+	if inp.selectDirty {
+		// One typed SelectTarget per change; NetID=0 clears the selection
+		// (the selection-model equivalent of right-click on the web client).
+		// Suppress no-op repeats so an AI that keeps asking for the same
+		// target every tick doesn't flood the wire.
+		next := inp.selectNetID
+		if next != b.selectedNetID {
 			b.inputSeq++
-			b.sendTypedInput(&game.UnlockTarget{
-				Sequence: b.inputSeq,
-				NetID:    prev,
-			})
-		}
-		if next != 0 && next != prev {
-			b.inputSeq++
-			b.sendTypedInput(&game.LockTarget{
+			b.sendTypedInput(&game.SelectTarget{
 				Sequence: b.inputSeq,
 				NetID:    next,
 			})
+			b.selectedNetID = next
 		}
-		b.currentLockTarget = next
 	}
 	for slot := uint8(0); slot < 8; slot++ {
 		if inp.abilityCast&(1<<slot) == 0 {

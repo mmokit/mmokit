@@ -179,8 +179,6 @@ func (b *Bot) handleOwnState(msg *game.PlayerOwnState) {
 		CargoItems:       cargo,
 		CargoMass:        msg.CargoMass,
 		MaxCargoMass:     msg.MaxCargoMass,
-		LockProgress:     msg.LockProgress,
-		LockTargetID:     msg.LockTargetID,
 		LockedByID:       msg.BeingLockedByID,
 		LockedByProgress: msg.BeingLockedByProgress,
 	}

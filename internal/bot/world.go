@@ -72,8 +72,6 @@ type OwnState struct {
 	CargoItems       []*InventoryItem
 	CargoMass        float32
 	MaxCargoMass     float32
-	LockProgress     float32
-	LockTargetID     uint32
 	LockedByID       uint32
 	LockedByProgress float32
 }
