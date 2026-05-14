@@ -25,14 +25,15 @@ const SLOT_COLORS: Record<number, string> = {
 // Duplicated on client because the SDK only emits the item registry,
 // not the underlying TargetingMode enum. Values MUST match the Go-side
 // declaration exactly (Self=0, LockOn=1, SkillshotLine=2,
-// SkillshotGround=3, SkillshotChannel=4) — out-of-sync values silently
-// break the aim-state machine dispatch.
+// SkillshotGround=3, SkillshotChannel=4, CursorPick=5) — out-of-sync
+// values silently break the aim-state machine dispatch.
 export const enum TargetingMode {
   Self = 0,
   LockOn = 1,
   SkillshotLine = 2,
   SkillshotGround = 3,
   SkillshotChannel = 4,
+  CursorPick = 5,
 }
 
 // Client-side ability data per equipment item ID
@@ -91,7 +92,7 @@ export const ITEM_ABILITIES: Record<number, { primary: AbilityInfo; secondary?: 
       name: "Ion", title: "Ion Burn", range: 500,
       desc: "Applies a damage-over-time burn to the target.",
       stats: ["DPS: 6", "Duration: 4s", "Range: 500", "Cooldown: 8s"],
-      mode: TargetingMode.LockOn,
+      mode: TargetingMode.CursorPick,
     },
     secondary: {
       name: "Overld", title: "Ion Overload", range: 600,
@@ -111,7 +112,7 @@ export const ITEM_ABILITIES: Record<number, { primary: AbilityInfo; secondary?: 
       name: "Torp", title: "Plasma Torpedo", range: 900,
       desc: "Slow but devastating. Bonus damage vs unshielded.",
       stats: ["Damage: 60 (+30 no shield)", "Range: 900", "Cooldown: 20s"],
-      mode: TargetingMode.LockOn,
+      mode: TargetingMode.CursorPick,
     },
   },
   // PVE v2 weapons (W2 slot)
@@ -126,7 +127,7 @@ export const ITEM_ABILITIES: Record<number, { primary: AbilityInfo; secondary?: 
       name: "Missile", title: "Homing Missile", range: 50,
       desc: "Locks on and chases. Splashes on impact. Requires a target lock.",
       stats: ["Damage: 60", "Splash: 20 in 3u", "Speed: 30/s", "Range: 50", "Cooldown: 8s"],
-      mode: TargetingMode.LockOn,
+      mode: TargetingMode.CursorPick,
       splashRadius: 3,
     },
   },

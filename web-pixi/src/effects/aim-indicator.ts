@@ -2,6 +2,7 @@ import { Container, Graphics } from "pixi.js";
 import { abilityParamsForSlot, TargetingMode } from "../ui/ability-bar";
 import type { GameState } from "../state";
 import { px } from "../view";
+import { EntityType } from "../../sdk";
 
 // Per-slot beam color for the aim preview. Mirrors the HTML ability-bar
 // slot colors so the on-canvas indicator visually matches the key that
@@ -129,6 +130,40 @@ export class AimIndicator {
         this.gfx.circle(tx, ty, splashR).fill({ color: 0xff4422, alpha: 0.25 });
         this.gfx.circle(tx, ty, splashR).stroke({ color: 0xff6644, width: px(2), alpha: 0.85 });
         this.gfx.circle(sx, sy, range).stroke({ color, width: px(1), alpha: 0.25 });
+        break;
+      }
+      case TargetingMode.CursorPick: {
+        // Hover-highlight on the enemy nearest the cursor — feedback for
+        // "this is who you'd hit." Same pick math as the server-side
+        // dispatchCursorPick (within ~5u of aim, within params.Range of ship).
+        let best: { x: number; y: number; radius: number } | null = null;
+        let bestDist2 = 5 * 5; // pickRadius squared
+        for (const ent of state.entities.values()) {
+          if (!ent.current) continue;
+          if (ent.current.entityType !== EntityType.NPC) continue;
+          const ex = ent.renderX;
+          const ey = ent.renderY;
+          // Range from caster.
+          const rx = ex - sx;
+          const ry = ey - sy;
+          if (range > 0 && rx * rx + ry * ry > range * range) continue;
+          // Distance from cursor.
+          const cdx = ex - cx;
+          const cdy = ey - cy;
+          const d2 = cdx * cdx + cdy * cdy;
+          if (d2 < bestDist2) {
+            bestDist2 = d2;
+            const r = (ent.current.radius ?? 6) + px(3);
+            best = { x: ex, y: ey, radius: r };
+          }
+        }
+        // Range ring around ship — always visible during aim.
+        this.gfx.circle(sx, sy, range).stroke({ color, width: px(1), alpha: 0.25 });
+        if (best) {
+          // Soft highlight ring on the picked enemy.
+          this.gfx.circle(best.x, best.y, best.radius).stroke({ color: 0xff5544, width: px(2), alpha: 0.9 });
+          this.gfx.circle(best.x, best.y, best.radius + px(3)).stroke({ color: 0xff5544, width: px(1), alpha: 0.3 });
+        }
         break;
       }
       // Self / LockOn — no aim preview; handleAbilityPress fires those immediately.
