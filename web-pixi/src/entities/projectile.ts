@@ -17,9 +17,9 @@ interface VariantStyle {
 }
 
 const VARIANT_STYLES: Record<number, VariantStyle> = {
-  [PROJECTILE_PLASMA]: { color: 0x44e0ff, trailColor: 0x1488aa, radius: 3 },
-  [PROJECTILE_MISSILE]: { color: 0xff9933, trailColor: 0xaa5511, radius: 4 },
-  [PROJECTILE_MORTAR]: { color: 0xffdd33, trailColor: 0xaa8811, radius: 5 },
+  [PROJECTILE_PLASMA]:  { color: 0x44e0ff, trailColor: 0x1488aa, radius: 6 },
+  [PROJECTILE_MISSILE]: { color: 0xff9933, trailColor: 0xaa5511, radius: 8 },
+  [PROJECTILE_MORTAR]:  { color: 0xffdd33, trailColor: 0xaa8811, radius: 9 },
 };
 
 // createProjectileDisplay renders a server-spawned Projectile entity.
@@ -38,22 +38,26 @@ export function createProjectileDisplay(): EntityDisplayObject {
 
   function redraw(style: VariantStyle) {
     body.clear();
+    // Soft glow halo so the projectile reads as a luminous object
+    // against the dark backdrop rather than a pixel dot. Drawn first so
+    // it sits beneath the solid core.
+    body.circle(0, 0, px(style.radius * 1.8)).fill({ color: style.color, alpha: 0.25 });
     body.circle(0, 0, px(style.radius)).fill({ color: style.color });
     // Bright core highlight to make the projectile pop against dark
     // space — picks up the same hue at higher alpha.
-    body.circle(0, 0, px(style.radius * 0.5)).fill({ color: 0xffffff, alpha: 0.7 });
+    body.circle(0, 0, px(style.radius * 0.5)).fill({ color: 0xffffff, alpha: 0.85 });
 
     trail.clear();
-    // Stubby tail behind the projectile. Rotation is owned by
-    // EntityManager (sets container.rotation from renderRot), so the
-    // tail just points -X in local space.
-    const tailLen = px(style.radius * 4);
-    const tailWidth = px(style.radius * 0.9);
+    // Longer, more visible tail behind the projectile. Rotation is
+    // owned by EntityManager (sets container.rotation from renderRot),
+    // so the tail just points -X in local space.
+    const tailLen = px(style.radius * 8);
+    const tailWidth = px(style.radius * 1.2);
     trail.poly([
       -px(style.radius * 0.5), -tailWidth,
       -tailLen, 0,
       -px(style.radius * 0.5), tailWidth,
-    ]).fill({ color: style.trailColor, alpha: 0.55 });
+    ]).fill({ color: style.trailColor, alpha: 0.7 });
   }
 
   return {

@@ -10,6 +10,7 @@ import { createLootCrateDisplay } from "./loot-crate";
 import { createNpcDisplay } from "./npc";
 import { createPoiDisplay } from "./poi";
 import { createAoEMarkerDisplay } from "./aoe-marker";
+import { createLanceTelegraphDisplay } from "./lance-telegraph";
 import { EntityType } from "../../sdk/index.js";
 
 export class EntityManager {
@@ -85,6 +86,8 @@ export class EntityManager {
         return createAoEMarkerDisplay();
       case EntityType.Projectile:
         return createProjectileDisplay();
+      case EntityType.LanceTelegraph:
+        return createLanceTelegraphDisplay();
     }
     // Unreachable for known SDK entity kinds — fall back to a stub dot.
     return createUnknownEntityDisplay(ENTITY_COLORS[0] || 0xffffff);

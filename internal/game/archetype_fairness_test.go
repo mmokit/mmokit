@@ -9,7 +9,7 @@ import "testing"
 // or interrupt before resolution).
 func TestArchetypeAoEFairness(t *testing.T) {
 	cfg := DefaultGameConfig()
-	for _, arch := range []uint8{ArchetypeBrawler, ArchetypeArtillery, ArchetypeKamikaze} {
+	for _, arch := range []uint8{ArchetypeBrawler, ArchetypeArtillery, ArchetypeLancer} {
 		radius, castTime, fairness := archetypeAoEParams(&cfg, arch)
 		if radius == 0 || castTime == 0 || fairness == FairnessFocusFire {
 			continue

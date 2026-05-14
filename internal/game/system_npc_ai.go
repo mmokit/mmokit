@@ -67,8 +67,12 @@ func (s *NPCAISystem) Update(dt float32) {
 			s.tickEngage(self, ai, pos, vel, rot, lock, now, dt)
 		case AIStateCast:
 			s.tickCast(self, ai, pos, vel, rot, lock, now, dt)
-		case AIStateBeep:
-			s.tickBeep(self, ai, pos, vel, dt)
+		case AIStateLanceWindup:
+			s.tickLanceWindup(self, ai, vel, rot, dt)
+		case AIStateLanceCharge:
+			s.tickLanceCharge(self, ai, pos, vel, rot, lock, dt)
+		case AIStateLanceRecover:
+			s.tickLanceRecover(self, ai, vel, dt)
 		}
 	}
 }
@@ -290,11 +294,33 @@ func (s *NPCAISystem) tickEngage(self mmokit.Entity, ai *gamecomp.NPCAI,
 		}
 	}
 
-	if ai.Archetype == ArchetypeKamikaze && dist <= s.gw.Config.KamikazeDetonateRange {
-		ai.BeepTimeRemaining = s.gw.Config.KamikazeBeepTime
-		ai.State = AIStateBeep
+	// Lancer windup trigger: when in lance range and off cooldown, snapshot
+	// the player's current direction relative to us — that's where we'll
+	// commit the charge after the windup. The player can dodge by moving
+	// perpendicular during the 1s telegraph; sticking to the predicted
+	// line gets you hit. Spawning the telegraph entity is deferred so the
+	// new entity isn't created during the entities.Iter query.
+	if ai.Archetype == ArchetypeLancer && dist <= s.gw.Config.LancerLanceRange && ai.RecoverRemaining <= 0 {
+		chargeDir := float32(math.Atan2(float64(dy), float64(dx)))
+		chargeLen := s.gw.Config.LancerChargeSpeed * s.gw.Config.LancerChargeTime
+		px2, py2 := pos.X, pos.Y
+		halfW := s.gw.Config.LancerChargeWidth
+		windup := s.gw.Config.LancerWindupTime
+		ownerNetID := self.NetID()
+		gw := s.gw
+		aiRef := ai
+		s.Commands().Defer(func() {
+			marker := gw.SpawnLanceTelegraph(px2, py2, chargeDir, chargeLen, halfW, windup, ownerNetID)
+			aiRef.LanceTelegraphNetID = marker.NetID()
+		})
+
+		ai.WindupRemaining = s.gw.Config.LancerWindupTime
+		ai.ChargeDirAngle = chargeDir
+		ai.ChargeHit = false
+		ai.State = AIStateLanceWindup
 		vel.X, vel.Y = 0, 0
-		s.gw.eng.Log.Log(CatNPCAI, "ai: %d Kamikaze BEEP at dist=%.0f", self.NetID(), dist)
+		s.gw.eng.Log.Log(CatNPCAI, "ai: %d Lancer WINDUP toward %.2f rad (dist=%.0f)",
+			self.NetID(), chargeDir, dist)
 		return
 	}
 
@@ -325,7 +351,8 @@ func (s *NPCAISystem) tickEngage(self mmokit.Entity, ai *gamecomp.NPCAI,
 // npcAbilityTypeFor maps an NPC archetype to an existing player-side
 // ability type so the shared VFX dispatcher in ability-effects.ts
 // renders a sensible visual. Brawler is the only archetype that fires
-// hitscan in v2 — Artillery uses AoE markers, Kamikaze detonates.
+// hitscan in v2 — Artillery uses AoE markers, Lancer applies contact
+// damage during its dash.
 func npcAbilityTypeFor(archetype uint8) uint8 {
 	return uint8(item.AbilityTypePulseLaser)
 }
@@ -372,32 +399,85 @@ func (s *NPCAISystem) tickCast(self mmokit.Entity, ai *gamecomp.NPCAI,
 	}
 }
 
-// tickBeep drives a Kamikaze NPC during its detonation telegraph. The NPC
-// is stationary; when the timer elapses, an instant AoE marker is spawned
-// at the current position and the Kamikaze despawns. Death during the
-// beep window cancels the detonation entirely (no marker spawned).
-func (s *NPCAISystem) tickBeep(self mmokit.Entity, ai *gamecomp.NPCAI,
-	pos *mmokit.Position, vel *mmokit.Velocity, dt float32,
+// tickLanceWindup holds the Lancer stationary while its line-shaped
+// telegraph is visible. The NPC faces the committed charge direction;
+// when the windup timer elapses, the telegraph entity is despawned (its
+// Lifetime would also expire this tick, but cleaning up early avoids a
+// 1-tick visual overlap with the charge dash) and the NPC transitions
+// to LanceCharge.
+func (s *NPCAISystem) tickLanceWindup(self mmokit.Entity, ai *gamecomp.NPCAI,
+	vel *mmokit.Velocity, rot *mmokit.Rotation, dt float32,
 ) {
 	vel.X, vel.Y = 0, 0
-	ai.BeepTimeRemaining -= dt
-	if ai.BeepTimeRemaining > 0 {
+	rot.Angle = ai.ChargeDirAngle // hold the visual heading
+	ai.WindupRemaining -= dt
+	if ai.WindupRemaining > 0 {
 		return
 	}
-	// Detonate: spawn instant AoE marker at current position, despawn self.
-	// Inside a query iteration → use Commands().Defer to avoid locked-world panic.
-	px, py := pos.X, pos.Y
-	radius := s.gw.Config.KamikazeAoERadius
-	damage := s.gw.Config.KamikazeAoEDamage
-	ownerNetID := self.NetID()
-	handle := self.Handle()
-	gw := s.gw
-	s.Commands().Defer(func() {
-		gw.SpawnAoEMarker(px, py, 0, radius, damage, ownerNetID, FactionMaskAll)
-	})
-	s.Commands().Despawn(handle)
-	s.gw.eng.Log.Log(CatNPCAI, "ai: %d Kamikaze DETONATE at (%.0f,%.0f)",
-		self.NetID(), pos.X, pos.Y)
+	if ai.LanceTelegraphNetID != 0 {
+		marker := mmokit.EntityByNetID(s.gw.stage, ai.LanceTelegraphNetID)
+		if marker.Alive() {
+			s.Commands().Despawn(marker.Handle())
+		}
+		ai.LanceTelegraphNetID = 0
+	}
+	ai.ChargeRemaining = s.gw.Config.LancerChargeTime
+	ai.State = AIStateLanceCharge
+	s.gw.eng.Log.Log(CatNPCAI, "ai: %d Lancer CHARGE", self.NetID())
+}
+
+// tickLanceCharge sprints the Lancer in the committed charge direction.
+// Any locked target within ChargeWidth of the lancer's current position
+// takes ChargeDamage once per charge (ChargeHit gate). On charge end,
+// the lancer enters LanceRecover (vulnerable cooldown window).
+func (s *NPCAISystem) tickLanceCharge(self mmokit.Entity, ai *gamecomp.NPCAI,
+	pos *mmokit.Position, vel *mmokit.Velocity, rot *mmokit.Rotation,
+	lock *gamecomp.TargetLock, dt float32,
+) {
+	ux := float32(math.Cos(float64(ai.ChargeDirAngle)))
+	uy := float32(math.Sin(float64(ai.ChargeDirAngle)))
+	vel.X = ux * s.gw.Config.LancerChargeSpeed
+	vel.Y = uy * s.gw.Config.LancerChargeSpeed
+	rot.Angle = ai.ChargeDirAngle
+
+	if !ai.ChargeHit && lock.ActiveNetID != 0 {
+		target := mmokit.EntityByNetID(s.gw.stage, lock.ActiveNetID)
+		if target.Alive() {
+			tpos := mmokit.Get[mmokit.Position](target)
+			if tpos != nil {
+				ddx, ddy := tpos.X-pos.X, tpos.Y-pos.Y
+				hitR := s.gw.Config.LancerChargeWidth
+				if ddx*ddx+ddy*ddy <= hitR*hitR {
+					s.gw.Damage(self, target, s.gw.Config.LancerChargeDamage, 0, 0, npcAbilityTypeFor(ai.Archetype))
+					ai.ChargeHit = true
+					s.gw.eng.Log.Log(CatNPCAI, "ai: %d Lancer HIT target=%d dmg=%.0f",
+						self.NetID(), target.NetID(), s.gw.Config.LancerChargeDamage)
+				}
+			}
+		}
+	}
+
+	ai.ChargeRemaining -= dt
+	if ai.ChargeRemaining > 0 {
+		return
+	}
+	ai.RecoverRemaining = s.gw.Config.LancerRecoverTime
+	ai.State = AIStateLanceRecover
+	vel.X, vel.Y = 0, 0
+}
+
+// tickLanceRecover holds the Lancer stationary during its post-charge
+// cooldown. The window is the player's punish opportunity. On expiry the
+// lancer returns to Engage so it can re-acquire range and wind up again.
+func (s *NPCAISystem) tickLanceRecover(self mmokit.Entity, ai *gamecomp.NPCAI,
+	vel *mmokit.Velocity, dt float32,
+) {
+	vel.X, vel.Y = 0, 0
+	ai.RecoverRemaining -= dt
+	if ai.RecoverRemaining <= 0 {
+		ai.State = AIStateEngage
+		s.gw.eng.Log.Log(CatNPCAI, "ai: %d Lancer RECOVER → Engage", self.NetID())
+	}
 }
 
 func (s *NPCAISystem) applyMotion(ai *gamecomp.NPCAI, vel *mmokit.Velocity,
@@ -412,8 +492,8 @@ func (s *NPCAISystem) applyMotion(ai *gamecomp.NPCAI, vel *mmokit.Velocity,
 	case MotionCharge:
 		// Charge until within preferred firing distance; stop there so the
 		// NPC doesn't physically overlap the player and oscillate at sub-tick
-		// distances. Kamikaze sets PreferredRange == DetonateRange so it
-		// charges right up to the beep trigger — that still works.
+		// distances. Lancer sets PreferredRange == LanceRange so it charges
+		// right up to the windup trigger — that still works.
 		if dist > ai.PreferredRange {
 			vel.X, vel.Y = ux*ai.MaxSpeed, uy*ai.MaxSpeed
 		} else {

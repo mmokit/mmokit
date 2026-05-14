@@ -14,7 +14,7 @@ import (
 // The test wires NPCAISystem + PhysicsSystem (mirroring production
 // ordering) and ticks ~5 game-seconds so we catch panics in any of the
 // new archetype state branches (Brawler hitscan, Artillery cast,
-// Kamikaze beep).
+// Lancer windup/charge/recover).
 func TestStarterArenaEncounter(t *testing.T) {
 	gw, _ := newTestGameWorld()
 	ai, phys := newWiredNPCAISystem(t, gw)
@@ -26,7 +26,7 @@ func TestStarterArenaEncounter(t *testing.T) {
 	const cx, cy float32 = 1000, 1000
 	gw.spawnPOIRoster(cx, cy, /*poiNetID*/ 1, /*rosterIdx*/ 0)
 
-	// Expected count from rosters[0]: 1 Artillery + 2 Brawler + 3 Kamikaze = 6.
+	// Expected count from rosters[0]: 1 Artillery + 2 Brawler + 3 Lancer = 6.
 	var npcCount int
 	mmokit.ForEach1(gw.stage, func(_ mmokit.Entity, _ *gamecomp.NPCAI) {
 		npcCount++
@@ -59,7 +59,7 @@ func TestStarterArenaRosterShape(t *testing.T) {
 	want := map[uint8]int{
 		ArchetypeArtillery: 1,
 		ArchetypeBrawler:   2,
-		ArchetypeKamikaze:  3,
+		ArchetypeLancer:    3,
 	}
 	for arch, n := range want {
 		if got := counts[arch]; got != n {

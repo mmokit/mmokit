@@ -6,10 +6,11 @@ import { px } from "../view";
 
 // NPCAI.Archetype values — must match internal/game ArchetypeXxx consts.
 // PVE v2: Sniper/Swarmer were replaced by Artillery/Kamikaze at the same
-// wire values (1, 2).
+// wire values (1, 2). Kamikaze was then replaced by Lancer (telegraphed
+// line-charge) at the same value (2).
 const ARCH_BRAWLER = 0;
 const ARCH_ARTILLERY = 1;
-const ARCH_KAMIKAZE = 2;
+const ARCH_LANCER = 2;
 
 // NPCAI.State values — must match internal/game AIState* consts. We
 // only care about Leashed (returning to leash anchor) for visual fade.
@@ -24,7 +25,7 @@ interface ArchetypeStyle {
 const ARCHETYPES: Record<number, ArchetypeStyle> = {
   [ARCH_BRAWLER]:   { color: 0xff4444, scale: 1.2, label: "BRAWLER" },
   [ARCH_ARTILLERY]: { color: 0xcc66ff, scale: 1.3, label: "ARTILLERY" },
-  [ARCH_KAMIKAZE]:  { color: 0xffaa22, scale: 0.7, label: "KAMIKAZE" },
+  [ARCH_LANCER]:    { color: 0xffaa22, scale: 1.0, label: "LANCER" },
 };
 
 const DEFAULT_ARCH: ArchetypeStyle = { color: 0xff4444, scale: 1.0, label: "NPC" };

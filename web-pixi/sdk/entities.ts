@@ -218,7 +218,32 @@ export interface ProjectileEntity {
   type: number;
 }
 
-export type AnyEntity = ShipEntity | AsteroidEntity | StationEntity | LootCrateEntity | NPCEntity | POIEntity | AoEMarkerEntity | ProjectileEntity;
+/** Entity kind 8. */
+export interface LanceTelegraphEntity {
+  netID: number;
+  entityType: 8;
+  /**
+   * Cluster-clock stamp (Unix ms) from the authoritative producer at
+   * the moment this state was emitted. Preserves the producer's
+   * timeline through any relay hops. Used as the per-entity time-base
+   * for snapshot interpolation.
+   */
+  producedAtMs: number;
+  worldX: number;
+  worldY: number;
+  velX: number;
+  velY: number;
+  radius: number;
+  width: number;
+  height: number;
+  remaining: number;
+  length: number;
+  halfWidth: number;
+  ownerNetID: number;
+  angle: number;
+}
+
+export type AnyEntity = ShipEntity | AsteroidEntity | StationEntity | LootCrateEntity | NPCEntity | POIEntity | AoEMarkerEntity | ProjectileEntity | LanceTelegraphEntity;
 
 export interface DeltaWorldUpdate {
   tick: number;

@@ -2,21 +2,30 @@ package game
 
 // NPCArchetype enumerates the v2 enemy archetypes. Values are wire-stable
 // (replicated via NPCAI.Archetype) — append new variants at the end.
+// Slot 2 originally held Kamikaze ("charge + beep + detonate"); replaced
+// with Lancer (telegraphed line-charge) at the same wire value.
 const (
 	ArchetypeBrawler   uint8 = 0
 	ArchetypeArtillery uint8 = 1
-	ArchetypeKamikaze  uint8 = 2
+	ArchetypeLancer    uint8 = 2
 )
 
 // NPCAIState — current state-machine slot for an NPC.
+//
+// AIStateBeep (5) is no longer used after Kamikaze was replaced by Lancer
+// but the constant is kept at its wire value to avoid renumbering. The
+// Lancer states (Windup / Charge / Recover) appended at 7/8/9.
 const (
-	AIStateIdle     uint8 = 0
-	AIStateAcquire  uint8 = 1
-	AIStateEngage   uint8 = 2
-	AIStateLeash    uint8 = 3
-	AIStateCast     uint8 = 4 // PVE v2: Artillery casting an AoE
-	AIStateBeep     uint8 = 5 // PVE v2: Kamikaze charging detonation
-	AIStateApproach uint8 = 6 // PVE v2: alerted, moving toward target before lock
+	AIStateIdle         uint8 = 0
+	AIStateAcquire      uint8 = 1
+	AIStateEngage       uint8 = 2
+	AIStateLeash        uint8 = 3
+	AIStateCast         uint8 = 4 // PVE v2: Artillery casting an AoE
+	AIStateBeep         uint8 = 5 // unused (was Kamikaze detonation telegraph)
+	AIStateApproach     uint8 = 6 // PVE v2: alerted, moving toward target before lock
+	AIStateLanceWindup  uint8 = 7 // PVE v2: Lancer holding telegraph
+	AIStateLanceCharge  uint8 = 8 // PVE v2: Lancer dashing through committed line
+	AIStateLanceRecover uint8 = 9 // PVE v2: Lancer cooldown after charge
 )
 
 // MotionPolicy — how an NPC moves while in Engage. Applied per-archetype.
@@ -75,18 +84,18 @@ func archetypeDefaults(cfg *GameConfig, kind uint8) ArchetypeDefaults {
 			DamagePerShot:  0,
 			FireRate:       0,
 		}
-	case ArchetypeKamikaze:
+	case ArchetypeLancer:
 		return ArchetypeDefaults{
-			HP:             cfg.KamikazeHP,
-			Shield:         cfg.KamikazeShield,
-			MaxSpeed:       cfg.KamikazeMaxSpeed,
-			TurnRate:       cfg.KamikazeTurnRate,
-			PreferredRange: cfg.KamikazeDetonateRange,
-			WeaponRange:    cfg.KamikazeDetonateRange,
-			AggroRadius:    cfg.KamikazeAggroRadius,
-			LockRange:      30, // ~half of aggro — approach before locking
+			HP:             cfg.LancerHP,
+			Shield:         cfg.LancerShield,
+			MaxSpeed:       cfg.LancerMaxSpeed,
+			TurnRate:       cfg.LancerTurnRate,
+			PreferredRange: cfg.LancerLanceRange, // close-in stalker
+			WeaponRange:    cfg.LancerLanceRange,
+			AggroRadius:    cfg.LancerAggroRadius,
+			LockRange:      cfg.LancerLockRange,
 			MotionPolicy:   MotionCharge,
-			DamagePerShot:  0, // damage via AoE on detonation
+			DamagePerShot:  0, // damage applied during charge tick
 			FireRate:       0,
 		}
 	}
@@ -114,8 +123,12 @@ func archetypeAoEParams(cfg *GameConfig, arch uint8) (radius, castTime float32, 
 	switch arch {
 	case ArchetypeArtillery:
 		return cfg.ArtilleryAoERadius, cfg.ArtilleryCastTime, FairnessEffort
-	case ArchetypeKamikaze:
-		return cfg.KamikazeAoERadius, cfg.KamikazeBeepTime, FairnessFocusFire
+	case ArchetypeLancer:
+		// Lancer is a line-charge, not a circular AoE. Counter-play is
+		// to sidestep the telegraphed line or punish the recovery, not
+		// "stand outside this circle." FocusFire instructs the fairness
+		// test to skip the spatial-dodge check for this archetype.
+		return 0, 0, FairnessFocusFire
 	}
 	return 0, 0, FairnessStrict
 }

@@ -13,6 +13,7 @@ export const EntityType = {
     POI: 5,
     AoEMarker: 6,
     Projectile: 7,
+    LanceTelegraph: 8,
 } as const;
 
 export type EntityTypeValue = typeof EntityType[keyof typeof EntityType];

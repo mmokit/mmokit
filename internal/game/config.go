@@ -17,7 +17,7 @@ import (
 // ConfigVersion tracks breaking config changes. Bump this when defaults change
 // in a way that is incompatible with saved configs (e.g. unit rescale).
 // When the saved version doesn't match, defaults are used and re-saved.
-const ConfigVersion = 5
+const ConfigVersion = 6
 
 // GameConfig holds all tunable game parameters.
 type GameConfig struct {
@@ -73,15 +73,19 @@ type GameConfig struct {
 	ArtilleryCastCooldown    float32 `json:"artillery_cast_cooldown"`
 	ArtilleryInterruptDamage float32 `json:"artillery_interrupt_damage"`
 
-	KamikazeHP            float32 `json:"kamikaze_hp"`
-	KamikazeShield        float32 `json:"kamikaze_shield"`
-	KamikazeMaxSpeed      float32 `json:"kamikaze_max_speed"`
-	KamikazeTurnRate      float32 `json:"kamikaze_turn_rate"`
-	KamikazeAggroRadius   float32 `json:"kamikaze_aggro_radius"`
-	KamikazeDetonateRange float32 `json:"kamikaze_detonate_range"`
-	KamikazeBeepTime      float32 `json:"kamikaze_beep_time"`
-	KamikazeAoERadius     float32 `json:"kamikaze_aoe_radius"`
-	KamikazeAoEDamage     float32 `json:"kamikaze_aoe_damage"`
+	LancerHP           float32 `json:"lancer_hp"`
+	LancerShield       float32 `json:"lancer_shield"`
+	LancerMaxSpeed     float32 `json:"lancer_max_speed"`
+	LancerTurnRate     float32 `json:"lancer_turn_rate"`
+	LancerAggroRadius  float32 `json:"lancer_aggro_radius"`
+	LancerLockRange    float32 `json:"lancer_lock_range"`
+	LancerLanceRange   float32 `json:"lancer_lance_range"`
+	LancerWindupTime   float32 `json:"lancer_windup_time"`
+	LancerChargeSpeed  float32 `json:"lancer_charge_speed"`
+	LancerChargeTime   float32 `json:"lancer_charge_time"`
+	LancerChargeWidth  float32 `json:"lancer_charge_width"`
+	LancerChargeDamage float32 `json:"lancer_charge_damage"`
+	LancerRecoverTime  float32 `json:"lancer_recover_time"`
 
 	// AI shared
 	AggroDeescalationSec float32 `json:"aggro_deescalation_sec"`
@@ -179,12 +183,17 @@ func DefaultGameConfig() GameConfig {
 
 		ArtilleryHP: 250, ArtilleryShield: 150, ArtilleryMaxSpeed: 4, ArtilleryTurnRate: 1.5,
 		ArtilleryWeaponRange: 70, ArtilleryAggroRadius: 80,
-		ArtilleryAoERadius: 5, ArtilleryAoEDamage: 50,
+		ArtilleryAoERadius: 12, ArtilleryAoEDamage: 50,
 		ArtilleryCastTime: 3.5, ArtilleryCastCooldown: 3.0, ArtilleryInterruptDamage: 25,
 
-		KamikazeHP: 60, KamikazeShield: 0, KamikazeMaxSpeed: 16, KamikazeTurnRate: 3.0,
-		KamikazeAggroRadius: 60, KamikazeDetonateRange: 4, KamikazeBeepTime: 0.5,
-		KamikazeAoERadius: 6, KamikazeAoEDamage: 40,
+		// Lancer — telegraphed charge: stalk to mid range, freeze 1s with a
+		// visible line telegraph, then dash through fast. Heavy damage on
+		// contact. Counter-play is sidestep during telegraph + punish
+		// during the 1.5s recovery window.
+		LancerHP: 120, LancerShield: 50, LancerMaxSpeed: 14, LancerTurnRate: 2.5,
+		LancerAggroRadius: 60, LancerLockRange: 40, LancerLanceRange: 30,
+		LancerWindupTime: 1.0, LancerChargeSpeed: 50, LancerChargeTime: 0.8,
+		LancerChargeWidth: 3, LancerChargeDamage: 35, LancerRecoverTime: 1.5,
 
 		AggroDeescalationSec: 6,
 

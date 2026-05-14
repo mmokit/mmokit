@@ -17,14 +17,15 @@ const (
 // matching TypeScript const block from the same kind registry, so the
 // authoritative source of truth is the RegisterKind call sites.
 const (
-	KindShip       uint8 = iota // 0
-	KindAsteroid                // 1
-	KindStation                 // 2
-	KindLootCrate               // 3
-	KindNPC                     // 4
-	KindPOI                     // 5
-	KindAoEMarker               // 6
-	KindProjectile              // 7
+	KindShip           uint8 = iota // 0
+	KindAsteroid                    // 1
+	KindStation                     // 2
+	KindLootCrate                   // 3
+	KindNPC                         // 4
+	KindPOI                         // 5
+	KindAoEMarker                   // 6
+	KindProjectile                  // 7
+	KindLanceTelegraph              // 8
 )
 
 // Health represents hit points.
@@ -395,9 +396,17 @@ type NPCAI struct {
 	CastingMarkerNetID uint32
 	CastCooldown       float32
 
-	// PVE v2: Kamikaze beep state. >0 = beeping; on reaching 0 the kamikaze
-	// spawns its detonate AoEMarker and despawns itself.
-	BeepTimeRemaining float32
+	// PVE v2: Lancer windup + charge tracking. WindupRemaining > 0 means a
+	// telegraph is in flight at LanceTelegraphNetID; ChargeRemaining > 0
+	// means the lancer is actively dashing in ChargeDirAngle direction.
+	// RecoverRemaining > 0 means the lancer just finished a charge and is
+	// vulnerable. ChargeHit ensures one-shot-per-charge damage application.
+	WindupRemaining     float32
+	ChargeRemaining     float32
+	RecoverRemaining    float32
+	ChargeDirAngle      float32 // radians; locked at windup-end
+	LanceTelegraphNetID uint32
+	ChargeHit           bool
 }
 
 // POIAnchor links an NPC back to its owning POI for leash + roster

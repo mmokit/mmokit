@@ -8,7 +8,7 @@ import {
   applyDelta, BaselineStore,
   decodeLengthPrefixedStringU8,
 } from "./_core/delta-decoder-core.js";
-import type { ShipEntity, ShipStatusEffectsItem, AsteroidEntity, StationEntity, LootCrateEntity, LootCrateItemsItem, NPCEntity, NPCStatusEffectsItem, POIEntity, AoEMarkerEntity, ProjectileEntity, AnyEntity, DeltaWorldUpdate } from "./entities.js";
+import type { ShipEntity, ShipStatusEffectsItem, AsteroidEntity, StationEntity, LootCrateEntity, LootCrateItemsItem, NPCEntity, NPCStatusEffectsItem, POIEntity, AoEMarkerEntity, ProjectileEntity, LanceTelegraphEntity, AnyEntity, DeltaWorldUpdate } from "./entities.js";
 
 const SHIPENTITY_FIELD_SIZES = [4, 4, 2, 2, 2, 2, 2, 4, 4, 4, 4, 4, 1, 1, 1, 4, 2];
 const SHIPENTITY_HAS_VAR_TAIL = true;
@@ -191,6 +191,26 @@ function decodeProjectileEntitySnapshot(snap: Uint8Array, initial: Uint8Array | 
   return { netID: 0, producedAtMs: 0, entityType: 7, worldX, worldY, velX, velY, radius, width, height, remaining, ownerNetID, targetNetID, damage, splashRadius, splashDamage, maxTurnRate, type };
 }
 
+const LANCETELEGRAPHENTITY_FIELD_SIZES = [4, 4, 2, 2, 2, 2, 2, 4, 4, 4, 4, 2];
+const LANCETELEGRAPHENTITY_HAS_VAR_TAIL = false;
+
+function decodeLanceTelegraphEntitySnapshot(snap: Uint8Array, initial: Uint8Array | null, existing?: LanceTelegraphEntity): LanceTelegraphEntity {
+  let o = 0;
+  const worldX = readFloat32(snap, o); o += 4;
+  const worldY = readFloat32(snap, o); o += 4;
+  const velX = unVel(readInt16(snap, o), 2000); o += 2;
+  const velY = unVel(readInt16(snap, o), 2000); o += 2;
+  const radius = unVel(readInt16(snap, o), 500); o += 2;
+  const width = unVel(readInt16(snap, o), 500); o += 2;
+  const height = unVel(readInt16(snap, o), 500); o += 2;
+  const remaining = readFloat32(snap, o); o += 4;
+  const length = readFloat32(snap, o); o += 4;
+  const halfWidth = readFloat32(snap, o); o += 4;
+  const ownerNetID = readUint32(snap, o); o += 4;
+  const angle = unAngle(readUint16(snap, o)); o += 2;
+  return { netID: 0, producedAtMs: 0, entityType: 8, worldX, worldY, velX, velY, radius, width, height, remaining, length, halfWidth, ownerNetID, angle };
+}
+
 export class SpaceDeltaDecoder {
   private baselines = new BaselineStore<{ type: number; lastEntity?: AnyEntity }>();
 
@@ -252,6 +272,7 @@ export class SpaceDeltaDecoder {
       case 5: { const prev = existing && existing.entityType === 5 ? existing : undefined; const e = decodePOIEntitySnapshot(snap, initial, prev); e.netID = netID; e.producedAtMs = producedAtMs; return e; }
       case 6: { const prev = existing && existing.entityType === 6 ? existing : undefined; const e = decodeAoEMarkerEntitySnapshot(snap, initial, prev); e.netID = netID; e.producedAtMs = producedAtMs; return e; }
       case 7: { const prev = existing && existing.entityType === 7 ? existing : undefined; const e = decodeProjectileEntitySnapshot(snap, initial, prev); e.netID = netID; e.producedAtMs = producedAtMs; return e; }
+      case 8: { const prev = existing && existing.entityType === 8 ? existing : undefined; const e = decodeLanceTelegraphEntitySnapshot(snap, initial, prev); e.netID = netID; e.producedAtMs = producedAtMs; return e; }
       default: return null;
     }
   }
@@ -266,6 +287,7 @@ export class SpaceDeltaDecoder {
       case 5: return POIENTITY_FIELD_SIZES;
       case 6: return AOEMARKERENTITY_FIELD_SIZES;
       case 7: return PROJECTILEENTITY_FIELD_SIZES;
+      case 8: return LANCETELEGRAPHENTITY_FIELD_SIZES;
       default: return [];
     }
   }
@@ -280,6 +302,7 @@ export class SpaceDeltaDecoder {
       case 5: return POIENTITY_HAS_VAR_TAIL;
       case 6: return AOEMARKERENTITY_HAS_VAR_TAIL;
       case 7: return PROJECTILEENTITY_HAS_VAR_TAIL;
+      case 8: return LANCETELEGRAPHENTITY_HAS_VAR_TAIL;
       default: return false;
     }
   }
