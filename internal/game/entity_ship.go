@@ -89,6 +89,15 @@ func (gw *GameWorld) SpawnPlayer(s *mmokit.PlayerSession) {
 			Shield:   item.StarterShield,
 			Thruster: item.StarterThruster,
 		}
+		// PVE v2: seed new-player cargo with the two new weapon items so
+		// players can swap them in from inventory and exercise the new
+		// AbilityTypes (PlasmaShot, HomingMissile, SustainedBeam, MortarShell)
+		// without any setup. Drop when starter-kit selection lands.
+		if savedCargo == nil {
+			savedCargo = make(map[uint32]int32, 2)
+		}
+		savedCargo[item.PlasmaCannon] = 1
+		savedCargo[item.BeamMortarBattery] = 1
 	}
 
 	br := boundingRadius(gw.Config.ShipWidth, gw.Config.ShipHeight)

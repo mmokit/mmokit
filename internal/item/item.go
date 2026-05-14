@@ -136,6 +136,10 @@ const (
 	StarterMiningLaser uint32 = 130 // Mining Laser (Weapon2 slot for new players)
 	StarterShield      uint32 = 110 // Standard Shield Gen
 	StarterThruster    uint32 = 120 // Standard Thruster
+
+	// PVE v2 weapons — seeded in new-player cargo for easy testing.
+	PlasmaCannon      uint32 = 107 // PlasmaShot primary + HomingMissile secondary
+	BeamMortarBattery uint32 = 108 // SustainedBeam primary + MortarShell secondary
 )
 
 // ItemDef defines a type of item in the game.
