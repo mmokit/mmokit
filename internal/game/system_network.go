@@ -5,34 +5,12 @@ import (
 	"github.com/zenion/mmoserver/pkg/mmokit"
 )
 
-// highestProgressSlot returns (targetNetID, progress) for the slot with
-// the highest progress. Locked slots (Progress=1) win over partial
-// progress; if no slots exist, returns (0, 0).
-func highestProgressSlot(lock *gamecomp.TargetLock) (uint32, float32) {
-	var bestNetID uint32
-	var bestProg float32
-	for _, s := range lock.Slots {
-		if s.Progress > bestProg {
-			bestProg = s.Progress
-			bestNetID = s.TargetNetID
-		}
-	}
-	return bestNetID, bestProg
-}
-
 // NetworkSystem wraps the generic ReplicationSystem with game-specific
-// lifecycle handling (reverse lock map, PlayerOwnState, auto-broadcast
-// typed events).
+// lifecycle handling (PlayerOwnState, auto-broadcast typed events).
 type NetworkSystem struct {
 	mmokit.SystemBase
 	gw       *GameWorld
 	replSys *mmokit.ReplicationSystem
-	ctx     *gameNetContext
-
-	locks mmokit.Query[struct {
-		Lock  *gamecomp.TargetLock
-		NetID *mmokit.NetworkID
-	}]
 
 	lockVictims mmokit.Query[struct {
 		LB *gamecomp.LockedBy
@@ -46,11 +24,6 @@ func (s *NetworkSystem) Init() {
 	s.gw = mmokit.State[GameWorld](s.Stage())
 	gw := s.gw
 
-	s.ctx = &gameNetContext{
-		lockedBy: make(map[mmokit.EntityHandle]lockerInfo),
-	}
-
-	s.locks.With(mmokit.IncludeAll())
 	s.lockVictims.With(mmokit.IncludeAll())
 
 	// Build replicators from EntityKindDefs (auto-discovery).
@@ -93,56 +66,18 @@ func (s *NetworkSystem) Update(dt float32) {
 	s.replSys.Update(dt)
 }
 
-// beforeTick builds the reverse lock map, syncs the LockedBy component on all
-// lockable entities, and hoists per-tick lookups.
+// beforeTick zeros LockedBy on every lockable entity (the selection-model
+// rewrite removed the producer side; the field stays on the wire so clients
+// don't see stale state) and drains the per-stage auto-broadcast queue.
 func (s *NetworkSystem) beforeTick(tick uint32) {
 	gw := s.gw
 
-	// Build reverse lock map: for each entity being locked, track the most-
-	// progressed locker. Resolve via TargetNetID (not the locker's TargetEntity)
-	// — the cross-cell codec skips ecs.Entity fields, so on a border replica of
-	// the locker that handle is zero. NetID lookup gives the local entity in
-	// either case, which is what lets LockedBy populate over a cell line.
-	//
-	// With slot-based locks, walk every slot on every locker: each slot is an
-	// independent (locker → target) edge. A locker with N slots contributes N
-	// entries; per-target dedup keeps the highest-progress slot.
-	clear(s.ctx.lockedBy)
-	for _, b := range s.locks.Iter {
-		for _, slot := range b.Lock.Slots {
-			if slot.TargetNetID == 0 || slot.Progress <= 0 {
-				continue
-			}
-			targetE := mmokit.EntityByNetID(gw.stage, slot.TargetNetID)
-			if !targetE.Alive() {
-				continue
-			}
-			target := targetE.Handle()
-			if existing, ok := s.ctx.lockedBy[target]; !ok || slot.Progress > existing.progress {
-				s.ctx.lockedBy[target] = lockerInfo{netID: b.NetID.ID, progress: slot.Progress}
-			}
-		}
-	}
-
-	// Sync LockedBy component on every lockable entity. Zero first, then
-	// populate from the reverse map. Entities with LockedBy that aren't in
-	// the map get zeroed out — the client reads LockerNetID==0 as "not locked".
-	// Log only on locker transitions to avoid per-tick spam.
-	for e, b := range s.lockVictims.Iter {
-		if info, ok := s.ctx.lockedBy[e]; ok {
-			if b.LB.LockerNetID != info.netID {
-				gw.eng.Log.Log(CatCombatLock, "lockedBy acquired: locker=%d progress=%.2f",
-					info.netID, info.progress)
-			}
-			b.LB.LockerNetID = info.netID
-			b.LB.LockerProgress = info.progress
-		} else {
-			if b.LB.LockerNetID != 0 {
-				gw.eng.Log.Log(CatCombatLock, "lockedBy released: prev_locker=%d", b.LB.LockerNetID)
-			}
-			b.LB.LockerNetID = 0
-			b.LB.LockerProgress = 0
-		}
+	// LockedBy has no producer post-TargetLock removal — always-zero. Keep
+	// the iteration so any stale value on a freshly-transferred entity is
+	// cleared promptly.
+	for _, b := range s.lockVictims.Iter {
+		b.LB.LockerNetID = 0
+		b.LB.LockerProgress = 0
 	}
 
 	// Drain the per-stage auto-broadcast queue: each event carries an opaque
@@ -207,15 +142,6 @@ func (s *NetworkSystem) sendOwnState(connID uint32, entity mmokit.EntityHandle) 
 
 	msg := &PlayerOwnState{}
 
-	// Lock-on state — surface the highest-progress slot. Preserves the
-	// single-target wire semantics that PlayerOwnState's HUD ring expects
-	// even though the underlying lock model is now multi-slot.
-	if lock := mmokit.Get[gamecomp.TargetLock](e); lock != nil {
-		netID, prog := highestProgressSlot(lock)
-		msg.LockProgress = prog
-		msg.LockTargetID = netID
-	}
-
 	// Ability cooldowns
 	if abilities := mmokit.Get[gamecomp.AbilitySet](e); abilities != nil {
 		for slot := uint32(0); slot < uint32(6); slot++ {
@@ -252,12 +178,6 @@ func (s *NetworkSystem) sendOwnState(connID uint32, entity mmokit.EntityHandle) 
 		}
 		msg.CargoMass = inv.TotalMass()
 		msg.MaxCargoMass = inv.MaxMass
-	}
-
-	// Being-locked state from reverse map
-	if lb, ok := s.ctx.lockedBy[entity]; ok {
-		msg.BeingLockedByID = lb.netID
-		msg.BeingLockedByProgress = lb.progress
 	}
 
 	mmokit.SendEvent(gw.stage, connID, msg)

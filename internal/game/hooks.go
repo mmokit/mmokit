@@ -29,8 +29,8 @@ func (gw *GameWorld) Hooks() mmokit.Hooks {
 // post-construction phase that fires for cell states.
 //
 // Without this, gw.FinishTransferSpawn never runs on real cross-cell
-// handoffs and config-only fields on `mmokit:"local"` components (e.g.
-// TargetLock.MaxSlots, TargetLock.Range) stay zero after every transfer.
+// handoffs and config-only fields on `mmokit:"local"` components stay
+// zero after every transfer.
 func (gw *GameWorld) wireStageCallbacks() {
 	gw.stage.SetOnTransferReceived(func(entity mmokit.EntityHandle, frame *mmokit.TransferFrame) {
 		gw.FinishTransferSpawn(entity, frame)

@@ -8,27 +8,8 @@ import (
 	"github.com/zenion/mmoserver/pkg/mmokit"
 )
 
-// activeLockTarget returns the active slot's resolved entity if the
-// active slot is locked and the target is alive, else (zero, false).
-func activeLockTarget(gw *GameWorld, lock *gamecomp.TargetLock) (mmokit.Entity, bool) {
-	if lock == nil || lock.ActiveNetID == 0 {
-		return mmokit.Entity{}, false
-	}
-	for _, s := range lock.Slots {
-		if s.TargetNetID == lock.ActiveNetID && s.Locked {
-			e := mmokit.EntityByNetID(gw.stage, s.TargetNetID)
-			if e.Alive() {
-				return e, true
-			}
-			return mmokit.Entity{}, false
-		}
-	}
-	return mmokit.Entity{}, false
-}
-
 type abilityBundle struct {
 	Input     *gamecomp.PlayerInput
-	Lock      *gamecomp.TargetLock
 	Abilities *gamecomp.AbilitySet
 	Equip     *gamecomp.Equipment
 }
@@ -204,46 +185,26 @@ func (s *AbilitySystem) executeAbility(action abilityAction) bool {
 		return s.dispatchCursorPick(action, casterE)
 	}
 
-	// TargetingSelf and TargetingLockOn fall through to the existing
-	// per-Type dispatch — these abilities have bespoke handlers (shield
-	// buffs, thruster effects, mining beam toggle, lock-on hitscan) that
-	// are too varied for a generic dispatch.
+	// TargetingSelf falls through to the existing per-Type dispatch —
+	// these abilities have bespoke handlers (shield buffs, thruster
+	// effects, mining beam toggle) that are too varied for a generic
+	// dispatch. TargetingLockOn is now an alias for selection-based
+	// hitscan in the lock-on gate above; the dispatchByType lock-on
+	// hitscan cases were retired with the TargetLock tear-out.
 	return s.dispatchByType(action, casterE)
 }
 
-// dispatchByType handles TargetingSelf and TargetingLockOn abilities via
-// a per-AbilityType switch. Skillshot modes are routed elsewhere by
-// executeAbility before reaching this function.
+// dispatchByType handles TargetingSelf abilities (and the mining-beam
+// toggle) via a per-AbilityType switch. Skillshot + CursorPick + LockOn
+// modes are routed by executeAbility before reaching this function.
 func (s *AbilitySystem) dispatchByType(action abilityAction, casterE mmokit.Entity) bool {
 	gw := s.gw
 	entity := action.caster
-	lock := mmokit.Get[gamecomp.TargetLock](casterE)
 	params := action.params
 
 	fired := true
 
 	switch params.Type {
-	// --- Hitscan damage abilities ---
-	case item.AbilityTypePulseLaser, item.AbilityTypePulseBarrage,
-		item.AbilityTypeRailShot, item.AbilityTypeIonOverload, item.AbilityTypePlasmaBolt:
-		target, ok := activeLockTarget(gw, lock)
-		if ok {
-			caster := mmokit.EntityByNetID(gw.stage, action.casterNetID)
-			gw.Damage(caster, target, params.Damage, 0, action.slot, uint8(params.Type))
-			gw.eng.Log.Log(CatCombatAbility, "ability %s: %d -> %d dmg=%.0f",
-				params.Name, action.casterNetID, target.NetID(), params.Damage)
-		}
-
-	// --- Hitscan + bonus vs unshielded ---
-	case item.AbilityTypePiercingRound:
-		target, ok := activeLockTarget(gw, lock)
-		if ok {
-			caster := mmokit.EntityByNetID(gw.stage, action.casterNetID)
-			gw.Damage(caster, target, params.Damage, params.BonusDamage, action.slot, uint8(params.Type))
-			gw.eng.Log.Log(CatCombatAbility, "ability %s: %d -> %d dmg=%.0f",
-				params.Name, action.casterNetID, target.NetID(), params.Damage)
-		}
-
 	// --- Shield restore + Fortified buff ---
 	case item.AbilityTypeEmergencyShield, item.AbilityTypeHardenedShield:
 		regenPerSec := params.ShieldRestore / params.BuffDuration
@@ -573,8 +534,7 @@ func (s *AbilitySystem) dispatchCursorPick(action abilityAction, casterE mmokit.
 	gw.eng.Log.Log(CatCombatAbility, "ability %s: %d cursor-pick HIT target=%d",
 		params.Name, action.casterNetID, targetNetID)
 
-	// Per-ability effect — replicates the old LockOn dispatchByType
-	// logic but reads `best` instead of activeLockTarget(lock).
+	// Per-ability effect — runs against the cursor-picked `best` target.
 	switch params.Type {
 	case item.AbilityTypeHomingMissile:
 		bpos := mmokit.Get[mmokit.Position](best)
@@ -605,9 +565,8 @@ func (s *AbilitySystem) dispatchCursorPick(action abilityAction, casterE mmokit.
 
 // fireProjectileToward — same as fireProjectile but stamps an explicit
 // TargetNetID so the projectile homes/tracks the cursor-pick target.
-// fireProjectile (used by dispatchSkillshotLine) infers TargetNetID from
-// the caster's TargetLock; cursor-pick has no lock, so the target is
-// supplied directly.
+// fireProjectile (used by dispatchSkillshotLine) always fires straight;
+// cursor-pick supplies the homing target directly.
 func (s *AbilitySystem) fireProjectileToward(
 	caster mmokit.Entity, params *item.AbilityParams,
 	projType uint8, targetNetID uint32, dirX, dirY float32,
@@ -644,8 +603,7 @@ func (s *AbilitySystem) fireProjectileToward(
 
 // fireProjectile creates a Projectile entity travelling in the supplied
 // (dirX, dirY) direction. The caller owns the targeting decision —
-// dispatchSkillshotLine builds dx/dy from cursor aim, HomingMissile
-// builds dx/dy from the locked target's position.
+// dispatchSkillshotLine builds dx/dy from cursor aim.
 //
 // dirX/dirY do not need to be pre-normalized; this function normalizes
 // them. If the vector is degenerate (e.g. cursor on top of ship), the
@@ -681,15 +639,10 @@ func (s *AbilitySystem) fireProjectile(
 		dirX, dirY = dirX/norm, dirY/norm
 	}
 
-	var targetNetID uint32
-	if projType == gamecomp.ProjectileTypeMissile {
-		if lock := mmokit.Get[gamecomp.TargetLock](caster); lock != nil {
-			if target, ok := activeLockTarget(gw, lock); ok {
-				targetNetID = target.NetID()
-			}
-		}
-	}
-
+	// fireProjectile is now only called from dispatchSkillshotLine — a
+	// straight-line shot with no homing. HomingMissile / PlasmaTorpedo
+	// (cursor-pick) take the fireProjectileToward path and stamp
+	// TargetNetID explicitly; here we always fire un-targeted.
 	lifetime := float32(0)
 	if params.ProjectileSpeed > 0 {
 		lifetime = params.Range / params.ProjectileSpeed
@@ -697,7 +650,6 @@ func (s *AbilitySystem) fireProjectile(
 
 	spec := gamecomp.ProjectileSpec{
 		OwnerNetID:   caster.NetID(),
-		TargetNetID:  targetNetID,
 		Damage:       params.Damage,
 		SplashRadius: params.SplashRadius,
 		SplashDamage: params.SplashDamage,

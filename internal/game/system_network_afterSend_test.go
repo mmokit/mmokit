@@ -9,6 +9,23 @@ import (
 	pkgnet "github.com/zenion/mmoserver/pkg/net"
 )
 
+// wireNetworkSystemForTest constructs a NetworkSystem and runs only the
+// state initialization beforeTick / afterSend depend on — query bindings,
+// IncludeAll for replica visibility. Skips NetworkSystem.Init (which
+// builds the full ReplicationSystem and needs a Process / ClusterClock /
+// viewer source the unit-test world doesn't have).
+func wireNetworkSystemForTest(t *testing.T, gw *GameWorld) *NetworkSystem {
+	t.Helper()
+	ns := &NetworkSystem{}
+	ns.SetDeps(gw.eng.ECS, gw.eng)
+	ns.InitStage(gw.stage)
+	ns.gw = gw
+	ns.BindQueries(ns)
+	ns.lockVictims.With(mmokit.IncludeAll())
+	ns.BuildQueries()
+	return ns
+}
+
 // captureTransport records every SendUnreliable / SendReliable payload so
 // tests can assert on the exact wire bytes a system writes per viewer.
 type captureTransport struct {

@@ -96,12 +96,6 @@ type GameConfig struct {
 	// AI shared
 	AggroDeescalationSec float32 `json:"aggro_deescalation_sec"`
 
-	// Target lock
-	LockOnTime         float32 `json:"lockOnTime"`         // seconds to achieve full lock
-	LockOnRange        float32 `json:"lockOnRange"`        // max range to maintain lock
-	LockMaxSlotsPlayer uint8   `json:"lock_max_slots_player"`
-	LockMaxSlotsNPC    uint8   `json:"lock_max_slots_npc"`
-	MiningLockTime     float32 `json:"miningLockTime"` // seconds to lock an asteroid
 
 	// Docking
 	DockTime         float32 `json:"dockTime"`         // seconds to complete docking
@@ -179,10 +173,9 @@ func DefaultGameConfig() GameConfig {
 		NpcWidth:            1.7,
 		NpcHeight:           0.83,
 
-		// NPC archetypes — ranges scaled to fit the player's 100u AoI /
-		// 50u LockOnRange. Aggro radius < AoI ensures the player can
-		// always see an engaging NPC; WeaponRange ≤ player LockOnRange
-		// keeps fire visible on the player's HUD.
+		// NPC archetypes — ranges scaled to fit the player's 100u AoI.
+		// Aggro radius < AoI ensures the player can always see an engaging
+		// NPC; WeaponRange ≤ AoI keeps fire visible on the player's HUD.
 		BrawlerHP: 120, BrawlerShield: 60, BrawlerMaxSpeed: 6, BrawlerTurnRate: 1.5,
 		BrawlerPreferredRange: 30, BrawlerWeaponRange: 50, BrawlerAggroRadius: 30,
 		BrawlerDamagePerShot: 8, BrawlerFireRate: 1.0,
@@ -208,13 +201,6 @@ func DefaultGameConfig() GameConfig {
 		LancerChargeWidth: 3, LancerChargeDamage: 35, LancerRecoverTime: 1.5,
 
 		AggroDeescalationSec: 6,
-
-		// Target lock
-		LockOnTime:         2.0,
-		LockOnRange:        50,
-		LockMaxSlotsPlayer: 4,
-		LockMaxSlotsNPC:    1,
-		MiningLockTime:     1.5,
 
 		// Docking
 		DockTime:         3.0,

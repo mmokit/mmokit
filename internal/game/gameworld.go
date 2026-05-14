@@ -216,25 +216,6 @@ func (gw *GameWorld) ApplyEquipmentStats(entity mmokit.Entity) {
 		inv.MaxMass = gw.Config.MaxCargo
 	}
 
-	// TargetLock tuning — Range and MaxSlots are pure config reads with no
-	// equipment modifier today. Both MUST be re-applied here because
-	// TargetLock is `mmokit:"local"` (Slots contain stale ecs.Entity
-	// handles after a cross-cell transfer, so the component travels as
-	// zero-value); without re-syncing MaxSlots, the post-transfer player
-	// has MaxSlots=0 and every LockTarget input bounces as SlotsFull.
-	// LockOnTime is consumed per-slot at LockTarget time; live locks keep
-	// their captured value.
-	if tl := mmokit.Get[gamecomp.TargetLock](entity); tl != nil {
-		tl.Range = gw.Config.LockOnRange
-		tl.MaxSlots = gw.Config.LockMaxSlotsPlayer
-		// Slot entity handles don't survive a cross-cell transfer — clear
-		// them rather than letting the next system tick re-resolve. This
-		// also forecloses any path where stale slots could persist past
-		// the boundary and exhaust MaxSlots on the new cell.
-		tl.Slots = tl.Slots[:0]
-		tl.ActiveNetID = 0
-	}
-
 	// Movement stats from thruster. All three are re-synced from config
 	// each call so that runtime `config set` changes propagate through the
 	// game-side `config`-command OnChanged hook (which calls this function

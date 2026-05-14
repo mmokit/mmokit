@@ -54,7 +54,6 @@ func GameSetup(coord *mmokit.Process) {
 	// path that used to fire on connect / split / merge.
 	coord.AddSystem(mmokit.NewDebugBroadcaster())
 	coord.AddSystem(mmokit.NewSystem(&DockingSystem{}))
-	coord.AddSystem(mmokit.NewSystem(&TargetLockSystem{}))
 	coord.AddSystem(mmokit.NewSystem(&ShipDynamicsSystem{}))
 	coord.AddSystem(mmokit.NewSystem(&MiningSystem{}))
 	coord.AddSystem(mmokit.NewSystem(&AbilitySystem{}))

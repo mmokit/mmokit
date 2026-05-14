@@ -21,8 +21,7 @@ type ShipBundle struct {
 	ShipControl   *gamecomp.ShipControl
 	Equipment     *gamecomp.Equipment
 	Inventory     *gamecomp.Inventory
-	TargetLock    *gamecomp.TargetLock `mmokit:"local"`
-	Selection     *gamecomp.Selection  `mmokit:"local"`
+	Selection     *gamecomp.Selection `mmokit:"local"`
 	AbilitySet    *gamecomp.AbilitySet
 	StatusEffects *gamecomp.StatusEffects
 	MoveTarget    *mmokit.MoveTarget
@@ -130,10 +129,6 @@ func (gw *GameWorld) SpawnPlayer(s *mmokit.PlayerSession) {
 			RegenDelay: gw.Config.ShieldRegenDelay,
 		},
 		gamecomp.Inventory{Items: savedCargo, MaxMass: gw.Config.MaxCargo},
-		gamecomp.TargetLock{
-			MaxSlots: gw.Config.LockMaxSlotsPlayer,
-			Range:    gw.Config.LockOnRange,
-		},
 		gamecomp.Selection{EntityNetID: 0},
 		gamecomp.Equipment{
 			Weapon1:  equip.Weapon1,

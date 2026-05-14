@@ -118,8 +118,6 @@ type AbilityCooldownState struct {
 
 // PlayerOwnState — per-tick state sent only to the owning player.
 type PlayerOwnState struct {
-	LockProgress          float32
-	LockTargetID          uint32
 	AbilityCooldowns      []AbilityCooldownState
 	Equipment             EquipmentState
 	CargoItems            []InventoryItem
@@ -150,41 +148,6 @@ type PlayerSpawned struct {
 	OriginCellY  int32
 }
 
-// LockSlotsMsg — server→client snapshot of the receiving player's own
-// lock slots. Emitted every time slots mutate (add / remove / active
-// changes) and every tick a slot is in-progress — the per-tick push is
-// what drives the client lock-on-ring animation; without it the ring
-// snaps from 0%→100% at the lock-complete instant. Sent only to the
-// owning connection.
-type LockSlotsMsg struct {
-	Slots       []LockSlotWire
-	ActiveNetID uint32
-}
-
-// LockSlotWire is the per-slot subset replicated to the owning player.
-type LockSlotWire struct {
-	TargetNetID uint32
-	Progress    float32
-	Locked      bool
-}
-
-// LockRejectReason classifies a lock-attempt rejection.
-type LockRejectReason uint8
-
-const (
-	LockRejectedSlotsFull     LockRejectReason = 1
-	LockRejectedOutOfRange    LockRejectReason = 2
-	LockRejectedInvalidTarget LockRejectReason = 3
-)
-
-// LockRejectedMsg — server→client signal that a LockTarget request
-// failed. Client typically plays an error sound. Sent only to the
-// requesting connection.
-type LockRejectedMsg struct {
-	TargetNetID uint32
-	Reason      uint8 // LockRejectReason
-}
-
 // RegisterServerEvents registers every typed server event the space game
 // emits. Called by GameSetup so both production (cmd/server/main.go) and
 // tests (per-test newTestGameWorld → GameSetup) get the registrations.
@@ -204,8 +167,6 @@ func RegisterServerEvents() {
 		mmokit.RegisterEvent[Docked]()
 		mmokit.RegisterEvent[MapData]()
 		mmokit.RegisterEvent[CurrencyUpdate]()
-		mmokit.RegisterEvent[LockSlotsMsg]()
-		mmokit.RegisterEvent[LockRejectedMsg]()
 		mmokit.RegisterEvent[marketplace.MarketTradeNotification]()
 	})
 }

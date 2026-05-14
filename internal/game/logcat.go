@@ -6,7 +6,6 @@ const (
 	// combat:*
 	CatCombatHit     = "combat:hit"     // damage events
 	CatCombatKill    = "combat:kill"    // kill events, currency rewards
-	CatCombatLock    = "combat:lock"    // target lock acquire/break
 	CatCombatAbility = "combat:ability" // ability activation and effects
 
 	// economy:*
@@ -41,7 +40,7 @@ const (
 
 // GameCategories lists every game-specific log category.
 var GameCategories = []string{
-	CatCombatHit, CatCombatKill, CatCombatLock, CatCombatAbility,
+	CatCombatHit, CatCombatKill, CatCombatAbility,
 	CatEconomyBank, CatEconomyLoot, CatEconomyMarket, CatEconomyMining,
 	CatPlayerConnect, CatPlayerSpawn, CatPlayerDock, CatPlayerEquip, CatPlayerInput,
 	CatWorldCollision, CatWorldMap, CatWorldNetwork, CatWorldTransfer, CatWorldReplica,

@@ -26,7 +26,7 @@ func wireAbilitySystem(t *testing.T, gw *GameWorld) *AbilitySystem {
 }
 
 // spawnAbilityTestPlayer creates a player ship with the components the
-// AbilitySystem query needs (PlayerInput, TargetLock, AbilitySet,
+// AbilitySystem query needs (PlayerInput, Selection, AbilitySet,
 // Equipment) plus the basics (Position, NetworkID, EntityKind, Health,
 // Shield, PlayerConn). Returns the rich Entity wrapper for mutation
 // (e.g. setting AbilityCast / LastCastAim before ticking).
@@ -51,7 +51,6 @@ func spawnAbilityTestPlayer(t *testing.T, gw *GameWorld, netID, connID uint32, x
 	e := mmokit.EntityFromECS(gw.stage, handle)
 	mmokit.Set(e, mmokit.PlayerConn{ConnID: connID})
 	mmokit.Set(e, gamecomp.PlayerInput{})
-	mmokit.Set(e, gamecomp.TargetLock{MaxSlots: 4, Range: 1000})
 	mmokit.Set(e, gamecomp.Selection{})
 	mmokit.Set(e, gamecomp.AbilitySet{})
 	mmokit.Set(e, gamecomp.Equipment{Weapon1: w1, Weapon2: w2})
@@ -100,31 +99,17 @@ func setAbilityCast(t *testing.T, player mmokit.Entity, slot uint8, aimX, aimY f
 	input.LastCastAimY = aimY
 }
 
-// lockTarget primes the player's Selection (and TargetLock, for any
-// downstream system that still reads it) so the AbilitySystem
-// pre-dispatch gate passes. The gate now reads Selection.EntityNetID;
-// TargetLock stays populated as a no-op safety net for callers that
-// still consult it (non-mining lock-on hitscan abilities + homing
-// projectile target inference).
-func lockTarget(t *testing.T, player, target mmokit.Entity) {
+// selectTarget primes the player's Selection so the AbilitySystem
+// pre-dispatch gate (which reads Selection.EntityNetID for LockOn-mode
+// abilities) passes. Skillshot-mode abilities ignore Selection, but the
+// helper keeps the tests symmetric with the pre-rewrite locking flow.
+func selectTarget(t *testing.T, player, target mmokit.Entity) {
 	t.Helper()
-	lock := mmokit.Get[gamecomp.TargetLock](player)
-	if lock == nil {
-		t.Fatal("player missing TargetLock component")
-	}
 	sel := mmokit.Get[gamecomp.Selection](player)
 	if sel == nil {
 		t.Fatal("player missing Selection component")
 	}
-	netID := target.NetID()
-	lock.Slots = []gamecomp.LockSlot{{
-		TargetNetID:  netID,
-		TargetEntity: target.Handle(),
-		Progress:     1.0,
-		Locked:       true,
-	}}
-	lock.ActiveNetID = netID
-	sel.EntityNetID = netID
+	sel.EntityNetID = target.NetID()
 }
 
 // TestSkillshotLine_AimedAtTargetHits — fire a skillshot-line ability
@@ -141,7 +126,7 @@ func TestSkillshotLine_AimedAtTargetHits(t *testing.T) {
 	player := spawnAbilityTestPlayer(t, gw, 4001, 1, 0, 0,
 		item.PlasmaCannon, 0)
 	target := spawnAbilityTestNPC(t, gw, 4002, 20, 0)
-	lockTarget(t, player, target)
+	selectTarget(t, player, target)
 
 	targetPos := mmokit.Get[mmokit.Position](target)
 	setAbilityCast(t, player, gamecomp.AbilityQ, targetPos.X, targetPos.Y)
@@ -182,7 +167,7 @@ func TestSkillshotGround_DropsAoEAtCursor(t *testing.T) {
 	// Target inside MortarShell range (40u) so the cursor clamp doesn't
 	// move the splash center off the target.
 	target := spawnAbilityTestNPC(t, gw, 4102, 30, 0)
-	lockTarget(t, player, target)
+	selectTarget(t, player, target)
 
 	targetPos := mmokit.Get[mmokit.Position](target)
 	setAbilityCast(t, player, gamecomp.AbilityR, targetPos.X, targetPos.Y)

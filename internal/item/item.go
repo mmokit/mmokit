@@ -78,7 +78,7 @@ type TargetingMode uint8
 
 const (
 	TargetingSelf             TargetingMode = 0 // no aim, no target (default — abilities missing classification will Self-cast, visible bug)
-	TargetingLockOn           TargetingMode = 1 // requires active TargetLock
+	TargetingLockOn           TargetingMode = 1 // requires active Selection
 	TargetingSkillshotLine    TargetingMode = 2 // direction from caster toward cursor; fires Projectile
 	TargetingSkillshotGround  TargetingMode = 3 // cursor position; drops AoEMarker
 	TargetingSkillshotChannel TargetingMode = 4 // held; beam tracks cursor direction
@@ -115,7 +115,7 @@ type AbilityParams struct {
 	SplashRadius      float32 // u; 0 = single-target
 	SplashDamage      float32 // damage applied at splash radius
 	HomingMaxTurnRate float32 // rad/s; 0 = no homing
-	RequiresLock      bool    // true = ability is refused (no cooldown) if no active TargetLock
+	RequiresLock      bool    // unused post-TargetLock removal; preserved for item-def shape
 
 	// Channel-related fields (used by Task 21's SustainedBeam handler).
 	ChannelDuration float32 // seconds of max channel

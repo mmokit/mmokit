@@ -9,10 +9,8 @@ import (
 
 // TestApplyDamage_DormantTargetTakesNoDamage pins the invariant that a
 // Dormant entity (e.g. a docked player parked at a station) is immune to
-// damage. TargetLockSystem already breaks locks on Dormant targets, but
-// this guard covers any direct ApplyDamage call path that bypasses the
-// lock. Without it, the docked player at station center could be killed
-// by a stray laser from a passing ship.
+// damage. Without this guard, the docked player at station center could
+// be killed by a stray laser from a passing ship.
 func TestApplyDamage_DormantTargetTakesNoDamage(t *testing.T) {
 	gw, _ := newTestGameWorld()
 

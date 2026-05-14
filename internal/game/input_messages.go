@@ -15,27 +15,6 @@ type SetMoveTarget struct {
 	X, Y     float32
 }
 
-// LockTarget — begin locking onto an entity. Server rejects if slots
-// full, target invalid, or out of range — emits LockRejectedMsg.
-type LockTarget struct {
-	Sequence uint32
-	NetID    uint32
-}
-
-// UnlockTarget — drop a specific slot. NetID=0 is a no-op.
-type UnlockTarget struct {
-	Sequence uint32
-	NetID    uint32
-}
-
-// SetActiveTarget — switch the active firing target. NetID must be
-// among locked slots and Locked=true; otherwise silently ignored.
-// NetID=0 explicitly clears active.
-type SetActiveTarget struct {
-	Sequence uint32
-	NetID    uint32
-}
-
 // SelectTarget — left-click sets the player's selection to NetID; NetID=0
 // clears (right-click). Server validates the target is alive + in AoI;
 // invalid requests are dropped silently (no error event).
@@ -47,10 +26,11 @@ type SelectTarget struct {
 // CastAbility — discrete ability press. Slot identifies which equipped
 // ability fired. AimX/AimY carry the cursor world position; meaning
 // depends on the ability's TargetingMode:
-//   Self            — ignored
-//   LockOn          — ignored (server reads TargetLock.ActiveNetID)
-//   SkillshotLine   — direction = (AimX - shipX, AimY - shipY), normalized
-//   SkillshotGround — drop the AoE at (AimX, AimY), clamped to ability range
+//   Self             — ignored
+//   LockOn           — reads the player's Selection.EntityNetID as the target
+//   CursorPick       — nearest enemy within pickRadius of (AimX, AimY)
+//   SkillshotLine    — direction = (AimX - shipX, AimY - shipY), normalized
+//   SkillshotGround  — drop the AoE at (AimX, AimY), clamped to ability range
 //   SkillshotChannel — initial aim point; updates via ChannelAim while held
 type CastAbility struct {
 	Sequence uint32

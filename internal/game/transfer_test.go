@@ -179,28 +179,13 @@ func TestFinishTransferSpawn_Ship(t *testing.T) {
 	if !mmokit.Has[gamecomp.ShipControl](e) {
 		t.Error("ShipControl should be present (default)")
 	}
-	if !mmokit.Has[gamecomp.TargetLock](e) {
-		t.Error("TargetLock should be present (default)")
-	}
-	// TargetLock is `mmokit:"local"` so MaxSlots+Range are NOT serialized
-	// across the wire. FinishTransferSpawn → ApplyEquipmentStats must
-	// restore them from config so the next LockTarget input doesn't trip
-	// the `len(Slots) >= MaxSlots` gate and bounce as SlotsFull.
-	tl := mmokit.Get[gamecomp.TargetLock](e)
-	if tl.MaxSlots != gw.Config.LockMaxSlotsPlayer {
-		t.Errorf("TargetLock.MaxSlots: got %d, want %d (config)", tl.MaxSlots, gw.Config.LockMaxSlotsPlayer)
-	}
-	if tl.Range != gw.Config.LockOnRange {
-		t.Errorf("TargetLock.Range: got %f, want %f (config)", tl.Range, gw.Config.LockOnRange)
-	}
 }
 
 // TestSpawnFromTransferCore_FiresOnTransferReceived guards against
-// regressions where the stage's onTransferReceived hook is left unwired
-// (the bug that made TargetLock.MaxSlots stay zero on every cross-cell
-// crossing). Calls SpawnFromTransferCore — the production cross-cell path
-// — and asserts MaxSlots came out non-zero, which can only happen if
-// FinishTransferSpawn → ApplyEquipmentStats actually ran.
+// regressions where the stage's onTransferReceived hook is left unwired —
+// the post-transfer player ship must have its Shield re-synced from
+// equipment via FinishTransferSpawn → ApplyEquipmentStats. Without the
+// hook firing, the docked-then-roamed player ends up with Shield.Max=0.
 func TestSpawnFromTransferCore_FiresOnTransferReceived(t *testing.T) {
 	gw, cm := newTestGameWorld()
 
@@ -228,12 +213,12 @@ func TestSpawnFromTransferCore_FiresOnTransferReceived(t *testing.T) {
 	}
 	e := mmokit.EntityFromECS(gw.stage, handle)
 
-	tl := mmokit.Get[gamecomp.TargetLock](e)
-	if tl == nil {
-		t.Fatal("TargetLock missing after transfer — EnsureEntityKindComponents not run")
+	sh := mmokit.Get[gamecomp.Shield](e)
+	if sh == nil {
+		t.Fatal("Shield missing after transfer — EnsureEntityKindComponents not run")
 	}
-	if tl.MaxSlots != gw.Config.LockMaxSlotsPlayer {
-		t.Fatalf("TargetLock.MaxSlots: got %d, want %d — onTransferReceived hook not wired", tl.MaxSlots, gw.Config.LockMaxSlotsPlayer)
+	if sh.Max != gw.Config.ShipShield {
+		t.Fatalf("Shield.Max: got %f, want %f — onTransferReceived hook not wired", sh.Max, gw.Config.ShipShield)
 	}
 }
 

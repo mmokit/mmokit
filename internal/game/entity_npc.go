@@ -7,8 +7,8 @@ import (
 
 // NPCBundle is the entity-kind component bundle for NPC enemy ships.
 // NPCs do not carry LockedBy — the combat-warning ring belongs only on
-// the local player's own ship. NPCs no longer carry TargetLock either —
-// they track their engage target via NPCAI.TargetNetID. Leashing is
+// the local player's own ship. NPCs track their engage target via
+// NPCAI.TargetNetID, not a lock indirection. Leashing is
 // intentionally NOT in the bundle: it's a transient state marker added/
 // removed dynamically by the leash subsystem. Adding it as a bundle
 // field would attach it at spawn time (via EnsureEntityKindComponents),

@@ -56,35 +56,6 @@ type Shield struct {
 	DamageCooldown float32 // time remaining before regen resumes
 }
 
-// TargetLock holds slot-based EVE-style multi-target lock state.
-//
-// Slots is a contiguous slice; iteration order = lock acquisition order.
-// ActiveNetID is the currently-selected slot's target — read by abilities
-// for default firing. MaxSlots is local-only (set per-entity at spawn:
-// 4 for player ships, 1 for NPCs). Range is the maximum lock distance.
-//
-// Slots are NOT replicated via per-entity wire — the owning player learns
-// its own slot state via LockSlotsMsg events. Other players see only the
-// reverse-direction LockedBy marker on their own entity when locked.
-type TargetLock struct {
-	Slots       []LockSlot
-	ActiveNetID uint32  // local-only — owner learns via LockSlotsMsg
-	MaxSlots    uint8   // local-only — 4 for ships, 1 for NPCs
-	Range       float32
-}
-
-// LockSlot is one in-progress or completed lock. ScanResolution and
-// SigRadius are reserved for v2 sensor mechanics; v1 ignores them.
-type LockSlot struct {
-	TargetNetID    uint32
-	TargetEntity   ecs.Entity
-	Progress       float32 // 0..1
-	LockTime       float32 // seconds to full lock for this target
-	Locked         bool    // true when Progress >= 1.0
-	ScanResolution float32 // reserved v2 — unused
-	SigRadius      float32 // reserved v2 — unused
-}
-
 // LockedBy is a replicated "who is locking me" marker. The NetworkSystem
 // populates it each tick from the reverse lock map so clients can render a
 // warning ring on any entity currently being target-locked. Zero LockerNetID
@@ -235,10 +206,9 @@ func (inv *Inventory) IsEmpty() bool {
 
 // PlayerInput holds the current frame's input for a player.
 type PlayerInput struct {
-	Sequence        uint32 // for input ack
-	JettisonItemID  uint32 // item ID to jettison (0 = none)
-	AbilityCast     uint32 // bitmask: bit 0=Q, 1=W, 2=E, 3=R, 4=D, 5=F
-	LockTargetNetID uint32 // lock-on target network ID
+	Sequence       uint32 // for input ack
+	JettisonItemID uint32 // item ID to jettison (0 = none)
+	AbilityCast    uint32 // bitmask: bit 0=Q, 1=W, 2=E, 3=R, 4=D, 5=F
 
 	// PVE v3: cursor world coords from the most recent CastAbility press.
 	// AbilitySystem reads these when dispatching skillshot abilities and
@@ -367,8 +337,7 @@ func (s *StatusEffects) TickDown(dt float32) {
 
 // Leashing marks an NPC currently returning to its anchor under the
 // leash mechanic. Leashing entities are invulnerable (ApplyDamage skips
-// them), untargetable (TargetLockSystem auto-drops any existing locks
-// and rejects new ones), and move at 2× speed toward their anchor.
+// them), untargetable, and move at 2× speed toward their anchor.
 // Removed when the NPC reaches its anchor — at that point HP and Shield
 // are restored to Max and the NPC re-enters Idle.
 type Leashing struct{}
@@ -426,9 +395,8 @@ type NPCAI struct {
 	SpecialDirAngle       float32
 	SpecialTelegraphNetID uint32
 
-	// TargetNetID — the NPC's current engage target. Replaces the old
-	// TargetLock.ActiveNetID indirection. Updated each tick by the
-	// closest-enemy logic in tickEngage; consumed by dispatch methods
+	// TargetNetID — the NPC's current engage target. Updated each tick by
+	// the closest-enemy logic in tickEngage; consumed by dispatch methods
 	// (tickEngage hitscan, tickCast for Artillery, etc.).
 	TargetNetID uint32
 }

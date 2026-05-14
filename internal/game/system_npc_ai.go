@@ -9,7 +9,7 @@ import (
 )
 
 // NPCAISystem drives the per-NPC state machine each tick. Acquires
-// targets via NPCAI.TargetNetID (no TargetLock indirection), applies
+// targets via NPCAI.TargetNetID, applies
 // motion policy in Engage, manages leash return, and fires weapons.
 //
 // Time is tracked locally via elapsedSec (monotonic dt accumulation) —

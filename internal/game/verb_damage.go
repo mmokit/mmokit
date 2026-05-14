@@ -111,9 +111,7 @@ func (gw *GameWorld) ApplyDamage(target mmokit.Entity, damage float32, attackerN
 		return 0
 	}
 	// Dormant targets (e.g. docked players parked at a station) take no
-	// damage. TargetLockSystem already breaks locks on Dormant targets, but
-	// belt-and-suspenders here covers any direct call path that bypasses
-	// the lock — and pins the invariant in tests.
+	// damage — pins the invariant in tests.
 	if mmokit.Has[mmokit.Dormant](target) {
 		return 0
 	}
