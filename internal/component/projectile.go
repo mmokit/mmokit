@@ -24,6 +24,13 @@ type ProjectileSpec struct {
 	SplashDamage float32 `net:"f32"`
 	MaxTurnRate  float32 `net:"f32"` // rad/s; 0 = no homing
 	Type         uint8   `net:"u8"`  // 0=Plasma, 1=Missile, 2=Mortar
+
+	// PierceCount: remaining pierces before the projectile despawns on
+	// hit. 0 = stop at first non-owner hit (default). >0 = pass through;
+	// decrement on each hit. PiercedNetIDs prevents re-hitting the same
+	// victim along the line.
+	PierceCount   uint8     `net:"u8"`
+	PiercedNetIDs [4]uint32 // server-only (no net tag) — already-hit victims
 }
 
 // Projectile-type visual variants. Must match the corresponding
