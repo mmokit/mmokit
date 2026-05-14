@@ -52,6 +52,7 @@ func spawnAbilityTestPlayer(t *testing.T, gw *GameWorld, netID, connID uint32, x
 	mmokit.Set(e, mmokit.PlayerConn{ConnID: connID})
 	mmokit.Set(e, gamecomp.PlayerInput{})
 	mmokit.Set(e, gamecomp.TargetLock{MaxSlots: 4, Range: 1000})
+	mmokit.Set(e, gamecomp.Selection{})
 	mmokit.Set(e, gamecomp.AbilitySet{})
 	mmokit.Set(e, gamecomp.Equipment{Weapon1: w1, Weapon2: w2})
 	mmokit.Set(e, mmokit.Rotation{})
@@ -99,15 +100,21 @@ func setAbilityCast(t *testing.T, player mmokit.Entity, slot uint8, aimX, aimY f
 	input.LastCastAimY = aimY
 }
 
-// lockTarget primes the player's TargetLock so the AbilitySystem
-// pre-dispatch gate (slots 0-3 require an active locked slot) passes.
-// The skillshot dispatch itself ignores the lock — aim is taken from
-// PlayerInput.LastCastAim* — but the gate is still enforced upstream.
+// lockTarget primes the player's Selection (and TargetLock, for any
+// downstream system that still reads it) so the AbilitySystem
+// pre-dispatch gate passes. The gate now reads Selection.EntityNetID;
+// TargetLock stays populated as a no-op safety net for callers that
+// still consult it (non-mining lock-on hitscan abilities + homing
+// projectile target inference).
 func lockTarget(t *testing.T, player, target mmokit.Entity) {
 	t.Helper()
 	lock := mmokit.Get[gamecomp.TargetLock](player)
 	if lock == nil {
 		t.Fatal("player missing TargetLock component")
+	}
+	sel := mmokit.Get[gamecomp.Selection](player)
+	if sel == nil {
+		t.Fatal("player missing Selection component")
 	}
 	netID := target.NetID()
 	lock.Slots = []gamecomp.LockSlot{{
@@ -117,6 +124,7 @@ func lockTarget(t *testing.T, player, target mmokit.Entity) {
 		Locked:       true,
 	}}
 	lock.ActiveNetID = netID
+	sel.EntityNetID = netID
 }
 
 // TestSkillshotLine_AimedAtTargetHits — fire a skillshot-line ability

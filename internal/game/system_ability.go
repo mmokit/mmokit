@@ -76,7 +76,7 @@ func (s *AbilitySystem) Update(dt float32) {
 	s.deferred = s.deferred[:0]
 
 	for entity, b := range s.entities.Iter {
-		input, lock, abilities, equip := b.Input, b.Lock, b.Abilities, b.Equip
+		input, abilities, equip := b.Input, b.Abilities, b.Equip
 
 		// Tick down all cooldowns
 		for i := range abilities.Cooldowns {
@@ -113,8 +113,12 @@ func (s *AbilitySystem) Update(dt float32) {
 			// activation validates the target inside executeAbility.
 			isMiningToggle := params.Type == item.AbilityTypeMiningBeam
 			if slot <= gamecomp.AbilityR && !isMiningToggle && params.Mode == item.TargetingLockOn {
-				target, ok := activeLockTarget(gw, lock)
-				if !ok {
+				sel := mmokit.Get[gamecomp.Selection](casterE)
+				if sel == nil || sel.EntityNetID == 0 {
+					continue
+				}
+				target := mmokit.EntityByNetID(gw.stage, sel.EntityNetID)
+				if !target.Alive() {
 					continue
 				}
 				if params.Range > 0 && !s.inRange(entity, target.Handle(), params.Range) {
@@ -271,16 +275,21 @@ func (s *AbilitySystem) dispatchByType(action abilityAction, casterE mmokit.Enti
 			laser.Beams[beamIdx].Active = false
 			gw.eng.Log.Log(CatEconomyMining, "mining beam off: %d beam=%d", action.casterNetID, beamIdx)
 		} else {
-			// Toggle on — require lock and validate target is minable
-			lockTarget, ok := activeLockTarget(gw, lock)
-			if !ok || !mmokit.Has[gamecomp.Minable](lockTarget) {
+			// Toggle on — require selection and validate target is minable
+			sel := mmokit.Get[gamecomp.Selection](casterE)
+			if sel == nil || sel.EntityNetID == 0 {
+				fired = false
+				break
+			}
+			selTarget := mmokit.EntityByNetID(gw.stage, sel.EntityNetID)
+			if !selTarget.Alive() || !mmokit.Has[gamecomp.Minable](selTarget) {
 				fired = false
 				break
 			}
 			laser.Beams[beamIdx].Active = true
-			laser.Target = lockTarget.Handle()
+			laser.Target = selTarget.Handle()
 			gw.eng.Log.Log(CatEconomyMining, "mining beam on: %d beam=%d target=%d",
-				action.casterNetID, beamIdx, lockTarget.NetID())
+				action.casterNetID, beamIdx, selTarget.NetID())
 		}
 		// Sync replicated ActiveMining immediately so clients see the toggle
 		// on the same tick, without waiting for the next MiningSystem pass.
