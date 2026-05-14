@@ -26,11 +26,21 @@ func (gw *GameWorld) SpawnLanceTelegraph(
 	x, y, dirAngle, length, halfWidth, windupTime float32,
 	ownerNetID uint32,
 ) mmokit.Entity {
+	// Collider radius spans the full charge path so the spatial-grid
+	// entry sits roughly centered on the lance line. Without a Collider
+	// the SpatialSystem skips this entity entirely → replication never
+	// finds it → client doesn't draw the telegraph. Layer 0 (non-terrain)
+	// keeps it out of player↔terrain collision checks.
+	gridRadius := length * 0.5
+	if gridRadius < 2 {
+		gridRadius = 2
+	}
 	return gw.stage.Spawn(
 		mmokit.EntityKind{Type: gamecomp.KindLanceTelegraph},
 		mmokit.Position{X: x, Y: y},
 		mmokit.Rotation{Angle: dirAngle},
 		mmokit.Lifetime{Remaining: windupTime},
+		mmokit.Collider{Radius: gridRadius, Width: gridRadius * 2, Height: gridRadius * 2, Shape: mmokit.ShapeCircle},
 		gamecomp.LanceTelegraphSpec{
 			Length:     length,
 			HalfWidth:  halfWidth,

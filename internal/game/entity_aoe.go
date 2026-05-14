@@ -34,6 +34,12 @@ func (gw *GameWorld) SpawnAoEMarker(
 		mmokit.EntityKind{Type: gamecomp.KindAoEMarker},
 		mmokit.Position{X: x, Y: y},
 		mmokit.Lifetime{Remaining: lifetime},
+		// Collider matches the AoE radius so SpatialSystem indexes the
+		// marker. Without a Collider, the entity is invisible to the
+		// spatial grid → not replicated → client never sees the
+		// telegraph. Layer is informational; Shape=Circle keeps the
+		// math consistent with the AoESystem radius check.
+		mmokit.Collider{Radius: radius, Width: radius * 2, Height: radius * 2, Shape: mmokit.ShapeCircle},
 		gamecomp.AoESpec{
 			Radius:      radius,
 			Damage:      damage,

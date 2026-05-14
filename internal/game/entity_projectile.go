@@ -31,6 +31,12 @@ func (gw *GameWorld) SpawnProjectile(
 		mmokit.Position{X: x, Y: y},
 		mmokit.Velocity{X: vx, Y: vy},
 		mmokit.Lifetime{Remaining: lifetime},
+		// Collider is required for SpatialSystem to index the entity —
+		// without indexing, the replication system's AoI culling never
+		// finds it and the client never sees the projectile. A small
+		// 1u radius is enough for indexing; non-terrain layer keeps it
+		// out of CollisionSystem's player↔terrain checks.
+		mmokit.Collider{Radius: 1, Width: 2, Height: 2, Shape: mmokit.ShapeCircle},
 		spec,
 	)
 }
