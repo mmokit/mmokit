@@ -203,12 +203,14 @@ func doInit() {
 			Primary: AbilityParams{
 				Type: AbilityTypePulseLaser, Name: "Pulse Shot",
 				Damage: 30.0, Range: 30.0, Cooldown: 1.0,
-				Mode: TargetingSkillshotLine,
+				ProjectileSpeed: 60,
+				Mode:            TargetingSkillshotLine,
 			},
 			Secondary: &AbilityParams{
 				Type: AbilityTypePulseBarrage, Name: "Pulse Barrage",
 				Damage: 20.0, Range: 40.0, Cooldown: 4.0,
-				Mode: TargetingSkillshotLine,
+				ProjectileSpeed: 60,
+				Mode:            TargetingSkillshotLine,
 			},
 		},
 	})
@@ -219,12 +221,14 @@ func doInit() {
 			Primary: AbilityParams{
 				Type: AbilityTypeRailShot, Name: "Rail Shot",
 				Damage: 50, Range: 60, Cooldown: 3.0,
-				Mode: TargetingSkillshotLine,
+				ProjectileSpeed: 120,
+				Mode:            TargetingSkillshotLine,
 			},
 			Secondary: &AbilityParams{
 				Type: AbilityTypePiercingRound, Name: "Piercing Round",
 				Damage: 40, BonusDamage: 15, Range: 35, Cooldown: 8.0,
-				Mode: TargetingSkillshotLine,
+				ProjectileSpeed: 100,
+				Mode:            TargetingSkillshotLine,
 			},
 		},
 	})
@@ -240,7 +244,8 @@ func doInit() {
 			Secondary: &AbilityParams{
 				Type: AbilityTypeIonOverload, Name: "Ion Overload",
 				Damage: 40, Range: 30.0, Cooldown: 8.0,
-				Mode: TargetingSkillshotLine,
+				ProjectileSpeed: 60,
+				Mode:            TargetingSkillshotLine,
 			},
 		},
 	})
@@ -251,7 +256,8 @@ func doInit() {
 			Primary: AbilityParams{
 				Type: AbilityTypePlasmaBolt, Name: "Plasma Bolt",
 				Damage: 25, Range: 35, Cooldown: 3.0,
-				Mode: TargetingSkillshotLine,
+				ProjectileSpeed: 60,
+				Mode:            TargetingSkillshotLine,
 			},
 			Secondary: &AbilityParams{
 				Type: AbilityTypePlasmaTorpedo, Name: "Plasma Torpedo",

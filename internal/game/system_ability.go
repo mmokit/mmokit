@@ -110,7 +110,7 @@ func (s *AbilitySystem) Update(dt float32) {
 			// Mining beam is a toggle — skip lock check here so deactivation always works;
 			// activation validates the target inside executeAbility.
 			isMiningToggle := params.Type == item.AbilityTypeMiningBeam
-			if slot <= gamecomp.AbilityR && !isMiningToggle {
+			if slot <= gamecomp.AbilityR && !isMiningToggle && params.Mode == item.TargetingLockOn {
 				target, ok := activeLockTarget(gw, lock)
 				if !ok {
 					continue
