@@ -263,17 +263,6 @@ func (s *AbilitySystem) dispatchByType(action abilityAction, casterE mmokit.Enti
 		gw.eng.Log.Log(CatCombatAbility, "ability %s: %d speed x%.1f for %.1fs",
 			params.Name, action.casterNetID, params.SpeedMult, params.BoostDuration)
 
-	// --- Projectile weapons (PVE v2) ---
-	case item.AbilityTypePlasmaShot:
-		s.fireProjectile(casterE, params, gamecomp.ProjectileTypePlasma, 0)
-		gw.eng.Log.Log(CatCombatAbility, "ability %s: %d fired projectile dmg=%.0f speed=%.0f",
-			params.Name, action.casterNetID, params.Damage, params.ProjectileSpeed)
-
-	case item.AbilityTypeMortarShell:
-		s.fireProjectile(casterE, params, gamecomp.ProjectileTypeMortar, 0)
-		gw.eng.Log.Log(CatCombatAbility, "ability %s: %d fired mortar dmg=%.0f splash=%.0f",
-			params.Name, action.casterNetID, params.Damage, params.SplashRadius)
-
 	// --- Sustained beam channel (PVE v2, Task 21) ---
 	case item.AbilityTypeSustainedBeam:
 		// Pressing the key while already channeling is a no-op — don't
@@ -305,7 +294,8 @@ func (s *AbilitySystem) dispatchByType(action abilityAction, casterE mmokit.Enti
 
 	// --- Homing missile — requires active target lock (Task 20) ---
 	case item.AbilityTypeHomingMissile:
-		if _, ok := activeLockTarget(gw, lock); !ok {
+		target, ok := activeLockTarget(gw, lock)
+		if !ok {
 			// No active lock — refuse cast. Returning false skips the
 			// cooldown assignment in Update, so the ability stays ready.
 			gw.eng.Log.Log(CatCombatAbility, "ability %s: %d cancelled (no lock)",
@@ -313,7 +303,14 @@ func (s *AbilitySystem) dispatchByType(action abilityAction, casterE mmokit.Enti
 			fired = false
 			break
 		}
-		s.fireProjectile(casterE, params, gamecomp.ProjectileTypeMissile, 0)
+		tpos := mmokit.Get[mmokit.Position](target)
+		cpos := mmokit.Get[mmokit.Position](casterE)
+		if tpos == nil || cpos == nil {
+			fired = false
+			break
+		}
+		dx, dy := tpos.X-cpos.X, tpos.Y-cpos.Y
+		s.fireProjectile(casterE, params, gamecomp.ProjectileTypeMissile, 0, dx, dy)
 		gw.eng.Log.Log(CatCombatAbility, "ability %s: %d fired homing missile dmg=%.0f",
 			params.Name, action.casterNetID, params.Damage)
 
@@ -437,10 +434,54 @@ func (s *AbilitySystem) dispatchByType(action abilityAction, casterE mmokit.Enti
 }
 
 // dispatchSkillshotLine handles TargetingSkillshotLine abilities — a
-// projectile fired in the direction from caster to cursor (aimX/aimY).
-// Implementation lands in Task 10.
+// projectile fired in the direction from caster toward the cursor
+// position carried on the cast action (aimX/aimY). Pierce count and
+// projectile visual type vary per AbilityType; PulseBarrage fans 3
+// sub-projectiles in a ±10° cone.
 func (s *AbilitySystem) dispatchSkillshotLine(action abilityAction, casterE mmokit.Entity) bool {
-	return false // implemented in Task 10
+	gw := s.gw
+	params := action.params
+
+	casterPos := mmokit.Get[mmokit.Position](casterE)
+	if casterPos == nil {
+		return false
+	}
+	dx := action.aimX - casterPos.X
+	dy := action.aimY - casterPos.Y
+
+	// Choose pierce count + visual variant per AbilityType (per spec table).
+	var pierceCount uint8
+	var projType uint8 = gamecomp.ProjectileTypePlasma // default visual variant
+	switch params.Type {
+	case item.AbilityTypeRailShot:
+		pierceCount = 2
+	case item.AbilityTypePiercingRound:
+		pierceCount = 99
+		projType = gamecomp.ProjectileTypeMissile // distinct visual
+	case item.AbilityTypePlasmaShot:
+		projType = gamecomp.ProjectileTypePlasma
+		// PulseLaser, PulseBarrage, PlasmaBolt, IonOverload all fall through
+		// to default Plasma visual + pierceCount 0.
+	}
+
+	if params.Type == item.AbilityTypePulseBarrage {
+		// 3 sub-projectiles in a ±10° cone (~0.1745 rad).
+		s.fireProjectile(casterE, params, projType, pierceCount, dx, dy)
+		spread := float32(0.1745)
+		cos, sin := float32(math.Cos(float64(spread))), float32(math.Sin(float64(spread)))
+		dxL := cos*dx - sin*dy
+		dyL := sin*dx + cos*dy
+		dxR := cos*dx + sin*dy
+		dyR := -sin*dx + cos*dy
+		s.fireProjectile(casterE, params, projType, pierceCount, dxL, dyL)
+		s.fireProjectile(casterE, params, projType, pierceCount, dxR, dyR)
+	} else {
+		s.fireProjectile(casterE, params, projType, pierceCount, dx, dy)
+	}
+
+	gw.eng.Log.Log(CatCombatAbility, "ability %s: %d skillshot fired aim=(%.0f,%.0f) pierce=%d",
+		params.Name, action.casterNetID, action.aimX, action.aimY, pierceCount)
+	return true
 }
 
 // dispatchSkillshotGround handles TargetingSkillshotGround abilities — an
@@ -457,8 +498,15 @@ func (s *AbilitySystem) dispatchSkillshotChannel(action abilityAction, casterE m
 	return false // implemented in Task 12
 }
 
-// fireProjectile creates a Projectile entity travelling in the caster's
-// facing direction (or toward the active target if a lock is present).
+// fireProjectile creates a Projectile entity travelling in the supplied
+// (dirX, dirY) direction. The caller owns the targeting decision —
+// dispatchSkillshotLine builds dx/dy from cursor aim, HomingMissile
+// builds dx/dy from the locked target's position.
+//
+// dirX/dirY do not need to be pre-normalized; this function normalizes
+// them. If the vector is degenerate (e.g. cursor on top of ship), the
+// caster's facing rotation is used as a fallback.
+//
 // projType is one of gamecomp.ProjectileType* — purely a visual variant
 // hint for the client renderer.
 //
@@ -466,33 +514,34 @@ func (s *AbilitySystem) dispatchSkillshotChannel(action abilityAction, casterE m
 // the world lock from the query iteration has been released and it is
 // safe to spawn entities directly.
 func (s *AbilitySystem) fireProjectile(
-	caster mmokit.Entity, params *item.AbilityParams, projType uint8, pierceCount uint8,
+	caster mmokit.Entity, params *item.AbilityParams, projType uint8,
+	pierceCount uint8, dirX, dirY float32,
 ) {
 	gw := s.gw
 	casterPos := mmokit.Get[mmokit.Position](caster)
-	casterRot := mmokit.Get[mmokit.Rotation](caster)
-	if casterPos == nil || casterRot == nil {
+	if casterPos == nil {
 		return
 	}
 
-	// Default direction: muzzle-forward.
-	dirX := float32(math.Cos(float64(casterRot.Angle)))
-	dirY := float32(math.Sin(float64(casterRot.Angle)))
-	var targetNetID uint32
+	// Normalize the supplied aim vector; on degeneracy fall back to caster
+	// facing so we never spawn a stationary projectile.
+	norm := float32(math.Sqrt(float64(dirX*dirX + dirY*dirY)))
+	if norm < 1e-3 {
+		if rot := mmokit.Get[mmokit.Rotation](caster); rot != nil {
+			dirX = float32(math.Cos(float64(rot.Angle)))
+			dirY = float32(math.Sin(float64(rot.Angle)))
+		} else {
+			return // can't fire without a direction
+		}
+	} else {
+		dirX, dirY = dirX/norm, dirY/norm
+	}
 
-	// If a lock is active, aim at the target's current position.
-	if lock := mmokit.Get[gamecomp.TargetLock](caster); lock != nil {
-		if target, ok := activeLockTarget(gw, lock); ok {
-			if tpos := mmokit.Get[mmokit.Position](target); tpos != nil {
-				dx := tpos.X - casterPos.X
-				dy := tpos.Y - casterPos.Y
-				norm := float32(math.Sqrt(float64(dx*dx + dy*dy)))
-				if norm > 1e-3 {
-					dirX, dirY = dx/norm, dy/norm
-				}
-				if projType == gamecomp.ProjectileTypeMissile {
-					targetNetID = target.NetID()
-				}
+	var targetNetID uint32
+	if projType == gamecomp.ProjectileTypeMissile {
+		if lock := mmokit.Get[gamecomp.TargetLock](caster); lock != nil {
+			if target, ok := activeLockTarget(gw, lock); ok {
+				targetNetID = target.NetID()
 			}
 		}
 	}
