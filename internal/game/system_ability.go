@@ -124,10 +124,14 @@ func (s *AbilitySystem) Update(dt float32) {
 				slot:        slot,
 				params:      params,
 				abilities:   abilities,
+				aimX:        input.LastCastAimX,
+				aimY:        input.LastCastAimY,
 			})
 		}
 
 		input.AbilityCast = 0
+		input.LastCastAimX = 0
+		input.LastCastAimY = 0
 	}
 
 	for _, action := range s.deferred {

@@ -239,6 +239,15 @@ type PlayerInput struct {
 	JettisonItemID  uint32 // item ID to jettison (0 = none)
 	AbilityCast     uint32 // bitmask: bit 0=Q, 1=W, 2=E, 3=R, 4=D, 5=F
 	LockTargetNetID uint32 // lock-on target network ID
+
+	// PVE v3: cursor world coords from the most recent CastAbility press.
+	// AbilitySystem reads these when dispatching skillshot abilities and
+	// resets them to 0 each tick after dispatch (matching the
+	// AbilityCast bitmask reset pattern). The entire PlayerInput
+	// component is local-only (tagged on the ship bundle); these fields
+	// are never serialized over the wire.
+	LastCastAimX float32
+	LastCastAimY float32
 }
 
 // LootCrate is a marker for dropped cargo entities.

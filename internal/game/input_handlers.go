@@ -183,10 +183,13 @@ func RegisterInputs(mmo *mmokit.Process) {
 			return
 		}
 		input.AbilityCast |= 1 << msg.Slot
+		input.LastCastAimX = msg.AimX
+		input.LastCastAimY = msg.AimY
 		if netID != nil {
 			player.Stage().Engine().Log.Log(CatPlayerInput,
-				"player=%d cast=0x%x slot=%d seq=%d",
-				netID.ID, input.AbilityCast, msg.Slot, input.Sequence)
+				"player=%d cast=0x%x slot=%d seq=%d aim=(%.1f,%.1f)",
+				netID.ID, input.AbilityCast, msg.Slot, input.Sequence,
+				msg.AimX, msg.AimY)
 		}
 	})
 
