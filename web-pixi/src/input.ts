@@ -32,7 +32,8 @@ function handleAbilityPress(state: GameState, slot: number): void {
   const isSkillshot =
     params.mode === TargetingMode.SkillshotLine ||
     params.mode === TargetingMode.SkillshotGround ||
-    params.mode === TargetingMode.SkillshotChannel;
+    params.mode === TargetingMode.SkillshotChannel ||
+    params.mode === TargetingMode.CursorPick;
   const quickcast = (state.quickcastMask & (1 << slot)) !== 0;
 
   // Same-slot press while aiming → confirm and fire (release equivalent).
