@@ -747,10 +747,17 @@ func (s *AbilitySystem) tickChannels(dt float32) {
 		}
 		aimAngle := float32(math.Atan2(float64(dy), float64(dx)))
 
-		// Player can be rotated separately from cursor — drop the
-		// channel if the player's facing is way off the aim direction.
-		// BeamHalfArcRad is the allowed slack between facing and aim.
-		if angleDelta(casterRot.Angle, aimAngle) > params.BeamHalfArcRad {
+		// Player can be rotated separately from cursor — drop the channel
+		// only if the player's facing is *grossly* off the aim direction.
+		// The historical BeamHalfArcRad (~30°) was too tight: any
+		// click-to-move-induced rotation while channeling broke the lock
+		// silently, so the beam appeared to "stop damaging" mid-fight.
+		// SkillshotChannel is fundamentally a cursor-driven aim — the
+		// ship-facing check only exists to stop people from beaming
+		// straight backwards. 120° (2.094 rad) is the loosest allowance
+		// that still satisfies that intent.
+		const beamArcLimit float32 = 2.094
+		if angleDelta(casterRot.Angle, aimAngle) > beamArcLimit {
 			ends = append(ends, endCandidate{caster, ch.SlotID})
 			return
 		}

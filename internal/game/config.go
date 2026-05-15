@@ -41,6 +41,10 @@ type GameConfig struct {
 	StationRadius       float32 `json:"stationRadius"`
 	LootCrateRadius     float32 `json:"lootCrateRadius"`
 	LootCrateLifetime   float32 `json:"lootCrateLifetime"`
+	// RepairCostPerHP is the credit cost to restore one HP at a station.
+	// Total cost = (MaxHP − CurrentHP) × RepairCostPerHP, rounded up.
+	// 0 disables the repair charge (free repairs).
+	RepairCostPerHP     float32 `json:"repairCostPerHp"`
 	LootPickupRange     float32 `json:"lootPickupRange"`
 	BankMaxMass         float32 `json:"bankMaxMass"` // station bank mass limit
 	NpcHealth           float32 `json:"npcHealth"`
@@ -157,7 +161,7 @@ func DefaultGameConfig() GameConfig {
 		ShipTurnAccel:       8.0,
 		ShipWidth:           2.0, // ship length (forward)
 		ShipHeight:          1.0, // ship width (side)
-		ShipHealth:          100,
+		ShipHealth:          50,
 		ShipShield:          0,
 		ShieldRegenRate:     1.7,
 		ShieldRegenDelay:    2.0,
@@ -169,6 +173,7 @@ func DefaultGameConfig() GameConfig {
 		StationRadius:       5.0,
 		LootCrateRadius:     0.4,
 		LootCrateLifetime:   60.0,
+		RepairCostPerHP:     1.0,
 		LootPickupRange:     5.0,
 		BankMaxMass:         10000,
 		NpcHealth:           100,

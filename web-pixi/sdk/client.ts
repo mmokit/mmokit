@@ -3,7 +3,7 @@
 import { Transport } from "./transport.js";
 import { SpaceDeltaDecoder } from "./delta-decoder.js";
 import { TypedDispatcher, BankContents, CurrencyUpdate, Docked, DockingState, EquipResult, MapData, PlayerDied, PlayerOwnState, PlayerSpawned, TransferResult, MarketTradeNotification, CellChange, DebugInfo, OperationError, PlayerEntityAssigned, Pong, ServerConfig, WorldDelta } from "./broadcasts.js";
-import { AuthChangePasswordRequest, AuthChangePasswordResponse, AuthLoginRequest, AuthLoginResponse, AuthLogoutRequest, AuthLogoutResponse, AuthRegisterRequest, AuthRegisterResponse, AuthValidateTokenRequest, AuthValidateTokenResponse, BankRequest, BankResponse, MarketBrowseRequest, MarketCancelOrderRequest, MarketCreateOrderRequest, MarketInstantTradeRequest, MarketMyOrdersRequest, MarketMyOrdersResponse, MarketOrderBookResponse, MarketOrderResultResponse } from "./operations.js";
+import { AuthChangePasswordRequest, AuthChangePasswordResponse, AuthLoginRequest, AuthLoginResponse, AuthLogoutRequest, AuthLogoutResponse, AuthRegisterRequest, AuthRegisterResponse, AuthValidateTokenRequest, AuthValidateTokenResponse, BankRequest, BankResponse, MarketBrowseRequest, MarketCancelOrderRequest, MarketCreateOrderRequest, MarketInstantTradeRequest, MarketMyOrdersRequest, MarketMyOrdersResponse, MarketOrderBookResponse, MarketOrderResultResponse, RepairRequest, RepairResponse } from "./operations.js";
 
 export interface SpaceClientOptions {
   url: string;
@@ -250,6 +250,11 @@ export class SpaceClient {
   /** Typed op game.BankRequest → game.BankResponse (kind=player-cell). */
   bank(req: BankRequest): Promise<BankResponse> {
     return this.callOp<BankRequest, BankResponse>(req, BankResponse);
+  }
+
+  /** Typed op game.RepairRequest → game.RepairResponse (kind=player-cell). */
+  repair(req: RepairRequest): Promise<RepairResponse> {
+    return this.callOp<RepairRequest, RepairResponse>(req, RepairResponse);
   }
 
   /** Typed op marketplace.MarketBrowseRequest → marketplace.MarketOrderBookResponse (kind=player-cell). */

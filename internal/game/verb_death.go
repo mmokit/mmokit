@@ -99,57 +99,92 @@ func RegisterDeathVerbs(p *mmokit.Process) {
 }
 
 // handlePlayerKilled is the per-kind body for player deaths. Sends the death
-// cue to the player's client, captures inventory + equipment as a loot drop,
-// and transitions the player session to StateDead.
+// cue to the player's client, captures non-soulbound inventory + equipment
+// as a loot drop, preserves soulbound items on the player's save so the
+// starter kit survives respawn (closing the die→respawn→loot-fresh-starter
+// exploit), and transitions the session to StateDead.
 func (gw *GameWorld) handlePlayerKilled(target mmokit.Entity, killer mmokit.Entity) {
 	// Caller (killedHandler) verified PlayerConn presence via mmokit.Has[PlayerConn].
 	connID := mmokit.Get[mmokit.PlayerConn](target).ConnID
 
 	mmokit.SendEvent(gw.stage, connID, &PlayerDied{KillerID: killer.NetID()})
 
+	pos := mmokit.Get[mmokit.Position](target)
+	if pos == nil {
+		if s := gw.Players.ByConnID(connID); s != nil {
+			gw.Players.Transition(s, StateDead)
+		}
+		return
+	}
+
+	// Split inventory + equipment into "dropped as loot" and "kept across
+	// death". Soulbound items (starter kit, seeded weapons) stay on the
+	// player's save so respawn restores them.
+	var drops map[uint32]int32
+	var keptCargo map[uint32]int32
+	var keptEquip EquipmentSave
+
+	if inv := mmokit.Get[gamecomp.Inventory](target); inv != nil && !inv.IsEmpty() {
+		all := inv.Clear()
+		for id, qty := range all {
+			if item.IsSoulbound(id) {
+				if keptCargo == nil {
+					keptCargo = make(map[uint32]int32)
+				}
+				keptCargo[id] = qty
+			} else {
+				if drops == nil {
+					drops = make(map[uint32]int32)
+				}
+				drops[id] += qty
+			}
+		}
+	}
+	if eq := mmokit.Get[gamecomp.Equipment](target); eq != nil {
+		// Equipment slots — soulbound items stay in their slot for respawn;
+		// non-soulbound items go to the loot crate.
+		dropOrKeep := func(slot *uint32, save *uint32) {
+			if *slot == 0 {
+				return
+			}
+			if item.IsSoulbound(*slot) {
+				*save = *slot
+			} else {
+				if drops == nil {
+					drops = make(map[uint32]int32)
+				}
+				drops[*slot] += 1
+			}
+			*slot = 0
+		}
+		dropOrKeep(&eq.Weapon1, &keptEquip.Weapon1)
+		dropOrKeep(&eq.Weapon2, &keptEquip.Weapon2)
+		dropOrKeep(&eq.Shield, &keptEquip.Shield)
+		dropOrKeep(&eq.Thruster, &keptEquip.Thruster)
+	}
+
 	if s := gw.Players.ByConnID(connID); s != nil {
 		if s.Username != "" {
-			// Clear saved state so respawn places them near the station.
 			pdata := gw.PlayerDB.Bind(s)
-			pdata.Cargo = nil
-			pdata.Equipment = EquipmentSave{}
-			pdata.HasSave = false
+			pdata.Cargo = keptCargo
+			pdata.Equipment = keptEquip
+			// HasSave stays true when ANY soulbound item is kept — otherwise
+			// the respawn path would fall into the "fresh player" branch and
+			// hand out a brand-new starter kit + seed pack, which is the
+			// exact exploit we're closing.
+			pdata.HasSave = keptCargo != nil || !keptEquip.IsZero()
 			gw.PlayerDB.MarkDirtyByUserID(pdata.UserID)
 		}
 		gw.Players.Transition(s, StateDead)
 	}
 
-	// Capture inventory + equipment for loot crate drop.
-	pos := mmokit.Get[mmokit.Position](target)
-	if pos == nil {
-		return
-	}
-	var items map[uint32]int32
-
-	if inv := mmokit.Get[gamecomp.Inventory](target); inv != nil && !inv.IsEmpty() {
-		items = inv.Clear()
-	}
-	if eq := mmokit.Get[gamecomp.Equipment](target); eq != nil {
-		for _, eqID := range []uint32{eq.Weapon1, eq.Weapon2, eq.Shield, eq.Thruster} {
-			if eqID != 0 {
-				if items == nil {
-					items = make(map[uint32]int32)
-				}
-				items[eqID] += 1
-			}
-		}
-		eq.Weapon1 = 0
-		eq.Weapon2 = 0
-		eq.Shield = 0
-		eq.Thruster = 0
-	}
-	if len(items) > 0 {
+	if len(drops) > 0 {
 		// Defer — observer fires from OnTickEach iteration, where spawning
 		// new entities would panic against the ark locked-world check. The
 		// closure runs at the next Commands flush (between systems).
-		x, y, drops := pos.X, pos.Y, items
+		x, y, items := pos.X, pos.Y, drops
 		gw.stage.Commands().Defer(func() {
-			gw.SpawnLootCrate(x, y, drops)
+			gw.SpawnLootCrate(x, y, items)
 		})
 	}
 }

@@ -38,6 +38,7 @@ func GameSetup(coord *mmokit.Process) {
 	// Typed-op handlers — RoutePlayerCell ops dispatched on the player's
 	// authoritative cell engine via Process.DispatchCellRoutedOp.
 	mmokit.RegisterOp(mmokit.RoutePlayerCell, HandleBankRequest)
+	mmokit.RegisterOp(mmokit.RoutePlayerCell, HandleRepairRequest)
 	RegisterDamageVerb(coord)
 	RegisterMiningVerb(coord)
 	RegisterStatusVerb(coord)
@@ -60,11 +61,21 @@ func GameSetup(coord *mmokit.Process) {
 	coord.AddSystem(mmokit.NewSystem(&ProjectileSystem{})) // after Ability (abilities spawn projectiles)
 	coord.AddSystem(mmokit.NewSystem(&StatusEffectSystem{}))
 	coord.AddSystem(mmokit.NewSystem(&NPCAISystem{}))
-	coord.AddSystem(mmokit.NewSystem(&AoESystem{})) // after NPCAISystem (Artillery/Kamikaze/projectile splash resolve same-tick)
 	coord.AddSystem(mmokit.NewSystem(&POISystem{}))
 	coord.AddSystem(mmokit.NewSystem(&WanderSystem{}))
 	coord.AddSystem(mmokit.NewPhysicsSystem())
 	coord.AddSystem(mmokit.NewLifetimeSystem())
+	// AoESystem runs AFTER LifetimeSystem so it sees Lifetime<=0 on the
+	// same tick the engine decrements to zero. The previous order
+	// (AoESystem before LifetimeSystem) silently dropped every non-instant
+	// AoE: LifetimeSystem would mark the marker for removal as soon as
+	// Remaining hit 0, FlushRemovals would despawn it at end-of-tick, and
+	// the next tick's AoESystem couldn't find the entity to resolve
+	// damage. Instant AoEs (Lifetime=0 spawned by projectile splash) still
+	// resolve same-tick — LifetimeSystem decrements 0→-dt (still <=0,
+	// queues removal), then AoESystem sees the marker pre-Flush and
+	// applies damage.
+	coord.AddSystem(mmokit.NewSystem(&AoESystem{}))
 	coord.AddSystem(mmokit.NewSpatialSystem())
 	coord.AddSystem(mmokit.NewSystem(&CollisionSystem{}))
 	coord.AddSystem(mmokit.NewSystem(&ShieldRegenSystem{}))

@@ -169,6 +169,17 @@ type ItemDef struct {
 	EquipSlot   EquipSlot  // which equipment slot this fits (SlotNone for non-equipment)
 	Equip       *EquipData // ability/stat data (nil for non-equipment items)
 	Gaseous     bool       // if true, resource has no terrain collision (e.g. gas clouds)
+	// Soulbound items don't drop on player death — they stay with the
+	// player's saved cargo/equipment. Used for the starter kit so dying
+	// can't be exploited to mint fresh starter items via loot crates.
+	Soulbound bool
+}
+
+// IsSoulbound reports whether an item type stays with the player on death.
+// Returns false for unknown item IDs.
+func IsSoulbound(id uint32) bool {
+	def := registry[id]
+	return def != nil && def.Soulbound
 }
 
 var registry map[uint32]*ItemDef
@@ -199,7 +210,7 @@ func doInit() {
 	// --- Weapons (SlotWeapon → fits Weapon1 or Weapon2) ---
 	register(&ItemDef{
 		ID: 100, Name: "Pulse Laser Array", Category: CategoryEquipment,
-		MassPerUnit: 5.0, EquipSlot: SlotWeapon,
+		MassPerUnit: 5.0, EquipSlot: SlotWeapon, Soulbound: true,
 		Equip: &EquipData{
 			Primary: AbilityParams{
 				Type: AbilityTypePulseLaser, Name: "Pulse Shot",
@@ -272,7 +283,7 @@ func doInit() {
 	// homing splash munition).
 	register(&ItemDef{
 		ID: 107, Name: "Plasma Cannon", Category: CategoryEquipment,
-		MassPerUnit: 5.0, EquipSlot: SlotWeapon,
+		MassPerUnit: 5.0, EquipSlot: SlotWeapon, Soulbound: true,
 		Equip: &EquipData{
 			Primary: AbilityParams{
 				Type: AbilityTypePlasmaShot, Name: "Plasma Shot",
@@ -297,7 +308,7 @@ func doInit() {
 	// splash munition with no lock requirement).
 	register(&ItemDef{
 		ID: 108, Name: "Beam-Mortar Battery", Category: CategoryEquipment,
-		MassPerUnit: 5.0, EquipSlot: SlotWeapon,
+		MassPerUnit: 5.0, EquipSlot: SlotWeapon, Soulbound: true,
 		Equip: &EquipData{
 			Primary: AbilityParams{
 				Type: AbilityTypeSustainedBeam, Name: "Sustained Beam",
@@ -322,7 +333,7 @@ func doInit() {
 	// --- Mining Lasers (SlotWeapon → fits Weapon1 or Weapon2) ---
 	register(&ItemDef{
 		ID: 130, Name: "Mining Laser", Category: CategoryEquipment,
-		MassPerUnit: 5.0, EquipSlot: SlotWeapon,
+		MassPerUnit: 5.0, EquipSlot: SlotWeapon, Soulbound: true,
 		Equip: &EquipData{
 			Primary: AbilityParams{
 				Type: AbilityTypeMiningBeam, Name: "Mining Beam",
@@ -356,14 +367,14 @@ func doInit() {
 	// --- Shield Generator (SlotShield → D) ---
 	register(&ItemDef{
 		ID: 110, Name: "Standard Shield Gen", Category: CategoryEquipment,
-		MassPerUnit: 5.0, EquipSlot: SlotShield,
+		MassPerUnit: 5.0, EquipSlot: SlotShield, Soulbound: true,
 		Equip: &EquipData{
 			Primary: AbilityParams{
 				Type: AbilityTypeEmergencyShield, Name: "Emergency Shield",
 				Cooldown: 15.0, ShieldRestore: 35, DmgReduction: 0.3, BuffDuration: 5.0,
 				Mode: TargetingSelf,
 			},
-			ShieldMax: 50, ShieldRegenRate: 1.7,
+			ShieldMax: 200, ShieldRegenRate: 1.7,
 		},
 	})
 	register(&ItemDef{
@@ -375,14 +386,14 @@ func doInit() {
 				Cooldown: 20.0, ShieldRestore: 55, DmgReduction: 0.5, BuffDuration: 6.0,
 				Mode: TargetingSelf,
 			},
-			ShieldMax: 75, ShieldRegenRate: 1.0,
+			ShieldMax: 250, ShieldRegenRate: 1.0,
 		},
 	})
 
 	// --- Thruster (SlotThruster → F) ---
 	register(&ItemDef{
 		ID: 120, Name: "Standard Thruster", Category: CategoryEquipment,
-		MassPerUnit: 5.0, EquipSlot: SlotThruster,
+		MassPerUnit: 5.0, EquipSlot: SlotThruster, Soulbound: true,
 		Equip: &EquipData{
 			Primary: AbilityParams{
 				Type: AbilityTypeAfterburner, Name: "Afterburner",

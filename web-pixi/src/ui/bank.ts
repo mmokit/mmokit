@@ -2,7 +2,13 @@ import { ITEM_COLORS_CSS, DEFAULT_ITEM_COLOR } from "../constants";
 
 import { SETTLEMENT_CURRENCY_ID, type GameState } from "../state";
 import { needsRebuild, invalidate } from "./memo";
-import { InventoryTransfer } from "../../sdk/index.js";
+import { InventoryTransfer, RepairRequest } from "../../sdk/index.js";
+import { getCombat } from "../entity-accessors";
+
+// Server's GameConfig.RepairCostPerHP default. The UI mirrors the formula
+// (ceil((maxHP − currentHP) × cost)) for display only — server is
+// authoritative. Keep in sync with internal/game/config.go.
+const REPAIR_COST_PER_HP = 1;
 
 let delegationSetup = false;
 let currentState: GameState | null = null;
@@ -55,6 +61,40 @@ function setupDelegation(): void {
     closeBtn.addEventListener("mousedown", (e) => {
       e.stopPropagation();
       if (currentState) currentState.bankPanelOpen = false;
+    });
+  }
+
+  const repairBtn = document.getElementById("repair-btn") as HTMLButtonElement | null;
+  if (repairBtn) {
+    repairBtn.addEventListener("mousedown", async (e) => {
+      e.stopPropagation();
+      if (!currentState?.connected || !currentState.client) return;
+      if (repairBtn.disabled) return;
+      // Optimistically disable to avoid double-clicks; server response
+      // re-renders state + the next updateRepairSection re-evaluates.
+      repairBtn.disabled = true;
+      currentState.inputSeq++;
+      try {
+        const res = await currentState.client.repair(new RepairRequest({ sequence: currentState.inputSeq }));
+        if (res.error) {
+          // Error path: leave HP unchanged; updateRepairSection will
+          // re-enable the button on the next tick if conditions permit.
+          // We deliberately don't toast — the disabled state + "insufficient"
+          // hint already communicate failure.
+          return;
+        }
+        // Server-side health mutation will replicate next tick, but echo
+        // immediately into the local entity snapshot so the HUD doesn't
+        // flash stale HP for one frame.
+        if (currentState.myEntityId && res.newHealth > 0) {
+          const ent = currentState.entities.get(currentState.myEntityId);
+          if (ent && ent.current && "healthCurrent" in ent.current) {
+            (ent.current as { healthCurrent: number }).healthCurrent = res.newHealth;
+          }
+        }
+      } catch {
+        // network/transport drop — silently retry on next click.
+      }
     });
   }
 }
@@ -151,4 +191,45 @@ export function updateBankPanel(state: GameState): void {
     : `${Math.floor(state.bankTotalMass)} mass`;
   const curName = state.itemDefs.get(SETTLEMENT_CURRENCY_ID)?.name ?? "Currency";
   footerEl.textContent = `${massText} | ${curName}: ${Math.floor(bankFlux)} | Click: All • Shift+Click: Half`;
+
+  updateRepairSection(state, bankFlux);
+}
+
+// updateRepairSection refreshes the HP/cost/button labels each tick while
+// docked. Drives the button disabled-state from the same predicate the
+// server enforces (must have credits ≥ cost AND have missing HP), so the
+// click handler only fires when it'll succeed.
+function updateRepairSection(state: GameState, credits: number): void {
+  const hpEl = document.getElementById("repair-hp-text");
+  const costEl = document.getElementById("repair-cost-text");
+  const btn = document.getElementById("repair-btn") as HTMLButtonElement | null;
+  if (!hpEl || !costEl || !btn) return;
+
+  const myEnt = state.myEntityId ? state.entities.get(state.myEntityId) : undefined;
+  const combat = myEnt ? getCombat(myEnt) : undefined;
+  if (!combat || combat.maxHealth <= 0) {
+    hpEl.textContent = "HP --/--";
+    costEl.textContent = "";
+    costEl.classList.remove("insufficient");
+    btn.disabled = true;
+    return;
+  }
+
+  const cur = Math.floor(combat.health);
+  const max = Math.floor(combat.maxHealth);
+  hpEl.textContent = `HP ${cur} / ${max}`;
+
+  const missing = combat.maxHealth - combat.health;
+  if (missing <= 0) {
+    costEl.textContent = "Full";
+    costEl.classList.remove("insufficient");
+    btn.disabled = true;
+    return;
+  }
+
+  const cost = Math.ceil(missing * REPAIR_COST_PER_HP);
+  const canAfford = credits >= cost;
+  costEl.textContent = `${cost} cr`;
+  costEl.classList.toggle("insufficient", !canAfford);
+  btn.disabled = !canAfford;
 }

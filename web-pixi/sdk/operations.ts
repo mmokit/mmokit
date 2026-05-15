@@ -434,6 +434,55 @@ export class BankResponse {
   }
 }
 
+/** Broadcast-eligible event game.RepairRequest (typeID 0xf1ca9017). */
+export class RepairRequest {
+  static readonly typeID = 0xf1ca9017;
+  sequence: number = 0;
+
+  constructor(init?: Partial<RepairRequest>) {
+    if (init) Object.assign(this, init);
+  }
+
+  static decode(buf: Uint8Array): RepairRequest {
+    const dv = new DataView(buf.buffer, buf.byteOffset, buf.byteLength);
+    let off = 0;
+    const m = new RepairRequest();
+    m.sequence = dv.getUint32(off, true); off += 4;
+    return m;
+  }
+
+  encode(): Uint8Array {
+    const buf = new Uint8Array(4);
+    const dv = new DataView(buf.buffer);
+    let off = 0;
+    dv.setUint32(off, this.sequence, true); off += 4;
+    return buf;
+  }
+}
+
+/** Broadcast-eligible event game.RepairResponse (typeID 0x3a71b9ed). */
+export class RepairResponse {
+  static readonly typeID = 0x3a71b9ed;
+  success: boolean = false;
+  cost: number = 0;
+  newHealth: number = 0;
+  error: string = "";
+
+  static decode(buf: Uint8Array): RepairResponse {
+    const dv = new DataView(buf.buffer, buf.byteOffset, buf.byteLength);
+    let off = 0;
+    const m = new RepairResponse();
+    m.success = dv.getUint8(off) !== 0; off += 1;
+    m.cost = Number(dv.getBigInt64(off, true)); off += 8;
+    m.newHealth = dv.getFloat32(off, true); off += 4;
+    {
+      const sl = dv.getUint16(off, true); off += 2;
+      m.error = new TextDecoder().decode(buf.subarray(off, off + sl)); off += sl;
+    }
+    return m;
+  }
+}
+
 /** Broadcast-eligible event marketplace.MarketBrowseRequest (typeID 0xd952f5a1). */
 export class MarketBrowseRequest {
   static readonly typeID = 0xd952f5a1;

@@ -135,6 +135,41 @@ func TestAoESystem_OwnerNotDamaged(t *testing.T) {
 	}
 }
 
+// TestAoESystem_ProductionOrder_LifetimeDecrementThenResolve — pins the
+// system-order contract from factory.go: LifetimeSystem runs BEFORE
+// AoESystem so that on the tick where Remaining drops to 0, AoESystem
+// can still see the marker (FlushRemovals hasn't run yet) and apply
+// damage. The reverse order silently dropped every non-instant AoE
+// because the marker was despawned by LifetimeSystem's removal queue
+// before AoESystem next looked at it.
+func TestAoESystem_ProductionOrder_LifetimeDecrementThenResolve(t *testing.T) {
+	gw, _ := newTestGameWorld()
+	mmokit.Handle(gw.stage, damageHandler)
+	aoeSys := wireAoESystem(t, gw)
+	lifeSys := &mmokit.LifetimeSystem{}
+	mmokit.WireSystem(lifeSys, gw.stage.ECSWorld(), gw.eng, gw.stage)
+
+	npc := spawnAoETestNPC(t, gw, 9001, 100, 100)
+
+	// 0.6s lifetime mirrors the player Mortar GroundCastDelay.
+	gw.SpawnAoEMarker(100, 100, 0.6, 8, 40, 0, FactionMaskAll, 0)
+
+	// Production order: LifetimeSystem decrements, then AoESystem
+	// resolves expired markers. Tick at 20Hz (dt=0.05) for ~14 ticks so
+	// the 0.6s window is reliably crossed.
+	for range 14 {
+		gw.stage.TickOne(lifeSys, 0.05)
+		gw.stage.TickOne(aoeSys, 0.05)
+		if hp := mmokit.Get[gamecomp.Health](npc).Current; hp < 100 {
+			break
+		}
+	}
+
+	if hp := mmokit.Get[gamecomp.Health](npc).Current; hp >= 100 {
+		t.Fatalf("expected NPC damaged after 0.6s lifetime expired in production order; got HP=%.1f", hp)
+	}
+}
+
 // TestAoESystem_FactionMask_NPCOnly — a marker with FactionMaskNPC
 // hits NPCs but not players.
 func TestAoESystem_FactionMask_NPCOnly(t *testing.T) {

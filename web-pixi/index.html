@@ -363,6 +363,39 @@
             border-top: 1px solid rgba(255,255,255,0.08); padding-top: 6px;
         }
 
+        /* Station services (currently: HP repair). Sits below the bank table
+           in the docked bank panel. Repair button enables only when there's
+           missing HP AND the player has enough credits. */
+        #repair-section {
+            margin-top: 10px;
+            border-top: 1px solid rgba(255,255,255,0.08);
+            padding-top: 8px;
+        }
+        #repair-section h3 {
+            color: #aab; font-size: 11px; margin: 0 0 6px;
+            text-transform: uppercase; letter-spacing: 1px;
+        }
+        #repair-row {
+            display: flex; align-items: center; gap: 10px;
+            font-size: 12px; color: #ccc;
+        }
+        #repair-hp-text { flex: 1; color: #eee; }
+        #repair-cost-text { color: #fc6; min-width: 80px; text-align: right; }
+        #repair-cost-text.insufficient { color: #f88; }
+        #repair-btn {
+            background: rgba(80,180,80,0.2);
+            border: 1px solid rgba(80,180,80,0.5);
+            color: #8f8; font-family: monospace; font-size: 11px;
+            padding: 4px 10px; cursor: pointer;
+            letter-spacing: 1px;
+        }
+        #repair-btn:hover:not(:disabled) { background: rgba(80,180,80,0.4); }
+        #repair-btn:disabled {
+            background: rgba(80,80,80,0.2);
+            border-color: rgba(120,120,120,0.4);
+            color: #666; cursor: not-allowed;
+        }
+
         /* While docked, the cargo-panel is reparented into #station-panels
            as the leftmost child. Override the absolute right-rail
            positioning so it can flow as a flex item. */
@@ -743,6 +776,14 @@
                 <tbody id="bank-rows"></tbody>
             </table>
             <div id="bank-footer"></div>
+            <div id="repair-section">
+                <h3>SERVICES</h3>
+                <div id="repair-row">
+                    <span id="repair-hp-text">HP --/--</span>
+                    <span id="repair-cost-text"></span>
+                    <button id="repair-btn" disabled>REPAIR</button>
+                </div>
+            </div>
         </div>
         <div id="marketplace-panel"></div>
     </div>
