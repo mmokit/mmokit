@@ -183,6 +183,12 @@ func projectileAbilityType(projType uint8) uint8 {
 		return uint8(item.AbilityTypeHomingMissile)
 	case gamecomp.ProjectileTypeMortar:
 		return uint8(item.AbilityTypeMortarShell)
+	case gamecomp.ProjectileTypePulse:
+		return uint8(item.AbilityTypePulseLaser)
+	case gamecomp.ProjectileTypeRail:
+		return uint8(item.AbilityTypeRailShot)
+	case gamecomp.ProjectileTypeIon:
+		return uint8(item.AbilityTypeIonOverload)
 	}
 	return 0
 }

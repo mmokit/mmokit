@@ -39,4 +39,7 @@ const (
 	ProjectileTypePlasma  uint8 = 0
 	ProjectileTypeMissile uint8 = 1
 	ProjectileTypeMortar  uint8 = 2
+	ProjectileTypePulse   uint8 = 3 // fast yellow tracers (PulseLaser, PulseBarrage)
+	ProjectileTypeRail    uint8 = 4 // long blue-white slugs (RailShot, PiercingRound)
+	ProjectileTypeIon     uint8 = 5 // purple/electric (IonOverload)
 )

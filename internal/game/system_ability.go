@@ -362,19 +362,24 @@ func (s *AbilitySystem) dispatchSkillshotLine(action abilityAction, casterE mmok
 	dx := action.aimX - casterPos.X
 	dy := action.aimY - casterPos.Y
 
-	// Choose pierce count + visual variant per AbilityType (per spec table).
+	// Choose pierce count + visual variant per AbilityType. Each weapon
+	// family gets its own ProjectileType so pulse/rail/ion/plasma read
+	// distinctly on the client (color, size, trail).
 	var pierceCount uint8
-	var projType uint8 = gamecomp.ProjectileTypePlasma // default visual variant
+	var projType uint8 = gamecomp.ProjectileTypePlasma
 	switch params.Type {
+	case item.AbilityTypePulseLaser, item.AbilityTypePulseBarrage:
+		projType = gamecomp.ProjectileTypePulse
 	case item.AbilityTypeRailShot:
 		pierceCount = 2
+		projType = gamecomp.ProjectileTypeRail
 	case item.AbilityTypePiercingRound:
 		pierceCount = 99
-		projType = gamecomp.ProjectileTypeMissile // distinct visual
-	case item.AbilityTypePlasmaShot:
+		projType = gamecomp.ProjectileTypeRail
+	case item.AbilityTypeIonOverload:
+		projType = gamecomp.ProjectileTypeIon
+	case item.AbilityTypePlasmaBolt, item.AbilityTypePlasmaShot:
 		projType = gamecomp.ProjectileTypePlasma
-		// PulseLaser, PulseBarrage, PlasmaBolt, IonOverload all fall through
-		// to default Plasma visual + pierceCount 0.
 	}
 
 	if params.Type == item.AbilityTypePulseBarrage {

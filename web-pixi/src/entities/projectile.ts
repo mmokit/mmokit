@@ -9,6 +9,9 @@ import { px } from "../view";
 const PROJECTILE_PLASMA = 0;
 const PROJECTILE_MISSILE = 1;
 const PROJECTILE_MORTAR = 2;
+const PROJECTILE_PULSE = 3;
+const PROJECTILE_RAIL = 4;
+const PROJECTILE_ION = 5;
 
 interface VariantStyle {
   color: number;
@@ -16,10 +19,20 @@ interface VariantStyle {
   radius: number; // in screen px
 }
 
+// Per-weapon color identity:
+//   Plasma (cyan)   — PlasmaShot / PlasmaBolt, the "plasma" family
+//   Missile (orange)— HomingMissile, the "guided" missile
+//   Mortar (gold)   — MortarShell launch trail
+//   Pulse (yellow)  — fast PulseLaser/PulseBarrage tracers, small
+//   Rail (white-blue) — RailShot/PiercingRound slugs, long thin trail
+//   Ion (purple)    — IonOverload, with electric-hued trail
 const VARIANT_STYLES: Record<number, VariantStyle> = {
   [PROJECTILE_PLASMA]:  { color: 0x44e0ff, trailColor: 0x1488aa, radius: 6 },
   [PROJECTILE_MISSILE]: { color: 0xff9933, trailColor: 0xaa5511, radius: 8 },
   [PROJECTILE_MORTAR]:  { color: 0xffdd33, trailColor: 0xaa8811, radius: 9 },
+  [PROJECTILE_PULSE]:   { color: 0xffee66, trailColor: 0xaa8822, radius: 4 },
+  [PROJECTILE_RAIL]:    { color: 0xccddff, trailColor: 0x4477cc, radius: 5 },
+  [PROJECTILE_ION]:     { color: 0xcc66ff, trailColor: 0x6633aa, radius: 6 },
 };
 
 // createProjectileDisplay renders a server-spawned Projectile entity.
