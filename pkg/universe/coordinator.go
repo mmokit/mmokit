@@ -416,9 +416,8 @@ type PlayerLocation struct {
 }
 
 // activeUser is the UUID-keyed view of an active player session. Tracks
-// just enough state for the kick-old policy on duplicate authentication
-// (find the gateway holding the existing session, send SE_KICKED, then
-// tear it down).
+// just enough state to detect duplicate-active logins (a second window
+// authenticating with the same user_id) so the gateway can reject them.
 type activeUser struct {
 	UserID    uuid.UUID
 	Username  string
@@ -535,8 +534,9 @@ type Process struct {
 	// authState; cell-side callers only have username, so both indexes are
 	// kept consistent on every notifySession* mutation.
 	activeUsers map[uuid.UUID]*activeUser
-	// userIDByConn lets the gateway's kick-old path resolve a connID back to
-	// the userID for the active session that needs to be torn down.
+	// userIDByConn maps a per-connection ID back to its user_id. Currently
+	// only written (cleaned up on notifySessionRemoved); kept as a hook for
+	// future per-connection→user_id lookups.
 	userIDByConn  map[uint32]uuid.UUID
 	sessionRoutes *sessionRoutes // connID -> cell routing; own mu, separate from c.mu
 
@@ -1095,8 +1095,10 @@ func (c *Process) notifySessionRemoved(username string) {
 // applyResolveSpawnReconnect populates resp with reconnect-routing info when
 // activeUsers has a session for userID:
 //
-//   - Active=true (user online elsewhere) → kick old, leave resp untouched
-//     (caller treats as fresh login).
+//   - Active=true (user online elsewhere) → set Rejected=true. The gateway
+//     closes the new WebSocket without dispatching a PlayerAssignment, so the
+//     duplicate window sees a clean "already logged in" error and the
+//     original session keeps playing uninterrupted.
 //   - Active=false (in grace period) AND the cached cell is still owned →
 //     stamp IsReconnect=true + the current host for the cell. After a merge
 //     or migrate the cached CellID may be stale; HostForCellID returning ""
@@ -1113,7 +1115,7 @@ func (c *Process) applyResolveSpawnReconnect(userID uuid.UUID, resp *meshpb.Spaw
 		return
 	}
 	if loc.Active {
-		c.kickActiveUser(userID, "replaced by newer login")
+		resp.Rejected = true
 		return
 	}
 	if loc.CellID == "" {
@@ -1130,8 +1132,8 @@ func (c *Process) applyResolveSpawnReconnect(userID uuid.UUID, resp *meshpb.Spaw
 
 // registerAuthenticatedSession is called by the gateway after auth-service
 // success and PlayerAssignment dispatch. It stamps the UUID-keyed activeUsers
-// index so kickActiveUser can target the right gateway/connection on a
-// duplicate-auth event.
+// index so a subsequent duplicate-login attempt for the same user_id can be
+// detected (via activeUserLocked) and rejected with a clean error.
 func (c *Process) registerAuthenticatedSession(userID uuid.UUID, username, gatewayID string, connID uint32, hostID string, cellID MeshCellID) {
 	if userID == uuid.Nil {
 		return
@@ -1211,30 +1213,6 @@ func (c *Process) activeUserLocked(userID uuid.UUID) *PlayerLocation {
 		return loc
 	}
 	return &PlayerLocation{HostID: au.HostID, CellID: au.CellID, Active: true}
-}
-
-// kickActiveUser tears down the existing session for userID and sends SE_KICKED
-// to the old connection. No-op when no active session exists for that UUID.
-// The new session is expected to install itself afterward via the normal
-// dispatchPlayerAssignment path.
-func (c *Process) kickActiveUser(userID uuid.UUID, reason string) {
-	c.mu.Lock()
-	au := c.activeUsers[userID]
-	if au != nil {
-		delete(c.activeUsers, userID)
-		delete(c.userIDByConn, au.ConnID)
-		delete(c.players, au.Username)
-	}
-	c.mu.Unlock()
-	if au == nil {
-		return
-	}
-	c.Log.Log(CatNetConn, "coordinator: kick old session user=%s conn=%d (reason=%s)", au.Username, au.ConnID, reason)
-	if c.gateway != nil && c.gateway.id == au.GatewayID {
-		c.gateway.kickConn(au.ConnID, reason)
-	}
-	// sessionRoutes cleanup so the upstream switch logic doesn't bounce traffic.
-	c.sessionRoutes.Remove(SessionKey{GatewayID: au.GatewayID, ConnID: au.ConnID})
 }
 
 // ActiveUserHost returns the hostID for an active username, or "" if offline.

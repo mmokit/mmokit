@@ -95,6 +95,11 @@ type GameConfig struct {
 
 	// AI shared
 	AggroDeescalationSec float32 `json:"aggro_deescalation_sec"`
+	// NPCAttackJitter is the random fraction applied to every NPC attack
+	// cooldown (initial spawn + post-cast resets). 0.4 means "actual
+	// cooldown = base × (1 ± 0.4)" — sampled fresh each time so multiple
+	// NPCs of the same archetype don't fire their abilities in unison.
+	NPCAttackJitter float32 `json:"npc_attack_jitter"`
 
 
 	// Docking
@@ -191,16 +196,20 @@ func DefaultGameConfig() GameConfig {
 		ArtilleryAoERadius: 12, ArtilleryAoEDamage: 50,
 		ArtilleryCastTime: 3.5, ArtilleryCastCooldown: 3.0, ArtilleryInterruptDamage: 25,
 
-		// Lancer — telegraphed charge: stalk to mid range, freeze 1s with a
+		// Lancer — telegraphed charge: stalk to mid range, freeze with a
 		// visible line telegraph, then dash through fast. Heavy damage on
 		// contact. Counter-play is sidestep during telegraph + punish
-		// during the 1.5s recovery window.
+		// during the recovery window. Windup + recover are both stretched
+		// so the charge cadence feels readable rather than spammy, and the
+		// jitter knob below desyncs multiple Lancers engaging the same
+		// player.
 		LancerHP: 60, LancerShield: 20, LancerMaxSpeed: 14, LancerTurnRate: 2.5,
 		LancerAggroRadius: 60, LancerLockRange: 40, LancerLanceRange: 30,
-		LancerWindupTime: 1.0, LancerChargeSpeed: 50, LancerChargeTime: 0.8,
-		LancerChargeWidth: 3, LancerChargeDamage: 35, LancerRecoverTime: 1.5,
+		LancerWindupTime: 1.5, LancerChargeSpeed: 50, LancerChargeTime: 0.8,
+		LancerChargeWidth: 3, LancerChargeDamage: 35, LancerRecoverTime: 2.5,
 
 		AggroDeescalationSec: 6,
+		NPCAttackJitter:      0.4,
 
 		// Docking
 		DockTime:         3.0,

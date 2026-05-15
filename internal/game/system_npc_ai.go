@@ -2,11 +2,32 @@ package game
 
 import (
 	"math"
+	"math/rand/v2"
 
 	gamecomp "github.com/zenion/mmoserver/internal/component"
 	"github.com/zenion/mmoserver/internal/item"
 	"github.com/zenion/mmoserver/pkg/mmokit"
 )
+
+// jitterCooldown returns `base * (1 + r)` where r is uniform in
+// [-jitter, +jitter]. Used by NPC archetypes to desync ability cadence
+// across enemies engaging the same player — without it, every Lancer in a
+// pack winds up and charges in unison, and every Artillery casts on the
+// same beat. jitter is clamped to [0, 0.9] so a misconfigured value can
+// never produce a non-positive cooldown.
+func jitterCooldown(base, jitter float32) float32 {
+	if base <= 0 {
+		return base
+	}
+	if jitter < 0 {
+		jitter = 0
+	}
+	if jitter > 0.9 {
+		jitter = 0.9
+	}
+	r := (rand.Float32()*2 - 1) * jitter
+	return base * (1 + r)
+}
 
 // NPCAISystem drives the per-NPC state machine each tick. Acquires
 // targets via NPCAI.TargetNetID, applies
@@ -323,7 +344,7 @@ func (s *NPCAISystem) tickEngage(self mmokit.Entity, ai *gamecomp.NPCAI,
 				// Resolve the special: hitscan along SpecialDirAngle for
 				// BrawlerSpecialLength × (2 × BrawlerSpecialHalfWidth).
 				s.resolveBrawlerSpecial(self, ai, pos)
-				ai.SpecialCooldown = s.gw.Config.BrawlerSpecialCooldown
+				ai.SpecialCooldown = jitterCooldown(s.gw.Config.BrawlerSpecialCooldown, s.gw.Config.NPCAttackJitter)
 			}
 			// While windup is active, Brawler stays still (visible commit).
 			vel.X, vel.Y = 0, 0
@@ -468,7 +489,7 @@ func (s *NPCAISystem) tickCast(self mmokit.Entity, ai *gamecomp.NPCAI,
 		ai.CastingMarkerNetID = 0
 		ai.CastTimeRemaining = 0
 		ai.CastDamageAccum = 0
-		ai.CastCooldown = s.gw.Config.ArtilleryCastCooldown
+		ai.CastCooldown = jitterCooldown(s.gw.Config.ArtilleryCastCooldown, s.gw.Config.NPCAttackJitter)
 		ai.State = AIStateEngage
 		return
 	}
@@ -482,7 +503,7 @@ func (s *NPCAISystem) tickCast(self mmokit.Entity, ai *gamecomp.NPCAI,
 		ai.CastingMarkerNetID = 0
 		ai.CastTimeRemaining = 0
 		ai.CastDamageAccum = 0
-		ai.CastCooldown = s.gw.Config.ArtilleryCastCooldown
+		ai.CastCooldown = jitterCooldown(s.gw.Config.ArtilleryCastCooldown, s.gw.Config.NPCAttackJitter)
 		ai.State = AIStateEngage
 	}
 }
@@ -549,7 +570,7 @@ func (s *NPCAISystem) tickLanceCharge(self mmokit.Entity, ai *gamecomp.NPCAI,
 	if ai.ChargeRemaining > 0 {
 		return
 	}
-	ai.RecoverRemaining = s.gw.Config.LancerRecoverTime
+	ai.RecoverRemaining = jitterCooldown(s.gw.Config.LancerRecoverTime, s.gw.Config.NPCAttackJitter)
 	ai.State = AIStateLanceRecover
 	vel.X, vel.Y = 0, 0
 }

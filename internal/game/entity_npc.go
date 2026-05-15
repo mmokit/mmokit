@@ -1,6 +1,8 @@
 package game
 
 import (
+	"math/rand/v2"
+
 	gamecomp "github.com/zenion/mmoserver/internal/component"
 	"github.com/zenion/mmoserver/pkg/mmokit"
 )
@@ -28,6 +30,28 @@ type NPCBundle struct {
 func (gw *GameWorld) SpawnNPC(x, y float32, archetype uint8, poiNetID uint32) mmokit.Entity {
 	d := archetypeDefaults(gw.Config, archetype)
 
+	// Initial ability-cooldown offsets so a pack of NPCs that aggro on the
+	// same tick don't fire their telegraphed attacks in lockstep. Each
+	// archetype seeds the relevant clock; values are sampled uniformly in
+	// [0, base × (1 + jitter)]. The whole-base ceiling guarantees the
+	// first cast/charge isn't unfairly delayed past the steady-state
+	// cadence — but two NPCs spawning together are statistically
+	// guaranteed to drift apart.
+	jitter := gw.Config.NPCAttackJitter
+	var initCastCD, initSpecialCD, initRecover float32
+	switch archetype {
+	case ArchetypeArtillery:
+		initCastCD = rand.Float32() * gw.Config.ArtilleryCastCooldown * (1 + jitter)
+	case ArchetypeBrawler:
+		initSpecialCD = rand.Float32() * gw.Config.BrawlerSpecialCooldown * (1 + jitter)
+	case ArchetypeLancer:
+		// RecoverRemaining is the gate for Lancer charges (see tickEngage:
+		// the windup trigger requires RecoverRemaining<=0). Stamping a
+		// small initial recover prevents instant-windup-on-aggro for
+		// freshly spawned packs.
+		initRecover = rand.Float32() * gw.Config.LancerRecoverTime * (1 + jitter)
+	}
+
 	components := []any{
 		mmokit.Position{X: x, Y: y},
 		mmokit.EntityKind{Type: gamecomp.KindNPC},
@@ -48,17 +72,20 @@ func (gw *GameWorld) SpawnNPC(x, y float32, archetype uint8, poiNetID uint32) mm
 		},
 		gamecomp.StatusEffects{},
 		gamecomp.NPCAI{
-			Archetype:      archetype,
-			State:          AIStateIdle,
-			MaxSpeed:       d.MaxSpeed,
-			TurnRate:       d.TurnRate,
-			PreferredRange: d.PreferredRange,
-			WeaponRange:    d.WeaponRange,
-			AggroRadius:    d.AggroRadius,
-			LockRange:      d.LockRange,
-			MotionPolicy:   d.MotionPolicy,
-			DamagePerShot:  d.DamagePerShot,
-			FireRate:       d.FireRate,
+			Archetype:        archetype,
+			State:            AIStateIdle,
+			MaxSpeed:         d.MaxSpeed,
+			TurnRate:         d.TurnRate,
+			PreferredRange:   d.PreferredRange,
+			WeaponRange:      d.WeaponRange,
+			AggroRadius:      d.AggroRadius,
+			LockRange:        d.LockRange,
+			MotionPolicy:     d.MotionPolicy,
+			DamagePerShot:    d.DamagePerShot,
+			FireRate:         d.FireRate,
+			CastCooldown:     initCastCD,
+			SpecialCooldown:  initSpecialCD,
+			RecoverRemaining: initRecover,
 		},
 	}
 	if poiNetID != 0 {

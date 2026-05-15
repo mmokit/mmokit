@@ -278,10 +278,12 @@ func (g *Gateway) onAuthLogout(connID uint32) {
 	g.connMgr.Remove(connID)
 }
 
-// kickConn tears down an existing connection — used by the coordinator's
-// kick-old policy when a duplicate user_id authenticates. Reason is logged;
-// no SE_KICKED event is sent today (gateway-crash transparent reconnect
-// will land in a follow-up phase).
+// kickConn tears down an existing connection — used by the duplicate-active
+// rejection path in dispatchPostAuthAssignment when a second window logs in
+// for an already-online user_id. Reason is logged; no SE_KICKED event is
+// sent today (gateway-crash transparent reconnect will land in a follow-up
+// phase). The client sees a clean WebSocket close and surfaces the rejection
+// via the existing onClose → onLoginRejected handler.
 func (g *Gateway) kickConn(connID uint32, reason string) {
 	g.clearAuthState(connID)
 	g.mu.Lock()
@@ -298,6 +300,27 @@ func (g *Gateway) kickConn(connID uint32, reason string) {
 // PlayerAssignment to the destination cell.
 func (g *Gateway) dispatchPostAuthAssignment(connID uint32, userID uuid.UUID, username, token string) {
 	res := g.resolveSpawn(context.Background(), userID, username)
+
+	// Duplicate-active rejection. Another window is already online for this
+	// user_id; close the new WS without dispatching a PlayerAssignment so
+	// the original session keeps playing uninterrupted. Standalone gateway
+	// gets the flag piggybacked on SpawnResolved (set by
+	// applyResolveSpawnReconnect on the coord); embedded gateway runs the
+	// same check inline via activeUserLocked. Both paths converge here.
+	rejected := res.Rejected
+	if !rejected && g.coord != nil {
+		g.coord.mu.RLock()
+		if loc := g.coord.activeUserLocked(userID); loc != nil && loc.Active {
+			rejected = true
+		}
+		g.coord.mu.RUnlock()
+	}
+	if rejected {
+		g.log.Log(CatNetConn, "gateway: rejecting duplicate login conn=%d user=%s — another session is active", connID, username)
+		g.kickConn(connID, "another session is active for this user")
+		return
+	}
+
 	loc := res.Location
 
 	var cellID string
@@ -368,8 +391,8 @@ func (g *Gateway) dispatchPostAuthAssignment(connID uint32, userID uuid.UUID, us
 	}
 
 	// Stamp the UUID-keyed activeUsers index so reconnect detection
-	// (activeUserLocked) and kick-old policy (kickActiveUser) can find
-	// this session on a subsequent auth attempt for the same user_id.
+	// (activeUserLocked) and duplicate-active rejection can find this
+	// session on a subsequent auth attempt for the same user_id.
 	// Without this, activeUsers stays empty and every login creates a
 	// fresh entity instead of reattaching to the lingering session.
 	//
@@ -569,10 +592,9 @@ func (g *Gateway) announceSession(sess *localSession) {
 // disconnected session in the same coord process) then writes directly to
 // the cell's Inbox. In standalone mode it forwards via MeshData.
 //
-// Duplicate-user detection (kick-old policy) lives one layer up in the
-// coordinator's activeUsers map, keyed by UUID. Any duplicate auth attempt
-// for a user_id that already has an active session kicks the old session
-// before this dispatch runs.
+// Duplicate-active rejection happens upstream in dispatchPostAuthAssignment
+// (single early-exit before any session state is mutated). By the time we
+// reach this method the user is either fresh-login or grace-period reconnect.
 func (g *Gateway) dispatchPlayerAssignment(sess *localSession) error {
 	if g.coord == nil {
 		return g.dispatchPlayerAssignmentRemote(sess)
@@ -580,27 +602,15 @@ func (g *Gateway) dispatchPlayerAssignment(sess *localSession) error {
 
 	// Embedded mode.
 
-	// Check for reconnection (lingering disconnected session). Look up by
-	// userID — that's the canonical identity post-auth-service.
+	// Look up the user's lingering disconnected session (grace period). If
+	// one exists, route the assignment to its current cell with
+	// IsReconnect=true so the cell rebinds to the existing entity.
 	var reconnectCellID MeshCellID
-	var existingHostID string
 	g.coord.mu.RLock()
-	if loc := g.coord.activeUserLocked(sess.userID); loc != nil {
-		if loc.Active {
-			existingHostID = loc.HostID
-		} else {
-			reconnectCellID = loc.CellID
-		}
+	if loc := g.coord.activeUserLocked(sess.userID); loc != nil && !loc.Active {
+		reconnectCellID = loc.CellID
 	}
 	g.coord.mu.RUnlock()
-
-	if existingHostID != "" {
-		// Same user_id is already active. Kick-old: tear the old session
-		// down and accept the new one. Implementation lives on the
-		// coordinator so it can target the right gateway/connID pair.
-		g.coord.kickActiveUser(sess.userID, "replaced by newer login")
-		// Fall through and treat this as a fresh login.
-	}
 
 	if reconnectCellID != "" {
 		if node, ok := g.coord.getCell(reconnectCellID); ok {

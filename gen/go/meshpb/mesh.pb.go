@@ -4602,6 +4602,11 @@ func (x *HostOpAck) GetError() string {
 // to the existing entity instead of spawning a fresh one. world_x/world_y are
 // always set so the gateway has a fallback if the named cell has since been
 // merged away.
+//
+// rejected=true means the user is already online elsewhere (an Active entry
+// exists in activeUsers). The gateway must NOT dispatch the assignment — it
+// closes the new WebSocket connection so the duplicate window sees a clean
+// "already logged in" error. The original session keeps playing.
 type SpawnResolved struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	RequestId     uint64                 `protobuf:"varint,1,opt,name=request_id,json=requestId,proto3" json:"request_id,omitempty"`
@@ -4610,6 +4615,7 @@ type SpawnResolved struct {
 	IsReconnect   bool                   `protobuf:"varint,4,opt,name=is_reconnect,json=isReconnect,proto3" json:"is_reconnect,omitempty"`
 	TargetHostId  string                 `protobuf:"bytes,5,opt,name=target_host_id,json=targetHostId,proto3" json:"target_host_id,omitempty"`
 	TargetCellId  string                 `protobuf:"bytes,6,opt,name=target_cell_id,json=targetCellId,proto3" json:"target_cell_id,omitempty"`
+	Rejected      bool                   `protobuf:"varint,7,opt,name=rejected,proto3" json:"rejected,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -4684,6 +4690,13 @@ func (x *SpawnResolved) GetTargetCellId() string {
 		return x.TargetCellId
 	}
 	return ""
+}
+
+func (x *SpawnResolved) GetRejected() bool {
+	if x != nil {
+		return x.Rejected
+	}
+	return false
 }
 
 // S9: coordinator tells a remote host to register (or update) a player
@@ -5395,7 +5408,7 @@ const file_meshpb_mesh_proto_rawDesc = "" +
 	"\tHostOpAck\x12\x15\n" +
 	"\x06req_id\x18\x01 \x01(\x04R\x05reqId\x12\x0e\n" +
 	"\x02ok\x18\x02 \x01(\bR\x02ok\x12\x14\n" +
-	"\x05error\x18\x03 \x01(\tR\x05error\"\xcf\x01\n" +
+	"\x05error\x18\x03 \x01(\tR\x05error\"\xeb\x01\n" +
 	"\rSpawnResolved\x12\x1d\n" +
 	"\n" +
 	"request_id\x18\x01 \x01(\x04R\trequestId\x12\x17\n" +
@@ -5403,7 +5416,8 @@ const file_meshpb_mesh_proto_rawDesc = "" +
 	"\aworld_y\x18\x03 \x01(\x02R\x06worldY\x12!\n" +
 	"\fis_reconnect\x18\x04 \x01(\bR\visReconnect\x12$\n" +
 	"\x0etarget_host_id\x18\x05 \x01(\tR\ftargetHostId\x12$\n" +
-	"\x0etarget_cell_id\x18\x06 \x01(\tR\ftargetCellId\"\x94\x01\n" +
+	"\x0etarget_cell_id\x18\x06 \x01(\tR\ftargetCellId\x12\x1a\n" +
+	"\brejected\x18\a \x01(\bR\brejected\"\x94\x01\n" +
 	"\x0fSessionRegister\x12\x1d\n" +
 	"\n" +
 	"gateway_id\x18\x01 \x01(\tR\tgatewayId\x12\x17\n" +

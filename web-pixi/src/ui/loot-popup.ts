@@ -18,8 +18,11 @@ let stateRef: GameState | null = null;
 let lastRenderedCrateId = 0;
 let lastRenderedItemsSig = "";
 
-const LOOT_RANGE_OPEN = 6; // matches server LootPickupRange + small UX margin
-const LOOT_RANGE_CLOSE = 10; // hysteresis to prevent flicker
+// Must match server GameConfig.LootPickupRange exactly — opening from a
+// looser threshold meant the popup appeared in a band where LootAll /
+// LootItem ops fail server-side, so the UI lied about availability.
+const LOOT_RANGE_OPEN = 5;
+const LOOT_RANGE_CLOSE = 6; // 1-unit hysteresis to prevent boundary flicker
 
 export function createLootPopup(): void {
   popupEl = document.createElement("div");

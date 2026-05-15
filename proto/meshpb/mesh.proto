@@ -593,6 +593,11 @@ message HostOpAck {
 // to the existing entity instead of spawning a fresh one. world_x/world_y are
 // always set so the gateway has a fallback if the named cell has since been
 // merged away.
+//
+// rejected=true means the user is already online elsewhere (an Active entry
+// exists in activeUsers). The gateway must NOT dispatch the assignment — it
+// closes the new WebSocket connection so the duplicate window sees a clean
+// "already logged in" error. The original session keeps playing.
 message SpawnResolved {
   uint64 request_id     = 1;
   float  world_x        = 2;
@@ -600,6 +605,7 @@ message SpawnResolved {
   bool   is_reconnect   = 4;
   string target_host_id = 5;
   string target_cell_id = 6;
+  bool   rejected       = 7;
 }
 
 // S9: coordinator tells a remote host to register (or update) a player

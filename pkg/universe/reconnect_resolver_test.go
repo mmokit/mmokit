@@ -36,10 +36,13 @@ func TestApplyResolveSpawnReconnect_DisconnectedRoutesToOldCell(t *testing.T) {
 	}
 }
 
-// TestApplyResolveSpawnReconnect_ActiveKicksOld covers the duplicate-login
-// branch: when the same user_id is currently online, the new login wins
-// and the old session is kicked. resp stays empty (treated as fresh login).
-func TestApplyResolveSpawnReconnect_ActiveKicksOld(t *testing.T) {
+// TestApplyResolveSpawnReconnect_ActiveRejects covers the duplicate-login
+// branch: when the same user_id is currently online, the new login is
+// rejected (resp.Rejected=true) so the original session keeps playing. The
+// existing activeUsers entry MUST be preserved — kicking the original
+// session here is what caused the entity-duplication exploit when two
+// browser windows raced auto-reconnect against each other.
+func TestApplyResolveSpawnReconnect_ActiveRejects(t *testing.T) {
 	c := minimalCoordWithCell(t, "h-1", "cell_0_0")
 	uid := uuid.New()
 
@@ -49,14 +52,17 @@ func TestApplyResolveSpawnReconnect_ActiveKicksOld(t *testing.T) {
 	resp := &meshpb.SpawnResolved{}
 	c.applyResolveSpawnReconnect(uid, resp)
 
+	if !resp.Rejected {
+		t.Errorf("Rejected=false; expected true when an Active session already exists")
+	}
 	if resp.IsReconnect {
-		t.Errorf("IsReconnect=true; expected false (kick-old, treat as fresh)")
+		t.Errorf("IsReconnect=true; expected false on rejection")
 	}
 	c.mu.RLock()
 	_, stillActive := c.activeUsers[uid]
 	c.mu.RUnlock()
-	if stillActive {
-		t.Errorf("activeUsers[uid] not removed after kick")
+	if !stillActive {
+		t.Errorf("activeUsers[uid] removed; expected to be preserved (original session still wins)")
 	}
 }
 

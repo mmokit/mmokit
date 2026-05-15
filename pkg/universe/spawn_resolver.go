@@ -57,11 +57,16 @@ func (c *Process) CellAtPosition(worldX, worldY float32) string {
 // spawn location AND any reconnect-routing override discovered on the
 // coordinator (standalone gateway only; the embedded path runs reconnect
 // detection inline at dispatchPlayerAssignment).
+//
+// Rejected=true means an Active session already exists for this user_id; the
+// caller MUST close the new WebSocket without dispatching a PlayerAssignment
+// (see Gateway.dispatchPostAuthAssignment).
 type spawnResolution struct {
 	Location     coords.Location
 	IsReconnect  bool
 	TargetHostID string
 	TargetCellID string
+	Rejected     bool
 }
 
 // resolveSpawn returns the spawn location for the (userID, username) pair and
@@ -96,6 +101,7 @@ func (g *Gateway) resolveSpawn(ctx context.Context, userID uuid.UUID, username s
 				IsReconnect:  resp.IsReconnect,
 				TargetHostID: resp.TargetHostId,
 				TargetCellID: resp.TargetCellId,
+				Rejected:     resp.Rejected,
 			}
 		}
 		if err != nil {
