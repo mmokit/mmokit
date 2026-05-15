@@ -23,7 +23,6 @@ var webFS embed.FS
 func main() {
 	process := mmokit.New(mmokit.Config{
 		Name:          "simple",
-		TickRate:      20,
 		WebDir:        "embed",
 		StaticFS:      webFS,
 		AnonymousAuth: true,
