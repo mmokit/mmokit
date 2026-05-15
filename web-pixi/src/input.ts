@@ -356,6 +356,22 @@ export function setupInput(
       state.marketPanelOpen = !state.marketPanelOpen;
     }
 
+    // S: stop movement. Clears server-side MoveTarget (server-side drag
+    // handles the slow-down naturally — same coast-to-stop the player
+    // sees at the end of a normal click-to-move). Also clears the local
+    // move pin so the indicator disappears immediately.
+    if (e.code === "KeyS" && !state.isDead && !state.isDocked && state.connected && state.client) {
+      state.inputSeq++;
+      state.client.send(new SetMoveTarget({
+        sequence: state.inputSeq,
+        active: false,
+        x: 0,
+        y: 0,
+      }));
+      state.moveTarget = { x: 0, y: 0, active: false };
+      state.pendingLootCrateId = 0;
+    }
+
   });
 
   window.addEventListener("keyup", (e) => {
