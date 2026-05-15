@@ -1,7 +1,5 @@
 import { px } from "./view";
 import type { GameState } from "./state";
-import { audio } from "./audio/audio-manager";
-import { SoundId } from "./audio/sounds";
 import { abilityParamsForSlot, getAbilityRange, TargetingMode } from "./ui/ability-bar";
 import {
   CastAbility,
@@ -142,7 +140,6 @@ export function setupInput(
       netID,
     }));
     state.selectedNetID = netID; // optimistic
-    audio.play(SoundId.TargetLock); // repurposed as "select" blip
   }
 
   function tryUnlock(_netID: number): void {
@@ -183,7 +180,6 @@ export function setupInput(
       netID: next,
     }));
     state.selectedNetID = next;
-    audio.play(SoundId.TargetLock);
   }
 
   function issueMove(clientX: number, clientY: number) {
@@ -408,18 +404,17 @@ export function setupInput(
 
   window.addEventListener("mousedown", (e) => {
     if (e.button === 2 && !state.cellMapOpen) {
-      // Right-click priority 1: clear selection.
-      if (state.selectedNetID !== 0) {
-        tryUnlock(state.selectedNetID);
-        return;
-      }
-      // Right-click priority 2: cancel active skillshot aim.
-      // Mirrors the EVE / SC2 convention: aim+right-click escapes the
-      // targeting cursor.
+      // Right-click priority 1: cancel active skillshot aim. Mirrors the
+      // EVE / SC2 convention: aim+right-click escapes the targeting
+      // cursor.
       if (state.aimingSlot) {
         state.aimingSlot = 0;
         return;
       }
+      // Right-click is the move verb — it must NOT clear the selection.
+      // Selection persists across move commands so the UI keeps showing
+      // info on the picked target (asteroid, NPC, ship). Use shift+click
+      // or click-empty-space to clear the selection.
       state.rightMouseDown = true;
       issueMove(e.clientX, e.clientY);
     }

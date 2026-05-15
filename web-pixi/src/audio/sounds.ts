@@ -40,7 +40,11 @@ export const ABILITY_TYPE_SOUNDS: Record<number, SoundId> = {
   // PVE v2 weapons
   9: SoundId.PlasmaTorpedo,   // PlasmaShot — fast plasma launch
   10: SoundId.MissileLaunch,  // HomingMissile — literally a missile
-  11: SoundId.IonBurn,        // SustainedBeam — closest continuous-beam sound
+  // SustainedBeam (11) deliberately has NO entry — every damage tick is
+  // an ability event, so a per-tick sound retriggers 10×/sec during the
+  // channel. The beam reads visually from aim-indicator + the per-hit
+  // VFX in ability-effects.ts; we let the channel stay quiet rather than
+  // hammer the player with IonBurn on every tick.
   12: SoundId.PlasmaTorpedo,  // MortarShell — heavy projectile launch
   // Shield abilities
   20: SoundId.ShieldActivate, // EmergencyShield

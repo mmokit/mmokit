@@ -761,11 +761,16 @@ func (s *AbilitySystem) tickChannels(dt float32) {
 		}
 
 		// Hitscan along the aim line — find the closest non-owner entity
-		// within params.Range and ±4u of the beam line.
+		// within params.Range and ±beamHalfWidth of the beam line. The
+		// half-width is loose enough to be forgiving when the cursor isn't
+		// pixel-perfect on the enemy; tighter than this and small ships
+		// felt like they were "phasing through" the beam without taking
+		// damage.
+		const beamHalfWidth float32 = 8
 		s.nearbyChannel = gw.Spatial.QueryRadius(
 			casterPos.X+dx/aimNorm*params.Range*0.5, // midpoint of the beam line
 			casterPos.Y+dy/aimNorm*params.Range*0.5,
-			params.Range*0.5+8, // search radius covering the full beam length
+			params.Range*0.5+beamHalfWidth+4, // search radius covering the full beam length + width
 			s.nearbyChannel[:0],
 		)
 
@@ -795,7 +800,7 @@ func (s *AbilitySystem) tickChannels(dt float32) {
 			if perp < 0 {
 				perp = -perp
 			}
-			if perp > 4 {
+			if perp > beamHalfWidth {
 				continue
 			}
 			if parallel < victimDist {
