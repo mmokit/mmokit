@@ -166,10 +166,10 @@ func (g *HashGrid) TrackedCount() int {
 // QueryRadius returns all entries within the given radius of (cx, cy).
 // Results are appended to the provided slice to avoid allocation.
 func (g *HashGrid) QueryRadius(cx, cy, radius float32, results []Entry) []Entry {
-	minX := int32((cx - radius) * g.invBucketSize)
-	maxX := int32((cx + radius) * g.invBucketSize)
-	minY := int32((cy - radius) * g.invBucketSize)
-	maxY := int32((cy + radius) * g.invBucketSize)
+	minX := int32(math.Floor(float64((cx - radius) * g.invBucketSize)))
+	maxX := int32(math.Floor(float64((cx + radius) * g.invBucketSize)))
+	minY := int32(math.Floor(float64((cy - radius) * g.invBucketSize)))
+	maxY := int32(math.Floor(float64((cy + radius) * g.invBucketSize)))
 
 	r2 := radius * radius
 
@@ -389,7 +389,7 @@ func abs32(v float32) float32 {
 
 func (g *HashGrid) bucketKey(x, y float32) BucketKey {
 	return BucketKey{
-		X: int32(x * g.invBucketSize),
-		Y: int32(y * g.invBucketSize),
+		X: int32(math.Floor(float64(x * g.invBucketSize))),
+		Y: int32(math.Floor(float64(y * g.invBucketSize))),
 	}
 }

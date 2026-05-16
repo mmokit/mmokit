@@ -27,7 +27,7 @@ func (g *HashGrid) Raycast(from, to Vec2, layerMask uint8) (ecs.Entity, Vec2, fl
 
 	var bestEntity ecs.Entity
 	var bestHit Vec2
-	bestT := float32(1.0) + 1 // sentinel: any t in [0,1] beats this
+	bestT := float32(2.0) // > 1 so any valid t in [0,1] wins
 	found := false
 
 	// Walk every bucket the ray crosses via a 2D DDA. For each bucket,
@@ -118,7 +118,8 @@ func (g *HashGrid) bucketsAlongRay(from, to Vec2) []BucketKey {
 		if bx == bx1 && by == by1 {
 			return keys
 		}
-		// Safety: stop after a generous upper bound.
+		// Guard against NaN/Inf propagation in degenerate inputs — the DDA
+		// terminates naturally for valid float32 endpoints.
 		if len(keys) > 4096 {
 			return keys
 		}
