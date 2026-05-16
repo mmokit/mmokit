@@ -105,6 +105,17 @@ type GameConfig struct {
 	// NPCs of the same archetype don't fire their abilities in unison.
 	NPCAttackJitter float32 `json:"npc_attack_jitter"`
 
+	// AILosRecheckIntervalSec throttles how often an engaging NPC re-tests
+	// LOS to its current target. Defaults to 0.5s — frequent enough that a
+	// target ducking behind a wall is detected quickly, but cheap enough
+	// that we don't raycast every tick.
+	AILosRecheckIntervalSec float32 `json:"ai_los_recheck_interval_sec"`
+	// AILosLossDropSec is how long LOS must stay continuously blocked before
+	// an engaging NPC drops its target and returns to Idle. Defaults to 3.0s
+	// so quick obscurations (sweeping past a pillar, brief overlap with a
+	// friendly ship) don't break aggro.
+	AILosLossDropSec float32 `json:"ai_los_loss_drop_sec"`
+
 
 	// Docking
 	DockTime         float32 `json:"dockTime"`         // seconds to complete docking
@@ -215,6 +226,9 @@ func DefaultGameConfig() GameConfig {
 
 		AggroDeescalationSec: 6,
 		NPCAttackJitter:      0.4,
+
+		AILosRecheckIntervalSec: 0.5,
+		AILosLossDropSec:        3.0,
 
 		// Docking
 		DockTime:         3.0,

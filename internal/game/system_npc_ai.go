@@ -236,6 +236,28 @@ func (s *NPCAISystem) tickEngage(self mmokit.Entity, ai *gamecomp.NPCAI,
 		return
 	}
 
+	// Periodic LOS recheck: if LOS to the target stays blocked for
+	// AILosLossDropSec, drop the target and return to Idle. Cheap because
+	// the raycast only fires every AILosRecheckIntervalSec — between
+	// rechecks LOSLostAt holds the latched timestamp of first loss.
+	if now-ai.LastLOSCheckAt >= s.gw.Config.AILosRecheckIntervalSec {
+		ai.LastLOSCheckAt = now
+		if hasLOSOnGrid(s.gw.Spatial,
+			spatial.Vec2{X: pos.X, Y: pos.Y},
+			spatial.Vec2{X: tpos.X, Y: tpos.Y}) {
+			ai.LOSLostAt = 0
+		} else if ai.LOSLostAt == 0 {
+			ai.LOSLostAt = now
+		} else if now-ai.LOSLostAt >= s.gw.Config.AILosLossDropSec {
+			ai.State = AIStateIdle
+			ai.TargetNetID = 0
+			ai.LOSLostAt = 0
+			vel.X, vel.Y = 0, 0
+			s.gw.eng.Log.Log(CatNPCAI, "ai: %d Engage→Idle (LOS lost)", self.NetID())
+			return
+		}
+	}
+
 	// Target switching: if a damage source is closer than current target,
 	// drop the lock and re-acquire on the attacker next tick. Stamped by
 	// ApplyDamage in verb_damage.go; consumed (and cleared) here.

@@ -142,6 +142,62 @@ func TestNPCAI_LOSBlockedTargetNotAcquired(t *testing.T) {
 	}
 }
 
+// TestNPCAI_LOSLostDropsTargetAfterTimeout — once a Brawler is actively
+// engaging, dropping a LayerStatic wall between it and its target must
+// cause the NPC to drop back to Idle after AILosLossDropSec (3.0s default)
+// of continuously blocked LOS. The deescalation timer is bumped to a large
+// value so the only path out of Engage is the new LOS-loss path.
+func TestNPCAI_LOSLostDropsTargetAfterTimeout(t *testing.T) {
+	gw, _ := newTestGameWorld()
+	ai, phys := newWiredNPCAISystem(t, gw)
+
+	// Push the deescalation timer way out so it can't be what drops the
+	// target — we want to prove the LOS-loss path fires on its own.
+	gw.Config.AggroDeescalationSec = 600
+
+	npc := gw.SpawnNPC(0, 0, ArchetypeBrawler, 0)
+	player := newTestPlayerAt(t, gw, 8201, 20, 0) // inside 30u aggro, no wall yet
+
+	const dt = float32(0.05)
+
+	// Phase 1: warm up until the NPC is in Engage with LOS still clear.
+	tickAI(gw.stage, ai, phys, dt, 4) // 0.2s — Idle → Acquire → Engage
+	aiComp := mmokit.Get[gamecomp.NPCAI](npc)
+	if aiComp.State != AIStateEngage {
+		t.Fatalf("setup: NPC did not reach Engage; state=%d", aiComp.State)
+	}
+
+	// Phase 2: drop a LayerStatic wall directly on the sight line. After
+	// AILosLossDropSec of continuous LOS blockage the NPC must drop to Idle.
+	wallW := gw.stage.ECSWorld()
+	wallE := wallW.NewEntity()
+	gw.Spatial.Register(spatial.Entry{
+		Entity: wallE,
+		X:      10, Y: 0,
+		Radius: 12, Width: 10, Height: 20,
+		Shape: spatial.ShapeRect, Layer: spatial.LayerStatic,
+	})
+
+	// Also park the player so the brawler doesn't follow it out from
+	// behind the wall and re-establish LOS.
+	pp := mmokit.Get[mmokit.Position](mmokit.EntityFromECS(gw.stage, player))
+	pp.X, pp.Y = 20, 0
+
+	// Tick well past AILosLossDropSec (3.0s). The first recheck fires at
+	// ~0.5s (AILosRecheckIntervalSec) after the wall goes up, and the drop
+	// fires at the first recheck where now-LOSLostAt >= 3.0s — so we need
+	// roughly 3.5s + one recheck interval to be safe. 4.0s = 80 ticks.
+	tickAI(gw.stage, ai, phys, dt, 80)
+
+	aiComp = mmokit.Get[gamecomp.NPCAI](npc)
+	if aiComp.State != AIStateIdle {
+		t.Errorf("Brawler must drop to Idle after sustained LOS loss; got state=%d", aiComp.State)
+	}
+	if aiComp.TargetNetID != 0 {
+		t.Errorf("TargetNetID must be cleared on LOS-loss drop; got %d", aiComp.TargetNetID)
+	}
+}
+
 // TestNPCAI_AggroDeescalation — AI returns to Idle after
 // AggroDeescalationSec (default 6s) of no damage activity. The target
 // is teleported out of weapon range mid-test so the NPC stops stamping

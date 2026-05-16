@@ -399,6 +399,17 @@ type NPCAI struct {
 	// the closest-enemy logic in tickEngage; consumed by dispatch methods
 	// (tickEngage hitscan, tickCast for Artillery, etc.).
 	TargetNetID uint32
+
+	// PVE v2 (dungeon POI): periodic LOS recheck in Engage. LastLOSCheckAt
+	// is the stage-time of the last LOS raycast — used to throttle the
+	// recheck at AILosRecheckIntervalSec cadence. LOSLostAt is the stage-
+	// time at which LOS first went blocked (0 if currently clear); when
+	// (now - LOSLostAt) >= AILosLossDropSec the NPC drops the target and
+	// returns to Idle. Both are local-only state (no net:"..." tag) but
+	// ride the transfer codec so an NPC mid-recheck handed off across a
+	// cell boundary keeps its timers.
+	LastLOSCheckAt float32
+	LOSLostAt      float32
 }
 
 // POIAnchor links an NPC back to its owning POI for leash + roster
