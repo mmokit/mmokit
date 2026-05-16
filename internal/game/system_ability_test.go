@@ -328,6 +328,85 @@ func TestSelection_LeftClickSetsSelection(t *testing.T) {
 	}
 }
 
+// TestAbility_BeamClipsAtLOSWall — a SustainedBeam channel aimed at an
+// NPC must not deliver per-tick damage when a LayerStatic wall sits
+// between caster and target. Without the wall, the same setup damages
+// the NPC — that's the positive baseline sub-test. The LOS gate lives
+// in tickChannels and uses the wider LayerStatic|LayerProp mask so
+// asteroids (props) also block beam damage.
+func TestAbility_BeamClipsAtLOSWall(t *testing.T) {
+	run := func(t *testing.T, withWall bool) float32 {
+		t.Helper()
+		gw, _ := newTestGameWorld()
+		mmokit.Handle(gw.stage, damageHandler)
+
+		abSys := wireAbilitySystem(t, gw)
+
+		// BeamMortarBattery primary = SustainedBeam (Range=30, Damage=4,
+		// ChannelTickRate=10).
+		player := spawnAbilityTestPlayer(t, gw, 6001, 1, 0, 0,
+			item.BeamMortarBattery, 0)
+
+		// Target sits 20u along +x — inside Range=30. NPC's spatial
+		// entry has Layer=0 (test default) so it never matches the
+		// LayerStatic|LayerProp raycast mask. That's exactly the case
+		// the LOS gate is built for: the target is NOT itself a
+		// blocker; only OTHER colliders should clip the beam.
+		target := spawnAbilityTestNPC(t, gw, 6002, 20, 0)
+
+		// Caster facing matches aim direction (along +x) so the ±120°
+		// arc check in tickChannels passes.
+		rot := mmokit.Get[mmokit.Rotation](player)
+		rot.Angle = 0
+
+		// Bypass dispatchSkillshotChannel + queued Commands so the test
+		// is deterministic on a single tick — attach Channeling directly
+		// with NextTickIn=0 so the very first tick is a damage tick.
+		mmokit.Set(player, gamecomp.Channeling{
+			SlotID:        gamecomp.AbilityQ, // BeamMortarBattery primary → slot Q
+			RemainingTime: 3.0,
+			NextTickIn:    0,
+			AimX:          20,
+			AimY:          0,
+		})
+
+		if withWall {
+			// LayerStatic wall at (10,0) — sits squarely between caster
+			// (0,0) and target (20,0). Mirrors the wall pattern in
+			// system_npc_ai_test.go::TestNPCAI_LOSBlockedTargetNotAcquired.
+			wallW := gw.stage.ECSWorld()
+			wallE := wallW.NewEntity()
+			gw.Spatial.Register(spatial.Entry{
+				Entity: wallE,
+				X:      10, Y: 0,
+				Radius: 12, Width: 10, Height: 20,
+				Shape: spatial.ShapeRect, Layer: spatial.LayerStatic,
+			})
+		}
+
+		// One tick of AbilitySystem runs tickChannels — the damage gate
+		// fires (NextTickIn=0) and the LOS gate either lets it through
+		// or suppresses it.
+		gw.stage.TickOne(abSys, 0.05)
+
+		hp := mmokit.Get[gamecomp.Health](target)
+		if hp == nil {
+			t.Fatal("target missing Health after tick")
+		}
+		return hp.Current
+	}
+
+	// Positive baseline — beam lands.
+	if got := run(t, false); got >= 100 {
+		t.Fatalf("baseline (no wall): expected beam to damage target, got HP=%.1f", got)
+	}
+
+	// LOS gate — wall absorbs the beam.
+	if got := run(t, true); got < 100 {
+		t.Fatalf("LOS clip: expected wall to block beam (HP=100), got HP=%.1f", got)
+	}
+}
+
 // TestMining_RequiresSelection — without a selection, MiningBeam toggle
 // dispatch is refused by the inside-dispatchByType selection gate;
 // MiningLaser.Beams[0].Active stays false and the replicated

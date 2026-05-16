@@ -817,9 +817,24 @@ func (s *AbilitySystem) tickChannels(dt float32) {
 		}
 
 		if victim.Alive() {
-			gw.Damage(caster, victim, params.Damage, 0, ch.SlotID, uint8(params.Type))
-			gw.eng.Log.Log(CatCombatHit, "channel: %d -> %d dmg=%.0f",
-				ownerNetID, victim.NetID(), params.Damage)
+			// LOS clip: a LayerStatic wall or LayerProp asteroid between
+			// caster and victim absorbs the beam this tick. The check
+			// allows the target itself as a first-hit (e.g. asteroid =
+			// target = first hit on the ray) — only OTHER colliders
+			// block. The damage tick still advances NextTickIn so the
+			// player can't "queue" hits by walking out from behind cover.
+			vpos := mmokit.Get[mmokit.Position](victim)
+			if vpos != nil && hasShotLOSOnGrid(gw.Spatial,
+				vec2(casterPos.X, casterPos.Y),
+				vec2(vpos.X, vpos.Y),
+				victim.Handle()) {
+				gw.Damage(caster, victim, params.Damage, 0, ch.SlotID, uint8(params.Type))
+				gw.eng.Log.Log(CatCombatHit, "channel: %d -> %d dmg=%.0f",
+					ownerNetID, victim.NetID(), params.Damage)
+			} else {
+				gw.eng.Log.Log(CatCombatHit, "channel: %d -> %d BLOCKED (LOS)",
+					ownerNetID, victim.NetID())
+			}
 		}
 		ch.NextTickIn = 1.0 / params.ChannelTickRate
 	})
