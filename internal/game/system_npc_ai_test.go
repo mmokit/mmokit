@@ -7,6 +7,7 @@ import (
 
 	gamecomp "github.com/zenion/mmoserver/internal/component"
 	"github.com/zenion/mmoserver/pkg/mmokit"
+	"github.com/zenion/mmoserver/pkg/spatial"
 )
 
 // newWiredNPCAISystem wires NPCAISystem (and a sidecar PhysicsSystem so
@@ -102,6 +103,42 @@ func TestNPCAI_BrawlerCharges(t *testing.T) {
 	pos := mmokit.Get[mmokit.Position](npc)
 	if pos.X <= 0 {
 		t.Errorf("Brawler should have moved toward target (+x); pos.X=%.2f", pos.X)
+	}
+}
+
+// TestNPCAI_LOSBlockedTargetNotAcquired — a Brawler whose only candidate
+// player sits inside AggroRadius but on the far side of a LayerStatic
+// wall must NOT acquire the target. The Euclidean-distance scan finds
+// the player; the LOS gate added in Task 8 rejects it because the wall
+// blocks the line.
+func TestNPCAI_LOSBlockedTargetNotAcquired(t *testing.T) {
+	gw, _ := newTestGameWorld()
+	ai, phys := newWiredNPCAISystem(t, gw)
+
+	// Brawler at origin; default 30u aggro radius.
+	npc := gw.SpawnNPC(0, 0, ArchetypeBrawler, 0)
+	// Player at (20, 0) — inside aggro (matches TestNPCAI_IdleToAcquireOnTargetInRange).
+	newTestPlayerAt(t, gw, 8101, 20, 0)
+
+	// Wall at (10, 0): rect 10 wide, 20 tall, LayerStatic. Sits squarely
+	// on the segment NPC(0,0) → Player(20,0) so Raycast against
+	// LayerStatic must hit it. We register the wall directly in the
+	// spatial grid since SpawnDungeonWall doesn't exist yet (Task 16).
+	wallW := gw.stage.ECSWorld()
+	wallE := wallW.NewEntity()
+	gw.Spatial.Register(spatial.Entry{
+		Entity: wallE,
+		X:      10, Y: 0,
+		Radius: 12, Width: 10, Height: 20,
+		Shape: spatial.ShapeRect, Layer: spatial.LayerStatic,
+	})
+
+	const dt = float32(0.05)
+	tickAI(gw.stage, ai, phys, dt, 2) // same window as the positive test
+
+	aiComp := mmokit.Get[gamecomp.NPCAI](npc)
+	if aiComp.State != AIStateIdle {
+		t.Errorf("Brawler must stay Idle when target is LOS-blocked; got state=%d", aiComp.State)
 	}
 }
 

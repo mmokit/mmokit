@@ -7,6 +7,7 @@ import (
 	gamecomp "github.com/zenion/mmoserver/internal/component"
 	"github.com/zenion/mmoserver/internal/item"
 	"github.com/zenion/mmoserver/pkg/mmokit"
+	"github.com/zenion/mmoserver/pkg/spatial"
 )
 
 // jitterCooldown returns `base * (1 + r)` where r is uniform in
@@ -678,10 +679,20 @@ func (s *NPCAISystem) findNearestEnemy(self mmokit.Entity,
 		}
 		dx, dy := ppos.X-pos.X, ppos.Y-pos.Y
 		d2 := dx*dx + dy*dy
-		if d2 < bestDist2 {
-			bestDist2 = d2
-			best = entE
+		if d2 >= bestDist2 {
+			return
 		}
+		// LOS gate: reject candidates blocked by a LayerStatic collider
+		// (walls, station hulls) between the NPC and the candidate. The
+		// Euclidean distance check above stays as the primary filter; LOS
+		// is an additional gate so NPCs can't aggro through dungeon walls.
+		if !hasLOSOnGrid(s.gw.Spatial,
+			spatial.Vec2{X: pos.X, Y: pos.Y},
+			spatial.Vec2{X: ppos.X, Y: ppos.Y}) {
+			return
+		}
+		bestDist2 = d2
+		best = entE
 	})
 	return best
 }
