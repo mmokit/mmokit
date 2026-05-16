@@ -81,3 +81,47 @@ func TestRaycast_NegativeCoordinates(t *testing.T) {
 		t.Fatalf("dist expected ~150, got %.2f", dist)
 	}
 }
+
+func TestRaycast_AxisAlignedRect(t *testing.T) {
+	g := NewHashGrid(100)
+	w := ecs.NewWorld()
+	e := w.NewEntity()
+	// Rect at (200,0) with width=80 forward, height=40 side, no rotation.
+	// OBB extents are (40,20); surface along ray at X=160.
+	g.Register(Entry{
+		Entity: e, X: 200, Y: 0,
+		Radius: 50, Width: 80, Height: 40, Rotation: 0,
+		Shape: ShapeRect, Layer: LayerStatic,
+	})
+	_, hitPt, dist, ok := g.Raycast(Vec2{0, 0}, Vec2{500, 0}, LayerStatic)
+	if !ok {
+		t.Fatal("expected hit")
+	}
+	if math.Abs(float64(hitPt.X-160)) > 0.5 {
+		t.Fatalf("hit X expected ~160, got %.2f", hitPt.X)
+	}
+	if math.Abs(float64(dist-160)) > 0.5 {
+		t.Fatalf("dist expected ~160, got %.2f", dist)
+	}
+}
+
+func TestRaycast_RotatedRect(t *testing.T) {
+	g := NewHashGrid(100)
+	w := ecs.NewWorld()
+	e := w.NewEntity()
+	// 90° rotated rect at (200,0): width-axis now points +Y, so the rect
+	// along X is 40 wide (the original Height). Surface at X=180.
+	g.Register(Entry{
+		Entity: e, X: 200, Y: 0,
+		Radius: 50, Width: 80, Height: 40,
+		Rotation: float32(math.Pi / 2),
+		Shape:    ShapeRect, Layer: LayerStatic,
+	})
+	_, hitPt, _, ok := g.Raycast(Vec2{0, 0}, Vec2{500, 0}, LayerStatic)
+	if !ok {
+		t.Fatal("expected hit")
+	}
+	if math.Abs(float64(hitPt.X-180)) > 0.5 {
+		t.Fatalf("hit X expected ~180, got %.2f", hitPt.X)
+	}
+}

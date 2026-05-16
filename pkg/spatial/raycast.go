@@ -53,7 +53,18 @@ func (g *HashGrid) Raycast(from, to Vec2, layerMask uint8) (ecs.Entity, Vec2, fl
 					found = true
 				}
 			}
-			// Rect handled in Task 3.
+			if e.Shape == ShapeRect {
+				t, hitOK := rayRectHit(from, to, e)
+				if !hitOK {
+					continue
+				}
+				if t < bestT {
+					bestT = t
+					bestEntity = e.Entity
+					bestHit = Vec2{from.X + dx*t, from.Y + dy*t}
+					found = true
+				}
+			}
 		}
 	}
 	if !found {
@@ -151,4 +162,74 @@ func rayCircleHit(from, to Vec2, cx, cy, r float32) (float32, bool) {
 		return t2, true
 	}
 	return 0, false
+}
+
+// rayRectHit returns t∈[0,1] for the nearest ray-vs-OBB entry, or false.
+// Transforms the ray into the rect's local frame and runs a 2D slab test.
+func rayRectHit(from, to Vec2, e Entry) (float32, bool) {
+	cosA := float32(math.Cos(float64(-e.Rotation)))
+	sinA := float32(math.Sin(float64(-e.Rotation)))
+	fx := from.X - e.X
+	fy := from.Y - e.Y
+	tx := to.X - e.X
+	ty := to.Y - e.Y
+	lfx := cosA*fx - sinA*fy
+	lfy := sinA*fx + cosA*fy
+	ltx := cosA*tx - sinA*ty
+	lty := sinA*tx + cosA*ty
+	dx := ltx - lfx
+	dy := lty - lfy
+
+	hx := e.Width / 2
+	hy := e.Height / 2
+
+	tMin := float32(-math.MaxFloat32)
+	tMax := float32(math.MaxFloat32)
+
+	// X slab
+	if math.Abs(float64(dx)) < 1e-6 {
+		if lfx < -hx || lfx > hx {
+			return 0, false
+		}
+	} else {
+		t1 := (-hx - lfx) / dx
+		t2 := (hx - lfx) / dx
+		if t1 > t2 {
+			t1, t2 = t2, t1
+		}
+		if t1 > tMin {
+			tMin = t1
+		}
+		if t2 < tMax {
+			tMax = t2
+		}
+		if tMin > tMax {
+			return 0, false
+		}
+	}
+	// Y slab
+	if math.Abs(float64(dy)) < 1e-6 {
+		if lfy < -hy || lfy > hy {
+			return 0, false
+		}
+	} else {
+		t1 := (-hy - lfy) / dy
+		t2 := (hy - lfy) / dy
+		if t1 > t2 {
+			t1, t2 = t2, t1
+		}
+		if t1 > tMin {
+			tMin = t1
+		}
+		if t2 < tMax {
+			tMax = t2
+		}
+		if tMin > tMax {
+			return 0, false
+		}
+	}
+	if tMin < 0 || tMin > 1 {
+		return 0, false
+	}
+	return tMin, true
 }
