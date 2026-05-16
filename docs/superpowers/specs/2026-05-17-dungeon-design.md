@@ -289,7 +289,7 @@ Callers pick the mask appropriate to the surface:
 | `NPCAISystem.Acquire` | `LayerStatic` | Skip target candidate if blocked. |
 | `NPCAISystem.Engage` (re-check) | `LayerStatic` | Every 500ms; sustained loss > 3s → drop target via existing de-escalation. |
 | `AbilitySystem` beam/hitscan | `LayerStatic \| LayerProp` | Beam visually clips at hitPoint; no damage past contact. |
-| `TargetLockSystem` per-slot | `LayerStatic` | Sustained loss > 1s → auto-break the lock (EVE behavior). |
+| Selection auto-clear | `LayerStatic` | Per-player check each tick: if `Selection.EntityNetID != 0` and LOS to that entity has been blocked for ≥ 1s, clear `EntityNetID`. Mining beams (the main reader of Selection) stop firing as a consequence. |
 
 ### 8.2 Pathfinding — `pkg/pathfinding/`
 
@@ -429,7 +429,7 @@ New categories:
 - `los` — LOS raycast hits/misses on AI + lock surfaces (verbose, off by default).
 - `pathfind` — A* invocations + path lengths (verbose, off by default).
 
-Existing `ai` covers NPC state transitions; existing `combatLock` covers the LOS-break path through target lock.
+Existing `ai` covers NPC state transitions. Selection auto-clear events log under the new `los` category.
 
 All combat-relevant events log player + NPC NetIDs and quantities per CLAUDE.md convention.
 
@@ -492,7 +492,7 @@ Each step is independently shippable.
 - **Procgen output looking same-y on repeated runs** — with a permanent layout per cell and only one dungeon for v1, this is academic. When per-cell dungeons land, will need a name-pool + visual-variation pass to avoid every cave looking identical.
 - **NavGrid memory at scale** — one 60×60 NavGrid is trivial; 100 of them (per-cell dungeons) is still trivial. Flag for revisit only if dungeon counts grow beyond hundreds.
 - **Beam visuals on LOS clipping** — the client needs to know where to stop drawing a beam. The server-side hit point can be included in the beam-fire event payload; the client renders the beam from origin to that point instead of `Range`-extent. Small wire-protocol addition during step 1.
-- **`TargetLock` LOS-loss UX** — auto-breaking a lock after 1s of LOS loss is EVE behavior but may feel surprising the first time a player loses a lock to an asteroid passing between them and a target. Mitigations: tune the threshold; UX feedback ("LOCK LOST: LOS blocked"); fire a `LockBrokenMsg{Reason}` event. Defer to first playtest.
+- **Selection auto-clear UX** — clearing `Selection.EntityNetID` after 1s of LOS loss is mainly visible when mining (mining beams stop firing). Players who don't mine inside dungeons won't notice. Tune threshold if it feels off in playtest.
 - **Stations gain `LayerStatic`** — once §12 step 2 lands, stations block sight, locks, and beam damage in addition to the movement they already block. This is a global combat change, not dungeon-scoped. Reasonable as a feature (you can't shoot through a station), but worth a playtest pass with the existing PvE content to confirm nothing breaks.
 - **`KindAsteroid` `LayerProp` assignment** — same step. Asteroids will block projectiles + beams but not locks/sight. Players will be able to hide projectile-shooters behind asteroids; mining cycles are unaffected (mining laser is a direct beam to a locked asteroid that the player is in LOS of by construction). Flag for playtest.
 - **Naming for procgen dungeons** — Section 6.2 lists `Name` as a procgen field but doesn't specify the generator. Pick a name-pool table in `dungeon_config.go` (e.g. `["Stillveil Hollow", "Ashbore Cradle", "Verdigris Maw", …]`) and hash-select on dungeon seed. Bikeshed-worthy but cheap.
