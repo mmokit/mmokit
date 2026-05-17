@@ -8,6 +8,7 @@ import (
 	"github.com/zenion/mmoserver/internal/item"
 	"github.com/zenion/mmoserver/pkg/coords"
 	"github.com/zenion/mmoserver/pkg/mmokit"
+	"github.com/zenion/mmoserver/pkg/spatial"
 )
 
 // AsteroidBundle is the entity-kind component bundle for asteroids.
@@ -64,7 +65,7 @@ func (gw *GameWorld) spawnAsteroid(x, y float32) {
 func (gw *GameWorld) spawnAsteroidWithItem(x, y float32, itemID uint32) {
 	radius := gw.Config.AsteroidMinRadius + rand.Float32()*(gw.Config.AsteroidMaxRadius-gw.Config.AsteroidMinRadius)
 
-	layer := gamecomp.LayerTerrain
+	layer := spatial.LayerProp
 	if def := item.Get(itemID); def != nil && def.Gaseous {
 		layer = 0
 	}
@@ -72,7 +73,7 @@ func (gw *GameWorld) spawnAsteroidWithItem(x, y float32, itemID uint32) {
 	gw.stage.Spawn(
 		mmokit.Position{X: x, Y: y},
 		mmokit.EntityKind{Type: gamecomp.KindAsteroid},
-		mmokit.Collider{Radius: radius, Layer: layer},
+		mmokit.Collider{Radius: radius, Shape: spatial.ShapeCircle, Layer: layer},
 		mmokit.Rotation{Angle: rand.Float32() * 2 * math.Pi},
 		gamecomp.Minable{ItemID: itemID, Remaining: radius * 5},
 	)

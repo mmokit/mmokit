@@ -3,6 +3,7 @@ package game
 import (
 	gamecomp "github.com/zenion/mmoserver/internal/component"
 	"github.com/zenion/mmoserver/pkg/mmokit"
+	"github.com/zenion/mmoserver/pkg/spatial"
 )
 
 // StationBundle is the entity-kind component bundle for trade stations.
@@ -29,7 +30,11 @@ func (gw *GameWorld) SpawnStation() {
 	e := gw.stage.Spawn(
 		mmokit.Position{X: StationLocalX, Y: StationLocalY},
 		mmokit.EntityKind{Type: gamecomp.KindStation},
-		mmokit.Collider{Radius: gw.Config.StationRadius},
+		mmokit.Collider{
+			Radius: gw.Config.StationRadius,
+			Shape:  spatial.ShapeCircle,
+			Layer:  spatial.LayerStatic,
+		},
 		gamecomp.Station{},
 	)
 	gw.eng.Log.Log(CatPlayerSpawn, "station spawned: netID=%d pos=(%.1f,%.1f)", e.NetID(), StationLocalX, StationLocalY)
