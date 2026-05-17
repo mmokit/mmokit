@@ -26,9 +26,21 @@ type DungeonBundle struct {
 // SpawnDungeon only creates the world-level marker. Procgen
 // (Tasks 19-22) wraps this with the geometry + roster setup.
 func (gw *GameWorld) SpawnDungeon(x, y float32, d gamecomp.Dungeon) uint32 {
+	// AoI visibility relies on SpatialSystem registering an entity in
+	// the spatial grid — entities without a Collider are never indexed
+	// and never replicated to clients. Give the dungeon a Collider with
+	// Radius = OuterRadius so AoI queries within (viewerAoI + asteroid
+	// radius) of the dungeon center pick it up; Layer=LayerEntity keeps
+	// it transparent to LOS / shot / ship-vs-terrain collision (those
+	// gate on LayerStatic | LayerProp).
 	e := gw.stage.Spawn(
 		mmokit.Position{X: x, Y: y},
 		mmokit.EntityKind{Type: gamecomp.KindDungeon},
+		mmokit.Collider{
+			Radius: d.OuterRadius,
+			Shape:  spatial.ShapeCircle,
+			Layer:  spatial.LayerEntity,
+		},
 		d,
 	)
 	gw.eng.Log.Log(CatDungeon, "dungeon: spawned netID=%d pos=(%.0f,%.0f) name=%q entrances=%d",

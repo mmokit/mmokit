@@ -44,7 +44,10 @@ func (s *CollisionSystem) Update(dt float32) {
 		s.nearby = gw.Spatial.QueryRadius(pos.X, pos.Y, searchRadius, s.nearby[:0])
 
 		for _, terrain := range s.nearby {
-			if terrain.Layer != spatial.LayerProp {
+			// Ships collide with both world props (asteroids = LayerProp)
+			// and static structures (cave walls + stations = LayerStatic).
+			// LayerEntity (ships/NPCs) and Layer=0 markers are skipped.
+			if terrain.Layer != spatial.LayerProp && terrain.Layer != spatial.LayerStatic {
 				continue
 			}
 			if !gw.stage.ECSWorld().Alive(terrain.Entity) {
