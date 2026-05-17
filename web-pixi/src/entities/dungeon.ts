@@ -3,25 +3,32 @@ import type { DungeonEntity } from "../../sdk/index.js";
 import type { ClientEntity, EntityDisplayObject } from "../types";
 import { px } from "../view";
 
-// Hardcoded entrance pattern — mirrors the server-side layout in
-// internal/game/entity_dungeon.go::SpawnDungeonFromGraph. The
-// entrance positions themselves aren't on the wire (the Dungeon
-// component's EntranceX/Y fields are `mmokit:"local"`), so the
-// client reproduces the same south-biased trio (south, NE, NW)
-// from the radius. EntranceCount is also local-only, so we just
-// render all three for the v1 dungeon layout.
-//
-// If/when the codec gains f32 initial-field support, the entrance
-// list should come from the wire so the client follows the server's
-// pickEntranceAngles outputs exactly (random-rotated variants etc.).
-function entrancePositions(radius: number): Array<{ x: number; y: number }> {
-  const cos30 = Math.cos(Math.PI / 6);
-  const sin30 = Math.sin(Math.PI / 6);
-  return [
-    { x: 0, y: -radius },                 // south (server uses Y-down for these constants)
-    { x: radius * cos30, y: -radius * sin30 },  // NE
-    { x: -radius * cos30, y: -radius * sin30 }, // NW
-  ];
+// Derive entrance marker positions from the server-replicated EntranceMask
+// bitmap. The mask packs the 16-slot perimeter ring used by
+// internal/game/dungeon_gen.go::generateWalls: bit i = 1 means slot i is
+// a wall (occluded), bit i = 0 means slot i is an entrance gap. Each gap
+// is centered at the midpoint of its arc (arcLen * s + arcLen / 2) at
+// radius `radius`. This keeps the client markers in lock-step with the
+// server's pickEntranceAngles outputs, so pilots can fly through every
+// rendered notch without colliding with an actual wall.
+const RING_SEGMENTS = 16;
+
+function entrancePositionsFromMask(
+  mask: number,
+  radius: number,
+): Array<{ x: number; y: number }> {
+  const arcLen = (2 * Math.PI) / RING_SEGMENTS;
+  const positions: Array<{ x: number; y: number }> = [];
+  for (let s = 0; s < RING_SEGMENTS; s++) {
+    if ((mask & (1 << s)) === 0) {
+      const angle = arcLen * s + arcLen / 2;
+      positions.push({
+        x: radius * Math.cos(angle),
+        y: radius * Math.sin(angle),
+      });
+    }
+  }
+  return positions;
 }
 
 export function createDungeonDisplay(): EntityDisplayObject {
@@ -64,9 +71,10 @@ export function createDungeonDisplay(): EntityDisplayObject {
   container.addChild(sublabel);
 
   let drawnRadius = 0;
+  let drawnMask = -1;
   let drawnName = "";
 
-  function drawRock(radius: number) {
+  function drawRock(radius: number, mask: number) {
     rock.clear();
     entrances.clear();
 
@@ -106,8 +114,10 @@ export function createDungeonDisplay(): EntityDisplayObject {
         .fill({ color: 0x0e0a08, alpha: 0.6 });
     }
 
-    // Entrance markers — orange glowing notch + bright dot.
-    const ents = entrancePositions(radius);
+    // Entrance markers — orange glowing notch + bright dot. Positions
+    // are derived from the server-replicated mask so each notch sits at
+    // a real gap in the perimeter wall, not a hardcoded guess.
+    const ents = entrancePositionsFromMask(mask, radius);
     for (const e of ents) {
       // Outer glow halo
       entrances
@@ -130,10 +140,12 @@ export function createDungeonDisplay(): EntityDisplayObject {
     update(ent: ClientEntity, _isMe: boolean, now: number) {
       const e = ent.current as DungeonEntity;
       const radius = e.radius || 1800;
+      const mask = e.entranceMask || 0;
 
-      if (radius !== drawnRadius) {
+      if (radius !== drawnRadius || mask !== drawnMask) {
         drawnRadius = radius;
-        drawRock(radius);
+        drawnMask = mask;
+        drawRock(radius, mask);
         // Position labels relative to the asteroid's outer radius.
         label.position.set(0, -radius - px(18));
         sublabel.position.set(0, -radius - px(2));

@@ -466,8 +466,15 @@ type PilotName struct {
 // tracked server-side in GameWorld.dungeonChambers — only the world-level
 // info travels with the entity.
 //
-// Name is the only wire field (initial-only — fixed at spawn). The
-// remaining geometry (outer radius, entrance positions) are local-only
+// Name and EntranceMask are the wire fields (initial-only — fixed at
+// spawn). EntranceMask is a 16-bit perimeter bitmap: bit i is 1 if slot i
+// of the 16-slot ring is a wall (occluded), 0 if it's an entrance gap.
+// The client uses this to render entrance markers at the exact positions
+// the server actually carved gaps in the perimeter wall — replaces the
+// previously hardcoded south/NE/NW assumption that drifted out of sync
+// with pickEntranceAngles.
+//
+// The remaining geometry (outer radius, entrance positions) are local-only
 // because the client doesn't need them at the dungeon-marker level: the
 // outer wall + entrance gaps are materialized as KindDungeonWall entities
 // which clients render directly from their replicated Position/Rotation/
@@ -481,6 +488,7 @@ type PilotName struct {
 // encoding, a separate event, or be derived from sibling entities.)
 type Dungeon struct {
 	Name          string  `net:"initial"`
+	EntranceMask  uint16  `net:"initial,u16"`
 	OuterRadius   float32 `mmokit:"local"`
 	EntranceCount uint8   `mmokit:"local"`
 	EntranceX0    float32 `mmokit:"local"`

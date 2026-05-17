@@ -319,3 +319,19 @@ func isEntranceSlot(s int, gaps []int) bool {
 	}
 	return false
 }
+
+// entranceMaskFor returns the wire-replicated perimeter bitmap for a
+// dungeon: bit i is 1 if slot i of the ring is a wall, 0 if it's an
+// entrance gap. Derived from pickEntranceAngles so the client renders
+// entrance markers at the exact slots the server carved gaps in
+// generateWalls. ringSegments must match the constant in generateWalls.
+func entranceMaskFor(g *dungeonGraph, cfg *GameConfig, ringSegments int) uint16 {
+	entrances := pickEntranceAngles(g, cfg, ringSegments)
+	var mask uint16
+	for s := 0; s < ringSegments; s++ {
+		if !isEntranceSlot(s, entrances) {
+			mask |= 1 << s
+		}
+	}
+	return mask
+}

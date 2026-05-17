@@ -264,6 +264,7 @@ export interface DungeonEntity {
   width: number;
   height: number;
   name: string;
+  entranceMask: number;
 }
 
 /** Entity kind 10. */

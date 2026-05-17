@@ -226,7 +226,8 @@ function decodeDungeonEntitySnapshot(snap: Uint8Array, initial: Uint8Array | nul
   const width = unVel(readInt16(snap, o), 500); o += 2;
   const height = unVel(readInt16(snap, o), 500); o += 2;
   const name = initial ? decodeLengthPrefixedStringU8(initial) : (existing?.name ?? "");
-  return { netID: 0, producedAtMs: 0, entityType: 9, worldX, worldY, velX, velY, radius, width, height, name };
+  const entranceMask = existing?.entranceMask ?? 0;
+  return { netID: 0, producedAtMs: 0, entityType: 9, worldX, worldY, velX, velY, radius, width, height, name, entranceMask };
 }
 
 const DUNGEONWALLENTITY_FIELD_SIZES = [4, 4, 2, 2, 2, 2, 2, 2];

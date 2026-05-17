@@ -70,6 +70,7 @@ func (gw *GameWorld) SpawnDungeonFromGraph(centerX, centerY float32, seed uint64
 
 	dungeonNetID := gw.SpawnDungeon(centerX, centerY, gamecomp.Dungeon{
 		Name:          g.name,
+		EntranceMask:  entranceMaskFor(g, gw.Config, 16),
 		OuterRadius:   gw.Config.DungeonAsteroidRadius,
 		EntranceCount: uint8(gw.Config.DungeonEntranceCount),
 		EntranceX0:    ent[0].X, EntranceY0: ent[0].Y,
