@@ -17,7 +17,7 @@ import (
 // ConfigVersion tracks breaking config changes. Bump this when defaults change
 // in a way that is incompatible with saved configs (e.g. unit rescale).
 // When the saved version doesn't match, defaults are used and re-saved.
-const ConfigVersion = 11
+const ConfigVersion = 12
 
 // GameConfig holds all tunable game parameters.
 type GameConfig struct {
@@ -317,19 +317,24 @@ func DefaultGameConfig() GameConfig {
 		StationCellPOIClearCooldown:    180,
 		NonStationCellPOIClearCooldown: 600,
 
-		// Dungeon procgen
-		DungeonAsteroidRadius:   1800,
+		// Dungeon procgen — scaled to match the game's actual world scale
+		// (ships are ~2u wide, asteroids 0.7-2u, station radius 5, AoI 100u,
+		// Brawler aggro 30u). The original spec used 1800u radii which was
+		// ~900× too large — the player couldn't see the asteroid at all
+		// because AoI queries by entity center and 1800u puts the entity
+		// center far past every reasonable AoI.
+		DungeonAsteroidRadius:   80,
 		DungeonChamberCountMin:  5,
 		DungeonChamberCountMax:  8,
-		DungeonChamberRadiusMin: 120,
-		DungeonChamberRadiusMax: 240,
-		DungeonCorridorWidth:    100,
+		DungeonChamberRadiusMin: 10,
+		DungeonChamberRadiusMax: 18,
+		DungeonCorridorWidth:    5,
 		DungeonEntranceCount:    3,
-		DungeonWallThickness:    30,
+		DungeonWallThickness:    1.5,
 		DungeonTestsiteCellX:    0,
 		DungeonTestsiteCellY:    0,
 		DungeonTestsiteOffsetX:  0,
-		DungeonTestsiteOffsetY:  -2300, // asteroid center 2300u north of station; entrance ~500u north of station (world -Y = visual up)
+		DungeonTestsiteOffsetY:  -580, // asteroid center 580u north of station; entrance (south side, radius 80) ~500u north of station
 
 		// Per-chamber cooldowns
 		ChamberCooldownMobPack:  1800,
