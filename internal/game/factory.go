@@ -61,6 +61,7 @@ func GameSetup(coord *mmokit.Process) {
 	coord.AddSystem(mmokit.NewSystem(&ProjectileSystem{})) // after Ability (abilities spawn projectiles)
 	coord.AddSystem(mmokit.NewSystem(&StatusEffectSystem{}))
 	coord.AddSystem(mmokit.NewSystem(&NPCAISystem{}))
+	coord.AddSystem(mmokit.NewSystem(&SelectionLOSSystem{}))
 	coord.AddSystem(mmokit.NewSystem(&POISystem{}))
 	coord.AddSystem(mmokit.NewSystem(&WanderSystem{}))
 	coord.AddSystem(mmokit.NewPhysicsSystem())

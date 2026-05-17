@@ -116,6 +116,13 @@ type GameConfig struct {
 	// friendly ship) don't break aggro.
 	AILosLossDropSec float32 `json:"ai_los_loss_drop_sec"`
 
+	// LockLosLossBreakSec is how long a player's Selection may have its LOS
+	// to the selected entity continuously blocked by a LayerStatic collider
+	// before SelectionLOSSystem auto-clears the selection. Mirrors the AI
+	// LOS-loss latch but on the player side; mining beams and other
+	// Selection-driven abilities stop the moment the selection clears.
+	LockLosLossBreakSec float32 `json:"lock_los_loss_break_sec"`
+
 
 	// Docking
 	DockTime         float32 `json:"dockTime"`         // seconds to complete docking
@@ -229,6 +236,7 @@ func DefaultGameConfig() GameConfig {
 
 		AILosRecheckIntervalSec: 0.5,
 		AILosLossDropSec:        3.0,
+		LockLosLossBreakSec:     1.0,
 
 		// Docking
 		DockTime:         3.0,
