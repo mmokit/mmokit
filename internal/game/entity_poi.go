@@ -68,8 +68,8 @@ func (gw *GameWorld) spawnPOIRoster(cx, cy float32, poiNetID uint32, rosterIdx u
 // those anchored to poiNetID. Used to rebuild the roster after respawn.
 func (gw *GameWorld) collectRosterNetIDs(poiNetID uint32) []uint32 {
 	var ids []uint32
-	mmokit.ForEach1(gw.stage, func(e mmokit.Entity, anchor *gamecomp.POIAnchor) {
-		if anchor.POINetID != poiNetID {
+	mmokit.ForEach1(gw.stage, func(e mmokit.Entity, anchor *gamecomp.DungeonAnchor) {
+		if anchor.DungeonNetID != poiNetID {
 			return
 		}
 		ids = append(ids, e.NetID())

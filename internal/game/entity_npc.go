@@ -20,7 +20,7 @@ type NPCBundle struct {
 	Shield        *gamecomp.Shield
 	StatusEffects *gamecomp.StatusEffects
 	NPCAI         *gamecomp.NPCAI
-	POIAnchor     *gamecomp.POIAnchor `mmokit:"local"`
+	DungeonAnchor *gamecomp.DungeonAnchor `mmokit:"local"`
 }
 
 // SpawnNPC creates an NPC ship of the given archetype, anchored at the
@@ -89,7 +89,7 @@ func (gw *GameWorld) SpawnNPC(x, y float32, archetype uint8, poiNetID uint32) mm
 		},
 	}
 	if poiNetID != 0 {
-		components = append(components, gamecomp.POIAnchor{POINetID: poiNetID})
+		components = append(components, gamecomp.DungeonAnchor{DungeonNetID: poiNetID})
 	}
 
 	e := gw.stage.Spawn(components...)

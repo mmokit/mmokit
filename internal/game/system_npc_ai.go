@@ -639,15 +639,15 @@ func (s *NPCAISystem) applyMotion(ai *gamecomp.NPCAI, vel *mmokit.Velocity,
 func (s *NPCAISystem) tickLeash(self mmokit.Entity, ai *gamecomp.NPCAI,
 	pos *mmokit.Position, vel *mmokit.Velocity, rot *mmokit.Rotation, dt float32,
 ) {
-	anchor := mmokit.Get[gamecomp.POIAnchor](self)
-	if anchor == nil || anchor.POINetID == 0 {
+	anchor := mmokit.Get[gamecomp.DungeonAnchor](self)
+	if anchor == nil || anchor.DungeonNetID == 0 {
 		// No anchor (test NPC) — clear leash.
 		mmokit.RemoveComponent[gamecomp.Leashing](s.Commands(), self)
 		ai.State = AIStateIdle
 		vel.X, vel.Y = 0, 0
 		return
 	}
-	poiE := mmokit.EntityByNetID(s.gw.stage, anchor.POINetID)
+	poiE := mmokit.EntityByNetID(s.gw.stage, anchor.DungeonNetID)
 	if !poiE.Alive() {
 		mmokit.RemoveComponent[gamecomp.Leashing](s.Commands(), self)
 		ai.State = AIStateIdle

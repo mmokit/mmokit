@@ -412,10 +412,14 @@ type NPCAI struct {
 	LOSLostAt      float32
 }
 
-// POIAnchor links an NPC back to its owning POI for leash + roster
-// tracking. POINetID is the network ID of the POI entity.
-type POIAnchor struct {
-	POINetID uint32
+// DungeonAnchor links an NPC (or chest) back to its owning POI/dungeon
+// for leash + roster tracking. DungeonNetID is the network ID of the
+// owning POI/dungeon entity. ChamberID identifies which chamber inside
+// a multi-chamber dungeon the entity belongs to; combat POIs (treated
+// as a degenerate single-chamber dungeon per spec §6.7) leave it 0.
+type DungeonAnchor struct {
+	DungeonNetID uint32
+	ChamberID    uint16
 }
 
 // POI status — wire-replicated so clients can tint the marker.
