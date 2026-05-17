@@ -81,10 +81,15 @@ func (gw *GameWorld) SpawnDungeonFromGraph(centerX, centerY float32, seed uint64
 	// Generate walls once — reused for spawning the wall colliders
 	// AND for rasterizing the NavGrid below.
 	walls := generateWalls(g, gw.Config)
-	// Spawn walls (world-space = local + center).
+	// Spawn walls (world-space = local + center). Track the spawned wall
+	// netIDs so dungeon.regenerate can despawn them cleanly without
+	// orphaning colliders in the spatial grid.
+	wallNetIDs := make([]uint32, 0, len(walls))
 	for _, w := range walls {
-		gw.SpawnDungeonWall(centerX+w.Center.X, centerY+w.Center.Y, w.Width, w.Height, w.Rotation)
+		netID := gw.SpawnDungeonWall(centerX+w.Center.X, centerY+w.Center.Y, w.Width, w.Height, w.Rotation)
+		wallNetIDs = append(wallNetIDs, netID)
 	}
+	gw.dungeonWalls[dungeonNetID] = wallNetIDs
 
 	// Build the NavGrid for this dungeon and shift its origin so all
 	// cells (and pathfinding queries) are in world-space — NPCs query

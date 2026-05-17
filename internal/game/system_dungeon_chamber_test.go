@@ -101,3 +101,43 @@ func TestSpawnDungeonFromGraph_PopulatesChambers(t *testing.T) {
 		}
 	}
 }
+
+// TestDungeonRegenerate_DespawnsOldWalls regresses the orphan-wall bug
+// where dungeon.regenerate left the previous procgen run's wall
+// colliders in the spatial grid. SpawnDungeonFromGraph must now track
+// wall netIDs so the regenerate flow (despawn walls + RemoveDungeon)
+// removes them cleanly.
+func TestDungeonRegenerate_DespawnsOldWalls(t *testing.T) {
+	gw, _ := newTestGameWorld()
+	defer gw.Shutdown()
+
+	dungeonNetID := gw.SpawnDungeonFromGraph(0, 0, 12345)
+	walls := gw.DungeonWallNetIDs(dungeonNetID)
+	if len(walls) == 0 {
+		t.Fatal("expected non-empty wall list after first spawn")
+	}
+
+	// Simulate the regenerate flow's wall-despawn step.
+	for _, wid := range walls {
+		e := mmokit.EntityByNetID(gw.stage, wid)
+		if !e.Alive() {
+			t.Fatalf("wall %d not alive immediately after spawn", wid)
+		}
+		mmokit.Despawn(e)
+	}
+	gw.RemoveDungeon(dungeonNetID)
+	// Despawn is deferred — flush the engine's removal queue before
+	// asserting the entities are gone.
+	gw.eng.FlushRemovals()
+
+	for _, wid := range walls {
+		if mmokit.EntityByNetID(gw.stage, wid).Alive() {
+			t.Fatalf("wall %d still alive after despawn + flush", wid)
+		}
+	}
+	// RemoveDungeon must also clear the wall-netID side map so a
+	// subsequent regenerate doesn't see stale data.
+	if got := gw.DungeonWallNetIDs(dungeonNetID); len(got) != 0 {
+		t.Fatalf("expected empty wall list after RemoveDungeon, got %d entries", len(got))
+	}
+}

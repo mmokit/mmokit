@@ -79,6 +79,11 @@ type GameWorld struct {
 	// SpawnDungeonFromGraph — see the construction site there).
 	dungeonNavGrids map[uint32]*pathfinding.NavGrid
 
+	// dungeonWalls maps dungeon NetID → list of wall entity NetIDs spawned
+	// for that dungeon. Used by dungeon.regenerate to despawn the prior
+	// dungeon's walls cleanly. Populated by SpawnDungeonFromGraph.
+	dungeonWalls map[uint32][]uint32
+
 	// autoRespawnAt maps connID → engine tick at which a dead player
 	// will be auto-respawned. The client's Respawn input cannot reach
 	// the handler (the typed-input dispatcher drops frames when the
@@ -117,12 +122,23 @@ func (gw *GameWorld) DungeonChambers() map[uint32]map[uint16]*ChamberState {
 }
 
 // RemoveDungeon drops every server-side tracking record for a dungeon
-// (chamber state + NavGrid). Used by dungeon.regenerate to tear down
-// the old layout before re-procgen. Does NOT despawn the dungeon entity
-// itself or its walls/NPCs — the caller is responsible for that.
+// (chamber state + NavGrid + wall netID list). Used by
+// dungeon.regenerate to tear down the old layout before re-procgen.
+// Does NOT despawn the dungeon entity itself or its walls/NPCs — the
+// caller is responsible for that (use DungeonWallNetIDs to look up the
+// walls before calling RemoveDungeon).
 func (gw *GameWorld) RemoveDungeon(dungeonNetID uint32) {
 	delete(gw.dungeonChambers, dungeonNetID)
 	delete(gw.dungeonNavGrids, dungeonNetID)
+	delete(gw.dungeonWalls, dungeonNetID)
+}
+
+// DungeonWallNetIDs returns the wall netIDs spawned for the given
+// dungeon. Empty slice if the dungeon doesn't exist. Used by
+// dungeon.regenerate to despawn the prior layout's walls before
+// re-procgen so the spatial grid doesn't accumulate orphan colliders.
+func (gw *GameWorld) DungeonWallNetIDs(dungeonNetID uint32) []uint32 {
+	return gw.dungeonWalls[dungeonNetID]
 }
 
 // SpawnChamberRoster is the exported view of spawnChamberRoster for

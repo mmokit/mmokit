@@ -255,7 +255,7 @@ func registerDungeonRegenerate(reg *cmdsys.Registry, coord *mmokit.Process) erro
 	return reg.Register(cmdsys.Command{
 		Verb:        "dungeon.regenerate",
 		Capability:  "dungeon.regenerate",
-		Description: "debug-only: tear down a dungeon and re-procgen with a fresh seed at the same position (leaves stale walls — restart for a clean slate)",
+		Description: "debug-only: tear down a dungeon (including its wall colliders) and re-procgen with a fresh seed at the same position",
 		Examples:    []string{"dungeon.regenerate 12345"},
 		Route:       cmdsys.RouteAllHosts,
 		Args:        DungeonRegenerateArgs{},
@@ -288,18 +288,11 @@ func registerDungeonRegenerate(reg *cmdsys.Registry, coord *mmokit.Process) erro
 	})
 }
 
-// regenerateDungeonOnLoop tears down a dungeon's chamber state +
-// dungeon marker entity, then re-procgens at the same position with a
-// fresh time-based seed.
-//
-// v1 simplification: walls and the NavGrid entry from the old dungeon
-// are NOT removed. The new dungeon overwrites the NavGrid map entry
-// because SpawnDungeonFromGraph writes to gw.dungeonNavGrids
-// unconditionally, but stale wall entities remain in the world.
-// Because there's only one dungeon per cell in v1 and walls don't
-// actively interfere (they're static colliders the new layout can
-// share/overlap with), this is acceptable for a debug verb. For a
-// truly clean slate, restart the server.
+// regenerateDungeonOnLoop tears down a dungeon's chamber state, wall
+// colliders, and dungeon marker entity, then re-procgens at the same
+// position with a fresh time-based seed. Wall netIDs are tracked at
+// spawn time (see GameWorld.dungeonWalls) so the spatial grid doesn't
+// accumulate orphan colliders across regenerates.
 func regenerateDungeonOnLoop(stage *mmokit.Stage, netID uint32) DungeonRegenerateResult {
 	gw := mmokit.State[game.GameWorld](stage)
 	if gw == nil {
@@ -329,7 +322,18 @@ func regenerateDungeonOnLoop(stage *mmokit.Stage, netID uint32) DungeonRegenerat
 			mmokit.Despawn(re)
 		}
 	}
-	// Drop the chamber tracking + NavGrid entries for the old dungeon.
+	// Despawn the dungeon's wall colliders so they don't accumulate
+	// across regenerates (each procgen run spawns dozens; without this
+	// cleanup the spatial grid bloats and AoI/collision queries slow).
+	for _, wallNetID := range gw.DungeonWallNetIDs(netID) {
+		we := mmokit.EntityByNetID(stage, wallNetID)
+		if !we.Alive() {
+			continue
+		}
+		mmokit.Despawn(we)
+	}
+	// Drop the chamber tracking + NavGrid + wall-netID entries for the
+	// old dungeon.
 	gw.RemoveDungeon(netID)
 	// Despawn the dungeon marker entity.
 	mmokit.Despawn(e)
