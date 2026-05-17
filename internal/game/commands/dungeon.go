@@ -18,35 +18,30 @@ import (
 // the dispatcher (Route: RouteAllHosts), mirroring poi.list.
 type DungeonListArgs struct{}
 
-// DungeonListResult carries one entry per dungeon live on this host.
-// Each entry nests its per-chamber status so the SPA can render the
-// breakdown alongside the dungeon row.
+// DungeonListResult is one row per chamber across every dungeon. Flat
+// shape so the console table renderer can pick it up via `cmd:"table"`
+// — the SPA can group on (DungeonNetID, DungeonName) client-side if it
+// wants the nested view. Mirrors poi.list's POIListResult shape.
 type DungeonListResult struct {
-	Dungeons []DungeonInfo `json:"dungeons"`
+	Rows []DungeonChamberRow `cmd:"table" json:"rows"`
 }
 
-// DungeonInfo is one row in dungeon.list output. Chambers is nested
-// because the table renderer is bypassed here — the admin SPA consumes
-// this as JSON and renders its own per-chamber drill-down.
-type DungeonInfo struct {
-	NetID        uint32        `json:"net_id"`
-	Name         string        `json:"name"`
-	CellX        int32         `json:"cell_x"`
-	CellY        int32         `json:"cell_y"`
-	Position     [2]float32    `json:"position"`
-	ChamberCount int           `json:"chamber_count"`
-	Chambers     []ChamberInfo `json:"chambers"`
-}
-
-// ChamberInfo is one chamber's status snapshot.
-//   Role:    0=mobpack, 1=sideboss, 2=terminal
-//   Status:  0=active, 1=cleared, 2=cooldown
-type ChamberInfo struct {
-	ID                   uint16  `json:"id"`
-	Role                 uint8   `json:"role"`
-	Status               uint8   `json:"status"`
-	AliveCount           int     `json:"alive_count"`
-	CooldownRemainingSec float32 `json:"cooldown_remaining_sec"`
+// DungeonChamberRow is one chamber's status snapshot with its parent
+// dungeon's identity columns included. Role/Status are pre-formatted
+// short strings ("Mob"/"Side"/"Term", "Active"/"Cleared"/"CD") so the
+// table output is readable without a separate legend.
+type DungeonChamberRow struct {
+	DungeonNetID uint32  `json:"dungeon_net_id"`
+	DungeonName  string  `json:"dungeon_name"`
+	CellX        int32   `json:"cell_x"`
+	CellY        int32   `json:"cell_y"`
+	X            float32 `json:"x"`
+	Y            float32 `json:"y"`
+	ChamberID    uint16  `json:"chamber_id"`
+	Role         string  `json:"role"`
+	Status       string  `json:"status"`
+	Alive        int     `json:"alive"`
+	CooldownLeft string  `json:"cooldown_left"` // "ready" or "2m45s"
 }
 
 func registerDungeonList(reg *cmdsys.Registry, coord *mmokit.Process) error {
@@ -64,35 +59,35 @@ func registerDungeonList(reg *cmdsys.Registry, coord *mmokit.Process) error {
 			for _, c := range coord.Cells {
 				cells = append(cells, c)
 			}
-			var out []DungeonInfo
+			var out []DungeonChamberRow
 			for _, cell := range cells {
 				if cell.Stage == nil || cell.Engine == nil {
 					continue
 				}
-				cellRows, err := mmokit.CmdOnLoop(ctx, cell.Engine, func() ([]DungeonInfo, error) {
-					return collectDungeonInfos(cell), nil
+				cellRows, err := mmokit.CmdOnLoop(ctx, cell.Engine, func() ([]DungeonChamberRow, error) {
+					return collectDungeonChamberRows(cell), nil
 				})
 				if err != nil {
 					return nil, err
 				}
 				out = append(out, cellRows...)
 			}
-			return DungeonListResult{Dungeons: out}, nil
+			return DungeonListResult{Rows: out}, nil
 		},
 	})
 }
 
-// collectDungeonInfos walks gw.DungeonChambers() and assembles one
-// DungeonInfo per live dungeon entity. MUST be called on the stage's
-// game-loop goroutine.
-func collectDungeonInfos(cell *mmokit.Cell) []DungeonInfo {
+// collectDungeonChamberRows walks gw.DungeonChambers() and emits one
+// flat row per chamber across every dungeon on this cell. MUST be called
+// on the stage's game-loop goroutine.
+func collectDungeonChamberRows(cell *mmokit.Cell) []DungeonChamberRow {
 	stage := cell.Stage
 	gw := mmokit.State[game.GameWorld](stage)
 	if gw == nil {
 		return nil
 	}
 	now := time.Now().UnixNano()
-	var rows []DungeonInfo
+	var rows []DungeonChamberRow
 	for dungeonNetID, chambers := range gw.DungeonChambers() {
 		e := mmokit.EntityByNetID(stage, dungeonNetID)
 		if !e.Alive() {
@@ -100,38 +95,85 @@ func collectDungeonInfos(cell *mmokit.Cell) []DungeonInfo {
 		}
 		pos := mmokit.Get[mmokit.Position](e)
 		dcomp := mmokit.Get[gamecomp.Dungeon](e)
-		info := DungeonInfo{
-			NetID:        dungeonNetID,
-			CellX:        cell.Cell.X,
-			CellY:        cell.Cell.Y,
-			ChamberCount: len(chambers),
-		}
+		var px, py float32
 		if pos != nil {
-			info.Position = [2]float32{pos.X, pos.Y}
+			px, py = pos.X, pos.Y
 		}
+		var name string
 		if dcomp != nil {
-			info.Name = dcomp.Name
+			name = dcomp.Name
 		}
 		for _, c := range chambers {
-			ci := ChamberInfo{
-				ID:         c.ID,
-				Role:       uint8(c.Role),
-				Status:     uint8(c.Status),
-				AliveCount: len(c.AliveNetIDs),
+			row := DungeonChamberRow{
+				DungeonNetID: dungeonNetID,
+				DungeonName:  name,
+				CellX:        cell.Cell.X,
+				CellY:        cell.Cell.Y,
+				X:            px,
+				Y:            py,
+				ChamberID:    c.ID,
+				Role:         roleLabel(c.Role),
+				Status:       statusLabel(c.Status),
+				Alive:        len(c.AliveNetIDs),
+				CooldownLeft: "—",
 			}
-			if c.Status == game.ChamberCooldown && c.ClearedAt > 0 {
-				cooldown := game.ChamberCooldownFor(gw.Config, c.Role)
-				elapsedSec := float32(now-c.ClearedAt) / 1e9
-				remain := cooldown - elapsedSec
-				if remain > 0 {
-					ci.CooldownRemainingSec = remain
+			switch c.Status {
+			case game.ChamberActive:
+				row.CooldownLeft = "ready"
+			case game.ChamberCooldown:
+				if c.ClearedAt > 0 {
+					cooldown := game.ChamberCooldownFor(gw.Config, c.Role)
+					elapsedSec := float32(now-c.ClearedAt) / 1e9
+					remain := cooldown - elapsedSec
+					if remain > 0 {
+						row.CooldownLeft = formatDur(remain)
+					} else {
+						row.CooldownLeft = "ready"
+					}
 				}
 			}
-			info.Chambers = append(info.Chambers, ci)
+			rows = append(rows, row)
 		}
-		rows = append(rows, info)
 	}
 	return rows
+}
+
+func roleLabel(r game.ChamberRole) string {
+	switch r {
+	case game.ChamberMobPack:
+		return "Mob"
+	case game.ChamberSideBoss:
+		return "Side"
+	case game.ChamberTerminal:
+		return "Term"
+	default:
+		return "?"
+	}
+}
+
+func statusLabel(s game.ChamberStatus) string {
+	switch s {
+	case game.ChamberActive:
+		return "Active"
+	case game.ChamberCleared:
+		return "Cleared"
+	case game.ChamberCooldown:
+		return "CD"
+	default:
+		return "?"
+	}
+}
+
+func formatDur(sec float32) string {
+	if sec <= 0 {
+		return "ready"
+	}
+	mins := int(sec) / 60
+	rem := int(sec) % 60
+	if mins == 0 {
+		return fmt.Sprintf("%ds", rem)
+	}
+	return fmt.Sprintf("%dm%02ds", mins, rem)
 }
 
 // ── dungeon.respawn ──────────────────────────────────────────────────────────
