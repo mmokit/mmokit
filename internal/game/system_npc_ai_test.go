@@ -70,7 +70,7 @@ func TestNPCAI_IdleToAcquireOnTargetInRange(t *testing.T) {
 	gw, _ := newTestGameWorld()
 	ai, phys := newWiredNPCAISystem(t, gw)
 
-	npc := gw.SpawnNPC(0, 0, ArchetypeBrawler, 0)
+	npc := gw.SpawnNPC(0, 0, ArchetypeBrawler, 0, NPCSpawnModifiers{})
 	newTestPlayerAt(t, gw, 8001, 20, 0) // inside Brawler's 30u aggro
 
 	const dt = float32(0.05)
@@ -88,7 +88,7 @@ func TestNPCAI_BrawlerCharges(t *testing.T) {
 	gw, _ := newTestGameWorld()
 	ai, phys := newWiredNPCAISystem(t, gw)
 
-	npc := gw.SpawnNPC(0, 0, ArchetypeBrawler, 0)
+	npc := gw.SpawnNPC(0, 0, ArchetypeBrawler, 0, NPCSpawnModifiers{})
 	// 70u: outside default 30u aggro AND 50u weapon range. Bump this
 	// NPC's aggro to 100u so it locks at 70u and exercises the charge
 	// motion (default tuning leaves no in-aggro / out-of-weapon zone).
@@ -116,7 +116,7 @@ func TestNPCAI_LOSBlockedTargetNotAcquired(t *testing.T) {
 	ai, phys := newWiredNPCAISystem(t, gw)
 
 	// Brawler at origin; default 30u aggro radius.
-	npc := gw.SpawnNPC(0, 0, ArchetypeBrawler, 0)
+	npc := gw.SpawnNPC(0, 0, ArchetypeBrawler, 0, NPCSpawnModifiers{})
 	// Player at (20, 0) — inside aggro (matches TestNPCAI_IdleToAcquireOnTargetInRange).
 	newTestPlayerAt(t, gw, 8101, 20, 0)
 
@@ -155,7 +155,7 @@ func TestNPCAI_LOSLostDropsTargetAfterTimeout(t *testing.T) {
 	// target — we want to prove the LOS-loss path fires on its own.
 	gw.Config.AggroDeescalationSec = 600
 
-	npc := gw.SpawnNPC(0, 0, ArchetypeBrawler, 0)
+	npc := gw.SpawnNPC(0, 0, ArchetypeBrawler, 0, NPCSpawnModifiers{})
 	player := newTestPlayerAt(t, gw, 8201, 20, 0) // inside 30u aggro, no wall yet
 
 	const dt = float32(0.05)
@@ -206,7 +206,7 @@ func TestNPCAI_AggroDeescalation(t *testing.T) {
 	gw, _ := newTestGameWorld()
 	ai, phys := newWiredNPCAISystem(t, gw)
 
-	npc := gw.SpawnNPC(0, 0, ArchetypeBrawler, 0)
+	npc := gw.SpawnNPC(0, 0, ArchetypeBrawler, 0, NPCSpawnModifiers{})
 	player := newTestPlayerAt(t, gw, 8004, 20, 0) // inside 30u aggro
 
 	const dt = float32(0.05)
@@ -228,5 +228,152 @@ func TestNPCAI_AggroDeescalation(t *testing.T) {
 	npcAI = mmokit.Get[gamecomp.NPCAI](npc)
 	if npcAI.State != AIStateIdle {
 		t.Errorf("expected Idle after deescalation; got %d", npcAI.State)
+	}
+}
+
+// TestSpawnNPC_EliteStatsApplied — confirms the Elite modifier on
+// SpawnNPC multiplies HP / MaxSpeed / DamagePerShot by the BossSolo
+// multipliers. Comparison is against a vanilla Brawler at the same
+// archetype with no modifiers.
+func TestSpawnNPC_EliteStatsApplied(t *testing.T) {
+	gw, _ := newTestGameWorld()
+
+	normal := gw.SpawnNPC(0, 0, ArchetypeBrawler, 0, NPCSpawnModifiers{})
+	elite := gw.SpawnNPC(50, 0, ArchetypeBrawler, 0, NPCSpawnModifiers{Elite: true})
+
+	nAI := mmokit.Get[gamecomp.NPCAI](normal)
+	eAI := mmokit.Get[gamecomp.NPCAI](elite)
+	if nAI == nil || eAI == nil {
+		t.Fatal("expected NPCAI on both spawns")
+	}
+	nH := mmokit.Get[gamecomp.Health](normal)
+	eH := mmokit.Get[gamecomp.Health](elite)
+	if nH == nil || eH == nil {
+		t.Fatal("expected Health on both spawns")
+	}
+
+	cfg := gw.Config
+	wantHP := nH.Max * cfg.BossSoloHPMultiplier
+	wantSpeed := nAI.MaxSpeed * cfg.BossSoloSpeedMultiplier
+	wantDmg := nAI.DamagePerShot * cfg.BossSoloDmgMultiplier
+	const eps = 1e-3
+
+	if absF32(eH.Max-wantHP) > eps {
+		t.Errorf("elite HP: got %.2f, want %.2f (normal=%.2f x %.2f)",
+			eH.Max, wantHP, nH.Max, cfg.BossSoloHPMultiplier)
+	}
+	if absF32(eH.Current-wantHP) > eps {
+		t.Errorf("elite HP.Current: got %.2f, want %.2f", eH.Current, wantHP)
+	}
+	if absF32(eAI.MaxSpeed-wantSpeed) > eps {
+		t.Errorf("elite MaxSpeed: got %.2f, want %.2f", eAI.MaxSpeed, wantSpeed)
+	}
+	if absF32(eAI.DamagePerShot-wantDmg) > eps {
+		t.Errorf("elite DamagePerShot: got %.2f, want %.2f", eAI.DamagePerShot, wantDmg)
+	}
+}
+
+// absF32 — local helper so the test file doesn't pull in math just for this.
+func absF32(v float32) float32 {
+	if v < 0 {
+		return -v
+	}
+	return v
+}
+
+// TestBossGuardian_StationaryNeverMoves — a BossGuardian with a player
+// well outside WeaponRange must hold position. MotionStationary keeps
+// vel.X/Y = 0 even when AI is in Approach/Acquire/Engage (whichever the
+// state machine settles into without a target in lock range).
+func TestBossGuardian_StationaryNeverMoves(t *testing.T) {
+	gw, _ := newTestGameWorld()
+	ai, phys := newWiredNPCAISystem(t, gw)
+
+	npc := gw.SpawnNPC(0, 0, ArchetypeBossGuardian, 0, NPCSpawnModifiers{})
+	// Place a player inside the boss's aggro radius so it enters Engage;
+	// stationary motion must still zero out velocity.
+	npcAI := mmokit.Get[gamecomp.NPCAI](npc)
+	aggro := npcAI.AggroRadius
+	newTestPlayerAt(t, gw, 9101, aggro*0.3, 0)
+
+	startX, startY := float32(0), float32(0)
+	if p := mmokit.Get[mmokit.Position](npc); p != nil {
+		startX, startY = p.X, p.Y
+	}
+
+	const dt = float32(0.05)
+	tickAI(gw.stage, ai, phys, dt, 40) // 2 seconds
+
+	p := mmokit.Get[mmokit.Position](npc)
+	if p == nil {
+		t.Fatal("BossGuardian lost position")
+	}
+	if absF32(p.X-startX) > 0.1 || absF32(p.Y-startY) > 0.1 {
+		t.Errorf("BossGuardian moved (Stationary policy): start=(%.2f,%.2f) now=(%.2f,%.2f)",
+			startX, startY, p.X, p.Y)
+	}
+}
+
+// TestBossGuardian_SpawnsAddsAtHPThresholds — driving the boss's HP
+// below each Config.BossMainAddSpawnThresholds entry must spawn 2 add
+// NPCs once per threshold. Re-crossing the same threshold is a no-op.
+func TestBossGuardian_SpawnsAddsAtHPThresholds(t *testing.T) {
+	gw, _ := newTestGameWorld()
+	aiSys, phys := newWiredNPCAISystem(t, gw)
+
+	npc := gw.SpawnNPC(0, 0, ArchetypeBossGuardian, 0, NPCSpawnModifiers{})
+	bossH := mmokit.Get[gamecomp.Health](npc)
+	bossAI := mmokit.Get[gamecomp.NPCAI](npc)
+	if bossH == nil || bossAI == nil {
+		t.Fatal("expected Health + NPCAI on BossGuardian")
+	}
+
+	// Give the boss a target so tickEngage runs (the add-spawn check
+	// lives in the engaged branch).
+	newTestPlayerAt(t, gw, 9201, bossAI.AggroRadius*0.3, 0)
+
+	// Warm up: enough ticks for Idle → Acquire → Engage. The boss is
+	// stationary so turn-to-face is the only obstacle.
+	const dt = float32(0.05)
+	tickAI(gw.stage, aiSys, phys, dt, 20)
+	if bossAI.State != AIStateEngage {
+		t.Fatalf("expected BossGuardian in Engage before damage; state=%d", bossAI.State)
+	}
+
+	// countLancers returns the number of live Lancer NPCs anchored to
+	// the boss's dungeon (0 here since this is a console-spawned boss)
+	// or anywhere on the stage by archetype — we just count Lancers.
+	countLancers := func() int {
+		n := 0
+		mmokit.ForEach1(gw.stage, func(e mmokit.Entity, ai *gamecomp.NPCAI) {
+			if ai.Archetype == ArchetypeLancer {
+				n++
+			}
+		})
+		return n
+	}
+
+	thresholds := gw.Config.BossMainAddSpawnThresholds
+	prior := countLancers()
+
+	for i, t0 := range thresholds {
+		// Drive HP just below threshold i (within (t-1%) ≈ t-0.01 of Max).
+		bossH.Current = bossH.Max * (t0 - 0.01)
+		tickAI(gw.stage, aiSys, phys, dt, 2) // one engage tick + flush
+		got := countLancers()
+		if got-prior != 2 {
+			t.Errorf("threshold %d (frac<%.2f): expected +2 Lancers, got +%d (total=%d)",
+				i, t0, got-prior, got)
+		}
+		prior = got
+
+		// Crossing the same threshold again must not respawn adds.
+		bossH.Current = bossH.Max * (t0 - 0.02) // stay below
+		tickAI(gw.stage, aiSys, phys, dt, 2)
+		got2 := countLancers()
+		if got2 != prior {
+			t.Errorf("threshold %d re-crossing should be no-op; total went %d→%d",
+				i, prior, got2)
+		}
 	}
 }

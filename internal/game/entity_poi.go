@@ -59,7 +59,7 @@ func (gw *GameWorld) spawnPOIRoster(cx, cy float32, poiNetID uint32, rosterIdx u
 			r := rng.Float32() * m.SpreadRadius
 			ox := r * float32(math.Cos(angle))
 			oy := r * float32(math.Sin(angle))
-			gw.SpawnNPC(cx+ox, cy+oy, m.Archetype, poiNetID)
+			gw.SpawnNPC(cx+ox, cy+oy, m.Archetype, poiNetID, NPCSpawnModifiers{})
 		}
 	}
 }

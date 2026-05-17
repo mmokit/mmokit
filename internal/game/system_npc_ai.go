@@ -401,6 +401,13 @@ func (s *NPCAISystem) tickEngage(self mmokit.Entity, ai *gamecomp.NPCAI,
 		}
 	}
 
+	// BossGuardian: check HP thresholds and spawn escort waves once per
+	// crossing. Runs while engaged (lockstep with the boss's normal
+	// firing cadence) — the boss is stationary so position is stable.
+	if ai.Archetype == ArchetypeBossGuardian {
+		s.maybeSpawnBossAdds(self, ai)
+	}
+
 	if dist <= ai.WeaponRange && angleDelta(rot.Angle, desired) < 0.26 /* ~15° */ {
 		ai.FireCooldown -= dt
 		if ai.FireCooldown <= 0 && ai.FireRate > 0 {
@@ -422,6 +429,83 @@ func (s *NPCAISystem) tickEngage(self mmokit.Entity, ai *gamecomp.NPCAI,
 				ai.LastCombatActivityAt = now
 			}
 		}
+	}
+}
+
+// maybeSpawnBossAdds fires escort-add waves when the BossGuardian's HP
+// fraction drops below each Config.BossMainAddSpawnThresholds entry.
+// Each threshold fires exactly once per life (tracked in
+// ai.AddSpawnThresholdsHit bitmask). Adds are Lancers spawned near the
+// boss, anchored to the same dungeon + chamber so the chamber
+// lifecycle correctly waits for them before flipping Cleared.
+func (s *NPCAISystem) maybeSpawnBossAdds(self mmokit.Entity, ai *gamecomp.NPCAI) {
+	gw := s.gw
+	health := mmokit.Get[gamecomp.Health](self)
+	if health == nil || health.Max <= 0 {
+		return
+	}
+	frac := health.Current / health.Max
+	thresholds := gw.Config.BossMainAddSpawnThresholds
+	pos := mmokit.Get[mmokit.Position](self)
+	if pos == nil {
+		return
+	}
+	anchor := mmokit.Get[gamecomp.DungeonAnchor](self)
+	// anchor may be nil for console-spawned test bosses (poiNetID=0);
+	// they still spawn adds but won't be tracked in a chamber roster.
+
+	for i, thresh := range thresholds {
+		if i >= 8 {
+			break // bitmask is uint8 — refuse to silently overflow
+		}
+		bit := uint8(1) << uint(i)
+		if ai.AddSpawnThresholdsHit&bit != 0 {
+			continue
+		}
+		if frac >= thresh {
+			continue
+		}
+		ai.AddSpawnThresholdsHit |= bit
+
+		// Snapshot the boss's data we need inside Defer — the surrounding
+		// Iter holds a query lock, so spawning has to defer to the next
+		// system boundary.
+		bx, by := pos.X, pos.Y
+		var dungeonNetID uint32
+		var chamberID uint16
+		if anchor != nil {
+			dungeonNetID = anchor.DungeonNetID
+			chamberID = anchor.ChamberID
+		}
+		bossNetID := self.NetID()
+		s.Commands().Defer(func() {
+			const addCount = 2
+			// Spawn 2 Lancers a short distance off the boss. Small ring
+			// offset (±15u) avoids the adds materializing inside the boss.
+			for k := 0; k < addCount; k++ {
+				angle := float64(k) * (2 * math.Pi / float64(addCount))
+				ox := float32(math.Cos(angle)) * 15
+				oy := float32(math.Sin(angle)) * 15
+				addE := gw.SpawnNPC(bx+ox, by+oy, ArchetypeLancer, dungeonNetID, NPCSpawnModifiers{})
+				// Re-tag the chamber ID so AliveNetIDs tracking + leashing
+				// follow the boss's chamber. SpawnNPC sets ChamberID=0; we
+				// overwrite to match the boss's chamber.
+				if a := mmokit.Get[gamecomp.DungeonAnchor](addE); a != nil {
+					a.ChamberID = chamberID
+				}
+				// If we have an owning chamber, register the add in
+				// AliveNetIDs so the chamber lifecycle waits for it.
+				if dungeonNetID != 0 {
+					if chambers, ok := gw.dungeonChambers[dungeonNetID]; ok {
+						if c, ok := chambers[chamberID]; ok {
+							c.AliveNetIDs = append(c.AliveNetIDs, addE.NetID())
+						}
+					}
+				}
+			}
+			gw.eng.Log.Log(CatNPCAI, "ai: %d BossGuardian add-spawn threshold=%d frac=%.2f spawned=%d",
+				bossNetID, i, frac, addCount)
+		})
 	}
 }
 

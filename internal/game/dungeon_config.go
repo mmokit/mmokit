@@ -91,8 +91,3 @@ func rosterIdxForRole(role ChamberRole, rngU64 uint64) uint16 {
 	return uint16(candidates[int(rngU64%uint64(len(candidates)))])
 }
 
-// ArchetypeBossGuardian is forward-declared here for the roster table.
-// The actual archetype implementation lands in Task 29 (npc_archetype.go).
-// Current archetypes occupy values 0 (Brawler), 1 (Artillery), 2 (Lancer);
-// 3 is reserved for BossGuardian.
-const ArchetypeBossGuardian uint8 = 3

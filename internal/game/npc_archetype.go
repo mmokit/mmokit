@@ -5,9 +5,10 @@ package game
 // Slot 2 originally held Kamikaze ("charge + beep + detonate"); replaced
 // with Lancer (telegraphed line-charge) at the same wire value.
 const (
-	ArchetypeBrawler   uint8 = 0
-	ArchetypeArtillery uint8 = 1
-	ArchetypeLancer    uint8 = 2
+	ArchetypeBrawler      uint8 = 0
+	ArchetypeArtillery    uint8 = 1
+	ArchetypeLancer       uint8 = 2
+	ArchetypeBossGuardian uint8 = 3 // PVE v3: stationary terminal-chamber main boss with periodic add-spawn mechanic
 )
 
 // NPCAIState — current state-machine slot for an NPC.
@@ -98,6 +99,24 @@ func archetypeDefaults(cfg *GameConfig, kind uint8) ArchetypeDefaults {
 			MotionPolicy:   MotionCharge,
 			DamagePerShot:  0, // damage applied during charge tick
 			FireRate:       0,
+		}
+	case ArchetypeBossGuardian:
+		// Terminal-chamber main boss: stationary, big aggro / weapon range,
+		// scaled HP + damage off the Brawler baseline times the BossMain
+		// multipliers. The add-spawn mechanic (per-threshold escort waves)
+		// lives in NPCAISystem.tickEngage — not here.
+		return ArchetypeDefaults{
+			HP:             cfg.BrawlerHP * cfg.BossMainHPMultiplier,
+			Shield:         0,
+			MaxSpeed:       0, // stationary — MotionStationary holds vel.X/Y = 0
+			TurnRate:       cfg.BrawlerTurnRate * 0.5,
+			PreferredRange: cfg.BrawlerWeaponRange,
+			WeaponRange:    cfg.BrawlerWeaponRange,
+			AggroRadius:    cfg.BrawlerAggroRadius * 2,
+			LockRange:      cfg.BrawlerAggroRadius * 2,
+			MotionPolicy:   MotionStationary,
+			DamagePerShot:  cfg.BrawlerDamagePerShot * cfg.BossMainDmgMultiplier,
+			FireRate:       cfg.BrawlerFireRate,
 		}
 	}
 	panic("archetypeDefaults: unknown archetype")

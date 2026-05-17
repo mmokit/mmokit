@@ -24,12 +24,34 @@ type NPCBundle struct {
 	Pathing       *gamecomp.Pathing       `mmokit:"local"`
 }
 
+// NPCSpawnModifiers customizes a spawn-time NPC: elite roster variants
+// (multiplied HP/damage/speed for ChamberSideBoss "champion" entries) and
+// the BossGuardian "main boss" flag for ChamberTerminal rosters. Pass the
+// zero value for vanilla spawns. Modifier flags are spawn-time only —
+// they're applied to the captured NPCAI stats during SpawnNPC and not
+// stored on the entity afterwards.
+type NPCSpawnModifiers struct {
+	Elite bool // multiplies HP/Damage/Speed via Config.BossSolo* multipliers
+	Main  bool // reserved for BossGuardian-only hooks (no per-stat multiplier here — the archetype itself already encodes the Main-boss base stats)
+}
+
 // SpawnNPC creates an NPC ship of the given archetype, anchored at the
 // given local position with anchor link to poiNetID. Pass poiNetID=0
 // for console-spawned test NPCs (they leash to their spawn position
-// when no POI exists).
-func (gw *GameWorld) SpawnNPC(x, y float32, archetype uint8, poiNetID uint32) mmokit.Entity {
+// when no POI exists). Modifier flags scale the archetype's base stats
+// at spawn time — see NPCSpawnModifiers.
+func (gw *GameWorld) SpawnNPC(x, y float32, archetype uint8, poiNetID uint32, mods NPCSpawnModifiers) mmokit.Entity {
 	d := archetypeDefaults(gw.Config, archetype)
+
+	// Apply elite scaling to the archetype defaults BEFORE the component
+	// values are captured. Elite is the "champion" flag on a
+	// ChamberSideBoss roster — HP/damage/speed get multiplied so the boss
+	// reads as visibly stronger than its escorts.
+	if mods.Elite {
+		d.HP *= gw.Config.BossSoloHPMultiplier
+		d.MaxSpeed *= gw.Config.BossSoloSpeedMultiplier
+		d.DamagePerShot *= gw.Config.BossSoloDmgMultiplier
+	}
 
 	// Initial ability-cooldown offsets so a pack of NPCs that aggro on the
 	// same tick don't fire their telegraphed attacks in lockstep. Each
@@ -57,9 +79,12 @@ func (gw *GameWorld) SpawnNPC(x, y float32, archetype uint8, poiNetID uint32) mm
 	// with MotionPathfind so they navigate around walls (the dungeon
 	// NavGrid is built by SpawnDungeonFromGraph). Open-world NPCs keep
 	// their archetype-default policy (Charge / Stationary) — no NavGrid
-	// exists for the open world.
+	// exists for the open world. Archetypes that are *already* Stationary
+	// (Artillery, BossGuardian) keep MotionStationary even inside a
+	// dungeon — they're designed to hold position and pathfind would
+	// compute a route they can't follow at speed 0.
 	motion := d.MotionPolicy
-	if poiNetID != 0 {
+	if poiNetID != 0 && motion != MotionStationary {
 		if _, ok := gw.dungeonNavGrids[poiNetID]; ok {
 			motion = MotionPathfind
 		}
@@ -109,7 +134,7 @@ func (gw *GameWorld) SpawnNPC(x, y float32, archetype uint8, poiNetID uint32) mm
 	}
 
 	e := gw.stage.Spawn(components...)
-	gw.eng.Log.Log(CatPlayerSpawn, "npc spawned: netID=%d archetype=%d pos=(%.0f,%.0f) anchor=%d",
-		e.NetID(), archetype, x, y, poiNetID)
+	gw.eng.Log.Log(CatPlayerSpawn, "npc spawned: netID=%d archetype=%d pos=(%.0f,%.0f) anchor=%d elite=%v main=%v",
+		e.NetID(), archetype, x, y, poiNetID, mods.Elite, mods.Main)
 	return e
 }

@@ -412,6 +412,13 @@ type NPCAI struct {
 	// cell boundary keeps its timers.
 	LastLOSCheckAt float32
 	LOSLostAt      float32
+
+	// PVE v3 (BossGuardian): bitmask of HP-fraction thresholds (indices
+	// into Config.BossMainAddSpawnThresholds) that have already triggered
+	// their escort-add spawn. Bit i set = threshold i has fired this life.
+	// Cleared implicitly when the NPC is destroyed (each new spawn gets a
+	// fresh NPCAI). Only consulted for ArchetypeBossGuardian.
+	AddSpawnThresholdsHit uint8
 }
 
 // DungeonAnchor links an NPC (or chest) back to its owning POI/dungeon

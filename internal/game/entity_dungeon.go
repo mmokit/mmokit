@@ -124,45 +124,24 @@ func (gw *GameWorld) SpawnDungeonFromGraph(centerX, centerY float32, seed uint64
 // records their netIDs in c.AliveNetIDs. Each NPC's DungeonAnchor is
 // retagged with the chamber ID (SpawnNPC attaches DungeonAnchor with
 // ChamberID=0 — we override here so the chamber lifecycle can identify
-// per-chamber kills).
-//
-// Members whose archetype is not yet implemented (e.g. ArchetypeBossGuardian
-// prior to Task 29) are skipped with a log line — the roster still spawns
-// its other members; once the archetype lands the next respawn cycle picks
-// them up automatically.
+// per-chamber kills). The roster's Elite/Main flags pass through to
+// SpawnNPC so champion mobs scale up and BossGuardians are flagged as
+// main bosses.
 func (gw *GameWorld) spawnChamberRoster(dungeonNetID uint32, c *ChamberState) {
 	roster := dungeonRosters[c.RosterDefIdx]
 	rng := rand.New(rand.NewPCG(uint64(dungeonNetID), uint64(c.ID)+uint64(c.RespawnCount)))
 	for _, m := range roster.Members {
-		if !isImplementedArchetype(m.Archetype) {
-			gw.eng.Log.Log(CatDungeonGen, "chamber roster: skipping unimplemented archetype=%d (chamber=%d)",
-				m.Archetype, c.ID)
-			continue
-		}
+		mods := NPCSpawnModifiers{Elite: m.Elite, Main: m.Main}
 		for i := 0; i < m.Count; i++ {
 			angle := rng.Float64() * 2 * math.Pi
 			r := rng.Float32() * m.SpreadRadius
 			px := c.Center.X + r*float32(math.Cos(angle))
 			py := c.Center.Y + r*float32(math.Sin(angle))
-			e := gw.SpawnNPC(px, py, m.Archetype, dungeonNetID)
+			e := gw.SpawnNPC(px, py, m.Archetype, dungeonNetID, mods)
 			if anchor := mmokit.Get[gamecomp.DungeonAnchor](e); anchor != nil {
 				anchor.ChamberID = c.ID
 			}
 			c.AliveNetIDs = append(c.AliveNetIDs, e.NetID())
 		}
 	}
-}
-
-// isImplementedArchetype reports whether SpawnNPC can handle the given
-// archetype. ArchetypeBossGuardian is declared in dungeon_config.go but
-// the archetypeDefaults entry is added by Task 29 — until then,
-// SpawnNPC would panic with "unknown archetype". Roster spawn paths
-// guard against this so a partially-implemented archetype list doesn't
-// blow up the cell bootstrap.
-func isImplementedArchetype(a uint8) bool {
-	switch a {
-	case ArchetypeBrawler, ArchetypeArtillery, ArchetypeLancer:
-		return true
-	}
-	return false
 }
