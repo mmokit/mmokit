@@ -17,7 +17,7 @@ import (
 // ConfigVersion tracks breaking config changes. Bump this when defaults change
 // in a way that is incompatible with saved configs (e.g. unit rescale).
 // When the saved version doesn't match, defaults are used and re-saved.
-const ConfigVersion = 9
+const ConfigVersion = 10
 
 // GameConfig holds all tunable game parameters.
 type GameConfig struct {
@@ -328,8 +328,8 @@ func DefaultGameConfig() GameConfig {
 		DungeonWallThickness:    30,
 		DungeonTestsiteCellX:    0,
 		DungeonTestsiteCellY:    0,
-		DungeonTestsiteOffsetX:  -4500,
-		DungeonTestsiteOffsetY:  0,
+		DungeonTestsiteOffsetX:  0,
+		DungeonTestsiteOffsetY:  -2500, // 2500u north of station (world -Y = visual up)
 
 		// Per-chamber cooldowns
 		ChamberCooldownMobPack:  1800,

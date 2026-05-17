@@ -26,13 +26,15 @@ func TestPOIGen_Deterministic(t *testing.T) {
 	}
 }
 
-// TestPOIGen_StationCellGuaranteed verifies station cell always gets a POI.
-func TestPOIGen_StationCellGuaranteed(t *testing.T) {
+// TestPOIGen_StationCellEmpty verifies the station cell has no POIs —
+// the testsite dungeon replaces the legacy station-cell combat POI as
+// starter PvE content.
+func TestPOIGen_StationCellEmpty(t *testing.T) {
 	cfg := DefaultGameConfig()
 	cell := mmokit.CellCoord{CellX: 0, CellY: 0}
 	pois := GeneratePOIs(cell, cell, &cfg, nil)
-	if len(pois) == 0 {
-		t.Errorf("station cell got no POIs")
+	if len(pois) != 0 {
+		t.Errorf("station cell should have 0 POIs (dungeon replaces it), got %d", len(pois))
 	}
 }
 

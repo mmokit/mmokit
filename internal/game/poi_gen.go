@@ -18,9 +18,10 @@ type POIDef struct {
 }
 
 // GeneratePOIs returns the procgen list of POIs for a cell. Mirrors
-// GenerateBelts: deterministic FNV(cellX, cellY, "poi") seed. Station
-// cell gets exactly one POI guaranteed; non-station cells get 0–1 with
-// POIPerCellProbability.
+// GenerateBelts: deterministic FNV(cellX, cellY, "poi") seed. The
+// station cell intentionally returns no POIs — the testsite dungeon
+// (see SpawnDungeonFromGraph) is the starter PvE content for that
+// cell. Non-station cells get 0–1 POIs with POIPerCellProbability.
 func GeneratePOIs(cell, stationCell mmokit.CellCoord, cfg *GameConfig, belts []AsteroidBelt) []POIDef {
 	h := fnv.New64a()
 	buf := make([]byte, 12)
@@ -30,15 +31,9 @@ func GeneratePOIs(cell, stationCell mmokit.CellCoord, cfg *GameConfig, belts []A
 	h.Write(buf)
 	rng := rand.New(rand.NewPCG(h.Sum64(), 1))
 
-	isStation := cell == stationCell
-
-	if isStation {
-		return []POIDef{{
-			X:         StationLocalX + cfg.StationPOIOffsetX,
-			Y:         StationLocalY + cfg.StationPOIOffsetY,
-			Type:      0, // combat
-			RosterIdx: 0,
-		}}
+	if cell == stationCell {
+		// Dungeon replaces the legacy station-cell combat POI.
+		return nil
 	}
 
 	if rng.Float32() > cfg.POIPerCellProbability {
