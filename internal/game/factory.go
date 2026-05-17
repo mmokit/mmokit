@@ -63,6 +63,7 @@ func GameSetup(coord *mmokit.Process) {
 	coord.AddSystem(mmokit.NewSystem(&NPCAISystem{}))
 	coord.AddSystem(mmokit.NewSystem(&SelectionLOSSystem{}))
 	coord.AddSystem(mmokit.NewSystem(&POISystem{}))
+	coord.AddSystem(mmokit.NewSystem(&DungeonChamberSystem{}))
 	coord.AddSystem(mmokit.NewSystem(&WanderSystem{}))
 	coord.AddSystem(mmokit.NewPhysicsSystem())
 	coord.AddSystem(mmokit.NewLifetimeSystem())

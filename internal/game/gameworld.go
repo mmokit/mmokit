@@ -66,6 +66,10 @@ type GameWorld struct {
 	// NPC death detection.
 	poiRosters map[uint32][]uint32
 
+	// dungeonChambers maps dungeon NetID → chamber ID → state.
+	// Cleared at startup; populated by SpawnDungeonFromGraph.
+	dungeonChambers map[uint32]map[uint16]*ChamberState
+
 	// autoRespawnAt maps connID → engine tick at which a dead player
 	// will be auto-respawned. The client's Respawn input cannot reach
 	// the handler (the typed-input dispatcher drops frames when the

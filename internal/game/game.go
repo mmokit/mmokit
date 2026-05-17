@@ -40,9 +40,10 @@ func NewGameWorld(base *mmokit.Stage, cfg *GameConfig, playerDB *PlayerRepo, cel
 		Spatial:       base.SpatialGrid(),
 		Config:        cfg,
 		PlayerDB:      playerDB,
-		dockingStates: make(map[string]*DockingProgress),
-		poiRosters:    make(map[uint32][]uint32),
-		autoRespawnAt: make(map[uint32]uint32),
+		dockingStates:   make(map[string]*DockingProgress),
+		poiRosters:      make(map[uint32][]uint32),
+		dungeonChambers: make(map[uint32]map[uint16]*ChamberState),
+		autoRespawnAt:   make(map[uint32]uint32),
 	}
 	gw.Players = eng.Players
 
@@ -303,6 +304,14 @@ func NewGameWorld(base *mmokit.Stage, cfg *GameConfig, playerDB *PlayerRepo, cel
 			gw.SpawnStation()
 		}
 		gw.spawnPOIs()
+		// Dungeon testsite: one procgen dungeon in the designated cell.
+		// Gated to a single cell during v1 — global rollout follows in a
+		// later spec pass.
+		if int(cell.CellX) == cfg.DungeonTestsiteCellX && int(cell.CellY) == cfg.DungeonTestsiteCellY {
+			x := StationLocalX + cfg.DungeonTestsiteOffsetX
+			y := StationLocalY + cfg.DungeonTestsiteOffsetY
+			gw.SpawnDungeonFromGraph(x, y, DungeonSeed(cell.CellX, cell.CellY))
+		}
 	}
 
 	return gw

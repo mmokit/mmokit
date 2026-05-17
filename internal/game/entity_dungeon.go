@@ -1,8 +1,12 @@
 package game
 
 import (
+	"math"
+	"math/rand/v2"
+
 	gamecomp "github.com/zenion/mmoserver/internal/component"
 	"github.com/zenion/mmoserver/pkg/mmokit"
+	"github.com/zenion/mmoserver/pkg/spatial"
 )
 
 // DungeonBundle is the entity-kind bundle for a dungeon POI.
@@ -30,4 +34,124 @@ func (gw *GameWorld) SpawnDungeon(x, y float32, d gamecomp.Dungeon) uint32 {
 	gw.eng.Log.Log(CatDungeon, "dungeon: spawned netID=%d pos=(%.0f,%.0f) name=%q entrances=%d",
 		e.NetID(), x, y, d.Name, d.EntranceCount)
 	return e.NetID()
+}
+
+// SpawnDungeonFromGraph runs the full procgen pipeline for one dungeon
+// at world-space (centerX, centerY) with the given seed. Spawns:
+//  1. the dungeon marker entity
+//  2. all wall colliders
+//  3. all chamber rosters (NPCs anchored to the dungeon + chamber)
+//  4. records ChamberState in gw.dungeonChambers
+//
+// Returns the dungeon entity's NetID.
+func (gw *GameWorld) SpawnDungeonFromGraph(centerX, centerY float32, seed uint64) uint32 {
+	g := buildDungeonGraph(gw.Config, seed)
+
+	// Entrance positions follow the same south-biased pattern as
+	// pickEntranceAngles. Local coords relative to the dungeon center;
+	// the dungeon entity itself sits at (centerX, centerY) so the
+	// client can translate when it needs them.
+	var ent [3]spatial.Vec2
+	r := gw.Config.DungeonAsteroidRadius
+	// Entrance 0: south
+	ent[0] = spatial.Vec2{X: 0, Y: -r}
+	if gw.Config.DungeonEntranceCount >= 2 {
+		ent[1] = spatial.Vec2{
+			X: r * float32(math.Cos(math.Pi/6)),
+			Y: -r * float32(math.Sin(math.Pi/6)),
+		}
+	}
+	if gw.Config.DungeonEntranceCount >= 3 {
+		ent[2] = spatial.Vec2{
+			X: -r * float32(math.Cos(math.Pi/6)),
+			Y: -r * float32(math.Sin(math.Pi/6)),
+		}
+	}
+
+	dungeonNetID := gw.SpawnDungeon(centerX, centerY, gamecomp.Dungeon{
+		Name:          g.name,
+		OuterRadius:   gw.Config.DungeonAsteroidRadius,
+		EntranceCount: uint8(gw.Config.DungeonEntranceCount),
+		EntranceX0:    ent[0].X, EntranceY0: ent[0].Y,
+		EntranceX1:    ent[1].X, EntranceY1: ent[1].Y,
+		EntranceX2:    ent[2].X, EntranceY2: ent[2].Y,
+		Seed: seed,
+	})
+
+	// Spawn walls (world-space = local + center).
+	for _, w := range generateWalls(g, gw.Config) {
+		gw.SpawnDungeonWall(centerX+w.Center.X, centerY+w.Center.Y, w.Width, w.Height, w.Rotation)
+	}
+
+	// Spawn chambers + rosters. Chamber 0 is the entry — no roster.
+	chambers := make(map[uint16]*ChamberState)
+	for _, c := range g.chambers {
+		if c.isEntry {
+			continue
+		}
+		rngU64 := seed ^ uint64(c.id+1)*0xbf58476d1ce4e5b9
+		rosterIdx := rosterIdxForRole(c.role, rngU64)
+		state := &ChamberState{
+			ID:           c.id,
+			Center:       spatial.Vec2{X: centerX + c.center.X, Y: centerY + c.center.Y},
+			Radius:       c.radius,
+			Role:         c.role,
+			Status:       ChamberActive,
+			RosterDefIdx: rosterIdx,
+		}
+		chambers[c.id] = state
+		gw.spawnChamberRoster(dungeonNetID, state)
+	}
+	gw.dungeonChambers[dungeonNetID] = chambers
+
+	gw.eng.Log.Log(CatDungeonGen, "dungeon procgen: seed=%d chambers=%d entrances=%d",
+		seed, len(chambers), gw.Config.DungeonEntranceCount)
+	return dungeonNetID
+}
+
+// spawnChamberRoster spawns every roster member for the chamber and
+// records their netIDs in c.AliveNetIDs. Each NPC's DungeonAnchor is
+// retagged with the chamber ID (SpawnNPC attaches DungeonAnchor with
+// ChamberID=0 — we override here so the chamber lifecycle can identify
+// per-chamber kills).
+//
+// Members whose archetype is not yet implemented (e.g. ArchetypeBossGuardian
+// prior to Task 29) are skipped with a log line — the roster still spawns
+// its other members; once the archetype lands the next respawn cycle picks
+// them up automatically.
+func (gw *GameWorld) spawnChamberRoster(dungeonNetID uint32, c *ChamberState) {
+	roster := dungeonRosters[c.RosterDefIdx]
+	rng := rand.New(rand.NewPCG(uint64(dungeonNetID), uint64(c.ID)+uint64(c.RespawnCount)))
+	for _, m := range roster.Members {
+		if !isImplementedArchetype(m.Archetype) {
+			gw.eng.Log.Log(CatDungeonGen, "chamber roster: skipping unimplemented archetype=%d (chamber=%d)",
+				m.Archetype, c.ID)
+			continue
+		}
+		for i := 0; i < m.Count; i++ {
+			angle := rng.Float64() * 2 * math.Pi
+			r := rng.Float32() * m.SpreadRadius
+			px := c.Center.X + r*float32(math.Cos(angle))
+			py := c.Center.Y + r*float32(math.Sin(angle))
+			e := gw.SpawnNPC(px, py, m.Archetype, dungeonNetID)
+			if anchor := mmokit.Get[gamecomp.DungeonAnchor](e); anchor != nil {
+				anchor.ChamberID = c.ID
+			}
+			c.AliveNetIDs = append(c.AliveNetIDs, e.NetID())
+		}
+	}
+}
+
+// isImplementedArchetype reports whether SpawnNPC can handle the given
+// archetype. ArchetypeBossGuardian is declared in dungeon_config.go but
+// the archetypeDefaults entry is added by Task 29 — until then,
+// SpawnNPC would panic with "unknown archetype". Roster spawn paths
+// guard against this so a partially-implemented archetype list doesn't
+// blow up the cell bootstrap.
+func isImplementedArchetype(a uint8) bool {
+	switch a {
+	case ArchetypeBrawler, ArchetypeArtillery, ArchetypeLancer:
+		return true
+	}
+	return false
 }
