@@ -1,6 +1,9 @@
 package game
 
-import "testing"
+import (
+	"math"
+	"testing"
+)
 
 func minimalDungeonCfg() *GameConfig {
 	return &GameConfig{
@@ -82,6 +85,29 @@ func TestDungeonGen_AllChambersReachable(t *testing.T) {
 		for i, dist := range d {
 			if dist < 0 {
 				t.Fatalf("seed %d: chamber %d unreachable", seed, i)
+			}
+		}
+	}
+}
+
+// TestDungeonGen_AllChambersInsideAsteroid asserts that layoutGraph
+// keeps every chamber fully inside the asteroid silhouette (center +
+// radius + wall thickness <= asteroid radius) across many seeds. This
+// is the procgen-side complement to the NavGrid reachability test —
+// the clamp ensures bosses/chests never spawn in unreachable rooms.
+func TestDungeonGen_AllChambersInsideAsteroid(t *testing.T) {
+	cfg := minimalDungeonCfg()
+	cfg.DungeonAsteroidRadius = 1800
+	cfg.DungeonChamberRadiusMax = 240
+	cfg.DungeonWallThickness = 30
+	margin := cfg.DungeonChamberRadiusMax + cfg.DungeonWallThickness
+	for seed := uint64(0); seed < 1000; seed++ {
+		g := buildDungeonGraph(cfg, seed)
+		for i, c := range g.chambers {
+			dist := float32(math.Hypot(float64(c.center.X), float64(c.center.Y)))
+			if dist+c.radius > cfg.DungeonAsteroidRadius-cfg.DungeonWallThickness {
+				t.Fatalf("seed %d chamber %d: center=(%.0f,%.0f) radius=%.0f dist=%.0f exceeds asteroid radius %.0f (margin: %.0f)",
+					seed, i, c.center.X, c.center.Y, c.radius, dist, cfg.DungeonAsteroidRadius, margin)
 			}
 		}
 	}

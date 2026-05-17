@@ -157,10 +157,21 @@ func bfsDistances(g *dungeonGraph, root int) []int {
 
 // layoutGraph places each chamber's center inside the asteroid via a
 // random radial walk from the entry chamber.
+//
+// Each child placement is constrained to lie fully inside the asteroid
+// silhouette: dist(origin, center) + chamber.radius + WallThickness must
+// be <= DungeonAsteroidRadius. We try up to layoutMaxAngleTries random
+// angles per child; if none satisfy the constraint, we fall back to the
+// midpoint between the parent and the asteroid center, which is
+// guaranteed to be in-bounds whenever the parent itself is in-bounds.
+// This trades some visual variety on extreme seeds for the hard
+// guarantee that every chamber is reachable on the NavGrid.
 func layoutGraph(g *dungeonGraph, cfg *GameConfig, rng *rand.Rand) {
 	// entry at south interior surface
 	margin := cfg.DungeonChamberRadiusMax + cfg.DungeonWallThickness
 	g.chambers[0].center = spatial.Vec2{X: 0, Y: -(cfg.DungeonAsteroidRadius - margin)}
+
+	const layoutMaxAngleTries = 16
 
 	visited := make([]bool, len(g.chambers))
 	visited[0] = true
@@ -183,11 +194,31 @@ func layoutGraph(g *dungeonGraph, cfg *GameConfig, rng *rand.Rand) {
 			}
 			visited[child] = true
 			corridorLen := float32(150) + rng.Float32()*150
-			angle := rng.Float64() * 2 * math.Pi
 			d := cfg.DungeonChamberRadiusMax + corridorLen
-			g.chambers[child].center = spatial.Vec2{
-				X: g.chambers[cur].center.X + d*float32(math.Cos(angle)),
-				Y: g.chambers[cur].center.Y + d*float32(math.Sin(angle)),
+			childRadius := g.chambers[child].radius
+			maxDist := cfg.DungeonAsteroidRadius - childRadius - cfg.DungeonWallThickness
+
+			placed := false
+			for try := 0; try < layoutMaxAngleTries; try++ {
+				angle := rng.Float64() * 2 * math.Pi
+				cx := g.chambers[cur].center.X + d*float32(math.Cos(angle))
+				cy := g.chambers[cur].center.Y + d*float32(math.Sin(angle))
+				if float32(math.Hypot(float64(cx), float64(cy))) <= maxDist {
+					g.chambers[child].center = spatial.Vec2{X: cx, Y: cy}
+					placed = true
+					break
+				}
+			}
+			if !placed {
+				// Fallback: midpoint between parent and asteroid center.
+				// Always succeeds when the parent is in-bounds, since
+				// |midpoint| <= |parent| / 2 < maxDist for any reasonable
+				// config (parent itself is constrained the same way and
+				// the entry sits inside maxDist by construction).
+				g.chambers[child].center = spatial.Vec2{
+					X: g.chambers[cur].center.X * 0.5,
+					Y: g.chambers[cur].center.Y * 0.5,
+				}
 			}
 			queue = append(queue, child)
 		}
