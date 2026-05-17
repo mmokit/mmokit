@@ -6,6 +6,7 @@ import (
 	gamecomp "github.com/zenion/mmoserver/internal/component"
 	"github.com/zenion/mmoserver/internal/item"
 	"github.com/zenion/mmoserver/pkg/mmokit"
+	"github.com/zenion/mmoserver/pkg/spatial"
 )
 
 type abilityBundle struct {
@@ -823,18 +824,40 @@ func (s *AbilitySystem) tickChannels(dt float32) {
 			// target = first hit on the ray) — only OTHER colliders
 			// block. The damage tick still advances NextTickIn so the
 			// player can't "queue" hits by walking out from behind cover.
+			//
+			// We inline the raycast (rather than calling
+			// hasShotLOSOnGrid) so we keep the hit point — when the LOS
+			// gate suppresses damage, we ship the hit point to the
+			// caster as a BeamClip event so the client can terminate
+			// the beam visual at the obstruction instead of drawing
+			// through the wall to full range.
 			vpos := mmokit.Get[mmokit.Position](victim)
-			if vpos != nil && hasShotLOSOnGrid(gw.Spatial,
-				vec2(casterPos.X, casterPos.Y),
-				vec2(vpos.X, vpos.Y),
-				caster.Handle(),
-				victim.Handle()) {
-				gw.Damage(caster, victim, params.Damage, 0, ch.SlotID, uint8(params.Type))
-				gw.eng.Log.Log(CatCombatHit, "channel: %d -> %d dmg=%.0f",
-					ownerNetID, victim.NetID(), params.Damage)
-			} else {
-				gw.eng.Log.Log(CatCombatHit, "channel: %d -> %d BLOCKED (LOS)",
-					ownerNetID, victim.NetID())
+			if vpos != nil {
+				hitE, hitPt, _, hit := gw.Spatial.Raycast(
+					spatial.Vec2{X: casterPos.X, Y: casterPos.Y},
+					spatial.Vec2{X: vpos.X, Y: vpos.Y},
+					spatial.LayerStatic|spatial.LayerProp,
+				)
+				blocked := hit && hitE != caster.Handle() && hitE != victim.Handle()
+				if !blocked {
+					gw.Damage(caster, victim, params.Damage, 0, ch.SlotID, uint8(params.Type))
+					gw.eng.Log.Log(CatCombatHit, "channel: %d -> %d dmg=%.0f",
+						ownerNetID, victim.NetID(), params.Damage)
+				} else {
+					gw.eng.Log.Log(CatCombatHit, "channel: %d -> %d BLOCKED (LOS)",
+						ownerNetID, victim.NetID())
+					// Notify the caster (only) so the client can clip
+					// the beam visual at hitPt. Per-NPC observers don't
+					// currently render the beam, so caster-only is
+					// sufficient for v1.
+					if pc := mmokit.Get[mmokit.PlayerConn](caster); pc != nil {
+						mmokit.SendEvent(gw.stage, pc.ConnID, &BeamClip{
+							Caster: ownerNetID,
+							HitX:   hitPt.X,
+							HitY:   hitPt.Y,
+						})
+					}
+				}
 			}
 		}
 		ch.NextTickIn = 1.0 / params.ChannelTickRate

@@ -13,6 +13,7 @@ import {
   PlayerOwnState,
   MapData,
   CurrencyUpdate,
+  BeamClip,
   PlayerDied,
   Ping,
   Pong,
@@ -539,6 +540,18 @@ export function connect(state: GameState, callbacks: NetworkCallbacks): void {
 
   client.onCurrencyUpdate((update: CurrencyUpdate) => {
     state.currencyBalances[update.currencyID] = Number(update.balance);
+  });
+
+  // BeamClip — server signals that the active beam channel is currently
+  // blocked by a wall / asteroid at (hitX, hitY). The aim indicator
+  // clamps the beam visual to this point so we don't draw through the
+  // obstruction. Stale clip events decay after BEAM_CLIP_TTL_MS in
+  // aim-indicator.ts.
+  client.onBeamClip((clip: BeamClip) => {
+    if (clip.caster !== state.myEntityId) return;
+    state.beamClipX = clip.hitX;
+    state.beamClipY = clip.hitY;
+    state.beamClipExpiresAt = performance.now() + 300; // BEAM_CLIP_TTL_MS
   });
 
   client.connect();

@@ -166,6 +166,24 @@ export class BankContents {
   }
 }
 
+/** Broadcast-eligible event game.BeamClip (typeID 0x35def132). */
+export class BeamClip {
+  static readonly typeID = 0x35def132;
+  caster: number = 0;
+  hitX: number = 0;
+  hitY: number = 0;
+
+  static decode(buf: Uint8Array): BeamClip {
+    const dv = new DataView(buf.buffer, buf.byteOffset, buf.byteLength);
+    let off = 0;
+    const m = new BeamClip();
+    m.caster = dv.getUint32(off, true); off += 4;
+    m.hitX = dv.getFloat32(off, true); off += 4;
+    m.hitY = dv.getFloat32(off, true); off += 4;
+    return m;
+  }
+}
+
 /** Broadcast-eligible event game.CurrencyUpdate (typeID 0x722e1d79). */
 export class CurrencyUpdate {
   static readonly typeID = 0x722e1d79;

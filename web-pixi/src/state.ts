@@ -107,6 +107,16 @@ export interface GameState {
   channelingSlot: number;
   /** performance.now() ms when the active channel auto-ends client-side. */
   channelEndsAt: number;
+  /**
+   * LOS-clip point for the current channel beam — set by the BeamClip
+   * server event when the server's LOS gate suppresses a damage tick.
+   * The aim indicator clamps the beam visual to this point so the beam
+   * doesn't draw through walls. Decays after BEAM_CLIP_TTL_MS without a
+   * fresh event, falling back to full-range rendering.
+   */
+  beamClipExpiresAt: number;
+  beamClipX: number;
+  beamClipY: number;
 
   // Cargo/Economy/Equipment
   cargoPanelOpen: boolean;
@@ -232,6 +242,9 @@ export function createInitialState(): GameState {
     cursorWorldY: 0,
     channelingSlot: 0,
     channelEndsAt: 0,
+    beamClipExpiresAt: 0,
+    beamClipX: 0,
+    beamClipY: 0,
 
     cargoPanelOpen: true,
     jettisonRequest: 0,

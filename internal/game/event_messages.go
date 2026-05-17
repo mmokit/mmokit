@@ -148,6 +148,23 @@ type PlayerSpawned struct {
 	OriginCellY  int32
 }
 
+// BeamClip — sent to the caster when a SustainedBeam channel tick is
+// blocked by a LayerStatic / LayerProp collider (wall, asteroid)
+// between the caster and the intended victim. The client uses HitX/HitY
+// to terminate the beam visual at the obstruction instead of drawing
+// through the wall to full range.
+//
+// Emitted from tickChannels every damage-tick that the LOS gate fires
+// (~1 / ChannelTickRate seconds). The client treats a clip event as
+// "the beam is currently blocked at this point" and decays the clamp
+// after a short window if no fresh event arrives — see
+// web-pixi/src/effects/aim-indicator.ts.
+type BeamClip struct {
+	Caster uint32
+	HitX   float32
+	HitY   float32
+}
+
 // RegisterServerEvents registers every typed server event the space game
 // emits. Called by GameSetup so both production (cmd/server/main.go) and
 // tests (per-test newTestGameWorld → GameSetup) get the registrations.
@@ -167,6 +184,7 @@ func RegisterServerEvents() {
 		mmokit.RegisterEvent[Docked]()
 		mmokit.RegisterEvent[MapData]()
 		mmokit.RegisterEvent[CurrencyUpdate]()
+		mmokit.RegisterEvent[BeamClip]()
 		mmokit.RegisterEvent[marketplace.MarketTradeNotification]()
 	})
 }

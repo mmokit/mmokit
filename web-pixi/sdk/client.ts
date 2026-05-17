@@ -2,7 +2,7 @@
 
 import { Transport } from "./transport.js";
 import { SpaceDeltaDecoder } from "./delta-decoder.js";
-import { TypedDispatcher, BankContents, CurrencyUpdate, Docked, DockingState, EquipResult, MapData, PlayerDied, PlayerOwnState, PlayerSpawned, TransferResult, MarketTradeNotification, CellChange, DebugInfo, OperationError, PlayerEntityAssigned, Pong, ServerConfig, WorldDelta } from "./broadcasts.js";
+import { TypedDispatcher, BankContents, BeamClip, CurrencyUpdate, Docked, DockingState, EquipResult, MapData, PlayerDied, PlayerOwnState, PlayerSpawned, TransferResult, MarketTradeNotification, CellChange, DebugInfo, OperationError, PlayerEntityAssigned, Pong, ServerConfig, WorldDelta } from "./broadcasts.js";
 import { AuthChangePasswordRequest, AuthChangePasswordResponse, AuthLoginRequest, AuthLoginResponse, AuthLogoutRequest, AuthLogoutResponse, AuthRegisterRequest, AuthRegisterResponse, AuthValidateTokenRequest, AuthValidateTokenResponse, BankRequest, BankResponse, MarketBrowseRequest, MarketCancelOrderRequest, MarketCreateOrderRequest, MarketInstantTradeRequest, MarketMyOrdersRequest, MarketMyOrdersResponse, MarketOrderBookResponse, MarketOrderResultResponse, RepairRequest, RepairResponse } from "./operations.js";
 
 export interface SpaceClientOptions {
@@ -82,6 +82,11 @@ export class SpaceClient {
   /** Subscribe to typed server event game.BankContents (typeID 0xce9d072f). */
   onBankContents(handler: (msg: BankContents) => void): () => void {
     return this.typedEvents.on(BankContents, handler);
+  }
+
+  /** Subscribe to typed server event game.BeamClip (typeID 0x35def132). */
+  onBeamClip(handler: (msg: BeamClip) => void): () => void {
+    return this.typedEvents.on(BeamClip, handler);
   }
 
   /** Subscribe to typed server event game.CurrencyUpdate (typeID 0x722e1d79). */

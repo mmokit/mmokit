@@ -65,8 +65,27 @@ export class AimIndicator {
 
     const nx = dx / dist;
     const ny = dy / dist;
-    const ex = sx + nx * range;
-    const ey = sy + ny * range;
+    let ex = sx + nx * range;
+    let ey = sy + ny * range;
+
+    // LOS clip: when the server's tickChannels LOS gate suppressed the
+    // last damage tick it shipped us a BeamClip event with the
+    // wall/asteroid hit point. Clamp the beam endpoint to that point
+    // (clamped further to the range cap, never extended beyond) so the
+    // visual terminates at the obstruction. The event TTL is short
+    // (~300 ms) so the beam snaps back to full range once the player
+    // re-aims at clear sight.
+    if (state.beamClipExpiresAt > performance.now()) {
+      const cdx = state.beamClipX - sx;
+      const cdy = state.beamClipY - sy;
+      // Project the clip point onto the aim direction so an off-axis
+      // hit point (e.g. wall on the side of the cursor line) still
+      // collapses the beam length correctly.
+      const clipDist = Math.max(0, Math.min(range, cdx * nx + cdy * ny));
+      ex = sx + nx * clipDist;
+      ey = sy + ny * clipDist;
+    }
+
     // Channel beam: brighter + thicker than aim preview, with a slow pulse.
     const halfW = px(8);
     const pxX = -ny * halfW;
