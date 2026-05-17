@@ -14,6 +14,8 @@ export const EntityType = {
     AoEMarker: 6,
     Projectile: 7,
     LineTelegraph: 8,
+    Dungeon: 9,
+    DungeonWall: 10,
 } as const;
 
 export type EntityTypeValue = typeof EntityType[keyof typeof EntityType];

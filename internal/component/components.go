@@ -26,6 +26,8 @@ const (
 	KindAoEMarker                   // 6
 	KindProjectile                  // 7
 	KindLineTelegraph              // 8
+	KindDungeon                    // 9
+	KindDungeonWall                // 10
 )
 
 // Health represents hit points.
@@ -449,6 +451,55 @@ type POI struct {
 // PilotName stores the player's display name for network replication.
 type PilotName struct {
 	Name string `net:"initial"`
+}
+
+// Dungeon is the marker + state component for a dungeon POI (asteroid-cave
+// system). One per dungeon entity (KindDungeon). The chamber state is
+// tracked server-side in GameWorld.dungeonChambers — only the world-level
+// info travels with the entity.
+//
+// Name is the only wire field (initial-only — fixed at spawn). The
+// remaining geometry (outer radius, entrance positions) are local-only
+// because the client doesn't need them at the dungeon-marker level: the
+// outer wall + entrance gaps are materialized as KindDungeonWall entities
+// which clients render directly from their replicated Position/Rotation/
+// Width/Height. EntranceCount + EntranceX/Y0..2 stay on the server for
+// AI pathfinding and chamber assignment, and Seed reproduces the procgen
+// layout after cross-cell transfer.
+//
+// (The current codec only supports string/u8/u16/u32/bool as `initial,...`
+// encodings — see pkg/system/field_writers.go::initialWriterFor — so any
+// f32 fields that need to reach the client must do so via snapshot
+// encoding, a separate event, or be derived from sibling entities.)
+type Dungeon struct {
+	Name          string  `net:"initial"`
+	OuterRadius   float32 `mmokit:"local"`
+	EntranceCount uint8   `mmokit:"local"`
+	EntranceX0    float32 `mmokit:"local"`
+	EntranceY0    float32 `mmokit:"local"`
+	EntranceX1    float32 `mmokit:"local"`
+	EntranceY1    float32 `mmokit:"local"`
+	EntranceX2    float32 `mmokit:"local"`
+	EntranceY2    float32 `mmokit:"local"`
+	Seed          uint64  `mmokit:"local"`
+}
+
+// DungeonWall is the marker component for a static rectangular cave wall.
+//
+// The wall's geometry (width/height) is carried by the entity's Collider,
+// which the engine already replicates via the per-entity QSize binding
+// (radius+width+height as quantized snapshot fields). The orientation
+// comes from the entity's Rotation component, attached via a per-kind
+// QAngle extra binding. The DungeonWall component itself is intentionally
+// empty + local-only — it exists as a marker so server-side systems can
+// distinguish "this is a wall" from other static colliders, and so the
+// kind shows up in the SDK's entity-type enum.
+//
+// Width/Height are kept here (local-only) for ergonomic server access
+// without going through the Collider component.
+type DungeonWall struct {
+	Width  float32 `mmokit:"local"`
+	Height float32 `mmokit:"local"`
 }
 
 // Wander tags an entity for random wandering movement (load testing).

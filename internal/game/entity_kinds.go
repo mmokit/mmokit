@@ -93,6 +93,19 @@ func RegisterEntityKinds(p *mmokit.Process) {
 			return mmokit.QAngle(ecs.NewMap1[mmokit.Rotation](w))
 		}),
 	)
+
+	mmokit.RegisterKind[DungeonBundle](p, gamecomp.KindDungeon, "Dungeon")
+
+	// DungeonWall: static rectangular cave geometry. Per-kind QAngle
+	// binding so client renderers can draw the OBB in its committed
+	// orientation. Walls never move post-spawn, but the Rotation field
+	// is initial-only on the wire so the client gets it on visibility
+	// enter.
+	mmokit.RegisterKind[DungeonWallBundle](p, gamecomp.KindDungeonWall, "DungeonWall",
+		mmokit.WithExtraBindingFn(func(w *ecs.World) system.ComponentBinding {
+			return mmokit.QAngle(ecs.NewMap1[mmokit.Rotation](w))
+		}),
+	)
 }
 
 // initEntityKinds populates per-stage state that depends on the running

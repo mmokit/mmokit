@@ -36,6 +36,15 @@ const (
 
 	// poi — POI lifecycle (spawn, roster tracking, clear/cooldown/respawn).
 	CatPOI = "poi"
+
+	// dungeon — dungeon lifecycle (clear/cooldown/respawn, chamber state).
+	CatDungeon = "dungeon"
+	// dungeonGen — dungeon procgen (chamber layout, corridor carving, wall placement).
+	CatDungeonGen = "dungeonGen"
+	// los — line-of-sight raycast events (target acquisition, lock breaks).
+	CatLOS = "los"
+	// pathfind — NPC pathfinding (nav-grid bake, A* queries, repaths).
+	CatPathfind = "pathfind"
 )
 
 // GameCategories lists every game-specific log category.
@@ -47,4 +56,5 @@ var GameCategories = []string{
 	CatPersistFlush,
 	CatNPCAI,
 	CatPOI,
+	CatDungeon, CatDungeonGen, CatLOS, CatPathfind,
 }

@@ -8,7 +8,7 @@ import {
   applyDelta, BaselineStore,
   decodeLengthPrefixedStringU8,
 } from "./_core/delta-decoder-core.js";
-import type { ShipEntity, ShipStatusEffectsItem, AsteroidEntity, StationEntity, LootCrateEntity, LootCrateItemsItem, NPCEntity, NPCStatusEffectsItem, POIEntity, AoEMarkerEntity, ProjectileEntity, LineTelegraphEntity, AnyEntity, DeltaWorldUpdate } from "./entities.js";
+import type { ShipEntity, ShipStatusEffectsItem, AsteroidEntity, StationEntity, LootCrateEntity, LootCrateItemsItem, NPCEntity, NPCStatusEffectsItem, POIEntity, AoEMarkerEntity, ProjectileEntity, LineTelegraphEntity, DungeonEntity, DungeonWallEntity, AnyEntity, DeltaWorldUpdate } from "./entities.js";
 
 const SHIPENTITY_FIELD_SIZES = [4, 4, 2, 2, 2, 2, 2, 4, 4, 4, 4, 4, 1, 1, 1, 4, 2];
 const SHIPENTITY_HAS_VAR_TAIL = true;
@@ -213,6 +213,38 @@ function decodeLineTelegraphEntitySnapshot(snap: Uint8Array, initial: Uint8Array
   return { netID: 0, producedAtMs: 0, entityType: 8, worldX, worldY, velX, velY, radius, width, height, remaining, length, halfWidth, ownerNetID, angle };
 }
 
+const DUNGEONENTITY_FIELD_SIZES = [4, 4, 2, 2, 2, 2, 2];
+const DUNGEONENTITY_HAS_VAR_TAIL = false;
+
+function decodeDungeonEntitySnapshot(snap: Uint8Array, initial: Uint8Array | null, existing?: DungeonEntity): DungeonEntity {
+  let o = 0;
+  const worldX = readFloat32(snap, o); o += 4;
+  const worldY = readFloat32(snap, o); o += 4;
+  const velX = unVel(readInt16(snap, o), 2000); o += 2;
+  const velY = unVel(readInt16(snap, o), 2000); o += 2;
+  const radius = unVel(readInt16(snap, o), 500); o += 2;
+  const width = unVel(readInt16(snap, o), 500); o += 2;
+  const height = unVel(readInt16(snap, o), 500); o += 2;
+  const name = initial ? decodeLengthPrefixedStringU8(initial) : (existing?.name ?? "");
+  return { netID: 0, producedAtMs: 0, entityType: 9, worldX, worldY, velX, velY, radius, width, height, name };
+}
+
+const DUNGEONWALLENTITY_FIELD_SIZES = [4, 4, 2, 2, 2, 2, 2, 2];
+const DUNGEONWALLENTITY_HAS_VAR_TAIL = false;
+
+function decodeDungeonWallEntitySnapshot(snap: Uint8Array, initial: Uint8Array | null, existing?: DungeonWallEntity): DungeonWallEntity {
+  let o = 0;
+  const worldX = readFloat32(snap, o); o += 4;
+  const worldY = readFloat32(snap, o); o += 4;
+  const velX = unVel(readInt16(snap, o), 2000); o += 2;
+  const velY = unVel(readInt16(snap, o), 2000); o += 2;
+  const radius = unVel(readInt16(snap, o), 500); o += 2;
+  const width = unVel(readInt16(snap, o), 500); o += 2;
+  const height = unVel(readInt16(snap, o), 500); o += 2;
+  const angle = unAngle(readUint16(snap, o)); o += 2;
+  return { netID: 0, producedAtMs: 0, entityType: 10, worldX, worldY, velX, velY, radius, width, height, angle };
+}
+
 export class SpaceDeltaDecoder {
   private baselines = new BaselineStore<{ type: number; lastEntity?: AnyEntity }>();
 
@@ -275,6 +307,8 @@ export class SpaceDeltaDecoder {
       case 6: { const prev = existing && existing.entityType === 6 ? existing : undefined; const e = decodeAoEMarkerEntitySnapshot(snap, initial, prev); e.netID = netID; e.producedAtMs = producedAtMs; return e; }
       case 7: { const prev = existing && existing.entityType === 7 ? existing : undefined; const e = decodeProjectileEntitySnapshot(snap, initial, prev); e.netID = netID; e.producedAtMs = producedAtMs; return e; }
       case 8: { const prev = existing && existing.entityType === 8 ? existing : undefined; const e = decodeLineTelegraphEntitySnapshot(snap, initial, prev); e.netID = netID; e.producedAtMs = producedAtMs; return e; }
+      case 9: { const prev = existing && existing.entityType === 9 ? existing : undefined; const e = decodeDungeonEntitySnapshot(snap, initial, prev); e.netID = netID; e.producedAtMs = producedAtMs; return e; }
+      case 10: { const prev = existing && existing.entityType === 10 ? existing : undefined; const e = decodeDungeonWallEntitySnapshot(snap, initial, prev); e.netID = netID; e.producedAtMs = producedAtMs; return e; }
       default: return null;
     }
   }
@@ -290,6 +324,8 @@ export class SpaceDeltaDecoder {
       case 6: return AOEMARKERENTITY_FIELD_SIZES;
       case 7: return PROJECTILEENTITY_FIELD_SIZES;
       case 8: return LINETELEGRAPHENTITY_FIELD_SIZES;
+      case 9: return DUNGEONENTITY_FIELD_SIZES;
+      case 10: return DUNGEONWALLENTITY_FIELD_SIZES;
       default: return [];
     }
   }
@@ -305,6 +341,8 @@ export class SpaceDeltaDecoder {
       case 6: return AOEMARKERENTITY_HAS_VAR_TAIL;
       case 7: return PROJECTILEENTITY_HAS_VAR_TAIL;
       case 8: return LINETELEGRAPHENTITY_HAS_VAR_TAIL;
+      case 9: return DUNGEONENTITY_HAS_VAR_TAIL;
+      case 10: return DUNGEONWALLENTITY_HAS_VAR_TAIL;
       default: return false;
     }
   }

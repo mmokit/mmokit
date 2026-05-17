@@ -17,7 +17,7 @@ import (
 // ConfigVersion tracks breaking config changes. Bump this when defaults change
 // in a way that is incompatible with saved configs (e.g. unit rescale).
 // When the saved version doesn't match, defaults are used and re-saved.
-const ConfigVersion = 8
+const ConfigVersion = 9
 
 // GameConfig holds all tunable game parameters.
 type GameConfig struct {
@@ -166,6 +166,43 @@ type GameConfig struct {
 	POIPerKillFluxBonus            int32   `json:"poi_per_kill_flux_bonus"`
 	StationCellPOIClearCooldown    int32   `json:"station_cell_poi_clear_cooldown_sec"`
 	NonStationCellPOIClearCooldown int32   `json:"non_station_cell_poi_clear_cooldown_sec"`
+
+	// Dungeon procgen
+	DungeonAsteroidRadius   float32 `json:"dungeon_asteroid_radius"`
+	DungeonChamberCountMin  int     `json:"dungeon_chamber_count_min"`
+	DungeonChamberCountMax  int     `json:"dungeon_chamber_count_max"`
+	DungeonChamberRadiusMin float32 `json:"dungeon_chamber_radius_min"`
+	DungeonChamberRadiusMax float32 `json:"dungeon_chamber_radius_max"`
+	DungeonCorridorWidth    float32 `json:"dungeon_corridor_width"`
+	DungeonEntranceCount    int     `json:"dungeon_entrance_count"`
+	DungeonWallThickness    float32 `json:"dungeon_wall_thickness"`
+	DungeonTestsiteCellX    int     `json:"dungeon_testsite_cell_x"`
+	DungeonTestsiteCellY    int     `json:"dungeon_testsite_cell_y"`
+	DungeonTestsiteOffsetX  float32 `json:"dungeon_testsite_offset_x"`
+	DungeonTestsiteOffsetY  float32 `json:"dungeon_testsite_offset_y"`
+
+	// Per-chamber cooldowns (seconds)
+	ChamberCooldownMobPack  float32 `json:"chamber_cooldown_mob_pack"`
+	ChamberCooldownSideBoss float32 `json:"chamber_cooldown_side_boss"`
+	ChamberCooldownTerminal float32 `json:"chamber_cooldown_terminal"`
+
+	// Boss stats
+	BossSoloHPMultiplier       float32   `json:"boss_solo_hp_multiplier"`
+	BossSoloDmgMultiplier      float32   `json:"boss_solo_dmg_multiplier"`
+	BossSoloSpeedMultiplier    float32   `json:"boss_solo_speed_multiplier"`
+	BossMainHPMultiplier       float32   `json:"boss_main_hp_multiplier"`
+	BossMainDmgMultiplier      float32   `json:"boss_main_dmg_multiplier"`
+	BossMainAddSpawnThresholds []float32 `json:"boss_main_add_spawn_thresholds"`
+
+	// Loot
+	ChamberMobPackFluxBase      float32 `json:"chamber_mob_pack_flux_base"`
+	ChamberSideBossFluxBase     float32 `json:"chamber_side_boss_flux_base"`
+	ChamberTerminalBossFluxBase float32 `json:"chamber_terminal_boss_flux_base"`
+
+	// Pathfinding
+	NavGridCellSize                float32 `json:"nav_grid_cell_size"`
+	PathRepathIntervalSec          float32 `json:"path_repath_interval_sec"`
+	PathRepathTargetMovedThreshold float32 `json:"path_repath_target_moved_threshold"`
 }
 
 // DefaultGameConfig returns sensible defaults for game balance.
@@ -279,6 +316,43 @@ func DefaultGameConfig() GameConfig {
 		POIPerKillFluxBonus:            100,
 		StationCellPOIClearCooldown:    180,
 		NonStationCellPOIClearCooldown: 600,
+
+		// Dungeon procgen
+		DungeonAsteroidRadius:   1800,
+		DungeonChamberCountMin:  5,
+		DungeonChamberCountMax:  8,
+		DungeonChamberRadiusMin: 120,
+		DungeonChamberRadiusMax: 240,
+		DungeonCorridorWidth:    100,
+		DungeonEntranceCount:    3,
+		DungeonWallThickness:    30,
+		DungeonTestsiteCellX:    0,
+		DungeonTestsiteCellY:    0,
+		DungeonTestsiteOffsetX:  -4500,
+		DungeonTestsiteOffsetY:  0,
+
+		// Per-chamber cooldowns
+		ChamberCooldownMobPack:  1800,
+		ChamberCooldownSideBoss: 2700,
+		ChamberCooldownTerminal: 3600,
+
+		// Boss stats
+		BossSoloHPMultiplier:       3.0,
+		BossSoloDmgMultiplier:      1.5,
+		BossSoloSpeedMultiplier:    1.2,
+		BossMainHPMultiplier:       10.0,
+		BossMainDmgMultiplier:      2.0,
+		BossMainAddSpawnThresholds: []float32{0.75, 0.5, 0.25},
+
+		// Loot
+		ChamberMobPackFluxBase:      200,
+		ChamberSideBossFluxBase:     1500,
+		ChamberTerminalBossFluxBase: 6000,
+
+		// Pathfinding
+		NavGridCellSize:                30,
+		PathRepathIntervalSec:          1.5,
+		PathRepathTargetMovedThreshold: 50,
 	}
 }
 
