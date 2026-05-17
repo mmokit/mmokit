@@ -4,14 +4,19 @@ All ECS component types for the space MMO. These are pure data structs with no m
 
 ## Collision Layers
 
-Bitmask constants for filtering which entities can collide:
+Collision layer constants live in `pkg/spatial` (`LayerStatic`, `LayerProp`,
+`LayerEntity`). The legacy `LayerPlayer = 1` / `LayerTerrain = 2` pair
+that used to live here was removed because `LayerPlayer` numerically
+collided with `spatial.LayerStatic` (both equal `1`), which caused
+`hasLOSOnGrid` to treat every ship/NPC collider as a sight-blocker —
+NPCs never aggro'd because the caster's own collider always returned a
+hit at the ray origin.
 
-```text
-LayerPlayer  = 1
-LayerTerrain = 2
-```
-
-Players collide with Terrain (bounce).
+| Layer | Bit value | Members | Blocks |
+|-------|-----------|---------|--------|
+| `LayerStatic` | `1 << 0 = 1` | Stations, dungeon walls | movement, sight, locks, shots |
+| `LayerProp`   | `1 << 1 = 2` | Asteroids | shots only (sight + lock pass through) |
+| `LayerEntity` | `1 << 2 = 4` | Ships, NPCs | nothing |
 
 ## Entity Kinds
 

@@ -5,6 +5,7 @@ import (
 
 	gamecomp "github.com/zenion/mmoserver/internal/component"
 	"github.com/zenion/mmoserver/pkg/mmokit"
+	"github.com/zenion/mmoserver/pkg/spatial"
 )
 
 // NPCBundle is the entity-kind component bundle for NPC enemy ships.
@@ -96,7 +97,7 @@ func (gw *GameWorld) SpawnNPC(x, y float32, archetype uint8, poiNetID uint32, mo
 		mmokit.Collider{
 			Width:  gw.Config.NpcWidth,
 			Height: gw.Config.NpcHeight,
-			Layer:  gamecomp.LayerPlayer,
+			Layer:  spatial.LayerEntity,
 			Shape:  mmokit.ShapeRect,
 			Radius: boundingRadius(gw.Config.NpcWidth, gw.Config.NpcHeight),
 		},

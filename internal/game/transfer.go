@@ -3,6 +3,7 @@ package game
 import (
 	gamecomp "github.com/zenion/mmoserver/internal/component"
 	"github.com/zenion/mmoserver/pkg/mmokit"
+	"github.com/zenion/mmoserver/pkg/spatial"
 )
 
 // FinishTransferSpawn applies config-dependent overrides after transfer.
@@ -19,7 +20,7 @@ func (gw *GameWorld) FinishTransferSpawn(handle mmokit.EntityHandle, frame *mmok
 			col.Radius = boundingRadius(gw.Config.ShipWidth, gw.Config.ShipHeight)
 			col.Width = gw.Config.ShipWidth
 			col.Height = gw.Config.ShipHeight
-			col.Layer = gamecomp.LayerPlayer
+			col.Layer = spatial.LayerEntity
 			col.Shape = mmokit.ShapeRect
 		}
 		gw.ApplyEquipmentStats(entity)
@@ -29,7 +30,7 @@ func (gw *GameWorld) FinishTransferSpawn(handle mmokit.EntityHandle, frame *mmok
 			col.Radius = boundingRadius(gw.Config.NpcWidth, gw.Config.NpcHeight)
 			col.Width = gw.Config.NpcWidth
 			col.Height = gw.Config.NpcHeight
-			col.Layer = gamecomp.LayerPlayer
+			col.Layer = spatial.LayerEntity
 			col.Shape = mmokit.ShapeRect
 		}
 	}

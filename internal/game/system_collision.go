@@ -3,8 +3,8 @@ package game
 import (
 	"math"
 
-	"github.com/zenion/mmoserver/internal/component"
 	"github.com/zenion/mmoserver/pkg/mmokit"
+	"github.com/zenion/mmoserver/pkg/spatial"
 )
 
 // CollisionSystem handles terrain bounce (player-vs-asteroid).
@@ -44,7 +44,7 @@ func (s *CollisionSystem) Update(dt float32) {
 		s.nearby = gw.Spatial.QueryRadius(pos.X, pos.Y, searchRadius, s.nearby[:0])
 
 		for _, terrain := range s.nearby {
-			if terrain.Layer != component.LayerTerrain {
+			if terrain.Layer != spatial.LayerProp {
 				continue
 			}
 			if !gw.stage.ECSWorld().Alive(terrain.Entity) {

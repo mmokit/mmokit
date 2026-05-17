@@ -827,6 +827,7 @@ func (s *AbilitySystem) tickChannels(dt float32) {
 			if vpos != nil && hasShotLOSOnGrid(gw.Spatial,
 				vec2(casterPos.X, casterPos.Y),
 				vec2(vpos.X, vpos.Y),
+				caster.Handle(),
 				victim.Handle()) {
 				gw.Damage(caster, victim, params.Damage, 0, ch.SlotID, uint8(params.Type))
 				gw.eng.Log.Log(CatCombatHit, "channel: %d -> %d dmg=%.0f",

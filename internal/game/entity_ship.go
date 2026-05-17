@@ -9,6 +9,7 @@ import (
 	"github.com/zenion/mmoserver/internal/item"
 	"github.com/zenion/mmoserver/pkg/coords"
 	"github.com/zenion/mmoserver/pkg/mmokit"
+	"github.com/zenion/mmoserver/pkg/spatial"
 )
 
 // ShipBundle is the entity-kind component bundle for player ships. Defines
@@ -108,7 +109,7 @@ func (gw *GameWorld) SpawnPlayer(s *mmokit.PlayerSession) {
 		mmokit.Collider{
 			Width:  gw.Config.ShipWidth,
 			Height: gw.Config.ShipHeight,
-			Layer:  gamecomp.LayerPlayer,
+			Layer:  spatial.LayerEntity,
 			Shape:  mmokit.ShapeRect,
 			Radius: br,
 		},
@@ -147,6 +148,18 @@ func (gw *GameWorld) SpawnPlayer(s *mmokit.PlayerSession) {
 
 	// Apply equipment passive stats (shield max/regen, thrust/speed).
 	gw.ApplyEquipmentStats(e)
+
+	// Fresh spawn: top off shield to its post-equipment Max. Base ShipShield
+	// is 0, so the entity was created with Current=0; ApplyEquipmentStats
+	// raises Max to the gen's full value but doesn't auto-fill Current
+	// (that would also fire on every equipment swap, which we don't want).
+	// We DO want a fresh spawn / respawn to start with full shield — both
+	// because it matches player expectations and because otherwise the
+	// 2s regen delay would leave the player essentially unshielded for
+	// several seconds on every login.
+	if shield := mmokit.Get[gamecomp.Shield](e); shield != nil {
+		shield.Current = shield.Max
+	}
 
 	handle := e.Handle()
 	s.Entity = handle

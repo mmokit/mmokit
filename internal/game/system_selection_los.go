@@ -36,7 +36,7 @@ func (s *SelectionLOSSystem) Update(dt float32) {
 	now := s.elapsedSec
 	cutoff := gw.Config.LockLosLossBreakSec
 
-	for _, b := range s.entities.Iter {
+	for selfE, b := range s.entities.Iter {
 		sel, pos := b.Sel, b.Pos
 
 		if sel.EntityNetID == 0 {
@@ -59,7 +59,8 @@ func (s *SelectionLOSSystem) Update(dt float32) {
 
 		if hasLOSOnGrid(gw.Spatial,
 			spatial.Vec2{X: pos.X, Y: pos.Y},
-			spatial.Vec2{X: tpos.X, Y: tpos.Y}) {
+			spatial.Vec2{X: tpos.X, Y: tpos.Y},
+			selfE) {
 			sel.LOSLostAt = 0
 			continue
 		}

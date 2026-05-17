@@ -5,11 +5,12 @@ import (
 	"github.com/zenion/mmoserver/internal/item"
 )
 
-// Collision layers (game-specific assignments)
-const (
-	LayerPlayer  uint8 = 1
-	LayerTerrain uint8 = 2
-)
+// Collision layer constants live in pkg/spatial — use spatial.LayerStatic /
+// spatial.LayerProp / spatial.LayerEntity. The old LayerPlayer/LayerTerrain
+// pair was removed because LayerPlayer=1 numerically collided with
+// spatial.LayerStatic (1<<0), causing hasLOSOnGrid to treat every ship /
+// NPC collider as a sight-blocker — NPCs never aggro'd because the
+// caster's own collider always returned a hit at the ray origin.
 
 // Entity kinds — wire byte that identifies an entity's kind on the
 // replication channel. Names match the second arg passed to
