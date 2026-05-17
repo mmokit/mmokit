@@ -7,6 +7,7 @@ import (
 	gamecomp "github.com/zenion/mmoserver/internal/component"
 	"github.com/zenion/mmoserver/internal/item"
 	"github.com/zenion/mmoserver/pkg/mmokit"
+	"github.com/zenion/mmoserver/pkg/pathfinding"
 )
 
 // Package-level custom player states.
@@ -43,6 +44,7 @@ func NewGameWorld(base *mmokit.Stage, cfg *GameConfig, playerDB *PlayerRepo, cel
 		dockingStates:   make(map[string]*DockingProgress),
 		poiRosters:      make(map[uint32][]uint32),
 		dungeonChambers: make(map[uint32]map[uint16]*ChamberState),
+		dungeonNavGrids: make(map[uint32]*pathfinding.NavGrid),
 		autoRespawnAt:   make(map[uint32]uint32),
 	}
 	gw.Players = eng.Players

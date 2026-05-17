@@ -502,6 +502,20 @@ type DungeonWall struct {
 	Height float32 `mmokit:"local"`
 }
 
+// Pathing caches the NavGrid-derived waypoint list for an NPC under
+// MotionPathfind. Local-only — never replicated. The waypoint slices
+// are reused across repaths (truncate-and-append) to avoid per-tick
+// allocations.
+type Pathing struct {
+	WaypointsX   []float32 `mmokit:"local"`
+	WaypointsY   []float32 `mmokit:"local"`
+	CurrentIdx   int       `mmokit:"local"`
+	TargetX      float32   `mmokit:"local"`
+	TargetY      float32   `mmokit:"local"`
+	RepathAt     float32   `mmokit:"local"`
+	DungeonNetID uint32    `mmokit:"local"`
+}
+
 // Wander tags an entity for random wandering movement (load testing).
 type Wander struct {
 	Speed       float32 // base movement speed

@@ -6,6 +6,7 @@ import (
 	gamecomp "github.com/zenion/mmoserver/internal/component"
 	"github.com/zenion/mmoserver/internal/item"
 	"github.com/zenion/mmoserver/pkg/mmokit"
+	"github.com/zenion/mmoserver/pkg/pathfinding"
 )
 
 // DockingProgress tracks a player's in-progress docking sequence.
@@ -69,6 +70,14 @@ type GameWorld struct {
 	// dungeonChambers maps dungeon NetID → chamber ID → state.
 	// Cleared at startup; populated by SpawnDungeonFromGraph.
 	dungeonChambers map[uint32]map[uint16]*ChamberState
+
+	// dungeonNavGrids maps dungeon NetID → rasterized NavGrid used by
+	// NPC pathfinding (MotionPathfind). Populated by
+	// SpawnDungeonFromGraph alongside dungeonChambers; NavGrid origin +
+	// cells are in WORLD-SPACE coordinates (the rasterizer is built in
+	// local space and then shifted to the dungeon's world center by
+	// SpawnDungeonFromGraph — see the construction site there).
+	dungeonNavGrids map[uint32]*pathfinding.NavGrid
 
 	// autoRespawnAt maps connID → engine tick at which a dead player
 	// will be auto-respawned. The client's Respawn input cannot reach

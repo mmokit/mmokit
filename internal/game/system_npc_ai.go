@@ -7,6 +7,7 @@ import (
 	gamecomp "github.com/zenion/mmoserver/internal/component"
 	"github.com/zenion/mmoserver/internal/item"
 	"github.com/zenion/mmoserver/pkg/mmokit"
+	"github.com/zenion/mmoserver/pkg/pathfinding"
 	"github.com/zenion/mmoserver/pkg/spatial"
 )
 
@@ -290,7 +291,12 @@ func (s *NPCAISystem) tickEngage(self mmokit.Entity, ai *gamecomp.NPCAI,
 	desired := float32(math.Atan2(float64(dy), float64(dx)))
 	turnTowards(rot, desired, ai.TurnRate, dt)
 
-	s.applyMotion(ai, vel, pos, tpos, dist, dx, dy)
+	switch ai.MotionPolicy {
+	case MotionPathfind:
+		s.tickPathfindMotion(self, ai, pos, vel, tpos)
+	default:
+		s.applyMotion(ai, vel, pos, tpos, dist, dx, dy)
+	}
 
 	// Artillery: paint AoE marker on target position when cooldown elapses,
 	// then transition to Cast (stationary while casting). Defers spawn so
@@ -735,4 +741,77 @@ func turnTowards(rot *mmokit.Rotation, desired, turnRate, dt float32) bool {
 
 func angleDelta(a, b float32) float32 {
 	return float32(math.Abs(float64(normalizeAngle(a - b))))
+}
+
+// tickPathfindMotion drives an NPC under MotionPathfind: lazily
+// computes a NavGrid waypoint list to targetPos and steers along it.
+// Re-paths when the target moves substantially or RepathAt elapses.
+// Falls back to no-op (zero velocity) when no NavGrid is registered
+// for the NPC's dungeon, when A* fails, or when Pathing is missing.
+func (s *NPCAISystem) tickPathfindMotion(npcE mmokit.Entity, ai *gamecomp.NPCAI,
+	pos *mmokit.Position, vel *mmokit.Velocity, targetPos *mmokit.Position,
+) {
+	p := mmokit.Get[gamecomp.Pathing](npcE)
+	if p == nil {
+		// Pathfind motion requested but no Pathing component — degrade to
+		// stationary (safer than charging through walls). Operator-spawned
+		// NPCs without a dungeon shouldn't get MotionPathfind anyway.
+		vel.X, vel.Y = 0, 0
+		return
+	}
+	ng, ok := s.gw.dungeonNavGrids[p.DungeonNetID]
+	if !ok {
+		vel.X, vel.Y = 0, 0
+		return
+	}
+	now := s.elapsedSec
+	dxT := targetPos.X - p.TargetX
+	dyT := targetPos.Y - p.TargetY
+	movedThresh := s.gw.Config.PathRepathTargetMovedThreshold
+	targetMoved := dxT*dxT+dyT*dyT > movedThresh*movedThresh
+	if len(p.WaypointsX) == 0 || now > p.RepathAt || targetMoved {
+		path := pathfinding.AStar(ng,
+			pathfinding.Vec2{X: pos.X, Y: pos.Y},
+			pathfinding.Vec2{X: targetPos.X, Y: targetPos.Y})
+		if path == nil {
+			// No path — hold position rather than charge blindly.
+			vel.X, vel.Y = 0, 0
+			return
+		}
+		smoothed := pathfinding.SmoothLOS(path, losAdapter{grid: s.gw.Spatial})
+		p.WaypointsX = p.WaypointsX[:0]
+		p.WaypointsY = p.WaypointsY[:0]
+		for _, wp := range smoothed {
+			p.WaypointsX = append(p.WaypointsX, wp.X)
+			p.WaypointsY = append(p.WaypointsY, wp.Y)
+		}
+		p.CurrentIdx = 0
+		p.TargetX = targetPos.X
+		p.TargetY = targetPos.Y
+		p.RepathAt = now + s.gw.Config.PathRepathIntervalSec
+	}
+	if p.CurrentIdx >= len(p.WaypointsX) {
+		vel.X, vel.Y = 0, 0
+		return
+	}
+	wpX := p.WaypointsX[p.CurrentIdx]
+	wpY := p.WaypointsY[p.CurrentIdx]
+	dx := wpX - pos.X
+	dy := wpY - pos.Y
+	dist := float32(math.Hypot(float64(dx), float64(dy)))
+	if dist < s.gw.Config.NavGridCellSize/2 {
+		p.CurrentIdx++
+		return
+	}
+	vel.X = ai.MaxSpeed * dx / dist
+	vel.Y = ai.MaxSpeed * dy / dist
+}
+
+// losAdapter wraps spatial.HashGrid to satisfy pathfinding.LOSChecker —
+// used by SmoothLOS to collapse waypoint chains where the NPC has a
+// clear line of sight (against LayerStatic) between two points.
+type losAdapter struct{ grid *spatial.HashGrid }
+
+func (a losAdapter) Clear(p, q pathfinding.Vec2) bool {
+	return hasLOSOnGrid(a.grid, spatial.Vec2{X: p.X, Y: p.Y}, spatial.Vec2{X: q.X, Y: q.Y})
 }

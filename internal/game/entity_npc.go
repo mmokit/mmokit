@@ -21,6 +21,7 @@ type NPCBundle struct {
 	StatusEffects *gamecomp.StatusEffects
 	NPCAI         *gamecomp.NPCAI
 	DungeonAnchor *gamecomp.DungeonAnchor `mmokit:"local"`
+	Pathing       *gamecomp.Pathing       `mmokit:"local"`
 }
 
 // SpawnNPC creates an NPC ship of the given archetype, anchored at the
@@ -52,6 +53,18 @@ func (gw *GameWorld) SpawnNPC(x, y float32, archetype uint8, poiNetID uint32) mm
 		initRecover = rand.Float32() * gw.Config.LancerRecoverTime * (1 + jitter)
 	}
 
+	// Dungeon-spawned NPCs override their archetype's default MotionPolicy
+	// with MotionPathfind so they navigate around walls (the dungeon
+	// NavGrid is built by SpawnDungeonFromGraph). Open-world NPCs keep
+	// their archetype-default policy (Charge / Stationary) — no NavGrid
+	// exists for the open world.
+	motion := d.MotionPolicy
+	if poiNetID != 0 {
+		if _, ok := gw.dungeonNavGrids[poiNetID]; ok {
+			motion = MotionPathfind
+		}
+	}
+
 	components := []any{
 		mmokit.Position{X: x, Y: y},
 		mmokit.EntityKind{Type: gamecomp.KindNPC},
@@ -80,7 +93,7 @@ func (gw *GameWorld) SpawnNPC(x, y float32, archetype uint8, poiNetID uint32) mm
 			WeaponRange:      d.WeaponRange,
 			AggroRadius:      d.AggroRadius,
 			LockRange:        d.LockRange,
-			MotionPolicy:     d.MotionPolicy,
+			MotionPolicy:     motion,
 			DamagePerShot:    d.DamagePerShot,
 			FireRate:         d.FireRate,
 			CastCooldown:     initCastCD,
@@ -90,6 +103,9 @@ func (gw *GameWorld) SpawnNPC(x, y float32, archetype uint8, poiNetID uint32) mm
 	}
 	if poiNetID != 0 {
 		components = append(components, gamecomp.DungeonAnchor{DungeonNetID: poiNetID})
+	}
+	if motion == MotionPathfind {
+		components = append(components, gamecomp.Pathing{DungeonNetID: poiNetID})
 	}
 
 	e := gw.stage.Spawn(components...)

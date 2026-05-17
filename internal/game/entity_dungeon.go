@@ -78,10 +78,21 @@ func (gw *GameWorld) SpawnDungeonFromGraph(centerX, centerY float32, seed uint64
 		Seed: seed,
 	})
 
+	// Generate walls once — reused for spawning the wall colliders
+	// AND for rasterizing the NavGrid below.
+	walls := generateWalls(g, gw.Config)
 	// Spawn walls (world-space = local + center).
-	for _, w := range generateWalls(g, gw.Config) {
+	for _, w := range walls {
 		gw.SpawnDungeonWall(centerX+w.Center.X, centerY+w.Center.Y, w.Width, w.Height, w.Rotation)
 	}
+
+	// Build the NavGrid for this dungeon and shift its origin so all
+	// cells (and pathfinding queries) are in world-space — NPCs query
+	// against pos.X/pos.Y directly.
+	ng := buildDungeonNavGrid(g, walls, gw.Config)
+	ng.Origin.X += centerX
+	ng.Origin.Y += centerY
+	gw.dungeonNavGrids[dungeonNetID] = ng
 
 	// Spawn chambers + rosters. Chamber 0 is the entry — no roster.
 	chambers := make(map[uint16]*ChamberState)

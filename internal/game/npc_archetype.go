@@ -32,6 +32,7 @@ const (
 const (
 	MotionCharge     uint8 = 0
 	MotionStationary uint8 = 1 // Artillery between casts; no retreat
+	MotionPathfind   uint8 = 2 // navigate per dungeon NavGrid via A* + LOS smoothing
 )
 
 // ArchetypeDefaults holds the spawn-time defaults for an archetype.
