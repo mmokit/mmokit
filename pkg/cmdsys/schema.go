@@ -115,10 +115,18 @@ func typeKind(t reflect.Type, depth int, maxDepth int) (string, error) {
 		return "string", nil
 	case reflect.Int:
 		return "int", nil
+	case reflect.Int8:
+		return "int8", nil
+	case reflect.Int16:
+		return "int16", nil
 	case reflect.Int32:
 		return "int32", nil
 	case reflect.Int64:
 		return "int64", nil
+	case reflect.Uint8:
+		return "uint8", nil
+	case reflect.Uint16:
+		return "uint16", nil
 	case reflect.Uint32:
 		return "uint32", nil
 	case reflect.Uint64:
@@ -135,6 +143,12 @@ func typeKind(t reflect.Type, depth int, maxDepth int) (string, error) {
 			return "", err
 		}
 		return "[]" + elem, nil
+	case reflect.Array:
+		elem, err := typeKind(t.Elem(), depth, maxDepth)
+		if err != nil {
+			return "", err
+		}
+		return fmt.Sprintf("[%d]%s", t.Len(), elem), nil
 	case reflect.Struct:
 		if maxDepth != maxStructDepthUnlimited && depth >= maxDepth {
 			return "", fmt.Errorf("cmdsys: struct nesting deeper than %d level is not supported", maxDepth)
