@@ -108,6 +108,44 @@ func (gw *GameWorld) PoiRosters(poiNetID uint32) []uint32 {
 // standard one.
 func (gw *GameWorld) POICooldownSec() int32 { return poiCooldownSec(gw) }
 
+// DungeonChambers returns the per-dungeon chamber tracking map used by
+// admin cmdsys handlers (dungeon.list / dungeon.respawn /
+// dungeon.regenerate). The returned map is the live storage — callers
+// must only mutate it on the game-loop goroutine.
+func (gw *GameWorld) DungeonChambers() map[uint32]map[uint16]*ChamberState {
+	return gw.dungeonChambers
+}
+
+// RemoveDungeon drops every server-side tracking record for a dungeon
+// (chamber state + NavGrid). Used by dungeon.regenerate to tear down
+// the old layout before re-procgen. Does NOT despawn the dungeon entity
+// itself or its walls/NPCs — the caller is responsible for that.
+func (gw *GameWorld) RemoveDungeon(dungeonNetID uint32) {
+	delete(gw.dungeonChambers, dungeonNetID)
+	delete(gw.dungeonNavGrids, dungeonNetID)
+}
+
+// SpawnChamberRoster is the exported view of spawnChamberRoster for
+// admin cmdsys handlers (dungeon.respawn). Spawns every roster member
+// for the chamber and appends their netIDs to c.AliveNetIDs.
+func (gw *GameWorld) SpawnChamberRoster(dungeonNetID uint32, c *ChamberState) {
+	gw.spawnChamberRoster(dungeonNetID, c)
+}
+
+// ChamberCooldownFor is the exported view of chamberCooldownFor for
+// admin cmdsys handlers (dungeon.list). Returns the configured cooldown
+// (seconds) for the chamber's role.
+func ChamberCooldownFor(cfg *GameConfig, role ChamberRole) float32 {
+	return chamberCooldownFor(cfg, role)
+}
+
+// RosterIdxForRole is the exported view of rosterIdxForRole for admin
+// cmdsys handlers (dungeon.respawn). Picks a deterministic roster index
+// for the given chamber role from a stable RNG-on-seed source.
+func RosterIdxForRole(role ChamberRole, rngU64 uint64) uint16 {
+	return rosterIdxForRole(role, rngU64)
+}
+
 // Engine returns the engine for this cell.
 func (gw *GameWorld) Engine() *mmokit.Engine { return gw.eng }
 

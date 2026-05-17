@@ -24,6 +24,10 @@ func RegisterAll(reg *cmdsys.Registry, coord *mmokit.Process, playerDB *game.Pla
 		func() error { return registerPOIList(reg, coord) },
 		func() error { return registerPOIClear(reg, coord) },
 		func() error { return registerPOISpawn(reg, coord) },
+		func() error { return registerDungeonList(reg, coord) },
+		func() error { return registerDungeonRespawn(reg, coord) },
+		func() error { return registerDungeonRegenerate(reg, coord) },
+		func() error { return registerDungeonSpawn(reg, coord) },
 	}
 	for _, fn := range funcs {
 		if err := fn(); err != nil {
