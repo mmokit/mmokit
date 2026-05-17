@@ -11,6 +11,8 @@ import { createNpcDisplay } from "./npc";
 import { createPoiDisplay } from "./poi";
 import { createAoEMarkerDisplay } from "./aoe-marker";
 import { createLineTelegraphDisplay } from "./line-telegraph";
+import { createDungeonDisplay } from "./dungeon";
+import { createDungeonWallDisplay } from "./dungeon-wall";
 import { EntityType } from "../../sdk/index.js";
 
 export class EntityManager {
@@ -88,6 +90,10 @@ export class EntityManager {
         return createProjectileDisplay();
       case EntityType.LineTelegraph:
         return createLineTelegraphDisplay();
+      case EntityType.Dungeon:
+        return createDungeonDisplay();
+      case EntityType.DungeonWall:
+        return createDungeonWallDisplay();
     }
     // Unreachable for known SDK entity kinds — fall back to a stub dot.
     return createUnknownEntityDisplay(ENTITY_COLORS[0] || 0xffffff);

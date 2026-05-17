@@ -123,6 +123,32 @@ export class Minimap {
               .stroke({ color, width: 1.5, alpha });
             break;
           }
+          case EntityType.Dungeon: {
+            // Dungeons render as an orange asteroid-icon — a filled
+            // circle with three radial notches mirroring the cave
+            // entrances. Scale lightly with the dungeon's actual
+            // outer radius so big dungeons are visually larger on the
+            // map.
+            const dotR = Math.max(
+              4,
+              Math.min((ent.current.radius || 1800) * scale * 0.5, 10),
+            );
+            this.gfx.circle(ex, ey, dotR).fill({ color: 0x3a2e22 });
+            this.gfx
+              .circle(ex, ey, dotR)
+              .stroke({ color: 0xffaa55, width: 1.5, alpha: 0.9 });
+            // Cave-mouth dots — south, NE, NW positions.
+            for (const a of [Math.PI / 2, -Math.PI / 6, Math.PI + Math.PI / 6]) {
+              const mx = ex + Math.cos(a) * dotR;
+              const my = ey + Math.sin(a) * dotR;
+              this.gfx.circle(mx, my, 1.5).fill({ color: 0xffeeaa, alpha: 1.0 });
+            }
+            break;
+          }
+          // DungeonWall entities aren't drawn on the minimap — they'd
+          // be a wall of static dots that drowns out the dungeon icon.
+          case EntityType.DungeonWall:
+            break;
         }
       }
     }

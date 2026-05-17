@@ -11,6 +11,13 @@ import { px } from "../view";
 const ARCH_BRAWLER = 0;
 const ARCH_ARTILLERY = 1;
 const ARCH_LANCER = 2;
+// PVE v3 dungeon terminal-chamber main boss. Stationary, large HP pool,
+// periodic add-spawn mechanic — visually distinguished as a 2× hull and
+// a distinct deep-red tint so pilots immediately recognize "this is THE
+// boss" vs the regular Brawler/Artillery/Lancer mob mix. Elite ("side
+// boss") champions aren't yet on the wire (Elite is an NPCSpawnModifier
+// only), so v1 distinguishes BossGuardian only.
+const ARCH_BOSS_GUARDIAN = 3;
 
 // NPCAI.State values — must match internal/game AIState* consts. We
 // only care about Leashed (returning to leash anchor) for visual fade.
@@ -23,9 +30,10 @@ interface ArchetypeStyle {
 }
 
 const ARCHETYPES: Record<number, ArchetypeStyle> = {
-  [ARCH_BRAWLER]:   { color: 0xff4444, scale: 1.2, label: "BRAWLER" },
-  [ARCH_ARTILLERY]: { color: 0xcc66ff, scale: 1.3, label: "ARTILLERY" },
-  [ARCH_LANCER]:    { color: 0xffaa22, scale: 1.0, label: "LANCER" },
+  [ARCH_BRAWLER]:        { color: 0xff4444, scale: 1.2, label: "BRAWLER" },
+  [ARCH_ARTILLERY]:      { color: 0xcc66ff, scale: 1.3, label: "ARTILLERY" },
+  [ARCH_LANCER]:         { color: 0xffaa22, scale: 1.0, label: "LANCER" },
+  [ARCH_BOSS_GUARDIAN]:  { color: 0xff1818, scale: 2.0, label: "GUARDIAN" },
 };
 
 const DEFAULT_ARCH: ArchetypeStyle = { color: 0xff4444, scale: 1.0, label: "NPC" };

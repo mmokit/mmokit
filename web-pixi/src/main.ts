@@ -38,6 +38,7 @@ import { createLootPopup, updateLootPopup } from "./ui/loot-popup";
 import { createMarketPanel, updateMarketPanel } from "./ui/market";
 import { CellMap } from "./ui/cell-map";
 import { SelectionPanel } from "./ui/selection-panel";
+import { DungeonOverlay } from "./dungeon-overlay";
 
 async function main() {
   const state = createInitialState();
@@ -170,6 +171,12 @@ async function main() {
   const gameUiRoot =
     (document.getElementById("game-ui") as HTMLElement | null) ?? document.body;
   const selectionPanel = new SelectionPanel(gameUiRoot);
+
+  // Dungeon "inside cave system" overlay — full-screen darkening with a
+  // spotlight on the dungeon interior when the player is within an
+  // asteroid silhouette. Added before the minimap so the minimap's
+  // higher zIndex keeps it at full brightness.
+  const dungeonOverlay = new DungeonOverlay(app.stage);
 
   // Minimap (PixiJS overlay on app.stage, zIndex 100)
   const minimap = new Minimap(app.stage);
@@ -406,6 +413,10 @@ async function main() {
     updateLootPopup(state);
     updateEscMenu(state);
     selectionPanel.update(state);
+
+    // Dungeon overlay — must run after camera.update so worldToScreen
+    // sees the latest player-follow center.
+    dungeonOverlay.update(state, camera, app.screen.width, app.screen.height);
 
     // Minimap
     minimap.update(state, app.screen.width, app.screen.height);
