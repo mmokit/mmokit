@@ -167,9 +167,11 @@ func bfsDistances(g *dungeonGraph, root int) []int {
 // This trades some visual variety on extreme seeds for the hard
 // guarantee that every chamber is reachable on the NavGrid.
 func layoutGraph(g *dungeonGraph, cfg *GameConfig, rng *rand.Rand) {
-	// entry at south interior surface
+	// Entry chamber on the station-facing (visually-south = world +Y in
+	// PixiJS no-flip world container) interior surface, lined up with the
+	// primary entrance gap from pickEntranceAngles below.
 	margin := cfg.DungeonChamberRadiusMax + cfg.DungeonWallThickness
-	g.chambers[0].center = spatial.Vec2{X: 0, Y: -(cfg.DungeonAsteroidRadius - margin)}
+	g.chambers[0].center = spatial.Vec2{X: 0, Y: cfg.DungeonAsteroidRadius - margin}
 
 	const layoutMaxAngleTries = 16
 
@@ -302,8 +304,14 @@ func generateWalls(g *dungeonGraph, cfg *GameConfig) []wallSpec {
 	return walls
 }
 
-func pickEntranceAngles(g *dungeonGraph, cfg *GameConfig, ringSegments int) []int {
-	base := int(float64(ringSegments) * 0.75) % ringSegments
+// pickEntranceAngles returns the ring-slot indices that are entrance
+// gaps (rest of the ring becomes wall segments). The primary entrance
+// is on the visually-south side of the asteroid (slot 4 of 16 ≈ math
+// angle 101° ≈ world +Y in PixiJS coords) so it faces the station,
+// which sits south of the asteroid in world space. Other entrances
+// spread evenly around the ring.
+func pickEntranceAngles(_ *dungeonGraph, cfg *GameConfig, ringSegments int) []int {
+	base := int(float64(ringSegments) * 0.25) % ringSegments
 	out := []int{base}
 	for i := 1; i < cfg.DungeonEntranceCount; i++ {
 		out = append(out, (base+ringSegments*i/cfg.DungeonEntranceCount)%ringSegments)
