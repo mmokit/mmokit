@@ -80,6 +80,10 @@ async function main() {
   worldContainer.addChild(gridContainer);
 
   const entityContainer = new Container();
+  // Allow per-entity zIndex so the dungeon silhouette can render below
+  // ships/walls/NPCs (zIndex=-10 in entities/dungeon.ts) instead of
+  // obscuring them based on entity-creation order.
+  entityContainer.sortableChildren = true;
   worldContainer.addChild(entityContainer);
 
   const uiEntityContainer = new Container(); // Non-rotating ship bars/names

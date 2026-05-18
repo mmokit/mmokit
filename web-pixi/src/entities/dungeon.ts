@@ -33,6 +33,12 @@ function entrancePositionsFromMask(
 
 export function createDungeonDisplay(): EntityDisplayObject {
   const container = new Container();
+  // Render the asteroid silhouette underneath every other entity so the
+  // player ship + walls + NPCs are visible after flying inside. Default
+  // zIndex is 0 — anything negative draws first. The entityContainer is
+  // marked sortableChildren so this ordering is respected regardless of
+  // entity-creation order.
+  container.zIndex = -10;
 
   // The asteroid silhouette draws once at first valid radius and never
   // redraws (geometry is static — radius is set at spawn time and the
