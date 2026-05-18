@@ -164,6 +164,7 @@ type GameConfig struct {
 	POIPlacementMargin             float32 `json:"poi_placement_margin"`
 	POIBaseClearFlux               int32   `json:"poi_base_clear_flux"`
 	POIPerKillFluxBonus            int32   `json:"poi_per_kill_flux_bonus"`
+	POIIntraCellClearance          float32 `json:"poi_intra_cell_clearance"`
 	StationCellPOIClearCooldown    int32   `json:"station_cell_poi_clear_cooldown_sec"`
 	NonStationCellPOIClearCooldown int32   `json:"non_station_cell_poi_clear_cooldown_sec"`
 
@@ -314,6 +315,7 @@ func DefaultGameConfig() GameConfig {
 		POIPlacementMargin:             200,
 		POIBaseClearFlux:               500,
 		POIPerKillFluxBonus:            100,
+		POIIntraCellClearance:          1000,
 		StationCellPOIClearCooldown:    180,
 		NonStationCellPOIClearCooldown: 600,
 
