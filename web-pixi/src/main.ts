@@ -39,6 +39,7 @@ import { createMarketPanel, updateMarketPanel } from "./ui/market";
 import { CellMap } from "./ui/cell-map";
 import { SelectionPanel } from "./ui/selection-panel";
 import { DungeonOverlay } from "./dungeon-overlay";
+import { devOverlay } from "./ui/dev-overlay";
 
 async function main() {
   const state = createInitialState();
@@ -340,6 +341,11 @@ async function main() {
 
     // Interpolation
     interpolateEntities(state.entities, state.clockSync, now);
+
+    // Dev overlay records continuously; renders only when toggled visible
+    // (Backquote key). Kept after interpolation so player-ring stats
+    // reflect the same renderTime the camera will see.
+    devOverlay.update(state, now);
 
     // Camera follows player
     const myEntity = state.entities.get(state.myEntityId);

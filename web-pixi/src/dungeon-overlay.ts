@@ -10,24 +10,33 @@ import { zoom } from "./view";
  * radius, a full-screen darkening overlay is rendered everywhere
  * EXCEPT a soft circular spotlight that follows the dungeon's
  * silhouette. The world inside the asteroid stays normal-lit; the
- * world outside dims to ~60% brightness, suggesting you've ducked
- * into a cave system.
+ * world outside dims, suggesting you've ducked into a cave system.
  *
- * Implementation: one PIXI.Graphics holds a screen-space rectangle
- * at MULTIPLY blend that darkens the canvas. The "hole" is achieved
- * by drawing a circular ERASE on top, which subtracts alpha from the
- * dark rect inside the spotlight radius. We render two concentric
- * erases (a hard inner edge + a softer outer edge) so the transition
- * feels rocky rather than vignette-sharp.
+ * Implementation: each Graphics draws a screen rect filled at the
+ * target alpha, then uses Graphics.cut() to subtract a circle out
+ * of that fill — producing real geometry with no blend-mode trick.
+ * The previous version used the "erase" blend mode against a dark
+ * rect inside the same Container, but in Pixi v8 erase operates
+ * against the framebuffer (not the local container), so the "hole"
+ * subtracted from the scene underneath — darkening the spotlight
+ * area instead of brightening it. cut() avoids that entirely.
+ *
+ * Two concentric bands give a soft rim falloff:
+ *   - outer band: rect ∖ circle(r * 1.05) at α≈0.30
+ *   - inner band: rect ∖ circle(r * 0.94) at α≈0.25
+ * Areas overlap additively (both Graphics rendered with normal blend),
+ * giving:
+ *   inside r*0.94          → 0.00 dark (clear)
+ *   r*0.94 .. r*1.05 rim   → 0.30 dark (soft transition)
+ *   outside r*1.05         → 0.55 dark (full)
  *
  * Lives on app.stage above worldContainer but below the minimap so
  * the minimap stays at full brightness.
  */
 export class DungeonOverlay {
   private container: Container;
-  private dark: Graphics;
-  private hole: Graphics;
-  private softHole: Graphics;
+  private outerDark: Graphics;
+  private innerDark: Graphics;
   private active = false;
 
   constructor(stage: Container) {
@@ -37,16 +46,9 @@ export class DungeonOverlay {
     this.container.visible = false;
     stage.addChild(this.container);
 
-    this.dark = new Graphics();
-    this.container.addChild(this.dark);
-
-    this.softHole = new Graphics();
-    this.softHole.blendMode = "erase";
-    this.container.addChild(this.softHole);
-
-    this.hole = new Graphics();
-    this.hole.blendMode = "erase";
-    this.container.addChild(this.hole);
+    this.outerDark = new Graphics();
+    this.innerDark = new Graphics();
+    this.container.addChild(this.outerDark, this.innerDark);
   }
 
   update(state: GameState, camera: Camera, screenW: number, screenH: number): void {
@@ -85,27 +87,27 @@ export class DungeonOverlay {
     const screenCenter = camera.worldToScreen(insideDungeon.x, insideDungeon.y);
     const screenRadius = insideDungeon.r * zoom();
 
-    // Full-screen darkening — multiply blend would tint everything, but a
-    // normal-blend semi-transparent black gives a more controllable result
-    // and pairs cleanly with ERASE-mode holes.
-    this.dark.clear();
-    this.dark
+    // Outer dark band — rect with circle(r * 1.05) cut out. The
+    // sequence is: draw + fill rect, then draw circle + cut() — the
+    // circle's geometry is subtracted from the previously filled rect.
+    // Result is a single shape that paints the rect alpha everywhere
+    // EXCEPT inside the circle. No blend modes, no framebuffer coupling.
+    this.outerDark.clear();
+    this.outerDark
       .rect(0, 0, screenW, screenH)
-      .fill({ color: 0x000000, alpha: 0.55 });
-
-    // Inner hard erase — restores 100% of the alpha inside the spotlight.
-    this.hole.clear();
-    this.hole
-      .circle(screenCenter.x, screenCenter.y, screenRadius * 0.94)
-      .fill({ color: 0xffffff, alpha: 1.0 });
-
-    // Soft outer erase — partial cut between rInner and rOuter so the
-    // darkening fades into the rock edge rather than appearing as a
-    // hard ring.
-    this.softHole.clear();
-    this.softHole
+      .fill({ color: 0x000000, alpha: 0.30 })
       .circle(screenCenter.x, screenCenter.y, screenRadius * 1.05)
-      .fill({ color: 0xffffff, alpha: 0.5 });
+      .cut();
+
+    // Inner dark band — same trick with a tighter hole. Adds extra
+    // darkening to the area outside r*0.94 so the rim has a two-band
+    // falloff: rim (0.30 dark) → outside (0.30 + 0.25 = ~0.55 dark).
+    this.innerDark.clear();
+    this.innerDark
+      .rect(0, 0, screenW, screenH)
+      .fill({ color: 0x000000, alpha: 0.25 })
+      .circle(screenCenter.x, screenCenter.y, screenRadius * 0.94)
+      .cut();
   }
 
   private setActive(on: boolean): void {

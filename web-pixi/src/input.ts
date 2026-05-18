@@ -1,6 +1,7 @@
 import { px } from "./view";
 import type { GameState } from "./state";
 import { abilityParamsForSlot, getAbilityRange, TargetingMode } from "./ui/ability-bar";
+import { devOverlay } from "./ui/dev-overlay";
 import {
   CastAbility,
   ChannelAim,
@@ -191,6 +192,14 @@ export function setupInput(
   }
 
   window.addEventListener("keydown", (e) => {
+    // Dev overlay toggle (Backquote / ~). Available pre-login so the
+    // panel can be left enabled across reconnects.
+    if (e.code === "Backquote") {
+      devOverlay.toggle();
+      e.preventDefault();
+      return;
+    }
+
     if (!state.loggedIn) return;
 
     // Chat mode handling — server-side chat decommissioned in Plan 1

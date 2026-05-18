@@ -30,6 +30,7 @@ import {
 import { CELL_SIZE } from "./constants";
 import { updateEntityFromServer } from "./interpolation";
 import { observeFrameStamps } from "./clockSync";
+import { devOverlay } from "./ui/dev-overlay";
 import { spawnExplosion } from "./effects/explosion";
 import { SETTLEMENT_CURRENCY_ID, type GameState, type CellInfo } from "./state";
 
@@ -77,7 +78,13 @@ function applyDeltaUpdate(state: GameState, update: DeltaWorldUpdate): void {
   // entity carries its own ClusterClock-aligned `producedAtMs` stamp;
   // clockSync anchors on the freshest one in the frame.
   const fresh: AnyEntity[] = [...update.entered, ...update.updated];
-  observeFrameStamps(state.clockSync, fresh, performance.now());
+  const arriveMs = performance.now();
+  observeFrameStamps(state.clockSync, fresh, arriveMs);
+  let maxStamp = 0;
+  for (const e of fresh) {
+    if (e.producedAtMs > maxStamp) maxStamp = e.producedAtMs;
+  }
+  devOverlay.observeServerFrame(arriveMs, maxStamp);
 
   // Fresh-snapshot frames (flag set by the server on the first frame from a
   // given ReplicationSystem: login or cross-cell handoff) are authoritative
