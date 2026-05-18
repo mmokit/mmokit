@@ -301,7 +301,26 @@ func (g *Generator) genDeltaDecoder() string {
 			writeVarTailDecoder(&b, ent, g.tailItemTypeName(ent))
 		}
 
-		// Initial fields.
+		// Initial fields. Multiple initial fields are packed in declaration
+		// order into the entity's InitialData byte slice; we walk through
+		// with a running offset variable so each decoder reads from its
+		// proper position. Without this all initial fields after the first
+		// would read from byte 0 and clobber each other.
+		hasInitialFields := false
+		for _, binding := range ent.Bindings {
+			for _, field := range binding.Fields {
+				if field.Initial {
+					hasInitialFields = true
+					break
+				}
+			}
+			if hasInitialFields {
+				break
+			}
+		}
+		if hasInitialFields {
+			b.WriteString("  let initialOff = 0;\n")
+		}
 		for _, binding := range ent.Bindings {
 			for _, field := range binding.Fields {
 				if !field.Initial {
@@ -309,6 +328,12 @@ func (g *Generator) genDeltaDecoder() string {
 				}
 				writeInitialFieldDecoder(&b, field, ent.InitialData)
 			}
+		}
+		if hasInitialFields {
+			// Silence the unused-variable warning when the last field is a
+			// scalar (the final advance line is the only "use" of initialOff
+			// and gets stripped by tsc DCE if no later field references it).
+			b.WriteString("  void initialOff;\n")
 		}
 
 		// Return object. `producedAtMs` is overwritten by the caller from
@@ -540,14 +565,52 @@ func writeFieldDecoder(b *strings.Builder, field BindingSchemaField) {
 	}
 }
 
+// writeInitialFieldDecoder emits one TS decode statement for an
+// initial-only field. It assumes a `let initialOff = 0;` variable was
+// emitted earlier in the same function and updates that offset after
+// each read so subsequent fields find the right bytes.
+//
+// Supported encodings:
+//   string — 1-byte length prefix + UTF-8 bytes
+//   u8     — 1 byte
+//   i8     — 1 byte signed
+//   u16    — 2 bytes big-endian unsigned
+//   i16    — 2 bytes big-endian signed
+//   u32    — 4 bytes big-endian unsigned
+//   f32    — 4 bytes IEEE-754 big-endian
+//   bool   — 1 byte (0/1)
+//
+// Unknown encodings fall back to the previous existing-or-zero default
+// so a new wire type doesn't silently corrupt other fields' offsets.
 func writeInitialFieldDecoder(b *strings.Builder, field BindingSchemaField, _ string) {
+	n := field.Name
 	switch field.Encoding {
 	case "string":
-		fmt.Fprintf(b, "  const %s = initial ? decodeLengthPrefixedStringU8(initial) : (existing?.%s ?? \"\");\n", field.Name, field.Name)
+		fmt.Fprintf(b, "  const %s = initial && initialOff < initial.length ? decodeLengthPrefixedStringU8(initial.subarray(initialOff)) : (existing?.%s ?? \"\");\n", n, n)
+		fmt.Fprintf(b, "  if (initial && initialOff < initial.length) initialOff += 1 + initial[initialOff];\n")
 	case "u8":
-		fmt.Fprintf(b, "  const %s = initial ? initial[0] : (existing?.%s ?? 0);\n", field.Name, field.Name)
+		fmt.Fprintf(b, "  const %s = initial && initialOff < initial.length ? initial[initialOff] : (existing?.%s ?? 0);\n", n, n)
+		b.WriteString("  if (initial && initialOff < initial.length) initialOff += 1;\n")
+	case "i8":
+		fmt.Fprintf(b, "  const %s = initial && initialOff < initial.length ? (initial[initialOff] << 24 >> 24) : (existing?.%s ?? 0);\n", n, n)
+		b.WriteString("  if (initial && initialOff < initial.length) initialOff += 1;\n")
+	case "u16":
+		fmt.Fprintf(b, "  const %s = initial && initialOff + 2 <= initial.length ? readUint16(initial, initialOff) : (existing?.%s ?? 0);\n", n, n)
+		b.WriteString("  if (initial && initialOff + 2 <= initial.length) initialOff += 2;\n")
+	case "i16":
+		fmt.Fprintf(b, "  const %s = initial && initialOff + 2 <= initial.length ? readInt16(initial, initialOff) : (existing?.%s ?? 0);\n", n, n)
+		b.WriteString("  if (initial && initialOff + 2 <= initial.length) initialOff += 2;\n")
+	case "u32":
+		fmt.Fprintf(b, "  const %s = initial && initialOff + 4 <= initial.length ? readUint32(initial, initialOff) : (existing?.%s ?? 0);\n", n, n)
+		b.WriteString("  if (initial && initialOff + 4 <= initial.length) initialOff += 4;\n")
+	case "f32":
+		fmt.Fprintf(b, "  const %s = initial && initialOff + 4 <= initial.length ? readFloat32(initial, initialOff) : (existing?.%s ?? 0);\n", n, n)
+		b.WriteString("  if (initial && initialOff + 4 <= initial.length) initialOff += 4;\n")
+	case "bool":
+		fmt.Fprintf(b, "  const %s = initial && initialOff < initial.length ? (initial[initialOff] !== 0) : (existing?.%s ?? false);\n", n, n)
+		b.WriteString("  if (initial && initialOff < initial.length) initialOff += 1;\n")
 	default:
-		fmt.Fprintf(b, "  const %s = existing?.%s ?? 0;\n", field.Name, field.Name)
+		fmt.Fprintf(b, "  const %s = existing?.%s ?? 0;\n", n, n)
 	}
 }
 

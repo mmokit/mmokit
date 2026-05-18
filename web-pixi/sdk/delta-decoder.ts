@@ -225,8 +225,16 @@ function decodeDungeonEntitySnapshot(snap: Uint8Array, initial: Uint8Array | nul
   const radius = unVel(readInt16(snap, o), 500); o += 2;
   const width = unVel(readInt16(snap, o), 500); o += 2;
   const height = unVel(readInt16(snap, o), 500); o += 2;
-  const name = initial ? decodeLengthPrefixedStringU8(initial) : (existing?.name ?? "");
-  const entranceMask = existing?.entranceMask ?? 0;
+  // PATCH (pre-next-SDK-regen): multi-field initial decode with running
+  // offset. Without this, every initial field after the first reads from
+  // byte 0 and gets clobbered — e.g. entranceMask was always 0, so the
+  // client saw an entrance at every ring slot (16 vortexes instead of 3).
+  let initialOff = 0;
+  const name = initial && initialOff < initial.length ? decodeLengthPrefixedStringU8(initial.subarray(initialOff)) : (existing?.name ?? "");
+  if (initial && initialOff < initial.length) initialOff += 1 + initial[initialOff];
+  const entranceMask = initial && initialOff + 2 <= initial.length ? readUint16(initial, initialOff) : (existing?.entranceMask ?? 0);
+  if (initial && initialOff + 2 <= initial.length) initialOff += 2;
+  void initialOff;
   return { netID: 0, producedAtMs: 0, entityType: 9, worldX, worldY, velX, velY, radius, width, height, name, entranceMask };
 }
 
