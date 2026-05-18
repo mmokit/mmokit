@@ -17,7 +17,7 @@ import (
 // ConfigVersion tracks breaking config changes. Bump this when defaults change
 // in a way that is incompatible with saved configs (e.g. unit rescale).
 // When the saved version doesn't match, defaults are used and re-saved.
-const ConfigVersion = 12
+const ConfigVersion = 13
 
 // GameConfig holds all tunable game parameters.
 type GameConfig struct {
@@ -209,7 +209,7 @@ type GameConfig struct {
 func DefaultGameConfig() GameConfig {
 	return GameConfig{
 		Version:             ConfigVersion,
-		AoIRadius:           100,
+		AoIRadius:           500, // bumped from 100 — old value made 80u dungeon asteroid invisible until you were inside it
 		MaxSpeed:            68,
 		ShipThrust:          20,
 		ShipTurnRate:        8.0,
