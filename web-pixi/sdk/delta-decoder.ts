@@ -40,7 +40,10 @@ function decodeShipEntitySnapshot(snap: Uint8Array, initial: Uint8Array | null, 
     const duration = unNorm(snap[o]); o += 1;
     statusEffects.push({ type, duration });
   }
-  const name = initial ? decodeLengthPrefixedStringU8(initial) : (existing?.name ?? "");
+  let initialOff = 0;
+  const name = initial && initialOff < initial.length ? decodeLengthPrefixedStringU8(initial.subarray(initialOff)) : (existing?.name ?? "");
+  if (initial && initialOff < initial.length) initialOff += 1 + initial[initialOff];
+  void initialOff;
   return { netID: 0, producedAtMs: 0, entityType: 0, worldX, worldY, velX, velY, radius, width, height, name, healthCurrent, healthMax, shieldCurrent, shieldMax, lockerNetID, lockerProgress, beam0Active, beam1Active, miningTargetNetID, angle, statusEffects };
 }
 
@@ -126,7 +129,10 @@ function decodeNPCEntitySnapshot(snap: Uint8Array, initial: Uint8Array | null, e
     const duration = unNorm(snap[o]); o += 1;
     statusEffects.push({ type, duration });
   }
-  const state = initial ? initial[0] : (existing?.state ?? 0);
+  let initialOff = 0;
+  const state = initial && initialOff < initial.length ? initial[initialOff] : (existing?.state ?? 0);
+  if (initial && initialOff < initial.length) initialOff += 1;
+  void initialOff;
   return { netID: 0, producedAtMs: 0, entityType: 4, worldX, worldY, velX, velY, radius, width, height, healthCurrent, healthMax, shieldCurrent, shieldMax, archetype, state, angle, statusEffects };
 }
 
@@ -143,7 +149,10 @@ function decodePOIEntitySnapshot(snap: Uint8Array, initial: Uint8Array | null, e
   const width = unVel(readInt16(snap, o), 500); o += 2;
   const height = unVel(readInt16(snap, o), 500); o += 2;
   const type = snap[o]; o += 1;
-  const status = initial ? initial[0] : (existing?.status ?? 0);
+  let initialOff = 0;
+  const status = initial && initialOff < initial.length ? initial[initialOff] : (existing?.status ?? 0);
+  if (initial && initialOff < initial.length) initialOff += 1;
+  void initialOff;
   return { netID: 0, producedAtMs: 0, entityType: 5, worldX, worldY, velX, velY, radius, width, height, type, status };
 }
 
@@ -225,10 +234,6 @@ function decodeDungeonEntitySnapshot(snap: Uint8Array, initial: Uint8Array | nul
   const radius = unVel(readInt16(snap, o), 500); o += 2;
   const width = unVel(readInt16(snap, o), 500); o += 2;
   const height = unVel(readInt16(snap, o), 500); o += 2;
-  // PATCH (pre-next-SDK-regen): multi-field initial decode with running
-  // offset. Without this, every initial field after the first reads from
-  // byte 0 and gets clobbered — e.g. entranceMask was always 0, so the
-  // client saw an entrance at every ring slot (16 vortexes instead of 3).
   let initialOff = 0;
   const name = initial && initialOff < initial.length ? decodeLengthPrefixedStringU8(initial.subarray(initialOff)) : (existing?.name ?? "");
   if (initial && initialOff < initial.length) initialOff += 1 + initial[initialOff];
