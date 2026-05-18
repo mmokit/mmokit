@@ -195,7 +195,10 @@ func layoutGraph(g *dungeonGraph, cfg *GameConfig, rng *rand.Rand) {
 				continue
 			}
 			visited[child] = true
-			corridorLen := float32(150) + rng.Float32()*150
+			// Corridor length scales with asteroid radius so the procgen
+			// stays sensible across re-tuning. 15-30% of R puts chambers
+			// well inside the silhouette without collapsing to a blob.
+			corridorLen := cfg.DungeonAsteroidRadius * (0.15 + rng.Float32()*0.15)
 			d := cfg.DungeonChamberRadiusMax + corridorLen
 			childRadius := g.chambers[child].radius
 			maxDist := cfg.DungeonAsteroidRadius - childRadius - cfg.DungeonWallThickness
@@ -247,17 +250,26 @@ func generateWalls(g *dungeonGraph, cfg *GameConfig) []wallSpec {
 	const ringSegments = 16
 	entranceAngles := pickEntranceAngles(g, cfg, ringSegments)
 	arcLen := 2 * math.Pi / ringSegments
-	segLen := cfg.DungeonAsteroidRadius * float32(arcLen) // chord length approx
+	// Place perimeter walls a half-thickness inside DungeonAsteroidRadius
+	// so the wall surface sits at R and the wall body is fully inside the
+	// silhouette outline. Without this, walls float visually outside the
+	// jittered asteroid polygon (which inscribes to ~0.88R at minimum).
+	wallR := cfg.DungeonAsteroidRadius - cfg.DungeonWallThickness/2
+	// Slight chord overlap so adjacent segments meet at the corners
+	// without gaps. arcLen*R is the arc length; 2*R*sin(arcLen/2) is the
+	// chord length. We use the larger arc-length approximation plus a
+	// safety margin so the wall covers the full chord.
+	segLen := wallR*float32(arcLen) + cfg.DungeonWallThickness*2
 	for s := 0; s < ringSegments; s++ {
 		if isEntranceSlot(s, entranceAngles) {
 			continue
 		}
 		angle := float32(arcLen)*float32(s) + float32(arcLen)/2
-		cx := cfg.DungeonAsteroidRadius * float32(math.Cos(float64(angle)))
-		cy := cfg.DungeonAsteroidRadius * float32(math.Sin(float64(angle)))
+		cx := wallR * float32(math.Cos(float64(angle)))
+		cy := wallR * float32(math.Sin(float64(angle)))
 		walls = append(walls, wallSpec{
 			Center:   spatial.Vec2{X: cx, Y: cy},
-			Width:    segLen + 10, // slight overlap to avoid LOS leaks
+			Width:    segLen,
 			Height:   cfg.DungeonWallThickness,
 			Rotation: angle + float32(math.Pi/2),
 		})

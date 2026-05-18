@@ -39,8 +39,17 @@ func (s *CollisionSystem) Update(dt float32) {
 			return
 		}
 
-		// Query nearby entries within the player's bounding radius + margin
-		searchRadius := col.Radius + gw.Config.AsteroidMaxRadius
+		// Query nearby entries within the player's bounding radius +
+		// margin. The margin must cover the LARGEST possible terrain
+		// bounding radius — dungeon walls have bounding radius up to
+		// roughly half their length (corridor walls can be ~30u, perimeter
+		// segments ~25u). Using AsteroidMaxRadius alone (2u) was sized for
+		// regular asteroids and missed every wall in the spatial query.
+		terrainMargin := gw.Config.AsteroidMaxRadius
+		if dungeonMargin := gw.Config.DungeonAsteroidRadius * 0.5; dungeonMargin > terrainMargin {
+			terrainMargin = dungeonMargin
+		}
+		searchRadius := col.Radius + terrainMargin
 		s.nearby = gw.Spatial.QueryRadius(pos.X, pos.Y, searchRadius, s.nearby[:0])
 
 		for _, terrain := range s.nearby {

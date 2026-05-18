@@ -91,27 +91,30 @@ export function createDungeonDisplay(): EntityDisplayObject {
       const r = radius * jitter;
       points.push(Math.cos(angle) * r, Math.sin(angle) * r);
     }
+    // Asteroid interior is rendered semi-translucent so the player ship
+    // and walls remain visible after flying inside. The outline stroke
+    // stays opaque so the silhouette is still visually identifiable.
     rock
       .poly(points)
-      .fill({ color: 0x1a1612, alpha: 1.0 })
-      .stroke({ color: 0x4a3a2a, width: px(2), alpha: 0.8 });
+      .fill({ color: 0x1a1612, alpha: 0.35 })
+      .stroke({ color: 0x4a3a2a, width: px(2), alpha: 0.9 });
 
     // Inner detail rings — pock-mark hint of crater geometry.
     rock
       .circle(0, 0, radius * 0.78)
-      .stroke({ color: 0x3a2e22, width: px(1), alpha: 0.4 });
+      .stroke({ color: 0x3a2e22, width: px(1), alpha: 0.25 });
     rock
       .circle(0, 0, radius * 0.55)
-      .stroke({ color: 0x3a2e22, width: px(1), alpha: 0.25 });
+      .stroke({ color: 0x3a2e22, width: px(1), alpha: 0.15 });
 
-    // Scattered craters — fixed seed via deterministic angles.
+    // Scattered craters — kept subtle so they don't obscure interior content.
     for (let i = 0; i < 12; i++) {
       const angle = i * 0.523 + Math.sin(i * 3.1) * 0.4;
       const distR = radius * (0.3 + ((i * 0.137) % 0.5));
       const cR = radius * (0.04 + ((i * 0.07) % 0.06));
       rock
         .circle(Math.cos(angle) * distR, Math.sin(angle) * distR, cR)
-        .fill({ color: 0x0e0a08, alpha: 0.6 });
+        .fill({ color: 0x0e0a08, alpha: 0.25 });
     }
 
     // Entrance markers — orange glowing notch + bright dot. Positions
