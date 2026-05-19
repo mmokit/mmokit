@@ -263,6 +263,8 @@ const (
 	StatusFortified   StatusType = 2 // damage reduction (Value = fraction e.g. 0.3)
 	StatusAfterburner StatusType = 3 // speed multiplier (Value = multiplier e.g. 2.5)
 	StatusShieldRegen StatusType = 4 // shield heal over time (Value = shield points per second)
+	StatusSlow        StatusType = 5 // movement multiplier (Value < 1.0 attenuates speed)
+	StatusSilence     StatusType = 6 // disables ability casts (Value unused)
 )
 
 // StatusEffect represents a single active buff or debuff.

@@ -26,6 +26,24 @@ type ShipDynamicsSystem struct {
 	}]
 }
 
+// EffectiveSpeedMul returns the combined movement multiplier from all
+// active status effects on the entity (Afterburner amplifies, Slow
+// attenuates). Returns 1.0 if se is nil. Exported so tests can verify
+// the combination directly without simulating motion.
+func EffectiveSpeedMul(se *gamecomp.StatusEffects) float32 {
+	mul := float32(1.0)
+	if se == nil {
+		return mul
+	}
+	if af := se.Get(gamecomp.StatusAfterburner); af != nil {
+		mul *= af.Value
+	}
+	if sl := se.Get(gamecomp.StatusSlow); sl != nil {
+		mul *= sl.Value
+	}
+	return mul
+}
+
 // signf returns -1, 0, or +1 based on the sign of x.
 func signf(x float32) float32 {
 	switch {
@@ -67,15 +85,15 @@ func (s *ShipDynamicsSystem) Update(dt float32) {
 			continue
 		}
 
-		// Determine effective thrust and max speed (afterburner check).
+		// Determine effective thrust and max speed.
+		// Afterburner amplifies, Slow attenuates — both flow through
+		// EffectiveSpeedMul as a single multiplier on thrust + maxSpeed.
 		thrust := ship.Thrust
 		maxSpeed := ship.MaxSpeed
-		if se := mmokit.Get[gamecomp.StatusEffects](entity); se != nil {
-			if eff := se.Get(gamecomp.StatusAfterburner); eff != nil {
-				thrust *= eff.Value
-				maxSpeed *= eff.Value
-			}
-		}
+		se := mmokit.Get[gamecomp.StatusEffects](entity)
+		speedMul := EffectiveSpeedMul(se)
+		thrust *= speedMul
+		maxSpeed *= speedMul
 
 		// 1. Always apply drag.
 		vel.X *= dragFactor
@@ -193,14 +211,13 @@ func (s *ShipDynamicsSystem) Update(dt float32) {
 		vel.X += float32(math.Cos(float64(rot.Angle))) * thrustMag
 		vel.Y += float32(math.Sin(float64(rot.Angle))) * thrustMag
 
-		// Max speed clamp — only while afterburner is active (safety).
-		// Without a boost, drag naturally limits speed, allowing afterburner
-		// speed to bleed off smoothly after the buff expires.
-		hasAB := false
-		if se := mmokit.Get[gamecomp.StatusEffects](entity); se != nil && se.Get(gamecomp.StatusAfterburner) != nil {
-			hasAB = true
-		}
-		if hasAB {
+		// Max speed clamp — only while a movement-status is active
+		// (afterburner boost or slow debuff). Without a status effect,
+		// drag naturally limits speed, allowing afterburner-built speed
+		// to bleed off smoothly after the buff expires. Slow needs the
+		// clamp to bring an already-fast ship under its reduced cap
+		// without waiting for drag.
+		if speedMul != 1.0 {
 			speed = float32(math.Sqrt(float64(vel.X*vel.X + vel.Y*vel.Y)))
 			if speed > maxSpeed {
 				scale := maxSpeed / speed

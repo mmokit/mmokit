@@ -74,6 +74,18 @@ func (s *AbilitySystem) Update(dt float32) {
 		casterE := mmokit.EntityFromECS(gw.stage, entity)
 		casterNetID := casterE.NetID()
 
+		// Silence gate: a Silenced caster cannot start any ability cast.
+		// Drop the pending cast bits (so a queued press doesn't fire the
+		// moment Silence wears off) and skip the per-slot dispatch loop
+		// entirely. Cooldowns are NOT consumed.
+		if se := mmokit.Get[gamecomp.StatusEffects](casterE); se != nil && se.Has(gamecomp.StatusSilence) {
+			gw.eng.Log.Log(CatCombatAbility, "ability cast blocked by silence: %d", casterNetID)
+			input.AbilityCast = 0
+			input.LastCastAimX = 0
+			input.LastCastAimY = 0
+			continue
+		}
+
 		for slot := range uint8(gamecomp.AbilityCount) {
 			if input.AbilityCast&(1<<slot) == 0 {
 				continue
