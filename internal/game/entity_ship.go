@@ -25,6 +25,7 @@ type ShipBundle struct {
 	Selection     *gamecomp.Selection `mmokit:"local"`
 	AbilitySet    *gamecomp.AbilitySet
 	StatusEffects *gamecomp.StatusEffects
+	Supercruise   *gamecomp.Supercruise
 	MoveTarget    *mmokit.MoveTarget
 	LockedBy      *gamecomp.LockedBy
 	ActiveMining  *gamecomp.ActiveMining
@@ -139,6 +140,7 @@ func (gw *GameWorld) SpawnPlayer(s *mmokit.PlayerSession) {
 		},
 		gamecomp.AbilitySet{},
 		gamecomp.StatusEffects{},
+		gamecomp.Supercruise{},
 		mmokit.MoveTarget{},
 		gamecomp.LockedBy{},
 		gamecomp.ActiveMining{},
