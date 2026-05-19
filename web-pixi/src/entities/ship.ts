@@ -41,7 +41,14 @@ export function createShipDisplay(): EntityDisplayObject {
   uiContainer.addChild(hpBarBg);
   uiContainer.addChild(hpBarFill);
 
-  // Supercruise channel radial (local player only, drawn while phase===1)
+  // Supercruise Active-phase glow — drawn for ALL ships while phase===2
+  // so AoI viewers can see who's in supercruise at a glance. Placed before
+  // the channel radial so it sits behind in the uiContainer paint order.
+  const supercruiseGlow = new Graphics();
+  uiContainer.addChild(supercruiseGlow);
+
+  // Supercruise channel radial — drawn for ALL ships while phase===1 so
+  // AoI viewers can telegraph the interdiction window.
   const channelRadial = new Graphics();
   uiContainer.addChild(channelRadial);
 
@@ -249,11 +256,27 @@ export function createShipDisplay(): EntityDisplayObject {
         nameTag.visible = false;
       }
 
-      // Supercruise channel radial — local player only, while phase===1.
-      // Fills clockwise from 0 to 1 over (1 - channelRemaining/CHANNEL_TIME).
+      // Supercruise Active-phase glow — drawn for ALL ships (including the
+      // local player) while phase===2. Soft pulsing circle behind the hull
+      // so nearby players can spot supercruising ships at a distance.
+      supercruiseGlow.clear();
+      if (e.phase === 2) {
+        const hullRadius = Math.sqrt(hw * hw + hh * hh);
+        const glowRadius = hullRadius * 1.6 + px(6);
+        const glowPulse = 0.55 + 0.25 * Math.sin(now * 0.005);
+        // Outer halo
+        supercruiseGlow.circle(0, 0, glowRadius).fill({ color: 0x4aa0ff, alpha: 0.12 * glowPulse });
+        // Inner halo (brighter, tighter)
+        supercruiseGlow.circle(0, 0, hullRadius * 1.25 + px(3))
+          .fill({ color: 0x88ccff, alpha: 0.18 * glowPulse });
+      }
+
+      // Supercruise channel radial — drawn for ALL ships while phase===1
+      // so AoI viewers see the interdiction window telegraphed on nearby
+      // players. Fills clockwise from 0 to 1 over (1 - channelRemaining/CHANNEL_TIME).
       // SUPERCRUISE_CHANNEL_TIME default = 3.0s; hard-coded here per spec.
       channelRadial.clear();
-      if (isMe && e.phase === 1) {
+      if (e.phase === 1) {
         const CHANNEL_TIME = 3.0;
         const remaining = e.channelRemaining;
         const progress = Math.max(0, Math.min(1, 1 - remaining / CHANNEL_TIME));
