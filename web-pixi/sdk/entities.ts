@@ -22,6 +22,11 @@ export interface ShipEntity {
   healthMax: number;
   shieldCurrent: number;
   shieldMax: number;
+  phase: number;
+  bufferHP: number;
+  bufferMax: number;
+  channelRemaining: number;
+  lockoutRemaining: number;
   lockerNetID: number;
   lockerProgress: number;
   beam0Active: boolean;

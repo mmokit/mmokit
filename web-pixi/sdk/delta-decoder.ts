@@ -10,7 +10,7 @@ import {
 } from "./_core/delta-decoder-core.js";
 import type { ShipEntity, ShipStatusEffectsItem, AsteroidEntity, StationEntity, LootCrateEntity, LootCrateItemsItem, NPCEntity, NPCStatusEffectsItem, POIEntity, AoEMarkerEntity, ProjectileEntity, LineTelegraphEntity, DungeonEntity, DungeonWallEntity, AnyEntity, DeltaWorldUpdate } from "./entities.js";
 
-const SHIPENTITY_FIELD_SIZES = [4, 4, 2, 2, 2, 2, 2, 4, 4, 4, 4, 4, 1, 1, 1, 4, 2];
+const SHIPENTITY_FIELD_SIZES = [4, 4, 2, 2, 2, 2, 2, 4, 4, 4, 4, 1, 4, 4, 4, 4, 4, 1, 1, 1, 4, 2];
 const SHIPENTITY_HAS_VAR_TAIL = true;
 
 function decodeShipEntitySnapshot(snap: Uint8Array, initial: Uint8Array | null, existing?: ShipEntity): ShipEntity {
@@ -26,6 +26,11 @@ function decodeShipEntitySnapshot(snap: Uint8Array, initial: Uint8Array | null, 
   const healthMax = readFloat32(snap, o); o += 4;
   const shieldCurrent = readFloat32(snap, o); o += 4;
   const shieldMax = readFloat32(snap, o); o += 4;
+  const phase = snap[o]; o += 1;
+  const bufferHP = readFloat32(snap, o); o += 4;
+  const bufferMax = readFloat32(snap, o); o += 4;
+  const channelRemaining = readFloat32(snap, o); o += 4;
+  const lockoutRemaining = readFloat32(snap, o); o += 4;
   const lockerNetID = readUint32(snap, o); o += 4;
   const lockerProgress = unNorm(snap[o]); o += 1;
   const beam0Active = !!snap[o]; o += 1;
@@ -44,7 +49,7 @@ function decodeShipEntitySnapshot(snap: Uint8Array, initial: Uint8Array | null, 
   const name = initial && initialOff < initial.length ? decodeLengthPrefixedStringU8(initial.subarray(initialOff)) : (existing?.name ?? "");
   if (initial && initialOff < initial.length) initialOff += 1 + initial[initialOff];
   void initialOff;
-  return { netID: 0, producedAtMs: 0, entityType: 0, worldX, worldY, velX, velY, radius, width, height, name, healthCurrent, healthMax, shieldCurrent, shieldMax, lockerNetID, lockerProgress, beam0Active, beam1Active, miningTargetNetID, angle, statusEffects };
+  return { netID: 0, producedAtMs: 0, entityType: 0, worldX, worldY, velX, velY, radius, width, height, name, healthCurrent, healthMax, shieldCurrent, shieldMax, phase, bufferHP, bufferMax, channelRemaining, lockoutRemaining, lockerNetID, lockerProgress, beam0Active, beam1Active, miningTargetNetID, angle, statusEffects };
 }
 
 const ASTEROIDENTITY_FIELD_SIZES = [4, 4, 2, 2, 2, 2, 2, 4, 4];

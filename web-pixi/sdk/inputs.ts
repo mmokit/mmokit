@@ -245,6 +245,24 @@ export class SetMoveTarget {
   }
 }
 
+/** Client-input message game.ToggleSuperCruise (typeID 0x5dbe6b99). */
+export class ToggleSuperCruise {
+  static readonly typeID = 0x5dbe6b99;
+  sequence: number = 0;
+
+  constructor(init?: Partial<ToggleSuperCruise>) {
+    if (init) Object.assign(this, init);
+  }
+
+  encode(): Uint8Array {
+    const buf = new Uint8Array(4);
+    const dv = new DataView(buf.buffer);
+    let off = 0;
+    dv.setUint32(off, this.sequence, true); off += 4;
+    return buf;
+  }
+}
+
 /** Client-input message game.Undock (typeID 0x149cc6db). */
 export class Undock {
   static readonly typeID = 0x149cc6db;
