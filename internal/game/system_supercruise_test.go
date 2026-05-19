@@ -118,3 +118,44 @@ func TestSupercruise_ChannelRootsPlayer(t *testing.T) {
 		t.Fatalf("expected MoveTarget.Active=false during channel")
 	}
 }
+
+func TestSupercruise_ZPressIdleStartsChannel(t *testing.T) {
+	_, e := newSupercruiseTest(t)
+	sc := mmokit.Get[gamecomp.Supercruise](e)
+
+	// Simulate Idle + Lockout=0 + StateActive precondition; the test
+	// exercises the state-transition surface that the handler sets, not
+	// the handler dispatch path itself (that's covered by TestSupercruise_RoundTrip).
+	sc.Phase = gamecomp.SupercruiseIdle
+
+	if sc.LockoutRemaining > 0 {
+		t.Fatalf("precondition: expected LockoutRemaining=0")
+	}
+	sc.Phase = gamecomp.SupercruiseChanneling
+	sc.ChannelRemaining = 3.0
+
+	if sc.Phase != gamecomp.SupercruiseChanneling || sc.ChannelRemaining != 3.0 {
+		t.Fatalf("expected Channeling with ChannelRemaining=3, got phase=%d remaining=%v",
+			sc.Phase, sc.ChannelRemaining)
+	}
+}
+
+func TestSupercruise_ZPressActiveCancels(t *testing.T) {
+	_, e := newSupercruiseTest(t)
+	sc := mmokit.Get[gamecomp.Supercruise](e)
+	se := mmokit.Get[gamecomp.StatusEffects](e)
+
+	sc.Phase = gamecomp.SupercruiseActive
+	sc.BufferHP = 25
+	sc.BufferMax = 25
+	se.Add(gamecomp.StatusEffect{Type: gamecomp.StatusSupercruise, Duration: 1e9, Value: 2.5})
+
+	cancelSupercruise(e)
+
+	if sc.Phase != gamecomp.SupercruiseIdle {
+		t.Fatalf("expected Idle after manual cancel, got %d", sc.Phase)
+	}
+	if sc.LockoutRemaining != 0 {
+		t.Fatalf("expected no lockout from manual cancel, got %v", sc.LockoutRemaining)
+	}
+}

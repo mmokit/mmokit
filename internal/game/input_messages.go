@@ -106,3 +106,13 @@ type LootAll struct {
 	Sequence   uint32
 	CrateNetID uint32
 }
+
+// ToggleSuperCruise — discrete Z-key press. Server toggles the player's
+// Supercruise.Phase:
+//   Idle      → Channeling (if LockoutRemaining=0, not docked/dead)
+//   Channeling/Active → Idle (manual cancel, no lockout)
+// Buffer drain + combat lockout are owned by the damage hook in
+// verb_damage.go, not by this handler.
+type ToggleSuperCruise struct {
+	Sequence uint32
+}

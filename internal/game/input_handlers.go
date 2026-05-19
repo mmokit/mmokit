@@ -67,6 +67,9 @@ func RegisterInputs(mmo *mmokit.Process) {
 		if msg.Slot >= gamecomp.AbilityCount {
 			return
 		}
+		// Firing any ability cancels supercruise (auto-cancel site).
+		// No lockout — auto-cancel is voluntary, lockout is combat-only.
+		cancelSupercruise(player)
 		input.AbilityCast |= 1 << msg.Slot
 		input.LastCastAimX = msg.AimX
 		input.LastCastAimY = msg.AimY
@@ -162,6 +165,8 @@ func RegisterInputs(mmo *mmokit.Process) {
 			return
 		}
 		connID := conn.ConnID
+		// Initiating docking cancels supercruise.
+		cancelSupercruise(player)
 		gw.stage.Commands().Defer(func() {
 			gw.startDockingFor(connID)
 		})
@@ -290,6 +295,51 @@ func RegisterInputs(mmo *mmokit.Process) {
 		gw.stage.Commands().Defer(func() {
 			gw.performLootAllFor(connID, crateNetID)
 		})
+	})
+
+	// ToggleSuperCruise — Z key press. Idle → Channeling, or Channeling/
+	// Active → Idle (manual cancel). Lockout (LockoutRemaining > 0) blocks
+	// re-entry. State machine lives in SupercruiseSystem; this handler
+	// only flips Phase / arms the timer.
+	mmokit.HandleClient(mmo, func(player mmokit.Entity, msg *ToggleSuperCruise) {
+		state := mmokit.PlayerStateOf(player)
+		if state != mmokit.StateActive {
+			return
+		}
+		input := mmokit.Get[gamecomp.PlayerInput](player)
+		if input == nil {
+			return
+		}
+		input.Sequence = msg.Sequence
+
+		sc := mmokit.Get[gamecomp.Supercruise](player)
+		if sc == nil {
+			return
+		}
+		gw := gameWorldOfEntity(player)
+		if gw == nil {
+			return
+		}
+		switch sc.Phase {
+		case gamecomp.SupercruiseIdle:
+			if sc.LockoutRemaining > 0 {
+				gw.eng.Log.Log(CatSupercruise, "z-press ignored (lockout=%.1f) netID=%d",
+					sc.LockoutRemaining, player.NetID())
+				return
+			}
+			sc.Phase = gamecomp.SupercruiseChanneling
+			sc.ChannelRemaining = gw.Config.SupercruiseChannelTime
+			if mt := mmokit.Get[mmokit.MoveTarget](player); mt != nil {
+				mt.Active = false
+			}
+			gw.eng.Log.Log(CatSupercruise, "channel start: netID=%d duration=%.1f",
+				player.NetID(), sc.ChannelRemaining)
+		case gamecomp.SupercruiseChanneling, gamecomp.SupercruiseActive:
+			phase := sc.Phase
+			cancelSupercruise(player)
+			gw.eng.Log.Log(CatSupercruise, "manual cancel: netID=%d phase=%d",
+				player.NetID(), phase)
+		}
 	})
 }
 
