@@ -42,6 +42,7 @@ func GameSetup(coord *mmokit.Process) {
 	RegisterDamageVerb(coord)
 	RegisterMiningVerb(coord)
 	RegisterStatusVerb(coord)
+	RegisterHealVerb(coord)
 	RegisterDeathVerbs(coord)
 	RegisterBeamToggleVerb(coord)
 	// Death observer: fires Killed exactly once per entity per Health drop-to-zero.
