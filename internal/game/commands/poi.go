@@ -81,7 +81,6 @@ func collectPOIRows(stage *mmokit.Stage) []POIRow {
 	if gw == nil {
 		return nil
 	}
-	cooldownSec := gw.POICooldownSec()
 	var rows []POIRow
 	mmokit.ForEach2(stage, func(e mmokit.Entity, p *gamecomp.POI, pos *mmokit.Position) {
 		nid := e.NetID()
@@ -93,6 +92,7 @@ func collectPOIRows(stage *mmokit.Stage) []POIRow {
 		}
 		cooldownLeft := "ready"
 		if p.Status == gamecomp.POIStatusCooldown || p.Status == gamecomp.POIStatusCleared {
+			cooldownSec := gw.POICooldownSec(p.Tier)
 			elapsed := time.Since(time.Unix(0, p.ClearedAt))
 			remain := time.Duration(cooldownSec)*time.Second - elapsed
 			if remain > 0 {

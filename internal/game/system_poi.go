@@ -170,6 +170,8 @@ func (s *POISystem) applyLeash(poiNetID uint32, ids []uint32) {
 
 // onClear drops the Flux bounty crate at the POI center and flips the
 // component to Cooldown, stamping ClearedAt with server-local time.
+// Bounty is scaled by the POI's tier reward multiplier (TierDef.FluxRewardMul):
+// T1=1.0x, T2=2.5x, T3=6.0x.
 func (s *POISystem) onClear(poi *gamecomp.POI, pos *mmokit.Position, poiNetID uint32) {
 	gw := s.gw
 	roster := rosterForIdx(poi.RosterDefIdx)
@@ -177,22 +179,27 @@ func (s *POISystem) onClear(poi *gamecomp.POI, pos *mmokit.Position, poiNetID ui
 	for _, m := range roster.Members {
 		rosterCount += m.Count
 	}
-	bounty := gw.Config.POIBaseClearFlux + gw.Config.POIPerKillFluxBonus*int32(rosterCount)
+	rewardMul := tierDef(poi.Tier).FluxRewardMul
+	if rewardMul <= 0 {
+		rewardMul = 1.0
+	}
+	base := gw.Config.POIBaseClearFlux + gw.Config.POIPerKillFluxBonus*int32(rosterCount)
+	bounty := int32(float32(base) * rewardMul)
 	gw.SpawnLootCrate(pos.X, pos.Y, map[uint32]int32{
 		item.CreditsItemID: bounty,
 	})
 
 	poi.Status = gamecomp.POIStatusCooldown
 	poi.ClearedAt = time.Now().UnixNano()
-	gw.eng.Log.Log(CatPOI, "poi: cleared netID=%d bounty=%d roster=%s",
-		poiNetID, bounty, roster.Name)
+	gw.eng.Log.Log(CatPOI, "poi: cleared netID=%d tier=%d bounty=%d roster=%s",
+		poiNetID, poi.Tier, bounty, roster.Name)
 }
 
 // tickCooldown reports whether the cooldown has elapsed; the caller
 // runs repopulate AFTER the entities.Iter query closes (spawning NPCs
 // inside the iteration would trip ark's locked-world check).
 func (s *POISystem) tickCooldown(poi *gamecomp.POI, pos *mmokit.Position, poiNetID uint32, now int64) bool {
-	cooldownSec := poiCooldownSec(s.gw)
+	cooldownSec := poiCooldownSec(s.gw, poi.Tier)
 	elapsed := now - poi.ClearedAt
 	return elapsed >= int64(cooldownSec)*int64(time.Second)
 }
@@ -210,10 +217,17 @@ func (s *POISystem) repopulate(poi *gamecomp.POI, pos *mmokit.Position, poiNetID
 
 // poiCooldownSec returns the cooldown duration (seconds) for POIs in
 // this world's root cell. The station cell uses the shorter
-// tutorial-friendly cooldown; all other cells use the standard one.
-func poiCooldownSec(gw *GameWorld) int32 {
+// tutorial-friendly cooldown regardless of tier; outside the station
+// cell the tier-table CooldownSec wins (T1=180s, T2=300s, T3=900s),
+// falling back to the legacy NonStationCellPOIClearCooldown when the
+// tier table doesn't pin a value.
+func poiCooldownSec(gw *GameWorld, tier uint8) int32 {
 	if gw.RootCell == gw.Config.StationCell {
 		return gw.Config.StationCellPOIClearCooldown
+	}
+	td := tierDef(tier)
+	if td.CooldownSec > 0 {
+		return td.CooldownSec
 	}
 	return gw.Config.NonStationCellPOIClearCooldown
 }

@@ -108,10 +108,10 @@ func (gw *GameWorld) PoiRosters(poiNetID uint32) []uint32 {
 
 // POICooldownSec is the exported view of poiCooldownSec for cmdsys
 // command handlers in internal/game/commands. Returns the configured
-// cooldown (seconds) for POIs in this world's root cell — station cell
-// uses the tutorial-friendly cooldown, every other cell uses the
-// standard one.
-func (gw *GameWorld) POICooldownSec() int32 { return poiCooldownSec(gw) }
+// cooldown (seconds) for a POI of the given tier in this world's root
+// cell — station cell uses the tutorial-friendly cooldown regardless
+// of tier; outside the station cell the per-tier CooldownSec wins.
+func (gw *GameWorld) POICooldownSec(tier uint8) int32 { return poiCooldownSec(gw, tier) }
 
 // DungeonChambers returns the per-dungeon chamber tracking map used by
 // admin cmdsys handlers (dungeon.list / dungeon.respawn /
