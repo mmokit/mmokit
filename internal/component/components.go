@@ -452,6 +452,7 @@ type POI struct {
 	Status       uint8 `net:"u8"`
 	AnchorRadius float32
 	LeashRadius  float32
+	Tier         uint8 `net:"initial"` // 1..3, immutable per POI
 	ClearedAt    int64  // unix nanos (server time, not ClusterClock)
 	RosterDefIdx uint16
 }

@@ -15,6 +15,7 @@ type POIDef struct {
 	X, Y      float32
 	Type      uint8
 	RosterIdx uint16
+	Tier      uint8 // 1..3
 }
 
 // GeneratePOIs returns the procgen list of POIs for a cell. Mirrors
@@ -61,7 +62,7 @@ func GeneratePOIs(cell, stationCell mmokit.CellCoord, cfg *GameConfig, belts []A
 			continue
 		}
 
-		return []POIDef{{X: x, Y: y, Type: 0 /* combat */, RosterIdx: 0}}
+		return []POIDef{{X: x, Y: y, Type: 0 /* combat */, RosterIdx: 0, Tier: 1}}
 	}
 	return nil
 }

@@ -250,7 +250,7 @@ func registerPOISpawn(reg *cmdsys.Registry, coord *mmokit.Process) error {
 			localY := args.Y - minY
 
 			return mmokit.CmdOnLoop(ctx, cell.Engine, func() (POISpawnResult, error) {
-				netID := gw.SpawnPOI(localX, localY, gamecomp.POITypeCombat, args.RosterIdx)
+				netID := gw.SpawnPOI(localX, localY, gamecomp.POITypeCombat, args.RosterIdx, 1)
 				return POISpawnResult{NetID: netID, CellID: cellID}, nil
 			})
 		},

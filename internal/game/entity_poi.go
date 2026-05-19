@@ -20,13 +20,13 @@ func (gw *GameWorld) spawnPOIs() {
 	belts := GenerateBelts(gw.RootCell, gw.Config.StationCell)
 	defs := GeneratePOIs(gw.RootCell, gw.Config.StationCell, gw.Config, belts)
 	for _, d := range defs {
-		gw.SpawnPOI(d.X, d.Y, d.Type, d.RosterIdx)
+		gw.SpawnPOI(d.X, d.Y, d.Type, d.RosterIdx, d.Tier)
 	}
 }
 
 // SpawnPOI creates a POI entity at the given local position and spawns
 // its roster of NPCs anchored to it. Returns the POI's network ID.
-func (gw *GameWorld) SpawnPOI(x, y float32, poiType uint8, rosterIdx uint16) uint32 {
+func (gw *GameWorld) SpawnPOI(x, y float32, poiType uint8, rosterIdx uint16, tier uint8) uint32 {
 	e := gw.stage.Spawn(
 		mmokit.Position{X: x, Y: y},
 		mmokit.EntityKind{Type: gamecomp.KindPOI},
@@ -36,6 +36,7 @@ func (gw *GameWorld) SpawnPOI(x, y float32, poiType uint8, rosterIdx uint16) uin
 			AnchorRadius: gw.Config.POIAnchorRadius,
 			LeashRadius:  gw.Config.POILeashRadius,
 			RosterDefIdx: rosterIdx,
+			Tier:         tier,
 		},
 	)
 
