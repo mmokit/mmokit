@@ -38,6 +38,10 @@ type BucketedDecoration struct {
 // BucketByCell groups every placed entity by the cell that currently owns
 // its world position, using the live coords.CellSize. The returned map is
 // keyed by CellID; missing keys mean "no manifest content for that cell."
+//
+// Regions are intentionally not bucketed: they are world-coord polygons /
+// annuli that span multiple cells, so callers do point-in-region tests
+// against the global Regions list.
 func (s *Snapshot) BucketByCell() map[CellID]*CellBucket {
 	out := map[CellID]*CellBucket{}
 	get := func(c CellID) *CellBucket {
