@@ -26,14 +26,22 @@ type NPCBundle struct {
 }
 
 // NPCSpawnModifiers customizes a spawn-time NPC: elite roster variants
-// (multiplied HP/damage/speed for ChamberSideBoss "champion" entries) and
-// the BossGuardian "main boss" flag for ChamberTerminal rosters. Pass the
-// zero value for vanilla spawns. Modifier flags are spawn-time only —
-// they're applied to the captured NPCAI stats during SpawnNPC and not
-// stored on the entity afterwards.
+// (multiplied HP/damage/speed for ChamberSideBoss "champion" entries),
+// the BossGuardian "main boss" flag for ChamberTerminal rosters, and
+// explicit HP/Damage/Shield multipliers (used by tier-based difficulty
+// scaling — they stack on top of the Elite scaling). Pass the zero
+// value for vanilla spawns. Modifier flags/values are spawn-time only —
+// they're applied to the captured NPCAI/Health/Shield stats during
+// SpawnNPC and not stored on the entity afterwards.
+//
+// A zero multiplier is treated as 1.0 (no-op) so callers can fill in
+// only the fields they care about.
 type NPCSpawnModifiers struct {
-	Elite bool // multiplies HP/Damage/Speed via Config.BossSolo* multipliers
-	Main  bool // reserved for BossGuardian-only hooks (no per-stat multiplier here — the archetype itself already encodes the Main-boss base stats)
+	Elite     bool    // multiplies HP/Damage/Speed via Config.BossSolo* multipliers
+	Main      bool    // reserved for BossGuardian-only hooks (no per-stat multiplier here — the archetype itself already encodes the Main-boss base stats)
+	HPMul     float32 // additional HP multiplier; zero treated as 1.0
+	DmgMul    float32 // additional damage multiplier; zero treated as 1.0
+	ShieldMul float32 // additional shield multiplier; zero treated as 1.0
 }
 
 // SpawnNPC creates an NPC ship of the given archetype, anchored at the
@@ -52,6 +60,19 @@ func (gw *GameWorld) SpawnNPC(x, y float32, archetype uint8, poiNetID uint32, mo
 		d.HP *= gw.Config.BossSoloHPMultiplier
 		d.MaxSpeed *= gw.Config.BossSoloSpeedMultiplier
 		d.DamagePerShot *= gw.Config.BossSoloDmgMultiplier
+	}
+
+	// Tier / explicit multipliers stack on top of Elite scaling. Zero
+	// is treated as 1.0 (no-op) so callers can fill in only the fields
+	// they care about.
+	if mods.HPMul > 0 {
+		d.HP *= mods.HPMul
+	}
+	if mods.DmgMul > 0 {
+		d.DamagePerShot *= mods.DmgMul
+	}
+	if mods.ShieldMul > 0 {
+		d.Shield *= mods.ShieldMul
 	}
 
 	// Initial ability-cooldown offsets so a pack of NPCs that aggro on the
