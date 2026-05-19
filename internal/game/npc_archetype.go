@@ -5,10 +5,13 @@ package game
 // Slot 2 originally held Kamikaze ("charge + beep + detonate"); replaced
 // with Lancer (telegraphed line-charge) at the same wire value.
 const (
-	ArchetypeBrawler      uint8 = 0
-	ArchetypeArtillery    uint8 = 1
-	ArchetypeLancer       uint8 = 2
-	ArchetypeBossGuardian uint8 = 3 // PVE v3: stationary terminal-chamber main boss with periodic add-spawn mechanic
+	ArchetypeBrawler        uint8 = 0
+	ArchetypeArtillery      uint8 = 1
+	ArchetypeLancer         uint8 = 2
+	ArchetypeBossGuardian   uint8 = 3 // PVE v3: stationary terminal-chamber main boss with periodic add-spawn mechanic
+	ArchetypeEliteBrawler   uint8 = 4 // PVE v3 tiered: Brawler with EliteStatMultiplier applied to HP/Damage/Speed
+	ArchetypeEliteArtillery uint8 = 5 // PVE v3 tiered: Artillery with EliteStatMultiplier applied to HP/Damage/Speed
+	ArchetypeEliteLancer    uint8 = 6 // PVE v3 tiered: Lancer with EliteStatMultiplier applied to HP/Damage/Speed
 )
 
 // NPCAIState — current state-machine slot for an NPC.
@@ -118,6 +121,24 @@ func archetypeDefaults(cfg *GameConfig, kind uint8) ArchetypeDefaults {
 			DamagePerShot:  cfg.BrawlerDamagePerShot * cfg.BossMainDmgMultiplier,
 			FireRate:       cfg.BrawlerFireRate,
 		}
+	case ArchetypeEliteBrawler:
+		d := archetypeDefaults(cfg, ArchetypeBrawler)
+		d.HP *= cfg.EliteStatMultiplier
+		d.DamagePerShot *= cfg.EliteStatMultiplier
+		d.MaxSpeed *= cfg.EliteStatMultiplier
+		return d
+	case ArchetypeEliteArtillery:
+		d := archetypeDefaults(cfg, ArchetypeArtillery)
+		d.HP *= cfg.EliteStatMultiplier
+		d.DamagePerShot *= cfg.EliteStatMultiplier
+		d.MaxSpeed *= cfg.EliteStatMultiplier
+		return d
+	case ArchetypeEliteLancer:
+		d := archetypeDefaults(cfg, ArchetypeLancer)
+		d.HP *= cfg.EliteStatMultiplier
+		d.DamagePerShot *= cfg.EliteStatMultiplier
+		d.MaxSpeed *= cfg.EliteStatMultiplier
+		return d
 	}
 	panic("archetypeDefaults: unknown archetype")
 }
@@ -141,9 +162,9 @@ const (
 // don't (Brawler — pure hitscan).
 func archetypeAoEParams(cfg *GameConfig, arch uint8) (radius, castTime float32, fairness FairnessFactor) {
 	switch arch {
-	case ArchetypeArtillery:
+	case ArchetypeArtillery, ArchetypeEliteArtillery:
 		return cfg.ArtilleryAoERadius, cfg.ArtilleryCastTime, FairnessEffort
-	case ArchetypeLancer:
+	case ArchetypeLancer, ArchetypeEliteLancer:
 		// Lancer is a line-charge, not a circular AoE. Counter-play is
 		// to sidestep the telegraphed line or punish the recovery, not
 		// "stand outside this circle." FocusFire instructs the fairness

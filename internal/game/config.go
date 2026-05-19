@@ -195,6 +195,14 @@ type GameConfig struct {
 	BossMainDmgMultiplier      float32   `json:"boss_main_dmg_multiplier"`
 	BossMainAddSpawnThresholds []float32 `json:"boss_main_add_spawn_thresholds"`
 
+	// EliteStatMultiplier scales HP / DamagePerShot / MaxSpeed for the
+	// ArchetypeEliteBrawler / ArchetypeEliteArtillery / ArchetypeEliteLancer
+	// variants used by T3 (and beyond) tiered rosters. Applied at
+	// archetypeDefaults() time, before any NPCSpawnModifiers (Elite/HPMul/
+	// DmgMul/ShieldMul) — so a tiered Elite Lancer in an EliteAnchor roster
+	// stacks: base × EliteStatMultiplier × tier StatMultiplier.
+	EliteStatMultiplier float32 `json:"elite_stat_multiplier"`
+
 	// Loot
 	ChamberMobPackFluxBase      float32 `json:"chamber_mob_pack_flux_base"`
 	ChamberSideBossFluxBase     float32 `json:"chamber_side_boss_flux_base"`
@@ -350,6 +358,8 @@ func DefaultGameConfig() GameConfig {
 		BossMainHPMultiplier:       10.0,
 		BossMainDmgMultiplier:      2.0,
 		BossMainAddSpawnThresholds: []float32{0.75, 0.5, 0.25},
+
+		EliteStatMultiplier: 1.3,
 
 		// Loot
 		ChamberMobPackFluxBase:      200,

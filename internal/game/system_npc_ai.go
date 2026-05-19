@@ -302,7 +302,7 @@ func (s *NPCAISystem) tickEngage(self mmokit.Entity, ai *gamecomp.NPCAI,
 	// Artillery: paint AoE marker on target position when cooldown elapses,
 	// then transition to Cast (stationary while casting). Defers spawn so
 	// the new entity is created after the entities.Iter query closes.
-	if ai.Archetype == ArchetypeArtillery {
+	if ai.Archetype == ArchetypeArtillery || ai.Archetype == ArchetypeEliteArtillery {
 		if ai.CastCooldown > 0 {
 			ai.CastCooldown -= dt
 		}
@@ -336,7 +336,7 @@ func (s *NPCAISystem) tickEngage(self mmokit.Entity, ai *gamecomp.NPCAI,
 	// perpendicular during the 1s telegraph; sticking to the predicted
 	// line gets you hit. Spawning the telegraph entity is deferred so the
 	// new entity isn't created during the entities.Iter query.
-	if ai.Archetype == ArchetypeLancer && dist <= s.gw.Config.LancerLanceRange && ai.RecoverRemaining <= 0 {
+	if (ai.Archetype == ArchetypeLancer || ai.Archetype == ArchetypeEliteLancer) && dist <= s.gw.Config.LancerLanceRange && ai.RecoverRemaining <= 0 {
 		chargeDir := float32(math.Atan2(float64(dy), float64(dx)))
 		chargeLen := s.gw.Config.LancerChargeSpeed * s.gw.Config.LancerChargeTime
 		px2, py2 := pos.X, pos.Y
@@ -364,7 +364,7 @@ func (s *NPCAISystem) tickEngage(self mmokit.Entity, ai *gamecomp.NPCAI,
 	// existing hitscan auto-attack (below). On cooldown the special triggers
 	// first, halts the brawler for a visible windup, then resolves a
 	// rectangle hit-check against any player inside the telegraph footprint.
-	if ai.Archetype == ArchetypeBrawler {
+	if ai.Archetype == ArchetypeBrawler || ai.Archetype == ArchetypeEliteBrawler {
 		if ai.SpecialCooldown > 0 {
 			ai.SpecialCooldown -= dt
 		}

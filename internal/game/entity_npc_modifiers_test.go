@@ -66,3 +66,15 @@ func TestSpawnNPC_ShieldMultiplier(t *testing.T) {
 		t.Fatalf("Shield.Max = %v, want %v", s.Max, baseShield*3.0)
 	}
 }
+
+func TestSpawnNPC_EliteLancer_StatsAreScaled(t *testing.T) {
+	gw, _ := newTestGameWorld()
+	baseHP := gw.Config.LancerHP
+
+	npc := gw.SpawnNPC(0, 0, ArchetypeEliteLancer, 0, NPCSpawnModifiers{})
+	h := mmokit.Get[gamecomp.Health](npc)
+	expected := baseHP * gw.Config.EliteStatMultiplier
+	if absf(h.Max-expected) > 0.1 {
+		t.Fatalf("EliteLancer HP = %v, want %v", h.Max, expected)
+	}
+}

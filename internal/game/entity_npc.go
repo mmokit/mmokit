@@ -85,11 +85,11 @@ func (gw *GameWorld) SpawnNPC(x, y float32, archetype uint8, poiNetID uint32, mo
 	jitter := gw.Config.NPCAttackJitter
 	var initCastCD, initSpecialCD, initRecover float32
 	switch archetype {
-	case ArchetypeArtillery:
+	case ArchetypeArtillery, ArchetypeEliteArtillery:
 		initCastCD = rand.Float32() * gw.Config.ArtilleryCastCooldown * (1 + jitter)
-	case ArchetypeBrawler:
+	case ArchetypeBrawler, ArchetypeEliteBrawler:
 		initSpecialCD = rand.Float32() * gw.Config.BrawlerSpecialCooldown * (1 + jitter)
-	case ArchetypeLancer:
+	case ArchetypeLancer, ArchetypeEliteLancer:
 		// RecoverRemaining is the gate for Lancer charges (see tickEngage:
 		// the windup trigger requires RecoverRemaining<=0). Stamping a
 		// small initial recover prevents instant-windup-on-aggro for
