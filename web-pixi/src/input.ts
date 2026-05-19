@@ -11,6 +11,7 @@ import {
   Respawn,
   SelectTarget,
   SetMoveTarget,
+  ToggleSuperCruise,
   Undock,
 } from "../sdk/index.js";
 
@@ -375,6 +376,13 @@ export function setupInput(
       }));
       state.moveTarget = { x: 0, y: 0, active: false };
       state.pendingLootCrateId = 0;
+    }
+
+    // Z: toggle supercruise. Server owns the state machine + channel
+    // timing + lockout enforcement — client just sends the intent.
+    if (e.code === "KeyZ" && !state.isDead && !state.isDocked && state.connected && state.client) {
+      state.inputSeq++;
+      state.client.send(new ToggleSuperCruise({ sequence: state.inputSeq }));
     }
 
   });
