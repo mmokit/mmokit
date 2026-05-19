@@ -265,6 +265,7 @@ const (
 	StatusShieldRegen StatusType = 4 // shield heal over time (Value = shield points per second)
 	StatusSlow        StatusType = 5 // movement multiplier (Value < 1.0 attenuates speed)
 	StatusSilence     StatusType = 6 // disables ability casts (Value unused)
+	StatusSupercruise StatusType = 7 // speed multiplier while in active supercruise (Value = multiplier e.g. 2.5)
 )
 
 // StatusEffect represents a single active buff or debuff.
@@ -338,6 +339,26 @@ func (s *StatusEffects) TickDown(dt float32) {
 			i++
 		}
 	}
+}
+
+// SupercruisePhase identifies the player's supercruise state.
+type SupercruisePhase uint8
+
+const (
+	SupercruiseIdle       SupercruisePhase = 0
+	SupercruiseChanneling SupercruisePhase = 1
+	SupercruiseActive     SupercruisePhase = 2
+)
+
+// Supercruise tracks the state machine for the Z-bound travel-mode toggle.
+// Phase transitions are driven by SupercruiseSystem (tick) and verb_damage.go
+// (damage drains BufferHP; combat involvement stamps LockoutRemaining).
+type Supercruise struct {
+	Phase            SupercruisePhase `net:"u8"`
+	BufferHP         float32          `net:"f32"` // remaining damage buffer (Active phase only)
+	BufferMax        float32          `net:"f32"` // snapshot at Channeling→Active transition
+	ChannelRemaining float32          `net:"f32"` // seconds left in channel (Channeling phase only)
+	LockoutRemaining float32          `net:"f32"` // seconds until Z press is accepted again
 }
 
 // Leashing marks an NPC currently returning to its anchor under the
