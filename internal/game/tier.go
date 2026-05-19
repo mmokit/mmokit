@@ -39,3 +39,13 @@ func TierForCellCenter(cell, stationCell mmokit.CellCoord) uint8 {
 	d := distFromStation(cell, centerLocal, centerLocal, stationCell)
 	return tierForDist(d)
 }
+
+// TierForDist is the exported wrapper around tierForDist for callers
+// outside this package (e.g. the operator-driven poi.spawn console verb).
+func TierForDist(d float32) uint8 { return tierForDist(d) }
+
+// DistFromStation is the exported wrapper around distFromStation for
+// callers outside this package.
+func DistFromStation(cell mmokit.CellCoord, localX, localY float32, stationCell mmokit.CellCoord) float32 {
+	return distFromStation(cell, localX, localY, stationCell)
+}

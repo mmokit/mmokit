@@ -249,8 +249,15 @@ func registerPOISpawn(reg *cmdsys.Registry, coord *mmokit.Process) error {
 			localX := args.X - minX
 			localY := args.Y - minY
 
+			// Derive tier from world distance so operator-spawned POIs
+			// match the gradient at their position — same rule the procgen
+			// path uses (per-POI tier, not cell-tier).
+			cellCoord := mmokit.CellCoord{CellX: int32(cell.Cell.X), CellY: int32(cell.Cell.Y)}
+			stationCell := gw.Config.StationCell
+			tier := game.TierForDist(game.DistFromStation(cellCoord, localX, localY, stationCell))
+
 			return mmokit.CmdOnLoop(ctx, cell.Engine, func() (POISpawnResult, error) {
-				netID := gw.SpawnPOI(localX, localY, gamecomp.POITypeCombat, args.RosterIdx, 1)
+				netID := gw.SpawnPOI(localX, localY, gamecomp.POITypeCombat, args.RosterIdx, tier)
 				return POISpawnResult{NetID: netID, CellID: cellID}, nil
 			})
 		},
