@@ -389,6 +389,28 @@ export class CellMap {
       this.markerLayer.removeChildAt(this.markerLayer.children.length - 1);
     }
 
+    // Tier rings — concentric circles around each station marking the
+    // T1/T2 and T2/T3 boundaries (16384u + 32768u from station center).
+    // Mirrors server-side tierTable.InnerRadius values. Drawn first so
+    // station + player markers paint on top.
+    const TIER_BOUNDARIES: Array<{ radius: number; color: number }> = [
+      { radius: 16384, color: 0xe8b53b },
+      { radius: 32768, color: 0xd04545 },
+    ];
+    for (const station of state.mapStations) {
+      const stationAbsX = station.cellX * CELL_SIZE + station.localX;
+      const stationAbsY = station.cellY * CELL_SIZE + station.localY;
+      const mx = pw / 2 + (stationAbsX - playerAbsX) * pixelsPerUnit;
+      const my = ph / 2 + (stationAbsY - playerAbsY) * pixelsPerUnit;
+      for (const band of TIER_BOUNDARIES) {
+        const screenR = band.radius * pixelsPerUnit;
+        if (screenR < 4) continue; // too zoomed out to be useful
+        this.markerGfx
+          .circle(mx, my, screenR)
+          .stroke({ color: band.color, width: 1, alpha: 0.22 });
+      }
+    }
+
     // Station markers
     for (const station of state.mapStations) {
       const stationAbsX = station.cellX * CELL_SIZE + station.localX;
