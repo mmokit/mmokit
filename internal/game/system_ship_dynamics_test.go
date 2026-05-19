@@ -253,3 +253,22 @@ func TestShipTurn_AlreadyFacingTarget(t *testing.T) {
 		t.Errorf("rot.Angle = %f, want ~0", rot.Angle)
 	}
 }
+
+func TestEffectiveSpeedMul_Supercruise(t *testing.T) {
+	se := &gamecomp.StatusEffects{}
+	se.Add(gamecomp.StatusEffect{Type: gamecomp.StatusSupercruise, Duration: 999, Value: 2.5})
+	got := EffectiveSpeedMul(se)
+	if got != 2.5 {
+		t.Fatalf("expected supercruise mul=2.5, got %v", got)
+	}
+}
+
+func TestEffectiveSpeedMul_SupercruiseStacksWithSlow(t *testing.T) {
+	se := &gamecomp.StatusEffects{}
+	se.Add(gamecomp.StatusEffect{Type: gamecomp.StatusSupercruise, Duration: 999, Value: 2.5})
+	se.Add(gamecomp.StatusEffect{Type: gamecomp.StatusSlow, Duration: 999, Value: 0.5})
+	got := EffectiveSpeedMul(se)
+	if got != 1.25 {
+		t.Fatalf("expected 2.5 * 0.5 = 1.25, got %v", got)
+	}
+}

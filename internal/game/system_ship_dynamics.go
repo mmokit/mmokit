@@ -38,6 +38,9 @@ func EffectiveSpeedMul(se *gamecomp.StatusEffects) float32 {
 	if af := se.Get(gamecomp.StatusAfterburner); af != nil {
 		mul *= af.Value
 	}
+	if sc := se.Get(gamecomp.StatusSupercruise); sc != nil {
+		mul *= sc.Value
+	}
 	if sl := se.Get(gamecomp.StatusSlow); sl != nil {
 		mul *= sl.Value
 	}
