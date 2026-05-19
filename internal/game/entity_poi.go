@@ -44,8 +44,8 @@ func (gw *GameWorld) SpawnPOI(x, y float32, poiType uint8, rosterIdx uint16, tie
 	gw.spawnPOIRoster(x, y, poiNetID, rosterIdx, tier)
 	gw.poiRosters[poiNetID] = gw.collectRosterNetIDs(poiNetID)
 
-	gw.eng.Log.Log(CatPOI, "poi: spawned netID=%d type=%d pos=(%.0f,%.0f) roster=%s",
-		poiNetID, poiType, x, y, rosterForIdx(rosterIdx).Name)
+	gw.eng.Log.Log(CatPOI, "poi: spawned netID=%d tier=%d type=%d pos=(%.0f,%.0f) roster=%s",
+		poiNetID, tier, poiType, x, y, rosterForIdx(rosterIdx).Name)
 	return poiNetID
 }
 

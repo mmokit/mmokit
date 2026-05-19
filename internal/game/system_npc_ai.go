@@ -773,11 +773,12 @@ func (s *NPCAISystem) tickSupport(e mmokit.Entity, ai *gamecomp.NPCAI,
 	var dirX, dirY float32
 	var hasDir bool
 
-	// Find the nearest player by scanning ShipControl owners (players
-	// have ShipControl; NPCs do not).
+	// Find the nearest player by scanning PlayerConn owners (the canonical
+	// player marker used everywhere else in the AI / ability / projectile
+	// systems).
 	var nearestPlayerNetID uint32
 	nearestPlayerDist2 := float32(1e9)
-	mmokit.ForEach2(gw.stage, func(pe mmokit.Entity, _ *gamecomp.ShipControl, ppos *mmokit.Position) {
+	mmokit.ForEach2(gw.stage, func(pe mmokit.Entity, _ *mmokit.PlayerConn, ppos *mmokit.Position) {
 		dx := ppos.X - pos.X
 		dy := ppos.Y - pos.Y
 		d2 := dx*dx + dy*dy

@@ -211,8 +211,8 @@ func (s *POISystem) repopulate(poi *gamecomp.POI, pos *mmokit.Position, poiNetID
 	gw.spawnPOIRoster(pos.X, pos.Y, poiNetID, poi.RosterDefIdx, poi.Tier)
 	gw.poiRosters[poiNetID] = gw.collectRosterNetIDs(poiNetID)
 	poi.Status = gamecomp.POIStatusActive
-	gw.eng.Log.Log(CatPOI, "poi: repopulated netID=%d roster_size=%d",
-		poiNetID, len(gw.poiRosters[poiNetID]))
+	gw.eng.Log.Log(CatPOI, "poi: repopulated netID=%d tier=%d roster_size=%d",
+		poiNetID, poi.Tier, len(gw.poiRosters[poiNetID]))
 }
 
 // poiCooldownSec returns the cooldown duration (seconds) for POIs in

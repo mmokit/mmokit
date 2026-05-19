@@ -180,7 +180,6 @@ type GameConfig struct {
 
 	POIAnchorRadius                float32 `json:"poi_anchor_radius"`
 	POILeashRadius                 float32 `json:"poi_leash_radius"`
-	POIPerCellProbability          float32 `json:"poi_per_cell_probability"`
 	POIBeltClearance               float32 `json:"poi_belt_clearance"`
 	POIStationClearance            float32 `json:"poi_station_clearance"`
 	POIPlacementMargin             float32 `json:"poi_placement_margin"`
@@ -358,7 +357,6 @@ func DefaultGameConfig() GameConfig {
 		StationPOIOffsetY:              -200,
 		POIAnchorRadius:                30,
 		POILeashRadius:                 120,
-		POIPerCellProbability:          0.3,
 		POIBeltClearance:               40,
 		POIStationClearance:            400,
 		POIPlacementMargin:             200,
