@@ -152,8 +152,10 @@ function decodePOIEntitySnapshot(snap: Uint8Array, initial: Uint8Array | null, e
   let initialOff = 0;
   const status = initial && initialOff < initial.length ? initial[initialOff] : (existing?.status ?? 0);
   if (initial && initialOff < initial.length) initialOff += 1;
+  const tier = initial && initialOff < initial.length ? initial[initialOff] : (existing?.tier ?? 0);
+  if (initial && initialOff < initial.length) initialOff += 1;
   void initialOff;
-  return { netID: 0, producedAtMs: 0, entityType: 5, worldX, worldY, velX, velY, radius, width, height, type, status };
+  return { netID: 0, producedAtMs: 0, entityType: 5, worldX, worldY, velX, velY, radius, width, height, type, status, tier };
 }
 
 const AOEMARKERENTITY_FIELD_SIZES = [4, 4, 2, 2, 2, 2, 2, 4, 4, 4, 4, 1, 1, 1];

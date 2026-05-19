@@ -50,6 +50,24 @@ export class Damage {
   }
 }
 
+/** Broadcast-eligible event game.Heal (typeID 0xb5796df9). */
+export class Heal {
+  static readonly typeID = 0xb5796df9;
+  amount: number = 0;
+  source: number = 0;
+  target: number = 0;
+
+  static decode(buf: Uint8Array): Heal {
+    const dv = new DataView(buf.buffer, buf.byteOffset, buf.byteLength);
+    let off = 0;
+    const m = new Heal();
+    m.amount = dv.getFloat32(off, true); off += 4;
+    m.source = dv.getUint32(off, true); off += 4;
+    m.target = dv.getUint32(off, true); off += 4;
+    return m;
+  }
+}
+
 /** Broadcast-eligible event game.Killed (typeID 0x6e8c9b2a). */
 export class Killed {
   static readonly typeID = 0x6e8c9b2a;

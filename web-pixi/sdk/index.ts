@@ -6,7 +6,7 @@ export type { AnyEntity, DeltaWorldUpdate } from "./entities.js";
 export * from "./entities.js";
 export { SpaceDeltaDecoder } from "./delta-decoder.js";
 export { Transport } from "./transport.js";
-export { BankContents, BeamClip, BeamToggle, CellChange, CurrencyUpdate, Damage, DebugInfo, Docked, DockingState, EquipResult, Killed, MapData, MarketTradeNotification, MineExtract, OperationError, PlayerDied, PlayerEntityAssigned, PlayerOwnState, PlayerSpawned, Pong, ServerConfig, Status, TransferResult, TypedDispatcher, WorldDelta } from "./broadcasts.js";
+export { BankContents, BeamClip, BeamToggle, CellChange, CurrencyUpdate, Damage, DebugInfo, Docked, DockingState, EquipResult, Heal, Killed, MapData, MarketTradeNotification, MineExtract, OperationError, PlayerDied, PlayerEntityAssigned, PlayerOwnState, PlayerSpawned, Pong, ServerConfig, Status, TransferResult, TypedDispatcher, WorldDelta } from "./broadcasts.js";
 export { CastAbility, ChannelAim, Dock, Equip, InventoryTransfer, JettisonItem, LootAll, LootItem, Ping, Respawn, SelectTarget, SetMoveTarget, Undock } from "./inputs.js";
 export { AuthChangePasswordRequest, AuthChangePasswordResponse, AuthLoginRequest, AuthLoginResponse, AuthLogoutRequest, AuthLogoutResponse, AuthRegisterRequest, AuthRegisterResponse, AuthValidateTokenRequest, AuthValidateTokenResponse, BankRequest, BankResponse, MarketBrowseRequest, MarketCancelOrderRequest, MarketCreateOrderRequest, MarketInstantTradeRequest, MarketMyOrdersRequest, MarketMyOrdersResponse, MarketOrderBookResponse, MarketOrderResultResponse, RepairRequest, RepairResponse } from "./operations.js";
 export { EntityType } from "./entityType.js";

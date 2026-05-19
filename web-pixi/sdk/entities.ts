@@ -162,6 +162,7 @@ export interface POIEntity {
   height: number;
   type: number;
   status: number;
+  tier: number;
 }
 
 /** Entity kind 6. */
