@@ -41,7 +41,7 @@ func (gw *GameWorld) SpawnPOI(x, y float32, poiType uint8, rosterIdx uint16, tie
 	)
 
 	poiNetID := e.NetID()
-	gw.spawnPOIRoster(x, y, poiNetID, rosterIdx)
+	gw.spawnPOIRoster(x, y, poiNetID, rosterIdx, tier)
 	gw.poiRosters[poiNetID] = gw.collectRosterNetIDs(poiNetID)
 
 	gw.eng.Log.Log(CatPOI, "poi: spawned netID=%d type=%d pos=(%.0f,%.0f) roster=%s",
@@ -50,17 +50,22 @@ func (gw *GameWorld) SpawnPOI(x, y float32, poiType uint8, rosterIdx uint16, tie
 }
 
 // spawnPOIRoster spawns all NPC members of the POI's roster around the
-// POI center.
-func (gw *GameWorld) spawnPOIRoster(cx, cy float32, poiNetID uint32, rosterIdx uint16) {
+// POI center. Tier scales HP/Dmg/Shield per the TierDef table.
+func (gw *GameWorld) spawnPOIRoster(cx, cy float32, poiNetID uint32, rosterIdx uint16, tier uint8) {
 	rng := rand.New(rand.NewPCG(uint64(poiNetID), uint64(rosterIdx)))
 	roster := rosterForIdx(rosterIdx)
+	mul := tierDef(tier).StatMultiplier
 	for _, m := range roster.Members {
 		for i := 0; i < m.Count; i++ {
 			angle := rng.Float64() * (2 * math.Pi)
 			r := rng.Float32() * m.SpreadRadius
 			ox := r * float32(math.Cos(angle))
 			oy := r * float32(math.Sin(angle))
-			gw.SpawnNPC(cx+ox, cy+oy, m.Archetype, poiNetID, NPCSpawnModifiers{})
+			gw.SpawnNPC(cx+ox, cy+oy, m.Archetype, poiNetID, NPCSpawnModifiers{
+				HPMul:     mul,
+				DmgMul:    mul,
+				ShieldMul: mul,
+			})
 		}
 	}
 }

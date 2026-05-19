@@ -24,7 +24,7 @@ func TestStarterArenaEncounter(t *testing.T) {
 	// transitions read back through gw.poiRosters, so the anchor link
 	// is benign for this smoke check.
 	const cx, cy float32 = 1000, 1000
-	gw.spawnPOIRoster(cx, cy, /*poiNetID*/ 1, /*rosterIdx*/ 0)
+	gw.spawnPOIRoster(cx, cy, /*poiNetID*/ 1, /*rosterIdx*/ 0, /*tier*/ 1)
 
 	// Expected count from rosters[0]: 1 Artillery + 2 Brawler + 3 Lancer = 6.
 	var npcCount int

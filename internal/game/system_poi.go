@@ -201,7 +201,7 @@ func (s *POISystem) tickCooldown(poi *gamecomp.POI, pos *mmokit.Position, poiNet
 // to Active. Must run outside the entities.Iter query.
 func (s *POISystem) repopulate(poi *gamecomp.POI, pos *mmokit.Position, poiNetID uint32) {
 	gw := s.gw
-	gw.spawnPOIRoster(pos.X, pos.Y, poiNetID, poi.RosterDefIdx)
+	gw.spawnPOIRoster(pos.X, pos.Y, poiNetID, poi.RosterDefIdx, poi.Tier)
 	gw.poiRosters[poiNetID] = gw.collectRosterNetIDs(poiNetID)
 	poi.Status = gamecomp.POIStatusActive
 	gw.eng.Log.Log(CatPOI, "poi: repopulated netID=%d roster_size=%d",
