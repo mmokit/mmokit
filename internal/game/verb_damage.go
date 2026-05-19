@@ -121,6 +121,55 @@ func (gw *GameWorld) ApplyDamage(target mmokit.Entity, damage float32, attackerN
 		return 0
 	}
 
+	// Supercruise interaction (Albion-style travel mode).
+	// - Any damage to a player in any phase stamps a 10s lockout that
+	//   blocks the next Z press once they're back in Idle.
+	// - Channeling phase is interrupted: Phase → Idle, ChannelRemaining
+	//   cleared.
+	// - Active phase: damage drains BufferHP 1:1. While buffer > 0,
+	//   Health is untouched (buffer absorbs). When buffer hits 0, the
+	//   player is knocked out (Phase → Idle, StatusSupercruise removed),
+	//   and the same damage event does NOT spill to Health (per spec:
+	//   sequential ApplyDamage calls; this single call is fully absorbed).
+	if sc := mmokit.Get[gamecomp.Supercruise](target); sc != nil {
+		sc.LockoutRemaining = max32(sc.LockoutRemaining, gw.Config.SupercruiseLockoutTime)
+		switch sc.Phase {
+		case gamecomp.SupercruiseChanneling:
+			sc.Phase = gamecomp.SupercruiseIdle
+			sc.ChannelRemaining = 0
+			gw.eng.Log.Log(CatSupercruise, "channel cancel: netID=%d reason=damage", target.NetID())
+		case gamecomp.SupercruiseActive:
+			sc.BufferHP -= damage
+			gw.eng.Log.Log(CatSupercruise, "buffer drain: netID=%d remaining=%.1f damage=%.1f",
+				target.NetID(), sc.BufferHP, damage)
+			if sc.BufferHP <= 0 {
+				sc.BufferHP = 0
+				sc.Phase = gamecomp.SupercruiseIdle
+				if se := mmokit.Get[gamecomp.StatusEffects](target); se != nil {
+					for i := uint8(0); i < se.Count; i++ {
+						if se.Effects[i].Type == gamecomp.StatusSupercruise {
+							se.Remove(i)
+							break
+						}
+					}
+				}
+				gw.eng.Log.Log(CatSupercruise, "knockout: netID=%d", target.NetID())
+			}
+			// Active buffer absorbs the entire damage event — return early so
+			// Health is unaffected (and shield isn't refreshed/depleted by a
+			// hit that supercruise ate).
+			return damage
+		}
+	}
+	// Attacker-side lockout: stamp the attacker's Supercruise too.
+	if attackerNetID != 0 {
+		if att := mmokit.EntityByNetID(gw.stage, attackerNetID); att.Alive() {
+			if asc := mmokit.Get[gamecomp.Supercruise](att); asc != nil {
+				asc.LockoutRemaining = max32(asc.LockoutRemaining, gw.Config.SupercruiseLockoutTime)
+			}
+		}
+	}
+
 	// Check Fortified buff for damage reduction
 	if se := mmokit.Get[gamecomp.StatusEffects](target); se != nil {
 		if eff := se.Get(gamecomp.StatusFortified); eff != nil {
@@ -161,4 +210,13 @@ func (gw *GameWorld) ApplyDamage(target mmokit.Entity, damage float32, attackerN
 		attackerNetID, target.NetID(), totalDamage, shieldAbsorbed, health.Current, health.Max)
 
 	return totalDamage
+}
+
+// max32 returns the larger of two float32 values. Used by the supercruise
+// lockout stamp to ensure we never shorten an in-flight lockout.
+func max32(a, b float32) float32 {
+	if a > b {
+		return a
+	}
+	return b
 }
