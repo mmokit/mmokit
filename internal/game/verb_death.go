@@ -106,6 +106,9 @@ func RegisterDeathVerbs(p *mmokit.Process) {
 func (gw *GameWorld) handlePlayerKilled(target mmokit.Entity, killer mmokit.Entity) {
 	// Caller (killedHandler) verified PlayerConn presence via mmokit.Has[PlayerConn].
 	connID := mmokit.Get[mmokit.PlayerConn](target).ConnID
+	// Death cancels any in-flight supercruise (no lockout — respawn will
+	// start with a fresh component).
+	cancelSupercruise(target)
 
 	mmokit.SendEvent(gw.stage, connID, &PlayerDied{KillerID: killer.NetID()})
 
