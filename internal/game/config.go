@@ -362,7 +362,7 @@ func DefaultGameConfig() GameConfig {
 		POIPlacementMargin:             200,
 		POIBaseClearFlux:               500,
 		POIPerKillFluxBonus:            100,
-		POIIntraCellClearance:          1000,
+		POIIntraCellClearance:          500,
 		StationCellPOIClearCooldown:    180,
 		NonStationCellPOIClearCooldown: 600,
 

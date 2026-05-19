@@ -72,7 +72,7 @@ func placePOI(rng *rand.Rand, cfg *GameConfig, belts []AsteroidBelt, existing []
 	usable := coords.CellSize - margin*2
 	intraMin2 := cfg.POIIntraCellClearance * cfg.POIIntraCellClearance
 
-	for attempt := 0; attempt < 30; attempt++ {
+	for attempt := 0; attempt < 100; attempt++ {
 		x := margin + rng.Float32()*usable
 		y := margin + rng.Float32()*usable
 

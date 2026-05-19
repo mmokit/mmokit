@@ -111,10 +111,14 @@ type TierDef struct {
 
 // tierTable is the single source of truth for tier behavior. Modify
 // this table to retune; nothing else should hard-code tier values.
+//
+// Densities are tuned so a player traveling at MaxSpeed=68u/s encounters
+// content roughly every ~20s in T1 (~1500u between POIs in an 8192u
+// cell), every ~60s in T2, and roughly per-cell at T3 destination raids.
 var tierTable = []TierDef{
-	{Tier: 1, InnerRadius: 0, POIsPerCell: [2]int{3, 5}, StatMultiplier: 1.0, FluxRewardMul: 1.0, Rosters: []uint16{SmallSkirmishIdx, StarterArenaIdx}, CooldownSec: 180},
-	{Tier: 2, InnerRadius: 16384, POIsPerCell: [2]int{1, 2}, StatMultiplier: 1.5, FluxRewardMul: 2.5, Rosters: []uint16{MediumWarbandIdx, DisruptorCellIdx}, CooldownSec: 300},
-	{Tier: 3, InnerRadius: 32768, POIsPerCell: [2]int{0, 1}, StatMultiplier: 2.5, FluxRewardMul: 6.0, Rosters: []uint16{HeavyBattalionIdx, EliteAnchorIdx}, CooldownSec: 900},
+	{Tier: 1, InnerRadius: 0, POIsPerCell: [2]int{30, 50}, StatMultiplier: 1.0, FluxRewardMul: 1.0, Rosters: []uint16{SmallSkirmishIdx, StarterArenaIdx}, CooldownSec: 180},
+	{Tier: 2, InnerRadius: 16384, POIsPerCell: [2]int{10, 20}, StatMultiplier: 1.5, FluxRewardMul: 2.5, Rosters: []uint16{MediumWarbandIdx, DisruptorCellIdx}, CooldownSec: 300},
+	{Tier: 3, InnerRadius: 32768, POIsPerCell: [2]int{1, 5}, StatMultiplier: 2.5, FluxRewardMul: 6.0, Rosters: []uint16{HeavyBattalionIdx, EliteAnchorIdx}, CooldownSec: 900},
 }
 
 // tierDef returns the TierDef for a tier (1-indexed). Out-of-range
