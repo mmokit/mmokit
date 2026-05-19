@@ -115,3 +115,31 @@ func TestSupercruise_AttackerLockoutOnDealtDamage(t *testing.T) {
 		t.Fatalf("expected attacker lockout=10s, got %v", attackerSC.LockoutRemaining)
 	}
 }
+
+// Regression: when the victim is in Active phase, the buffer-drain branch
+// returns early. Attacker-lockout stamping must still fire — combat
+// involvement is involvement regardless of target phase.
+func TestSupercruise_AttackerLockoutOnDamageToActiveVictim(t *testing.T) {
+	gw, victim := newSupercruiseTest(t)
+	victimSC := mmokit.Get[gamecomp.Supercruise](victim)
+
+	// Put the victim in Active so the buffer absorbs and triggers early-return.
+	victimSC.Phase = gamecomp.SupercruiseActive
+	victimSC.BufferMax = 25
+	victimSC.BufferHP = 25
+
+	// Spawn an attacker entity.
+	attackerNetID := uint32(2)
+	newTestShip(t, gw, attackerNetID, 100, 0)
+	attacker := mmokit.EntityByNetID(gw.stage, attackerNetID)
+	mmokit.Set(attacker, gamecomp.StatusEffects{})
+	mmokit.Set(attacker, gamecomp.Supercruise{})
+	attackerSC := mmokit.Get[gamecomp.Supercruise](attacker)
+
+	gw.ApplyDamage(victim, 5, attackerNetID)
+
+	if attackerSC.LockoutRemaining != 10 {
+		t.Fatalf("expected attacker lockout=10s even when victim was Active, got %v",
+			attackerSC.LockoutRemaining)
+	}
+}
