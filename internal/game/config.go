@@ -17,7 +17,7 @@ import (
 // ConfigVersion tracks breaking config changes. Bump this when defaults change
 // in a way that is incompatible with saved configs (e.g. unit rescale).
 // When the saved version doesn't match, defaults are used and re-saved.
-const ConfigVersion = 13
+const ConfigVersion = 14
 
 // GameConfig holds all tunable game parameters.
 type GameConfig struct {
@@ -233,6 +233,12 @@ type GameConfig struct {
 	NavGridCellSize                float32 `json:"nav_grid_cell_size"`
 	PathRepathIntervalSec          float32 `json:"path_repath_interval_sec"`
 	PathRepathTargetMovedThreshold float32 `json:"path_repath_target_moved_threshold"`
+
+	// Supercruise (Albion-style mount toggle bound to Z)
+	SupercruiseSpeedMul    float32 `json:"supercruise_speed_mul"`    // 2.5 default
+	SupercruiseBufferPct   float32 `json:"supercruise_buffer_pct"`   // 0.25 default — fraction of Health.Max
+	SupercruiseChannelTime float32 `json:"supercruise_channel_time"` // 3.0 default
+	SupercruiseLockoutTime float32 `json:"supercruise_lockout_time"` // 10.0 default
 }
 
 // DefaultGameConfig returns sensible defaults for game balance.
@@ -409,6 +415,12 @@ func DefaultGameConfig() GameConfig {
 		NavGridCellSize:                30,
 		PathRepathIntervalSec:          1.5,
 		PathRepathTargetMovedThreshold: 50,
+
+		// Supercruise
+		SupercruiseSpeedMul:    2.5,
+		SupercruiseBufferPct:   0.25,
+		SupercruiseChannelTime: 3.0,
+		SupercruiseLockoutTime: 10.0,
 	}
 }
 

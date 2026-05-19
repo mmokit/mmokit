@@ -45,6 +45,8 @@ const (
 	CatLOS = "los"
 	// pathfind — NPC pathfinding (nav-grid bake, A* queries, repaths).
 	CatPathfind = "pathfind"
+	// supercruise — channel/active/lockout state changes for the Z-bound travel toggle.
+	CatSupercruise = "supercruise"
 )
 
 // GameCategories lists every game-specific log category.
@@ -57,4 +59,5 @@ var GameCategories = []string{
 	CatNPCAI,
 	CatPOI,
 	CatDungeon, CatDungeonGen, CatLOS, CatPathfind,
+	CatSupercruise,
 }
