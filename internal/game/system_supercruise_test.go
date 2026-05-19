@@ -159,3 +159,67 @@ func TestSupercruise_ZPressActiveCancels(t *testing.T) {
 		t.Fatalf("expected no lockout from manual cancel, got %v", sc.LockoutRemaining)
 	}
 }
+
+func TestSupercruise_RoundTrip(t *testing.T) {
+	gw, e := newSupercruiseTest(t)
+	sc := mmokit.Get[gamecomp.Supercruise](e)
+	se := mmokit.Get[gamecomp.StatusEffects](e)
+
+	sys := &SupercruiseSystem{}
+	mmokit.WireSystem(sys, gw.stage.ECSWorld(), gw.eng, gw.stage)
+	sys.Init()
+
+	// Phase 1: Z press starts channel.
+	sc.Phase = gamecomp.SupercruiseChanneling
+	sc.ChannelRemaining = gw.Config.SupercruiseChannelTime
+
+	// Tick the full channel (60 ticks at 0.05 dt = 3.0s nominal; one
+	// extra tick to account for float32 accumulation slack — see
+	// TestSupercruise_ChannelCompletesToActive for details).
+	for i := 0; i < 61; i++ {
+		sys.Update(0.05)
+	}
+	if sc.Phase != gamecomp.SupercruiseActive {
+		t.Fatalf("phase 1: expected Active after channel, got %d", sc.Phase)
+	}
+	if !se.Has(gamecomp.StatusSupercruise) {
+		t.Fatalf("phase 1: expected StatusSupercruise applied")
+	}
+	if EffectiveSpeedMul(se) != 2.5 {
+		t.Fatalf("phase 1: expected speed mul=2.5, got %v", EffectiveSpeedMul(se))
+	}
+
+	// Phase 2: take partial damage — buffer drains, lockout stamped, still Active.
+	gw.ApplyDamage(e, 10, 0)
+	if sc.Phase != gamecomp.SupercruiseActive {
+		t.Fatalf("phase 2: expected still Active, got %d", sc.Phase)
+	}
+	if sc.BufferHP != 15 {
+		t.Fatalf("phase 2: expected BufferHP=15, got %v", sc.BufferHP)
+	}
+	if sc.LockoutRemaining != 10 {
+		t.Fatalf("phase 2: expected lockout=10, got %v", sc.LockoutRemaining)
+	}
+
+	// Phase 3: take remaining damage — knockout, Active → Idle.
+	gw.ApplyDamage(e, 15, 0)
+	if sc.Phase != gamecomp.SupercruiseIdle {
+		t.Fatalf("phase 3: expected Idle after knockout, got %d", sc.Phase)
+	}
+	if se.Has(gamecomp.StatusSupercruise) {
+		t.Fatalf("phase 3: expected StatusSupercruise removed after knockout")
+	}
+	if EffectiveSpeedMul(se) != 1.0 {
+		t.Fatalf("phase 3: expected speed mul=1.0 after knockout, got %v", EffectiveSpeedMul(se))
+	}
+
+	// Phase 4: lockout decays — Z press during lockout is blocked, then allowed.
+	sys.Update(5.0)
+	if sc.LockoutRemaining != 5.0 {
+		t.Fatalf("phase 4: expected lockout=5 after 5s, got %v", sc.LockoutRemaining)
+	}
+	sys.Update(5.0)
+	if sc.LockoutRemaining != 0 {
+		t.Fatalf("phase 4: expected lockout=0 after 10s, got %v", sc.LockoutRemaining)
+	}
+}
