@@ -12,6 +12,7 @@ const (
 	ArchetypeEliteBrawler   uint8 = 4 // PVE v3 tiered: Brawler with EliteStatMultiplier applied to HP/Damage/Speed
 	ArchetypeEliteArtillery uint8 = 5 // PVE v3 tiered: Artillery with EliteStatMultiplier applied to HP/Damage/Speed
 	ArchetypeEliteLancer    uint8 = 6 // PVE v3 tiered: Lancer with EliteStatMultiplier applied to HP/Damage/Speed
+	ArchetypeSupport        uint8 = 7 // PVE v3 tiered: heals allies, retreats from players (no offensive output)
 )
 
 // NPCAIState — current state-machine slot for an NPC.
@@ -139,6 +140,15 @@ func archetypeDefaults(cfg *GameConfig, kind uint8) ArchetypeDefaults {
 		d.DamagePerShot *= cfg.EliteStatMultiplier
 		d.MaxSpeed *= cfg.EliteStatMultiplier
 		return d
+	case ArchetypeSupport:
+		return ArchetypeDefaults{
+			HP:            cfg.SupportHP,
+			Shield:        cfg.SupportShield,
+			MaxSpeed:      cfg.SupportMaxSpeed,
+			TurnRate:      cfg.SupportTurnRate,
+			DamagePerShot: 0, // Support deals no damage
+			// AttackRange unused; Support targets allies via separate code path.
+		}
 	}
 	panic("archetypeDefaults: unknown archetype")
 }

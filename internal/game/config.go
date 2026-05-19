@@ -97,6 +97,15 @@ type GameConfig struct {
 	LancerChargeDamage float32 `json:"lancer_charge_damage"`
 	LancerRecoverTime  float32 `json:"lancer_recover_time"`
 
+	SupportHP           float32 `json:"support_hp"`
+	SupportShield       float32 `json:"support_shield"`
+	SupportMaxSpeed     float32 `json:"support_max_speed"`
+	SupportTurnRate     float32 `json:"support_turn_rate"`
+	SupportHealRange    float32 `json:"support_heal_range"`
+	SupportHealAmount   float32 `json:"support_heal_amount"`
+	SupportHealCooldown float32 `json:"support_heal_cooldown"`
+	SupportRetreatDist  float32 `json:"support_retreat_dist"`
+
 	// AI shared
 	AggroDeescalationSec float32 `json:"aggro_deescalation_sec"`
 	// NPCAttackJitter is the random fraction applied to every NPC attack
@@ -276,6 +285,15 @@ func DefaultGameConfig() GameConfig {
 		LancerAggroRadius: 60, LancerLockRange: 40, LancerLanceRange: 30,
 		LancerWindupTime: 1.5, LancerChargeSpeed: 50, LancerChargeTime: 0.8,
 		LancerChargeWidth: 3, LancerChargeDamage: 35, LancerRecoverTime: 2.5,
+
+		SupportHP:           100,
+		SupportShield:       40,
+		SupportMaxSpeed:     5,
+		SupportTurnRate:     1.2,
+		SupportHealRange:    200,
+		SupportHealAmount:   40,
+		SupportHealCooldown: 4.0,
+		SupportRetreatDist:  60,
 
 		AggroDeescalationSec: 6,
 		NPCAttackJitter:      0.4,
