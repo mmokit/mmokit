@@ -55,3 +55,61 @@ func TestPOIGen_RespectsClearance(t *testing.T) {
 		}
 	}
 }
+
+// TestGeneratePOIs_T1CellYieldsMultiplePOIs verifies a cell adjacent to
+// the station (T1) yields 3-5 POIs per the tier table.
+func TestGeneratePOIs_T1CellYieldsMultiplePOIs(t *testing.T) {
+	station := mmokit.CellCoord{CellX: 0, CellY: 0}
+	cell := mmokit.CellCoord{CellX: 1, CellY: 0}
+	cfg := DefaultGameConfig()
+	defs := GeneratePOIs(cell, station, &cfg, nil)
+	if len(defs) < 3 || len(defs) > 5 {
+		t.Fatalf("T1 cell POIs = %d, want 3..5", len(defs))
+	}
+}
+
+// TestGeneratePOIs_T3CellYieldsFewPOIs verifies a far cell (T3) yields
+// 0-1 POIs per the tier table.
+func TestGeneratePOIs_T3CellYieldsFewPOIs(t *testing.T) {
+	station := mmokit.CellCoord{CellX: 0, CellY: 0}
+	cell := mmokit.CellCoord{CellX: 5, CellY: 0} // ~40k units out, T3
+	cfg := DefaultGameConfig()
+	defs := GeneratePOIs(cell, station, &cfg, nil)
+	if len(defs) > 1 {
+		t.Fatalf("T3 cell POIs = %d, want 0..1", len(defs))
+	}
+}
+
+// TestGeneratePOIs_IntraCellClearance verifies POIs in the same cell
+// respect POIIntraCellClearance from each other.
+func TestGeneratePOIs_IntraCellClearance(t *testing.T) {
+	station := mmokit.CellCoord{CellX: 0, CellY: 0}
+	cell := mmokit.CellCoord{CellX: 1, CellY: 0}
+	cfg := DefaultGameConfig()
+	defs := GeneratePOIs(cell, station, &cfg, nil)
+	for i, a := range defs {
+		for j, b := range defs {
+			if i >= j {
+				continue
+			}
+			dx := a.X - b.X
+			dy := a.Y - b.Y
+			d2 := dx*dx + dy*dy
+			min2 := cfg.POIIntraCellClearance * cfg.POIIntraCellClearance
+			if d2 < min2 {
+				t.Fatalf("POIs %d,%d too close: %v < %v", i, j, d2, min2)
+			}
+		}
+	}
+}
+
+// TestGeneratePOIs_StationCellReturnsNil verifies the station cell
+// returns nil (dungeon replaces legacy combat POI there).
+func TestGeneratePOIs_StationCellReturnsNil(t *testing.T) {
+	station := mmokit.CellCoord{CellX: 0, CellY: 0}
+	cfg := DefaultGameConfig()
+	defs := GeneratePOIs(station, station, &cfg, nil)
+	if defs != nil {
+		t.Fatalf("station cell defs = %v, want nil", defs)
+	}
+}
