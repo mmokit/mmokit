@@ -398,6 +398,12 @@ type NPCAI struct {
 	SpecialDirAngle       float32
 	SpecialTelegraphNetID uint32
 
+	// PVE-tier (Support): countdown between heal casts. Independent of
+	// SpecialCooldown so Support doesn't interfere with Brawler/Disruptor
+	// state. Defaults to 0 on spawn — first heal fires as soon as a
+	// target appears.
+	HealCooldown float32
+
 	// TargetNetID — the NPC's current engage target. Updated each tick by
 	// the closest-enemy logic in tickEngage; consumed by dispatch methods
 	// (tickEngage hitscan, tickCast for Artillery, etc.).

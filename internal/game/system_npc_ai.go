@@ -78,6 +78,14 @@ func (s *NPCAISystem) Update(dt float32) {
 			continue
 		}
 
+		// Support uses its own minimal anchor/kite/heal loop — no state
+		// machine. Dispatched before the AIState switch so we skip the
+		// Idle→Approach→Acquire→Engage flow entirely.
+		if ai.Archetype == ArchetypeSupport {
+			s.tickSupport(self, ai, pos, vel, dt)
+			continue
+		}
+
 		switch ai.State {
 		case AIStateIdle:
 			s.tickIdle(self, ai, pos, vel, now, dt)
@@ -724,6 +732,121 @@ func (s *NPCAISystem) applyMotion(ai *gamecomp.NPCAI, vel *mmokit.Velocity,
 		}
 	case MotionStationary:
 		vel.X, vel.Y = 0, 0
+	}
+}
+
+// tickSupport advances a Support NPC. Support has its own minimal
+// behavior — never enters Engage/Approach/Leash. Each tick:
+//   - If nearest player is inside SupportRetreatDist, kite directly away.
+//   - Else, drift toward the POI anchor.
+//   - Tick HealCooldown. When ready, pick the lowest-HP roster ally
+//     within SupportHealRange (excluding self / dead / full-HP), Heal,
+//     reset HealCooldown.
+//
+// Movement applied by writing directly into Velocity — no Pathing or
+// state machine needed for Support's behavior.
+func (s *NPCAISystem) tickSupport(e mmokit.Entity, ai *gamecomp.NPCAI,
+	pos *mmokit.Position, vel *mmokit.Velocity, dt float32,
+) {
+	gw := s.gw
+
+	var dirX, dirY float32
+	var hasDir bool
+
+	// Find the nearest player by scanning ShipControl owners (players
+	// have ShipControl; NPCs do not).
+	var nearestPlayerNetID uint32
+	nearestPlayerDist2 := float32(1e9)
+	mmokit.ForEach2(gw.stage, func(pe mmokit.Entity, _ *gamecomp.ShipControl, ppos *mmokit.Position) {
+		dx := ppos.X - pos.X
+		dy := ppos.Y - pos.Y
+		d2 := dx*dx + dy*dy
+		if d2 < nearestPlayerDist2 {
+			nearestPlayerDist2 = d2
+			nearestPlayerNetID = pe.NetID()
+		}
+	})
+	retreat2 := gw.Config.SupportRetreatDist * gw.Config.SupportRetreatDist
+
+	if nearestPlayerNetID != 0 && nearestPlayerDist2 < retreat2 {
+		pe := mmokit.EntityByNetID(gw.stage, nearestPlayerNetID)
+		if ppos := mmokit.Get[mmokit.Position](pe); ppos != nil {
+			fx := pos.X - ppos.X
+			fy := pos.Y - ppos.Y
+			n := float32(math.Sqrt(float64(fx*fx + fy*fy)))
+			if n > 0.001 {
+				dirX, dirY = fx/n, fy/n
+				hasDir = true
+			}
+		}
+	} else {
+		if anchor := mmokit.Get[gamecomp.DungeonAnchor](e); anchor != nil && anchor.DungeonNetID != 0 {
+			poi := mmokit.EntityByNetID(gw.stage, anchor.DungeonNetID)
+			if poi.Alive() {
+				if poiPos := mmokit.Get[mmokit.Position](poi); poiPos != nil {
+					fx := poiPos.X - pos.X
+					fy := poiPos.Y - pos.Y
+					n := float32(math.Sqrt(float64(fx*fx + fy*fy)))
+					if n > 1.0 {
+						dirX, dirY = fx/n, fy/n
+						hasDir = true
+					}
+				}
+			}
+		}
+	}
+
+	if hasDir {
+		vel.X = dirX * gw.Config.SupportMaxSpeed
+		vel.Y = dirY * gw.Config.SupportMaxSpeed
+	} else {
+		vel.X = 0
+		vel.Y = 0
+	}
+
+	ai.HealCooldown -= dt
+	if ai.HealCooldown > 0 {
+		return
+	}
+
+	// Pick lowest-HP ally on the same POI within SupportHealRange.
+	myPOI := uint32(0)
+	if a := mmokit.Get[gamecomp.DungeonAnchor](e); a != nil {
+		myPOI = a.DungeonNetID
+	}
+	healRange2 := gw.Config.SupportHealRange * gw.Config.SupportHealRange
+
+	var bestTarget mmokit.Entity
+	bestPct := float32(1.0)
+	mmokit.ForEach2(gw.stage, func(other mmokit.Entity, _ *gamecomp.NPCAI, otherPos *mmokit.Position) {
+		if other.NetID() == e.NetID() {
+			return
+		}
+		oa := mmokit.Get[gamecomp.DungeonAnchor](other)
+		if oa == nil || oa.DungeonNetID != myPOI {
+			return
+		}
+		dx := otherPos.X - pos.X
+		dy := otherPos.Y - pos.Y
+		if dx*dx+dy*dy > healRange2 {
+			return
+		}
+		h := mmokit.Get[gamecomp.Health](other)
+		if h == nil || h.Current <= 0 || h.Current >= h.Max {
+			return
+		}
+		pct := h.Current / h.Max
+		if pct < bestPct {
+			bestPct = pct
+			bestTarget = other
+		}
+	})
+
+	if bestTarget.Alive() {
+		gw.Heal(e, bestTarget, gw.Config.SupportHealAmount)
+		ai.HealCooldown = gw.Config.SupportHealCooldown
+		gw.eng.Log.Log(CatNPCAI, "support: heal source=%d target=%d",
+			e.NetID(), bestTarget.NetID())
 	}
 }
 
