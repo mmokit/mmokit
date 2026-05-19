@@ -130,6 +130,17 @@
         #health-bar .bar-fill { background: rgba(255,60,60,0.8); }
         #cargo-bar { background: rgba(200,180,60,0.2); border-color: rgba(200,180,60,0.5); }
         #cargo-bar .bar-fill { background: rgba(200,180,60,0.8); }
+        #supercruise-bar { background: rgba(120,200,255,0.2); border-color: rgba(120,200,255,0.6); }
+        #supercruise-bar .bar-fill { background: rgba(120,200,255,0.85); }
+
+        /* Supercruise lockout indicator (Z hint) */
+        #supercruise-lockout {
+            position: absolute; bottom: 240px; left: 50%; transform: translateX(-50%);
+            color: #f88; font-size: 13px; font-weight: bold;
+            text-shadow: 0 0 4px #000, 0 0 6px #f44;
+            z-index: 10; pointer-events: none; display: none;
+            font-family: monospace;
+        }
 
         /* Station prompt */
         #station-prompt {
@@ -755,7 +766,12 @@
             <div class="bar-fill"></div>
             <div class="bar-label">CARGO 0%</div>
         </div>
+        <div id="supercruise-bar" class="bar-container" style="display:none">
+            <div class="bar-fill"></div>
+            <div class="bar-label">SUPERCRUISE 0 / 0</div>
+        </div>
     </div>
+    <div id="supercruise-lockout"></div>
     <div id="station-prompt">Press X to interact with the station</div>
     <div id="chat">
         <div id="chat-messages"></div>

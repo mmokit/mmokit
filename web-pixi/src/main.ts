@@ -30,6 +30,7 @@ import {
   updateDeathScreen,
   updateCargoPanel,
   updateToasts,
+  updateSupercruiseLockout,
 } from "./ui/hud";
 import { audio } from "./audio/audio-manager";
 import { initEscMenu, updateEscMenu } from "./ui/esc-menu";
@@ -413,6 +414,7 @@ async function main() {
     // HTML UI updates
     updateHUD(state);
     updateStatusBars(state);
+    updateSupercruiseLockout(state);
     updateStationPrompt(state);
     updateDeathScreen(state);
     updateCargoPanel(state);

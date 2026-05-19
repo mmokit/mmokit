@@ -7,7 +7,7 @@ import {
   CELL_SIZE,
 } from "../constants";
 import { SETTLEMENT_CURRENCY_ID, type GameState } from "../state";
-import { getCombat } from "../entity-accessors";
+import { getCombat, getShip } from "../entity-accessors";
 import { ITEM_ABILITIES, type AbilityInfo } from "./ability-bar";
 import { needsRebuild } from "./memo";
 
@@ -661,6 +661,43 @@ export function updateStatusBars(state: GameState): void {
     cargoFill.style.background = "rgba(255,60,60,0.9)";
   } else {
     cargoFill.style.background = "rgba(200,180,60,0.8)";
+  }
+
+  // Supercruise integrity bar — visible while phase===2 (Active). Drains
+  // visibly as bufferHP/bufferMax falls. Server-authoritative — read straight
+  // off the replicated ShipEntity fields, no client-side state.
+  const ship = getShip(myEntity);
+  const scBar = document.getElementById("supercruise-bar") as HTMLElement | null;
+  if (scBar) {
+    if (ship && ship.phase === 2 && ship.bufferMax > 0) {
+      scBar.style.display = "block";
+      const frac = Math.max(0, Math.min(1, ship.bufferHP / ship.bufferMax));
+      const scFill = scBar.querySelector(".bar-fill") as HTMLElement;
+      const scLabel = scBar.querySelector(".bar-label") as HTMLElement;
+      scFill.style.width = `${frac * 100}%`;
+      scLabel.textContent = `SUPERCRUISE ${Math.floor(ship.bufferHP)} / ${Math.floor(ship.bufferMax)}`;
+    } else {
+      scBar.style.display = "none";
+    }
+  }
+}
+
+export function updateSupercruiseLockout(state: GameState): void {
+  const el = document.getElementById("supercruise-lockout") as HTMLElement | null;
+  if (!el) return;
+  const myEntity = state.entities.get(state.myEntityId);
+  if (!myEntity) {
+    el.style.display = "none";
+    return;
+  }
+  const ship = getShip(myEntity);
+  // Show only while Idle (phase===0) AND lockout still ticking. During
+  // active or channeling, the player already has visual feedback elsewhere.
+  if (ship && ship.phase === 0 && ship.lockoutRemaining > 0) {
+    el.style.display = "block";
+    el.textContent = `Z (${ship.lockoutRemaining.toFixed(1)}s)`;
+  } else {
+    el.style.display = "none";
   }
 }
 

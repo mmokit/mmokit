@@ -41,6 +41,10 @@ export function createShipDisplay(): EntityDisplayObject {
   uiContainer.addChild(hpBarBg);
   uiContainer.addChild(hpBarFill);
 
+  // Supercruise channel radial (local player only, drawn while phase===1)
+  const channelRadial = new Graphics();
+  uiContainer.addChild(channelRadial);
+
   let currentColor = 0x44aaff;
   let lastW = 0;
   let lastH = 0;
@@ -243,6 +247,26 @@ export function createShipDisplay(): EntityDisplayObject {
         nameTag.visible = true;
       } else {
         nameTag.visible = false;
+      }
+
+      // Supercruise channel radial — local player only, while phase===1.
+      // Fills clockwise from 0 to 1 over (1 - channelRemaining/CHANNEL_TIME).
+      // SUPERCRUISE_CHANNEL_TIME default = 3.0s; hard-coded here per spec.
+      channelRadial.clear();
+      if (isMe && e.phase === 1) {
+        const CHANNEL_TIME = 3.0;
+        const remaining = e.channelRemaining;
+        const progress = Math.max(0, Math.min(1, 1 - remaining / CHANNEL_TIME));
+        const radius = Math.sqrt(hw * hw + hh * hh) + px(8);
+        // Background ring (faint)
+        channelRadial.circle(0, 0, radius).stroke({ color: 0x66aaff, width: px(2), alpha: 0.25 });
+        // Progress arc, starting at top (-PI/2), sweeping clockwise.
+        if (progress > 0) {
+          const startAngle = -Math.PI / 2;
+          const endAngle = startAngle + progress * Math.PI * 2;
+          channelRadial.arc(0, 0, radius, startAngle, endAngle, false)
+            .stroke({ color: 0x88ccff, width: px(3), alpha: 0.9 });
+        }
       }
 
       // Position UI container at entity position but without rotation
