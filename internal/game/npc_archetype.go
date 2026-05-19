@@ -13,6 +13,7 @@ const (
 	ArchetypeEliteArtillery uint8 = 5 // PVE v3 tiered: Artillery with EliteStatMultiplier applied to HP/Damage/Speed
 	ArchetypeEliteLancer    uint8 = 6 // PVE v3 tiered: Lancer with EliteStatMultiplier applied to HP/Damage/Speed
 	ArchetypeSupport        uint8 = 7 // PVE v3 tiered: heals allies, retreats from players (no offensive output)
+	ArchetypeDisruptor      uint8 = 8 // PVE v3 tiered: applies Slow + Silence debuffs on cooldown
 )
 
 // NPCAIState — current state-machine slot for an NPC.
@@ -148,6 +149,25 @@ func archetypeDefaults(cfg *GameConfig, kind uint8) ArchetypeDefaults {
 			TurnRate:      cfg.SupportTurnRate,
 			DamagePerShot: 0, // Support deals no damage
 			// AttackRange unused; Support targets allies via separate code path.
+		}
+	case ArchetypeDisruptor:
+		// Disruptor engages within DisruptorAttackRange. WeaponRange +
+		// PreferredRange map to AttackRange so the AI state machine
+		// approaches and stops at debuff range without overshooting.
+		// The actual debuff cadence is driven off SpecialCooldown by
+		// the per-archetype branch in tickEngage (not by FireRate).
+		return ArchetypeDefaults{
+			HP:             cfg.DisruptorHP,
+			Shield:         cfg.DisruptorShield,
+			MaxSpeed:       cfg.DisruptorMaxSpeed,
+			TurnRate:       cfg.DisruptorTurnRate,
+			PreferredRange: cfg.DisruptorAttackRange,
+			WeaponRange:    cfg.DisruptorAttackRange,
+			AggroRadius:    cfg.DisruptorAttackRange * 2,
+			LockRange:      cfg.DisruptorAttackRange,
+			MotionPolicy:   MotionCharge,
+			DamagePerShot:  0, // no direct damage — debuff-only
+			FireRate:       0,
 		}
 	}
 	panic("archetypeDefaults: unknown archetype")

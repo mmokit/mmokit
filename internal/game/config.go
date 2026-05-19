@@ -106,6 +106,19 @@ type GameConfig struct {
 	SupportHealCooldown float32 `json:"support_heal_cooldown"`
 	SupportRetreatDist  float32 `json:"support_retreat_dist"`
 
+	// PVE-tier: Disruptor — applies Slow + Silence debuffs on cooldown.
+	// v1 is instant-apply at SpecialCooldown elapses (no projectile yet);
+	// a future iteration can wrap this in a telegraphed skillshot.
+	DisruptorHP              float32 `json:"disruptor_hp"`
+	DisruptorShield          float32 `json:"disruptor_shield"`
+	DisruptorMaxSpeed        float32 `json:"disruptor_max_speed"`
+	DisruptorTurnRate        float32 `json:"disruptor_turn_rate"`
+	DisruptorAttackRange     float32 `json:"disruptor_attack_range"`
+	DisruptorDebuffCooldown  float32 `json:"disruptor_debuff_cooldown"`
+	DisruptorSlowDuration    float32 `json:"disruptor_slow_duration"`
+	DisruptorSlowFactor      float32 `json:"disruptor_slow_factor"`
+	DisruptorSilenceDuration float32 `json:"disruptor_silence_duration"`
+
 	// AI shared
 	AggroDeescalationSec float32 `json:"aggro_deescalation_sec"`
 	// NPCAttackJitter is the random fraction applied to every NPC attack
@@ -294,6 +307,16 @@ func DefaultGameConfig() GameConfig {
 		SupportHealAmount:   40,
 		SupportHealCooldown: 4.0,
 		SupportRetreatDist:  60,
+
+		DisruptorHP:              90,
+		DisruptorShield:          30,
+		DisruptorMaxSpeed:        7,
+		DisruptorTurnRate:        1.4,
+		DisruptorAttackRange:     150,
+		DisruptorDebuffCooldown:  6.0,
+		DisruptorSlowDuration:    3.0,
+		DisruptorSlowFactor:      0.5,
+		DisruptorSilenceDuration: 2.0,
 
 		AggroDeescalationSec: 6,
 		NPCAttackJitter:      0.4,

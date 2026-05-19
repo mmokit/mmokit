@@ -417,6 +417,26 @@ func (s *NPCAISystem) tickEngage(self mmokit.Entity, ai *gamecomp.NPCAI,
 		s.maybeSpawnBossAdds(self, ai)
 	}
 
+	// Disruptor: applies Slow + Silence to the locked target on cooldown.
+	// v1 is instant-apply when SpecialCooldown elapses and the target is
+	// inside DisruptorAttackRange — the spec envisions wrapping this in a
+	// telegraphed skillshot projectile (entity_line_telegraph), but the
+	// simpler instant form ships first and meets the design intent.
+	if ai.Archetype == ArchetypeDisruptor {
+		if ai.SpecialCooldown > 0 {
+			ai.SpecialCooldown -= dt
+		}
+		if ai.SpecialCooldown <= 0 && dist <= s.gw.Config.DisruptorAttackRange {
+			s.gw.ApplyStatus(self, target, gamecomp.StatusSlow,
+				s.gw.Config.DisruptorSlowDuration, s.gw.Config.DisruptorSlowFactor, 0, 0)
+			s.gw.ApplyStatus(self, target, gamecomp.StatusSilence,
+				s.gw.Config.DisruptorSilenceDuration, 1.0, 0, 0)
+			ai.SpecialCooldown = jitterCooldown(s.gw.Config.DisruptorDebuffCooldown, s.gw.Config.NPCAttackJitter)
+			ai.LastCombatActivityAt = now
+			s.gw.eng.Log.Log(CatCombatAbility, "disruptor: debuff source=%d target=%d", self.NetID(), target.NetID())
+		}
+	}
+
 	if dist <= ai.WeaponRange && angleDelta(rot.Angle, desired) < 0.26 /* ~15° */ {
 		ai.FireCooldown -= dt
 		if ai.FireCooldown <= 0 && ai.FireRate > 0 {
