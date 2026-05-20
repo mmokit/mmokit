@@ -1,7 +1,7 @@
 <script lang="ts">
   import {
     Globe, Boxes, Users, List, Scroll, Settings, ShieldCheck,
-    Bot, Database, Gauge, Layers, Zap, Server, Cpu, Radio,
+    Bot, Database, Gauge, Layers, Zap, Server, Cpu, Radio, MapPinned,
   } from "$lib/icons";
   import { navigate, route } from "$lib/router";
   import { panelsStore } from "$lib/stores.svelte";
@@ -36,6 +36,7 @@
   const builtinItems: Item[] = [
     { id: "cluster",  label: "Cells",    icon: Globe,       group: "MESH",      path: "/cluster",  glyph: "C" },
     { id: "nodes",    label: "Nodes",    icon: Boxes,       group: "MESH",      path: "/nodes",    glyph: "N" },
+    { id: "world-editor", label: "World Editor", icon: MapPinned, group: "MESH", path: "/world-editor", glyph: "W" },
     { id: "players",  label: "Players",  icon: Users,       group: "PEOPLE",    path: "/players",  glyph: "P" },
     { id: "events",   label: "Events",   icon: List,        group: "TELEMETRY", path: "/events",   glyph: "E" },
     { id: "audit",    label: "Audit",    icon: ShieldCheck, group: "TELEMETRY", path: "/audit",    glyph: "A" },

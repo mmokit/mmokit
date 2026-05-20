@@ -35,3 +35,4 @@ export { default as Crosshair } from "@lucide/svelte/icons/crosshair";
 export { default as Bot } from "@lucide/svelte/icons/bot";
 export { default as Database } from "@lucide/svelte/icons/database";
 export { default as Gauge } from "@lucide/svelte/icons/gauge";
+export { default as MapPinned } from "@lucide/svelte/icons/map-pinned";

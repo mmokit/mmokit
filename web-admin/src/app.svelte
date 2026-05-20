@@ -16,6 +16,7 @@
   import Logs from "./routes/logs.svelte";
   import Settings from "./routes/settings.svelte";
   import Users from "./routes/users.svelte";
+  import WorldEditor from "./routes/world-editor.svelte";
   import Sidebar from "./components/Sidebar.svelte";
   import TopBar from "./components/TopBar.svelte";
   import CommandPalette from "./components/CommandPalette.svelte";
@@ -112,6 +113,8 @@
           <Logs />
         {:else if path === "/users"}
           <Users />
+        {:else if path === "/world-editor"}
+          <WorldEditor />
         {:else if path === "/settings"}
           <Settings />
         {:else if path.startsWith("/panel/")}

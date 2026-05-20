@@ -1,0 +1,536 @@
+<script lang="ts">
+  import { onMount } from "svelte";
+  import {
+    worldStore,
+    CELL_SIZE,
+    TIER_2_RADIUS,
+    TIER_3_RADIUS,
+    type Tool,
+  } from "$lib/world-store.svelte";
+
+  let canvas: HTMLCanvasElement;
+  let container: HTMLDivElement;
+
+  // Mouse / interaction state.
+  let dragging = $state(false);
+  let panStart = { x: 0, y: 0 };
+  let panOrig = { x: 0, y: 0 };
+  let mouseScreen = $state<{ x: number; y: number } | null>(null);
+
+  // Color palette for entity types — matches WorldPalette glyph colors.
+  const COLORS = {
+    station: "rgb(103, 232, 238)",   // phosphor
+    poi: "rgb(244, 114, 182)",       // plasma
+    dungeon: "rgb(251, 146, 60)",    // amber
+    belt: "rgb(163, 230, 53)",       // lime
+    decoration: "rgb(232, 237, 247)", // silver
+    region: "rgb(180, 158, 250)",
+  } as const;
+
+  // Per-tool default args sent with world.place.
+  const PLACE_DEFAULTS: Record<string, Record<string, unknown>> = {
+    station:    { Name: "Station", Radius: 100 },
+    poi:        { Tier: 1, Roster: "StarterArena" },
+    dungeon:    { Name: "Dungeon" },
+    belt:       { Radius: 80, Density: 1.0 },
+    decoration: { Kind: "wreck", Variant: "" },
+    // region not supported by world.place yet — treat as no-op.
+    region:     {},
+  };
+
+  // ── Transform helpers ─────────────────────────────────────────────────
+
+  function worldToScreen(wx: number, wy: number, screenW: number, screenH: number): [number, number] {
+    const z = worldStore.zoom;
+    const [px, py] = worldStore.pan;
+    return [screenW / 2 + (wx + px) * z, screenH / 2 + (wy + py) * z];
+  }
+
+  function screenToWorld(sx: number, sy: number, screenW: number, screenH: number): [number, number] {
+    const z = worldStore.zoom;
+    const [px, py] = worldStore.pan;
+    return [(sx - screenW / 2) / z - px, (sy - screenH / 2) / z - py];
+  }
+
+  // ── Drawing ──────────────────────────────────────────────────────────
+
+  function clearAndBackground(ctx: CanvasRenderingContext2D, w: number, h: number): void {
+    ctx.fillStyle = "rgb(7, 10, 20)";
+    ctx.fillRect(0, 0, w, h);
+
+    // Subtle vignette / grid texture.
+    if (worldStore.layers.grid) {
+      ctx.strokeStyle = "rgba(148, 163, 189, 0.04)";
+      ctx.lineWidth = 1;
+      const step = 24;
+      ctx.beginPath();
+      for (let x = 0; x < w; x += step) {
+        ctx.moveTo(x + 0.5, 0);
+        ctx.lineTo(x + 0.5, h);
+      }
+      for (let y = 0; y < h; y += step) {
+        ctx.moveTo(0, y + 0.5);
+        ctx.lineTo(w, y + 0.5);
+      }
+      ctx.stroke();
+    }
+  }
+
+  function drawCellBoundaries(ctx: CanvasRenderingContext2D, w: number, h: number): void {
+    if (!worldStore.layers.cells) return;
+    const z = worldStore.zoom;
+    if (CELL_SIZE * z < 12) return; // too zoomed-out — skip
+
+    // World bounds visible on screen.
+    const [wxMin, wyMin] = screenToWorld(0, 0, w, h);
+    const [wxMax, wyMax] = screenToWorld(w, h, w, h);
+
+    const cxMin = Math.floor(wxMin / CELL_SIZE) - 1;
+    const cxMax = Math.ceil(wxMax / CELL_SIZE) + 1;
+    const cyMin = Math.floor(wyMin / CELL_SIZE) - 1;
+    const cyMax = Math.ceil(wyMax / CELL_SIZE) + 1;
+
+    ctx.save();
+    ctx.strokeStyle = "rgba(148, 163, 189, 0.18)";
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    for (let cx = cxMin; cx <= cxMax; cx++) {
+      const [sx] = worldToScreen(cx * CELL_SIZE, 0, w, h);
+      ctx.moveTo(sx + 0.5, 0);
+      ctx.lineTo(sx + 0.5, h);
+    }
+    for (let cy = cyMin; cy <= cyMax; cy++) {
+      const [, sy] = worldToScreen(0, cy * CELL_SIZE, w, h);
+      ctx.moveTo(0, sy + 0.5);
+      ctx.lineTo(w, sy + 0.5);
+    }
+    ctx.stroke();
+
+    // Cell ID labels (faint) — only when cells are large enough to be useful.
+    if (CELL_SIZE * z >= 60) {
+      ctx.fillStyle = "rgba(148, 163, 189, 0.45)";
+      ctx.font = "9.5px 'JetBrains Mono', ui-monospace, monospace";
+      ctx.textAlign = "left";
+      ctx.textBaseline = "top";
+      for (let cx = cxMin; cx <= cxMax; cx++) {
+        for (let cy = cyMin; cy <= cyMax; cy++) {
+          const [sx, sy] = worldToScreen(cx * CELL_SIZE, cy * CELL_SIZE, w, h);
+          ctx.fillText(`${cx},${cy}`, sx + 4, sy + 4);
+        }
+      }
+    }
+    ctx.restore();
+  }
+
+  function drawTierRings(ctx: CanvasRenderingContext2D, w: number, h: number): void {
+    if (!worldStore.layers.tiers) return;
+    const [cx, cy] = worldToScreen(0, 0, w, h);
+    const z = worldStore.zoom;
+
+    ctx.save();
+    ctx.setLineDash([6, 4]);
+    ctx.lineWidth = 1;
+
+    // T1/T2 boundary — amber.
+    ctx.strokeStyle = "rgba(251, 191, 36, 0.5)";
+    ctx.beginPath();
+    ctx.arc(cx, cy, TIER_2_RADIUS * z, 0, Math.PI * 2);
+    ctx.stroke();
+
+    // T2/T3 boundary — ember.
+    ctx.strokeStyle = "rgba(251, 113, 133, 0.55)";
+    ctx.beginPath();
+    ctx.arc(cx, cy, TIER_3_RADIUS * z, 0, Math.PI * 2);
+    ctx.stroke();
+
+    ctx.setLineDash([]);
+
+    // Labels on the X axis at right side of each ring.
+    if (z * TIER_2_RADIUS > 40) {
+      ctx.fillStyle = "rgba(251, 191, 36, 0.85)";
+      ctx.font = "9.5px 'JetBrains Mono', ui-monospace, monospace";
+      ctx.textAlign = "left";
+      ctx.textBaseline = "middle";
+      const [t2x] = worldToScreen(TIER_2_RADIUS, 0, w, h);
+      ctx.fillText("T1/T2", t2x + 4, cy);
+      ctx.fillStyle = "rgba(251, 113, 133, 0.9)";
+      const [t3x] = worldToScreen(TIER_3_RADIUS, 0, w, h);
+      ctx.fillText("T2/T3", t3x + 4, cy);
+    }
+
+    ctx.restore();
+  }
+
+  function drawEntities(ctx: CanvasRenderingContext2D, w: number, h: number): void {
+    const snap = worldStore.snapshot;
+    const selID = worldStore.selectedID;
+    const selType = worldStore.selectedType;
+
+    // Belts (drawn first — they have a radius).
+    if (worldStore.layers.belts) {
+      for (const b of snap.belts) {
+        const [sx, sy] = worldToScreen(b.world_pos[0], b.world_pos[1], w, h);
+        const r = Math.max(2, b.radius * worldStore.zoom);
+        const sel = selType === "belt" && selID === b.id;
+        ctx.beginPath();
+        ctx.arc(sx, sy, r, 0, Math.PI * 2);
+        ctx.fillStyle = "rgba(163, 230, 53, 0.10)";
+        ctx.fill();
+        ctx.strokeStyle = sel ? "rgba(103, 232, 238, 0.95)" : "rgba(163, 230, 53, 0.55)";
+        ctx.lineWidth = sel ? 1.5 : 1;
+        ctx.stroke();
+        drawDot(ctx, sx, sy, COLORS.belt, sel);
+      }
+    }
+
+    // Stations — large dot + radius hint.
+    if (worldStore.layers.stations) {
+      for (const s of snap.stations) {
+        const [sx, sy] = worldToScreen(s.world_pos[0], s.world_pos[1], w, h);
+        const sel = selType === "station" && selID === s.id;
+        if (s.radius && s.radius > 0) {
+          const r = Math.max(2, s.radius * worldStore.zoom);
+          ctx.beginPath();
+          ctx.arc(sx, sy, r, 0, Math.PI * 2);
+          ctx.strokeStyle = "rgba(103, 232, 238, 0.30)";
+          ctx.lineWidth = 1;
+          ctx.stroke();
+        }
+        drawSquare(ctx, sx, sy, 6, COLORS.station, sel);
+        drawLabel(ctx, sx, sy + 10, s.name || s.id, COLORS.station);
+      }
+    }
+
+    // POIs — diamond colored by tier.
+    if (worldStore.layers.pois) {
+      for (const p of snap.pois) {
+        const [sx, sy] = worldToScreen(p.world_pos[0], p.world_pos[1], w, h);
+        const sel = selType === "poi" && selID === p.id;
+        const color =
+          p.tier === 3 ? "rgb(251, 113, 133)" :
+          p.tier === 2 ? "rgb(251, 191, 36)" :
+          COLORS.poi;
+        drawDiamond(ctx, sx, sy, 5, color, sel);
+      }
+    }
+
+    // Dungeons.
+    if (worldStore.layers.dungeons) {
+      for (const d of snap.dungeons) {
+        const [sx, sy] = worldToScreen(d.world_pos[0], d.world_pos[1], w, h);
+        const sel = selType === "dungeon" && selID === d.id;
+        drawTriangle(ctx, sx, sy, 6, COLORS.dungeon, sel);
+        drawLabel(ctx, sx, sy + 10, d.name || d.id, COLORS.dungeon);
+      }
+    }
+
+    // Decorations — small ring.
+    if (worldStore.layers.decorations) {
+      for (const dc of snap.decorations) {
+        const [sx, sy] = worldToScreen(dc.world_pos[0], dc.world_pos[1], w, h);
+        const sel = selType === "decoration" && selID === dc.id;
+        ctx.beginPath();
+        ctx.arc(sx, sy, 3, 0, Math.PI * 2);
+        ctx.strokeStyle = sel ? "rgba(103, 232, 238, 0.95)" : "rgba(232, 237, 247, 0.55)";
+        ctx.lineWidth = sel ? 1.5 : 1;
+        ctx.stroke();
+      }
+    }
+  }
+
+  function drawDot(ctx: CanvasRenderingContext2D, sx: number, sy: number, color: string, selected: boolean): void {
+    ctx.beginPath();
+    ctx.arc(sx, sy, selected ? 4 : 2.5, 0, Math.PI * 2);
+    ctx.fillStyle = color;
+    ctx.fill();
+    if (selected) {
+      ctx.strokeStyle = "rgba(103, 232, 238, 0.95)";
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+    }
+  }
+  function drawSquare(ctx: CanvasRenderingContext2D, sx: number, sy: number, half: number, color: string, selected: boolean): void {
+    ctx.fillStyle = color;
+    ctx.fillRect(sx - half, sy - half, half * 2, half * 2);
+    if (selected) {
+      ctx.strokeStyle = "rgba(103, 232, 238, 0.95)";
+      ctx.lineWidth = 1.5;
+      ctx.strokeRect(sx - half - 2, sy - half - 2, half * 2 + 4, half * 2 + 4);
+    }
+  }
+  function drawDiamond(ctx: CanvasRenderingContext2D, sx: number, sy: number, r: number, color: string, selected: boolean): void {
+    ctx.beginPath();
+    ctx.moveTo(sx, sy - r);
+    ctx.lineTo(sx + r, sy);
+    ctx.lineTo(sx, sy + r);
+    ctx.lineTo(sx - r, sy);
+    ctx.closePath();
+    ctx.fillStyle = color;
+    ctx.fill();
+    if (selected) {
+      ctx.strokeStyle = "rgba(103, 232, 238, 0.95)";
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+    }
+  }
+  function drawTriangle(ctx: CanvasRenderingContext2D, sx: number, sy: number, r: number, color: string, selected: boolean): void {
+    ctx.beginPath();
+    ctx.moveTo(sx, sy - r);
+    ctx.lineTo(sx + r, sy + r * 0.85);
+    ctx.lineTo(sx - r, sy + r * 0.85);
+    ctx.closePath();
+    ctx.fillStyle = color;
+    ctx.fill();
+    if (selected) {
+      ctx.strokeStyle = "rgba(103, 232, 238, 0.95)";
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+    }
+  }
+  function drawLabel(ctx: CanvasRenderingContext2D, sx: number, sy: number, text: string, color: string): void {
+    if (worldStore.zoom < 0.02) return; // too zoomed-out
+    ctx.font = "9.5px 'JetBrains Mono', ui-monospace, monospace";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "top";
+    ctx.fillStyle = color;
+    ctx.fillText(text, sx, sy);
+  }
+
+  function drawCursor(ctx: CanvasRenderingContext2D, w: number, h: number): void {
+    if (!mouseScreen) return;
+    if (worldStore.tool === "select") return;
+    ctx.save();
+    ctx.strokeStyle = "rgba(34, 211, 218, 0.45)";
+    ctx.lineWidth = 1;
+    ctx.setLineDash([3, 3]);
+    ctx.beginPath();
+    ctx.moveTo(0, mouseScreen.y + 0.5);
+    ctx.lineTo(w, mouseScreen.y + 0.5);
+    ctx.moveTo(mouseScreen.x + 0.5, 0);
+    ctx.lineTo(mouseScreen.x + 0.5, h);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    // Tool indicator at cursor.
+    ctx.beginPath();
+    ctx.arc(mouseScreen.x, mouseScreen.y, 6, 0, Math.PI * 2);
+    ctx.strokeStyle = "rgba(103, 232, 238, 0.9)";
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  function redraw(): void {
+    if (!canvas || !container) return;
+    const dpr = window.devicePixelRatio || 1;
+    const rect = container.getBoundingClientRect();
+    const w = Math.max(100, Math.floor(rect.width));
+    const h = Math.max(100, Math.floor(rect.height));
+    canvas.width = w * dpr;
+    canvas.height = h * dpr;
+    canvas.style.width = `${w}px`;
+    canvas.style.height = `${h}px`;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    clearAndBackground(ctx, w, h);
+    drawCellBoundaries(ctx, w, h);
+    drawTierRings(ctx, w, h);
+    drawEntities(ctx, w, h);
+    drawCursor(ctx, w, h);
+  }
+
+  onMount(() => {
+    const ro = new ResizeObserver(() => requestAnimationFrame(redraw));
+    ro.observe(container);
+    let raf = 0;
+    const tick = () => {
+      redraw();
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => {
+      ro.disconnect();
+      cancelAnimationFrame(raf);
+    };
+  });
+
+  // ── Picking ──────────────────────────────────────────────────────────
+
+  // Nearest entity within `tolWorld` world units of (wx, wy). Returns
+  // {type, id} or null. O(n) — fine at editor scales (low hundreds).
+  function pickAt(wx: number, wy: number, tolWorld: number): { type: string; id: string } | null {
+    const snap = worldStore.snapshot;
+    const tol2 = tolWorld * tolWorld;
+    let bestType = "";
+    let bestID = "";
+    let bestD2 = Number.POSITIVE_INFINITY;
+
+    type Layered = { id: string; world_pos: [number, number] };
+    const buckets: Array<[boolean, string, Layered[]]> = [
+      [worldStore.layers.stations,    "station",    snap.stations],
+      [worldStore.layers.pois,        "poi",        snap.pois],
+      [worldStore.layers.dungeons,    "dungeon",    snap.dungeons],
+      [worldStore.layers.belts,       "belt",       snap.belts],
+      [worldStore.layers.decorations, "decoration", snap.decorations],
+    ];
+    for (const [on, type, list] of buckets) {
+      if (!on) continue;
+      for (const e of list) {
+        const dx = e.world_pos[0] - wx;
+        const dy = e.world_pos[1] - wy;
+        const d2 = dx * dx + dy * dy;
+        if (d2 <= tol2 && d2 < bestD2) {
+          bestD2 = d2;
+          bestType = type;
+          bestID = e.id;
+        }
+      }
+    }
+    return bestType ? { type: bestType, id: bestID } : null;
+  }
+
+  // ── Mouse handlers ───────────────────────────────────────────────────
+
+  function getMouseScreen(e: MouseEvent): { x: number; y: number } {
+    const rect = canvas.getBoundingClientRect();
+    return { x: e.clientX - rect.left, y: e.clientY - rect.top };
+  }
+
+  function onMouseDown(e: MouseEvent): void {
+    const { x, y } = getMouseScreen(e);
+    // Shift-drag = pan. Middle button also pans.
+    if (e.shiftKey || e.button === 1) {
+      dragging = true;
+      panStart = { x, y };
+      panOrig = { x: worldStore.pan[0], y: worldStore.pan[1] };
+      e.preventDefault();
+    }
+  }
+
+  function onMouseMove(e: MouseEvent): void {
+    const { x, y } = getMouseScreen(e);
+    mouseScreen = { x, y };
+    const rect = canvas.getBoundingClientRect();
+    const [wx, wy] = screenToWorld(x, y, rect.width, rect.height);
+    worldStore.cursor = [wx, wy];
+    if (dragging) {
+      const dx = (x - panStart.x) / worldStore.zoom;
+      const dy = (y - panStart.y) / worldStore.zoom;
+      worldStore.pan = [panOrig.x + dx, panOrig.y + dy];
+    }
+  }
+
+  function onMouseUp(): void {
+    dragging = false;
+  }
+
+  function onMouseLeave(): void {
+    dragging = false;
+    mouseScreen = null;
+  }
+
+  async function onClick(e: MouseEvent): Promise<void> {
+    if (e.shiftKey) return; // shift = pan
+    if (dragging) return;
+    const { x, y } = getMouseScreen(e);
+    const rect = canvas.getBoundingClientRect();
+    const [wx, wy] = screenToWorld(x, y, rect.width, rect.height);
+
+    if (worldStore.tool === "select") {
+      const tol = 10 / worldStore.zoom; // ~10px in world units
+      const hit = pickAt(wx, wy, tol);
+      if (hit) {
+        worldStore.setSelection(hit.type, hit.id);
+      } else {
+        worldStore.clearSelection();
+      }
+      return;
+    }
+
+    // Place tool.
+    const t = worldStore.tool;
+    if (t === "region") return; // not supported by world.place yet
+    const extra = PLACE_DEFAULTS[t] ?? {};
+    try {
+      await worldStore.place(t, wx, wy, extra);
+    } catch (err) {
+      console.error("world.place failed", err);
+    }
+  }
+
+  function onWheel(e: WheelEvent): void {
+    e.preventDefault();
+    const { x, y } = getMouseScreen(e);
+    const rect = canvas.getBoundingClientRect();
+    const w = rect.width, h = rect.height;
+    // World point under cursor before zoom.
+    const [wx, wy] = screenToWorld(x, y, w, h);
+    const factor = Math.exp(-e.deltaY * 0.001);
+    const newZoom = Math.max(0.005, Math.min(10, worldStore.zoom * factor));
+    worldStore.zoom = newZoom;
+    // Adjust pan so the same world point stays under the cursor.
+    const [nsx, nsy] = worldToScreen(wx, wy, w, h);
+    const dx = (x - nsx) / newZoom;
+    const dy = (y - nsy) / newZoom;
+    worldStore.pan = [worldStore.pan[0] + dx, worldStore.pan[1] + dy];
+  }
+
+  // ── Keyboard ─────────────────────────────────────────────────────────
+
+  const HOTKEYS: Record<string, Tool> = {
+    v: "select",
+    "1": "station",
+    "2": "poi",
+    "3": "dungeon",
+    "4": "belt",
+    "5": "region",
+    "6": "decoration",
+  };
+
+  function onKey(e: KeyboardEvent): void {
+    const target = e.target as HTMLElement | null;
+    if (target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable)) {
+      return;
+    }
+    if (e.key === "Escape") {
+      worldStore.clearSelection();
+      return;
+    }
+    const t = HOTKEYS[e.key.toLowerCase()];
+    if (t) {
+      worldStore.tool = t;
+      e.preventDefault();
+    }
+  }
+</script>
+
+<svelte:window onkeydown={onKey} />
+
+<div
+  bind:this={container}
+  class="relative grow min-w-0 min-h-0"
+  style="background: rgb(7, 10, 20);"
+>
+  <canvas
+    bind:this={canvas}
+    class="block w-full h-full
+      {worldStore.tool === 'select' ? 'cursor-crosshair' : 'cursor-cell'}
+      {dragging ? '!cursor-grabbing' : ''}"
+    onmousedown={onMouseDown}
+    onmousemove={onMouseMove}
+    onmouseup={onMouseUp}
+    onmouseleave={onMouseLeave}
+    onclick={onClick}
+    onwheel={onWheel}
+  ></canvas>
+
+  <!-- Overlay legend (top-left) -->
+  <div
+    class="absolute top-3 left-3 pointer-events-none bg-[var(--bg-deep)]/70 backdrop-blur border border-[var(--border-subtle)] rounded px-2.5 py-1.5 font-mono text-[10px] text-[var(--text-muted)] tracking-tight flex flex-col gap-0.5"
+  >
+    <div>shift-drag · pan</div>
+    <div>wheel · zoom</div>
+    <div>V · select / 1-6 · place</div>
+    <div>esc · clear selection</div>
+  </div>
+</div>
