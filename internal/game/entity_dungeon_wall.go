@@ -19,7 +19,7 @@ import (
 // dungeons leave it nil.
 type DungeonWallBundle struct {
 	Wall     *gamecomp.DungeonWall
-	PlacedID *gamecomp.PlacedID `mmokit:"local"`
+	PlacedID *gamecomp.PlacedID
 }
 
 // SpawnDungeonWall creates a rectangular wall collider at (x,y) with the

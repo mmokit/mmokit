@@ -20,7 +20,7 @@ import (
 // roster cleanly. Procgen/admin dungeons leave the field nil.
 type DungeonBundle struct {
 	Dungeon  *gamecomp.Dungeon
-	PlacedID *gamecomp.PlacedID `mmokit:"local"`
+	PlacedID *gamecomp.PlacedID
 }
 
 // SpawnDungeonAt is the world-manifest entry point. Delegates to

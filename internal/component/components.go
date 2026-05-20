@@ -43,16 +43,20 @@ type Decoration struct {
 
 // PlacedID tags an entity with the world-manifest id that spawned it.
 // Used by world.* cmdsys verbs to despawn / re-spawn placed entities
-// cleanly without position-matching heuristics. The component is
-// local-only — it survives cell transfer but never goes over the wire.
+// cleanly without position-matching heuristics.
+//
+// The component IS serialized across cell-transfer so the ID survives
+// when belt asteroids / dungeon walls / POI NPCs migrate to neighboring
+// cells. The ID field has no `net:"..."` tag so the component is NOT
+// sent to clients on the replication wire — it's server-side bookkeeping.
 //
 // Cascade behavior: SpawnPOI tags both the POI marker and every roster
 // NPC with the POI's PlacedID; SpawnDungeonAt tags the dungeon marker
 // and every wall with the dungeon's PlacedID; SpawnBelt tags the
-// asteroids it scatters. One DespawnPlacedByID(id) sweep removes the
-// whole subtree.
+// asteroids it scatters. One cluster-wide DespawnPlacedByID(id) sweep
+// removes the whole subtree wherever its members ended up.
 type PlacedID struct {
-	ID string `mmokit:"local"`
+	ID string
 }
 
 // Health represents hit points.

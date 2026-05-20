@@ -15,7 +15,7 @@ import (
 // fine, the bundle field is optional via the local-only tag.
 type POIBundle struct {
 	POI      *gamecomp.POI
-	PlacedID *gamecomp.PlacedID `mmokit:"local"`
+	PlacedID *gamecomp.PlacedID
 }
 
 // SpawnPOI is the world-manifest entry point. Translates a world.POI def

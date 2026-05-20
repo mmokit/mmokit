@@ -13,7 +13,7 @@ import (
 // from world manifests so world.* verbs can despawn them cleanly.
 type DecorationBundle struct {
 	Decoration *gamecomp.Decoration
-	PlacedID   *gamecomp.PlacedID `mmokit:"local"`
+	PlacedID *gamecomp.PlacedID
 }
 
 // SpawnDecoration materializes a decoration entity at (localX, localY)

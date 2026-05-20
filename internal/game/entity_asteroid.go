@@ -21,7 +21,7 @@ import (
 // dungeon-debris scatter / tests leave the field nil.
 type AsteroidBundle struct {
 	Minable  *gamecomp.Minable
-	PlacedID *gamecomp.PlacedID `mmokit:"local"`
+	PlacedID *gamecomp.PlacedID
 }
 
 // spawnAsteroid is the random-resource convenience used by tests and

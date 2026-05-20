@@ -13,7 +13,7 @@ import (
 // the station cleanly; it's local-only and survives cell transfer.
 type StationBundle struct {
 	Station  *gamecomp.Station  `mmokit:"local"`
-	PlacedID *gamecomp.PlacedID `mmokit:"local"`
+	PlacedID *gamecomp.PlacedID
 }
 
 // SpawnStation creates a trade station entity at (localX, localY) inside
