@@ -437,6 +437,16 @@ Connection URL defaults to `postgres://mmo:mmo@localhost:5432/mmo?sslmode=disabl
 
 All tunable game parameters are in `internal/game/config.go`. The `GameConfig` struct supports reflection-based get/set for runtime tweaking via the server console (`config get/set/list/save/reset`). The generic `Configurable` interface and `ReflectConfig` adapter live in `pkg/engine/configurable.go` — games wire them via `RegisterBuiltins(BuiltinOpts{Config: NewReflectConfig(&cfg)})`. Values copied into components at spawn time (e.g. `ShieldRegenRate`) only affect newly spawned entities.
 
+### World Editor (hand-placed skeleton, procgen interiors)
+
+Hand-placed entities — stations, combat POIs, dungeon anchors, asteroid-belt centers, decorations, regions — live in `world/*.json` at the repo root as git-tracked, world-coord JSON manifests (one file per entity type). Day-one default is empty; one seeded `world/stations.json` keeps `just dev` runnable.
+
+At cell boot, [internal/game/game.go::NewGameWorld](internal/game/game.go) calls `bucketForRootCell()` against the in-memory `mmokit.WorldSnapshot` (loaded once from `--world-dir`, default `world/`) and spawns the bucket's entities via `gw.SpawnStation` / `SpawnPOI` / `SpawnDungeonAt` / `SpawnBelt` / `SpawnDecoration`. Procgen survives only *inside* placed entities — NPC scatter inside a POI, asteroids inside a belt, dungeon chamber graph — all seeded by `fnv64(def.ID)` so layout is deterministic per-id (renaming changes interior, moving does not). The `GeneratePOIs` / `GenerateBelts` / `StationLocalX/Y` / cell-(0,0) auto-dungeon-spawn code was removed in the same pass.
+
+Editing is live: the `/world-editor` admin route POSTs seven `world.*` cmdsys verbs (`world.list`, `world.place`, `world.move`, `world.update`, `world.delete`, `world.reload`, `world.export`), all gated on capability `world.edit`. Each verb atomically writes the manifest via `pkg/world/jsonrepo` (per-file `sync.Mutex` + write-tmp + fsync + rename) and applies the spawn/despawn side-effect through the cell's game loop. The `PlacedID` component tags every placed entity (and its children — POI roster NPCs, dungeon walls/chambers, belt asteroids) so `DespawnPlacedByID(id)` cleans up entire subtrees in one sweep. SSE topic `world.changed` notifies the live editor of mutations.
+
+The editor SPA route is a three-pane LDtk-style canvas (palette / world-canvas / inspector) with explicit-Apply edits, V/1-6 hotkeys, shift-drag pan, wheel zoom, cell-boundary + tier-ring overlays. Coordinates are world-absolute throughout — cell size is not baked into the JSON, so resizing cells doesn't break the manifest. Spec: [docs/superpowers/specs/2026-05-20-world-editor-design.md](docs/superpowers/specs/2026-05-20-world-editor-design.md).
+
 ### Marketplace / Order Book
 
 `pkg/orderbook/` is a generic price-time priority matching engine. It returns `[]MatchEvent` from order placement — the caller decides how to settle trades. `internal/marketplace/settlement.go` wraps it with game-specific Flux currency, bank operations, tax, and trade notifications.
