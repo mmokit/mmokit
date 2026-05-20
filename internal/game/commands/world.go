@@ -688,9 +688,10 @@ func registerWorldExport(reg *cmdsys.Registry, coord *mmokit.Process, gwGetter f
 // ── helpers ────────────────────────────────────────────────────────────────
 
 // spawnInCell finds the cell on the coord owning (cellID) and runs fn on
-// its game loop. Returns an error if the cell isn't local to this host
-// or if fn's CmdOnLoop wrapper fails. fn receives the per-cell GameWorld
-// via mmokit.State.
+// its game loop. JSON is the source of truth and is cell-agnostic, so a
+// position outside the running cluster is a valid placement — ECS spawn
+// is best-effort. Returns nil (no error) when the target cell isn't part
+// of the running cluster; only CmdOnLoop failures bubble up.
 func spawnInCell(ctx context.Context, coord *mmokit.Process, cellID mmokit.WorldCellID, fn func(*game.GameWorld)) error {
 	// Resolve cell via center-coordinate lookup; mirrors the dungeon.spawn /
 	// poi.spawn pattern. CellSize() returns the active cell size.
@@ -699,11 +700,15 @@ func spawnInCell(ctx context.Context, coord *mmokit.Process, cellID mmokit.World
 	worldY := float32(cellID.Y)*cellSize + cellSize/2
 	meshCellID := coord.CellAtPosition(worldX, worldY)
 	if meshCellID == "" {
-		return fmt.Errorf("no cell owns world position for cell (%d,%d)", cellID.X, cellID.Y)
+		// Cell outside the running cluster — JSON-only placement is fine.
+		return nil
 	}
 	cell := coord.CellByID(mmokit.MeshCellID(meshCellID))
 	if cell == nil || cell.Stage == nil || cell.Engine == nil {
-		return fmt.Errorf("cell %q not local to this host", meshCellID)
+		// Cell exists but isn't local to this host (multi-host setup); also
+		// fine — JSON is the authoritative state. Remote-host spawn dispatch
+		// is a follow-up (spec §8 distributed-mode item).
+		return nil
 	}
 	_, err := mmokit.CmdOnLoop(ctx, cell.Engine, func() (struct{}, error) {
 		if gw := mmokit.State[game.GameWorld](cell.Stage); gw != nil {
