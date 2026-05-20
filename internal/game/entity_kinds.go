@@ -106,6 +106,8 @@ func RegisterEntityKinds(p *mmokit.Process) {
 			return mmokit.QAngle(ecs.NewMap1[mmokit.Rotation](w))
 		}),
 	)
+
+	mmokit.RegisterKind[DecorationBundle](p, gamecomp.KindDecoration, "Decoration")
 }
 
 // initEntityKinds populates per-stage state that depends on the running

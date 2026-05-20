@@ -29,7 +29,17 @@ const (
 	KindLineTelegraph              // 8
 	KindDungeon                    // 9
 	KindDungeonWall                // 10
+	KindDecoration                 // 11
 )
+
+// Decoration is the marker component for hand-placed visual-only props
+// (wrecks, beacons, signs). Kind selects the sprite family and Variant
+// picks a specific look within that family; both are sent once at
+// visibility-enter via the "initial" encoding (they never change).
+type Decoration struct {
+	Kind    string `net:"initial"`
+	Variant string `net:"initial"`
+}
 
 // Health represents hit points.
 //
