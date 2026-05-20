@@ -4,13 +4,16 @@ import type { ClientEntity, EntityDisplayObject } from "../types";
 import { getCombat, getShip } from "../entity-accessors";
 import { px } from "../view";
 
+type WakeRing = { worldX: number; worldY: number; spawnTime: number };
+type TrailPoint = { worldX: number; worldY: number; time: number };
+
+const RING_LIFETIME_MS = 1500;
+const TRAIL_LIFETIME_MS = 700;
+const RING_SPAWN_PERIOD_MS = 150;
+const TRAIL_SPAWN_PERIOD_MS = 40;
+
 export function createShipDisplay(): EntityDisplayObject {
   const container = new Container();
-
-  // Supercruise wake — velocity-trailing ellipse drawn BEHIND the hull
-  // in container-space (rotates with the ship). Active during phase===2.
-  const supercruiseWake = new Graphics();
-  container.addChild(supercruiseWake);
 
   // Exhaust layer (behind hull)
   const exhaust = new Graphics();
@@ -27,6 +30,12 @@ export function createShipDisplay(): EntityDisplayObject {
   // Screen-space container (not rotated) for bars and name
   const uiContainer = new Container();
   // We'll position this separately each frame
+
+  // Supercruise wake — list of past world-space positions rendered as a
+  // tapering polyline. Lives in uiContainer (non-rotating, world-aligned)
+  // and is drawn BEHIND everything else so bars/name sit on top.
+  const supercruiseWake = new Graphics();
+  uiContainer.addChild(supercruiseWake);
 
   // Name tag
   const nameTag = new Text({ text: "", style: { fontFamily: "monospace", fontSize: 10, fill: 0xccddff } });
@@ -56,6 +65,15 @@ export function createShipDisplay(): EntityDisplayObject {
   // AoI viewers can telegraph the interdiction window.
   const channelRadial = new Graphics();
   uiContainer.addChild(channelRadial);
+
+  // Supercruise wake/ripple state — per-ship closure so each ship has its
+  // own ring + trail histories. Both are world-anchored: spawned at the
+  // ship's renderX/renderY at the time of spawn, and rendered offset from
+  // the ship's CURRENT renderX/renderY so they stay put in world space.
+  const wakeRings: WakeRing[] = [];
+  const trailPoints: TrailPoint[] = [];
+  let lastRingSpawn = 0;
+  let lastTrailSpawn = 0;
 
   let currentColor = 0x44aaff;
   let lastW = 0;
@@ -261,47 +279,73 @@ export function createShipDisplay(): EntityDisplayObject {
         nameTag.visible = false;
       }
 
-      // Supercruise Active-phase visuals — drawn for ALL ships while phase===2:
-      //  (a) Velocity-trailing wake (container-space, rotated with hull) for
-      //      a "moving fast" readability cue.
-      //  (b) Concentric pulsing distortion rings (uiContainer, non-rotating)
-      //      that expand outward from the hull for a "gravity warp" telegraph.
-      // Together they make supercruising ships visually unmistakable.
-      supercruiseWake.clear();
-      supercruiseGlow.clear();
+      // Supercruise Active-phase visuals — world-anchored "wake left behind"
+      // for ALL ships in phase===2. Two effects:
+      //  (a) Distortion rings: spawn at the ship's current world position,
+      //      then stay put while expanding + fading over RING_LIFETIME_MS.
+      //  (b) Velocity trail: list of past world positions rendered as a
+      //      tapering polyline that naturally lags behind the moving ship.
+      // Both live in uiContainer (non-rotating, world-aligned) and continue
+      // to play out their lifetimes after the player exits Active.
       if (e.phase === 2) {
-        // (a) Wake: elongated ellipse trailing behind the hull along the ship's
-        // local -X axis (container is rotated with the ship's facing, so local
-        // +X is forward and -X is aft).
+        if (now - lastRingSpawn > RING_SPAWN_PERIOD_MS) {
+          wakeRings.push({ worldX: ent.renderX, worldY: ent.renderY, spawnTime: now });
+          lastRingSpawn = now;
+        }
         const speed = Math.sqrt(e.velX * e.velX + e.velY * e.velY);
-        if (speed > 0.5) {
-          const wakeLen = Math.max(w * 3, px(40));
-          const wakeWidth = h * 1.5;
-          supercruiseWake.ellipse(-wakeLen * 0.5, 0, wakeLen * 0.5, wakeWidth * 0.5)
-            .fill({ color: 0x66ccff, alpha: 0.18 })
-            .stroke({ color: 0x88ccff, width: px(1), alpha: 0.4 });
-          // Inner ellipse for depth
-          supercruiseWake.ellipse(-wakeLen * 0.35, 0, wakeLen * 0.4, wakeWidth * 0.35)
-            .fill({ color: 0xaaddff, alpha: 0.18 });
+        if (speed > 0.5 && now - lastTrailSpawn > TRAIL_SPAWN_PERIOD_MS) {
+          trailPoints.push({ worldX: ent.renderX, worldY: ent.renderY, time: now });
+          lastTrailSpawn = now;
         }
+      }
 
-        // (b) Pulsing distortion rings expanding outward from the hull.
-        const hullRadius = Math.sqrt(hw * hw + hh * hh);
-        const ringPeriod = 1200; // ms per ring cycle
-        const ringCount = 3;
-        for (let r = 0; r < ringCount; r++) {
-          // Stagger each ring by 1/ringCount of the period so they overlap.
-          const phase = ((now + r * (ringPeriod / ringCount)) % ringPeriod) / ringPeriod;
-          // Ring radius grows from hullRadius to ~hullRadius*2.5 across the cycle.
-          const ringRadius = hullRadius * (1 + phase * 1.5) + px(4);
-          // Alpha fades from 0.6 -> 0 across the cycle.
-          const ringAlpha = 0.6 * (1 - phase);
-          supercruiseGlow.circle(0, 0, ringRadius)
-            .stroke({ color: 0x66ccff, width: px(2), alpha: ringAlpha });
+      // Always age + prune so lifetimes drain after Active ends.
+      for (let i = wakeRings.length - 1; i >= 0; i--) {
+        if (now - wakeRings[i].spawnTime > RING_LIFETIME_MS) wakeRings.splice(i, 1);
+      }
+      for (let i = trailPoints.length - 1; i >= 0; i--) {
+        if (now - trailPoints[i].time > TRAIL_LIFETIME_MS) trailPoints.splice(i, 1);
+      }
+
+      // Render rings. Each ring's local-space center is offset from its
+      // world spawn position by the ship's CURRENT renderX/renderY so it
+      // appears at its spawn position regardless of where the ship is now.
+      supercruiseGlow.clear();
+      for (const r of wakeRings) {
+        const age = (now - r.spawnTime) / RING_LIFETIME_MS;
+        const radius = px(4) + age * px(46);
+        const alpha = (1 - age) * 0.7;
+        const lx = r.worldX - ent.renderX;
+        const ly = r.worldY - ent.renderY;
+        supercruiseGlow.circle(lx, ly, radius)
+          .stroke({ color: 0x66ccff, width: px(2), alpha });
+      }
+
+      // Render trail as connected polyline with tapering width + alpha.
+      supercruiseWake.clear();
+      if (trailPoints.length >= 2) {
+        for (let i = 0; i < trailPoints.length - 1; i++) {
+          const a = trailPoints[i];
+          const b = trailPoints[i + 1];
+          const age = (now - a.time) / TRAIL_LIFETIME_MS;
+          const alpha = (1 - age) * 0.55;
+          const width = px(4) * (1 - age * 0.7) + px(1);
+          const ax = a.worldX - ent.renderX;
+          const ay = a.worldY - ent.renderY;
+          const bx = b.worldX - ent.renderX;
+          const by = b.worldY - ent.renderY;
+          supercruiseWake.moveTo(ax, ay).lineTo(bx, by)
+            .stroke({ color: 0x88ccff, width, alpha });
         }
-        // Persistent inner halo so the ship itself reads as "wrapped".
-        supercruiseGlow.circle(0, 0, hullRadius * 1.15)
-          .fill({ color: 0x88ccff, alpha: 0.12 });
+        // Connect the most recent trail point to the ship's current position
+        // for a smooth "fresh" segment that doesn't lag visibly.
+        if (e.phase === 2) {
+          const last = trailPoints[trailPoints.length - 1];
+          const lx = last.worldX - ent.renderX;
+          const ly = last.worldY - ent.renderY;
+          supercruiseWake.moveTo(lx, ly).lineTo(0, 0)
+            .stroke({ color: 0xaaddff, width: px(4), alpha: 0.6 });
+        }
       }
 
       // Supercruise channel radial — drawn for ALL ships while phase===1
