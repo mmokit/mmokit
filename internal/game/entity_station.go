@@ -13,43 +13,43 @@ type StationBundle struct {
 	Station *gamecomp.Station `mmokit:"local"`
 }
 
-// StationLocalX, StationLocalY are the station's position in local coords
-// inside its StationCell. Tied to the cross-boundary mesh-test belt around
-// the world (CellSize, CellSize) corner: close enough that the belt is the
-// obvious first mining target on undock, far enough that StationRadius
-// doesn't overlap any asteroids in the 0_0 belt chunk (chunk centered at
-// (CellSize-15, CellSize-15) with radius 20). Exported so main.go can
-// derive the resolver's new-player fallback from StationCell + this offset.
-const (
-	StationLocalX float32 = 8100
-	StationLocalY float32 = 8100
-)
-
-// SpawnStation creates the trade station entity in the station cell.
-func (gw *GameWorld) SpawnStation() {
+// SpawnStation creates a trade station entity at (localX, localY) inside
+// the current cell using the provided world-manifest definition. When
+// def.Radius is zero, falls back to gw.Config.StationRadius so dev
+// manifests can omit the field and still get the sane default.
+func (gw *GameWorld) SpawnStation(localX, localY float32, def mmokit.WorldStation) {
+	radius := def.Radius
+	if radius == 0 {
+		radius = gw.Config.StationRadius
+	}
 	e := gw.stage.Spawn(
-		mmokit.Position{X: StationLocalX, Y: StationLocalY},
+		mmokit.Position{X: localX, Y: localY},
 		mmokit.EntityKind{Type: gamecomp.KindStation},
 		mmokit.Collider{
-			Radius: gw.Config.StationRadius,
+			Radius: radius,
 			Shape:  spatial.ShapeCircle,
 			Layer:  spatial.LayerStatic,
 		},
-		gamecomp.Station{},
+		gamecomp.Station{Name: def.Name},
 	)
-	gw.eng.Log.Log(CatPlayerSpawn, "station spawned: netID=%d pos=(%.1f,%.1f)", e.NetID(), StationLocalX, StationLocalY)
+	gw.eng.Log.Log(CatPlayerSpawn, "station spawned: id=%s netID=%d pos=(%.1f,%.1f) name=%q",
+		def.ID, e.NetID(), localX, localY, def.Name)
 }
 
-// CollectStationMapData returns map marker data for all stations in the world.
+// CollectStationMapData returns map marker data for all stations on this stage.
 func (gw *GameWorld) CollectStationMapData() []MapStationInfo {
 	var stations []MapStationInfo
-	mmokit.ForEach3(gw.stage, func(_ mmokit.Entity, _ *gamecomp.Station, pos *mmokit.Position, sec *mmokit.CellCoord) {
+	mmokit.ForEach3(gw.stage, func(_ mmokit.Entity, st *gamecomp.Station, pos *mmokit.Position, sec *mmokit.CellCoord) {
+		name := st.Name
+		if name == "" {
+			name = "TRADE STATION"
+		}
 		stations = append(stations, MapStationInfo{
 			CellX:  sec.CellX,
 			CellY:  sec.CellY,
 			LocalX: pos.X,
 			LocalY: pos.Y,
-			Name:   "TRADE STATION",
+			Name:   name,
 		})
 	})
 	return stations

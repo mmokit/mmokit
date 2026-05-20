@@ -34,7 +34,7 @@ func TestPOI_ClearSpawnsLootCrate(t *testing.T) {
 
 	sys := newWiredPOISystem(t, gw)
 
-	poiNetID := gw.SpawnPOI(2000, 2000, gamecomp.POITypeCombat, 0, 1)
+	poiNetID := gw.SpawnPOIWithRoster(2000, 2000, gamecomp.POITypeCombat, 0, 1)
 
 	// Kill every roster NPC.
 	for _, nid := range gw.poiRosters[poiNetID] {
@@ -67,7 +67,7 @@ func TestPOI_RosterWideLeash(t *testing.T) {
 	defer gw.Shutdown()
 	sys := newWiredPOISystem(t, gw)
 
-	poiNetID := gw.SpawnPOI(2000, 2000, gamecomp.POITypeCombat, 0, 1)
+	poiNetID := gw.SpawnPOIWithRoster(2000, 2000, gamecomp.POITypeCombat, 0, 1)
 	roster := gw.poiRosters[poiNetID]
 	if len(roster) < 2 {
 		t.Fatalf("expected >=2 roster members, got %d", len(roster))

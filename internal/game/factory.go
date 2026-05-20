@@ -11,6 +11,8 @@ func NewGameWorldStateFactory(
 	gameCfg *GameConfig,
 	playerDB *PlayerRepo,
 	playerSessions *mmokit.PlayerSessions,
+	worldRepo mmokit.WorldRepository,
+	worldSnap *mmokit.WorldSnapshot,
 ) func(base *mmokit.Stage) *GameWorld {
 	return func(base *mmokit.Stage) *GameWorld {
 		cell := base.Cell()
@@ -23,7 +25,7 @@ func NewGameWorldStateFactory(
 		gw := NewGameWorld(base, gameCfg, playerDB, mmokit.CellCoord{
 			CellX: rootCell.X,
 			CellY: rootCell.Y,
-		}, base.FromSplit())
+		}, base.FromSplit(), worldRepo, worldSnap)
 		gw.PlayerSessions = playerSessions
 		return gw
 	}

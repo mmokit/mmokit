@@ -18,7 +18,7 @@ func TestPOIClear_T1RewardUnscaled(t *testing.T) {
 
 	sys := newWiredPOISystem(t, gw)
 
-	poiNetID := gw.SpawnPOI(2500, 2500, 0, StarterArenaIdx, 1)
+	poiNetID := gw.SpawnPOIWithRoster(2500, 2500, 0, StarterArenaIdx, 1)
 	clearPOIRoster(t, gw, poiNetID)
 	gw.stage.TickOne(sys, 0.05)
 
@@ -41,7 +41,7 @@ func TestPOIClear_T3RewardScaledBy6x(t *testing.T) {
 
 	sys := newWiredPOISystem(t, gw)
 
-	poiNetID := gw.SpawnPOI(2500, 2500, 0, StarterArenaIdx, 3)
+	poiNetID := gw.SpawnPOIWithRoster(2500, 2500, 0, StarterArenaIdx, 3)
 	clearPOIRoster(t, gw, poiNetID)
 	gw.stage.TickOne(sys, 0.05)
 

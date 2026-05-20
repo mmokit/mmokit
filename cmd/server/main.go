@@ -15,6 +15,7 @@ import (
 	"github.com/zenion/mmoserver/pkg/services/auth"
 	"github.com/zenion/mmoserver/pkg/coords"
 	"github.com/zenion/mmoserver/pkg/mmokit"
+	"github.com/zenion/mmoserver/pkg/world/jsonrepo"
 	webpixi "github.com/zenion/mmoserver/web-pixi"
 )
 
@@ -40,8 +41,26 @@ func main() {
 		StaticFS:       webpixi.FS,
 		StaticFSPrefix: "dist",
 	}
+	worldDir := flag.String("world-dir", "world", "directory containing world manifest JSON files")
 	coordCfg.BindFlags()
 	flag.Parse()
+
+	// Load the hand-authored world manifest. Empty manifests are fine —
+	// jsonrepo.LoadAll creates the directory if missing and returns a
+	// snapshot with empty slices, so dev iteration starts from zero.
+	worldRepo := jsonrepo.New(*worldDir)
+	worldSnap, err := worldRepo.LoadAll()
+	if err != nil {
+		log.Fatalf("load world manifest from %s: %v", *worldDir, err)
+	}
+	log.Printf("world: loaded stations=%d pois=%d dungeons=%d belts=%d decorations=%d regions=%d",
+		len(worldSnap.Stations.Stations),
+		len(worldSnap.POIs.POIs),
+		len(worldSnap.Dungeons.Dungeons),
+		len(worldSnap.Belts.Belts),
+		len(worldSnap.Decorations.Decorations),
+		len(worldSnap.Regions.Regions),
+	)
 
 	// Parse roles upfront so init decisions (Postgres, marketplace) can branch
 	// on them before Process.Build runs.
@@ -306,7 +325,7 @@ func main() {
 	}
 
 	if needsGameState {
-		mmokit.AddState(coordinator, game.NewGameWorldStateFactory(&gameCfg, playerDB, playerSessions))
+		mmokit.AddState(coordinator, game.NewGameWorldStateFactory(&gameCfg, playerDB, playerSessions, worldRepo, worldSnap))
 	}
 
 	if playerDB != nil {
@@ -328,11 +347,19 @@ func main() {
 				}
 			}
 			// New player (no saved location). Spawn 30 units east of the
-			// trade station — outside DockRange (13.3) so the player sees
-			// the station and decides to dock instead of being auto-pulled.
+			// first trade station from the world manifest — outside
+			// DockRange (13.3) so the player sees the station and
+			// decides to dock instead of being auto-pulled. Falls back
+			// to (8100, 8100) inside the configured StationCell when the
+			// manifest carries no stations (smoke/test paths that boot
+			// against a totally empty world dir).
+			if len(worldSnap.Stations.Stations) > 0 {
+				st := worldSnap.Stations.Stations[0]
+				return coords.Location{X: st.WorldPos[0] + 30, Y: st.WorldPos[1]}
+			}
 			return coords.Location{
-				X: float32(gameCfg.StationCell.CellX)*coords.CellSize + game.StationLocalX + 30,
-				Y: float32(gameCfg.StationCell.CellY)*coords.CellSize + game.StationLocalY,
+				X: float32(gameCfg.StationCell.CellX)*coords.CellSize + 8100 + 30,
+				Y: float32(gameCfg.StationCell.CellY)*coords.CellSize + 8100,
 			}
 		})
 	}

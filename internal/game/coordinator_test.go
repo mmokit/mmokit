@@ -26,7 +26,7 @@ func newTestCoordinator() *pkguniverse.Process {
 		ConnManager: connMgr,
 		Logger:      log,
 	})
-	mmokit.AddState(coord, NewGameWorldStateFactory(&cfg, playerDB, playerSessions))
+	mmokit.AddState(coord, NewGameWorldStateFactory(&cfg, playerDB, playerSessions, nil, nil))
 	GameSetup(coord)
 	coord.Build()
 	return coord

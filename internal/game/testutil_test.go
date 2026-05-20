@@ -58,7 +58,7 @@ func newTestCell(cell pkguniverse.CellID) *pkguniverse.Cell {
 	// Build the game world directly (same logic as the world factory in GameSetup)
 	gw := NewGameWorld(base, &cfg, playerDB, comp.CellCoord{
 		CellX: cell.X, CellY: cell.Y,
-	}, false)
+	}, false, nil, nil)
 	gw.PlayerSessions = playerSessions
 
 	base.SetOnTransferReceived(func(entity ecs.Entity, frame *pkguniverse.TransferFrame) {

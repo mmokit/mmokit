@@ -16,7 +16,7 @@ func TestSupport_HealsLowestHPRosterAlly(t *testing.T) {
 	defer gw.Shutdown()
 	mmokit.Handle(gw.stage, healHandler) // newTestGameWorld doesn't wire RegisterHealVerb
 
-	poiNetID := gw.SpawnPOI(500, 500, 0, StarterArenaIdx, 1)
+	poiNetID := gw.SpawnPOIWithRoster(500, 500, 0, StarterArenaIdx, 1)
 	support := gw.SpawnNPC(500, 500, ArchetypeSupport, poiNetID, NPCSpawnModifiers{})
 
 	// Find two non-Support roster members anchored to this POI.
@@ -74,7 +74,7 @@ func TestSupport_NoTargetWhenAllAtFull(t *testing.T) {
 	defer gw.Shutdown()
 	mmokit.Handle(gw.stage, healHandler)
 
-	poiNetID := gw.SpawnPOI(500, 500, 0, StarterArenaIdx, 1)
+	poiNetID := gw.SpawnPOIWithRoster(500, 500, 0, StarterArenaIdx, 1)
 	support := gw.SpawnNPC(500, 500, ArchetypeSupport, poiNetID, NPCSpawnModifiers{})
 
 	hpBefore := map[uint32]float32{}

@@ -17,7 +17,11 @@ import (
 func TestStation_HasLayerStatic(t *testing.T) {
 	gw, _ := newTestGameWorld()
 
-	gw.SpawnStation()
+	gw.SpawnStation(8100, 8100, mmokit.WorldStation{
+		ID:     "test-station",
+		Name:   "TEST",
+		Radius: gw.Config.StationRadius,
+	})
 
 	var stationE mmokit.Entity
 	var found bool

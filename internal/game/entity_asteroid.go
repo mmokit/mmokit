@@ -6,7 +6,6 @@ import (
 
 	gamecomp "github.com/zenion/mmoserver/internal/component"
 	"github.com/zenion/mmoserver/internal/item"
-	"github.com/zenion/mmoserver/pkg/coords"
 	"github.com/zenion/mmoserver/pkg/mmokit"
 	"github.com/zenion/mmoserver/pkg/spatial"
 )
@@ -19,49 +18,19 @@ type AsteroidBundle struct {
 	Minable *gamecomp.Minable
 }
 
-func (gw *GameWorld) spawnAsteroids() {
-	belts := GenerateBelts(gw.RootCell, gw.Config.StationCell)
-	total := 0
-	for _, belt := range belts {
-		for i := 0; i < belt.Count; i++ {
-			angle := rand.Float32() * 2 * math.Pi
-			dist := rand.Float32() * belt.Radius
-			x := belt.CenterX + float32(math.Cos(float64(angle)))*dist
-			y := belt.CenterY + float32(math.Sin(float64(angle)))*dist
-			// Clamp within cell
-			if x < 0 {
-				x = 0
-			}
-			if y < 0 {
-				y = 0
-			}
-			if x >= coords.CellSize {
-				x = coords.CellSize - 1
-			}
-			if y >= coords.CellSize {
-				y = coords.CellSize - 1
-			}
-			// Resource type: 75% dominant, 25% random
-			allRes := item.ResourceIDs()
-			var itemID uint32
-			if rand.Float32() < 0.75 {
-				itemID = belt.ResourceItemIDs[rand.IntN(len(belt.ResourceItemIDs))]
-			} else {
-				itemID = allRes[rand.IntN(len(allRes))]
-			}
-			gw.spawnAsteroidWithItem(x, y, itemID)
-		}
-		total += belt.Count
-	}
-	gw.eng.Log.Log(CatPlayerSpawn, "spawned %d asteroids in %d belts for cell (%d,%d)",
-		total, len(belts), gw.RootCell.CellX, gw.RootCell.CellY)
-}
-
+// spawnAsteroid is the random-resource convenience used by tests and
+// the dungeon procgen wall-asteroid scatter. The per-cell bootstrap no
+// longer calls it directly — asteroids spawn from explicit world.Belt
+// entries via SpawnBelt (Task 8).
 func (gw *GameWorld) spawnAsteroid(x, y float32) {
 	allRes := item.ResourceIDs()
 	gw.spawnAsteroidWithItem(x, y, allRes[rand.IntN(len(allRes))])
 }
 
+// spawnAsteroidWithItem creates a single asteroid carrying the given
+// resource item. Kept as a private helper for Task 8's belt-scatter
+// loop and for the standalone unit tests that need a deterministic
+// resource type.
 func (gw *GameWorld) spawnAsteroidWithItem(x, y float32, itemID uint32) {
 	radius := gw.Config.AsteroidMinRadius + rand.Float32()*(gw.Config.AsteroidMaxRadius-gw.Config.AsteroidMinRadius)
 

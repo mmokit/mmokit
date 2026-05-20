@@ -257,7 +257,7 @@ func registerPOISpawn(reg *cmdsys.Registry, coord *mmokit.Process) error {
 			tier := game.TierForDist(game.DistFromStation(cellCoord, localX, localY, stationCell))
 
 			return mmokit.CmdOnLoop(ctx, cell.Engine, func() (POISpawnResult, error) {
-				netID := gw.SpawnPOI(localX, localY, gamecomp.POITypeCombat, args.RosterIdx, tier)
+				netID := gw.SpawnPOIWithRoster(localX, localY, gamecomp.POITypeCombat, args.RosterIdx, tier)
 				return POISpawnResult{NetID: netID, CellID: cellID}, nil
 			})
 		},

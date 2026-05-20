@@ -226,8 +226,12 @@ type PlayerInput struct {
 // LootCrate is a marker for dropped cargo entities.
 type LootCrate struct{}
 
-// Station is a marker for trade station entities.
-type Station struct{}
+// Station is the marker component for trade station entities. Name is
+// the operator-facing identifier sourced from world/stations.json and
+// survives transfer alongside the rest of the component.
+type Station struct {
+	Name string
+}
 
 // Ability slot constants (mapped to keyboard keys).
 // Abilities are defined by equipped items, not hardcoded.

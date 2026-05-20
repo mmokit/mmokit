@@ -13,20 +13,23 @@ type POIBundle struct {
 	POI *gamecomp.POI
 }
 
-// spawnPOIs runs the per-cell POI procgen and spawns the resulting
-// entities. Called from cell bootstrap after asteroids/belts have been
-// materialized so the clearance check has real data.
-func (gw *GameWorld) spawnPOIs() {
-	belts := GenerateBelts(gw.RootCell, gw.Config.StationCell)
-	defs := GeneratePOIs(gw.RootCell, gw.Config.StationCell, gw.Config, belts)
-	for _, d := range defs {
-		gw.SpawnPOI(d.X, d.Y, d.Type, d.RosterIdx, d.Tier)
-	}
+// SpawnPOI is the world-manifest entry point. Task 7 replaces this stub
+// with the real implementation that translates def.Type / def.Roster /
+// def.Tier into a SpawnPOIWithRoster call. The stub panics so the
+// per-cell bootstrap loop fails loudly when world/pois.json is non-empty
+// before the implementation lands.
+func (gw *GameWorld) SpawnPOI(localX, localY float32, def mmokit.WorldPOI) {
+	_ = localX
+	_ = localY
+	_ = def
+	panic("Task 7: implement SpawnPOI(localX, localY, def mmokit.WorldPOI)")
 }
 
-// SpawnPOI creates a POI entity at the given local position and spawns
-// its roster of NPCs anchored to it. Returns the POI's network ID.
-func (gw *GameWorld) SpawnPOI(x, y float32, poiType uint8, rosterIdx uint16, tier uint8) uint32 {
+// SpawnPOIWithRoster creates a POI entity at the given local position
+// and spawns its roster of NPCs anchored to it. Returns the POI's
+// network ID. Used by admin spawn commands and unit tests; Task 7 will
+// route the manifest-driven SpawnPOI through this helper.
+func (gw *GameWorld) SpawnPOIWithRoster(x, y float32, poiType uint8, rosterIdx uint16, tier uint8) uint32 {
 	e := gw.stage.Spawn(
 		mmokit.Position{X: x, Y: y},
 		mmokit.EntityKind{Type: gamecomp.KindPOI},

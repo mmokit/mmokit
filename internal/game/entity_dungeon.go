@@ -18,6 +18,18 @@ type DungeonBundle struct {
 	Dungeon *gamecomp.Dungeon
 }
 
+// SpawnDungeonAt is the world-manifest entry point. Task 9 replaces
+// this stub with the real implementation that routes through
+// SpawnDungeonFromGraph (or a per-dungeon-def variant). The stub panics
+// so the per-cell bootstrap loop fails loudly when world/dungeons.json
+// is non-empty before the implementation lands.
+func (gw *GameWorld) SpawnDungeonAt(localX, localY float32, def mmokit.WorldDungeon) {
+	_ = localX
+	_ = localY
+	_ = def
+	panic("Task 9: implement SpawnDungeonAt(localX, localY, def mmokit.WorldDungeon)")
+}
+
 // SpawnDungeon creates the dungeon marker entity at the given local
 // position with the given dungeon-state values. Returns the entity's
 // NetID.

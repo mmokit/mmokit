@@ -54,7 +54,7 @@ func runRosterTTK(t *testing.T, withSupport bool, dps float32) int {
 	mmokit.Handle(gw.stage, healHandler)
 	sys, _ := newWiredNPCAISystem(t, gw)
 
-	poiNetID := gw.SpawnPOI(500, 500, 0, StarterArenaIdx, 1)
+	poiNetID := gw.SpawnPOIWithRoster(500, 500, 0, StarterArenaIdx, 1)
 	if withSupport {
 		gw.SpawnNPC(500, 500, ArchetypeSupport, poiNetID, NPCSpawnModifiers{})
 	}

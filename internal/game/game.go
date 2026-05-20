@@ -6,6 +6,7 @@ import (
 
 	gamecomp "github.com/zenion/mmoserver/internal/component"
 	"github.com/zenion/mmoserver/internal/item"
+	"github.com/zenion/mmoserver/pkg/coords"
 	"github.com/zenion/mmoserver/pkg/mmokit"
 	"github.com/zenion/mmoserver/pkg/pathfinding"
 )
@@ -31,22 +32,24 @@ const (
 // NewGameWorld creates a new game world backed by the given Stage.
 // The cfg pointer is shared across all GameWorlds in the coordinator so that
 // runtime `config set` mutations propagate to every node at once.
-func NewGameWorld(base *mmokit.Stage, cfg *GameConfig, playerDB *PlayerRepo, cell mmokit.CellCoord, fromSplit bool) *GameWorld {
+func NewGameWorld(base *mmokit.Stage, cfg *GameConfig, playerDB *PlayerRepo, cell mmokit.CellCoord, fromSplit bool, worldRepo mmokit.WorldRepository, worldSnap *mmokit.WorldSnapshot) *GameWorld {
 	eng := base.Engine()
 	item.Init()
 
 	gw := &GameWorld{
-		stage:         base,
-		eng:           eng,
-		Spatial:       base.SpatialGrid(),
-		Config:        cfg,
-		PlayerDB:      playerDB,
+		stage:           base,
+		eng:             eng,
+		Spatial:         base.SpatialGrid(),
+		Config:          cfg,
+		PlayerDB:        playerDB,
 		dockingStates:   make(map[string]*DockingProgress),
 		poiRosters:      make(map[uint32][]uint32),
 		dungeonChambers: make(map[uint32]map[uint16]*ChamberState),
 		dungeonNavGrids: make(map[uint32]*pathfinding.NavGrid),
 		dungeonWalls:    make(map[uint32][]uint32),
 		autoRespawnAt:   make(map[uint32]uint32),
+		WorldRepo:       worldRepo,
+		WorldSnapshot:   worldSnap,
 	}
 	gw.Players = eng.Players
 
@@ -135,10 +138,11 @@ func NewGameWorld(base *mmokit.Stage, cfg *GameConfig, playerDB *PlayerRepo, cel
 		// transfer it back to the death cell — landing the player at the
 		// POI again, where the surviving NPCs kill them on sight.
 		pdata := gw.PlayerDB.Bind(s)
-		pdata.X = StationLocalX
-		pdata.Y = StationLocalY
-		pdata.CellX = gw.Config.StationCell.CellX
-		pdata.CellY = gw.Config.StationCell.CellY
+		spawnCell, spawnX, spawnY := gw.respawnLocation()
+		pdata.X = spawnX
+		pdata.Y = spawnY
+		pdata.CellX = spawnCell.CellX
+		pdata.CellY = spawnCell.CellY
 		gw.PlayerDB.MarkDirtyByUserID(pdata.UserID)
 		// Zero velocity + shield NOW (safe — existing component writes,
 		// not structural changes).
@@ -201,8 +205,9 @@ func NewGameWorld(base *mmokit.Stage, cfg *GameConfig, playerDB *PlayerRepo, cel
 		// AfterSystem) instead of poking ark directly.
 		mmokit.RemoveComponent[mmokit.Dormant](gw.stage.Commands(), entity)
 		if pos := mmokit.Get[mmokit.Position](entity); pos != nil {
-			pos.X = StationLocalX
-			pos.Y = StationLocalY
+			_, spawnX, spawnY := gw.respawnLocation()
+			pos.X = spawnX
+			pos.Y = spawnY
 		}
 		if v := mmokit.Get[mmokit.Velocity](entity); v != nil {
 			v.X, v.Y = 0, 0
@@ -300,23 +305,44 @@ func NewGameWorld(base *mmokit.Stage, cfg *GameConfig, playerDB *PlayerRepo, cel
 	gw.wireStageCallbacks()
 
 	// Spawn initial content for this cell (skip for split-created worlds —
-	// entities arrive via transfer from the parent cell)
+	// entities arrive via transfer from the parent cell). Every kind of
+	// world content comes from the per-cell bucket of the world manifest.
+	// Empty manifest sections mean nothing spawns and the stub spawners
+	// are never invoked.
 	if !fromSplit {
-		gw.spawnAsteroids()
-		if cell == cfg.StationCell {
-			gw.SpawnStation()
+		bucket := gw.bucketForRootCell()
+		for _, s := range bucket.Stations {
+			gw.SpawnStation(s.LocalPos[0], s.LocalPos[1], s.Def)
 		}
-		gw.spawnPOIs()
-		// Dungeon testsite: one procgen dungeon in the designated cell.
-		// Gated to a single cell during v1 — global rollout follows in a
-		// later spec pass.
-		if int(cell.CellX) == cfg.DungeonTestsiteCellX && int(cell.CellY) == cfg.DungeonTestsiteCellY {
-			x := StationLocalX + cfg.DungeonTestsiteOffsetX
-			y := StationLocalY + cfg.DungeonTestsiteOffsetY
-			gw.SpawnDungeonFromGraph(x, y, DungeonSeed(cell.CellX, cell.CellY))
+		for _, p := range bucket.POIs {
+			gw.SpawnPOI(p.LocalPos[0], p.LocalPos[1], p.Def)
+		}
+		for _, d := range bucket.Dungeons {
+			gw.SpawnDungeonAt(d.LocalPos[0], d.LocalPos[1], d.Def)
+		}
+		for _, b := range bucket.Belts {
+			gw.SpawnBelt(b.LocalPos[0], b.LocalPos[1], b.Def)
+		}
+		for _, dc := range bucket.Decorations {
+			gw.SpawnDecoration(dc.LocalPos[0], dc.LocalPos[1], dc.Def)
 		}
 	}
 
 	return gw
+}
+
+// respawnLocation returns the cell + local position a player should be
+// sent to on death/respawn. Prefers the first station in the world
+// manifest (its world position drives both the destination cell and the
+// local offset inside that cell); falls back to (Config.StationCell,
+// 8100, 8100) when no manifest is loaded or no stations are placed —
+// keeping legacy behavior alive for tests that don't wire a manifest.
+func (gw *GameWorld) respawnLocation() (mmokit.CellCoord, float32, float32) {
+	if gw.WorldSnapshot != nil && len(gw.WorldSnapshot.Stations.Stations) > 0 {
+		st := gw.WorldSnapshot.Stations.Stations[0]
+		wp := coords.FromFlat(float64(st.WorldPos[0]), float64(st.WorldPos[1]))
+		return mmokit.CellCoord{CellX: wp.CellX, CellY: wp.CellY}, wp.LocalX, wp.LocalY
+	}
+	return gw.Config.StationCell, 8100, 8100
 }
 

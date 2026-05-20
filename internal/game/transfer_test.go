@@ -40,7 +40,7 @@ func newTestGameWorld() (*GameWorld, *net.ConnManager) {
 	tmpCoord := pkguniverse.New(pkguniverse.Config{CellsX: 1, CellsY: 1, TickRate: 20})
 	GameSetup(tmpCoord)
 	tmpCoord.RealizeKindSpecs(base)
-	gw := NewGameWorld(base, &cfg, playerDB, mmokit.CellCoord{}, false)
+	gw := NewGameWorld(base, &cfg, playerDB, mmokit.CellCoord{}, false, nil, nil)
 	// Register the GameWorld as cell-local state so production paths that
 	// resolve via mmokit.State[GameWorld](stage) (e.g. system Init, verb
 	// dispatch) work inside unit tests.
