@@ -21,79 +21,41 @@
   // boundary drawing so the editor doesn't suggest cells exist that don't.
   let clusterBounds = $state<{ minX: number; maxX: number; minY: number; maxY: number } | null>(null);
 
-  // Live debug overlay state — visible in the canvas top-right so we can
-  // diagnose "cell lines not showing" without a devtools dance. Tracks the
-  // exact reason the cells layer drew (or didn't) on the last frame.
-  let dbg = $state<{
-    cellsLayerOn: boolean;
-    zoom: number;
-    cellPx: number;        // CELL_SIZE * zoom — must be ≥ 12 to draw
-    bounds: string;        // serialized clusterBounds
-    apiFetch: string;      // last apiGet status
-    sseEvents: number;     // count of cells SSE messages received
-    lastSSELen: number | null;
-    drawSkipReason: string;
-    recomputes: number;
-    lastRecomputeInfo: string;
-  }>({
-    cellsLayerOn: true,
-    zoom: 0,
-    cellPx: 0,
-    bounds: "null",
-    apiFetch: "pending",
-    sseEvents: 0,
-    lastSSELen: null,
-    drawSkipReason: "",
-    recomputes: 0,
-    lastRecomputeInfo: "",
-  });
-
   function parseCellID(id: string): { x: number; y: number } | null {
-    // Format is "X_Y" at depth 0; "X_Y:N" for split children — we use the
-    // root XY for bounding-box purposes since splits sit inside their parent.
+    // Format from /admin/api/cells is "cell_X_Y" at depth 0 and
+    // "cell_X_Y:N" for split children. We use the root XY for bounding-box
+    // purposes since splits sit inside their parent. Strategy: drop the
+    // split suffix, then read the LAST two underscore-separated integer
+    // segments so the parser is robust to optional "cell_" prefix or any
+    // future naming evolution.
     const head = id.split(":")[0];
     const parts = head.split("_");
-    if (parts.length !== 2) return null;
-    const x = parseInt(parts[0], 10);
-    const y = parseInt(parts[1], 10);
+    if (parts.length < 2) return null;
+    const y = parseInt(parts[parts.length - 1], 10);
+    const x = parseInt(parts[parts.length - 2], 10);
     if (!isFinite(x) || !isFinite(y)) return null;
     return { x, y };
   }
 
   function recomputeBoundsFrom(cells: CellInfo[]): void {
-    const caller = new Error().stack?.split("\n")[2]?.trim() ?? "?";
     if (!cells || cells.length === 0) {
-      // eslint-disable-next-line no-console
-      console.log("[WorldCanvas] recomputeBoundsFrom EMPTY (cells=", cells, ") setting bounds=null. caller:", caller);
       clusterBounds = null;
-      dbg.recomputes = dbg.recomputes + 1;
-      dbg.lastRecomputeInfo = `empty (caller: ${caller.slice(0, 60)})`;
       return;
     }
     let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
-    let parsed = 0;
-    const ids: string[] = [];
     for (const c of cells) {
-      ids.push(c.id);
       const xy = parseCellID(c.id);
       if (!xy) continue;
-      parsed++;
       if (xy.x < minX) minX = xy.x;
       if (xy.x > maxX) maxX = xy.x;
       if (xy.y < minY) minY = xy.y;
       if (xy.y > maxY) maxY = xy.y;
     }
-    // eslint-disable-next-line no-console
-    console.log("[WorldCanvas] recomputeBoundsFrom n=", cells.length, "parsed=", parsed, "ids=", ids, "bounds=", { minX, maxX, minY, maxY }, "caller:", caller);
     if (!isFinite(minX)) {
       clusterBounds = null;
-      dbg.recomputes = dbg.recomputes + 1;
-      dbg.lastRecomputeInfo = `n=${cells.length} parsed=0 (caller: ${caller.slice(0, 60)})`;
       return;
     }
     clusterBounds = { minX, maxX, minY, maxY };
-    dbg.recomputes = dbg.recomputes + 1;
-    dbg.lastRecomputeInfo = `n=${cells.length} parsed=${parsed} → ${minX},${minY}..${maxX},${maxY}`;
   }
 
   $effect(() => {
@@ -180,18 +142,10 @@
   }
 
   function drawCellBoundaries(ctx: CanvasRenderingContext2D, w: number, h: number): void {
-    dbg.cellsLayerOn = worldStore.layers.cells;
-    dbg.zoom = worldStore.zoom;
-    dbg.cellPx = CELL_SIZE * worldStore.zoom;
-    dbg.bounds = clusterBounds
-      ? `${clusterBounds.minX},${clusterBounds.minY}..${clusterBounds.maxX},${clusterBounds.maxY}`
-      : "null";
-
-    if (!worldStore.layers.cells) { dbg.drawSkipReason = "layer off"; return; }
-    if (!clusterBounds) { dbg.drawSkipReason = "no bounds"; return; }
+    if (!worldStore.layers.cells) return;
+    if (!clusterBounds) return; // bounds not loaded yet — the apiGet on mount fills this in a frame
     const z = worldStore.zoom;
-    if (CELL_SIZE * z < 12) { dbg.drawSkipReason = `cell <12px (${(CELL_SIZE * z).toFixed(1)})`; return; }
-    dbg.drawSkipReason = "";
+    if (CELL_SIZE * z < 12) return; // too zoomed-out — skip
 
     // Only render cells that actually exist in the running cluster. The
     // engine supports negative cell indices in principle (CellCoord is
@@ -503,24 +457,14 @@
     // 1Hz and may not have streamed anything yet when the editor opens.
     apiGet<CellInfo[]>("/admin/api/cells")
       .then((list) => {
-        const n = list?.length ?? 0;
-        dbg.apiFetch = `ok n=${n}`;
-        // eslint-disable-next-line no-console
-        console.log("[WorldCanvas] /admin/api/cells →", n, list);
         cellsStore.set(list);
         recomputeBoundsFrom(list);
         scheduleRedraw();
       })
-      .catch((err: Error) => {
-        dbg.apiFetch = `error: ${err?.message ?? "?"}`;
-        // eslint-disable-next-line no-console
-        console.error("[WorldCanvas] /admin/api/cells failed", err);
-      });
+      .catch(() => {});
     // Keep bounds fresh via SSE for live split/merge.
     const offCells = stream.subscribe("cells", (data) => {
       const list = data as CellInfo[];
-      dbg.sseEvents = dbg.sseEvents + 1;
-      dbg.lastSSELen = list?.length ?? null;
       cellsStore.set(list);
       recomputeBoundsFrom(list);
       scheduleRedraw();
@@ -773,25 +717,4 @@
     <div>esc · clear selection</div>
   </div>
 
-  <!-- Debug overlay (top-right) -->
-  <div
-    class="absolute top-3 right-3 pointer-events-none bg-[var(--bg-deep)]/85 backdrop-blur border border-[var(--border-subtle)] rounded px-2.5 py-1.5 font-mono text-[10px] tracking-tight flex flex-col gap-0.5 min-w-[220px]"
-    style="color: rgba(232, 237, 247, 0.85)"
-  >
-    <div class="text-[var(--text-dim)] uppercase tracking-[0.18em] text-[8.5px] mb-0.5">cells layer debug</div>
-    <div>layer on: <span style="color: {dbg.cellsLayerOn ? 'rgb(134,239,172)' : 'rgb(252,165,165)'}">{dbg.cellsLayerOn}</span></div>
-    <div>zoom: {dbg.zoom.toFixed(4)} (cell={dbg.cellPx.toFixed(0)}px, min 12)</div>
-    <div>bounds: <span style="color: {dbg.bounds === 'null' ? 'rgb(252,165,165)' : 'rgb(134,239,172)'}">{dbg.bounds}</span></div>
-    <div>api: <span style="color: {dbg.apiFetch.startsWith('ok') ? 'rgb(134,239,172)' : dbg.apiFetch === 'pending' ? 'rgb(250,204,21)' : 'rgb(252,165,165)'}">{dbg.apiFetch}</span></div>
-    <div>sse events: {dbg.sseEvents}{dbg.lastSSELen !== null ? ` (last n=${dbg.lastSSELen})` : ""}</div>
-    <div>recomputes: {dbg.recomputes}</div>
-    {#if dbg.lastRecomputeInfo}
-      <div style="opacity:.7; max-width:260px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap" title={dbg.lastRecomputeInfo}>last: {dbg.lastRecomputeInfo}</div>
-    {/if}
-    {#if dbg.drawSkipReason}
-      <div style="color: rgb(252,165,165)">skip: {dbg.drawSkipReason}</div>
-    {:else}
-      <div style="color: rgb(134,239,172)">drawing ✓</div>
-    {/if}
-  </div>
 </div>
