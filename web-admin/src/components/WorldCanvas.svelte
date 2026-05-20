@@ -139,53 +139,75 @@
 
   function drawCellBoundaries(ctx: CanvasRenderingContext2D, w: number, h: number): void {
     if (!worldStore.layers.cells) return;
-    if (!clusterBounds) return; // cells SSE hasn't hydrated yet
     const z = worldStore.zoom;
     if (CELL_SIZE * z < 12) return; // too zoomed-out — skip
 
-    // The running cluster occupies cells [minX..maxX, minY..maxY] inclusive.
-    // We draw cell boundaries (and labels) ONLY inside that rectangle so the
-    // editor doesn't suggest cells exist outside the actual mesh.
-    const { minX, maxX, minY, maxY } = clusterBounds;
-    const wxLeft = minX * CELL_SIZE;
-    const wxRight = (maxX + 1) * CELL_SIZE;
-    const wyTop = minY * CELL_SIZE;
-    const wyBottom = (maxY + 1) * CELL_SIZE;
-    const [sxLeft, syTop] = worldToScreen(wxLeft, wyTop, w, h);
-    const [sxRight, syBottom] = worldToScreen(wxRight, wyBottom, w, h);
+    // Cluster-aware view: the running cluster occupies a finite rectangle of
+    // cells; we draw boundaries / labels for THOSE cells brightly and tint
+    // the region. Cells outside the cluster get faint grid lines so the
+    // editor still shows the world-coord grid for orientation — they just
+    // visually fade into the background.
+    const [wxMin, wyMin] = screenToWorld(0, 0, w, h);
+    const [wxMax, wyMax] = screenToWorld(w, h, w, h);
+    const cxMin = Math.floor(wxMin / CELL_SIZE) - 1;
+    const cxMax = Math.ceil(wxMax / CELL_SIZE) + 1;
+    const cyMin = Math.floor(wyMin / CELL_SIZE) - 1;
+    const cyMax = Math.ceil(wyMax / CELL_SIZE) + 1;
 
     ctx.save();
-    // Tint the cluster region so its extent is obvious vs the empty space
-    // outside.
-    ctx.fillStyle = "rgba(148, 163, 189, 0.025)";
-    ctx.fillRect(sxLeft, syTop, sxRight - sxLeft, syBottom - syTop);
 
-    ctx.strokeStyle = "rgba(148, 163, 189, 0.22)";
+    // Cluster tint + bounding rectangle (when we know the bounds).
+    if (clusterBounds) {
+      const { minX, maxX, minY, maxY } = clusterBounds;
+      const [sxLeft, syTop] = worldToScreen(minX * CELL_SIZE, minY * CELL_SIZE, w, h);
+      const [sxRight, syBottom] = worldToScreen((maxX + 1) * CELL_SIZE, (maxY + 1) * CELL_SIZE, w, h);
+      ctx.fillStyle = "rgba(96, 165, 250, 0.05)";
+      ctx.fillRect(sxLeft, syTop, sxRight - sxLeft, syBottom - syTop);
+      ctx.strokeStyle = "rgba(96, 165, 250, 0.55)";
+      ctx.lineWidth = 1.25;
+      ctx.strokeRect(sxLeft + 0.5, syTop + 0.5, sxRight - sxLeft, syBottom - syTop);
+    }
+
+    // All grid lines (full viewport range). Cells inside the cluster get a
+    // brighter stroke; cells outside get a dim stroke so the world-coord
+    // grid is still visible for navigation.
     ctx.lineWidth = 1;
-    ctx.beginPath();
-    // Vertical lines at cell boundaries within the cluster.
-    for (let cx = minX; cx <= maxX + 1; cx++) {
+    function inClusterX(cx: number): boolean {
+      return !!clusterBounds && cx >= clusterBounds.minX && cx <= clusterBounds.maxX + 1;
+    }
+    function inClusterY(cy: number): boolean {
+      return !!clusterBounds && cy >= clusterBounds.minY && cy <= clusterBounds.maxY + 1;
+    }
+    for (let cx = cxMin; cx <= cxMax; cx++) {
       const [sx] = worldToScreen(cx * CELL_SIZE, 0, w, h);
-      ctx.moveTo(sx + 0.5, syTop);
-      ctx.lineTo(sx + 0.5, syBottom);
+      ctx.beginPath();
+      ctx.moveTo(sx + 0.5, 0);
+      ctx.lineTo(sx + 0.5, h);
+      ctx.strokeStyle = inClusterX(cx) ? "rgba(148, 163, 189, 0.32)" : "rgba(148, 163, 189, 0.10)";
+      ctx.stroke();
     }
-    // Horizontal lines.
-    for (let cy = minY; cy <= maxY + 1; cy++) {
+    for (let cy = cyMin; cy <= cyMax; cy++) {
       const [, sy] = worldToScreen(0, cy * CELL_SIZE, w, h);
-      ctx.moveTo(sxLeft, sy + 0.5);
-      ctx.lineTo(sxRight, sy + 0.5);
+      ctx.beginPath();
+      ctx.moveTo(0, sy + 0.5);
+      ctx.lineTo(w, sy + 0.5);
+      ctx.strokeStyle = inClusterY(cy) ? "rgba(148, 163, 189, 0.32)" : "rgba(148, 163, 189, 0.10)";
+      ctx.stroke();
     }
-    ctx.stroke();
 
-    // Cell ID labels (faint) — only when cells are large enough to be useful.
+    // Cell ID labels — bright inside cluster, faint outside.
     if (CELL_SIZE * z >= 60) {
-      ctx.fillStyle = "rgba(148, 163, 189, 0.55)";
       ctx.font = "9.5px 'JetBrains Mono', ui-monospace, monospace";
       ctx.textAlign = "left";
       ctx.textBaseline = "top";
-      for (let cx = minX; cx <= maxX; cx++) {
-        for (let cy = minY; cy <= maxY; cy++) {
+      for (let cx = cxMin; cx <= cxMax - 1; cx++) {
+        for (let cy = cyMin; cy <= cyMax - 1; cy++) {
+          const inCluster =
+            !!clusterBounds &&
+            cx >= clusterBounds.minX && cx <= clusterBounds.maxX &&
+            cy >= clusterBounds.minY && cy <= clusterBounds.maxY;
           const [sx, sy] = worldToScreen(cx * CELL_SIZE, cy * CELL_SIZE, w, h);
+          ctx.fillStyle = inCluster ? "rgba(96, 165, 250, 0.85)" : "rgba(148, 163, 189, 0.30)";
           ctx.fillText(`${cx}_${cy}`, sx + 4, sy + 4);
         }
       }
