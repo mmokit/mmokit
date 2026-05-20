@@ -230,7 +230,7 @@ type LootCrate struct{}
 // the operator-facing identifier sourced from world/stations.json and
 // survives transfer alongside the rest of the component.
 type Station struct {
-	Name string
+	Name string `mmokit:"local"`
 }
 
 // Ability slot constants (mapped to keyboard keys).
