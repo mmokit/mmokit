@@ -2,6 +2,7 @@ package system
 
 import (
 	"fmt"
+	"reflect"
 	"strconv"
 
 	"github.com/zenion/mmoserver/pkg/quantize"
@@ -135,9 +136,18 @@ func toFloat32(v any) float32 {
 		return float32(x)
 	case int16:
 		return float32(x)
-	default:
-		return 0
 	}
+	// Fallback for named types (e.g. `type Multiplier float32`).
+	rv := reflect.ValueOf(v)
+	switch rv.Kind() {
+	case reflect.Float32, reflect.Float64:
+		return float32(rv.Float())
+	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+		return float32(rv.Int())
+	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
+		return float32(rv.Uint())
+	}
+	return 0
 }
 
 func toUint8(v any) uint8 {
@@ -152,9 +162,16 @@ func toUint8(v any) uint8 {
 		return uint8(x)
 	case float32:
 		return uint8(x)
-	default:
-		return 0
 	}
+	// Fallback for named types (e.g. `type SupercruisePhase uint8`).
+	rv := reflect.ValueOf(v)
+	switch rv.Kind() {
+	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
+		return uint8(rv.Uint())
+	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+		return uint8(rv.Int())
+	}
+	return 0
 }
 
 func toUint16(v any) uint16 {
@@ -167,9 +184,16 @@ func toUint16(v any) uint16 {
 		return uint16(x)
 	case float32:
 		return uint16(x)
-	default:
-		return 0
 	}
+	// Fallback for named types.
+	rv := reflect.ValueOf(v)
+	switch rv.Kind() {
+	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
+		return uint16(rv.Uint())
+	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+		return uint16(rv.Int())
+	}
+	return 0
 }
 
 func toUint32(v any) uint32 {
@@ -182,9 +206,16 @@ func toUint32(v any) uint32 {
 		return uint32(x)
 	case float32:
 		return uint32(x)
-	default:
-		return 0
 	}
+	// Fallback for named types.
+	rv := reflect.ValueOf(v)
+	switch rv.Kind() {
+	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
+		return uint32(rv.Uint())
+	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+		return uint32(rv.Int())
+	}
+	return 0
 }
 
 func toInt16(v any) int16 {
@@ -195,7 +226,14 @@ func toInt16(v any) int16 {
 		return int16(x)
 	case float32:
 		return int16(x)
-	default:
-		return 0
 	}
+	// Fallback for named types.
+	rv := reflect.ValueOf(v)
+	switch rv.Kind() {
+	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+		return int16(rv.Int())
+	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
+		return int16(rv.Uint())
+	}
+	return 0
 }
