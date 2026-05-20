@@ -316,10 +316,13 @@ func registerWorldMove(reg *cmdsys.Registry, coord *mmokit.Process, gwGetter fun
 				return nil, err
 			}
 
-			// 3. Despawn at the old location (may be a different cell).
-			oldWPc := coords.FromFlat(float64(oldWP[0]), float64(oldWP[1]))
-			if err := spawnInCell(ctx, coord, mmokit.WorldCellID{X: oldWPc.CellX, Y: oldWPc.CellY},
-				func(gw *game.GameWorld) { gw.DespawnPlacedByID(args.Type, args.ID) }); err != nil {
+			// 3. Despawn cluster-wide — belt asteroids etc. may have migrated
+			//    to neighboring cells after their parent's initial spawn, so
+			//    single-cell despawn would orphan them. oldWP is no longer
+			//    needed for the despawn step but we keep it for any future
+			//    "rollback on spawn failure" path.
+			_ = oldWP
+			if err := despawnPlacedClusterWide(ctx, coord, args.Type, args.ID); err != nil {
 				return nil, err
 			}
 
@@ -448,10 +451,15 @@ func registerWorldUpdate(reg *cmdsys.Registry, coord *mmokit.Process, gwGetter f
 				// shouldn't happen since UpdateXxx already errored if missing.
 				return WorldUpdateResult{Type: args.Type, ID: args.ID}, nil
 			}
+			// Despawn cluster-wide (entities may have migrated post-spawn —
+			// e.g. belt asteroids crossing cell boundaries), then respawn at
+			// the same position with the updated def.
+			if err := despawnPlacedClusterWide(ctx, coord, args.Type, args.ID); err != nil {
+				return nil, err
+			}
 			wpc := coords.FromFlat(float64(wp[0]), float64(wp[1]))
 			cellID := mmokit.WorldCellID{X: wpc.CellX, Y: wpc.CellY}
 			if err := spawnInCell(ctx, coord, cellID, func(gw *game.GameWorld) {
-				gw.DespawnPlacedByID(args.Type, args.ID)
 				spawnPlaced(gw, args.Type, args.ID, wpc.LocalX, wpc.LocalY)
 			}); err != nil {
 				return nil, err
@@ -526,9 +534,9 @@ func registerWorldDelete(reg *cmdsys.Registry, coord *mmokit.Process, gwGetter f
 			}
 
 			reloadSnapshotInto(gw, coord)
-			wpc := coords.FromFlat(float64(wp[0]), float64(wp[1]))
-			if err := spawnInCell(ctx, coord, mmokit.WorldCellID{X: wpc.CellX, Y: wpc.CellY},
-				func(gw *game.GameWorld) { gw.DespawnPlacedByID(args.Type, args.ID) }); err != nil {
+			// Despawn cluster-wide so any migrated children (e.g. belt
+			// asteroids handed off to neighbor cells) get cleaned up.
+			if err := despawnPlacedClusterWide(ctx, coord, args.Type, args.ID); err != nil {
 				return nil, err
 			}
 
@@ -686,6 +694,29 @@ func registerWorldExport(reg *cmdsys.Registry, coord *mmokit.Process, gwGetter f
 }
 
 // ── helpers ────────────────────────────────────────────────────────────────
+
+// despawnPlacedClusterWide runs DespawnPlacedByID on every local cell. We
+// can't single-cell-target despawns because some entities migrate across
+// cells after spawn (e.g. belt asteroids whose disk straddles a boundary
+// are handed off by the engine). A move/update/delete must sweep
+// everywhere or those migrants survive their parent's despawn.
+func despawnPlacedClusterWide(ctx context.Context, coord *mmokit.Process, typ, id string) error {
+	for _, cell := range coord.Cells {
+		if cell == nil || cell.Stage == nil || cell.Engine == nil {
+			continue
+		}
+		c := cell
+		if _, err := mmokit.CmdOnLoop(ctx, c.Engine, func() (struct{}, error) {
+			if gw := mmokit.State[game.GameWorld](c.Stage); gw != nil {
+				gw.DespawnPlacedByID(typ, id)
+			}
+			return struct{}{}, nil
+		}); err != nil {
+			return err
+		}
+	}
+	return nil
+}
 
 // spawnInCell finds the cell on the coord owning (cellID) and runs fn on
 // its game loop. JSON is the source of truth and is cell-agnostic, so a
