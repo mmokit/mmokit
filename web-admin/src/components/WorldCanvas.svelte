@@ -9,6 +9,7 @@
   } from "$lib/world-store.svelte";
   import { cellsStore } from "$lib/stores.svelte";
   import { stream } from "$lib/stream";
+  import { apiGet } from "$lib/api";
   import type { CellInfo } from "$lib/types";
 
   let canvas: HTMLCanvasElement;
@@ -58,10 +59,24 @@
   });
 
   // Mouse / interaction state.
-  let dragging = $state(false);
+  let dragging = $state(false);            // shift-drag canvas pan
   let panStart = { x: 0, y: 0 };
   let panOrig = { x: 0, y: 0 };
   let mouseScreen = $state<{ x: number; y: number } | null>(null);
+
+  // Drag-to-move state for the selected entity. When the user mousedowns
+  // on an entity in select mode and moves the mouse beyond DRAG_THRESHOLD_PX,
+  // we treat it as a move-drag: live ghost preview while dragging,
+  // world.move RPC on release. Below threshold = click (no-op past selection).
+  const DRAG_THRESHOLD_PX = 4;
+  let entityDrag = $state<null | {
+    type: string;
+    id: string;
+    startScreen: { x: number; y: number };
+    startWorld: [number, number];
+    currentWorld: [number, number];
+    moved: boolean;
+  }>(null);
 
   // Color palette for entity types — matches WorldPalette glyph colors.
   const COLORS = {
@@ -292,6 +307,31 @@
         ctx.stroke();
       }
     }
+
+    // Drag-to-move ghost: while the user is dragging the selected entity,
+    // render a translucent marker at the current cursor world pos so the
+    // commit position is obvious. The actual entity stays drawn at its
+    // pre-move pos until the world.move RPC + refresh completes.
+    if (entityDrag && entityDrag.moved) {
+      const [sx, sy] = worldToScreen(entityDrag.currentWorld[0], entityDrag.currentWorld[1], w, h);
+      ctx.save();
+      ctx.setLineDash([4, 3]);
+      ctx.strokeStyle = "rgba(103, 232, 238, 0.85)";
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.arc(sx, sy, 9, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.fillStyle = "rgba(103, 232, 238, 0.95)";
+      ctx.font = "9.5px 'JetBrains Mono', ui-monospace, monospace";
+      ctx.textAlign = "left";
+      ctx.textBaseline = "middle";
+      ctx.fillText(
+        `→ (${Math.round(entityDrag.currentWorld[0])}, ${Math.round(entityDrag.currentWorld[1])})`,
+        sx + 12, sy,
+      );
+      ctx.restore();
+    }
   }
 
   function drawDot(ctx: CanvasRenderingContext2D, sx: number, sy: number, color: string, selected: boolean): void {
@@ -395,32 +435,62 @@
     drawCursor(ctx, w, h);
   }
 
+  // RAF-coalesced redraw: any state change schedules at most one redraw per
+  // frame. This replaces the always-on 60fps loop, which was burning CPU
+  // even when nothing was changing (and stuttering at extreme zooms where
+  // the per-frame draw exceeded 16ms).
+  let rafPending = 0;
+  function scheduleRedraw(): void {
+    if (rafPending) return;
+    rafPending = requestAnimationFrame(() => {
+      rafPending = 0;
+      redraw();
+    });
+  }
+
   onMount(() => {
-    // Subscribe to the cells SSE topic so we can compute the cluster's
-    // bounding box. The /cluster route also subscribes to this topic; both
-    // share one EventSource via stream.subscribe's de-dup.
+    // Seed cluster bounds via a one-shot fetch — the cells SSE topic is
+    // 1Hz and may not have streamed anything yet when the editor opens.
+    apiGet<CellInfo[]>("/admin/api/cells")
+      .then((list) => {
+        cellsStore.set(list);
+        recomputeBoundsFrom(list);
+        scheduleRedraw();
+      })
+      .catch(() => {});
+    // Keep bounds fresh via SSE for live split/merge.
     const offCells = stream.subscribe("cells", (data) => {
       const list = data as CellInfo[];
       cellsStore.set(list);
       recomputeBoundsFrom(list);
+      scheduleRedraw();
     });
-    // Seed from whatever is already in the store (the user may have visited
-    // /cluster first, in which case bounds are immediately available).
     recomputeBoundsFrom(cellsStore.value ?? []);
 
-    const ro = new ResizeObserver(() => requestAnimationFrame(redraw));
+    const ro = new ResizeObserver(() => scheduleRedraw());
     ro.observe(container);
-    let raf = 0;
-    const tick = () => {
-      redraw();
-      raf = requestAnimationFrame(tick);
-    };
-    raf = requestAnimationFrame(tick);
+    scheduleRedraw();
     return () => {
       offCells();
       ro.disconnect();
-      cancelAnimationFrame(raf);
+      if (rafPending) cancelAnimationFrame(rafPending);
     };
+  });
+
+  // Any reactive read in this $effect schedules a redraw on change.
+  $effect(() => {
+    // Pull every piece of state the renderer touches so Svelte tracks them.
+    void worldStore.snapshot;
+    void worldStore.zoom;
+    void worldStore.pan;
+    void worldStore.tool;
+    void worldStore.selectedID;
+    void worldStore.selectedType;
+    void worldStore.layers;
+    void mouseScreen;
+    void entityDrag;
+    void clusterBounds;
+    scheduleRedraw();
   });
 
   // ── Picking ──────────────────────────────────────────────────────────
@@ -467,12 +537,37 @@
 
   function onMouseDown(e: MouseEvent): void {
     const { x, y } = getMouseScreen(e);
+    const rect = canvas.getBoundingClientRect();
+
     // Shift-drag = pan. Middle button also pans.
     if (e.shiftKey || e.button === 1) {
       dragging = true;
       panStart = { x, y };
       panOrig = { x: worldStore.pan[0], y: worldStore.pan[1] };
       e.preventDefault();
+      return;
+    }
+
+    // Select mode: mousedown on an entity initiates a potential drag-to-move.
+    // We commit to "move" only once the cursor passes DRAG_THRESHOLD_PX.
+    if (worldStore.tool === "select") {
+      const [wx, wy] = screenToWorld(x, y, rect.width, rect.height);
+      const tol = 10 / worldStore.zoom;
+      const hit = pickAt(wx, wy, tol);
+      if (hit) {
+        // Select immediately so the inspector reflects the choice even on
+        // a click-without-drag.
+        worldStore.setSelection(hit.type, hit.id);
+        entityDrag = {
+          type: hit.type,
+          id: hit.id,
+          startScreen: { x, y },
+          startWorld: [wx, wy],
+          currentWorld: [wx, wy],
+          moved: false,
+        };
+        e.preventDefault();
+      }
     }
   }
 
@@ -482,46 +577,61 @@
     const rect = canvas.getBoundingClientRect();
     const [wx, wy] = screenToWorld(x, y, rect.width, rect.height);
     worldStore.cursor = [wx, wy];
+
     if (dragging) {
       const dx = (x - panStart.x) / worldStore.zoom;
       const dy = (y - panStart.y) / worldStore.zoom;
       worldStore.pan = [panOrig.x + dx, panOrig.y + dy];
+      return;
+    }
+
+    if (entityDrag) {
+      const dx = x - entityDrag.startScreen.x;
+      const dy = y - entityDrag.startScreen.y;
+      if (!entityDrag.moved && Math.hypot(dx, dy) > DRAG_THRESHOLD_PX) {
+        entityDrag = { ...entityDrag, moved: true };
+      }
+      if (entityDrag.moved) {
+        entityDrag = { ...entityDrag, currentWorld: [wx, wy] };
+      }
     }
   }
 
-  function onMouseUp(): void {
+  async function onMouseUp(): Promise<void> {
     dragging = false;
+    const d = entityDrag;
+    entityDrag = null;
+    if (d && d.moved) {
+      try {
+        await worldStore.move(d.type, d.id, Math.round(d.currentWorld[0]), Math.round(d.currentWorld[1]));
+      } catch (err) {
+        console.error("world.move failed", err);
+      }
+    }
   }
 
   function onMouseLeave(): void {
     dragging = false;
+    entityDrag = null;
     mouseScreen = null;
   }
 
   async function onClick(e: MouseEvent): Promise<void> {
-    if (e.shiftKey) return; // shift = pan
-    if (dragging) return;
+    if (e.shiftKey) return;     // shift = pan
+    if (dragging) return;       // a pan finished here
+    // mousedown/up in select mode handles selection + drag-move. The click
+    // handler only fires for place tools.
+    if (worldStore.tool === "select") return;
+
     const { x, y } = getMouseScreen(e);
     const rect = canvas.getBoundingClientRect();
     const [wx, wy] = screenToWorld(x, y, rect.width, rect.height);
 
-    if (worldStore.tool === "select") {
-      const tol = 10 / worldStore.zoom; // ~10px in world units
-      const hit = pickAt(wx, wy, tol);
-      if (hit) {
-        worldStore.setSelection(hit.type, hit.id);
-      } else {
-        worldStore.clearSelection();
-      }
-      return;
-    }
-
-    // Place tool.
     const t = worldStore.tool;
     if (t === "region") return; // not supported by world.place yet
     const extra = PLACE_DEFAULTS[t] ?? {};
     try {
-      await worldStore.place(t, wx, wy, extra);
+      await worldStore.place(t, Math.round(wx), Math.round(wy), extra);
     } catch (err) {
       console.error("world.place failed", err);
     }
