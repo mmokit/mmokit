@@ -33,6 +33,8 @@
     sseEvents: number;     // count of cells SSE messages received
     lastSSELen: number | null;
     drawSkipReason: string;
+    recomputes: number;
+    lastRecomputeInfo: string;
   }>({
     cellsLayerOn: true,
     zoom: 0,
@@ -42,6 +44,8 @@
     sseEvents: 0,
     lastSSELen: null,
     drawSkipReason: "",
+    recomputes: 0,
+    lastRecomputeInfo: "",
   });
 
   function parseCellID(id: string): { x: number; y: number } | null {
@@ -57,24 +61,39 @@
   }
 
   function recomputeBoundsFrom(cells: CellInfo[]): void {
+    const caller = new Error().stack?.split("\n")[2]?.trim() ?? "?";
     if (!cells || cells.length === 0) {
+      // eslint-disable-next-line no-console
+      console.log("[WorldCanvas] recomputeBoundsFrom EMPTY (cells=", cells, ") setting bounds=null. caller:", caller);
       clusterBounds = null;
+      dbg.recomputes = dbg.recomputes + 1;
+      dbg.lastRecomputeInfo = `empty (caller: ${caller.slice(0, 60)})`;
       return;
     }
     let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+    let parsed = 0;
+    const ids: string[] = [];
     for (const c of cells) {
+      ids.push(c.id);
       const xy = parseCellID(c.id);
       if (!xy) continue;
+      parsed++;
       if (xy.x < minX) minX = xy.x;
       if (xy.x > maxX) maxX = xy.x;
       if (xy.y < minY) minY = xy.y;
       if (xy.y > maxY) maxY = xy.y;
     }
+    // eslint-disable-next-line no-console
+    console.log("[WorldCanvas] recomputeBoundsFrom n=", cells.length, "parsed=", parsed, "ids=", ids, "bounds=", { minX, maxX, minY, maxY }, "caller:", caller);
     if (!isFinite(minX)) {
       clusterBounds = null;
+      dbg.recomputes = dbg.recomputes + 1;
+      dbg.lastRecomputeInfo = `n=${cells.length} parsed=0 (caller: ${caller.slice(0, 60)})`;
       return;
     }
     clusterBounds = { minX, maxX, minY, maxY };
+    dbg.recomputes = dbg.recomputes + 1;
+    dbg.lastRecomputeInfo = `n=${cells.length} parsed=${parsed} → ${minX},${minY}..${maxX},${maxY}`;
   }
 
   $effect(() => {
@@ -765,6 +784,10 @@
     <div>bounds: <span style="color: {dbg.bounds === 'null' ? 'rgb(252,165,165)' : 'rgb(134,239,172)'}">{dbg.bounds}</span></div>
     <div>api: <span style="color: {dbg.apiFetch.startsWith('ok') ? 'rgb(134,239,172)' : dbg.apiFetch === 'pending' ? 'rgb(250,204,21)' : 'rgb(252,165,165)'}">{dbg.apiFetch}</span></div>
     <div>sse events: {dbg.sseEvents}{dbg.lastSSELen !== null ? ` (last n=${dbg.lastSSELen})` : ""}</div>
+    <div>recomputes: {dbg.recomputes}</div>
+    {#if dbg.lastRecomputeInfo}
+      <div style="opacity:.7; max-width:260px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap" title={dbg.lastRecomputeInfo}>last: {dbg.lastRecomputeInfo}</div>
+    {/if}
     {#if dbg.drawSkipReason}
       <div style="color: rgb(252,165,165)">skip: {dbg.drawSkipReason}</div>
     {:else}
