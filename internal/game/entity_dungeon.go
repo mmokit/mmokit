@@ -15,22 +15,50 @@ import (
 // Only the world-level Dungeon component travels with the entity — chamber
 // state (clear/cooldown, mob roster, terminal-boss progress) is kept
 // server-side in GameWorld.dungeonChambers keyed by the dungeon's netID.
+// PlacedID is local-only and tags dungeons spawned from world manifests
+// so world.* verbs can despawn the dungeon + its walls + its chamber
+// roster cleanly. Procgen/admin dungeons leave the field nil.
 type DungeonBundle struct {
-	Dungeon *gamecomp.Dungeon
+	Dungeon  *gamecomp.Dungeon
+	PlacedID *gamecomp.PlacedID `mmokit:"local"`
 }
 
 // SpawnDungeonAt is the world-manifest entry point. Delegates to
 // SpawnDungeonFromGraph using def.Seed (or fnv64(def.ID) when zero) so
 // the chamber layout is deterministic per-id — renaming a dungeon
-// re-rolls its interior, moving it does not.
-func (gw *GameWorld) SpawnDungeonAt(localX, localY float32, def mmokit.WorldDungeon) {
+// re-rolls its interior, moving it does not. Tags the dungeon marker
+// + every wall + every chamber roster NPC with PlacedID{def.ID} so
+// DespawnPlacedByID sweeps the whole subtree. Returns the dungeon
+// entity's NetID.
+func (gw *GameWorld) SpawnDungeonAt(localX, localY float32, def mmokit.WorldDungeon) uint32 {
 	seed := uint64(def.Seed)
 	if seed == 0 {
 		seed = fnvDungeon(def.ID)
 	}
 	netID := gw.SpawnDungeonFromGraph(localX, localY, seed)
+
+	// Tag dungeon marker.
+	if e := mmokit.EntityByNetID(gw.stage, netID); e.Alive() {
+		mmokit.Set(e, gamecomp.PlacedID{ID: def.ID})
+	}
+	// Tag every wall the dungeon procgen spawned.
+	for _, wallNetID := range gw.dungeonWalls[netID] {
+		if we := mmokit.EntityByNetID(gw.stage, wallNetID); we.Alive() {
+			mmokit.Set(we, gamecomp.PlacedID{ID: def.ID})
+		}
+	}
+	// Tag every chamber roster NPC.
+	for _, chamber := range gw.dungeonChambers[netID] {
+		for _, npcNetID := range chamber.AliveNetIDs {
+			if ne := mmokit.EntityByNetID(gw.stage, npcNetID); ne.Alive() {
+				mmokit.Set(ne, gamecomp.PlacedID{ID: def.ID})
+			}
+		}
+	}
+
 	gw.eng.Log.Log(CatPlayerSpawn, "dungeon spawned: id=%s name=%q netID=%d pos=(%.1f,%.1f) seed=%d",
 		def.ID, def.Name, netID, localX, localY, seed)
+	return netID
 }
 
 func fnvDungeon(id string) uint64 {

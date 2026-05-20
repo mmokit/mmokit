@@ -149,6 +149,30 @@ func (gw *GameWorld) DungeonChambers() map[uint32]map[uint16]*ChamberState {
 	return gw.dungeonChambers
 }
 
+// DespawnPlacedByID removes every entity tagged with the given PlacedID
+// from this stage. Used by world.* cmdsys verbs (world.move/update/
+// delete/reload) to clean up after a manifest mutation without
+// position-matching heuristics. The typ argument is informational only
+// — dispatch is by id; cascade behavior is encoded by the spawn path
+// (SpawnPOI/Dungeon tag both the marker and every roster/wall NPC with
+// the same PlacedID).
+func (gw *GameWorld) DespawnPlacedByID(typ, id string) int {
+	if id == "" {
+		return 0
+	}
+	var doomed []mmokit.Entity
+	mmokit.ForEach1(gw.stage, func(e mmokit.Entity, pid *gamecomp.PlacedID) {
+		if pid.ID == id {
+			doomed = append(doomed, e)
+		}
+	})
+	for _, e := range doomed {
+		gw.stage.Commands().Despawn(e.Handle())
+	}
+	gw.eng.Log.Log(CatPlayerSpawn, "world: despawned %d entities for type=%s id=%s", len(doomed), typ, id)
+	return len(doomed)
+}
+
 // RemoveDungeon drops every server-side tracking record for a dungeon
 // (chamber state + NavGrid + wall netID list). Used by
 // dungeon.regenerate to tear down the old layout before re-procgen.

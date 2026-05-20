@@ -33,14 +33,19 @@ const beltBaseAsteroidCount = 12
 // def.Density multiplies the baseline asteroid count. Resource
 // selection is currently random (seeded by def.ID) from the global
 // resource pool, matching the existing spawnAsteroid behavior.
-func (gw *GameWorld) SpawnBelt(localX, localY float32, def mmokit.WorldBelt) {
+//
+// Each scattered asteroid is tagged with PlacedID{def.ID} so world.*
+// verbs can despawn the whole belt with one DespawnPlacedByID sweep.
+// Belts have no separate marker entity — they ARE their scatter — so
+// the function returns 0 rather than a representative NetID.
+func (gw *GameWorld) SpawnBelt(localX, localY float32, def mmokit.WorldBelt) uint32 {
 	if def.Radius <= 0 {
 		gw.eng.Log.Log(CatPlayerSpawn, "world: skip belt id=%s — non-positive radius", def.ID)
-		return
+		return 0
 	}
 	count := int(float32(beltBaseAsteroidCount) * def.Density)
 	if count <= 0 {
-		return
+		return 0
 	}
 	rng := rand.New(rand.NewPCG(fnvBelt(def.ID), 0))
 	for i := 0; i < count; i++ {
@@ -48,10 +53,11 @@ func (gw *GameWorld) SpawnBelt(localX, localY float32, def mmokit.WorldBelt) {
 		r := def.Radius * float32(math.Sqrt(float64(rng.Float32())))
 		ax := localX + r*float32(math.Cos(float64(angle)))
 		ay := localY + r*float32(math.Sin(float64(angle)))
-		gw.spawnAsteroidSeeded(ax, ay, rng)
+		gw.spawnAsteroidSeededTagged(ax, ay, rng, def.ID)
 	}
 	gw.eng.Log.Log(CatPlayerSpawn, "belt spawned: id=%s pos=(%.1f,%.1f) radius=%.1f density=%.2f count=%d",
 		def.ID, localX, localY, def.Radius, def.Density, count)
+	return 0
 }
 
 // fnvBelt hashes a belt's stable ID into a 64-bit seed for the

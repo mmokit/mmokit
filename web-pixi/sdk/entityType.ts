@@ -16,6 +16,7 @@ export const EntityType = {
     LineTelegraph: 8,
     Dungeon: 9,
     DungeonWall: 10,
+    Decoration: 11,
 } as const;
 
 export type EntityTypeValue = typeof EntityType[keyof typeof EntityType];

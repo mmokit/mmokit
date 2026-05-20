@@ -41,6 +41,20 @@ type Decoration struct {
 	Variant string `net:"initial"`
 }
 
+// PlacedID tags an entity with the world-manifest id that spawned it.
+// Used by world.* cmdsys verbs to despawn / re-spawn placed entities
+// cleanly without position-matching heuristics. The component is
+// local-only — it survives cell transfer but never goes over the wire.
+//
+// Cascade behavior: SpawnPOI tags both the POI marker and every roster
+// NPC with the POI's PlacedID; SpawnDungeonAt tags the dungeon marker
+// and every wall with the dungeon's PlacedID; SpawnBelt tags the
+// asteroids it scatters. One DespawnPlacedByID(id) sweep removes the
+// whole subtree.
+type PlacedID struct {
+	ID string `mmokit:"local"`
+}
+
 // Health represents hit points.
 //
 // LastDamagedByNetID and DeathFired are server-side only (no net:"..." tag,

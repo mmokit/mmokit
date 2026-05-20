@@ -23,6 +23,10 @@ type NPCBundle struct {
 	NPCAI         *gamecomp.NPCAI
 	DungeonAnchor *gamecomp.DungeonAnchor `mmokit:"local"`
 	Pathing       *gamecomp.Pathing       `mmokit:"local"`
+	// PlacedID is attached only to NPCs spawned as part of a world-manifest
+	// POI / dungeon (so DespawnPlacedByID cascades to the roster). NPCs
+	// spawned via admin verbs leave it nil.
+	PlacedID *gamecomp.PlacedID `mmokit:"local"`
 }
 
 // NPCSpawnModifiers customizes a spawn-time NPC: elite roster variants

@@ -294,7 +294,29 @@ export interface DungeonWallEntity {
   angle: number;
 }
 
-export type AnyEntity = ShipEntity | AsteroidEntity | StationEntity | LootCrateEntity | NPCEntity | POIEntity | AoEMarkerEntity | ProjectileEntity | LineTelegraphEntity | DungeonEntity | DungeonWallEntity;
+/** Entity kind 11. */
+export interface DecorationEntity {
+  netID: number;
+  entityType: 11;
+  /**
+   * Cluster-clock stamp (Unix ms) from the authoritative producer at
+   * the moment this state was emitted. Preserves the producer's
+   * timeline through any relay hops. Used as the per-entity time-base
+   * for snapshot interpolation.
+   */
+  producedAtMs: number;
+  worldX: number;
+  worldY: number;
+  velX: number;
+  velY: number;
+  radius: number;
+  width: number;
+  height: number;
+  kind: string;
+  variant: string;
+}
+
+export type AnyEntity = ShipEntity | AsteroidEntity | StationEntity | LootCrateEntity | NPCEntity | POIEntity | AoEMarkerEntity | ProjectileEntity | LineTelegraphEntity | DungeonEntity | DungeonWallEntity | DecorationEntity;
 
 export interface DeltaWorldUpdate {
   tick: number;
