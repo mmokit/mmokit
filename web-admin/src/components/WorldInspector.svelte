@@ -1,6 +1,7 @@
 <script lang="ts">
   import { worldStore, ROSTERS } from "$lib/world-store.svelte";
   import { ApiError } from "$lib/api";
+  import ConfirmDialog from "./ConfirmDialog.svelte";
 
   // Local edit buffer — keyed by per-entity-type field names that match
   // the cmdsys world.update args (Name, Radius, Tier, Roster, Density, Kind, Variant).
@@ -8,6 +9,7 @@
   let dirty = $state<Record<string, unknown>>({});
   let error = $state<string | null>(null);
   let busy = $state(false);
+  let confirmDeleteOpen = $state(false);
 
   // Reset the edit buffer whenever the selection changes.
   $effect(() => {
@@ -63,9 +65,14 @@
     error = null;
   }
 
-  async function onDelete(): Promise<void> {
+  function onDeleteClick(): void {
     if (!sel) return;
-    if (!window.confirm(`Delete ${sel.type} "${sel.entity.id}"?`)) return;
+    confirmDeleteOpen = true;
+  }
+
+  async function onDeleteConfirm(): Promise<void> {
+    if (!sel) return;
+    confirmDeleteOpen = false;
     busy = true;
     error = null;
     try {
@@ -254,9 +261,25 @@
       <button
         type="button"
         disabled={busy}
-        onclick={onDelete}
+        onclick={onDeleteClick}
         class="w-full py-1.5 rounded font-mono text-[11px] uppercase tracking-[0.1em] border border-ember-400/30 text-ember-300 hover:bg-ember-400/15 disabled:opacity-50 disabled:cursor-not-allowed"
       >Delete</button>
     </div>
   {/if}
 </aside>
+
+<ConfirmDialog
+  open={confirmDeleteOpen && !!sel}
+  title="Delete {sel?.type ?? ''}"
+  confirmLabel={busy ? "Deleting…" : "Delete"}
+  cancelLabel="Cancel"
+  danger
+  onConfirm={onDeleteConfirm}
+  onCancel={() => (confirmDeleteOpen = false)}
+>
+  {#if sel}
+    Permanently remove <span class="font-mono text-[var(--text-bright)]">{sel.entity.id}</span>
+    from <span class="font-mono">world/{sel.type}s.json</span> and despawn it from the running cluster?
+    This writes to disk immediately and cannot be undone without git.
+  {/if}
+</ConfirmDialog>
