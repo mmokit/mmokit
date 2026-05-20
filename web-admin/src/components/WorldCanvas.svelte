@@ -7,9 +7,55 @@
     TIER_3_RADIUS,
     type Tool,
   } from "$lib/world-store.svelte";
+  import { cellsStore } from "$lib/stores.svelte";
+  import { stream } from "$lib/stream";
+  import type { CellInfo } from "$lib/types";
 
   let canvas: HTMLCanvasElement;
   let container: HTMLDivElement;
+
+  // Cluster bounds derived from the live cells SSE topic. The world is
+  // infinite in principle (int32 cell indices), but the running cluster
+  // covers a finite rectangle of cells. We use these bounds to clip cell
+  // boundary drawing so the editor doesn't suggest cells exist that don't.
+  let clusterBounds = $state<{ minX: number; maxX: number; minY: number; maxY: number } | null>(null);
+
+  function parseCellID(id: string): { x: number; y: number } | null {
+    // Format is "X_Y" at depth 0; "X_Y:N" for split children — we use the
+    // root XY for bounding-box purposes since splits sit inside their parent.
+    const head = id.split(":")[0];
+    const parts = head.split("_");
+    if (parts.length !== 2) return null;
+    const x = parseInt(parts[0], 10);
+    const y = parseInt(parts[1], 10);
+    if (!isFinite(x) || !isFinite(y)) return null;
+    return { x, y };
+  }
+
+  function recomputeBoundsFrom(cells: CellInfo[]): void {
+    if (!cells || cells.length === 0) {
+      clusterBounds = null;
+      return;
+    }
+    let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+    for (const c of cells) {
+      const xy = parseCellID(c.id);
+      if (!xy) continue;
+      if (xy.x < minX) minX = xy.x;
+      if (xy.x > maxX) maxX = xy.x;
+      if (xy.y < minY) minY = xy.y;
+      if (xy.y > maxY) maxY = xy.y;
+    }
+    if (!isFinite(minX)) {
+      clusterBounds = null;
+      return;
+    }
+    clusterBounds = { minX, maxX, minY, maxY };
+  }
+
+  $effect(() => {
+    recomputeBoundsFrom(cellsStore.value ?? []);
+  });
 
   // Mouse / interaction state.
   let dragging = $state(false);
@@ -78,44 +124,54 @@
 
   function drawCellBoundaries(ctx: CanvasRenderingContext2D, w: number, h: number): void {
     if (!worldStore.layers.cells) return;
+    if (!clusterBounds) return; // cells SSE hasn't hydrated yet
     const z = worldStore.zoom;
     if (CELL_SIZE * z < 12) return; // too zoomed-out — skip
 
-    // World bounds visible on screen.
-    const [wxMin, wyMin] = screenToWorld(0, 0, w, h);
-    const [wxMax, wyMax] = screenToWorld(w, h, w, h);
-
-    const cxMin = Math.floor(wxMin / CELL_SIZE) - 1;
-    const cxMax = Math.ceil(wxMax / CELL_SIZE) + 1;
-    const cyMin = Math.floor(wyMin / CELL_SIZE) - 1;
-    const cyMax = Math.ceil(wyMax / CELL_SIZE) + 1;
+    // The running cluster occupies cells [minX..maxX, minY..maxY] inclusive.
+    // We draw cell boundaries (and labels) ONLY inside that rectangle so the
+    // editor doesn't suggest cells exist outside the actual mesh.
+    const { minX, maxX, minY, maxY } = clusterBounds;
+    const wxLeft = minX * CELL_SIZE;
+    const wxRight = (maxX + 1) * CELL_SIZE;
+    const wyTop = minY * CELL_SIZE;
+    const wyBottom = (maxY + 1) * CELL_SIZE;
+    const [sxLeft, syTop] = worldToScreen(wxLeft, wyTop, w, h);
+    const [sxRight, syBottom] = worldToScreen(wxRight, wyBottom, w, h);
 
     ctx.save();
-    ctx.strokeStyle = "rgba(148, 163, 189, 0.18)";
+    // Tint the cluster region so its extent is obvious vs the empty space
+    // outside.
+    ctx.fillStyle = "rgba(148, 163, 189, 0.025)";
+    ctx.fillRect(sxLeft, syTop, sxRight - sxLeft, syBottom - syTop);
+
+    ctx.strokeStyle = "rgba(148, 163, 189, 0.22)";
     ctx.lineWidth = 1;
     ctx.beginPath();
-    for (let cx = cxMin; cx <= cxMax; cx++) {
+    // Vertical lines at cell boundaries within the cluster.
+    for (let cx = minX; cx <= maxX + 1; cx++) {
       const [sx] = worldToScreen(cx * CELL_SIZE, 0, w, h);
-      ctx.moveTo(sx + 0.5, 0);
-      ctx.lineTo(sx + 0.5, h);
+      ctx.moveTo(sx + 0.5, syTop);
+      ctx.lineTo(sx + 0.5, syBottom);
     }
-    for (let cy = cyMin; cy <= cyMax; cy++) {
+    // Horizontal lines.
+    for (let cy = minY; cy <= maxY + 1; cy++) {
       const [, sy] = worldToScreen(0, cy * CELL_SIZE, w, h);
-      ctx.moveTo(0, sy + 0.5);
-      ctx.lineTo(w, sy + 0.5);
+      ctx.moveTo(sxLeft, sy + 0.5);
+      ctx.lineTo(sxRight, sy + 0.5);
     }
     ctx.stroke();
 
     // Cell ID labels (faint) — only when cells are large enough to be useful.
     if (CELL_SIZE * z >= 60) {
-      ctx.fillStyle = "rgba(148, 163, 189, 0.45)";
+      ctx.fillStyle = "rgba(148, 163, 189, 0.55)";
       ctx.font = "9.5px 'JetBrains Mono', ui-monospace, monospace";
       ctx.textAlign = "left";
       ctx.textBaseline = "top";
-      for (let cx = cxMin; cx <= cxMax; cx++) {
-        for (let cy = cyMin; cy <= cyMax; cy++) {
+      for (let cx = minX; cx <= maxX; cx++) {
+        for (let cy = minY; cy <= maxY; cy++) {
           const [sx, sy] = worldToScreen(cx * CELL_SIZE, cy * CELL_SIZE, w, h);
-          ctx.fillText(`${cx},${cy}`, sx + 4, sy + 4);
+          ctx.fillText(`${cx}_${cy}`, sx + 4, sy + 4);
         }
       }
     }
@@ -340,6 +396,18 @@
   }
 
   onMount(() => {
+    // Subscribe to the cells SSE topic so we can compute the cluster's
+    // bounding box. The /cluster route also subscribes to this topic; both
+    // share one EventSource via stream.subscribe's de-dup.
+    const offCells = stream.subscribe("cells", (data) => {
+      const list = data as CellInfo[];
+      cellsStore.set(list);
+      recomputeBoundsFrom(list);
+    });
+    // Seed from whatever is already in the store (the user may have visited
+    // /cluster first, in which case bounds are immediately available).
+    recomputeBoundsFrom(cellsStore.value ?? []);
+
     const ro = new ResizeObserver(() => requestAnimationFrame(redraw));
     ro.observe(container);
     let raf = 0;
@@ -349,6 +417,7 @@
     };
     raf = requestAnimationFrame(tick);
     return () => {
+      offCells();
       ro.disconnect();
       cancelAnimationFrame(raf);
     };

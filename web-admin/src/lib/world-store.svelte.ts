@@ -88,7 +88,15 @@ interface WorldEntityRow {
   Detail: string;
 }
 
-interface WorldListResp {
+// The admin /commands/<verb> endpoint wraps the handler's typed Result as
+// {ok, result, traceId}. world.list's Result is {Entities: [...]}.
+interface CmdInvokeResp<T> {
+  ok: boolean;
+  result?: T;
+  traceId?: string;
+}
+
+interface WorldListResult {
   Entities: WorldEntityRow[] | null;
 }
 
@@ -120,8 +128,11 @@ class WorldStore {
   });
 
   async refresh(): Promise<void> {
-    const res = await apiPost<WorldListResp>("/admin/api/commands/world.list", {});
-    const entities = res?.Entities ?? [];
+    const res = await apiPost<CmdInvokeResp<WorldListResult>>(
+      "/admin/api/commands/world.list",
+      {},
+    );
+    const entities = res?.result?.Entities ?? [];
 
     const stations: WorldStation[] = [];
     const pois: WorldPOI[] = [];
