@@ -33,7 +33,26 @@ func (gw *GameWorld) spawnAsteroid(x, y float32) {
 // resource type.
 func (gw *GameWorld) spawnAsteroidWithItem(x, y float32, itemID uint32) {
 	radius := gw.Config.AsteroidMinRadius + rand.Float32()*(gw.Config.AsteroidMaxRadius-gw.Config.AsteroidMinRadius)
+	gw.spawnAsteroidAt(x, y, itemID, radius, rand.Float32()*2*math.Pi)
+}
 
+// spawnAsteroidSeeded creates a single asteroid with resource, radius,
+// and rotation all drawn from the supplied RNG. Used by SpawnBelt for
+// fully-deterministic per-belt scatter (same def.ID → same layout).
+func (gw *GameWorld) spawnAsteroidSeeded(x, y float32, rng *rand.Rand) {
+	allRes := item.ResourceIDs()
+	if len(allRes) == 0 {
+		return
+	}
+	itemID := allRes[rng.IntN(len(allRes))]
+	radius := gw.Config.AsteroidMinRadius + rng.Float32()*(gw.Config.AsteroidMaxRadius-gw.Config.AsteroidMinRadius)
+	gw.spawnAsteroidAt(x, y, itemID, radius, rng.Float32()*2*math.Pi)
+}
+
+// spawnAsteroidAt is the shared core: place a single asteroid with the
+// caller-chosen item, radius, and rotation. Layer is derived from the
+// item's Gaseous flag.
+func (gw *GameWorld) spawnAsteroidAt(x, y float32, itemID uint32, radius, angle float32) {
 	layer := spatial.LayerProp
 	if def := item.Get(itemID); def != nil && def.Gaseous {
 		layer = 0
@@ -43,7 +62,7 @@ func (gw *GameWorld) spawnAsteroidWithItem(x, y float32, itemID uint32) {
 		mmokit.Position{X: x, Y: y},
 		mmokit.EntityKind{Type: gamecomp.KindAsteroid},
 		mmokit.Collider{Radius: radius, Shape: spatial.ShapeCircle, Layer: layer},
-		mmokit.Rotation{Angle: rand.Float32() * 2 * math.Pi},
+		mmokit.Rotation{Angle: angle},
 		gamecomp.Minable{ItemID: itemID, Remaining: radius * 5},
 	)
 }
