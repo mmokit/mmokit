@@ -1,6 +1,7 @@
 package game
 
 import (
+	"hash/fnv"
 	"math"
 	"math/rand/v2"
 
@@ -18,16 +19,24 @@ type DungeonBundle struct {
 	Dungeon *gamecomp.Dungeon
 }
 
-// SpawnDungeonAt is the world-manifest entry point. Task 9 replaces
-// this stub with the real implementation that routes through
-// SpawnDungeonFromGraph (or a per-dungeon-def variant). The stub panics
-// so the per-cell bootstrap loop fails loudly when world/dungeons.json
-// is non-empty before the implementation lands.
+// SpawnDungeonAt is the world-manifest entry point. Delegates to
+// SpawnDungeonFromGraph using def.Seed (or fnv64(def.ID) when zero) so
+// the chamber layout is deterministic per-id — renaming a dungeon
+// re-rolls its interior, moving it does not.
 func (gw *GameWorld) SpawnDungeonAt(localX, localY float32, def mmokit.WorldDungeon) {
-	_ = localX
-	_ = localY
-	_ = def
-	panic("Task 9: implement SpawnDungeonAt(localX, localY, def mmokit.WorldDungeon)")
+	seed := uint64(def.Seed)
+	if seed == 0 {
+		seed = fnvDungeon(def.ID)
+	}
+	netID := gw.SpawnDungeonFromGraph(localX, localY, seed)
+	gw.eng.Log.Log(CatPlayerSpawn, "dungeon spawned: id=%s name=%q netID=%d pos=(%.1f,%.1f) seed=%d",
+		def.ID, def.Name, netID, localX, localY, seed)
+}
+
+func fnvDungeon(id string) uint64 {
+	h := fnv.New64a()
+	h.Write([]byte(id))
+	return h.Sum64()
 }
 
 // SpawnDungeon creates the dungeon marker entity at the given local
