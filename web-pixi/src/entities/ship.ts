@@ -7,6 +7,11 @@ import { px } from "../view";
 export function createShipDisplay(): EntityDisplayObject {
   const container = new Container();
 
+  // Supercruise wake — velocity-trailing ellipse drawn BEHIND the hull
+  // in container-space (rotates with the ship). Active during phase===2.
+  const supercruiseWake = new Graphics();
+  container.addChild(supercruiseWake);
+
   // Exhaust layer (behind hull)
   const exhaust = new Graphics();
   container.addChild(exhaust);
@@ -256,19 +261,47 @@ export function createShipDisplay(): EntityDisplayObject {
         nameTag.visible = false;
       }
 
-      // Supercruise Active-phase glow — drawn for ALL ships (including the
-      // local player) while phase===2. Soft pulsing circle behind the hull
-      // so nearby players can spot supercruising ships at a distance.
+      // Supercruise Active-phase visuals — drawn for ALL ships while phase===2:
+      //  (a) Velocity-trailing wake (container-space, rotated with hull) for
+      //      a "moving fast" readability cue.
+      //  (b) Concentric pulsing distortion rings (uiContainer, non-rotating)
+      //      that expand outward from the hull for a "gravity warp" telegraph.
+      // Together they make supercruising ships visually unmistakable.
+      supercruiseWake.clear();
       supercruiseGlow.clear();
       if (e.phase === 2) {
+        // (a) Wake: elongated ellipse trailing behind the hull along the ship's
+        // local -X axis (container is rotated with the ship's facing, so local
+        // +X is forward and -X is aft).
+        const speed = Math.sqrt(e.velX * e.velX + e.velY * e.velY);
+        if (speed > 0.5) {
+          const wakeLen = Math.max(w * 3, px(40));
+          const wakeWidth = h * 1.5;
+          supercruiseWake.ellipse(-wakeLen * 0.5, 0, wakeLen * 0.5, wakeWidth * 0.5)
+            .fill({ color: 0x66ccff, alpha: 0.18 })
+            .stroke({ color: 0x88ccff, width: px(1), alpha: 0.4 });
+          // Inner ellipse for depth
+          supercruiseWake.ellipse(-wakeLen * 0.35, 0, wakeLen * 0.4, wakeWidth * 0.35)
+            .fill({ color: 0xaaddff, alpha: 0.18 });
+        }
+
+        // (b) Pulsing distortion rings expanding outward from the hull.
         const hullRadius = Math.sqrt(hw * hw + hh * hh);
-        const glowRadius = hullRadius * 1.6 + px(6);
-        const glowPulse = 0.55 + 0.25 * Math.sin(now * 0.005);
-        // Outer halo
-        supercruiseGlow.circle(0, 0, glowRadius).fill({ color: 0x4aa0ff, alpha: 0.12 * glowPulse });
-        // Inner halo (brighter, tighter)
-        supercruiseGlow.circle(0, 0, hullRadius * 1.25 + px(3))
-          .fill({ color: 0x88ccff, alpha: 0.18 * glowPulse });
+        const ringPeriod = 1200; // ms per ring cycle
+        const ringCount = 3;
+        for (let r = 0; r < ringCount; r++) {
+          // Stagger each ring by 1/ringCount of the period so they overlap.
+          const phase = ((now + r * (ringPeriod / ringCount)) % ringPeriod) / ringPeriod;
+          // Ring radius grows from hullRadius to ~hullRadius*2.5 across the cycle.
+          const ringRadius = hullRadius * (1 + phase * 1.5) + px(4);
+          // Alpha fades from 0.6 -> 0 across the cycle.
+          const ringAlpha = 0.6 * (1 - phase);
+          supercruiseGlow.circle(0, 0, ringRadius)
+            .stroke({ color: 0x66ccff, width: px(2), alpha: ringAlpha });
+        }
+        // Persistent inner halo so the ship itself reads as "wrapped".
+        supercruiseGlow.circle(0, 0, hullRadius * 1.15)
+          .fill({ color: 0x88ccff, alpha: 0.12 });
       }
 
       // Supercruise channel radial — drawn for ALL ships while phase===1
