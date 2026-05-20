@@ -1,5 +1,7 @@
 package game
 
+import "strings"
+
 // RosterMember describes one component of a POI's enemy roster.
 type RosterMember struct {
 	Archetype uint8
@@ -81,6 +83,22 @@ func rosterForIdx(idx uint16) RosterDef {
 // in internal/game/commands. v1 ships with a single roster ("Starter
 // Arena") — future POI difficulty tiers extend the table.
 func RosterForIdx(idx uint16) RosterDef { return rosterForIdx(idx) }
+
+// RosterIdxForName returns the integer roster index for a roster name in
+// the rosters table. Space-insensitive ("StarterArena" matches "Starter
+// Arena") so manifest authors can use either form. Falls back to
+// StarterArenaIdx on miss — matches the defensive behavior of the rest of
+// the roster lookup path (a bad manifest entry gets a safe default rather
+// than a crash).
+func RosterIdxForName(name string) uint16 {
+	norm := strings.ReplaceAll(name, " ", "")
+	for i, r := range rosters {
+		if strings.ReplaceAll(r.Name, " ", "") == norm {
+			return uint16(i)
+		}
+	}
+	return StarterArenaIdx
+}
 
 // Roster index constants used by the tier table. Existing rosters slice
 // is indexed in declaration order — these constants pin the indices for

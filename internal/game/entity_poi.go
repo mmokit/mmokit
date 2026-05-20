@@ -13,16 +13,20 @@ type POIBundle struct {
 	POI *gamecomp.POI
 }
 
-// SpawnPOI is the world-manifest entry point. Task 7 replaces this stub
-// with the real implementation that translates def.Type / def.Roster /
-// def.Tier into a SpawnPOIWithRoster call. The stub panics so the
-// per-cell bootstrap loop fails loudly when world/pois.json is non-empty
-// before the implementation lands.
+// SpawnPOI is the world-manifest entry point. Translates a world.POI def
+// into a SpawnPOIWithRoster call, resolving the roster name to its table
+// index. Validates tier (1..3); a bad tier logs a warning and returns
+// silently so the per-cell bootstrap loop never crashes on a malformed
+// manifest entry — validation at edit time is the editor's job.
 func (gw *GameWorld) SpawnPOI(localX, localY float32, def mmokit.WorldPOI) {
-	_ = localX
-	_ = localY
-	_ = def
-	panic("Task 7: implement SpawnPOI(localX, localY, def mmokit.WorldPOI)")
+	if def.Tier < 1 || def.Tier > 3 {
+		gw.eng.Log.Log(CatPOI, "world: skip poi id=%s — invalid tier %d", def.ID, def.Tier)
+		return
+	}
+	rosterIdx := RosterIdxForName(def.Roster)
+	netID := gw.SpawnPOIWithRoster(localX, localY, gamecomp.POITypeCombat, rosterIdx, def.Tier)
+	gw.eng.Log.Log(CatPOI, "poi spawned: id=%s netID=%d tier=%d roster=%s pos=(%.1f,%.1f)",
+		def.ID, netID, def.Tier, def.Roster, localX, localY)
 }
 
 // SpawnPOIWithRoster creates a POI entity at the given local position
