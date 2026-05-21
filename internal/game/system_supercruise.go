@@ -22,12 +22,20 @@ type SupercruiseSystem struct {
 	mmokit.SystemBase
 	gw       *GameWorld
 	entities mmokit.Query[struct {
-		SC *gamecomp.Supercruise
-		H  *gamecomp.Health
-		SE *gamecomp.StatusEffects
-		MT *mmokit.MoveTarget `ecs:"optional"`
+		SC  *gamecomp.Supercruise
+		H   *gamecomp.Health
+		SE  *gamecomp.StatusEffects
+		MT  *mmokit.MoveTarget `ecs:"optional"`
+		Vel *mmokit.Velocity   `ecs:"optional"`
 	}]
 }
+
+// channelDragCoeff is the effective drag coefficient applied to ship
+// velocity while channeling supercruise. With dt=0.05 and coeff=4.0,
+// velocity halves every ~0.17s and reaches ~1.8% of the entry speed
+// after 1s. Prevents players from channeling while still moving at
+// full speed.
+const channelDragCoeff = 4.0
 
 func (s *SupercruiseSystem) Init() {
 	s.gw = mmokit.State[GameWorld](s.Stage())
@@ -37,7 +45,7 @@ func (s *SupercruiseSystem) Update(dt float32) {
 	gw := s.gw
 
 	for e, b := range s.entities.Iter {
-		sc, h, se, mt := b.SC, b.H, b.SE, b.MT
+		sc, h, se, mt, vel := b.SC, b.H, b.SE, b.MT, b.Vel
 		entity := mmokit.EntityFromECS(gw.stage, e)
 
 		// Tick lockout regardless of phase.
@@ -51,9 +59,17 @@ func (s *SupercruiseSystem) Update(dt float32) {
 		switch sc.Phase {
 		case gamecomp.SupercruiseChanneling:
 			sc.ChannelRemaining -= dt
-			// Keep player rooted while channeling.
+			// Keep player rooted while channeling — clear move target and
+			// aggressively damp residual velocity. Without the velocity
+			// damp, a player at max speed can channel while continuing
+			// to drift forward at full speed.
 			if mt != nil {
 				mt.Active = false
+			}
+			if vel != nil {
+				dragFactor := float32(math.Exp(-channelDragCoeff * float64(dt)))
+				vel.X *= dragFactor
+				vel.Y *= dragFactor
 			}
 			if sc.ChannelRemaining <= 0 {
 				sc.ChannelRemaining = 0
