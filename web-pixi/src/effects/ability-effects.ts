@@ -863,18 +863,17 @@ export class AbilityEffectRenderer {
     const perpX = -Math.sin(rot);
     const perpY = Math.cos(rot);
 
-    // 3-5 particles per spawn cycle. Cone half-angle ~12°.
-    const count = 3 + Math.floor(Math.random() * 3);
+    // 2-3 particles per spawn cycle. Cone half-angle ~7°.
+    const count = 2 + Math.floor(Math.random() * 2);
     for (let i = 0; i < count; i++) {
       // Spawn slightly off-center on the perpendicular axis so the plume
-      // has visible width at the nozzle.
-      const nozzleOffset = (Math.random() - 0.5) * hw * 0.45;
+      // has visible width at the nozzle (tight — ~12% of hull width).
+      const nozzleOffset = (Math.random() - 0.5) * hw * 0.24;
       const sx = nozzleX + perpX * nozzleOffset;
       const sy = nozzleY + perpY * nozzleOffset;
-      // Velocity: predominantly backward + small angular spread + tiny
-      // perpendicular drift for plume "fan-out."
-      const speed = 6 + Math.random() * 5;
-      const spread = (Math.random() - 0.5) * 0.45; // ~±13°
+      // Velocity: predominantly backward + small angular spread.
+      const speed = 2.5 + Math.random() * 2.0;
+      const spread = (Math.random() - 0.5) * 0.24; // ~±7°
       const cosS = Math.cos(spread);
       const sinS = Math.sin(spread);
       // Rotate the backward vector by `spread` to give the cone angle
@@ -886,7 +885,7 @@ export class AbilityEffectRenderer {
         vx,
         vy,
         spawnTime: now,
-        lifetimeMs: 280 + Math.random() * 220, // 280-500ms
+        lifetimeMs: 180 + Math.random() * 140, // 180-320ms
       });
     }
   }
@@ -923,16 +922,16 @@ export class AbilityEffectRenderer {
             : age < 0.7
               ? 0xff9944 // mid orange
               : 0xcc4422; // cool red-amber
-        // Streak length proportional to particle speed
+        // Streak length proportional to particle speed (short, tight).
         const sSpeed = Math.sqrt(p.vx * p.vx + p.vy * p.vy);
-        const streakLen = Math.min(px(10), sSpeed * px(0.9));
+        const streakLen = Math.min(px(4), sSpeed * px(0.6));
         const ux = p.vx / sSpeed;
         const uy = p.vy / sSpeed;
         // Tail of the streak is behind the particle along its motion
         const tailX = p.worldX - ux * streakLen;
         const tailY = p.worldY - uy * streakLen;
         // Width tapers with age — thicker fresh, thinner as it dissipates
-        const width = px(1.8) * (1 - age * 0.6) + px(0.4);
+        const width = px(1.1) * (1 - age * 0.6) + px(0.3);
         this.gfx
           .moveTo(p.worldX, p.worldY)
           .lineTo(tailX, tailY)
