@@ -50,11 +50,28 @@ export function weaponMountOffset(
   };
 }
 
+// AfterburnerParticle is a single jet-exhaust particle in world space.
+// World-anchored so the particle stays behind in the wake as the ship
+// flies away — gives a realistic plume that trails through space rather
+// than a static shape glued to the nozzle.
+type AfterburnerParticle = {
+  worldX: number;
+  worldY: number;
+  vx: number;
+  vy: number;
+  spawnTime: number;
+  lifetimeMs: number;
+};
+
 export class AbilityEffectRenderer {
   private gfx: Graphics;
   private effects: AbilityEffect[] = [];
   private pendingExplosions: { time: number; targetId: number; x: number; y: number }[] = [];
   private pendingImpacts: { time: number; targetId: number; x: number; y: number; color: number; radius: number; duration: number }[] = [];
+  // Per-entity afterburner particle systems. Persisted across frames so
+  // particles continue draining after the status effect ends.
+  private afterburnerParticles: Map<number, AfterburnerParticle[]> = new Map();
+  private afterburnerLastSpawn: Map<number, number> = new Map();
 
   constructor(parent: Container) {
     this.gfx = new Graphics();
@@ -68,6 +85,7 @@ export class AbilityEffectRenderer {
     this.processPendingImpacts(state, now);
     this.drawInstantEffects(state, now);
     this.drawStatusEffects(state, now);
+    this.renderAfterburnerParticles(state, now);
   }
 
   private drainQueue(state: GameState, now: number): void {
@@ -719,6 +737,7 @@ export class AbilityEffectRenderer {
   private drawStatusEffects(state: GameState, now: number): void {
     for (const ent of state.entities.values()) {
       const e = ent.current as {
+        netID?: number;
         statusEffects?: Array<{ type: number; duration: number }>;
         width?: number;
         height?: number;
@@ -741,7 +760,11 @@ export class AbilityEffectRenderer {
             this.drawFortified(x, y, w, h, now);
             break;
           case STATUS_AFTERBURNER:
-            this.drawAfterburner(x, y, w, h, rot, now);
+            // Spawn-only; rendering happens in renderAfterburnerParticles
+            // so particles continue draining after the status ends.
+            if (e.netID !== undefined) {
+              this.spawnAfterburnerParticles(e.netID, x, y, w, rot, now);
+            }
             break;
           default:
             break;
@@ -805,33 +828,120 @@ export class AbilityEffectRenderer {
     this.gfx.stroke({ color: COLOR_D, width: px(2), alpha: pulse * 0.5 });
   }
 
-  private drawAfterburner(
+  // Spawn afterburner jet-exhaust particles at the ship's nozzle. Called
+  // every frame the ship has STATUS_AFTERBURNER active. Particles are
+  // recorded in world space and aged in renderAfterburnerParticles so they
+  // continue draining after the status effect ends — the engine plume
+  // doesn't snap off when the buff expires.
+  private spawnAfterburnerParticles(
+    netID: number,
     x: number,
     y: number,
     w: number,
-    h: number,
     rot: number,
     now: number,
   ): void {
-    const pulse = 0.8 + 0.2 * Math.sin(now * 0.01);
+    const SPAWN_PERIOD_MS = 22;
+    const last = this.afterburnerLastSpawn.get(netID) ?? 0;
+    if (now - last < SPAWN_PERIOD_MS) return;
+    this.afterburnerLastSpawn.set(netID, now);
 
-    // Anchor the trail at the ship's tail, matching the regular
-    // thruster nozzle position (-hw * 0.72 local). Without this the
-    // streaks originate from the ship's center and visibly pierce
-    // through the hull.
+    let bucket = this.afterburnerParticles.get(netID);
+    if (!bucket) {
+      bucket = [];
+      this.afterburnerParticles.set(netID, bucket);
+    }
+
     const hw = w / 2;
-    const tailOffset = hw * 0.72;
-    const tailX = x - Math.cos(rot) * tailOffset;
-    const tailY = y - Math.sin(rot) * tailOffset;
+    // Nozzle position behind the ship's center along the ship facing
+    const nozzleDist = hw * 0.72;
+    const backX = -Math.cos(rot);
+    const backY = -Math.sin(rot);
+    const nozzleX = x + backX * nozzleDist;
+    const nozzleY = y + backY * nozzleDist;
+    // Perpendicular axis for jitter around the nozzle
+    const perpX = -Math.sin(rot);
+    const perpY = Math.cos(rot);
 
-    for (let i = 1; i <= 3; i++) {
-      const trailX = tailX - Math.cos(rot) * px(20 + i * 15);
-      const trailY = tailY - Math.sin(rot) * px(20 + i * 15);
-      const alpha = (0.4 - i * 0.12) * pulse;
-      this.gfx
-        .moveTo(tailX, tailY)
-        .lineTo(trailX, trailY)
-        .stroke({ color: COLOR_F, width: px(2), alpha });
+    // 3-5 particles per spawn cycle. Cone half-angle ~12°.
+    const count = 3 + Math.floor(Math.random() * 3);
+    for (let i = 0; i < count; i++) {
+      // Spawn slightly off-center on the perpendicular axis so the plume
+      // has visible width at the nozzle.
+      const nozzleOffset = (Math.random() - 0.5) * hw * 0.45;
+      const sx = nozzleX + perpX * nozzleOffset;
+      const sy = nozzleY + perpY * nozzleOffset;
+      // Velocity: predominantly backward + small angular spread + tiny
+      // perpendicular drift for plume "fan-out."
+      const speed = 6 + Math.random() * 5;
+      const spread = (Math.random() - 0.5) * 0.45; // ~±13°
+      const cosS = Math.cos(spread);
+      const sinS = Math.sin(spread);
+      // Rotate the backward vector by `spread` to give the cone angle
+      const vx = (backX * cosS - backY * sinS) * speed;
+      const vy = (backX * sinS + backY * cosS) * speed;
+      bucket.push({
+        worldX: sx,
+        worldY: sy,
+        vx,
+        vy,
+        spawnTime: now,
+        lifetimeMs: 280 + Math.random() * 220, // 280-500ms
+      });
+    }
+  }
+
+  // Tick + render every particle in every entity's afterburner bucket.
+  // Runs unconditionally each frame so plumes finish playing out after the
+  // status effect ends; empty buckets get pruned.
+  private renderAfterburnerParticles(_state: GameState, now: number): void {
+    for (const [netID, bucket] of this.afterburnerParticles) {
+      for (let i = bucket.length - 1; i >= 0; i--) {
+        const p = bucket[i];
+        const age = (now - p.spawnTime) / p.lifetimeMs;
+        if (age >= 1) {
+          bucket.splice(i, 1);
+          continue;
+        }
+        // Advance position (approximate per-frame dt = 1/60s baked into the
+        // 0.05 step constant — matches the supercruise particle update rate).
+        p.worldX += p.vx * 0.04;
+        p.worldY += p.vy * 0.04;
+        // Color shift from bright yellow core to deep orange as the
+        // particle cools — gives the plume a heat-falloff gradient.
+        // Alpha ramps fast in then fades out.
+        let alpha: number;
+        if (age < 0.1) {
+          alpha = (age / 0.1) * 0.85;
+        } else {
+          alpha = (1 - (age - 0.1) / 0.9) * 0.85;
+        }
+        // Hot-to-cool palette: yellow → orange → dim red
+        const color =
+          age < 0.35
+            ? 0xffee66 // hot yellow core
+            : age < 0.7
+              ? 0xff9944 // mid orange
+              : 0xcc4422; // cool red-amber
+        // Streak length proportional to particle speed
+        const sSpeed = Math.sqrt(p.vx * p.vx + p.vy * p.vy);
+        const streakLen = Math.min(px(10), sSpeed * px(0.9));
+        const ux = p.vx / sSpeed;
+        const uy = p.vy / sSpeed;
+        // Tail of the streak is behind the particle along its motion
+        const tailX = p.worldX - ux * streakLen;
+        const tailY = p.worldY - uy * streakLen;
+        // Width tapers with age — thicker fresh, thinner as it dissipates
+        const width = px(1.8) * (1 - age * 0.6) + px(0.4);
+        this.gfx
+          .moveTo(p.worldX, p.worldY)
+          .lineTo(tailX, tailY)
+          .stroke({ color, width, alpha });
+      }
+      if (bucket.length === 0) {
+        this.afterburnerParticles.delete(netID);
+        this.afterburnerLastSpawn.delete(netID);
+      }
     }
   }
 }
