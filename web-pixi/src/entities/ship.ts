@@ -340,12 +340,12 @@ export function createShipDisplay(): EntityDisplayObject {
       ambientRing.clear();
       if (e.phase === 2) {
         const ringRadius = hullRadius * 1.15;
-        const pulse = 0.3 + 0.2 * Math.sin(now * 0.003);
+        const pulse = 0.5 + 0.15 * Math.sin(now * 0.003);
         ambientRing.circle(0, 0, ringRadius)
-          .stroke({ color: 0x66ddff, width: px(0.8), alpha: pulse });
-        const pulse2 = 0.2 + 0.15 * Math.sin(now * 0.003 + 1.5);
+          .stroke({ color: 0x66ddff, width: px(1.0), alpha: pulse });
+        const pulse2 = 0.375 + 0.125 * Math.sin(now * 0.003 + 1.5);
         ambientRing.circle(0, 0, hullRadius * 1.05)
-          .stroke({ color: 0xbbeeff, width: px(0.5), alpha: pulse2 });
+          .stroke({ color: 0xbbeeff, width: px(0.6), alpha: pulse2 });
       }
 
       // Ambient field particle spawn — omnidirectional emission from the
