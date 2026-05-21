@@ -24,6 +24,13 @@ type Streak = {
   vy: number;
   spawnTime: number;
 };
+type AmbientParticle = {
+  worldX: number;
+  worldY: number;
+  vx: number;
+  vy: number;
+  spawnTime: number;
+};
 
 const RING_LIFETIME_MS = 1500;
 const RING_SPAWN_PERIOD_MS = 150;
@@ -31,6 +38,8 @@ const PARTICLE_SPAWN_PERIOD_MS = 30;
 const PARTICLE_LIFETIME_MS = 700;
 const STREAK_SPAWN_PERIOD_MS = 50;
 const STREAK_LIFETIME_MS = 500;
+const AMBIENT_SPAWN_PERIOD_MS = 80;
+const AMBIENT_LIFETIME_MS = 1100;
 
 export function createShipDisplay(): EntityDisplayObject {
   const container = new Container();
@@ -58,10 +67,14 @@ export function createShipDisplay(): EntityDisplayObject {
   // particles first (deepest), then ship-following wake cone + bow wave on
   // top. Bars/name/lockout overlays are added later and sit above all VFX.
   const ripples = new Graphics(); // anisotropic world-anchored ellipses
+  const ambientRing = new Graphics(); // breathing hull-edge ring (always on while phase===2)
+  const ambientFieldLayer = new Graphics(); // omnidirectional ambient field particles
   const fieldParticles = new Graphics(); // drifting field-particles
   const streaksLayer = new Graphics(); // motion streaks oriented along velocity
   const bowWave = new Graphics(); // compressed arcs in front
   uiContainer.addChild(ripples);
+  uiContainer.addChild(ambientRing);
+  uiContainer.addChild(ambientFieldLayer);
   uiContainer.addChild(fieldParticles);
   uiContainer.addChild(streaksLayer);
   uiContainer.addChild(bowWave);
@@ -96,9 +109,11 @@ export function createShipDisplay(): EntityDisplayObject {
   const wakeRings: WakeRing[] = [];
   const particles: FieldParticle[] = [];
   const streaks: Streak[] = [];
+  const ambientParticles: AmbientParticle[] = [];
   let lastRingSpawn = 0;
   let lastParticleSpawn = 0;
   let lastStreakSpawn = 0;
+  let lastAmbientSpawn = 0;
 
   let currentColor = 0x44aaff;
   let lastW = 0;
@@ -319,6 +334,46 @@ export function createShipDisplay(): EntityDisplayObject {
       const speed = Math.sqrt(e.velX * e.velX + e.velY * e.velY);
       const hullRadius = Math.sqrt(hw * hw + hh * hh);
 
+      // Ambient field ring — a breathing hull-edge ring + inner accent ring,
+      // drawn whenever phase===2 regardless of motion. Telegraphs "the field
+      // is engaged" on a stationary supercruising ship.
+      ambientRing.clear();
+      if (e.phase === 2) {
+        const ringRadius = hullRadius * 1.15;
+        const pulse = 0.3 + 0.2 * Math.sin(now * 0.003);
+        ambientRing.circle(0, 0, ringRadius)
+          .stroke({ color: 0x66ddff, width: px(0.8), alpha: pulse });
+        const pulse2 = 0.2 + 0.15 * Math.sin(now * 0.003 + 1.5);
+        ambientRing.circle(0, 0, hullRadius * 1.05)
+          .stroke({ color: 0xbbeeff, width: px(0.5), alpha: pulse2 });
+      }
+
+      // Ambient field particle spawn — omnidirectional emission from the
+      // hull edge whenever phase===2. Distinct from the wake-biased
+      // fieldParticles below; these come from ALL sides of the ship.
+      if (e.phase === 2 && now - lastAmbientSpawn > AMBIENT_SPAWN_PERIOD_MS) {
+        const count = 1 + Math.floor(Math.random() * 2);
+        for (let i = 0; i < count; i++) {
+          const angle = Math.random() * Math.PI * 2;
+          const dirX = Math.cos(angle);
+          const dirY = Math.sin(angle);
+          const r = hullRadius * (1.0 + Math.random() * 0.3);
+          const sx = ent.renderX + dirX * r;
+          const sy = ent.renderY + dirY * r;
+          const outwardSpeed = 0.4 + Math.random() * 0.5;
+          const tangentialSpeed = (Math.random() - 0.5) * 0.3;
+          const perpX = -dirY;
+          const perpY = dirX;
+          ambientParticles.push({
+            worldX: sx, worldY: sy,
+            vx: dirX * outwardSpeed + perpX * tangentialSpeed,
+            vy: dirY * outwardSpeed + perpY * tangentialSpeed,
+            spawnTime: now,
+          });
+        }
+        lastAmbientSpawn = now;
+      }
+
       if (e.phase === 2 && speed > 0.5 && now - lastRingSpawn > RING_SPAWN_PERIOD_MS) {
         wakeRings.push({
           worldX: ent.renderX,
@@ -434,6 +489,27 @@ export function createShipDisplay(): EntityDisplayObject {
         const ly = p.worldY - ent.renderY;
         const alpha = (1 - age) * 0.7;
         fieldParticles.circle(lx, ly, px(0.8)).fill({ color: 0xbbeeff, alpha });
+      }
+
+      // Ambient field particles — render + age every frame regardless of
+      // phase so lifetimes finish playing out after supercruise ends.
+      ambientFieldLayer.clear();
+      for (let i = ambientParticles.length - 1; i >= 0; i--) {
+        const p = ambientParticles[i];
+        const age = (now - p.spawnTime) / AMBIENT_LIFETIME_MS;
+        if (age > 1) { ambientParticles.splice(i, 1); continue; }
+        p.worldX += p.vx * 0.05;
+        p.worldY += p.vy * 0.05;
+        const lx = p.worldX - ent.renderX;
+        const ly = p.worldY - ent.renderY;
+        let alpha: number;
+        if (age < 0.2) {
+          alpha = (age / 0.2) * 0.6;
+        } else {
+          alpha = (1 - (age - 0.2) / 0.8) * 0.6;
+        }
+        ambientFieldLayer.circle(lx, ly, px(0.7))
+          .fill({ color: 0xbbeeff, alpha });
       }
 
       // (1) Compressed bow-wave arcs — 4 thin arcs in front of the ship,
