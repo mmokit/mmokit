@@ -17,11 +17,20 @@ type FieldParticle = {
   vy: number;
   spawnTime: number;
 };
+type Streak = {
+  worldX: number;
+  worldY: number;
+  vx: number;
+  vy: number;
+  spawnTime: number;
+};
 
 const RING_LIFETIME_MS = 1500;
 const RING_SPAWN_PERIOD_MS = 150;
-const PARTICLE_SPAWN_PERIOD_MS = 60;
+const PARTICLE_SPAWN_PERIOD_MS = 30;
 const PARTICLE_LIFETIME_MS = 700;
+const STREAK_SPAWN_PERIOD_MS = 50;
+const STREAK_LIFETIME_MS = 500;
 
 export function createShipDisplay(): EntityDisplayObject {
   const container = new Container();
@@ -50,11 +59,11 @@ export function createShipDisplay(): EntityDisplayObject {
   // top. Bars/name/lockout overlays are added later and sit above all VFX.
   const ripples = new Graphics(); // anisotropic world-anchored ellipses
   const fieldParticles = new Graphics(); // drifting field-particles
-  const wakeCone = new Graphics(); // V-shape behind ship
+  const streaksLayer = new Graphics(); // motion streaks oriented along velocity
   const bowWave = new Graphics(); // compressed arcs in front
   uiContainer.addChild(ripples);
   uiContainer.addChild(fieldParticles);
-  uiContainer.addChild(wakeCone);
+  uiContainer.addChild(streaksLayer);
   uiContainer.addChild(bowWave);
 
   // Name tag
@@ -86,8 +95,10 @@ export function createShipDisplay(): EntityDisplayObject {
   // the ship's CURRENT renderX/renderY so they stay put in world space.
   const wakeRings: WakeRing[] = [];
   const particles: FieldParticle[] = [];
+  const streaks: Streak[] = [];
   let lastRingSpawn = 0;
   let lastParticleSpawn = 0;
+  let lastStreakSpawn = 0;
 
   let currentColor = 0x44aaff;
   let lastW = 0;
@@ -296,7 +307,8 @@ export function createShipDisplay(): EntityDisplayObject {
       // Supercruise Active-phase visuals — physics-grounded line-art VFX
       // for ALL ships in phase===2. Four effects compose the look:
       //  (1) Compressed bow-wave arcs in front of the ship (ship-following).
-      //  (2) V-shaped wake cone behind the ship (ship-following).
+      //  (2) Motion-streak particles — short line segments oriented along
+      //      their velocity, emergent wake-cone shape (world-anchored).
       //  (3) Anisotropic ripple ellipses left in world space, stretched
       //      along velocity direction at moment of spawn (world-anchored).
       //  (4) Drifting field particles caught in the gravitational wake
@@ -317,10 +329,10 @@ export function createShipDisplay(): EntityDisplayObject {
         lastRingSpawn = now;
       }
       if (e.phase === 2 && speed > 1 && now - lastParticleSpawn > PARTICLE_SPAWN_PERIOD_MS) {
-        const count = 1 + Math.floor(Math.random() * 2);
+        const count = 2 + Math.floor(Math.random() * 3);
         for (let i = 0; i < count; i++) {
-          const offset = (Math.random() - 0.5) * h * 1.5;
-          const back = hullRadius * (1 + Math.random() * 2);
+          const offset = (Math.random() - 0.5) * h * 2.5;
+          const back = hullRadius * (0.5 + Math.random() * 4);
           const dirX = e.velX / speed;
           const dirY = e.velY / speed;
           const perpX = -dirY;
@@ -338,6 +350,37 @@ export function createShipDisplay(): EntityDisplayObject {
           });
         }
         lastParticleSpawn = now;
+      }
+
+      // Motion-streak spawn — short line segments in the wake cone area
+      // oriented along their velocity. Together with the denser field
+      // particles, the wake cone shape emerges from particle distribution
+      // rather than being drawn as geometry.
+      if (e.phase === 2 && speed > 1 && now - lastStreakSpawn > STREAK_SPAWN_PERIOD_MS) {
+        const count = 2 + Math.floor(Math.random() * 2);
+        const dirX = e.velX / speed;
+        const dirY = e.velY / speed;
+        const perpX = -dirY;
+        const perpY = dirX;
+        for (let i = 0; i < count; i++) {
+          // Position: somewhere in the wake cone behind the ship.
+          const back = hullRadius * (1.0 + Math.random() * 3.0);
+          const offset = (Math.random() - 0.5) * h * 2.0 * (back / (hullRadius * 4)); // widens with distance
+          const sx = ent.renderX - dirX * back + perpX * offset;
+          const sy = ent.renderY - dirY * back + perpY * offset;
+          // Velocity: predominantly opposite the ship's motion (so the streak orients
+          // along the ship's direction), with small perpendicular jitter.
+          const baseStreakSpeed = 3 + Math.random() * 5;
+          const jitter = (Math.random() - 0.5) * 1.5;
+          streaks.push({
+            worldX: sx,
+            worldY: sy,
+            vx: -dirX * baseStreakSpeed + perpX * jitter,
+            vy: -dirY * baseStreakSpeed + perpY * jitter,
+            spawnTime: now,
+          });
+        }
+        lastStreakSpawn = now;
       }
 
       // Always age + prune so lifetimes drain after Active ends.
@@ -417,39 +460,41 @@ export function createShipDisplay(): EntityDisplayObject {
         }
       }
 
-      // (2) V-shaped wake cone behind the ship — two angled lines + a
-      // faint spine running down the middle.
-      wakeCone.clear();
-      if (e.phase === 2 && speed > 0.5) {
-        const dirX = e.velX / speed;
-        const dirY = e.velY / speed;
-        const backX = -dirX;
-        const backY = -dirY;
-        const perpX = -dirY;
-        const perpY = dirX;
-        const coneLength = hullRadius * 4;
-        const halfAngle = 0.7; // ~40° half-angle
-        const spreadAtTip = Math.tan(halfAngle) * coneLength;
-        const tailX = backX * hullRadius * 0.8;
-        const tailY = backY * hullRadius * 0.8;
-        const tipBaseX = tailX + backX * coneLength;
-        const tipBaseY = tailY + backY * coneLength;
-        const tipLeftX = tipBaseX + perpX * spreadAtTip;
-        const tipLeftY = tipBaseY + perpY * spreadAtTip;
-        const tipRightX = tipBaseX - perpX * spreadAtTip;
-        const tipRightY = tipBaseY - perpY * spreadAtTip;
-        wakeCone
-          .moveTo(tailX, tailY)
-          .lineTo(tipLeftX, tipLeftY)
-          .stroke({ color: 0x66ddff, width: px(1.5), alpha: 0.4 });
-        wakeCone
-          .moveTo(tailX, tailY)
-          .lineTo(tipRightX, tipRightY)
-          .stroke({ color: 0x66ddff, width: px(1.5), alpha: 0.4 });
-        wakeCone
-          .moveTo(tailX, tailY)
-          .lineTo(tipBaseX, tipBaseY)
-          .stroke({ color: 0xbbeeff, width: px(1), alpha: 0.25 });
+      // (2) Motion streaks — short line segments oriented along their
+      // velocity. World-anchored (each streak holds its own worldX/worldY
+      // and is rendered offset by the ship's CURRENT renderX/renderY).
+      // Updated + pruned every frame regardless of phase so lifetimes
+      // finish playing out after Active ends.
+      streaksLayer.clear();
+      for (let i = streaks.length - 1; i >= 0; i--) {
+        const s = streaks[i];
+        const age = (now - s.spawnTime) / STREAK_LIFETIME_MS;
+        if (age > 1) {
+          streaks.splice(i, 1);
+          continue;
+        }
+        // Advance position by velocity per frame (approximate dt).
+        s.worldX += s.vx * 0.02;
+        s.worldY += s.vy * 0.02;
+        const sSpeed = Math.sqrt(s.vx * s.vx + s.vy * s.vy);
+        const streakLen = Math.min(px(8), sSpeed * px(1.2));
+        const ux = s.vx / sSpeed;
+        const uy = s.vy / sSpeed;
+        const lx = s.worldX - ent.renderX;
+        const ly = s.worldY - ent.renderY;
+        const tailX = lx - ux * streakLen;
+        const tailY = ly - uy * streakLen;
+        // Alpha curve: ramps in over the first 15% of life, then fades out.
+        let alpha: number;
+        if (age < 0.15) {
+          alpha = (age / 0.15) * 0.7;
+        } else {
+          alpha = (1 - (age - 0.15) / 0.85) * 0.7;
+        }
+        streaksLayer
+          .moveTo(lx, ly)
+          .lineTo(tailX, tailY)
+          .stroke({ color: 0xbbeeff, width: px(1.2), alpha });
       }
 
       // Supercruise channel radial — drawn for ALL ships while phase===1
