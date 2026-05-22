@@ -181,7 +181,7 @@ type WorldPlaceResult struct {
 	ID   string
 }
 
-func registerWorldPlace(reg *cmdsys.Registry, coord *mmokit.Process, we *worldEditor) error {
+func registerWorldPlace(reg *cmdsys.Registry, coord *mmokit.Process, we *worldEditor, disp *cmdsys.Dispatcher) error {
 	return reg.Register(cmdsys.Command{
 		Verb:        "world.place",
 		Capability:  "world.edit",
@@ -213,11 +213,6 @@ func registerWorldPlace(reg *cmdsys.Registry, coord *mmokit.Process, we *worldEd
 				if err := we.repo.AddStation(def); err != nil {
 					return nil, err
 				}
-				if err := spawnInCell(ctx, coord, cellID, func(gw *game.GameWorld) {
-					gw.SpawnStation(wp.LocalX, wp.LocalY, def)
-				}); err != nil {
-					return nil, err
-				}
 			case "poi":
 				if args.Tier < 1 || args.Tier > 3 {
 					return nil, fmt.Errorf("tier must be 1..3, got %d", args.Tier)
@@ -232,22 +227,12 @@ func registerWorldPlace(reg *cmdsys.Registry, coord *mmokit.Process, we *worldEd
 				if err := we.repo.AddPOI(def); err != nil {
 					return nil, err
 				}
-				if err := spawnInCell(ctx, coord, cellID, func(gw *game.GameWorld) {
-					gw.SpawnPOI(wp.LocalX, wp.LocalY, def)
-				}); err != nil {
-					return nil, err
-				}
 			case "dungeon":
 				def := mmokit.WorldDungeon{
 					ID: id, Name: args.Name,
 					WorldPos: [2]float32{args.WorldX, args.WorldY},
 				}
 				if err := we.repo.AddDungeon(def); err != nil {
-					return nil, err
-				}
-				if err := spawnInCell(ctx, coord, cellID, func(gw *game.GameWorld) {
-					gw.SpawnDungeonAt(wp.LocalX, wp.LocalY, def)
-				}); err != nil {
 					return nil, err
 				}
 			case "belt":
@@ -265,22 +250,12 @@ func registerWorldPlace(reg *cmdsys.Registry, coord *mmokit.Process, we *worldEd
 				if err := we.repo.AddBelt(def); err != nil {
 					return nil, err
 				}
-				if err := spawnInCell(ctx, coord, cellID, func(gw *game.GameWorld) {
-					gw.SpawnBelt(wp.LocalX, wp.LocalY, def)
-				}); err != nil {
-					return nil, err
-				}
 			case "decoration":
 				def := mmokit.WorldDecoration{
 					ID: id, WorldPos: [2]float32{args.WorldX, args.WorldY},
 					Kind: args.Kind, Variant: args.Variant,
 				}
 				if err := we.repo.AddDecoration(def); err != nil {
-					return nil, err
-				}
-				if err := spawnInCell(ctx, coord, cellID, func(gw *game.GameWorld) {
-					gw.SpawnDecoration(wp.LocalX, wp.LocalY, def)
-				}); err != nil {
 					return nil, err
 				}
 			case "region":
@@ -321,6 +296,7 @@ func registerWorldPlace(reg *cmdsys.Registry, coord *mmokit.Process, we *worldEd
 				Op: "place", Type: args.Type, ID: id,
 				WorldX: args.WorldX, WorldY: args.WorldY,
 			})
+			fanOutReload(ctx, env, disp, coord)
 			return WorldPlaceResult{Type: args.Type, ID: id}, nil
 		},
 	})
@@ -342,7 +318,7 @@ type WorldMoveResult struct {
 	ID   string
 }
 
-func registerWorldMove(reg *cmdsys.Registry, coord *mmokit.Process, we *worldEditor) error {
+func registerWorldMove(reg *cmdsys.Registry, coord *mmokit.Process, we *worldEditor, disp *cmdsys.Dispatcher) error {
 	return reg.Register(cmdsys.Command{
 		Verb:        "world.move",
 		Capability:  "world.edit",
@@ -359,9 +335,8 @@ func registerWorldMove(reg *cmdsys.Registry, coord *mmokit.Process, we *worldEdi
 				return nil, fmt.Errorf("regions have no single position — delete + re-place to move")
 			}
 
-			// 1. Find the current world position.
-			oldWP, ok := lookupWorldPos(we.getSnap(), args.Type, args.ID)
-			if !ok {
+			// 1. Validate the entity exists in the snapshot.
+			if _, ok := lookupWorldPos(we.getSnap(), args.Type, args.ID); !ok {
 				return nil, fmt.Errorf("%s id %q not found", args.Type, args.ID)
 			}
 
@@ -371,31 +346,16 @@ func registerWorldMove(reg *cmdsys.Registry, coord *mmokit.Process, we *worldEdi
 				return nil, err
 			}
 
-			// 3. Despawn cluster-wide — belt asteroids etc. may have migrated
-			//    to neighboring cells after their parent's initial spawn, so
-			//    single-cell despawn would orphan them. oldWP is no longer
-			//    needed for the despawn step but we keep it for any future
-			//    "rollback on spawn failure" path.
-			_ = oldWP
-			if err := despawnPlacedClusterWide(ctx, coord, args.Type, args.ID); err != nil {
-				return nil, err
-			}
-
-			// 4. Reload snapshot, then spawn at the new location.
+			// 3. Refresh the in-memory snapshot on the coord. The fanned-out
+			//    world.reload (below) handles the actual despawn + respawn on
+			//    every host's ECS — including this process when it owns cells.
 			we.reload(coord)
-			newWPc := coords.FromFlat(float64(newWP[0]), float64(newWP[1]))
-			snap := we.getSnap()
-			if err := spawnInCell(ctx, coord, mmokit.WorldCellID{X: newWPc.CellX, Y: newWPc.CellY},
-				func(gw *game.GameWorld) {
-					spawnPlaced(gw, snap, args.Type, args.ID, newWPc.LocalX, newWPc.LocalY)
-				}); err != nil {
-				return nil, err
-			}
 
 			mmokit.PublishAdminTopic(coord, "world.changed", WorldChangeEvent{
 				Op: "move", Type: args.Type, ID: args.ID,
 				WorldX: args.WorldX, WorldY: args.WorldY,
 			})
+			fanOutReload(ctx, env, disp, coord)
 			return WorldMoveResult{Type: args.Type, ID: args.ID}, nil
 		},
 	})
@@ -423,7 +383,7 @@ type WorldUpdateResult struct {
 	ID   string
 }
 
-func registerWorldUpdate(reg *cmdsys.Registry, coord *mmokit.Process, we *worldEditor) error {
+func registerWorldUpdate(reg *cmdsys.Registry, coord *mmokit.Process, we *worldEditor, disp *cmdsys.Dispatcher) error {
 	return reg.Register(cmdsys.Command{
 		Verb:        "world.update",
 		Capability:  "world.edit",
@@ -521,37 +481,26 @@ func registerWorldUpdate(reg *cmdsys.Registry, coord *mmokit.Process, we *worldE
 				mmokit.PublishAdminTopic(coord, "world.changed", WorldChangeEvent{
 					Op: "update", Type: args.Type, ID: args.ID,
 				})
+				// Region updates carry no ECS side-effect, but fanning out
+				// the reload still keeps every host's in-memory snapshot in
+				// lockstep with the JSON file.
+				fanOutReload(ctx, env, disp, coord)
 				return WorldUpdateResult{Type: args.Type, ID: args.ID}, nil
 			}
 
-			// Look up current world_pos (unchanged), then despawn + respawn
-			// at the same position so the live entity reflects the new
-			// def fields (roster, tier, radius, etc.).
+			// Look up the current world_pos (unchanged by this verb) so the
+			// SSE event carries it for the editor UI. The fanned-out
+			// world.reload below handles the actual despawn + respawn on
+			// every host's ECS so the live entity reflects the new def fields
+			// (roster, tier, radius, etc.).
 			snap := we.getSnap()
-			wp, ok := lookupWorldPos(snap, args.Type, args.ID)
-			if !ok {
-				// Mutation succeeded but the manifest doesn't have the id —
-				// shouldn't happen since UpdateXxx already errored if missing.
-				return WorldUpdateResult{Type: args.Type, ID: args.ID}, nil
-			}
-			// Despawn cluster-wide (entities may have migrated post-spawn —
-			// e.g. belt asteroids crossing cell boundaries), then respawn at
-			// the same position with the updated def.
-			if err := despawnPlacedClusterWide(ctx, coord, args.Type, args.ID); err != nil {
-				return nil, err
-			}
-			wpc := coords.FromFlat(float64(wp[0]), float64(wp[1]))
-			cellID := mmokit.WorldCellID{X: wpc.CellX, Y: wpc.CellY}
-			if err := spawnInCell(ctx, coord, cellID, func(gw *game.GameWorld) {
-				spawnPlaced(gw, snap, args.Type, args.ID, wpc.LocalX, wpc.LocalY)
-			}); err != nil {
-				return nil, err
-			}
+			wp, _ := lookupWorldPos(snap, args.Type, args.ID)
 
 			mmokit.PublishAdminTopic(coord, "world.changed", WorldChangeEvent{
 				Op: "update", Type: args.Type, ID: args.ID,
 				WorldX: wp[0], WorldY: wp[1],
 			})
+			fanOutReload(ctx, env, disp, coord)
 			return WorldUpdateResult{Type: args.Type, ID: args.ID}, nil
 		},
 	})
@@ -569,7 +518,7 @@ type WorldDeleteResult struct {
 	ID   string
 }
 
-func registerWorldDelete(reg *cmdsys.Registry, coord *mmokit.Process, we *worldEditor) error {
+func registerWorldDelete(reg *cmdsys.Registry, coord *mmokit.Process, we *worldEditor, disp *cmdsys.Dispatcher) error {
 	return reg.Register(cmdsys.Command{
 		Verb:        "world.delete",
 		Capability:  "world.edit",
@@ -583,10 +532,11 @@ func registerWorldDelete(reg *cmdsys.Registry, coord *mmokit.Process, we *worldE
 				return nil, fmt.Errorf("world editor: no repo wired")
 			}
 
-			// Snapshot the position before mutating so we know which
-			// cell to dispatch the despawn to. Regions don't have a single
-			// world_pos — skip the lookup for them and rely on the repo
-			// delete to surface a not-found error if applicable.
+			// Snapshot the position before mutating so the SSE payload
+			// carries the now-vanishing entity's last known coords for the
+			// editor UI. Regions don't have a single world_pos — skip the
+			// lookup for them and rely on the repo delete to surface a
+			// not-found error if applicable.
 			var wp [2]float32
 			if args.Type != "region" {
 				var ok bool
@@ -626,20 +576,12 @@ func registerWorldDelete(reg *cmdsys.Registry, coord *mmokit.Process, we *worldE
 			}
 
 			we.reload(coord)
-			// Regions are annotation-only — no live ECS entities, so the
-			// cluster-wide despawn sweep is a no-op for them. Skip it.
-			if args.Type != "region" {
-				// Despawn cluster-wide so any migrated children (e.g. belt
-				// asteroids handed off to neighbor cells) get cleaned up.
-				if err := despawnPlacedClusterWide(ctx, coord, args.Type, args.ID); err != nil {
-					return nil, err
-				}
-			}
 
 			mmokit.PublishAdminTopic(coord, "world.changed", WorldChangeEvent{
 				Op: "delete", Type: args.Type, ID: args.ID,
 				WorldX: wp[0], WorldY: wp[1],
 			})
+			fanOutReload(ctx, env, disp, coord)
 			return WorldDeleteResult{Type: args.Type, ID: args.ID}, nil
 		},
 	})
@@ -657,8 +599,8 @@ func registerWorldReload(reg *cmdsys.Registry, coord *mmokit.Process, we *worldE
 	return reg.Register(cmdsys.Command{
 		Verb:        "world.reload",
 		Capability:  "world.edit",
-		Route:       cmdsys.RouteLocal,
-		Description: "re-read world/*.json from disk; brute-force despawn + re-spawn every placed entity",
+		Route:       cmdsys.RouteAllHosts,
+		Description: "re-read world/*.json from disk; brute-force despawn + re-spawn every placed entity; fanned out to every host so distributed-mode edits propagate without a restart",
 		Args:        WorldReloadArgs{}, Result: WorldReloadResult{},
 		Handler: func(ctx context.Context, env *cmdsys.Env, _ any) (any, error) {
 			if we.repo == nil {
@@ -792,59 +734,29 @@ func registerWorldExport(reg *cmdsys.Registry, coord *mmokit.Process, we *worldE
 
 // ── helpers ────────────────────────────────────────────────────────────────
 
-// despawnPlacedClusterWide runs DespawnPlacedByID on every local cell. We
-// can't single-cell-target despawns because some entities migrate across
-// cells after spawn (e.g. belt asteroids whose disk straddles a boundary
-// are handed off by the engine). A move/update/delete must sweep
-// everywhere or those migrants survive their parent's despawn.
-func despawnPlacedClusterWide(ctx context.Context, coord *mmokit.Process, typ, id string) error {
-	for _, cell := range coord.Cells {
-		if cell == nil || cell.Stage == nil || cell.Engine == nil {
-			continue
-		}
-		c := cell
-		if _, err := mmokit.CmdOnLoop(ctx, c.Engine, func() (struct{}, error) {
-			if gw := mmokit.State[game.GameWorld](c.Stage); gw != nil {
-				gw.DespawnPlacedByID(typ, id)
-			}
-			return struct{}{}, nil
-		}); err != nil {
-			return err
+// fanOutReload invokes world.reload via the dispatcher's InvokeInternal so
+// every host in the cluster re-reads the JSON from shared FS and rebuilds
+// its local PlacedID-tagged ECS entities. This is the *only* signal remote
+// hosts get that a coordinator-side world.* mutation happened — without it,
+// edits stay dormant on remote hosts until a server restart.
+//
+// In single-process mode the coord IS a host, so the local cell(s) get the
+// same reload — that's the correct behavior; world.reload's despawn-+-re-spawn
+// is idempotent (everything PlacedID-tagged is wiped and re-seeded from the
+// freshly-loaded snapshot bucket), so the double apply is cheap and correct.
+//
+// Errors are logged but never propagated: the JSON is already persisted to
+// disk, and the next mutation's (or a manual) world.reload will catch any
+// lagging host.
+func fanOutReload(ctx context.Context, env *cmdsys.Env, disp *cmdsys.Dispatcher, coord *mmokit.Process) {
+	if disp == nil || env == nil {
+		return
+	}
+	if _, err := disp.InvokeInternal(ctx, env, "world.reload", WorldReloadArgs{}); err != nil {
+		if coord != nil && coord.Log != nil {
+			coord.Log.Log("world", "world.reload fan-out failed: %v (JSON already written; next reload will resync)", err)
 		}
 	}
-	return nil
-}
-
-// spawnInCell finds the cell on the coord owning (cellID) and runs fn on
-// its game loop. JSON is the source of truth and is cell-agnostic, so a
-// position outside the running cluster is a valid placement — ECS spawn
-// is best-effort. Returns nil (no error) when the target cell isn't part
-// of the running cluster; only CmdOnLoop failures bubble up.
-func spawnInCell(ctx context.Context, coord *mmokit.Process, cellID mmokit.WorldCellID, fn func(*game.GameWorld)) error {
-	// Resolve cell via center-coordinate lookup; mirrors the dungeon.spawn /
-	// poi.spawn pattern. CellSize() returns the active cell size.
-	cellSize := mmokit.CellSize()
-	worldX := float32(cellID.X)*cellSize + cellSize/2
-	worldY := float32(cellID.Y)*cellSize + cellSize/2
-	meshCellID := coord.CellAtPosition(worldX, worldY)
-	if meshCellID == "" {
-		// Cell outside the running cluster — JSON-only placement is fine.
-		return nil
-	}
-	cell := coord.CellByID(mmokit.MeshCellID(meshCellID))
-	if cell == nil || cell.Stage == nil || cell.Engine == nil {
-		// Cell exists but isn't local to this host (multi-host setup); also
-		// fine — JSON is the authoritative state. Remote-host spawn dispatch
-		// is a follow-up (spec §8 distributed-mode item).
-		return nil
-	}
-	_, err := mmokit.CmdOnLoop(ctx, cell.Engine, func() (struct{}, error) {
-		if gw := mmokit.State[game.GameWorld](cell.Stage); gw != nil {
-			fn(gw)
-		}
-		return struct{}{}, nil
-	})
-	return err
 }
 
 // lookupWorldPos returns the manifest world_pos for (type, id) from the
@@ -914,66 +826,6 @@ func mutateWorldPos(repo mmokit.WorldRepository, typ, id string, newWP [2]float3
 		return repo.UpdateDecoration(id, func(d *mmokit.WorldDecoration) { d.WorldPos = newWP })
 	}
 	return fmt.Errorf("unknown type %q", typ)
-}
-
-// spawnPlaced looks up the def for (type, id) in the provided snapshot,
-// then calls the right SpawnXxx with the provided cell-local coords. Used
-// by world.move + world.update to re-spawn an entity after a manifest
-// mutation. Silent no-op on miss (the caller should have already
-// validated the id via lookupWorldPos).
-//
-// Must run on the cell's game-loop goroutine (Spawn touches ECS).
-func spawnPlaced(gw *game.GameWorld, snap *mmokit.WorldSnapshot, typ, id string, localX, localY float32) {
-	if gw == nil || snap == nil {
-		return
-	}
-	switch typ {
-	case "station":
-		if snap.Stations != nil {
-			for _, s := range snap.Stations.Stations {
-				if s.ID == id {
-					gw.SpawnStation(localX, localY, s)
-					return
-				}
-			}
-		}
-	case "poi":
-		if snap.POIs != nil {
-			for _, p := range snap.POIs.POIs {
-				if p.ID == id {
-					gw.SpawnPOI(localX, localY, p)
-					return
-				}
-			}
-		}
-	case "dungeon":
-		if snap.Dungeons != nil {
-			for _, d := range snap.Dungeons.Dungeons {
-				if d.ID == id {
-					gw.SpawnDungeonAt(localX, localY, d)
-					return
-				}
-			}
-		}
-	case "belt":
-		if snap.Belts != nil {
-			for _, b := range snap.Belts.Belts {
-				if b.ID == id {
-					gw.SpawnBelt(localX, localY, b)
-					return
-				}
-			}
-		}
-	case "decoration":
-		if snap.Decorations != nil {
-			for _, dc := range snap.Decorations.Decorations {
-				if dc.ID == id {
-					gw.SpawnDecoration(localX, localY, dc)
-					return
-				}
-			}
-		}
-	}
 }
 
 // autoID generates a stable id for a newly-placed entity from the

@@ -20,6 +20,7 @@ import (
 func RegisterAll(reg *cmdsys.Registry, coord *mmokit.Process, playerDB *game.PlayerRepo, cfg *game.GameConfig, worldRepo mmokit.WorldRepository, worldSnap *mmokit.WorldSnapshot) error {
 	cfgPtr := &cfg
 	we := newWorldEditor(worldRepo, worldSnap)
+	disp := coord.CmdDispatcher()
 
 	funcs := []func() error{
 		func() error { return registerDamage(reg, coord) },
@@ -36,10 +37,10 @@ func RegisterAll(reg *cmdsys.Registry, coord *mmokit.Process, playerDB *game.Pla
 		func() error { return registerDungeonRegenerate(reg, coord) },
 		func() error { return registerDungeonSpawn(reg, coord) },
 		func() error { return registerWorldList(reg, coord, we) },
-		func() error { return registerWorldPlace(reg, coord, we) },
-		func() error { return registerWorldMove(reg, coord, we) },
-		func() error { return registerWorldUpdate(reg, coord, we) },
-		func() error { return registerWorldDelete(reg, coord, we) },
+		func() error { return registerWorldPlace(reg, coord, we, disp) },
+		func() error { return registerWorldMove(reg, coord, we, disp) },
+		func() error { return registerWorldUpdate(reg, coord, we, disp) },
+		func() error { return registerWorldDelete(reg, coord, we, disp) },
 		func() error { return registerWorldReload(reg, coord, we) },
 		func() error { return registerWorldExport(reg, coord, we) },
 	}
