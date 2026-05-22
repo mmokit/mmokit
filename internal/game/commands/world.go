@@ -2,6 +2,7 @@ package commands
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 
 	gamecomp "github.com/zenion/mmoserver/internal/component"
@@ -111,9 +112,29 @@ func registerWorldList(reg *cmdsys.Registry, coord *mmokit.Process, we *worldEdi
 			}
 			if include("region") && snap.Regions != nil {
 				for _, rg := range snap.Regions.Regions {
+					// Encode region geometry in Detail as JSON so the admin
+					// SPA can render the polygon without a separate fetch.
+					// WorldX/WorldY default to the first vertex (handy for
+					// sorting/bucketing); rendering uses Vertices.
+					var wx, wy float32
+					if len(rg.Vertices) > 0 {
+						wx, wy = rg.Vertices[0][0], rg.Vertices[0][1]
+					}
+					payload, _ := json.Marshal(struct {
+						Name     string       `json:"name"`
+						Kind     string       `json:"kind"`
+						Shape    string       `json:"shape"`
+						Vertices [][2]float32 `json:"vertices,omitempty"`
+					}{
+						Name:     rg.Name,
+						Kind:     rg.Kind,
+						Shape:    rg.Shape,
+						Vertices: rg.Vertices,
+					})
 					rows = append(rows, WorldEntityRow{
 						Type: "region", ID: rg.ID,
-						Detail: rg.Kind + " " + rg.Shape,
+						WorldX: wx, WorldY: wy,
+						Detail: string(payload),
 					})
 				}
 			}
@@ -128,7 +149,7 @@ func registerWorldList(reg *cmdsys.Registry, coord *mmokit.Process, we *worldEdi
 // be left empty and the handler auto-generates a stable id from the
 // (type, cell, ordinal) tuple.
 type WorldPlaceArgs struct {
-	Type   string  `cmd:"help=station|poi|dungeon|belt|decoration"`
+	Type   string  `cmd:"help=station|poi|dungeon|belt|decoration|region"`
 	WorldX float32 `cmd:"help=world-absolute X"`
 	WorldY float32 `cmd:"help=world-absolute Y"`
 	ID     string  `cmd:"optional,help=stable id (auto-generated when empty)"`
@@ -137,16 +158,20 @@ type WorldPlaceArgs struct {
 	Tier   uint8  `cmd:"optional,help=POI: tier 1..3"`
 	Roster string `cmd:"optional,help=POI: roster name"`
 
-	// Station/Dungeon
-	Name string `cmd:"optional,help=Station/Dungeon: display name"`
+	// Station/Dungeon/Region
+	Name string `cmd:"optional,help=Station/Dungeon/Region: display name"`
 
 	// Belt + Station collider radius
 	Radius  float32 `cmd:"optional,help=Belt: radius (also Station collider radius)"`
 	Density float32 `cmd:"optional,help=Belt: asteroid density (default 1.0)"`
 
-	// Decoration-only
-	Kind    string `cmd:"optional,help=Decoration: kind (e.g. wreck/beacon)"`
+	// Decoration / Region kind
+	Kind    string `cmd:"optional,help=Decoration: kind (e.g. wreck/beacon); Region: free-form kind tag (t1|t2|t3|safe|pvp|faction|...)"`
 	Variant string `cmd:"optional,help=Decoration: variant"`
+
+	// Region-only
+	Shape    string `cmd:"optional,help=Region: polygon|annulus (default polygon)"`
+	Vertices string `cmd:"optional,help=Region: JSON-encoded [[wx,wy], ...] polygon vertices"`
 }
 
 // WorldPlaceResult reports the assigned ID — useful when the caller
@@ -258,6 +283,35 @@ func registerWorldPlace(reg *cmdsys.Registry, coord *mmokit.Process, we *worldEd
 				}); err != nil {
 					return nil, err
 				}
+			case "region":
+				shape := args.Shape
+				if shape == "" {
+					shape = "polygon"
+				}
+				if shape != "polygon" {
+					return nil, fmt.Errorf("region shape %q not yet supported (polygon only)", shape)
+				}
+				if args.Vertices == "" {
+					return nil, fmt.Errorf("region: Vertices required")
+				}
+				var verts [][2]float32
+				if err := json.Unmarshal([]byte(args.Vertices), &verts); err != nil {
+					return nil, fmt.Errorf("region: Vertices must be JSON [[x,y], ...]: %w", err)
+				}
+				if len(verts) < 3 {
+					return nil, fmt.Errorf("region polygon needs at least 3 vertices, got %d", len(verts))
+				}
+				def := mmokit.WorldRegion{
+					ID:       id,
+					Name:     args.Name,
+					Kind:     args.Kind,
+					Shape:    shape,
+					Vertices: verts,
+				}
+				if err := we.repo.AddRegion(def); err != nil {
+					return nil, err
+				}
+				// Regions are annotation-only — no ECS spawn.
 			default:
 				return nil, fmt.Errorf("unknown type %q", args.Type)
 			}
@@ -275,8 +329,9 @@ func registerWorldPlace(reg *cmdsys.Registry, coord *mmokit.Process, we *worldEd
 // ── world.move ─────────────────────────────────────────────────────────────
 
 // WorldMoveArgs identifies the entity to move + its new world coords.
+// Regions don't have a single position — move them by re-placing.
 type WorldMoveArgs struct {
-	Type   string  `cmd:"help=station|poi|dungeon|belt|decoration"`
+	Type   string  `cmd:"help=station|poi|dungeon|belt|decoration (regions: re-place instead)"`
 	ID     string  `cmd:"help=entity id"`
 	WorldX float32 `cmd:"help=new world-absolute X"`
 	WorldY float32 `cmd:"help=new world-absolute Y"`
@@ -299,6 +354,9 @@ func registerWorldMove(reg *cmdsys.Registry, coord *mmokit.Process, we *worldEdi
 			args := raw.(WorldMoveArgs)
 			if we.repo == nil {
 				return nil, fmt.Errorf("world editor: no repo wired")
+			}
+			if args.Type == "region" {
+				return nil, fmt.Errorf("regions have no single position — delete + re-place to move")
 			}
 
 			// 1. Find the current world position.
@@ -349,14 +407,14 @@ func registerWorldMove(reg *cmdsys.Registry, coord *mmokit.Process, we *worldEdi
 // are interpreted as "don't change" — the handler only writes fields
 // the caller explicitly set.
 type WorldUpdateArgs struct {
-	Type    string  `cmd:"help=station|poi|dungeon|belt|decoration"`
+	Type    string  `cmd:"help=station|poi|dungeon|belt|decoration|region"`
 	ID      string  `cmd:"help=entity id"`
 	Tier    uint8   `cmd:"optional,help=POI: new tier 1..3"`
 	Roster  string  `cmd:"optional,help=POI: new roster name"`
-	Name    string  `cmd:"optional,help=Station/Dungeon: new name"`
+	Name    string  `cmd:"optional,help=Station/Dungeon/Region: new name"`
 	Radius  float32 `cmd:"optional,help=Belt: new radius (or Station collider radius)"`
 	Density float32 `cmd:"optional,help=Belt: new density"`
-	Kind    string  `cmd:"optional,help=Decoration: new kind"`
+	Kind    string  `cmd:"optional,help=Decoration/Region: new kind"`
 	Variant string  `cmd:"optional,help=Decoration: new variant"`
 }
 
@@ -433,11 +491,38 @@ func registerWorldUpdate(reg *cmdsys.Registry, coord *mmokit.Process, we *worldE
 				}); err != nil {
 					return nil, err
 				}
+			case "region":
+				if err := we.repo.UpdateRegion(args.ID, func(r *mmokit.WorldRegion) {
+					if args.Name != "" {
+						r.Name = args.Name
+					}
+					// Allow blanking the kind via the sentinel "-" — empty
+					// kind is the default, so we can't tell "leave alone"
+					// from "clear it" via the zero value alone. The admin
+					// SPA always sends Kind=<current> on Apply, so this
+					// path mostly just persists the current value.
+					if args.Kind == "-" {
+						r.Kind = ""
+					} else if args.Kind != "" {
+						r.Kind = args.Kind
+					}
+				}); err != nil {
+					return nil, err
+				}
 			default:
 				return nil, fmt.Errorf("unknown type %q", args.Type)
 			}
 
 			we.reload(coord)
+
+			// Regions are annotation-only — skip the despawn/respawn cycle
+			// that re-creates live ECS entities for the other types.
+			if args.Type == "region" {
+				mmokit.PublishAdminTopic(coord, "world.changed", WorldChangeEvent{
+					Op: "update", Type: args.Type, ID: args.ID,
+				})
+				return WorldUpdateResult{Type: args.Type, ID: args.ID}, nil
+			}
 
 			// Look up current world_pos (unchanged), then despawn + respawn
 			// at the same position so the live entity reflects the new
@@ -475,7 +560,7 @@ func registerWorldUpdate(reg *cmdsys.Registry, coord *mmokit.Process, we *worldE
 // ── world.delete ───────────────────────────────────────────────────────────
 
 type WorldDeleteArgs struct {
-	Type string `cmd:"help=station|poi|dungeon|belt|decoration"`
+	Type string `cmd:"help=station|poi|dungeon|belt|decoration|region"`
 	ID   string `cmd:"help=entity id"`
 }
 
@@ -499,10 +584,16 @@ func registerWorldDelete(reg *cmdsys.Registry, coord *mmokit.Process, we *worldE
 			}
 
 			// Snapshot the position before mutating so we know which
-			// cell to dispatch the despawn to.
-			wp, ok := lookupWorldPos(we.getSnap(), args.Type, args.ID)
-			if !ok {
-				return nil, fmt.Errorf("%s id %q not found", args.Type, args.ID)
+			// cell to dispatch the despawn to. Regions don't have a single
+			// world_pos — skip the lookup for them and rely on the repo
+			// delete to surface a not-found error if applicable.
+			var wp [2]float32
+			if args.Type != "region" {
+				var ok bool
+				wp, ok = lookupWorldPos(we.getSnap(), args.Type, args.ID)
+				if !ok {
+					return nil, fmt.Errorf("%s id %q not found", args.Type, args.ID)
+				}
 			}
 
 			switch args.Type {
@@ -526,15 +617,23 @@ func registerWorldDelete(reg *cmdsys.Registry, coord *mmokit.Process, we *worldE
 				if err := we.repo.DeleteDecoration(args.ID); err != nil {
 					return nil, err
 				}
+			case "region":
+				if err := we.repo.DeleteRegion(args.ID); err != nil {
+					return nil, err
+				}
 			default:
 				return nil, fmt.Errorf("unknown type %q", args.Type)
 			}
 
 			we.reload(coord)
-			// Despawn cluster-wide so any migrated children (e.g. belt
-			// asteroids handed off to neighbor cells) get cleaned up.
-			if err := despawnPlacedClusterWide(ctx, coord, args.Type, args.ID); err != nil {
-				return nil, err
+			// Regions are annotation-only — no live ECS entities, so the
+			// cluster-wide despawn sweep is a no-op for them. Skip it.
+			if args.Type != "region" {
+				// Despawn cluster-wide so any migrated children (e.g. belt
+				// asteroids handed off to neighbor cells) get cleaned up.
+				if err := despawnPlacedClusterWide(ctx, coord, args.Type, args.ID); err != nil {
+					return nil, err
+				}
 			}
 
 			mmokit.PublishAdminTopic(coord, "world.changed", WorldChangeEvent{
@@ -911,6 +1010,12 @@ func autoID(typ string, c mmokit.WorldCellID, snap *mmokit.WorldSnapshot) string
 		case "decoration":
 			if snap.Decorations != nil {
 				for _, x := range snap.Decorations.Decorations {
+					seen[x.ID] = true
+				}
+			}
+		case "region":
+			if snap.Regions != nil {
+				for _, x := range snap.Regions.Regions {
 					seen[x.ID] = true
 				}
 			}

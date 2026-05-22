@@ -22,7 +22,6 @@
   type LayerKey = keyof typeof worldStore.layers;
   const layerRows: { key: LayerKey; label: string }[] = [
     { key: "cells",       label: "Cells" },
-    { key: "tiers",       label: "Tiers" },
     { key: "grid",        label: "Grid" },
     { key: "stations",    label: "Stations" },
     { key: "pois",        label: "POIs" },
@@ -112,6 +111,7 @@
     <div class="flex justify-between"><span>pois</span><span class="text-[var(--text-default)]">{worldStore.snapshot.pois.length}</span></div>
     <div class="flex justify-between"><span>dungeons</span><span class="text-[var(--text-default)]">{worldStore.snapshot.dungeons.length}</span></div>
     <div class="flex justify-between"><span>belts</span><span class="text-[var(--text-default)]">{worldStore.snapshot.belts.length}</span></div>
+    <div class="flex justify-between"><span>regions</span><span class="text-[var(--text-default)]">{worldStore.snapshot.regions.length}</span></div>
     <div class="flex justify-between"><span>decor</span><span class="text-[var(--text-default)]">{worldStore.snapshot.decorations.length}</span></div>
   </div>
 </aside>

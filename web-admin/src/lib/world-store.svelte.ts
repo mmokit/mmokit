@@ -59,17 +59,25 @@ export interface WorldDecoration {
   variant?: string;
 }
 
+export interface WorldRegion {
+  id: string;
+  name: string;
+  kind: string;
+  shape: string; // "polygon" | "annulus"
+  vertices: Pos2[]; // for polygon shape
+}
+
 export interface Snapshot {
   stations: WorldStation[];
   pois: WorldPOI[];
   dungeons: WorldDungeon[];
   belts: WorldBelt[];
   decorations: WorldDecoration[];
+  regions: WorldRegion[];
 }
 
 export interface LayerFlags {
   cells: boolean;
-  tiers: boolean;
   grid: boolean;
   stations: boolean;
   pois: boolean;
@@ -107,6 +115,7 @@ class WorldStore {
     dungeons: [],
     belts: [],
     decorations: [],
+    regions: [],
   });
   selectedID = $state<string | null>(null);
   selectedType = $state<string | null>(null);
@@ -117,7 +126,6 @@ class WorldStore {
   pan = $state<Pos2>([0, 0]);
   layers = $state<LayerFlags>({
     cells: true,
-    tiers: true,
     grid: true,
     stations: true,
     pois: true,
@@ -139,6 +147,7 @@ class WorldStore {
     const dungeons: WorldDungeon[] = [];
     const belts: WorldBelt[] = [];
     const decorations: WorldDecoration[] = [];
+    const regions: WorldRegion[] = [];
 
     for (const e of entities) {
       const wp: Pos2 = [e.WorldX, e.WorldY];
@@ -182,13 +191,36 @@ class WorldStore {
           });
           break;
         }
+        case "region": {
+          // Detail is a JSON blob: {"name":..., "kind":..., "shape":...,
+          // "vertices":[[wx,wy], ...]}. See registerWorldList in
+          // internal/game/commands/world.go.
+          let parsed: {
+            name?: string;
+            kind?: string;
+            shape?: string;
+            vertices?: Pos2[];
+          } = {};
+          try {
+            parsed = JSON.parse(e.Detail ?? "{}");
+          } catch {
+            // tolerate malformed; treat as an empty region
+          }
+          regions.push({
+            id: e.ID,
+            name: parsed.name ?? "",
+            kind: parsed.kind ?? "",
+            shape: parsed.shape ?? "polygon",
+            vertices: Array.isArray(parsed.vertices) ? parsed.vertices : [],
+          });
+          break;
+        }
         default:
-          // regions and any future types pass through silently
           break;
       }
     }
 
-    this.snapshot = { stations, pois, dungeons, belts, decorations };
+    this.snapshot = { stations, pois, dungeons, belts, decorations, regions };
   }
 
   subscribeLive(): () => void {
@@ -204,17 +236,29 @@ class WorldStore {
       | WorldPOI
       | WorldDungeon
       | WorldBelt
-      | WorldDecoration;
+      | WorldDecoration
+      | WorldRegion;
   } | null {
     if (!this.selectedID || !this.selectedType) return null;
     const t = this.selectedType;
     const id = this.selectedID;
-    const lookup: Record<string, (WorldStation | WorldPOI | WorldDungeon | WorldBelt | WorldDecoration)[]> = {
+    const lookup: Record<
+      string,
+      (
+        | WorldStation
+        | WorldPOI
+        | WorldDungeon
+        | WorldBelt
+        | WorldDecoration
+        | WorldRegion
+      )[]
+    > = {
       station: this.snapshot.stations,
       poi: this.snapshot.pois,
       dungeon: this.snapshot.dungeons,
       belt: this.snapshot.belts,
       decoration: this.snapshot.decorations,
+      region: this.snapshot.regions,
     };
     const list = lookup[t];
     if (!list) return null;
@@ -282,11 +326,8 @@ class WorldStore {
 
 export const worldStore = new WorldStore();
 
-// World constants (mirror pkg/coords/coords.go::CellSize and POI tier inner
-// radii from internal/game/poi_config.go).
+// World constants (mirror pkg/coords/coords.go::CellSize).
 export const CELL_SIZE = 8192;
-export const TIER_2_RADIUS = 16384;
-export const TIER_3_RADIUS = 32768;
 
 // Known roster names from internal/game/poi_config.go.
 export const ROSTERS = [
@@ -297,3 +338,29 @@ export const ROSTERS = [
   "HeavyBattalion",
   "EliteAnchor",
 ] as const;
+
+// Default lavender region color (matches the Region tool glyph in
+// WorldPalette). Returned for unknown kinds and the empty kind.
+export const DEFAULT_REGION_COLOR = "rgb(180, 158, 250)";
+
+// regionColor returns the canvas color for a region by its `kind`
+// freeform tag. The lookup is shared between the canvas renderer and any
+// future legend / palette that wants the same palette.
+export function regionColor(kind: string): string {
+  switch (kind) {
+    case "t1":
+      return "rgb(251, 191, 36)"; // amber
+    case "t2":
+      return "rgb(251, 146, 60)"; // orange
+    case "t3":
+      return "rgb(251, 113, 133)"; // rose
+    case "safe":
+      return "rgb(74, 222, 128)"; // green
+    case "pvp":
+      return "rgb(239, 68, 68)"; // red
+    case "faction":
+      return "rgb(34, 211, 238)"; // cyan
+    default:
+      return DEFAULT_REGION_COLOR;
+  }
+}

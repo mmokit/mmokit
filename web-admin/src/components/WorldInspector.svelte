@@ -110,9 +110,17 @@
     <div class="px-3 py-3 border-b border-[var(--border-faint)]">
       <div class="font-mono text-[10px] text-[var(--text-muted)] tracking-[0.14em] uppercase">{sel.type}</div>
       <div class="font-mono text-[12.5px] text-phosphor-300 mt-0.5 truncate" title={e.id}>{e.id}</div>
-      <div class="mt-1 font-mono text-[10.5px] text-[var(--text-muted)] tabular-nums">
-        x {e.world_pos[0].toFixed(0)} · y {e.world_pos[1].toFixed(0)}
-      </div>
+      {#if sel.type === "region"}
+        {@const rg = sel.entity as import("$lib/world-store.svelte").WorldRegion}
+        <div class="mt-1 font-mono text-[10.5px] text-[var(--text-muted)] tabular-nums">
+          {rg.vertices.length} points · {rg.shape}
+        </div>
+      {:else}
+        {@const ep = e as { world_pos: [number, number] }}
+        <div class="mt-1 font-mono text-[10.5px] text-[var(--text-muted)] tabular-nums">
+          x {ep.world_pos[0].toFixed(0)} · y {ep.world_pos[1].toFixed(0)}
+        </div>
+      {/if}
     </div>
 
     <div class="px-3 py-3 flex flex-col gap-3">
@@ -229,6 +237,37 @@
             value={get("Variant", dc.variant ?? "")}
             oninput={(ev) => setField("Variant", (ev.currentTarget as HTMLInputElement).value, dc.variant ?? "")}
           />
+        </div>
+      {:else if sel.type === "region"}
+        {@const rg = sel.entity as import("$lib/world-store.svelte").WorldRegion}
+        <div>
+          <label class={labelCls} for="ins-rname">Name</label>
+          <input
+            id="ins-rname"
+            type="text"
+            class={inputCls}
+            value={get("Name", rg.name)}
+            oninput={(ev) => setField("Name", (ev.currentTarget as HTMLInputElement).value, rg.name)}
+          />
+        </div>
+        <div>
+          <label class={labelCls} for="ins-rkind">Kind</label>
+          <input
+            id="ins-rkind"
+            type="text"
+            placeholder="t1 · t2 · t3 · safe · pvp · faction"
+            class={inputCls}
+            value={get("Kind", rg.kind)}
+            oninput={(ev) => setField("Kind", (ev.currentTarget as HTMLInputElement).value, rg.kind)}
+          />
+        </div>
+        <div>
+          <span class={labelCls}>Shape</span>
+          <div class="font-mono text-[11.5px] text-[var(--text-default)]">{rg.shape}</div>
+        </div>
+        <div>
+          <span class={labelCls}>Vertices</span>
+          <div class="font-mono text-[11.5px] text-[var(--text-default)]">{rg.vertices.length} points</div>
         </div>
       {/if}
     </div>

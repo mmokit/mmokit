@@ -3,13 +3,14 @@
   import {
     worldStore,
     CELL_SIZE,
-    TIER_2_RADIUS,
-    TIER_3_RADIUS,
+    regionColor,
+    DEFAULT_REGION_COLOR,
     type Tool,
   } from "$lib/world-store.svelte";
   import { cellsStore } from "$lib/stores.svelte";
   import { stream } from "$lib/stream";
   import { apiGet } from "$lib/api";
+  import { parseCellID } from "$lib/cellid";
   import type { CellInfo } from "$lib/types";
 
   let canvas: HTMLCanvasElement;
@@ -21,22 +22,6 @@
   // boundary drawing so the editor doesn't suggest cells exist that don't.
   let clusterBounds = $state<{ minX: number; maxX: number; minY: number; maxY: number } | null>(null);
 
-  function parseCellID(id: string): { x: number; y: number } | null {
-    // Format from /admin/api/cells is "cell_X_Y" at depth 0 and
-    // "cell_X_Y:N" for split children. We use the root XY for bounding-box
-    // purposes since splits sit inside their parent. Strategy: drop the
-    // split suffix, then read the LAST two underscore-separated integer
-    // segments so the parser is robust to optional "cell_" prefix or any
-    // future naming evolution.
-    const head = id.split(":")[0];
-    const parts = head.split("_");
-    if (parts.length < 2) return null;
-    const y = parseInt(parts[parts.length - 1], 10);
-    const x = parseInt(parts[parts.length - 2], 10);
-    if (!isFinite(x) || !isFinite(y)) return null;
-    return { x, y };
-  }
-
   function recomputeBoundsFrom(cells: CellInfo[]): void {
     if (!cells || cells.length === 0) {
       clusterBounds = null;
@@ -46,10 +31,15 @@
     for (const c of cells) {
       const xy = parseCellID(c.id);
       if (!xy) continue;
-      if (xy.x < minX) minX = xy.x;
-      if (xy.x > maxX) maxX = xy.x;
-      if (xy.y < minY) minY = xy.y;
-      if (xy.y > maxY) maxY = xy.y;
+      // Splits sit inside their depth-0 parent; collapse the child XY
+      // back into the parent's grid coordinate for bounding-box purposes
+      // so post-split cells don't expand the cluster rectangle.
+      const baseX = xy.depth === 0 ? xy.x : Math.floor(xy.x / (1 << xy.depth));
+      const baseY = xy.depth === 0 ? xy.y : Math.floor(xy.y / (1 << xy.depth));
+      if (baseX < minX) minX = baseX;
+      if (baseX > maxX) maxX = baseX;
+      if (baseY < minY) minY = baseY;
+      if (baseY > maxY) maxY = baseY;
     }
     if (!isFinite(minX)) {
       clusterBounds = null;
@@ -92,16 +82,32 @@
     region: "rgb(180, 158, 250)",
   } as const;
 
-  // Per-tool default args sent with world.place.
+  // Per-tool default args sent with world.place. Regions go through a
+  // separate polygon-placement state machine (see polygonDraft below).
   const PLACE_DEFAULTS: Record<string, Record<string, unknown>> = {
     station:    { Name: "Station", Radius: 100 },
     poi:        { Tier: 1, Roster: "StarterArena" },
     dungeon:    { Name: "Dungeon" },
     belt:       { Radius: 80, Density: 1.0 },
     decoration: { Kind: "wreck", Variant: "" },
-    // region not supported by world.place yet — treat as no-op.
-    region:     {},
   };
+
+  // In-flight polygon-placement state. Set when the user clicks while the
+  // Region tool is active; vertices grow as they click; cleared on
+  // commit/cancel. Rectangle mode (shift+drag) bypasses this and emits a
+  // 4-vertex polygon directly on mouseup.
+  type PolygonDraft = {
+    vertices: [number, number][]; // world-space
+  };
+  let polygonDraft = $state<PolygonDraft | null>(null);
+
+  // Rectangle-drag state for shift+drag in region mode. Stores the
+  // world-space anchor; the second corner is `worldStore.cursor`.
+  let rectDraft = $state<{ anchor: [number, number] } | null>(null);
+
+  // Distance (screen px) within which a click on the first polygon vertex
+  // closes the polygon.
+  const POLYGON_CLOSE_PX = 6;
 
   // ── Transform helpers ─────────────────────────────────────────────────
 
@@ -197,42 +203,147 @@
     ctx.restore();
   }
 
-  function drawTierRings(ctx: CanvasRenderingContext2D, w: number, h: number): void {
-    if (!worldStore.layers.tiers) return;
-    const [cx, cy] = worldToScreen(0, 0, w, h);
-    const z = worldStore.zoom;
+  // ── Region rendering ────────────────────────────────────────────────
+  //
+  // Regions are polygons (and future annuli) drawn under the entity layer.
+  // Outline + 8% alpha fill, color-coded by kind via regionColor().
+
+  function rgbToRgba(rgb: string, alpha: number): string {
+    // Convert "rgb(r, g, b)" → "rgba(r, g, b, A)". Falls back to the
+    // raw string if the input isn't the expected shape.
+    const m = /^rgb\((\d+),\s*(\d+),\s*(\d+)\)$/.exec(rgb.trim());
+    if (!m) return rgb;
+    return `rgba(${m[1]}, ${m[2]}, ${m[3]}, ${alpha})`;
+  }
+
+  function centroidOf(vertices: [number, number][]): [number, number] {
+    if (vertices.length === 0) return [0, 0];
+    let sx = 0, sy = 0;
+    for (const [x, y] of vertices) { sx += x; sy += y; }
+    return [sx / vertices.length, sy / vertices.length];
+  }
+
+  function drawRegions(ctx: CanvasRenderingContext2D, w: number, h: number): void {
+    if (!worldStore.layers.regions) return;
+    const regions = worldStore.snapshot.regions;
+    if (!regions || regions.length === 0) return;
+
+    const selID = worldStore.selectedID;
+    const selType = worldStore.selectedType;
 
     ctx.save();
-    ctx.setLineDash([6, 4]);
-    ctx.lineWidth = 1;
+    for (const r of regions) {
+      if (r.shape !== "polygon" || r.vertices.length < 3) continue;
+      const sel = selType === "region" && selID === r.id;
+      const baseColor = regionColor(r.kind);
+      const fill = rgbToRgba(baseColor, 0.08);
+      const stroke = sel ? rgbToRgba(baseColor, 1.0) : rgbToRgba(baseColor, 0.7);
 
-    // T1/T2 boundary — amber.
-    ctx.strokeStyle = "rgba(251, 191, 36, 0.5)";
+      ctx.beginPath();
+      for (let i = 0; i < r.vertices.length; i++) {
+        const [wx, wy] = r.vertices[i];
+        const [sx, sy] = worldToScreen(wx, wy, w, h);
+        if (i === 0) ctx.moveTo(sx, sy);
+        else ctx.lineTo(sx, sy);
+      }
+      ctx.closePath();
+      ctx.fillStyle = fill;
+      ctx.fill();
+      ctx.strokeStyle = stroke;
+      ctx.lineWidth = sel ? 2 : 1.25;
+      ctx.stroke();
+
+      // Selection ring at each vertex when selected.
+      if (sel) {
+        for (const [wx, wy] of r.vertices) {
+          const [sx, sy] = worldToScreen(wx, wy, w, h);
+          ctx.beginPath();
+          ctx.arc(sx, sy, 3, 0, Math.PI * 2);
+          ctx.fillStyle = stroke;
+          ctx.fill();
+        }
+      }
+
+      // Label at centroid.
+      if (worldStore.zoom >= 0.01) {
+        const [cwx, cwy] = centroidOf(r.vertices);
+        const [csx, csy] = worldToScreen(cwx, cwy, w, h);
+        ctx.font = "10px 'JetBrains Mono', ui-monospace, monospace";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillStyle = rgbToRgba(baseColor, 0.95);
+        ctx.fillText(r.name || r.id, csx, csy);
+      }
+    }
+    ctx.restore();
+  }
+
+  function drawPolygonDraft(ctx: CanvasRenderingContext2D, w: number, h: number): void {
+    if (!polygonDraft || polygonDraft.vertices.length === 0) return;
+    const color = DEFAULT_REGION_COLOR;
+    const stroke = rgbToRgba(color, 0.9);
+
+    ctx.save();
+    ctx.setLineDash([4, 3]);
+    ctx.lineWidth = 1.25;
+    ctx.strokeStyle = stroke;
+
+    // Connect vertices in order.
     ctx.beginPath();
-    ctx.arc(cx, cy, TIER_2_RADIUS * z, 0, Math.PI * 2);
+    for (let i = 0; i < polygonDraft.vertices.length; i++) {
+      const [wx, wy] = polygonDraft.vertices[i];
+      const [sx, sy] = worldToScreen(wx, wy, w, h);
+      if (i === 0) ctx.moveTo(sx, sy);
+      else ctx.lineTo(sx, sy);
+    }
+    // Trailing segment from last vertex to cursor.
+    if (mouseScreen) {
+      ctx.lineTo(mouseScreen.x, mouseScreen.y);
+    }
     ctx.stroke();
-
-    // T2/T3 boundary — ember.
-    ctx.strokeStyle = "rgba(251, 113, 133, 0.55)";
-    ctx.beginPath();
-    ctx.arc(cx, cy, TIER_3_RADIUS * z, 0, Math.PI * 2);
-    ctx.stroke();
-
     ctx.setLineDash([]);
 
-    // Labels on the X axis at right side of each ring.
-    if (z * TIER_2_RADIUS > 40) {
-      ctx.fillStyle = "rgba(251, 191, 36, 0.85)";
-      ctx.font = "9.5px 'JetBrains Mono', ui-monospace, monospace";
-      ctx.textAlign = "left";
-      ctx.textBaseline = "middle";
-      const [t2x] = worldToScreen(TIER_2_RADIUS, 0, w, h);
-      ctx.fillText("T1/T2", t2x + 4, cy);
-      ctx.fillStyle = "rgba(251, 113, 133, 0.9)";
-      const [t3x] = worldToScreen(TIER_3_RADIUS, 0, w, h);
-      ctx.fillText("T2/T3", t3x + 4, cy);
+    // Vertex dots.
+    ctx.fillStyle = stroke;
+    for (let i = 0; i < polygonDraft.vertices.length; i++) {
+      const [wx, wy] = polygonDraft.vertices[i];
+      const [sx, sy] = worldToScreen(wx, wy, w, h);
+      const r = i === 0 ? 4 : 3;
+      ctx.beginPath();
+      ctx.arc(sx, sy, r, 0, Math.PI * 2);
+      ctx.fill();
+      if (i === 0) {
+        // Highlight first vertex (the close target).
+        ctx.strokeStyle = stroke;
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.arc(sx, sy, POLYGON_CLOSE_PX, 0, Math.PI * 2);
+        ctx.stroke();
+      }
     }
+    ctx.restore();
+  }
 
+  function drawRectDraft(ctx: CanvasRenderingContext2D, w: number, h: number): void {
+    if (!rectDraft) return;
+    const [ax, ay] = rectDraft.anchor;
+    const [bx, by] = worldStore.cursor;
+    const [sx1, sy1] = worldToScreen(ax, ay, w, h);
+    const [sx2, sy2] = worldToScreen(bx, by, w, h);
+    const x = Math.min(sx1, sx2);
+    const y = Math.min(sy1, sy2);
+    const ww = Math.abs(sx2 - sx1);
+    const hh = Math.abs(sy2 - sy1);
+
+    const color = DEFAULT_REGION_COLOR;
+    ctx.save();
+    ctx.setLineDash([4, 3]);
+    ctx.strokeStyle = rgbToRgba(color, 0.95);
+    ctx.lineWidth = 1.25;
+    ctx.strokeRect(x + 0.5, y + 0.5, ww, hh);
+    ctx.setLineDash([]);
+    ctx.fillStyle = rgbToRgba(color, 0.08);
+    ctx.fillRect(x, y, ww, hh);
     ctx.restore();
   }
 
@@ -434,8 +545,10 @@
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     clearAndBackground(ctx, w, h);
     drawCellBoundaries(ctx, w, h);
-    drawTierRings(ctx, w, h);
+    drawRegions(ctx, w, h);
     drawEntities(ctx, w, h);
+    drawPolygonDraft(ctx, w, h);
+    drawRectDraft(ctx, w, h);
     drawCursor(ctx, w, h);
   }
 
@@ -493,14 +606,35 @@
     void worldStore.layers;
     void mouseScreen;
     void entityDrag;
+    void polygonDraft;
+    void rectDraft;
+    void worldStore.cursor;
     void clusterBounds;
     scheduleRedraw();
   });
 
   // ── Picking ──────────────────────────────────────────────────────────
 
+  // Standard ray-cast point-in-polygon. Returns true when (px, py) is
+  // inside the polygon defined by `verts` (in any winding order).
+  function pointInPolygon(px: number, py: number, verts: [number, number][]): boolean {
+    let inside = false;
+    for (let i = 0, j = verts.length - 1; i < verts.length; j = i++) {
+      const [xi, yi] = verts[i];
+      const [xj, yj] = verts[j];
+      const intersect =
+        ((yi > py) !== (yj > py)) &&
+        (px < ((xj - xi) * (py - yi)) / (yj - yi || Number.EPSILON) + xi);
+      if (intersect) inside = !inside;
+    }
+    return inside;
+  }
+
   // Nearest entity within `tolWorld` world units of (wx, wy). Returns
   // {type, id} or null. O(n) — fine at editor scales (low hundreds).
+  // Regions are picked separately via point-in-polygon (no nearness check)
+  // and take lower priority than point-style entities — so clicking the
+  // station glyph inside a region still selects the station.
   function pickAt(wx: number, wy: number, tolWorld: number): { type: string; id: string } | null {
     const snap = worldStore.snapshot;
     const tol2 = tolWorld * tolWorld;
@@ -529,7 +663,19 @@
         }
       }
     }
-    return bestType ? { type: bestType, id: bestID } : null;
+    if (bestType) return { type: bestType, id: bestID };
+
+    // Region fallback — point-in-polygon test, last-drawn-wins.
+    if (worldStore.layers.regions) {
+      for (let i = snap.regions.length - 1; i >= 0; i--) {
+        const r = snap.regions[i];
+        if (r.shape !== "polygon" || r.vertices.length < 3) continue;
+        if (pointInPolygon(wx, wy, r.vertices)) {
+          return { type: "region", id: r.id };
+        }
+      }
+    }
+    return null;
   }
 
   // ── Mouse handlers ───────────────────────────────────────────────────
@@ -543,8 +689,27 @@
     const { x, y } = getMouseScreen(e);
     const rect = canvas.getBoundingClientRect();
 
-    // Shift-drag = pan. Middle button also pans.
-    if (e.shiftKey || e.button === 1) {
+    // Middle button always pans (no modifier needed).
+    if (e.button === 1) {
+      dragging = true;
+      panStart = { x, y };
+      panOrig = { x: worldStore.pan[0], y: worldStore.pan[1] };
+      e.preventDefault();
+      return;
+    }
+
+    // Region tool + shift-drag = rectangle placement.
+    if (worldStore.tool === "region" && e.shiftKey && e.button === 0) {
+      const [wx, wy] = screenToWorld(x, y, rect.width, rect.height);
+      rectDraft = { anchor: [wx, wy] };
+      // Abort any in-progress polygon when switching to rect-drag.
+      polygonDraft = null;
+      e.preventDefault();
+      return;
+    }
+
+    // Shift-drag in any other tool = pan.
+    if (e.shiftKey) {
       dragging = true;
       panStart = { x, y };
       panOrig = { x: worldStore.pan[0], y: worldStore.pan[1] };
@@ -562,14 +727,18 @@
         // Select immediately so the inspector reflects the choice even on
         // a click-without-drag.
         worldStore.setSelection(hit.type, hit.id);
-        entityDrag = {
-          type: hit.type,
-          id: hit.id,
-          startScreen: { x, y },
-          startWorld: [wx, wy],
-          currentWorld: [wx, wy],
-          moved: false,
-        };
+        // Region selections aren't draggable as a unit yet — skip the
+        // entityDrag handshake. (Move-by-vertex is a v2 feature.)
+        if (hit.type !== "region") {
+          entityDrag = {
+            type: hit.type,
+            id: hit.id,
+            startScreen: { x, y },
+            startWorld: [wx, wy],
+            currentWorld: [wx, wy],
+            moved: false,
+          };
+        }
         e.preventDefault();
       }
     }
@@ -612,16 +781,39 @@
         console.error("world.move failed", err);
       }
     }
+
+    // Rectangle-drag finalization. Need a non-degenerate rect — collapse to
+    // a no-op if the user clicked without dragging.
+    const r = rectDraft;
+    rectDraft = null;
+    if (r) {
+      const [ax, ay] = r.anchor;
+      const [bx, by] = worldStore.cursor;
+      const minX = Math.min(ax, bx);
+      const maxX = Math.max(ax, bx);
+      const minY = Math.min(ay, by);
+      const maxY = Math.max(ay, by);
+      if (maxX - minX < 4 || maxY - minY < 4) return; // too small — discard
+      // Clockwise: top-left → top-right → bottom-right → bottom-left.
+      const verts: [number, number][] = [
+        [minX, minY],
+        [maxX, minY],
+        [maxX, maxY],
+        [minX, maxY],
+      ];
+      await commitRegionPolygon(verts);
+    }
   }
 
   function onMouseLeave(): void {
     dragging = false;
     entityDrag = null;
+    rectDraft = null;
     mouseScreen = null;
   }
 
   async function onClick(e: MouseEvent): Promise<void> {
-    if (e.shiftKey) return;     // shift = pan
+    if (e.shiftKey) return;     // shift = pan / rect-drag
     if (dragging) return;       // a pan finished here
     // mousedown/up in select mode handles selection + drag-move. The click
     // handler only fires for place tools.
@@ -632,12 +824,54 @@
     const [wx, wy] = screenToWorld(x, y, rect.width, rect.height);
 
     const t = worldStore.tool;
-    if (t === "region") return; // not supported by world.place yet
+
+    // Region tool: build a polygon vertex-by-vertex. Click within
+    // POLYGON_CLOSE_PX of the first vertex (when ≥3 vertices exist) to
+    // commit. Escape cancels (see onKey).
+    if (t === "region") {
+      if (polygonDraft && polygonDraft.vertices.length >= 3) {
+        const [fx, fy] = polygonDraft.vertices[0];
+        const [fsx, fsy] = worldToScreen(fx, fy, rect.width, rect.height);
+        const d = Math.hypot(fsx - x, fsy - y);
+        if (d <= POLYGON_CLOSE_PX) {
+          const verts = polygonDraft.vertices.slice();
+          polygonDraft = null;
+          await commitRegionPolygon(verts);
+          return;
+        }
+      }
+      const next: [number, number] = [wx, wy];
+      polygonDraft = polygonDraft
+        ? { vertices: [...polygonDraft.vertices, next] }
+        : { vertices: [next] };
+      return;
+    }
+
     const extra = PLACE_DEFAULTS[t] ?? {};
     try {
       await worldStore.place(t, Math.round(wx), Math.round(wy), extra);
     } catch (err) {
       console.error("world.place failed", err);
+    }
+  }
+
+  // commitRegionPolygon POSTs world.place for a freshly-drawn polygon.
+  // Vertices are world-space; sent as Vertices=<json> per the cmdsys
+  // contract. Uses the first vertex as WorldX/WorldY (the handler uses
+  // that pair only to derive a default auto-id cell hash; the actual
+  // shape lives in Vertices).
+  async function commitRegionPolygon(verts: [number, number][]): Promise<void> {
+    if (verts.length < 3) return;
+    const rounded = verts.map(([wx, wy]) => [Math.round(wx), Math.round(wy)] as [number, number]);
+    try {
+      await worldStore.place("region", rounded[0][0], rounded[0][1], {
+        Shape: "polygon",
+        Vertices: JSON.stringify(rounded),
+        Name: "",
+        Kind: "",
+      });
+    } catch (err) {
+      console.error("world.place region failed", err);
     }
   }
 
@@ -676,11 +910,34 @@
       return;
     }
     if (e.key === "Escape") {
+      if (polygonDraft) {
+        polygonDraft = null;
+        return;
+      }
+      if (rectDraft) {
+        rectDraft = null;
+        return;
+      }
       worldStore.clearSelection();
       return;
     }
+    if (e.key === "Enter") {
+      // Commit an in-progress polygon when ≥3 vertices exist.
+      if (polygonDraft && polygonDraft.vertices.length >= 3) {
+        const verts = polygonDraft.vertices.slice();
+        polygonDraft = null;
+        void commitRegionPolygon(verts);
+        e.preventDefault();
+        return;
+      }
+    }
     const t = HOTKEYS[e.key.toLowerCase()];
     if (t) {
+      // Switching away from the region tool abandons any in-flight draft.
+      if (t !== "region") {
+        polygonDraft = null;
+        rectDraft = null;
+      }
       worldStore.tool = t;
       e.preventDefault();
     }
@@ -714,7 +971,9 @@
     <div>shift-drag · pan</div>
     <div>wheel · zoom</div>
     <div>V · select / 1-6 · place</div>
-    <div>esc · clear selection</div>
+    <div>5 · region — click vertices, click 1st to close</div>
+    <div>5 + shift-drag · rect region</div>
+    <div>esc · cancel / clear selection</div>
   </div>
 
 </div>
