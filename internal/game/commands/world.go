@@ -47,7 +47,7 @@ type WorldEntityRow struct {
 	Detail string
 }
 
-func registerWorldList(reg *cmdsys.Registry, coord *mmokit.Process, gwGetter func() *game.GameWorld) error {
+func registerWorldList(reg *cmdsys.Registry, coord *mmokit.Process, we *worldEditor) error {
 	return reg.Register(cmdsys.Command{
 		Verb:        "world.list",
 		Capability:  "world.edit",
@@ -57,11 +57,10 @@ func registerWorldList(reg *cmdsys.Registry, coord *mmokit.Process, gwGetter fun
 		Result:      WorldListResult{},
 		Handler: func(ctx context.Context, env *cmdsys.Env, raw any) (any, error) {
 			args := raw.(WorldListArgs)
-			gw := gwGetter()
-			if gw == nil || gw.WorldSnapshot == nil {
+			snap := we.getSnap()
+			if snap == nil {
 				return WorldListResult{}, nil
 			}
-			snap := gw.WorldSnapshot
 			var rows []WorldEntityRow
 			include := func(t string) bool { return args.Type == "" || args.Type == t }
 
@@ -157,7 +156,7 @@ type WorldPlaceResult struct {
 	ID   string
 }
 
-func registerWorldPlace(reg *cmdsys.Registry, coord *mmokit.Process, gwGetter func() *game.GameWorld) error {
+func registerWorldPlace(reg *cmdsys.Registry, coord *mmokit.Process, we *worldEditor) error {
 	return reg.Register(cmdsys.Command{
 		Verb:        "world.place",
 		Capability:  "world.edit",
@@ -167,8 +166,7 @@ func registerWorldPlace(reg *cmdsys.Registry, coord *mmokit.Process, gwGetter fu
 		Result:      WorldPlaceResult{},
 		Handler: func(ctx context.Context, env *cmdsys.Env, raw any) (any, error) {
 			args := raw.(WorldPlaceArgs)
-			gw := gwGetter()
-			if gw == nil || gw.WorldRepo == nil {
+			if we.repo == nil {
 				return nil, fmt.Errorf("world editor: no repo wired")
 			}
 
@@ -177,7 +175,7 @@ func registerWorldPlace(reg *cmdsys.Registry, coord *mmokit.Process, gwGetter fu
 
 			id := args.ID
 			if id == "" {
-				id = autoID(args.Type, cellID, gw)
+				id = autoID(args.Type, cellID, we.getSnap())
 			}
 
 			switch args.Type {
@@ -187,7 +185,7 @@ func registerWorldPlace(reg *cmdsys.Registry, coord *mmokit.Process, gwGetter fu
 					WorldPos: [2]float32{args.WorldX, args.WorldY},
 					Radius:   args.Radius,
 				}
-				if err := gw.WorldRepo.AddStation(def); err != nil {
+				if err := we.repo.AddStation(def); err != nil {
 					return nil, err
 				}
 				if err := spawnInCell(ctx, coord, cellID, func(gw *game.GameWorld) {
@@ -206,7 +204,7 @@ func registerWorldPlace(reg *cmdsys.Registry, coord *mmokit.Process, gwGetter fu
 					ID: id, WorldPos: [2]float32{args.WorldX, args.WorldY},
 					Type: "combat", Tier: args.Tier, Roster: args.Roster,
 				}
-				if err := gw.WorldRepo.AddPOI(def); err != nil {
+				if err := we.repo.AddPOI(def); err != nil {
 					return nil, err
 				}
 				if err := spawnInCell(ctx, coord, cellID, func(gw *game.GameWorld) {
@@ -219,7 +217,7 @@ func registerWorldPlace(reg *cmdsys.Registry, coord *mmokit.Process, gwGetter fu
 					ID: id, Name: args.Name,
 					WorldPos: [2]float32{args.WorldX, args.WorldY},
 				}
-				if err := gw.WorldRepo.AddDungeon(def); err != nil {
+				if err := we.repo.AddDungeon(def); err != nil {
 					return nil, err
 				}
 				if err := spawnInCell(ctx, coord, cellID, func(gw *game.GameWorld) {
@@ -239,7 +237,7 @@ func registerWorldPlace(reg *cmdsys.Registry, coord *mmokit.Process, gwGetter fu
 					ID: id, WorldPos: [2]float32{args.WorldX, args.WorldY},
 					Radius: args.Radius, Density: density,
 				}
-				if err := gw.WorldRepo.AddBelt(def); err != nil {
+				if err := we.repo.AddBelt(def); err != nil {
 					return nil, err
 				}
 				if err := spawnInCell(ctx, coord, cellID, func(gw *game.GameWorld) {
@@ -252,7 +250,7 @@ func registerWorldPlace(reg *cmdsys.Registry, coord *mmokit.Process, gwGetter fu
 					ID: id, WorldPos: [2]float32{args.WorldX, args.WorldY},
 					Kind: args.Kind, Variant: args.Variant,
 				}
-				if err := gw.WorldRepo.AddDecoration(def); err != nil {
+				if err := we.repo.AddDecoration(def); err != nil {
 					return nil, err
 				}
 				if err := spawnInCell(ctx, coord, cellID, func(gw *game.GameWorld) {
@@ -264,7 +262,7 @@ func registerWorldPlace(reg *cmdsys.Registry, coord *mmokit.Process, gwGetter fu
 				return nil, fmt.Errorf("unknown type %q", args.Type)
 			}
 
-			reloadSnapshotInto(gw, coord)
+			we.reload(coord)
 			mmokit.PublishAdminTopic(coord, "world.changed", WorldChangeEvent{
 				Op: "place", Type: args.Type, ID: id,
 				WorldX: args.WorldX, WorldY: args.WorldY,
@@ -289,7 +287,7 @@ type WorldMoveResult struct {
 	ID   string
 }
 
-func registerWorldMove(reg *cmdsys.Registry, coord *mmokit.Process, gwGetter func() *game.GameWorld) error {
+func registerWorldMove(reg *cmdsys.Registry, coord *mmokit.Process, we *worldEditor) error {
 	return reg.Register(cmdsys.Command{
 		Verb:        "world.move",
 		Capability:  "world.edit",
@@ -299,20 +297,19 @@ func registerWorldMove(reg *cmdsys.Registry, coord *mmokit.Process, gwGetter fun
 		Result:      WorldMoveResult{},
 		Handler: func(ctx context.Context, env *cmdsys.Env, raw any) (any, error) {
 			args := raw.(WorldMoveArgs)
-			gw := gwGetter()
-			if gw == nil || gw.WorldRepo == nil {
+			if we.repo == nil {
 				return nil, fmt.Errorf("world editor: no repo wired")
 			}
 
 			// 1. Find the current world position.
-			oldWP, ok := lookupWorldPos(gw, args.Type, args.ID)
+			oldWP, ok := lookupWorldPos(we.getSnap(), args.Type, args.ID)
 			if !ok {
 				return nil, fmt.Errorf("%s id %q not found", args.Type, args.ID)
 			}
 
 			// 2. Mutate the JSON.
 			newWP := [2]float32{args.WorldX, args.WorldY}
-			if err := mutateWorldPos(gw, args.Type, args.ID, newWP); err != nil {
+			if err := mutateWorldPos(we.repo, args.Type, args.ID, newWP); err != nil {
 				return nil, err
 			}
 
@@ -327,11 +324,12 @@ func registerWorldMove(reg *cmdsys.Registry, coord *mmokit.Process, gwGetter fun
 			}
 
 			// 4. Reload snapshot, then spawn at the new location.
-			reloadSnapshotInto(gw, coord)
+			we.reload(coord)
 			newWPc := coords.FromFlat(float64(newWP[0]), float64(newWP[1]))
+			snap := we.getSnap()
 			if err := spawnInCell(ctx, coord, mmokit.WorldCellID{X: newWPc.CellX, Y: newWPc.CellY},
 				func(gw *game.GameWorld) {
-					spawnPlaced(gw, args.Type, args.ID, newWPc.LocalX, newWPc.LocalY)
+					spawnPlaced(gw, snap, args.Type, args.ID, newWPc.LocalX, newWPc.LocalY)
 				}); err != nil {
 				return nil, err
 			}
@@ -367,7 +365,7 @@ type WorldUpdateResult struct {
 	ID   string
 }
 
-func registerWorldUpdate(reg *cmdsys.Registry, coord *mmokit.Process, gwGetter func() *game.GameWorld) error {
+func registerWorldUpdate(reg *cmdsys.Registry, coord *mmokit.Process, we *worldEditor) error {
 	return reg.Register(cmdsys.Command{
 		Verb:        "world.update",
 		Capability:  "world.edit",
@@ -377,15 +375,14 @@ func registerWorldUpdate(reg *cmdsys.Registry, coord *mmokit.Process, gwGetter f
 		Result:      WorldUpdateResult{},
 		Handler: func(ctx context.Context, env *cmdsys.Env, raw any) (any, error) {
 			args := raw.(WorldUpdateArgs)
-			gw := gwGetter()
-			if gw == nil || gw.WorldRepo == nil {
+			if we.repo == nil {
 				return nil, fmt.Errorf("world editor: no repo wired")
 			}
 
 			// Mutate the manifest in place.
 			switch args.Type {
 			case "station":
-				if err := gw.WorldRepo.UpdateStation(args.ID, func(s *mmokit.WorldStation) {
+				if err := we.repo.UpdateStation(args.ID, func(s *mmokit.WorldStation) {
 					if args.Name != "" {
 						s.Name = args.Name
 					}
@@ -396,7 +393,7 @@ func registerWorldUpdate(reg *cmdsys.Registry, coord *mmokit.Process, gwGetter f
 					return nil, err
 				}
 			case "poi":
-				if err := gw.WorldRepo.UpdatePOI(args.ID, func(p *mmokit.WorldPOI) {
+				if err := we.repo.UpdatePOI(args.ID, func(p *mmokit.WorldPOI) {
 					if args.Tier != 0 {
 						p.Tier = args.Tier
 					}
@@ -407,7 +404,7 @@ func registerWorldUpdate(reg *cmdsys.Registry, coord *mmokit.Process, gwGetter f
 					return nil, err
 				}
 			case "dungeon":
-				if err := gw.WorldRepo.UpdateDungeon(args.ID, func(d *mmokit.WorldDungeon) {
+				if err := we.repo.UpdateDungeon(args.ID, func(d *mmokit.WorldDungeon) {
 					if args.Name != "" {
 						d.Name = args.Name
 					}
@@ -415,7 +412,7 @@ func registerWorldUpdate(reg *cmdsys.Registry, coord *mmokit.Process, gwGetter f
 					return nil, err
 				}
 			case "belt":
-				if err := gw.WorldRepo.UpdateBelt(args.ID, func(b *mmokit.WorldBelt) {
+				if err := we.repo.UpdateBelt(args.ID, func(b *mmokit.WorldBelt) {
 					if args.Radius != 0 {
 						b.Radius = args.Radius
 					}
@@ -426,7 +423,7 @@ func registerWorldUpdate(reg *cmdsys.Registry, coord *mmokit.Process, gwGetter f
 					return nil, err
 				}
 			case "decoration":
-				if err := gw.WorldRepo.UpdateDecoration(args.ID, func(d *mmokit.WorldDecoration) {
+				if err := we.repo.UpdateDecoration(args.ID, func(d *mmokit.WorldDecoration) {
 					if args.Kind != "" {
 						d.Kind = args.Kind
 					}
@@ -440,12 +437,13 @@ func registerWorldUpdate(reg *cmdsys.Registry, coord *mmokit.Process, gwGetter f
 				return nil, fmt.Errorf("unknown type %q", args.Type)
 			}
 
-			reloadSnapshotInto(gw, coord)
+			we.reload(coord)
 
 			// Look up current world_pos (unchanged), then despawn + respawn
 			// at the same position so the live entity reflects the new
 			// def fields (roster, tier, radius, etc.).
-			wp, ok := lookupWorldPos(gw, args.Type, args.ID)
+			snap := we.getSnap()
+			wp, ok := lookupWorldPos(snap, args.Type, args.ID)
 			if !ok {
 				// Mutation succeeded but the manifest doesn't have the id —
 				// shouldn't happen since UpdateXxx already errored if missing.
@@ -460,7 +458,7 @@ func registerWorldUpdate(reg *cmdsys.Registry, coord *mmokit.Process, gwGetter f
 			wpc := coords.FromFlat(float64(wp[0]), float64(wp[1]))
 			cellID := mmokit.WorldCellID{X: wpc.CellX, Y: wpc.CellY}
 			if err := spawnInCell(ctx, coord, cellID, func(gw *game.GameWorld) {
-				spawnPlaced(gw, args.Type, args.ID, wpc.LocalX, wpc.LocalY)
+				spawnPlaced(gw, snap, args.Type, args.ID, wpc.LocalX, wpc.LocalY)
 			}); err != nil {
 				return nil, err
 			}
@@ -486,7 +484,7 @@ type WorldDeleteResult struct {
 	ID   string
 }
 
-func registerWorldDelete(reg *cmdsys.Registry, coord *mmokit.Process, gwGetter func() *game.GameWorld) error {
+func registerWorldDelete(reg *cmdsys.Registry, coord *mmokit.Process, we *worldEditor) error {
 	return reg.Register(cmdsys.Command{
 		Verb:        "world.delete",
 		Capability:  "world.edit",
@@ -496,44 +494,43 @@ func registerWorldDelete(reg *cmdsys.Registry, coord *mmokit.Process, gwGetter f
 		Result:      WorldDeleteResult{},
 		Handler: func(ctx context.Context, env *cmdsys.Env, raw any) (any, error) {
 			args := raw.(WorldDeleteArgs)
-			gw := gwGetter()
-			if gw == nil || gw.WorldRepo == nil {
+			if we.repo == nil {
 				return nil, fmt.Errorf("world editor: no repo wired")
 			}
 
 			// Snapshot the position before mutating so we know which
 			// cell to dispatch the despawn to.
-			wp, ok := lookupWorldPos(gw, args.Type, args.ID)
+			wp, ok := lookupWorldPos(we.getSnap(), args.Type, args.ID)
 			if !ok {
 				return nil, fmt.Errorf("%s id %q not found", args.Type, args.ID)
 			}
 
 			switch args.Type {
 			case "station":
-				if err := gw.WorldRepo.DeleteStation(args.ID); err != nil {
+				if err := we.repo.DeleteStation(args.ID); err != nil {
 					return nil, err
 				}
 			case "poi":
-				if err := gw.WorldRepo.DeletePOI(args.ID); err != nil {
+				if err := we.repo.DeletePOI(args.ID); err != nil {
 					return nil, err
 				}
 			case "dungeon":
-				if err := gw.WorldRepo.DeleteDungeon(args.ID); err != nil {
+				if err := we.repo.DeleteDungeon(args.ID); err != nil {
 					return nil, err
 				}
 			case "belt":
-				if err := gw.WorldRepo.DeleteBelt(args.ID); err != nil {
+				if err := we.repo.DeleteBelt(args.ID); err != nil {
 					return nil, err
 				}
 			case "decoration":
-				if err := gw.WorldRepo.DeleteDecoration(args.ID); err != nil {
+				if err := we.repo.DeleteDecoration(args.ID); err != nil {
 					return nil, err
 				}
 			default:
 				return nil, fmt.Errorf("unknown type %q", args.Type)
 			}
 
-			reloadSnapshotInto(gw, coord)
+			we.reload(coord)
 			// Despawn cluster-wide so any migrated children (e.g. belt
 			// asteroids handed off to neighbor cells) get cleaned up.
 			if err := despawnPlacedClusterWide(ctx, coord, args.Type, args.ID); err != nil {
@@ -557,7 +554,7 @@ type WorldReloadResult struct {
 	Cells int // number of cells that had their PlacedID set rebuilt
 }
 
-func registerWorldReload(reg *cmdsys.Registry, coord *mmokit.Process, gwGetter func() *game.GameWorld) error {
+func registerWorldReload(reg *cmdsys.Registry, coord *mmokit.Process, we *worldEditor) error {
 	return reg.Register(cmdsys.Command{
 		Verb:        "world.reload",
 		Capability:  "world.edit",
@@ -565,11 +562,10 @@ func registerWorldReload(reg *cmdsys.Registry, coord *mmokit.Process, gwGetter f
 		Description: "re-read world/*.json from disk; brute-force despawn + re-spawn every placed entity",
 		Args:        WorldReloadArgs{}, Result: WorldReloadResult{},
 		Handler: func(ctx context.Context, env *cmdsys.Env, _ any) (any, error) {
-			gw := gwGetter()
-			if gw == nil || gw.WorldRepo == nil {
+			if we.repo == nil {
 				return nil, fmt.Errorf("world editor: no repo wired")
 			}
-			newSnap, err := gw.WorldRepo.LoadAll()
+			newSnap, err := we.repo.LoadAll()
 			if err != nil {
 				return nil, err
 			}
@@ -625,9 +621,11 @@ func registerWorldReload(reg *cmdsys.Registry, coord *mmokit.Process, gwGetter f
 				}
 				cells++
 			}
-			// The caller-side GameWorld's snapshot is also refreshed so
+			// Install the freshly-loaded snapshot on the worldEditor so
 			// subsequent world.list calls see the new manifest.
-			gw.WorldSnapshot = newSnap
+			we.mu.Lock()
+			we.snap = newSnap
+			we.mu.Unlock()
 			mmokit.PublishAdminTopic(coord, "world.changed", WorldChangeEvent{Op: "reload"})
 			return WorldReloadResult{Cells: cells}, nil
 		},
@@ -642,7 +640,7 @@ type WorldExportResult struct {
 	Path string
 }
 
-func registerWorldExport(reg *cmdsys.Registry, coord *mmokit.Process, gwGetter func() *game.GameWorld) error {
+func registerWorldExport(reg *cmdsys.Registry, coord *mmokit.Process, we *worldEditor) error {
 	return reg.Register(cmdsys.Command{
 		Verb:        "world.export",
 		Capability:  "world.edit",
@@ -651,40 +649,40 @@ func registerWorldExport(reg *cmdsys.Registry, coord *mmokit.Process, gwGetter f
 		Args:        WorldExportArgs{},
 		Result:      WorldExportResult{},
 		Handler: func(ctx context.Context, env *cmdsys.Env, _ any) (any, error) {
-			gw := gwGetter()
-			if gw == nil || gw.WorldRepo == nil {
+			if we.repo == nil {
 				return nil, fmt.Errorf("world editor: no repo wired")
 			}
-			if gw.WorldSnapshot == nil {
+			snap := we.getSnap()
+			if snap == nil {
 				return WorldExportResult{}, nil
 			}
-			if gw.WorldSnapshot.Stations != nil {
-				if err := gw.WorldRepo.SaveStations(gw.WorldSnapshot.Stations); err != nil {
+			if snap.Stations != nil {
+				if err := we.repo.SaveStations(snap.Stations); err != nil {
 					return nil, err
 				}
 			}
-			if gw.WorldSnapshot.POIs != nil {
-				if err := gw.WorldRepo.SavePOIs(gw.WorldSnapshot.POIs); err != nil {
+			if snap.POIs != nil {
+				if err := we.repo.SavePOIs(snap.POIs); err != nil {
 					return nil, err
 				}
 			}
-			if gw.WorldSnapshot.Dungeons != nil {
-				if err := gw.WorldRepo.SaveDungeons(gw.WorldSnapshot.Dungeons); err != nil {
+			if snap.Dungeons != nil {
+				if err := we.repo.SaveDungeons(snap.Dungeons); err != nil {
 					return nil, err
 				}
 			}
-			if gw.WorldSnapshot.Belts != nil {
-				if err := gw.WorldRepo.SaveBelts(gw.WorldSnapshot.Belts); err != nil {
+			if snap.Belts != nil {
+				if err := we.repo.SaveBelts(snap.Belts); err != nil {
 					return nil, err
 				}
 			}
-			if gw.WorldSnapshot.Decorations != nil {
-				if err := gw.WorldRepo.SaveDecorations(gw.WorldSnapshot.Decorations); err != nil {
+			if snap.Decorations != nil {
+				if err := we.repo.SaveDecorations(snap.Decorations); err != nil {
 					return nil, err
 				}
 			}
-			if gw.WorldSnapshot.Regions != nil {
-				if err := gw.WorldRepo.SaveRegions(gw.WorldSnapshot.Regions); err != nil {
+			if snap.Regions != nil {
+				if err := we.repo.SaveRegions(snap.Regions); err != nil {
 					return nil, err
 				}
 			}
@@ -751,12 +749,11 @@ func spawnInCell(ctx context.Context, coord *mmokit.Process, cellID mmokit.World
 }
 
 // lookupWorldPos returns the manifest world_pos for (type, id) from the
-// current snapshot, or false if not found.
-func lookupWorldPos(gw *game.GameWorld, typ, id string) ([2]float32, bool) {
-	if gw == nil || gw.WorldSnapshot == nil {
+// given snapshot, or false if not found.
+func lookupWorldPos(snap *mmokit.WorldSnapshot, typ, id string) ([2]float32, bool) {
+	if snap == nil {
 		return [2]float32{}, false
 	}
-	snap := gw.WorldSnapshot
 	switch typ {
 	case "station":
 		if snap.Stations != nil {
@@ -804,34 +801,33 @@ func lookupWorldPos(gw *game.GameWorld, typ, id string) ([2]float32, bool) {
 
 // mutateWorldPos updates the persisted world_pos for (type, id) in the
 // repo. Returns whatever error the repo surfaces (typically not-found).
-func mutateWorldPos(gw *game.GameWorld, typ, id string, newWP [2]float32) error {
+func mutateWorldPos(repo mmokit.WorldRepository, typ, id string, newWP [2]float32) error {
 	switch typ {
 	case "station":
-		return gw.WorldRepo.UpdateStation(id, func(s *mmokit.WorldStation) { s.WorldPos = newWP })
+		return repo.UpdateStation(id, func(s *mmokit.WorldStation) { s.WorldPos = newWP })
 	case "poi":
-		return gw.WorldRepo.UpdatePOI(id, func(p *mmokit.WorldPOI) { p.WorldPos = newWP })
+		return repo.UpdatePOI(id, func(p *mmokit.WorldPOI) { p.WorldPos = newWP })
 	case "dungeon":
-		return gw.WorldRepo.UpdateDungeon(id, func(d *mmokit.WorldDungeon) { d.WorldPos = newWP })
+		return repo.UpdateDungeon(id, func(d *mmokit.WorldDungeon) { d.WorldPos = newWP })
 	case "belt":
-		return gw.WorldRepo.UpdateBelt(id, func(b *mmokit.WorldBelt) { b.WorldPos = newWP })
+		return repo.UpdateBelt(id, func(b *mmokit.WorldBelt) { b.WorldPos = newWP })
 	case "decoration":
-		return gw.WorldRepo.UpdateDecoration(id, func(d *mmokit.WorldDecoration) { d.WorldPos = newWP })
+		return repo.UpdateDecoration(id, func(d *mmokit.WorldDecoration) { d.WorldPos = newWP })
 	}
 	return fmt.Errorf("unknown type %q", typ)
 }
 
-// spawnPlaced looks up the def for (type, id) from the snapshot the
-// GameWorld currently holds, then calls the right SpawnXxx with the
-// provided cell-local coords. Used by world.move + world.update to
-// re-spawn an entity after a manifest mutation. Silent no-op on miss
-// (the caller should have already validated the id via lookupWorldPos).
+// spawnPlaced looks up the def for (type, id) in the provided snapshot,
+// then calls the right SpawnXxx with the provided cell-local coords. Used
+// by world.move + world.update to re-spawn an entity after a manifest
+// mutation. Silent no-op on miss (the caller should have already
+// validated the id via lookupWorldPos).
 //
 // Must run on the cell's game-loop goroutine (Spawn touches ECS).
-func spawnPlaced(gw *game.GameWorld, typ, id string, localX, localY float32) {
-	if gw == nil || gw.WorldSnapshot == nil {
+func spawnPlaced(gw *game.GameWorld, snap *mmokit.WorldSnapshot, typ, id string, localX, localY float32) {
+	if gw == nil || snap == nil {
 		return
 	}
-	snap := gw.WorldSnapshot
 	switch typ {
 	case "station":
 		if snap.Stations != nil {
@@ -884,10 +880,9 @@ func spawnPlaced(gw *game.GameWorld, typ, id string, localX, localY float32) {
 // autoID generates a stable id for a newly-placed entity from the
 // (cell, type, ordinal) tuple. Probes the existing snapshot to avoid
 // collisions.
-func autoID(typ string, c mmokit.WorldCellID, gw *game.GameWorld) string {
+func autoID(typ string, c mmokit.WorldCellID, snap *mmokit.WorldSnapshot) string {
 	seen := map[string]bool{}
-	if gw != nil && gw.WorldSnapshot != nil {
-		snap := gw.WorldSnapshot
+	if snap != nil {
 		switch typ {
 		case "station":
 			if snap.Stations != nil {
@@ -925,33 +920,6 @@ func autoID(typ string, c mmokit.WorldCellID, gw *game.GameWorld) string {
 		id := fmt.Sprintf("%d_%d_%s_%d", c.X, c.Y, typ, n)
 		if !seen[id] {
 			return id
-		}
-	}
-}
-
-// reloadSnapshotInto re-reads the manifest from disk and installs it on
-// every local cell's GameWorld so subsequent world.* verbs see the new
-// state. Silent no-op on read failure (the caller's mutation already
-// landed on disk; rejecting on a transient read error would surface a
-// confusing partial-success).
-func reloadSnapshotInto(gw *game.GameWorld, coord *mmokit.Process) {
-	if gw == nil || gw.WorldRepo == nil {
-		return
-	}
-	snap, err := gw.WorldRepo.LoadAll()
-	if err != nil {
-		return
-	}
-	gw.WorldSnapshot = snap
-	// Propagate to every other local GameWorld too — they share the
-	// same disk-backed repo but each holds an independent snapshot
-	// pointer that needs refreshing.
-	for _, cell := range coord.Cells {
-		if cell == nil || cell.Stage == nil {
-			continue
-		}
-		if other := mmokit.State[game.GameWorld](cell.Stage); other != nil && other != gw {
-			other.WorldSnapshot = snap
 		}
 	}
 }

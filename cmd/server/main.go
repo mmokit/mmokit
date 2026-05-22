@@ -318,7 +318,7 @@ func main() {
 				log.Printf("console: no local cells — world-bound builtins unavailable (roles=%s)", p.Roles())
 			}
 
-			if err := gamecommands.RegisterAll(console.Registry(), p, playerDB, &gameCfg); err != nil {
+			if err := gamecommands.RegisterAll(console.Registry(), p, playerDB, &gameCfg, worldRepo, worldSnap); err != nil {
 				log.Printf("console: failed to register game commands: %v", err)
 			}
 		})
@@ -347,12 +347,12 @@ func main() {
 				}
 			}
 			// New player (no saved location). Spawn 30 units east of the
-			// first trade station from the world manifest — outside
-			// DockRange (13.3) so the player sees the station and
-			// decides to dock instead of being auto-pulled. Falls back
-			// to (8100, 8100) inside the configured StationCell when the
-			// manifest carries no stations (smoke/test paths that boot
-			// against a totally empty world dir).
+			// first trade station from the world manifest — well outside
+			// DockRange (8u from surface) so the player sees the station
+			// and decides to dock instead of being auto-pulled. Falls
+			// back to (8100, 8100) inside the configured StationCell when
+			// the manifest carries no stations (smoke/test paths that
+			// boot against a totally empty world dir).
 			if len(worldSnap.Stations.Stations) > 0 {
 				st := worldSnap.Stations.Stations[0]
 				return coords.Location{X: st.WorldPos[0] + 30, Y: st.WorldPos[1]}
