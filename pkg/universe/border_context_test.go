@@ -5,6 +5,7 @@ import (
 
 	"github.com/mlange-42/ark/ecs"
 
+	meshpb "github.com/zenion/mmoserver/gen/go/meshpb"
 	"github.com/zenion/mmoserver/pkg/component"
 	"github.com/zenion/mmoserver/pkg/coords"
 )
@@ -133,4 +134,77 @@ func TestCollectBorderContextFor_SplitFilterAndSource(t *testing.T) {
 	if _, present := bySource[q0.NetID()]; present {
 		t.Errorf("q0 local netID %d should have been excluded (authoritative)", q0.NetID())
 	}
+}
+
+// TestPopulateCell_MaterializesContextEntries exercises the destination-side
+// consumption of the shipped border context: populateCell spawns the
+// authoritative entities Live, then materializes proto.Context entries as
+// PresenceReplica — UNLESS a context entry's netID collides with an
+// authoritative one, in which case it is skipped (Live wins, no downgrade).
+func TestPopulateCell_MaterializesContextEntries(t *testing.T) {
+	coord, host, cell := newExecutorTestCoord(t)
+	exec := coord.hostExecutors[host.ID]
+
+	// Build a transfer-frame blob for a given netID/type at (x,y).
+	mkBlob := func(netID uint32, etype uint8, x, y float32) []byte {
+		blob, err := MarshalTransferFrame(&TransferFrame{
+			NetworkID:  netID,
+			Epoch:      1,
+			EntityType: etype,
+			PosX:       x,
+			PosY:       y,
+			Collider:   component.Collider{Radius: 4},
+			CellX:      cell.Cell.X,
+			CellY:      cell.Cell.Y,
+		})
+		if err != nil {
+			t.Fatalf("marshal transfer frame: %v", err)
+		}
+		return blob
+	}
+
+	// Two authoritative entities (Live) — netIDs 1001, 1002.
+	authBlobs := [][]byte{
+		mkBlob(1001, 1, 100, 100),
+		mkBlob(1002, 1, 200, 200),
+	}
+
+	// Context entries: 2001 + 2002 are pure context (→ Replica); 1001 collides
+	// with an authoritative netID and MUST be skipped (stays Live).
+	proto := &meshpb.CellTransfer{
+		Entities: packRecords(authBlobs),
+		Context: []*meshpb.BorderContextEntry{
+			{Entity: mkBlob(2001, 1, 300, 300), SourceCellId: "cell_1_0"},
+			{Entity: mkBlob(2002, 1, 400, 400), SourceCellId: "cell_9_9"},
+			{Entity: mkBlob(1001, 1, 999, 999), SourceCellId: "cell_1_0"}, // collides with Live
+		},
+	}
+
+	// populateCell touches ECS — run it on the cell's game loop.
+	execOnLoop(t, cell, func() {
+		if _, err := exec.populateCell(cell, proto); err != nil {
+			t.Fatalf("populateCell: %v", err)
+		}
+	})
+
+	assertPresence := func(netID uint32, want EntityPresence, label string) {
+		t.Helper()
+		_, got, ok := cell.Stage.netIDIdx.Lookup(netID)
+		if !ok {
+			t.Fatalf("%s: netID %d not present after populate", label, netID)
+		}
+		if got != want {
+			t.Errorf("%s: netID %d presence = %v, want %v", label, netID, got, want)
+		}
+	}
+
+	// Authoritative entities are Live.
+	assertPresence(1001, PresenceLive, "authoritative")
+	assertPresence(1002, PresenceLive, "authoritative")
+	// Pure context entries are Replica.
+	assertPresence(2001, PresenceReplica, "context")
+	assertPresence(2002, PresenceReplica, "context")
+	// The colliding context entry (1001) must NOT have downgraded the Live
+	// authoritative entity — it should remain Live (asserted above) and the
+	// context copy was skipped, leaving exactly one slot for that netID.
 }

@@ -618,6 +618,34 @@ func (e *cellTransferExecutor) populateCell(cell *Cell, proto *meshpb.CellTransf
 			sess.UserID = st.UserID
 		}
 	}
+
+	// Materialize cross-cell border context shipped by the source side
+	// (sibling-quadrant locals + outer-neighbor replicas). Same TransferFrame
+	// codec as authoritative entities; the only difference is the spawn API:
+	// upsertBorderReplicaFromTransfer creates a PresenceReplica rather than a
+	// PresenceLive entity. After this loop the dest cell's spatial grid holds
+	// the complete visible set (locals + cross-cell context), so its first
+	// ReplicationSystem tick emits a FreshSnapshot that needs no client-side
+	// reconcile churn — the transparent-handoff payoff.
+	for i, ctxEntry := range proto.Context {
+		frame, err := UnmarshalTransferFrame(ctxEntry.Entity)
+		if err != nil {
+			cell.Stage.Engine().Log.Log(CatMeshCell,
+				"[%s] populate context: unmarshal entry %d failed: %v", cell.MeshID, i, err)
+			continue
+		}
+		// Never let a context replica shadow an entity that is authoritative
+		// (Live) on this cell — `existing` holds the Live netIDs spawned above
+		// plus any the survivor already held. A Live→Replica clash would be
+		// rejected by the netIDIndex anyway; skip cleanly. (Entities that are
+		// already REPLICAs here aren't in `existing`, so upsertBorderReplica
+		// just updates them in place, which is correct.)
+		if _, isLive := existing[frame.NetworkID]; isLive {
+			continue
+		}
+		cell.Stage.upsertBorderReplicaFromTransfer(frame, MeshCellID(ctxEntry.SourceCellId))
+	}
+
 	return adoptedUsers, nil
 }
 
