@@ -915,7 +915,19 @@ func collectTransferContext(e *cellTransferExecutor, src *Cell, cmd cellTransfer
 		q := int(cmd.Quadrant)
 		qx := float32(q & 1)
 		qy := float32((q >> 1) & 1)
-		// Child quadrant rect, in the same coordinate space as pos/half.
+		// Child quadrant rect + the px>=half classification below intentionally
+		// MIRROR serializeQuadrantEntities exactly, so context inclusion stays
+		// consistent with which entities ship as authoritative (the dedup on
+		// the destination relies on that agreement). Both assume the parent's
+		// local origin is 0 — correct for a depth-0 parent (its entities are
+		// base-cell-local [0,parentSize) and the parent IS the root). For a
+		// depth>=1 parent the cell occupies a sub-region offset from the root
+		// origin, so this math is offset-wrong — but identically to the
+		// authoritative serializer, so context still matches it. Fixing nested
+		// (depth>=1) splits requires offsetting BOTH this and
+		// serializeQuadrantEntities by the parent's base-local origin; that's a
+		// pre-existing serializer limitation, tracked as a follow-up, not a
+		// regression introduced by border-context.
 		rectMinX := qx * half
 		rectMaxX := rectMinX + half
 		rectMinY := qy * half
