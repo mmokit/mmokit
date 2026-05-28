@@ -23,7 +23,7 @@ func registerTestKindOnProcess(t *testing.T, p *pkguniverse.Process) {
 			&def, w,
 			ecs.ComponentID[testKindHealth](w),
 			reflect.TypeFor[testKindHealth](),
-			false,
+			pkguniverse.KindComponentRequired,
 		)
 		stage.RegisterEntityKind(def)
 	})

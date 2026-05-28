@@ -9,11 +9,12 @@ import (
 // DecorationBundle is the component bundle for hand-placed visual-only
 // landmarks. The Decoration component carries the sprite family (Kind)
 // and variant ("destroyer-01", etc.) so the client can render without
-// per-tick traffic. PlacedID is local-only and tags decorations spawned
-// from world manifests so world.* verbs can despawn them cleanly.
+// per-tick traffic. PlacedID tags decorations spawned from world
+// manifests so world.* verbs can despawn them cleanly; it's optional
+// so non-manifest spawns can omit it.
 type DecorationBundle struct {
 	Decoration *gamecomp.Decoration
-	PlacedID *gamecomp.PlacedID
+	PlacedID   *gamecomp.PlacedID `mmokit:"optional"`
 }
 
 // SpawnDecoration materializes a decoration entity at (localX, localY)

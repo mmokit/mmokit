@@ -48,7 +48,7 @@ dev: build
     tmux kill-session -t space-vite 2>/dev/null || true
     tmux new-session -d -s space-vite -c "{{ justfile_directory() }}/web-pixi" 'bun run dev'
     trap 'tmux kill-session -t space-vite 2>/dev/null' INT TERM EXIT
-    ./bin/server --dev-insecure-cookie --admin-listen=:9101
+    ./bin/server --dev-insecure-cookie
 
 # Tmux session `space-dist` with coord + 3 nodes + gateway panes, each
 # with its own interactive console. Logs mirror to log/distributed-space
@@ -196,6 +196,23 @@ test-pg:
 # build the admin SPA into pkg/admin/static/dist (consumed by //go:embed)
 admin-build:
     cd web-admin && bun install --frozen-lockfile && bun run build
+
+# diagnostic — sample the server's /probe-ws heartbeat endpoint to
+# isolate whether bursty WebSocket delivery is a server / network /
+# browser issue. Requires `just dev` (or any server with the /probe-ws
+# route) to be running. See diagnostics/probe.ts for what's measured.
+#
+# Args are POSITIONAL (just doesn't support name=value on recipe args).
+#
+#   just probe                    # 30s sample at localhost:8080 (defaults)
+#   just probe 60                 # 60s sample at localhost:8080
+#   just probe 30 localhost:8080  # both args explicit
+probe duration="30" host="localhost:8080":
+    bun run diagnostics/probe.ts --host={{host}} --duration={{duration}}
+
+# probe with JSON output — for scripting / CI assertions
+probe-json duration="30" host="localhost:8080":
+    bun run diagnostics/probe.ts --host={{host}} --duration={{duration}} --json
 
 # vite dev server with proxy to a running coordinator's --admin-listen=:9101
 admin-dev:

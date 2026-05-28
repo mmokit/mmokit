@@ -1,5 +1,6 @@
 import type { AnyEntity, PlayerEntity } from "../sdk/entities.js";
 import { type ClockSync, newClockSync } from "./clockSync.js";
+import { newReplicationAudit, type ReplicationAudit } from "./replicationAudit.js";
 
 export interface EntitySample {
   worldX: number;
@@ -78,6 +79,15 @@ export interface GameState {
 
   // Clock sync for snapshot interpolation.
   clockSync: ClockSync;
+
+  /**
+   * Diagnostic audit of replication entity churn — counts FreshSnapshot
+   * frames, set-wise-reconcile deletions, exited/removed deletions, and
+   * re-entries (same netID re-created within 2s of being deleted). Drives
+   * the renderer's "REPL AUDIT" HUD panel; dumped via window.replAudit().
+   * Added to investigate the rubber-band-after-split/merge visual glitch.
+   */
+  replicationAudit: ReplicationAudit;
 }
 
 export function setTickRate(rate: number): void {
@@ -106,4 +116,5 @@ export const state: GameState = {
   frameCount: 0,
   lastFpsTime: 0,
   clockSync: newClockSync(),
+  replicationAudit: newReplicationAudit(),
 };

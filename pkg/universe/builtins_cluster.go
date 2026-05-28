@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/zenion/mmoserver/pkg/cmdsys"
+	"github.com/zenion/mmoserver/pkg/engine"
 )
 
 type clusterOverviewArgs struct{}
@@ -82,6 +83,10 @@ func (c *Process) wireCompletionSources() {
 			return true
 		})
 		return ids
+	})
+	c.console.SetCompletionSource("debug-flags", func() []string {
+		names := engine.ListDebugFlags()
+		return append(names, "all")
 	})
 	// service-kinds: registered Kind.Name values. The legacy `service ops`
 	// + `service call` console commands (Plan 2 retired the proto-op

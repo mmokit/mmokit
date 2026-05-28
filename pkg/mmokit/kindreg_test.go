@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/mlange-42/ark/ecs"
+	"github.com/zenion/mmoserver/pkg/spatial"
 	"github.com/zenion/mmoserver/pkg/system"
 	"github.com/zenion/mmoserver/pkg/universe"
 )
@@ -329,6 +330,60 @@ func assertTransferCorePanic(t *testing.T, kind uint8, name string, register fun
 		}
 	}()
 	register(mmo, kind, name)
+}
+
+// TestRegisterKind_OptionalTag verifies the `mmokit:"optional"` bundle-field
+// tag: the component is registered for cross-cell transfer (like a normal
+// non-local field) but its replication binding is the optional flavor —
+// hashing an entity that doesn't carry the component writes zero bytes
+// instead of panicking. This makes "transfer-preserved server-side
+// bookkeeping" representable without forcing every spawn site to attach
+// the component explicitly.
+func TestRegisterKind_OptionalTag(t *testing.T) {
+	type optionalBundle struct {
+		Name    *kindRegTestNameComp
+		Tagging *kindRegTestExtraComp `mmokit:"optional"`
+	}
+	mmo := newTestProcess(t)
+	RegisterKind[optionalBundle](mmo, 110, "OptionalTagKind")
+	mmo.Build()
+	t.Cleanup(func() { mmo.Shutdown() })
+
+	cell := firstCell(mmo)
+	def := cell.Stage.EntityKindDefs()[110]
+	if def == nil {
+		t.Fatal("kind 110 not registered")
+	}
+	// Optional fields ARE registered for transfer codec — the whole point is
+	// that they survive cell transfer when present.
+	if reg := cell.Stage.ReplicationRegistry(); reg.Len() != 2 {
+		t.Errorf("expected 2 components in transfer registry (Name + Tagging), got %d", reg.Len())
+	}
+	if len(def.NetworkBindings) != 2 {
+		t.Fatalf("expected 2 NetworkBindings, got %d", len(def.NetworkBindings))
+	}
+
+	// Spawn an entity of this kind WITHOUT the optional Tagging component.
+	// Hashing must not panic — that's the contract: the optional binding
+	// writes zeros when the component is absent.
+	e := cell.Stage.Spawn(
+		Position{X: 1, Y: 1},
+		EntityKind{Type: 110},
+		kindRegTestNameComp{Name: "spawned-without-optional"},
+	)
+
+	rep := system.AutoReplicator(def.Kind, def.NetworkBindings...)
+	var h system.Hasher
+	h.Reset()
+	viewer := &system.ViewerInfo{ConnID: 1, X: 1, Y: 1}
+	entry := spatial.Entry{Entity: e.Handle(), X: 1, Y: 1}
+
+	defer func() {
+		if r := recover(); r != nil {
+			t.Fatalf("Hash panicked for kinded entity missing an mmokit:\"optional\" component: %v", r)
+		}
+	}()
+	rep.Hash(&h, viewer, entry)
 }
 
 func TestRegisterKind_DashTag(t *testing.T) {

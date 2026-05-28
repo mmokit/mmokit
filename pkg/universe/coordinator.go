@@ -107,11 +107,10 @@ type Config struct {
 	ControlListen string
 
 	// AdminListen is the listen address for an HTTP admin server that
-	// exposes /events, /commands, and /metrics. Useful for pure-
-	// coordinator processes (`--mode=coordinator`) that don't have a
-	// client-facing HTTP listener but still need operational
-	// observability — commits run on coord, so the commit log lives
-	// there. Empty = disabled (default). Format: ":9101" or
+	// exposes /events, /commands, /metrics, and /admin/*. Bound only on
+	// processes that bear RoleCoordinator — admin state (commit log,
+	// cluster view, audit ring) lives on the coordinator. Default
+	// ":9101" via BindFlags. Pass "" to disable. Format: ":9101" or
 	// "127.0.0.1:9101".
 	AdminListen string
 
@@ -335,7 +334,7 @@ type Config struct {
 // from a higher layer (mmokit.DefaultAdminServerFactory) without
 // introducing an import cycle.
 type AdminConfig struct {
-	Enabled            bool          // default true (auto-set in Build when AdminListen is non-empty)
+	Enabled            bool          // default true (only honored on RoleCoordinator processes with non-empty AdminListen)
 	SessionTTL         time.Duration // default 8h
 	LockoutMaxAttempts int           // default 5
 	LockoutWindow      time.Duration // default 15m
@@ -1557,7 +1556,11 @@ func (c *Process) Build() {
 	// AdminListen non-empty implies "user wants admin" — enable unless
 	// they explicitly disabled it via --admin-enabled=false (which sets
 	// Enabled to false at flag-parse time). The flag default is true.
-	if cfg.AdminListen != "" && cfg.Admin.Enabled {
+	// Only run on coordinator-bearing processes — admin state lives on
+	// coord, so host/gateway-only processes inherit the default
+	// :9101 from BindFlags but skip the wiring (and the Postgres
+	// requirement) here.
+	if cfg.AdminListen != "" && cfg.Admin.Enabled && roles.Has(RoleCoordinator) {
 		if cfg.Admin.SessionTTL == 0 {
 			cfg.Admin.SessionTTL = 8 * time.Hour
 		}
@@ -2178,46 +2181,20 @@ func (c *Process) createNode(cell CellID, spatialBucketSize float32, owningHost 
 		base.clusterClock = c.ClusterClock
 	}
 
-	// Topology-transparent protocol: no default hook ever synthesizes a
-	// client-visible event on cell rename or player transfer. The
-	// framework only needs `onPlayerTransferReceived` to wire the
-	// destination-side PlayerSession so the engine's InputRouter
-	// dispatches to the right entity — client state reset is driven
-	// purely by the FRAME_FLAG_FRESH_SNAPSHOT bit the destination
-	// cell's ReplicationSystem sets on its first frame for the
-	// migrated conn. Games that need custom post-transfer logic
-	// override via SetOnPlayerTransferReceived / SetOnCellBoundsChanged.
+	// Framework-required session wiring (Entity / DebugFlags / UserID) on
+	// player transfers now lives directly in Stage.SpawnFromTransferCore so
+	// games that override onPlayerTransferReceived for game-specific behavior
+	// (e.g. the space game's MapData send + PlayerSessions tracking) can't
+	// accidentally drop those field assignments. The hook is purely an
+	// extension point — no framework default is installed.
 	//
-	// Historical defaults sent SE_PLAYER_SPAWNED here, which caused the
-	// client to wipe `state.entities` and `state.cellTopology` on every
-	// merge rename — the 3+ tick blank visible on the screen. Removed
-	// in favor of the topology-transparent delta stream.
-	base.onPlayerTransferReceived = func(entity ecs.Entity, frame *TransferFrame) {
-		// Two callers fire this hook with different session-state
-		// preconditions:
-		//
-		//  - cell_transfer_executor.populateCell (split/merge/migrate):
-		//    the session is NOT yet registered when SpawnFromTransferCore
-		//    runs, so the by-connID lookup returns nil and this hook
-		//    no-ops. populateCell registers the session AFTER spawn and
-		//    sets DebugFlags from spawnedFrame itself.
-		//
-		//  - cell.MsgHandoff → drainPendingPromotes (boundary handoff):
-		//    the session IS pre-registered by RegisterTransferSession
-		//    BEFORE SpawnLiveFromTransfer runs. This hook is the only
-		//    point that re-attaches the spawned entity AND restores the
-		//    DebugFlags bitmask carried in the transfer frame. Without
-		//    the DebugFlags assignment, every cross-cell walk would
-		//    silently zero a player's debug grants and the
-		//    debugBroadcaster would stop sending SE_DEBUG_INFO updates
-		//    to that connID — topology overlay freezes after the first
-		//    boundary crossing even though split/merge keep firing.
-		if s := eng.Players.ByConnID(frame.ConnID); s != nil {
-			s.Entity = entity
-			s.DebugFlags = engine.DebugFlag(frame.DebugFlags)
-			s.UserID = frame.UserID
-		}
-	}
+	// Topology-transparent protocol: no default hook synthesizes a
+	// client-visible event on cell rename or player transfer. Client state
+	// reset is driven purely by the FRAME_FLAG_FRESH_SNAPSHOT bit the
+	// destination cell's ReplicationSystem sets on its first frame for the
+	// migrated conn. Historical defaults sent SE_PLAYER_SPAWNED here, which
+	// caused the client to wipe `state.entities` and `state.cellTopology`
+	// on every merge rename — the 3+ tick blank visible on the screen.
 
 	// Realize all registered kind specs against this cell's Stage. Must run
 	// BEFORE the world factory so game-defined worlds can rely on

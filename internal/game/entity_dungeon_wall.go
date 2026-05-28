@@ -14,12 +14,12 @@ import (
 // Rotation component, which is replicated via the kind's QAngle extra
 // binding (mirroring how Ship/NPC publish their facing).
 //
-// PlacedID is local-only and tags walls that belong to a world-manifest
-// dungeon so DespawnPlacedByID can cascade. Walls from procgen/admin
-// dungeons leave it nil.
+// PlacedID tags walls that belong to a world-manifest dungeon so
+// DespawnPlacedByID can cascade; it's optional so walls from
+// procgen/admin dungeons can omit it.
 type DungeonWallBundle struct {
 	Wall     *gamecomp.DungeonWall
-	PlacedID *gamecomp.PlacedID
+	PlacedID *gamecomp.PlacedID `mmokit:"optional"`
 }
 
 // SpawnDungeonWall creates a rectangular wall collider at (x,y) with the

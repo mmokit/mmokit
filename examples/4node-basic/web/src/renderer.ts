@@ -1,6 +1,7 @@
 import { state, type CellInfo, type ClientEntity } from "./state.js";
 import { interpolateEntities } from "./interpolation.js";
 import { VIEWPORT_SCALE } from "./constants.js";
+import { windowStats } from "./replicationAudit.js";
 
 // 9 pre-selected colors — enough to avoid repeats for adjacent cells.
 const CELL_COLORS = [
@@ -272,6 +273,47 @@ function renderLoop(now: number): void {
   ctx.fillText(`FPS   ${state.fps}`, 14, 28);
   ctx.fillText(`NET   #${state.playerNetID || "?"}`, 14, 43);
   ctx.restore();
+
+  // -- 5b. Replication audit panel --
+  // Tracks FreshSnapshot frames and entity churn (deletions by reason
+  // + re-entries). Run `cell split <id>` from the server console, then
+  // watch the "1s" row spike. If del.fr ≈ reEntries within a second of
+  // a fresh frame, the rubber-band is the FreshSnapshot reconcile
+  // wiping entities that re-enter from sibling cells one tick later.
+  // Hide the panel until at least one fresh frame has been observed
+  // so it doesn't add noise during normal play.
+  if (state.replicationAudit.freshSnapshots > 0) {
+    const a = state.replicationAudit;
+    const w1 = windowStats(a, now, 1000);
+    const w5 = windowStats(a, now, 5000);
+    const panelY = 77;
+    const panelH = 90;
+    ctx.save();
+    ctx.fillStyle = "rgba(0,0,0,0.55)"; ctx.fillRect(8, panelY, 280, panelH);
+    ctx.font = "10px Courier New, monospace";
+    ctx.textAlign = "left"; ctx.textBaseline = "top";
+    ctx.fillStyle = "#fb7";
+    ctx.fillText("REPL AUDIT  (split/merge churn diag)", 14, panelY + 5);
+    ctx.fillStyle = "#bbb";
+    ctx.fillText(
+      `LIFE  fresh=${a.freshSnapshots} fr=${a.deletions["fresh-reconcile"]} ex=${a.deletions.exited} rm=${a.deletions.removed} re=${a.reEntries}`,
+      14, panelY + 20,
+    );
+    ctx.fillText(
+      `1s    fresh=${w1.freshSnapshots} fr=${w1.deletions["fresh-reconcile"]} ex=${w1.deletions.exited} rm=${w1.deletions.removed} re=${w1.reEntries}`,
+      14, panelY + 35,
+    );
+    ctx.fillText(
+      `5s    fresh=${w5.freshSnapshots} fr=${w5.deletions["fresh-reconcile"]} ex=${w5.deletions.exited} rm=${w5.deletions.removed} re=${w5.reEntries}`,
+      14, panelY + 50,
+    );
+    ctx.fillStyle = "#888";
+    ctx.fillText(
+      "fr=fresh-reconcile del   ex=exited   rm=removed   re=re-entry",
+      14, panelY + 68,
+    );
+    ctx.restore();
+  }
 
   // -- 6. Grid info --
   const panelW = 200;

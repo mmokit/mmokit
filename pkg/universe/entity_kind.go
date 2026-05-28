@@ -8,6 +8,23 @@ import (
 	"github.com/zenion/mmoserver/pkg/system"
 )
 
+// KindComponentMode classifies a bundle field's registration semantics.
+//
+//   - KindComponentRequired: registered for cross-cell transfer; caller MUST pass
+//     it at spawn time (Stage.Spawn enforces under InvariantPanic mode).
+//   - KindComponentOptional: registered for cross-cell transfer; caller MAY omit
+//     it at spawn time — auto_replicator's binding writes zeros when absent
+//     (used for transfer-preserved server-side bookkeeping like PlacedID).
+//   - KindComponentLocal: NOT registered for cross-cell transfer; auto-added with
+//     zero value on transfer receive (used for transient host-local state).
+type KindComponentMode uint8
+
+const (
+	KindComponentRequired KindComponentMode = iota
+	KindComponentOptional
+	KindComponentLocal
+)
+
 // EntityKindDef describes an entity kind's components for transfer replication,
 // client network replication, and schema export. Build one per entity type and
 // pass it to Stage.RegisterEntityKind.
@@ -16,12 +33,12 @@ type EntityKindDef struct {
 	Name       string // human-readable name for schema export (e.g. "Player")
 	components []kindComponent
 
-	// requiredTypes lists the reflect.Type of every non-local Bundle field
+	// requiredTypes lists the reflect.Type of every Required Bundle field
 	// declared by this kind. Stage.Spawn uses this under InvariantPanic to
 	// verify callers attached every required component (catches the
 	// "forgot to Set Health, NPC spawns dead-on-arrival" bug-class).
-	// Fields tagged mmokit:"local" are excluded — they are transfer-local
-	// state added on the receive side, not caller-required.
+	// Optional and Local fields are excluded — Optional is auto-zeroed at
+	// hash, Local is auto-added on transfer receive.
 	requiredTypes []reflect.Type
 
 	// NetworkBindings stores ComponentBinding values for the network
@@ -43,17 +60,12 @@ type kindComponent struct {
 }
 
 // KindComponentByID registers a component on an EntityKindDef from a
-// pre-resolved ecs.ID + reflect.Type. The component is included in
-// cross-cell transfers (unless localOnly=true) and auto-filled on
-// transfer receive.
+// pre-resolved ecs.ID + reflect.Type. See KindComponentMode for the
+// transfer/spawn semantics of each mode.
 //
 // Used by mmokit.RegisterKind[T] which walks a bundle struct via
 // reflection and resolves each field's component type via ecs.TypeID.
 // All access goes through World.Unsafe() — no typed Map1[T].
-//
-// localOnly=true skips transfer-codec registration but still ensures the
-// component is added on transfer receive (for local-only state that must
-// exist on the destination but doesn't carry serialized data over the wire).
 //
 // Internal API; game code uses mmokit.RegisterKind[T].
 func KindComponentByID(
@@ -61,7 +73,7 @@ func KindComponentByID(
 	w *ecs.World,
 	id ecs.ID,
 	t reflect.Type,
-	localOnly bool,
+	mode KindComponentMode,
 	opts ...ComponentOption,
 ) {
 	u := w.Unsafe()
@@ -72,13 +84,13 @@ func KindComponentByID(
 			}
 		},
 	}
-	if !localOnly {
+	if mode != KindComponentLocal {
 		kc.registerTransfer = func(reg *ReplicationRegistry) {
 			RegisterComponentByID(reg, w, id, t, opts...)
 		}
 	}
 	def.components = append(def.components, kc)
-	if !localOnly {
+	if mode == KindComponentRequired {
 		def.requiredTypes = append(def.requiredTypes, t)
 	}
 }

@@ -2,6 +2,7 @@ package net
 
 import (
 	"context"
+	"encoding/json"
 	"log"
 	"net/http"
 	"sync"
@@ -9,6 +10,13 @@ import (
 
 	"github.com/coder/websocket"
 )
+
+// ConnStatsProvider is an optional interface a Transport may implement
+// to expose write-path timing diagnostics. Used by HandleConnStats to
+// dump per-connection counters as JSON.
+type ConnStatsProvider interface {
+	Stats() ConnStats
+}
 
 // PlayerEvent represents a player connecting or disconnecting.
 type PlayerEvent struct {
@@ -252,10 +260,45 @@ func (cm *ConnManager) Handle(pattern string, handler http.Handler) {
 	cm.extraRoutes = append(cm.extraRoutes, route{pattern, handler})
 }
 
+// HandleConnStats returns a JSON snapshot of every active connection's
+// write-path counters. Mounted at /debug/conn-stats by the production
+// HTTP listener in pkg/universe/bootstrap.go.
+//
+// Layout: { "connections": [ {ConnStats}, … ] }
+//
+// Used by the Bun probe — it polls this after a 10s session to assert
+// "server-side mean write duration < 1ms", etc. — and by the in-browser
+// diagnostic overlay.
+func (cm *ConnManager) HandleConnStats(w http.ResponseWriter, _ *http.Request) {
+	cm.mu.RLock()
+	stats := make([]ConnStats, 0, len(cm.conns))
+	for _, t := range cm.conns {
+		if p, ok := t.(ConnStatsProvider); ok {
+			stats = append(stats, p.Stats())
+		}
+	}
+	cm.mu.RUnlock()
+
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", "no-store")
+	_ = json.NewEncoder(w).Encode(map[string]any{
+		"connections": stats,
+	})
+}
+
 // ListenAndServe starts the WebSocket server.
 func (cm *ConnManager) ListenAndServe(ctx context.Context, addr string) error {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/ws", cm.HandleWebSocket)
+	// Diagnostic heartbeat endpoint — emits a 32-byte frame every 50ms
+	// directly via ws.Write (no game logic, no outbound channel). Used by
+	// the Bun probe (just probe) and the in-browser diagnostic to
+	// isolate "is the network path itself bursty?" from game-side issues.
+	mux.HandleFunc("/probe-ws", HandleProbeWS)
+	// Per-connection write-path stats (mean/max queue + write duration,
+	// slow-event counts). Lets the probe / diagnostic UI assert that the
+	// server itself emitted on time vs. that downstream layers buffered.
+	mux.HandleFunc("/debug/conn-stats", cm.HandleConnStats)
 	for _, r := range cm.extraRoutes {
 		mux.Handle(r.pattern, r.handler)
 	}

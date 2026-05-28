@@ -60,7 +60,7 @@ func registerTestKind(t *testing.T, stage *pkguniverse.Stage) {
 		&def, w,
 		ecs.ComponentID[testKindHealth](w),
 		reflect.TypeFor[testKindHealth](),
-		false,
+		pkguniverse.KindComponentRequired,
 	)
 	stage.RegisterEntityKind(def)
 }

@@ -312,7 +312,7 @@ func TestApplyBorderFrame_AutoFillsKindComponents(t *testing.T) {
 	w := base.ECSWorld()
 	healthMap := ecs.NewMap1[testReplicaComponent](w)
 	def := EntityKindDef{Kind: 5, Name: "TestShip"}
-	KindComponentByID(&def, w, ecs.ComponentID[testReplicaComponent](w), reflect.TypeFor[testReplicaComponent](), false)
+	KindComponentByID(&def, w, ecs.ComponentID[testReplicaComponent](w), reflect.TypeFor[testReplicaComponent](), KindComponentRequired)
 	base.RegisterEntityKind(def)
 
 	frame := replication.Frame{
@@ -356,7 +356,7 @@ func TestApplyBorderFrame_AppliesComponentTail(t *testing.T) {
 	w := base.ECSWorld()
 	compMap := ecs.NewMap1[testReplicaComponent](w)
 	def := EntityKindDef{Kind: 7, Name: "TestShip"}
-	KindComponentByID(&def, w, ecs.ComponentID[testReplicaComponent](w), reflect.TypeFor[testReplicaComponent](), false)
+	KindComponentByID(&def, w, ecs.ComponentID[testReplicaComponent](w), reflect.TypeFor[testReplicaComponent](), KindComponentRequired)
 	base.RegisterEntityKind(def)
 
 	// Scan the wire format that the sender would produce for a
@@ -412,7 +412,7 @@ func TestApplyBorderFrame_LegacyZeroPaddingBackwardCompat(t *testing.T) {
 	w := base.ECSWorld()
 	compMap := ecs.NewMap1[testReplicaComponent](w)
 	def := EntityKindDef{Kind: 8, Name: "LegacyShip"}
-	KindComponentByID(&def, w, ecs.ComponentID[testReplicaComponent](w), reflect.TypeFor[testReplicaComponent](), false)
+	KindComponentByID(&def, w, ecs.ComponentID[testReplicaComponent](w), reflect.TypeFor[testReplicaComponent](), KindComponentRequired)
 	base.RegisterEntityKind(def)
 
 	// Build a header-only entry (no component tail beyond the count=0 field).
@@ -451,7 +451,7 @@ func TestApplyBorderFrame_UnknownComponentIDSkipped(t *testing.T) {
 	w := base.ECSWorld()
 	compMap := ecs.NewMap1[testReplicaComponent](w)
 	def := EntityKindDef{Kind: 9, Name: "Ship"}
-	KindComponentByID(&def, w, ecs.ComponentID[testReplicaComponent](w), reflect.TypeFor[testReplicaComponent](), false)
+	KindComponentByID(&def, w, ecs.ComponentID[testReplicaComponent](w), reflect.TypeFor[testReplicaComponent](), KindComponentRequired)
 	base.RegisterEntityKind(def)
 
 	// Build a serialized payload for the known component (ID 1 after
@@ -499,7 +499,7 @@ func TestApplyBorderFrame_UpdatesComponentsOnSecondFrame(t *testing.T) {
 	w := base.ECSWorld()
 	compMap := ecs.NewMap1[testReplicaComponent](w)
 	def := EntityKindDef{Kind: 10, Name: "Ship"}
-	KindComponentByID(&def, w, ecs.ComponentID[testReplicaComponent](w), reflect.TypeFor[testReplicaComponent](), false)
+	KindComponentByID(&def, w, ecs.ComponentID[testReplicaComponent](w), reflect.TypeFor[testReplicaComponent](), KindComponentRequired)
 	base.RegisterEntityKind(def)
 	compID := uint16(1)
 

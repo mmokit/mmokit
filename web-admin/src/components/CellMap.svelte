@@ -3,6 +3,7 @@
   import { cellsStore, metricsHistoryStore } from "$lib/stores.svelte";
   import { stream } from "$lib/stream";
   import { layoutCells, type Layout } from "./cellmap-layout";
+  import { parseCellID } from "$lib/cellid";
   import type { CellInfo, MetricsSample } from "$lib/types";
 
   type Props = {
@@ -219,13 +220,10 @@
     const baseRows = new Map<number, Layout>();
     for (const L of layouts) {
       if (L.depth !== 0) continue;
-      // Parse XY from ID: cell_X_Y.
-      const m = /^cell_(\d+)_(\d+)$/.exec(L.id);
-      if (!m) continue;
-      const x = Number.parseInt(m[1], 10);
-      const y = Number.parseInt(m[2], 10);
-      if (!baseCols.has(x)) baseCols.set(x, L);
-      if (!baseRows.has(y)) baseRows.set(y, L);
+      const xy = parseCellID(L.id);
+      if (!xy) continue;
+      if (!baseCols.has(xy.x)) baseCols.set(xy.x, L);
+      if (!baseRows.has(xy.y)) baseRows.set(xy.y, L);
     }
     // Top axis (X)
     ctx.textAlign = "center";
@@ -361,12 +359,10 @@
 
   function compactId(id: string): string {
     // "cell_0_0" → "0,0"; "cell_d1_0_0" → "d1·0,0"
-    let s = id.startsWith("cell_") ? id.slice(5) : id;
-    if (s.startsWith("d")) {
-      const us = s.indexOf("_");
-      if (us > 0) return s.slice(0, us) + "·" + s.slice(us + 1).replace(/_/g, ",");
-    }
-    return s.replace(/_/g, ",");
+    const c = parseCellID(id);
+    if (!c) return id;
+    if (c.depth === 0) return `${c.x},${c.y}`;
+    return `d${c.depth}·${c.x},${c.y}`;
   }
 
   function drawCornerBrackets(

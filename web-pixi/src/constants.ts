@@ -80,9 +80,3 @@ export const RENDER_DELAY = 100;
  */
 export const MAX_EXTRAPOLATE_MS = 50;
 
-/**
- * Smoothing factor for the clock-offset exponential moving average.
- * 0.1 = converges to a new steady-state offset in ~20 observations
- * (one second at 20Hz) while rejecting short spikes.
- */
-export const CLOCK_SYNC_ALPHA = 0.1;

@@ -7,6 +7,7 @@ import { state, setTickRate, type ClientEntity, type CellInfo } from "./state.js
 import { observeFrameStamps } from "./clockSync.js";
 import { updateEntityFromServer } from "./interpolation.js";
 import { pruneStaleOnFreshSnapshot } from "./reconcile.js";
+import { recordDeletion } from "./replicationAudit.js";
 import { mountEchoPanel } from "./echo_panel.js";
 import { mountChatPanel } from "./chat_panel.js";
 import { presenceOf } from "./debug-presence.js";
@@ -100,10 +101,11 @@ function applyWorldUpdate(update: DeltaWorldUpdate): void {
   // `producedAtMs` stamp; clockSync anchors on the freshest one
   // in the frame.
   const fresh = [...update.entered, ...update.updated];
-  observeFrameStamps(state.clockSync, fresh, performance.now());
+  const arriveMs = performance.now();
+  observeFrameStamps(state.clockSync, fresh, arriveMs);
 
   if (update.freshSnapshot) {
-    pruneStaleOnFreshSnapshot(state.entities, fresh, state.playerNetID);
+    pruneStaleOnFreshSnapshot(state.entities, fresh, state.playerNetID, state.replicationAudit, arriveMs);
   }
 
   // Resolve viewer's cell once per frame so presenceOf can compare
@@ -115,7 +117,7 @@ function applyWorldUpdate(update: DeltaWorldUpdate): void {
   // Merge entered + updated: both flow through updateEntityFromServer which
   // creates a ClientEntity on first sight or appends a sample to the ring.
   for (const raw of fresh) {
-    updateEntityFromServer(state.entities, raw, raw.producedAtMs);
+    updateEntityFromServer(state.entities, raw, raw.producedAtMs, state.replicationAudit, arriveMs);
     const ent = state.entities.get(raw.netID)!;
     // Derive presence client-side from topology + viewer cell. LOCAL
     // when the entity sits in our cell; REPLICA when it's mirrored
@@ -152,9 +154,11 @@ function applyWorldUpdate(update: DeltaWorldUpdate): void {
 
   // removed = entity died/despawned; exited = left our AoI. Both drop from local map.
   for (const netID of update.removed) {
+    recordDeletion(state.replicationAudit, arriveMs, netID, "removed");
     state.entities.delete(netID);
   }
   for (const netID of update.exited) {
+    recordDeletion(state.replicationAudit, arriveMs, netID, "exited");
     state.entities.delete(netID);
   }
 

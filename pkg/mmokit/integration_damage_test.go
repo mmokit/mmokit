@@ -35,7 +35,7 @@ func registerIntKind(t *testing.T, stage *pkguniverse.Stage) {
 		&def, w,
 		ecs.ComponentID[intHealth](w),
 		reflect.TypeFor[intHealth](),
-		false,
+		pkguniverse.KindComponentRequired,
 	)
 	stage.RegisterEntityKind(def)
 }

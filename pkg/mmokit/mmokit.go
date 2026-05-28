@@ -776,13 +776,14 @@ type ReplicationTier = system.ReplicationTier
 // satisfies the small system.ClusterClock interface structurally.
 func DefaultReplicationConfig(eng *engine.Engine, grid *spatial.HashGrid, clock system.ClusterClock) ReplicationConfig {
 	return ReplicationConfig{
-		World:          eng.ECS,
-		SpatialGrid:    grid,
-		Viewers:        system.NewPlayerViewerSource(eng.ECS, eng.Players, engine.StateActive),
-		Frame:          system.NewBinaryFrameWriter(eng.ConnMgr, makeWorldDeltaFrame),
-		GetTick:        func() uint32 { return eng.Tick },
-		ClusterClock:   clock,
-		TickIntervalMs: eng.TickIntervalMs(),
+		World:           eng.ECS,
+		SpatialGrid:     grid,
+		Viewers:         system.NewPlayerViewerSource(eng.ECS, eng.Players, engine.StateActive),
+		Frame:           system.NewBinaryFrameWriter(eng.ConnMgr, makeWorldDeltaFrame),
+		GetTick:         func() uint32 { return eng.Tick },
+		ClusterClock:    clock,
+		TickIntervalMs:  eng.TickIntervalMs(),
+		DeferFirstFrame: true,
 	}
 }
 

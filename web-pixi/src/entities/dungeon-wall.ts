@@ -104,7 +104,13 @@ export function createDungeonWallDisplay(): EntityDisplayObject {
     }
   }
 
-  function drawVein(w: number, h: number, alphaMul: number) {
+  // Draw the vein geometry at base alphas (no pulse multiplier). Called
+  // ONCE per size change. The slow pulse animation is applied each frame
+  // via `vein.alpha`, which is a cheap property assignment — no geometry
+  // rebuild, no CPU tessellation. Per-frame .clear()+redraw on Graphics
+  // forces Pixi to re-tessellate every frame; with ~50 walls in a
+  // dungeon that's the dominant cost in the render pass (was ~50× /frame).
+  function drawVein(w: number, h: number) {
     vein.clear();
     const hw = w / 2;
     const hh = h / 2;
@@ -116,34 +122,34 @@ export function createDungeonWallDisplay(): EntityDisplayObject {
       vein
         .moveTo(-hw * 0.92, 0)
         .lineTo(hw * 0.92, 0)
-        .stroke({ color: COL_VEIN_BLEED, width: px(3.5), alpha: 0.5 * alphaMul });
+        .stroke({ color: COL_VEIN_BLEED, width: px(3.5), alpha: 0.5 });
       // Bright hot core line on top
       vein
         .moveTo(-hw * 0.92, 0)
         .lineTo(hw * 0.92, 0)
-        .stroke({ color: COL_VEIN_HOT, width: px(1.3), alpha: 0.95 * alphaMul });
+        .stroke({ color: COL_VEIN_HOT, width: px(1.3), alpha: 0.95 });
       // Two tiny crystal sparks along the vein for visual rhythm
       vein
         .circle(-hw * 0.4, 0, px(1.6))
-        .fill({ color: COL_VEIN_HOT, alpha: 0.95 * alphaMul });
+        .fill({ color: COL_VEIN_HOT, alpha: 0.95 });
       vein
         .circle(hw * 0.4, 0, px(1.6))
-        .fill({ color: COL_VEIN_HOT, alpha: 0.95 * alphaMul });
+        .fill({ color: COL_VEIN_HOT, alpha: 0.95 });
     } else {
       vein
         .moveTo(0, -hh * 0.92)
         .lineTo(0, hh * 0.92)
-        .stroke({ color: COL_VEIN_BLEED, width: px(3.5), alpha: 0.5 * alphaMul });
+        .stroke({ color: COL_VEIN_BLEED, width: px(3.5), alpha: 0.5 });
       vein
         .moveTo(0, -hh * 0.92)
         .lineTo(0, hh * 0.92)
-        .stroke({ color: COL_VEIN_HOT, width: px(1.3), alpha: 0.95 * alphaMul });
+        .stroke({ color: COL_VEIN_HOT, width: px(1.3), alpha: 0.95 });
       vein
         .circle(0, -hh * 0.4, px(1.6))
-        .fill({ color: COL_VEIN_HOT, alpha: 0.95 * alphaMul });
+        .fill({ color: COL_VEIN_HOT, alpha: 0.95 });
       vein
         .circle(0, hh * 0.4, px(1.6))
-        .fill({ color: COL_VEIN_HOT, alpha: 0.95 * alphaMul });
+        .fill({ color: COL_VEIN_HOT, alpha: 0.95 });
     }
   }
 
@@ -162,12 +168,13 @@ export function createDungeonWallDisplay(): EntityDisplayObject {
         // patterns. Cast to int.
         seedBase = Math.floor((w * 31 + h * 127) % 1000);
         drawBody(w, h);
+        drawVein(w, h);
       }
       // Subtle vein pulse — slow breathing, slight phase shift so
-      // adjacent walls don't pulse in unison.
+      // adjacent walls don't pulse in unison. Cheap property assign,
+      // does NOT rebuild geometry.
       const phase = seedBase * 0.013;
-      const pulse = 0.75 + 0.25 * Math.sin(now * 0.0022 + phase);
-      drawVein(w, h, pulse);
+      vein.alpha = 0.75 + 0.25 * Math.sin(now * 0.0022 + phase);
     },
     destroy() {
       container.destroy({ children: true });

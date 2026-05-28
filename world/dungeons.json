@@ -1,1 +1,13 @@
-{"version":1,"dungeons":[]}
+{
+  "version": 1,
+  "dungeons": [
+    {
+      "id": "0_0_dungeon_1",
+      "name": "Dungeon",
+      "world_pos": [
+        7966,
+        7951
+      ]
+    }
+  ]
+}

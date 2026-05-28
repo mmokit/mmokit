@@ -827,9 +827,37 @@ func (b *Stage) SpawnFromTransferCore(data []byte, presence EntityPresence) (ecs
 		b.onTransferReceived(entity, frame)
 	}
 
-	// Player-specific hook
-	if frame.ConnID != 0 && b.onPlayerTransferReceived != nil {
-		b.onPlayerTransferReceived(entity, frame)
+	// Framework-required wiring on player transfers: re-attach the entity,
+	// restore the per-session DebugFlags bitmask, and stamp the auth UserID
+	// onto the pre-registered session BEFORE any game-specific hook runs.
+	// Two callers reach this with different session-state preconditions:
+	//
+	//   - cell_transfer_executor.populateCell (split/merge/migrate): session
+	//     is NOT yet registered; ByConnID returns nil; this block no-ops.
+	//     populateCell registers the session and sets these fields itself
+	//     after RegisterSessionTransfer returns.
+	//
+	//   - cell.MsgHandoff → drainPendingPromotes (boundary handoff): session
+	//     IS pre-registered by RegisterTransferSession; this block is the
+	//     only path that restores DebugFlags. Without it, every cross-cell
+	//     walk zeroes a player's debug grants and the debugBroadcaster
+	//     short-circuits on `sess.DebugFlags == 0` — topology overlay
+	//     freezes after the first boundary crossing even though split/merge
+	//     keep firing.
+	//
+	// Doing this in the framework instead of the optional onPlayerTransferReceived
+	// hook means games that override the hook for game-specific behavior (e.g.
+	// the space game's MapData send + PlayerSessions tracking) can't accidentally
+	// drop these field assignments.
+	if frame.ConnID != 0 {
+		if s := b.eng.Players.ByConnID(frame.ConnID); s != nil {
+			s.Entity = entity
+			s.DebugFlags = engine.DebugFlag(frame.DebugFlags)
+			s.UserID = frame.UserID
+		}
+		if b.onPlayerTransferReceived != nil {
+			b.onPlayerTransferReceived(entity, frame)
+		}
 	}
 
 	b.eng.Log.Log(CatMeshTransfer, "[%s] transfer received: netID=%d at (%.0f,%.0f)", b.cellID, frame.NetworkID, frame.PosX, frame.PosY)

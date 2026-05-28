@@ -12,6 +12,8 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+
+	pkgnet "github.com/zenion/mmoserver/pkg/net"
 )
 
 // BindFlags registers every engine-universal CLI flag on flag.CommandLine,
@@ -69,8 +71,8 @@ func (c *Config) BindFlags() {
 		"MeshControl listen addr (coordinator role)",
 		":9100", &c.ControlListen)
 	stringFlag("admin-listen",
-		"admin HTTP listen addr for /events, /commands, /metrics (empty = disabled)",
-		"", &c.AdminListen)
+		"admin HTTP listen addr for /events, /commands, /metrics, /admin/* (default :9101, only binds on RoleCoordinator processes; pass empty to disable)",
+		":9101", &c.AdminListen)
 	// Default-on: admin dashboard mounts whenever --admin-listen is set.
 	// Operators can explicitly disable via --admin-enabled=false to get
 	// the operational endpoints (/metrics, /commands, /events) without
@@ -172,6 +174,11 @@ func (c *Process) startHTTPListener() {
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/ws", c.ConnMgr.HandleWebSocket)
+	// Diagnostic endpoints — heartbeat WS + write-path stats. Live
+	// alongside /ws on the gateway listener so the Bun probe and
+	// in-browser overlay can reach them without any extra config.
+	mux.HandleFunc("/probe-ws", pkgnet.HandleProbeWS)
+	mux.HandleFunc("/debug/conn-stats", c.ConnMgr.HandleConnStats)
 	mux.Handle("/metrics", c.MetricsHandler())
 	mux.Handle("/commands", handleCommandList(c.registry))
 	mux.Handle("/commands/", handleCommandDescribe(c.registry))
@@ -218,13 +225,14 @@ func (c *Process) startHTTPListener() {
 }
 
 // startAdminHTTPListener binds an admin HTTP server on Config.AdminListen
-// exposing /events, /commands, and /metrics. Used by pure-coordinator
-// processes (and any process that wants separate operational endpoints
-// away from the client-facing HTTP listener). No-op when AdminListen is
-// empty. Unlike startHTTPListener, this is gated purely on config and
-// does NOT depend on the Gateway role.
+// exposing /events, /commands, /metrics, and /admin/*. Bound only on
+// processes that bear RoleCoordinator — admin state (commit log, cluster
+// view, audit ring) lives on the coordinator, and host/gateway-only
+// processes would just bind a port serving empty data (and would conflict
+// with the coord on shared-host multi-process setups). Pass
+// --admin-listen="" to disable on the coordinator too.
 func (c *Process) startAdminHTTPListener() {
-	if c.cfg.AdminListen == "" {
+	if c.cfg.AdminListen == "" || !c.roles.Has(RoleCoordinator) {
 		return
 	}
 

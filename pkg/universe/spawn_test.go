@@ -138,7 +138,7 @@ func TestSpawn_PanicsOnMissingRequiredKindComponent(t *testing.T) {
 	def := EntityKindDef{Kind: 99, Name: "TestKind"}
 	healthType := reflect.TypeFor[health]()
 	id := ecs.TypeID(w, healthType)
-	KindComponentByID(&def, w, id, healthType, false)
+	KindComponentByID(&def, w, id, healthType, KindComponentRequired)
 	stage.RegisterEntityKind(def)
 
 	defer func() {

@@ -669,7 +669,7 @@ func (rb *reflectBinding) hash(entity ecs.Entity, h *Hasher, _ *ViewerInfo, _ sp
 			rb.hashZeros(h)
 			return
 		}
-		panic("auto_replicator: required component missing on entity")
+		panic(fmt.Sprintf("auto_replicator: required component %q missing on entity %v (mark the bundle field `mmokit:\"optional\"` if absence is legitimate)", rb.structName, entity))
 	}
 	v := rb.reader.readValue(entity)
 	for _, tf := range rb.fields {
@@ -695,7 +695,7 @@ func (rb *reflectBinding) snapshot(entity ecs.Entity, w *quantize.SnapshotWriter
 			rb.snapshotZeros(w)
 			return
 		}
-		panic("auto_replicator: required component missing on entity")
+		panic(fmt.Sprintf("auto_replicator: required component %q missing on entity %v (mark the bundle field `mmokit:\"optional\"` if absence is legitimate)", rb.structName, entity))
 	}
 	v := rb.reader.readValue(entity)
 	for _, tf := range rb.fields {
@@ -722,7 +722,7 @@ func (rb *reflectBinding) initialData(entity ecs.Entity, _ *ViewerInfo, _ spatia
 			}
 			return buf
 		}
-		panic("auto_replicator: required component missing on entity")
+		panic(fmt.Sprintf("auto_replicator: required component %q missing on entity %v (mark the bundle field `mmokit:\"optional\"` if absence is legitimate)", rb.structName, entity))
 	}
 	v := rb.reader.readValue(entity)
 	for _, tf := range rb.initials {

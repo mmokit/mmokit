@@ -10,10 +10,11 @@ import (
 // The Station component is local-only — replication needs only the
 // position + EntityKind so the client can render the station marker.
 // PlacedID carries the world-manifest id so world.* verbs can despawn
-// the station cleanly; it's local-only and survives cell transfer.
+// the station cleanly; optional so future non-manifest spawn paths
+// (admin verbs, tests) can omit it.
 type StationBundle struct {
 	Station  *gamecomp.Station  `mmokit:"local"`
-	PlacedID *gamecomp.PlacedID
+	PlacedID *gamecomp.PlacedID `mmokit:"optional"`
 }
 
 // SpawnStation creates a trade station entity at (localX, localY) inside

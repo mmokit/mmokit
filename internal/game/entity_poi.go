@@ -9,13 +9,12 @@ import (
 )
 
 // POIBundle is the component bundle for a Point-of-Interest entity.
-// PlacedID is local-only and tags POIs spawned from world manifests so
-// world.* verbs can despawn the POI + its roster cleanly. POIs spawned
-// via poi.spawn (admin, no manifest id) leave the field nil — that's
-// fine, the bundle field is optional via the local-only tag.
+// PlacedID tags POIs spawned from world manifests so world.* verbs can
+// despawn the POI + its roster cleanly; it's optional so POIs spawned
+// via poi.spawn (admin, no manifest id) can omit the field.
 type POIBundle struct {
 	POI      *gamecomp.POI
-	PlacedID *gamecomp.PlacedID
+	PlacedID *gamecomp.PlacedID `mmokit:"optional"`
 }
 
 // SpawnPOI is the world-manifest entry point. Translates a world.POI def

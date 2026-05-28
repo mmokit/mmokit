@@ -143,9 +143,20 @@ type RegisterKindArg interface {
 //
 // Struct tags:
 //
-//	`mmokit:"local"`  — register as KindComponentLocalOnly (added on
-//	                    transfer receive but never serialized).
-//	`mmokit:"-"`      — skip this field entirely.
+//	`mmokit:"local"`     — KindComponentLocal: NOT serialized for transfer;
+//	                       auto-added with zero value on transfer receive.
+//	`mmokit:"optional"`  — KindComponentOptional: serialized for transfer
+//	                       when present; spawn callers MAY omit it; the
+//	                       replication binding writes zeros when absent
+//	                       (no panic). Use for server-side bookkeeping
+//	                       like placement tags that should survive cell
+//	                       transfer but aren't required at every spawn
+//	                       site.
+//	`mmokit:"-"`         — skip this field entirely.
+//
+// Untagged fields default to KindComponentRequired: serialized for
+// transfer AND required at spawn time (Stage.Spawn panics under
+// InvariantPanic if any required component is missing).
 //
 // Per-field overrides (custom binding, marshal, pre-marshal, local-only)
 // are passed via WithField[T](opts...). Kind-scoped extras (e.g. Rotation
@@ -158,6 +169,7 @@ type RegisterKindArg interface {
 //	    Name       *PlayerName
 //	    MoveTarget *mmokit.MoveTarget
 //	    Input      *PlayerInput `mmokit:"local"`
+//	    Tag        *PlacedID    `mmokit:"optional"`
 //	}
 //	mmokit.RegisterKind[PlayerBundle](mmo, KindPlayer, "Player")
 func RegisterKind[T any](
@@ -191,9 +203,9 @@ func RegisterKind[T any](
 	// Walk bundle fields, build plan up front (for validation before
 	// any cell exists).
 	type fieldPlan struct {
-		compType  reflect.Type
-		localOnly bool
-		opts      []FieldOption
+		compType reflect.Type
+		mode     universe.KindComponentMode
+		opts     []FieldOption
 	}
 	var plan []fieldPlan
 	for i := range bundleType.NumField() {
@@ -216,19 +228,31 @@ func RegisterKind[T any](
 			panic(fmt.Sprintf("mmokit.RegisterKind: bundle field %s.%s is a transfer-core component (%s); the framework owns its wire format — remove it from the bundle", bundleType.Name(), f.Name, ct.Name()))
 		}
 		ov, hasOv := overrideByType[ct]
-		// Resolve LocalOnly from struct tag OR LocalOnly() option.
-		local := tag == "local"
-		if !local && hasOv {
+		// Resolve mode from struct tag OR LocalOnly() option.
+		var mode universe.KindComponentMode
+		switch tag {
+		case "local":
+			mode = universe.KindComponentLocal
+		case "optional":
+			mode = universe.KindComponentOptional
+		case "":
+			mode = universe.KindComponentRequired
+		default:
+			panic(fmt.Sprintf("mmokit.RegisterKind: bundle field %s.%s has unknown mmokit tag %q (expected \"local\", \"optional\", \"-\", or unset)", bundleType.Name(), f.Name, tag))
+		}
+		if mode == universe.KindComponentRequired && hasOv {
 			var probe universe.ErasedOpts
 			for _, o := range ov.opts {
 				o.Apply(&probe)
 			}
-			local = probe.LocalOnly
+			if probe.LocalOnly {
+				mode = universe.KindComponentLocal
+			}
 		}
 		plan = append(plan, fieldPlan{
-			compType:  ct,
-			localOnly: local,
-			opts:      ov.opts,
+			compType: ct,
+			mode:     mode,
+			opts:     ov.opts,
 		})
 	}
 	if len(plan) == 0 {
@@ -251,12 +275,12 @@ func RegisterKind[T any](
 		def := universe.EntityKindDef{Kind: kind, Name: name}
 		for _, fp := range plan {
 			id := ecs.TypeID(w, fp.compType)
-			if fp.localOnly {
-				universe.KindComponentByID(&def, w, id, fp.compType, true)
+			if fp.mode == universe.KindComponentLocal {
+				universe.KindComponentByID(&def, w, id, fp.compType, universe.KindComponentLocal)
 				continue
 			}
 			// Transfer codec — universe filters Binding/LocalOnly internally.
-			universe.KindComponentByID(&def, w, id, fp.compType, false, fp.opts...)
+			universe.KindComponentByID(&def, w, id, fp.compType, fp.mode, fp.opts...)
 			// Network binding precedence: BindingFn(w) > Binding > default reflect-derived.
 			var bound system.ComponentBinding
 			for _, o := range fp.opts {
@@ -269,7 +293,11 @@ func RegisterKind[T any](
 				}
 			}
 			if bound == nil {
-				bound = system.ComponentByID(w, id, fp.compType)
+				if fp.mode == universe.KindComponentOptional {
+					bound = system.OptionalComponentByID(w, id, fp.compType)
+				} else {
+					bound = system.ComponentByID(w, id, fp.compType)
+				}
 			}
 			def.NetworkBindings = append(def.NetworkBindings, bound)
 		}

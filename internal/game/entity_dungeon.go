@@ -15,12 +15,12 @@ import (
 // Only the world-level Dungeon component travels with the entity — chamber
 // state (clear/cooldown, mob roster, terminal-boss progress) is kept
 // server-side in GameWorld.dungeonChambers keyed by the dungeon's netID.
-// PlacedID is local-only and tags dungeons spawned from world manifests
-// so world.* verbs can despawn the dungeon + its walls + its chamber
-// roster cleanly. Procgen/admin dungeons leave the field nil.
+// PlacedID tags dungeons spawned from world manifests so world.* verbs can
+// despawn the dungeon + its walls + its chamber roster cleanly; it's
+// optional so procgen/admin dungeons can omit it.
 type DungeonBundle struct {
 	Dungeon  *gamecomp.Dungeon
-	PlacedID *gamecomp.PlacedID
+	PlacedID *gamecomp.PlacedID `mmokit:"optional"`
 }
 
 // SpawnDungeonAt is the world-manifest entry point. Delegates to

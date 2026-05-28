@@ -15,13 +15,14 @@ import (
 // is a private alarm for ships only, and replicating LockedBy on
 // asteroids would leak the locking player's identity to every viewer.
 //
-// PlacedID is local-only and only present on asteroids spawned as part
-// of a world-manifest belt — the world editor uses it to despawn the
-// whole belt with one DespawnPlacedByID sweep. Asteroids spawned for
-// dungeon-debris scatter / tests leave the field nil.
+// PlacedID is only present on asteroids spawned as part of a world-manifest
+// belt — the world editor uses it to despawn the whole belt with one
+// DespawnPlacedByID sweep. Asteroids spawned for dungeon-debris scatter /
+// tests leave the field absent; `mmokit:"optional"` lets the framework
+// treat it as transfer-preserved but spawn-omittable.
 type AsteroidBundle struct {
 	Minable  *gamecomp.Minable
-	PlacedID *gamecomp.PlacedID
+	PlacedID *gamecomp.PlacedID `mmokit:"optional"`
 }
 
 // spawnAsteroid is the random-resource convenience used by tests and

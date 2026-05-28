@@ -5,6 +5,7 @@ import (
 	"log"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	"github.com/coder/websocket"
 )
@@ -12,6 +13,18 @@ import (
 const (
 	outboundBufferSize = 64
 	inputBufferSize    = 32
+
+	// SlowWriteThreshold is the ws.Write duration above which we log a
+	// warning. Above this, the write is almost certainly blocking on
+	// TCP back-pressure (client too slow draining) or kernel send-buffer
+	// fullness — both are root-cause signals for the stutter
+	// investigation.
+	SlowWriteThreshold = 5 * time.Millisecond
+
+	// SlowQueueThreshold is the time-in-outbound-channel above which we
+	// log a warning. Above this, the writePump goroutine itself was
+	// not being scheduled — points at Go runtime / GC issues.
+	SlowQueueThreshold = 5 * time.Millisecond
 
 	// Channel bytes prepended to every WebSocket frame.
 	ChannelEvent     byte = 0x00 // game events (input, world updates, etc.)
@@ -22,11 +35,19 @@ const (
 	// dispatcher.
 )
 
+// outboundEntry pairs a queued payload with the wall-clock time it was
+// queued. Lets the write pump measure goroutine-scheduling delay
+// (queueDur) separately from ws.Write blocking (writeDur).
+type outboundEntry struct {
+	data     []byte
+	queuedAt time.Time
+}
+
 // Conn wraps a WebSocket connection with read/write pumps.
 type Conn struct {
 	id       uint32
 	ws       *websocket.Conn
-	outbound chan []byte
+	outbound chan outboundEntry
 	mu       sync.Mutex
 	input    [][]byte // channel 0x00 frames
 	opInput  [][]byte // channel 0x01 frames
@@ -34,13 +55,23 @@ type Conn struct {
 
 	bytesSent atomic.Uint64
 	bytesRecv atomic.Uint64
+
+	// Diagnostic counters. Read via getters on *Conn for the
+	// /debug/conn-stats endpoint. Atomic so the read path is lock-free.
+	totalWrites     atomic.Uint64
+	slowWrites      atomic.Uint64 // ws.Write > SlowWriteThreshold
+	slowQueues      atomic.Uint64 // queueDur > SlowQueueThreshold
+	writeDurUsTotal atomic.Uint64 // sum of all write durations (µs)
+	queueDurUsTotal atomic.Uint64 // sum of all queue durations (µs)
+	writeDurUsMax   atomic.Uint64 // max single write duration (µs)
+	queueDurUsMax   atomic.Uint64 // max single queue duration (µs)
 }
 
 func newConn(id uint32, ws *websocket.Conn) *Conn {
 	c := &Conn{
 		id:       id,
 		ws:       ws,
-		outbound: make(chan []byte, outboundBufferSize),
+		outbound: make(chan outboundEntry, outboundBufferSize),
 		input:    make([][]byte, 0, inputBufferSize),
 		opInput:  make([][]byte, 0, 8),
 	}
@@ -51,8 +82,9 @@ func newConn(id uint32, ws *websocket.Conn) *Conn {
 
 // Send queues a message for sending. Non-blocking; drops if buffer full.
 func (c *Conn) Send(data []byte) {
+	entry := outboundEntry{data: data, queuedAt: time.Now()}
 	select {
-	case c.outbound <- data:
+	case c.outbound <- entry:
 	default:
 		log.Printf("conn %d: outbound buffer full, dropping message", c.id)
 	}
@@ -140,13 +172,95 @@ func (c *Conn) readPump(ctx context.Context) {
 }
 
 // writePump writes messages from the outbound channel to the WebSocket.
+//
+// For diagnostics, records two durations per write:
+//
+//   - queueDur: time the payload spent in the outbound channel before
+//     the pump picked it up. Large values indicate the writePump
+//     goroutine was not being scheduled (GC / runtime issue).
+//   - writeDur: time spent inside ws.Write itself. Large values indicate
+//     TCP back-pressure (the client isn't draining fast enough, so the
+//     kernel send buffer is full).
+//
+// Either kind crossing its threshold gets warn-logged and bumps a
+// counter exposed via ConnStats().
 func (c *Conn) writePump() {
-	for data := range c.outbound {
-		err := c.ws.Write(context.Background(), websocket.MessageBinary, data)
+	for entry := range c.outbound {
+		queueDur := time.Since(entry.queuedAt)
+		writeStart := time.Now()
+		err := c.ws.Write(context.Background(), websocket.MessageBinary, entry.data)
+		writeDur := time.Since(writeStart)
+
+		c.totalWrites.Add(1)
+		c.queueDurUsTotal.Add(uint64(queueDur.Microseconds()))
+		c.writeDurUsTotal.Add(uint64(writeDur.Microseconds()))
+		updateMax(&c.queueDurUsMax, uint64(queueDur.Microseconds()))
+		updateMax(&c.writeDurUsMax, uint64(writeDur.Microseconds()))
+
+		if queueDur > SlowQueueThreshold {
+			c.slowQueues.Add(1)
+			log.Printf("conn %d: slow queue %dms (writePump scheduling lag, bytes=%d)",
+				c.id, queueDur.Milliseconds(), len(entry.data))
+		}
+		if writeDur > SlowWriteThreshold {
+			c.slowWrites.Add(1)
+			log.Printf("conn %d: slow ws.Write %dms (TCP back-pressure, bytes=%d)",
+				c.id, writeDur.Milliseconds(), len(entry.data))
+		}
+
 		if err != nil {
 			return
 		}
-		c.bytesSent.Add(uint64(len(data)))
+		c.bytesSent.Add(uint64(len(entry.data)))
+	}
+}
+
+// updateMax atomically updates *cur to v if v > *cur. Lock-free via CAS.
+func updateMax(cur *atomic.Uint64, v uint64) {
+	for {
+		prev := cur.Load()
+		if v <= prev {
+			return
+		}
+		if cur.CompareAndSwap(prev, v) {
+			return
+		}
+	}
+}
+
+// ConnStats is a snapshot of one Conn's write-path timing counters.
+// Used by /debug/conn-stats to expose the data to the Bun probe and
+// the in-browser diagnostic overlay.
+type ConnStats struct {
+	ConnID         uint32 `json:"connId"`
+	TotalWrites    uint64 `json:"totalWrites"`
+	SlowWrites     uint64 `json:"slowWrites"`
+	SlowQueues     uint64 `json:"slowQueues"`
+	WriteDurUsMean uint64 `json:"writeDurUsMean"`
+	QueueDurUsMean uint64 `json:"queueDurUsMean"`
+	WriteDurUsMax  uint64 `json:"writeDurUsMax"`
+	QueueDurUsMax  uint64 `json:"queueDurUsMax"`
+	BytesSent      uint64 `json:"bytesSent"`
+}
+
+// Stats returns a snapshot of this connection's write-path counters.
+func (c *Conn) Stats() ConnStats {
+	total := c.totalWrites.Load()
+	var writeMean, queueMean uint64
+	if total > 0 {
+		writeMean = c.writeDurUsTotal.Load() / total
+		queueMean = c.queueDurUsTotal.Load() / total
+	}
+	return ConnStats{
+		ConnID:         c.id,
+		TotalWrites:    total,
+		SlowWrites:     c.slowWrites.Load(),
+		SlowQueues:     c.slowQueues.Load(),
+		WriteDurUsMean: writeMean,
+		QueueDurUsMean: queueMean,
+		WriteDurUsMax:  c.writeDurUsMax.Load(),
+		QueueDurUsMax:  c.queueDurUsMax.Load(),
+		BytesSent:      c.bytesSent.Load(),
 	}
 }
 

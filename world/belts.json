@@ -1,1 +1,14 @@
-{"version":1,"belts":[]}
+{
+  "version": 1,
+  "belts": [
+    {
+      "id": "0_0_belt_1",
+      "world_pos": [
+        8189,
+        8188
+      ],
+      "radius": 50,
+      "density": 3
+    }
+  ]
+}

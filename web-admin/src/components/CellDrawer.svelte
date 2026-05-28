@@ -3,6 +3,7 @@
   import { fmtBytes, fmtUsAsMs } from "$lib/format";
   import { apiGet, apiPost, ApiError } from "$lib/api";
   import { metricsHistoryStore } from "$lib/stores.svelte";
+  import { toDisplay } from "$lib/cellid";
   import { Close, Split, Merge, ArrowRightLeft, Crosshair, Network, Cpu } from "$lib/icons";
   import Sparkline from "./Sparkline.svelte";
   import BarChart from "./BarChart.svelte";
@@ -156,11 +157,9 @@
   const GAUGE_R = 30;
   const GAUGE_C = 2 * Math.PI * GAUGE_R;
 
-  // Cell ID display: prettier mono with separators.
-  function prettyId(id: string): string {
-    let s = id.startsWith("cell_") ? id.slice(5) : id;
-    return s;
-  }
+  // Cell ID display: strips the wire-form "cell_" prefix for the
+  // human-readable form (mesh "cell_X_Y" → display "X_Y").
+  const prettyId = toDisplay;
 
   // Entity composition for the breakdown bar — proportional widths.
   let composition = $derived(

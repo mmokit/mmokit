@@ -1,6 +1,14 @@
 {
   "version": 1,
   "stations": [
-    {"id": "trade-0", "name": "TRADE STATION", "world_pos": [8100, 8100], "radius": 100}
+    {
+      "id": "trade-0",
+      "name": "TRADE STATION",
+      "world_pos": [
+        8088,
+        8097
+      ],
+      "radius": 20
+    }
   ]
 }

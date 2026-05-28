@@ -46,7 +46,7 @@ type ClusterInfo struct {
 
 // CellInfo describes a single cell at any quadtree depth.
 type CellInfo struct {
-	ID        string       `json:"id"` // base or split ID, e.g. "0_0" or "0_0:1"
+	ID        string       `json:"id"` // mesh form: "cell_X_Y" (depth 0) or "cell_dN_X_Y" (depth N>0); see pkg/universe/cell_id.go
 	Depth     int          `json:"depth"`
 	Parent    string       `json:"parent"` // empty when Depth==0
 	HostID    string       `json:"hostId"`

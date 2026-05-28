@@ -19,3 +19,4 @@ func (t *WSTransport) InjectInput(data []byte)    { t.conn.InjectInput(data) }
 func (t *WSTransport) Close()                     { t.conn.Close() }
 func (t *WSTransport) BytesSent() uint64          { return t.conn.BytesSent() }
 func (t *WSTransport) BytesRecv() uint64          { return t.conn.BytesRecv() }
+func (t *WSTransport) Stats() ConnStats           { return t.conn.Stats() }

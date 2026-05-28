@@ -62,6 +62,18 @@ async function main() {
   // Insert canvas into DOM (before UI overlays)
   document.body.insertBefore(app.canvas, document.body.firstChild);
 
+  // Monkey-patch the renderer so we can time the auto-render pass.
+  // Pixi v8 calls renderer.render() after our ticker callbacks return —
+  // any CPU-side work inside (Graphics geometry rebuilds from per-frame
+  // .clear()+redraw on many objects) is otherwise invisible to ticker
+  // timing. The dev overlay (toggle ~) shows mean/max render duration.
+  const originalRender = app.renderer.render.bind(app.renderer);
+  (app.renderer as unknown as { render: (...a: unknown[]) => void }).render = (...args: unknown[]) => {
+    const start = performance.now();
+    (originalRender as (...a: unknown[]) => void)(...args);
+    devOverlay.observeRenderDuration(performance.now() - start);
+  };
+
   // Scene graph hierarchy
   app.stage.sortableChildren = true;
 
@@ -182,7 +194,7 @@ async function main() {
   // spotlight on the dungeon interior when the player is within an
   // asteroid silhouette. Added before the minimap so the minimap's
   // higher zIndex keeps it at full brightness.
-  const dungeonOverlay = new DungeonOverlay(app.stage);
+  const dungeonOverlay = new DungeonOverlay(app.stage, app.renderer);
 
   // Minimap (PixiJS overlay on app.stage, zIndex 100)
   const minimap = new Minimap(app.stage);
@@ -323,7 +335,8 @@ async function main() {
       applyViewport();
     }
 
-    const now = performance.now();
+    const tickerStart = performance.now();
+    const now = tickerStart;
 
     // FPS counter
     state.frameCount++;
@@ -383,8 +396,13 @@ async function main() {
       cellGrid.update(camera.x, camera.y, app.screen.width, app.screen.height);
     }
 
+    // Segment boundary — everything up to here is interpolation + camera + parallax.
+    const tInterpEnd = performance.now();
+
     // Sync entity display objects
     entityManager.sync(state.entities, state.myEntityId, now);
+
+    const tSyncEnd = performance.now();
 
     // Particles and effects
     const dt = app.ticker.deltaMS / 1000;
@@ -411,6 +429,8 @@ async function main() {
     aimIndicator.update(state);
     selectionOutline.update(state);
 
+    const tEffectsEnd = performance.now();
+
     // HTML UI updates
     updateHUD(state);
     updateStatusBars(state);
@@ -435,6 +455,19 @@ async function main() {
 
     // Cell map overlay
     cellMap.update(state, window.innerWidth, window.innerHeight);
+
+    // Per-frame timing breakdown for the dev overlay. Lets the user
+    // attribute main-thread blocks to a specific phase (interpolation,
+    // entity sync, effects, UI) instead of just seeing "rAF interval
+    // long".
+    const tEnd = performance.now();
+    devOverlay.observeRafSegments({
+      interp: tInterpEnd - tickerStart,
+      sync: tSyncEnd - tInterpEnd,
+      effects: tEffectsEnd - tSyncEnd,
+      render: tEnd - tEffectsEnd, // UI + minimap + cellmap
+      total: tEnd - tickerStart,
+    });
   });
 }
 

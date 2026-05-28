@@ -9,15 +9,17 @@ import (
 
 // stationInfo is a tiny snapshot of a station entity used by startDockingFor.
 type stationInfo struct {
-	x, y  float32
-	netID uint32
+	x, y   float32
+	radius float32
+	netID  uint32
 }
 
 // startDockingFor processes a single client Dock request. Dispatched via
 // Commands.Defer from the Dock input handler, so it runs at the next
 // per-system flush boundary with the ECS world unlocked. Finds the nearest
-// station within DockRange, transitions the session to StateDocking, and
-// records a DockingProgress entry the DockingSystem then ticks each frame.
+// station whose surface is within DockRange of the ship, transitions the
+// session to StateDocking, and records a DockingProgress entry the
+// DockingSystem then ticks each frame.
 func (gw *GameWorld) startDockingFor(connID uint32) {
 	sess := gw.Players.ByConnID(connID)
 	if sess == nil {
@@ -41,25 +43,31 @@ func (gw *GameWorld) startDockingFor(connID uint32) {
 		return
 	}
 
-	// Collect station positions (rare event — recomputed per call).
+	// Collect station positions + radii (rare event — recomputed per call).
 	var stations []stationInfo
 	mmokit.ForEach2(gw.stage, func(e mmokit.Entity, _ *gamecomp.Station, sp *mmokit.Position) {
 		netID := uint32(0)
 		if n := mmokit.Get[mmokit.NetworkID](e); n != nil {
 			netID = n.ID
 		}
-		stations = append(stations, stationInfo{x: sp.X, y: sp.Y, netID: netID})
+		radius := float32(0)
+		if c := mmokit.Get[mmokit.Collider](e); c != nil {
+			radius = c.Radius
+		}
+		stations = append(stations, stationInfo{x: sp.X, y: sp.Y, radius: radius, netID: netID})
 	})
-	dockRange2 := float64(gw.Config.DockRange) * float64(gw.Config.DockRange)
 
-	// Find nearest station within range.
+	// Find nearest station whose surface is within DockRange of the ship.
+	// Threshold scales with station radius so large stations remain dockable
+	// without the ship having to clip through their collider.
 	var nearest *stationInfo
 	bestDist2 := math.MaxFloat64
 	for i := range stations {
 		dx := float64(pos.X - stations[i].x)
 		dy := float64(pos.Y - stations[i].y)
 		d2 := dx*dx + dy*dy
-		if d2 <= dockRange2 && d2 < bestDist2 {
+		threshold := float64(stations[i].radius) + float64(gw.Config.DockRange)
+		if d2 <= threshold*threshold && d2 < bestDist2 {
 			bestDist2 = d2
 			nearest = &stations[i]
 		}

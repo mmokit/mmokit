@@ -36,15 +36,15 @@ var ErrUnknownDebugFlag = errors.New("unknown debug flag")
 // DebugGrantArgs is the input to `debug.grant`. Pass "all" as Flag
 // to enable every registered flag in one shot.
 type DebugGrantArgs struct {
-	Username string `cmd:"help=player username"`
-	Flag     string `cmd:"help=flag name to enable, or 'all' for every registered flag"`
+	Username string `cmd:"help=player username,complete=players"`
+	Flag     string `cmd:"help=flag name to enable, or 'all' for every registered flag,complete=debug-flags"`
 }
 
 // DebugRevokeArgs is the input to `debug.revoke`. Pass "all" as Flag
 // to clear every flag for the user.
 type DebugRevokeArgs struct {
-	Username string `cmd:"help=player username"`
-	Flag     string `cmd:"help=flag name to disable, or 'all' to clear every flag"`
+	Username string `cmd:"help=player username,complete=players"`
+	Flag     string `cmd:"help=flag name to disable, or 'all' to clear every flag,complete=debug-flags"`
 }
 
 // DebugListArgs is the input to `debug.list` (no args).

@@ -79,12 +79,14 @@ function applyDeltaUpdate(state: GameState, update: DeltaWorldUpdate): void {
   // clockSync anchors on the freshest one in the frame.
   const fresh: AnyEntity[] = [...update.entered, ...update.updated];
   const arriveMs = performance.now();
+  const offsetBefore = state.clockSync.offsetMs;
   observeFrameStamps(state.clockSync, fresh, arriveMs);
+  const offsetAfter = state.clockSync.offsetMs;
   let maxStamp = 0;
   for (const e of fresh) {
     if (e.producedAtMs > maxStamp) maxStamp = e.producedAtMs;
   }
-  devOverlay.observeServerFrame(arriveMs, maxStamp);
+  devOverlay.observeServerFrame(arriveMs, maxStamp, fresh.length, offsetBefore, offsetAfter);
 
   // Fresh-snapshot frames (flag set by the server on the first frame from a
   // given ReplicationSystem: login or cross-cell handoff) are authoritative
@@ -294,7 +296,15 @@ export function connect(state: GameState, callbacks: NetworkCallbacks): void {
   // state for the local connection.
   const deltaDecoder = new SpaceDeltaDecoder();
   client.onWorldDelta((msg: WorldDelta) => {
+    // Time the full decode+apply pass so the dev overlay can show
+    // per-frame processing duration. If this consistently exceeds the
+    // ~50ms tick interval, frame events back up on the JS event loop
+    // and arrive in bursts when the loop catches up — that's a
+    // client-side cause of the burst pattern, separate from any
+    // network-level batching.
+    const t0 = performance.now();
     applyDeltaUpdate(state, deltaDecoder.decode(msg.body));
+    devOverlay.observeApplyDuration(performance.now() - t0);
   });
 
   // Typed broadcast events — dispatched per-class via the framework's

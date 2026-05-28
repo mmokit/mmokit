@@ -148,7 +148,7 @@ type GameConfig struct {
 
 	// Docking
 	DockTime         float32 `json:"dockTime"`         // seconds to complete docking
-	DockRange        float32 `json:"dockRange"`        // max distance to initiate docking
+	DockRange        float32 `json:"dockRange"`        // max distance from station surface (collider edge) to initiate docking
 	DockPullStrength float32 `json:"dockPullStrength"` // acceleration toward station during docking
 	DockDragCoeff    float32 `json:"dockDragCoeff"`    // exponential drag during docking
 
@@ -332,7 +332,7 @@ func DefaultGameConfig() GameConfig {
 
 		// Docking
 		DockTime:         3.0,
-		DockRange:        13.3,
+		DockRange:        8.0,
 		DockPullStrength: 25.0,
 		DockDragCoeff:    4.0,
 

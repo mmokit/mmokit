@@ -8,6 +8,7 @@ import {
 import { MAX_EXTRAPOLATE_MS, RENDER_DELAY, RING_SIZE } from "./constants.js";
 import type { ClientEntity, EntitySample } from "./state.js";
 import { type ClockSync, estimatedServerNow } from "./clockSync.js";
+import { recordEntityCreate, type ReplicationAudit } from "./replicationAudit.js";
 
 function entityRotation(e: AnyEntity, fallbackPrev: number): number {
   const moving = e.velX !== 0 || e.velY !== 0;
@@ -40,11 +41,14 @@ export function updateEntityFromServer(
   entities: Map<number, ClientEntity>,
   serverState: AnyEntity,
   producedAtMs: number,
+  audit?: ReplicationAudit,
+  nowMs?: number,
 ): void {
   const id = serverState.netID;
   const existing = entities.get(id);
 
   if (!existing) {
+    if (audit && nowMs !== undefined) recordEntityCreate(audit, nowMs, id);
     const rot = entityRotation(serverState, 0);
     const first = sampleFrom(serverState, producedAtMs, rot);
     const ent: ClientEntity = {

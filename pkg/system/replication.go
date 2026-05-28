@@ -242,6 +242,18 @@ type ReplicationConfig struct {
 	// the detector entirely. Typical value: 30 (1.5s at 20Hz).
 	BlinkDetectorTicks uint64
 
+	// DeferFirstFrame skips emitting a frame on the very first tick a
+	// new conn appears. The frame is held until the next tick, by which
+	// time in-flight border-replica frames from neighbor cells have
+	// landed in the spatial grid. The deferred FreshSnapshot then
+	// includes border-visible entities, so the client receives a
+	// complete view in one shot instead of having to grace-mark + re-
+	// acquire them over the next few ticks (which renders as visible
+	// rubber-band/jitter after a cross-cell handoff). Default false to
+	// preserve existing test semantics; mmokit's DefaultReplicationConfig
+	// enables it for normal game wiring.
+	DeferFirstFrame bool
+
 	// OnBlinkDetected is called when a SPAWN is about to be emitted for
 	// a (connID, netID) that was the subject of a SE_ENTITY_REMOVED
 	// within BlinkDetectorTicks ticks. Implementations record to the
@@ -305,6 +317,20 @@ type ReplicationSystem struct {
 	// Per-viewer state
 	lastVisible map[uint32]map[uint32]bool // connID -> set of visible netIDs
 	connections map[uint32]*connState      // connID -> baseline + hash state
+
+	// firstFramePending tracks conns whose first frame has been deferred
+	// by one tick. On the tick a new conn shows up (no entry in lastVisible),
+	// the system marks the conn in this set and skips emitting. By the
+	// next tick, in-flight border-replica frames from neighbor cells have
+	// landed in the spatial grid via upsertBorderReplica, so the deferred
+	// FreshSnapshot frame includes them and the client receives a complete
+	// view in one shot. Without this defer, a cross-cell handoff lands the
+	// client on a frame containing only local entities and the client
+	// then has to grace-mark + re-acquire all border-visible entities
+	// over the next few ticks (visible as a wave of position jumps —
+	// the rubber-band-after-split bug). Cleared after the deferred frame
+	// emits or when the conn disconnects.
+	firstFramePending map[uint32]bool
 
 	// Cached delta encoders per entity type
 	deltaEncoders map[uint8]*quantize.DeltaEncoder
@@ -371,8 +397,9 @@ func NewReplicationSystem(cfg ReplicationConfig) *ReplicationSystem {
 		ghostMap:      ecs.NewMap1[component.Ghost](cfg.World),
 		replicaMap:    ecs.NewMap1[component.Replica](cfg.World),
 		dormantMap:    ecs.NewMap1[component.Dormant](cfg.World),
-		lastVisible:   make(map[uint32]map[uint32]bool),
-		connections:   make(map[uint32]*connState),
+		lastVisible:       make(map[uint32]map[uint32]bool),
+		connections:       make(map[uint32]*connState),
+		firstFramePending: make(map[uint32]bool),
 		deltaEncoders: encoders,
 		tierConfigs:   tierConfigs,
 		maxTierRadius: maxTierRadius,
@@ -544,6 +571,13 @@ func (s *ReplicationSystem) Update(dt float32) {
 		delete(s.lastVisible, connID)
 		delete(s.connections, connID)
 	}
+	// Same cleanup for firstFramePending — a conn that disconnects while
+	// its first frame was deferred shouldn't leave a stale entry behind.
+	for connID := range s.firstFramePending {
+		if !activeConns[connID] {
+			delete(s.firstFramePending, connID)
+		}
+	}
 
 	ringDepth := s.ringDepth()
 
@@ -562,6 +596,29 @@ func (s *ReplicationSystem) Update(dt float32) {
 		// concept leaks to the client, just a normal delta frame that
 		// happens to carry a "reset your decoder" bit.
 		_, hadPriorState := s.lastVisible[viewer.ConnID]
+
+		// Defer the first frame for a brand-new conn by one tick so any
+		// in-flight border-replica frames from neighbor cells land in
+		// the spatial grid before we compute the FreshSnapshot's visible
+		// set. Without this, a cross-cell handoff lands the client on a
+		// frame that only contains this cell's local entities and the
+		// client has to grace-mark + re-acquire every border-visible
+		// entity over the next few ticks. The trade-off is one tick (~50
+		// ms at 20 Hz) of delay before the first frame reaches the
+		// client; render delay absorbs it. On the deferred tick we fall
+		// through to normal processing — hadPriorState is still false so
+		// the FreshSnapshot flag gets set below. Gated on
+		// cfg.DeferFirstFrame so tests that exercise the first-tick
+		// frame path can opt out.
+		if s.cfg.DeferFirstFrame {
+			if !hadPriorState && !s.firstFramePending[viewer.ConnID] {
+				s.firstFramePending[viewer.ConnID] = true
+				continue
+			}
+			if s.firstFramePending[viewer.ConnID] {
+				delete(s.firstFramePending, viewer.ConnID)
+			}
+		}
 
 		// Cache the viewer's own player netID for the farewell path. If
 		// the entity lacks a NetworkID (e.g. spectator with no body)

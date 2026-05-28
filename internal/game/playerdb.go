@@ -295,7 +295,7 @@ func enginePlayerSnapshot(pd *PlayerData) *persist.PlayerSnapshot {
 	return &persist.PlayerSnapshot{
 		UserID:    pd.UserID,
 		Username:  pd.Username,
-		CellID:    fmt.Sprintf("cell_%d_%d", pd.CellX, pd.CellY),
+		CellID:    string(pkguniverse.CellID{X: pd.CellX, Y: pd.CellY, Depth: pd.CellDepth}.MeshID()),
 		PosX:      pd.X,
 		PosY:      pd.Y,
 		CreatedAt: pd.CreatedAt,
@@ -328,18 +328,21 @@ func gamePlayerStateSnapshot(pd *PlayerData) *gamepersist.PlayerStateSnapshot {
 // so a fresh player (no space.player_state row yet) is indistinguishable
 // from one that exists but has no balances.
 //
-// CellID parse failures default to (0, 0) — players at origin if the
+// CellID parse failures default to (0, 0, 0) — players at origin if the
 // persisted cell_id is malformed.
 func snapshotToPlayerData(engineSnap *persist.PlayerSnapshot, gameSnap *gamepersist.PlayerStateSnapshot) *PlayerData {
-	var cellX, cellY int32
-	fmt.Sscanf(engineSnap.CellID, "cell_%d_%d", &cellX, &cellY)
+	var cell pkguniverse.CellID
+	if engineSnap.CellID != "" {
+		cell, _ = pkguniverse.ParseCellID(engineSnap.CellID)
+	}
 	pd := &PlayerData{
 		UserID:     engineSnap.UserID,
 		Username:   engineSnap.Username,
 		X:          engineSnap.PosX,
 		Y:          engineSnap.PosY,
-		CellX:      cellX,
-		CellY:      cellY,
+		CellX:      cell.X,
+		CellY:      cell.Y,
+		CellDepth:  cell.Depth,
 		Currencies: map[uint32]int64{},
 		Cargo:      map[uint32]int32{},
 		Bank:       map[uint32]int32{},

@@ -15,6 +15,17 @@ export default defineConfig({
       "/auth": {
         target: "http://localhost:8080",
       },
+      // Diagnostic endpoints — heartbeat WebSocket + write-path stats.
+      // Used by the in-browser dev overlay (toggle ~) to A/B compare
+      // game frames against a synthetic heartbeat. Without these
+      // entries, the SPA page (served by vite) can't reach either.
+      "/probe-ws": {
+        target: "http://localhost:8080",
+        ws: true,
+      },
+      "/debug": {
+        target: "http://localhost:8080",
+      },
     },
     fs: {
       allow: [".."],

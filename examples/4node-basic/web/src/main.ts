@@ -2,6 +2,14 @@ import { connect, onShowGame } from "./network.js";
 import { loginAsName } from "./auth.js";
 import { setupInput } from "./input.js";
 import { startRenderLoop } from "./renderer.js";
+import { state } from "./state.js";
+import { dumpAudit } from "./replicationAudit.js";
+
+// Expose window.replAudit() for dumping the recent replication-audit
+// event log from DevTools.
+(window as unknown as { replAudit?: () => void }).replAudit = () => {
+  dumpAudit(state.replicationAudit);
+};
 
 function resizeCanvas(): void {
   const canvas = document.getElementById("canvas") as HTMLCanvasElement;

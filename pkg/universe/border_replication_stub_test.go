@@ -83,7 +83,7 @@ func TestBorderDispatcher_DeltaCompression_UnchangedTailEmitsSentinel(t *testing
 	world := base.ECSWorld()
 	healthMap := ecs.NewMap1[testReplicaComponent](world)
 	def := EntityKindDef{Kind: 1, Name: "TestShip"}
-	KindComponentByID(&def, world, ecs.ComponentID[testReplicaComponent](world), reflect.TypeFor[testReplicaComponent](), false)
+	KindComponentByID(&def, world, ecs.ComponentID[testReplicaComponent](world), reflect.TypeFor[testReplicaComponent](), KindComponentRequired)
 	base.RegisterEntityKind(def)
 
 	// Spawn a corner entity with a non-zero component value.
@@ -152,7 +152,7 @@ func TestBorderDispatcher_DeltaCompression_ForceResync(t *testing.T) {
 	world := base.ECSWorld()
 	healthMap := ecs.NewMap1[testReplicaComponent](world)
 	def := EntityKindDef{Kind: 1, Name: "TestShip"}
-	KindComponentByID(&def, world, ecs.ComponentID[testReplicaComponent](world), reflect.TypeFor[testReplicaComponent](), false)
+	KindComponentByID(&def, world, ecs.ComponentID[testReplicaComponent](world), reflect.TypeFor[testReplicaComponent](), KindComponentRequired)
 	base.RegisterEntityKind(def)
 
 	posMap := ecs.NewMap1[component.Position](world)
@@ -207,7 +207,7 @@ func TestApplyBorderFrame_UnchangedSentinelNoOps(t *testing.T) {
 	w := base.ECSWorld()
 	compMap := ecs.NewMap1[testReplicaComponent](w)
 	def := EntityKindDef{Kind: 3, Name: "Ship"}
-	KindComponentByID(&def, w, ecs.ComponentID[testReplicaComponent](w), reflect.TypeFor[testReplicaComponent](), false)
+	KindComponentByID(&def, w, ecs.ComponentID[testReplicaComponent](w), reflect.TypeFor[testReplicaComponent](), KindComponentRequired)
 	base.RegisterEntityKind(def)
 
 	compID := uint16(1)

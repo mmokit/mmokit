@@ -33,6 +33,7 @@ type PlayerData struct {
 	Y          float32          `json:"y"`
 	CellX      int32            `json:"cell_x"`
 	CellY      int32            `json:"cell_y"`
+	CellDepth  uint8            `json:"cell_depth,omitempty"`
 	Currencies map[uint32]int64 `json:"currencies,omitempty"`
 	Cargo      map[uint32]int32 `json:"cargo,omitempty"`
 	Bank       map[uint32]int32 `json:"bank,omitempty"`

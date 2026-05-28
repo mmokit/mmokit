@@ -25,8 +25,11 @@ type NPCBundle struct {
 	Pathing       *gamecomp.Pathing       `mmokit:"local"`
 	// PlacedID is attached only to NPCs spawned as part of a world-manifest
 	// POI / dungeon (so DespawnPlacedByID cascades to the roster). NPCs
-	// spawned via admin verbs leave it nil.
-	PlacedID *gamecomp.PlacedID
+	// spawned via admin verbs / chamber respawn leave the field absent;
+	// the `mmokit:"optional"` tag tells the framework to skip the
+	// replication-binding presence check while still transferring the
+	// component across cell boundaries when set.
+	PlacedID *gamecomp.PlacedID `mmokit:"optional"`
 }
 
 // NPCSpawnModifiers customizes a spawn-time NPC: elite roster variants

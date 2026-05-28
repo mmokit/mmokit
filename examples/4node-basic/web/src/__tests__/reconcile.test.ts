@@ -1,5 +1,6 @@
 import { describe, test, expect } from "bun:test";
 import { pruneStaleOnFreshSnapshot } from "../reconcile";
+import { newReplicationAudit } from "../replicationAudit";
 import type { ClientEntity } from "../state";
 
 function mkEntity(netID: number): ClientEntity {
@@ -20,14 +21,12 @@ function mkEntity(netID: number): ClientEntity {
 
 describe("pruneStaleOnFreshSnapshot", () => {
   test("drops stale entities not in the fresh visible set", () => {
-    // Stale replica left over from a previous cell's perspective —
-    // nothing in the fresh frame mentions it, so it must be dropped.
     const entities = new Map<number, ClientEntity>([
       [1, mkEntity(1)],
       [100, mkEntity(100)],
     ]);
 
-    pruneStaleOnFreshSnapshot(entities, [{ netID: 1 }], 1);
+    pruneStaleOnFreshSnapshot(entities, [{ netID: 1 }], 1, newReplicationAudit(), 0);
 
     expect(entities.has(1)).toBe(true);
     expect(entities.has(100)).toBe(false);
@@ -36,7 +35,7 @@ describe("pruneStaleOnFreshSnapshot", () => {
   test("keeps the player entity even when absent from the frame", () => {
     const entities = new Map<number, ClientEntity>([[1, mkEntity(1)]]);
 
-    pruneStaleOnFreshSnapshot(entities, [], 1);
+    pruneStaleOnFreshSnapshot(entities, [], 1, newReplicationAudit(), 0);
 
     expect(entities.has(1)).toBe(true);
   });
@@ -44,7 +43,7 @@ describe("pruneStaleOnFreshSnapshot", () => {
   test("playerNetID == 0 disables the defensive keep (no-op gate)", () => {
     const entities = new Map<number, ClientEntity>([[1, mkEntity(1)]]);
 
-    pruneStaleOnFreshSnapshot(entities, [], 0);
+    pruneStaleOnFreshSnapshot(entities, [], 0, newReplicationAudit(), 0);
 
     expect(entities.has(1)).toBe(false);
   });
