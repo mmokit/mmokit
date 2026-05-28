@@ -4165,28 +4165,94 @@ func (x *SpawnTransfer) GetSpawnLocation() *Location {
 	return nil
 }
 
+// BorderContextEntry carries a serialized entity that the destination
+// cell should materialize as a border replica (NOT authoritative). The
+// `entity` blob uses the same TransferFrame codec as the authoritative
+// entities packed in CellTransfer.entities; the destination dispatches
+// it via upsertBorderReplica instead of SpawnFromTransferCore.
+// `source_cell_id` is the mesh ID of the cell whose authority this
+// replica belongs to — used by the destination to route subsequent
+// border frames from that cell onto this replica.
+type BorderContextEntry struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Entity        []byte                 `protobuf:"bytes,1,opt,name=entity,proto3" json:"entity,omitempty"`
+	SourceCellId  string                 `protobuf:"bytes,2,opt,name=source_cell_id,json=sourceCellId,proto3" json:"source_cell_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *BorderContextEntry) Reset() {
+	*x = BorderContextEntry{}
+	mi := &file_meshpb_mesh_proto_msgTypes[50]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *BorderContextEntry) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*BorderContextEntry) ProtoMessage() {}
+
+func (x *BorderContextEntry) ProtoReflect() protoreflect.Message {
+	mi := &file_meshpb_mesh_proto_msgTypes[50]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use BorderContextEntry.ProtoReflect.Descriptor instead.
+func (*BorderContextEntry) Descriptor() ([]byte, []int) {
+	return file_meshpb_mesh_proto_rawDescGZIP(), []int{50}
+}
+
+func (x *BorderContextEntry) GetEntity() []byte {
+	if x != nil {
+		return x.Entity
+	}
+	return nil
+}
+
+func (x *BorderContextEntry) GetSourceCellId() string {
+	if x != nil {
+		return x.SourceCellId
+	}
+	return ""
+}
+
 // S7: unified cell state transfer. Covers split (parent -> new child),
 // merge (donor -> survivor), and live migrate (src host -> dest host, same
 // cell ID). Entities + sessions are packed as length-prefixed records.
 type CellTransfer struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	RequestId     uint64                 `protobuf:"varint,1,opt,name=request_id,json=requestId,proto3" json:"request_id,omitempty"`     // orchestrator-assigned, correlates with CellTransferReady
-	Kind          CellTransferKind       `protobuf:"varint,2,opt,name=kind,proto3,enum=meshpb.CellTransferKind" json:"kind,omitempty"`   // SPLIT | MERGE | MIGRATE
-	SrcCellId     string                 `protobuf:"bytes,3,opt,name=src_cell_id,json=srcCellId,proto3" json:"src_cell_id,omitempty"`    // split: parent; merge: donor; migrate: same as dest
-	DestCellId    string                 `protobuf:"bytes,4,opt,name=dest_cell_id,json=destCellId,proto3" json:"dest_cell_id,omitempty"` // split: child; merge: survivor; migrate: same as src
-	DestHostId    string                 `protobuf:"bytes,5,opt,name=dest_host_id,json=destHostId,proto3" json:"dest_host_id,omitempty"` // target host for dest cell (empty = stay local)
-	Quadrant      uint32                 `protobuf:"varint,6,opt,name=quadrant,proto3" json:"quadrant,omitempty"`                        // split only: 0=BL, 1=BR, 2=TL, 3=TR
-	SrcEpoch      uint64                 `protobuf:"varint,7,opt,name=src_epoch,json=srcEpoch,proto3" json:"src_epoch,omitempty"`        // parent/donor/source epoch at serialization time
-	Entities      []byte                 `protobuf:"bytes,8,opt,name=entities,proto3" json:"entities,omitempty"`                         // packed TransferFrame records, length-prefixed
-	Sessions      []byte                 `protobuf:"bytes,9,opt,name=sessions,proto3" json:"sessions,omitempty"`                         // packed SessionTransfer records
-	Bounds        *CellBounds            `protobuf:"bytes,10,opt,name=bounds,proto3" json:"bounds,omitempty"`                            // world-space bounds of dest cell
+	state      protoimpl.MessageState `protogen:"open.v1"`
+	RequestId  uint64                 `protobuf:"varint,1,opt,name=request_id,json=requestId,proto3" json:"request_id,omitempty"`     // orchestrator-assigned, correlates with CellTransferReady
+	Kind       CellTransferKind       `protobuf:"varint,2,opt,name=kind,proto3,enum=meshpb.CellTransferKind" json:"kind,omitempty"`   // SPLIT | MERGE | MIGRATE
+	SrcCellId  string                 `protobuf:"bytes,3,opt,name=src_cell_id,json=srcCellId,proto3" json:"src_cell_id,omitempty"`    // split: parent; merge: donor; migrate: same as dest
+	DestCellId string                 `protobuf:"bytes,4,opt,name=dest_cell_id,json=destCellId,proto3" json:"dest_cell_id,omitempty"` // split: child; merge: survivor; migrate: same as src
+	DestHostId string                 `protobuf:"bytes,5,opt,name=dest_host_id,json=destHostId,proto3" json:"dest_host_id,omitempty"` // target host for dest cell (empty = stay local)
+	Quadrant   uint32                 `protobuf:"varint,6,opt,name=quadrant,proto3" json:"quadrant,omitempty"`                        // split only: 0=BL, 1=BR, 2=TL, 3=TR
+	SrcEpoch   uint64                 `protobuf:"varint,7,opt,name=src_epoch,json=srcEpoch,proto3" json:"src_epoch,omitempty"`        // parent/donor/source epoch at serialization time
+	Entities   []byte                 `protobuf:"bytes,8,opt,name=entities,proto3" json:"entities,omitempty"`                         // packed TransferFrame records, length-prefixed
+	Sessions   []byte                 `protobuf:"bytes,9,opt,name=sessions,proto3" json:"sessions,omitempty"`                         // packed SessionTransfer records
+	Bounds     *CellBounds            `protobuf:"bytes,10,opt,name=bounds,proto3" json:"bounds,omitempty"`                            // world-space bounds of dest cell
+	// Cross-cell border-replica seed for transparent handoffs. Populated
+	// by the source side at SPLIT/MERGE/MIGRATE serialize time so the
+	// destination's spatial grid is complete (locals + cross-cell context)
+	// before its first replication tick. See
+	// docs/superpowers/specs/2026-05-28-transparent-cell-transfers-design.md.
+	Context       []*BorderContextEntry `protobuf:"bytes,11,rep,name=context,proto3" json:"context,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *CellTransfer) Reset() {
 	*x = CellTransfer{}
-	mi := &file_meshpb_mesh_proto_msgTypes[50]
+	mi := &file_meshpb_mesh_proto_msgTypes[51]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4198,7 +4264,7 @@ func (x *CellTransfer) String() string {
 func (*CellTransfer) ProtoMessage() {}
 
 func (x *CellTransfer) ProtoReflect() protoreflect.Message {
-	mi := &file_meshpb_mesh_proto_msgTypes[50]
+	mi := &file_meshpb_mesh_proto_msgTypes[51]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4211,7 +4277,7 @@ func (x *CellTransfer) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CellTransfer.ProtoReflect.Descriptor instead.
 func (*CellTransfer) Descriptor() ([]byte, []int) {
-	return file_meshpb_mesh_proto_rawDescGZIP(), []int{50}
+	return file_meshpb_mesh_proto_rawDescGZIP(), []int{51}
 }
 
 func (x *CellTransfer) GetRequestId() uint64 {
@@ -4284,6 +4350,13 @@ func (x *CellTransfer) GetBounds() *CellBounds {
 	return nil
 }
 
+func (x *CellTransfer) GetContext() []*BorderContextEntry {
+	if x != nil {
+		return x.Context
+	}
+	return nil
+}
+
 // S7: world-space axis-aligned bounds of a cell. Used to scope the destination
 // cell on a split/merge/migrate without recomputing from CellID.
 type CellBounds struct {
@@ -4298,7 +4371,7 @@ type CellBounds struct {
 
 func (x *CellBounds) Reset() {
 	*x = CellBounds{}
-	mi := &file_meshpb_mesh_proto_msgTypes[51]
+	mi := &file_meshpb_mesh_proto_msgTypes[52]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4310,7 +4383,7 @@ func (x *CellBounds) String() string {
 func (*CellBounds) ProtoMessage() {}
 
 func (x *CellBounds) ProtoReflect() protoreflect.Message {
-	mi := &file_meshpb_mesh_proto_msgTypes[51]
+	mi := &file_meshpb_mesh_proto_msgTypes[52]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4323,7 +4396,7 @@ func (x *CellBounds) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CellBounds.ProtoReflect.Descriptor instead.
 func (*CellBounds) Descriptor() ([]byte, []int) {
-	return file_meshpb_mesh_proto_rawDescGZIP(), []int{51}
+	return file_meshpb_mesh_proto_rawDescGZIP(), []int{52}
 }
 
 func (x *CellBounds) GetMinX() float32 {
@@ -4374,7 +4447,7 @@ type CellTransferReady struct {
 
 func (x *CellTransferReady) Reset() {
 	*x = CellTransferReady{}
-	mi := &file_meshpb_mesh_proto_msgTypes[52]
+	mi := &file_meshpb_mesh_proto_msgTypes[53]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4386,7 +4459,7 @@ func (x *CellTransferReady) String() string {
 func (*CellTransferReady) ProtoMessage() {}
 
 func (x *CellTransferReady) ProtoReflect() protoreflect.Message {
-	mi := &file_meshpb_mesh_proto_msgTypes[52]
+	mi := &file_meshpb_mesh_proto_msgTypes[53]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4399,7 +4472,7 @@ func (x *CellTransferReady) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CellTransferReady.ProtoReflect.Descriptor instead.
 func (*CellTransferReady) Descriptor() ([]byte, []int) {
-	return file_meshpb_mesh_proto_rawDescGZIP(), []int{52}
+	return file_meshpb_mesh_proto_rawDescGZIP(), []int{53}
 }
 
 func (x *CellTransferReady) GetRequestId() uint64 {
@@ -4466,7 +4539,7 @@ type ResolveSpawn struct {
 
 func (x *ResolveSpawn) Reset() {
 	*x = ResolveSpawn{}
-	mi := &file_meshpb_mesh_proto_msgTypes[53]
+	mi := &file_meshpb_mesh_proto_msgTypes[54]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4478,7 +4551,7 @@ func (x *ResolveSpawn) String() string {
 func (*ResolveSpawn) ProtoMessage() {}
 
 func (x *ResolveSpawn) ProtoReflect() protoreflect.Message {
-	mi := &file_meshpb_mesh_proto_msgTypes[53]
+	mi := &file_meshpb_mesh_proto_msgTypes[54]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4491,7 +4564,7 @@ func (x *ResolveSpawn) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ResolveSpawn.ProtoReflect.Descriptor instead.
 func (*ResolveSpawn) Descriptor() ([]byte, []int) {
-	return file_meshpb_mesh_proto_rawDescGZIP(), []int{53}
+	return file_meshpb_mesh_proto_rawDescGZIP(), []int{54}
 }
 
 func (x *ResolveSpawn) GetRequestId() uint64 {
@@ -4543,7 +4616,7 @@ type HostOpAck struct {
 
 func (x *HostOpAck) Reset() {
 	*x = HostOpAck{}
-	mi := &file_meshpb_mesh_proto_msgTypes[54]
+	mi := &file_meshpb_mesh_proto_msgTypes[55]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4555,7 +4628,7 @@ func (x *HostOpAck) String() string {
 func (*HostOpAck) ProtoMessage() {}
 
 func (x *HostOpAck) ProtoReflect() protoreflect.Message {
-	mi := &file_meshpb_mesh_proto_msgTypes[54]
+	mi := &file_meshpb_mesh_proto_msgTypes[55]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4568,7 +4641,7 @@ func (x *HostOpAck) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use HostOpAck.ProtoReflect.Descriptor instead.
 func (*HostOpAck) Descriptor() ([]byte, []int) {
-	return file_meshpb_mesh_proto_rawDescGZIP(), []int{54}
+	return file_meshpb_mesh_proto_rawDescGZIP(), []int{55}
 }
 
 func (x *HostOpAck) GetReqId() uint64 {
@@ -4622,7 +4695,7 @@ type SpawnResolved struct {
 
 func (x *SpawnResolved) Reset() {
 	*x = SpawnResolved{}
-	mi := &file_meshpb_mesh_proto_msgTypes[55]
+	mi := &file_meshpb_mesh_proto_msgTypes[56]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4634,7 +4707,7 @@ func (x *SpawnResolved) String() string {
 func (*SpawnResolved) ProtoMessage() {}
 
 func (x *SpawnResolved) ProtoReflect() protoreflect.Message {
-	mi := &file_meshpb_mesh_proto_msgTypes[55]
+	mi := &file_meshpb_mesh_proto_msgTypes[56]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4647,7 +4720,7 @@ func (x *SpawnResolved) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SpawnResolved.ProtoReflect.Descriptor instead.
 func (*SpawnResolved) Descriptor() ([]byte, []int) {
-	return file_meshpb_mesh_proto_rawDescGZIP(), []int{55}
+	return file_meshpb_mesh_proto_rawDescGZIP(), []int{56}
 }
 
 func (x *SpawnResolved) GetRequestId() uint64 {
@@ -4716,7 +4789,7 @@ type SessionRegister struct {
 
 func (x *SessionRegister) Reset() {
 	*x = SessionRegister{}
-	mi := &file_meshpb_mesh_proto_msgTypes[56]
+	mi := &file_meshpb_mesh_proto_msgTypes[57]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4728,7 +4801,7 @@ func (x *SessionRegister) String() string {
 func (*SessionRegister) ProtoMessage() {}
 
 func (x *SessionRegister) ProtoReflect() protoreflect.Message {
-	mi := &file_meshpb_mesh_proto_msgTypes[56]
+	mi := &file_meshpb_mesh_proto_msgTypes[57]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4741,7 +4814,7 @@ func (x *SessionRegister) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SessionRegister.ProtoReflect.Descriptor instead.
 func (*SessionRegister) Descriptor() ([]byte, []int) {
-	return file_meshpb_mesh_proto_rawDescGZIP(), []int{56}
+	return file_meshpb_mesh_proto_rawDescGZIP(), []int{57}
 }
 
 func (x *SessionRegister) GetGatewayId() string {
@@ -4790,7 +4863,7 @@ type CellTransferAbort struct {
 
 func (x *CellTransferAbort) Reset() {
 	*x = CellTransferAbort{}
-	mi := &file_meshpb_mesh_proto_msgTypes[57]
+	mi := &file_meshpb_mesh_proto_msgTypes[58]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4802,7 +4875,7 @@ func (x *CellTransferAbort) String() string {
 func (*CellTransferAbort) ProtoMessage() {}
 
 func (x *CellTransferAbort) ProtoReflect() protoreflect.Message {
-	mi := &file_meshpb_mesh_proto_msgTypes[57]
+	mi := &file_meshpb_mesh_proto_msgTypes[58]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4815,7 +4888,7 @@ func (x *CellTransferAbort) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CellTransferAbort.ProtoReflect.Descriptor instead.
 func (*CellTransferAbort) Descriptor() ([]byte, []int) {
-	return file_meshpb_mesh_proto_rawDescGZIP(), []int{57}
+	return file_meshpb_mesh_proto_rawDescGZIP(), []int{58}
 }
 
 func (x *CellTransferAbort) GetRequestId() uint64 {
@@ -4845,7 +4918,7 @@ type ClientInput struct {
 
 func (x *ClientInput) Reset() {
 	*x = ClientInput{}
-	mi := &file_meshpb_mesh_proto_msgTypes[58]
+	mi := &file_meshpb_mesh_proto_msgTypes[59]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4857,7 +4930,7 @@ func (x *ClientInput) String() string {
 func (*ClientInput) ProtoMessage() {}
 
 func (x *ClientInput) ProtoReflect() protoreflect.Message {
-	mi := &file_meshpb_mesh_proto_msgTypes[58]
+	mi := &file_meshpb_mesh_proto_msgTypes[59]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4870,7 +4943,7 @@ func (x *ClientInput) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ClientInput.ProtoReflect.Descriptor instead.
 func (*ClientInput) Descriptor() ([]byte, []int) {
-	return file_meshpb_mesh_proto_rawDescGZIP(), []int{58}
+	return file_meshpb_mesh_proto_rawDescGZIP(), []int{59}
 }
 
 func (x *ClientInput) GetConnId() uint32 {
@@ -4921,7 +4994,7 @@ type ClientFrame struct {
 
 func (x *ClientFrame) Reset() {
 	*x = ClientFrame{}
-	mi := &file_meshpb_mesh_proto_msgTypes[59]
+	mi := &file_meshpb_mesh_proto_msgTypes[60]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4933,7 +5006,7 @@ func (x *ClientFrame) String() string {
 func (*ClientFrame) ProtoMessage() {}
 
 func (x *ClientFrame) ProtoReflect() protoreflect.Message {
-	mi := &file_meshpb_mesh_proto_msgTypes[59]
+	mi := &file_meshpb_mesh_proto_msgTypes[60]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4946,7 +5019,7 @@ func (x *ClientFrame) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ClientFrame.ProtoReflect.Descriptor instead.
 func (*ClientFrame) Descriptor() ([]byte, []int) {
-	return file_meshpb_mesh_proto_rawDescGZIP(), []int{59}
+	return file_meshpb_mesh_proto_rawDescGZIP(), []int{60}
 }
 
 func (x *ClientFrame) GetConnId() uint32 {
@@ -4989,7 +5062,7 @@ type ClientDisconnect struct {
 
 func (x *ClientDisconnect) Reset() {
 	*x = ClientDisconnect{}
-	mi := &file_meshpb_mesh_proto_msgTypes[60]
+	mi := &file_meshpb_mesh_proto_msgTypes[61]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5001,7 +5074,7 @@ func (x *ClientDisconnect) String() string {
 func (*ClientDisconnect) ProtoMessage() {}
 
 func (x *ClientDisconnect) ProtoReflect() protoreflect.Message {
-	mi := &file_meshpb_mesh_proto_msgTypes[60]
+	mi := &file_meshpb_mesh_proto_msgTypes[61]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5014,7 +5087,7 @@ func (x *ClientDisconnect) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ClientDisconnect.ProtoReflect.Descriptor instead.
 func (*ClientDisconnect) Descriptor() ([]byte, []int) {
-	return file_meshpb_mesh_proto_rawDescGZIP(), []int{60}
+	return file_meshpb_mesh_proto_rawDescGZIP(), []int{61}
 }
 
 func (x *ClientDisconnect) GetGatewayId() string {
@@ -5366,7 +5439,10 @@ const file_meshpb_mesh_proto_rawDesc = "" +
 	"fromCellId\x12\x17\n" +
 	"\aconn_id\x18\x02 \x01(\rR\x06connId\x12\x1a\n" +
 	"\busername\x18\x03 \x01(\tR\busername\x127\n" +
-	"\x0espawn_location\x18\x04 \x01(\v2\x10.meshpb.LocationR\rspawnLocation\"\xdc\x02\n" +
+	"\x0espawn_location\x18\x04 \x01(\v2\x10.meshpb.LocationR\rspawnLocation\"R\n" +
+	"\x12BorderContextEntry\x12\x16\n" +
+	"\x06entity\x18\x01 \x01(\fR\x06entity\x12$\n" +
+	"\x0esource_cell_id\x18\x02 \x01(\tR\fsourceCellId\"\x92\x03\n" +
 	"\fCellTransfer\x12\x1d\n" +
 	"\n" +
 	"request_id\x18\x01 \x01(\x04R\trequestId\x12,\n" +
@@ -5381,7 +5457,8 @@ const file_meshpb_mesh_proto_rawDesc = "" +
 	"\bentities\x18\b \x01(\fR\bentities\x12\x1a\n" +
 	"\bsessions\x18\t \x01(\fR\bsessions\x12*\n" +
 	"\x06bounds\x18\n" +
-	" \x01(\v2\x12.meshpb.CellBoundsR\x06bounds\"`\n" +
+	" \x01(\v2\x12.meshpb.CellBoundsR\x06bounds\x124\n" +
+	"\acontext\x18\v \x03(\v2\x1a.meshpb.BorderContextEntryR\acontext\"`\n" +
 	"\n" +
 	"CellBounds\x12\x13\n" +
 	"\x05min_x\x18\x01 \x01(\x02R\x04minX\x12\x13\n" +
@@ -5469,7 +5546,7 @@ func file_meshpb_mesh_proto_rawDescGZIP() []byte {
 }
 
 var file_meshpb_mesh_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_meshpb_mesh_proto_msgTypes = make([]protoimpl.MessageInfo, 62)
+var file_meshpb_mesh_proto_msgTypes = make([]protoimpl.MessageInfo, 63)
 var file_meshpb_mesh_proto_goTypes = []any{
 	(CellTransferKind)(0),         // 0: meshpb.CellTransferKind
 	(*HostMessage)(nil),           // 1: meshpb.HostMessage
@@ -5522,18 +5599,19 @@ var file_meshpb_mesh_proto_goTypes = []any{
 	(*PlayerAssignment)(nil),      // 48: meshpb.PlayerAssignment
 	(*SessionTransfer)(nil),       // 49: meshpb.SessionTransfer
 	(*SpawnTransfer)(nil),         // 50: meshpb.SpawnTransfer
-	(*CellTransfer)(nil),          // 51: meshpb.CellTransfer
-	(*CellBounds)(nil),            // 52: meshpb.CellBounds
-	(*CellTransferReady)(nil),     // 53: meshpb.CellTransferReady
-	(*ResolveSpawn)(nil),          // 54: meshpb.ResolveSpawn
-	(*HostOpAck)(nil),             // 55: meshpb.HostOpAck
-	(*SpawnResolved)(nil),         // 56: meshpb.SpawnResolved
-	(*SessionRegister)(nil),       // 57: meshpb.SessionRegister
-	(*CellTransferAbort)(nil),     // 58: meshpb.CellTransferAbort
-	(*ClientInput)(nil),           // 59: meshpb.ClientInput
-	(*ClientFrame)(nil),           // 60: meshpb.ClientFrame
-	(*ClientDisconnect)(nil),      // 61: meshpb.ClientDisconnect
-	nil,                           // 62: meshpb.PeerList.EventRoutingEntry
+	(*BorderContextEntry)(nil),    // 51: meshpb.BorderContextEntry
+	(*CellTransfer)(nil),          // 52: meshpb.CellTransfer
+	(*CellBounds)(nil),            // 53: meshpb.CellBounds
+	(*CellTransferReady)(nil),     // 54: meshpb.CellTransferReady
+	(*ResolveSpawn)(nil),          // 55: meshpb.ResolveSpawn
+	(*HostOpAck)(nil),             // 56: meshpb.HostOpAck
+	(*SpawnResolved)(nil),         // 57: meshpb.SpawnResolved
+	(*SessionRegister)(nil),       // 58: meshpb.SessionRegister
+	(*CellTransferAbort)(nil),     // 59: meshpb.CellTransferAbort
+	(*ClientInput)(nil),           // 60: meshpb.ClientInput
+	(*ClientFrame)(nil),           // 61: meshpb.ClientFrame
+	(*ClientDisconnect)(nil),      // 62: meshpb.ClientDisconnect
+	nil,                           // 63: meshpb.PeerList.EventRoutingEntry
 }
 var file_meshpb_mesh_proto_depIdxs = []int32{
 	3,  // 0: meshpb.HostMessage.register:type_name -> meshpb.RegisterHost
@@ -5548,11 +5626,11 @@ var file_meshpb_mesh_proto_depIdxs = []int32{
 	15, // 9: meshpb.HostMessage.session_announce:type_name -> meshpb.SessionAnnounce
 	16, // 10: meshpb.HostMessage.player_migrated:type_name -> meshpb.PlayerMigrated
 	34, // 11: meshpb.HostMessage.graceful_leave:type_name -> meshpb.GracefulLeave
-	53, // 12: meshpb.HostMessage.cell_transfer_ready:type_name -> meshpb.CellTransferReady
+	54, // 12: meshpb.HostMessage.cell_transfer_ready:type_name -> meshpb.CellTransferReady
 	38, // 13: meshpb.HostMessage.command_response:type_name -> meshpb.CommandResponse
 	37, // 14: meshpb.HostMessage.command_request:type_name -> meshpb.CommandRequest
-	54, // 15: meshpb.HostMessage.resolve_spawn:type_name -> meshpb.ResolveSpawn
-	55, // 16: meshpb.HostMessage.host_op_ack:type_name -> meshpb.HostOpAck
+	55, // 15: meshpb.HostMessage.resolve_spawn:type_name -> meshpb.ResolveSpawn
+	56, // 16: meshpb.HostMessage.host_op_ack:type_name -> meshpb.HostOpAck
 	26, // 17: meshpb.HostMessage.service_announce:type_name -> meshpb.ServiceAnnounce
 	27, // 18: meshpb.HostMessage.service_leave:type_name -> meshpb.ServiceLeave
 	6,  // 19: meshpb.HostMessage.log_batch:type_name -> meshpb.LogBatch
@@ -5565,13 +5643,13 @@ var file_meshpb_mesh_proto_depIdxs = []int32{
 	32, // 26: meshpb.CoordMessage.persist_result:type_name -> meshpb.PersistResult
 	33, // 27: meshpb.CoordMessage.upstream_switch:type_name -> meshpb.UpstreamSwitch
 	35, // 28: meshpb.CoordMessage.cells_drained:type_name -> meshpb.CellsDrained
-	51, // 29: meshpb.CoordMessage.cell_transfer:type_name -> meshpb.CellTransfer
-	58, // 30: meshpb.CoordMessage.cell_transfer_abort:type_name -> meshpb.CellTransferAbort
+	52, // 29: meshpb.CoordMessage.cell_transfer:type_name -> meshpb.CellTransfer
+	59, // 30: meshpb.CoordMessage.cell_transfer_abort:type_name -> meshpb.CellTransferAbort
 	37, // 31: meshpb.CoordMessage.command_request:type_name -> meshpb.CommandRequest
 	38, // 32: meshpb.CoordMessage.command_response:type_name -> meshpb.CommandResponse
 	39, // 33: meshpb.CoordMessage.command_cancel:type_name -> meshpb.CommandCancel
-	56, // 34: meshpb.CoordMessage.spawn_resolved:type_name -> meshpb.SpawnResolved
-	57, // 35: meshpb.CoordMessage.session_register:type_name -> meshpb.SessionRegister
+	57, // 34: meshpb.CoordMessage.spawn_resolved:type_name -> meshpb.SpawnResolved
+	58, // 35: meshpb.CoordMessage.session_register:type_name -> meshpb.SessionRegister
 	20, // 36: meshpb.CoordMessage.cell_rename:type_name -> meshpb.CellRename
 	36, // 37: meshpb.CoordMessage.coord_time_sync:type_name -> meshpb.CoordTimeSync
 	5,  // 38: meshpb.Heartbeat.metrics:type_name -> meshpb.CellMetricsReport
@@ -5580,37 +5658,38 @@ var file_meshpb_mesh_proto_depIdxs = []int32{
 	22, // 41: meshpb.PeerList.cells:type_name -> meshpb.CellOwnership
 	24, // 42: meshpb.PeerList.gateways:type_name -> meshpb.GatewayRecord
 	25, // 43: meshpb.PeerList.services:type_name -> meshpb.ServiceRecord
-	62, // 44: meshpb.PeerList.event_routing:type_name -> meshpb.PeerList.EventRoutingEntry
+	63, // 44: meshpb.PeerList.event_routing:type_name -> meshpb.PeerList.EventRoutingEntry
 	40, // 45: meshpb.CommandRequest.caller:type_name -> meshpb.Caller
 	41, // 46: meshpb.Caller.grants:type_name -> meshpb.Grant
 	43, // 47: meshpb.MeshFrame.border_frame:type_name -> meshpb.BorderFrame
 	44, // 48: meshpb.MeshFrame.handoff:type_name -> meshpb.Handoff
 	45, // 49: meshpb.MeshFrame.forward_input:type_name -> meshpb.ForwardInput
-	51, // 50: meshpb.MeshFrame.cell_transfer:type_name -> meshpb.CellTransfer
-	53, // 51: meshpb.MeshFrame.cell_transfer_ready:type_name -> meshpb.CellTransferReady
-	58, // 52: meshpb.MeshFrame.cell_transfer_abort:type_name -> meshpb.CellTransferAbort
-	59, // 53: meshpb.MeshFrame.client_input:type_name -> meshpb.ClientInput
-	60, // 54: meshpb.MeshFrame.client_frame:type_name -> meshpb.ClientFrame
+	52, // 50: meshpb.MeshFrame.cell_transfer:type_name -> meshpb.CellTransfer
+	54, // 51: meshpb.MeshFrame.cell_transfer_ready:type_name -> meshpb.CellTransferReady
+	59, // 52: meshpb.MeshFrame.cell_transfer_abort:type_name -> meshpb.CellTransferAbort
+	60, // 53: meshpb.MeshFrame.client_input:type_name -> meshpb.ClientInput
+	61, // 54: meshpb.MeshFrame.client_frame:type_name -> meshpb.ClientFrame
 	46, // 55: meshpb.MeshFrame.cross_action:type_name -> meshpb.CrossCellAction
 	48, // 56: meshpb.MeshFrame.player_assignment:type_name -> meshpb.PlayerAssignment
 	49, // 57: meshpb.MeshFrame.session_transfer:type_name -> meshpb.SessionTransfer
 	50, // 58: meshpb.MeshFrame.spawn_transfer:type_name -> meshpb.SpawnTransfer
-	61, // 59: meshpb.MeshFrame.client_disconnect:type_name -> meshpb.ClientDisconnect
+	62, // 59: meshpb.MeshFrame.client_disconnect:type_name -> meshpb.ClientDisconnect
 	30, // 60: meshpb.MeshFrame.service_event:type_name -> meshpb.ServiceEvent
 	47, // 61: meshpb.PlayerAssignment.spawn_location:type_name -> meshpb.Location
 	47, // 62: meshpb.SpawnTransfer.spawn_location:type_name -> meshpb.Location
 	0,  // 63: meshpb.CellTransfer.kind:type_name -> meshpb.CellTransferKind
-	52, // 64: meshpb.CellTransfer.bounds:type_name -> meshpb.CellBounds
-	28, // 65: meshpb.PeerList.EventRoutingEntry.value:type_name -> meshpb.ProcessList
-	1,  // 66: meshpb.MeshControl.Control:input_type -> meshpb.HostMessage
-	42, // 67: meshpb.MeshData.Data:input_type -> meshpb.MeshFrame
-	2,  // 68: meshpb.MeshControl.Control:output_type -> meshpb.CoordMessage
-	42, // 69: meshpb.MeshData.Data:output_type -> meshpb.MeshFrame
-	68, // [68:70] is the sub-list for method output_type
-	66, // [66:68] is the sub-list for method input_type
-	66, // [66:66] is the sub-list for extension type_name
-	66, // [66:66] is the sub-list for extension extendee
-	0,  // [0:66] is the sub-list for field type_name
+	53, // 64: meshpb.CellTransfer.bounds:type_name -> meshpb.CellBounds
+	51, // 65: meshpb.CellTransfer.context:type_name -> meshpb.BorderContextEntry
+	28, // 66: meshpb.PeerList.EventRoutingEntry.value:type_name -> meshpb.ProcessList
+	1,  // 67: meshpb.MeshControl.Control:input_type -> meshpb.HostMessage
+	42, // 68: meshpb.MeshData.Data:input_type -> meshpb.MeshFrame
+	2,  // 69: meshpb.MeshControl.Control:output_type -> meshpb.CoordMessage
+	42, // 70: meshpb.MeshData.Data:output_type -> meshpb.MeshFrame
+	69, // [69:71] is the sub-list for method output_type
+	67, // [67:69] is the sub-list for method input_type
+	67, // [67:67] is the sub-list for extension type_name
+	67, // [67:67] is the sub-list for extension extendee
+	0,  // [0:67] is the sub-list for field type_name
 }
 
 func init() { file_meshpb_mesh_proto_init() }
@@ -5682,7 +5761,7 @@ func file_meshpb_mesh_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_meshpb_mesh_proto_rawDesc), len(file_meshpb_mesh_proto_rawDesc)),
 			NumEnums:      1,
-			NumMessages:   62,
+			NumMessages:   63,
 			NumExtensions: 0,
 			NumServices:   2,
 		},

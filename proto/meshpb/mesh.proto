@@ -510,6 +510,19 @@ message SpawnTransfer {
 // roll back a partial transfer.
 // ═══════════════════════════════════════════════
 
+// BorderContextEntry carries a serialized entity that the destination
+// cell should materialize as a border replica (NOT authoritative). The
+// `entity` blob uses the same TransferFrame codec as the authoritative
+// entities packed in CellTransfer.entities; the destination dispatches
+// it via upsertBorderReplica instead of SpawnFromTransferCore.
+// `source_cell_id` is the mesh ID of the cell whose authority this
+// replica belongs to — used by the destination to route subsequent
+// border frames from that cell onto this replica.
+message BorderContextEntry {
+  bytes  entity         = 1;
+  string source_cell_id = 2;
+}
+
 // S7: unified cell state transfer. Covers split (parent -> new child),
 // merge (donor -> survivor), and live migrate (src host -> dest host, same
 // cell ID). Entities + sessions are packed as length-prefixed records.
@@ -524,6 +537,12 @@ message CellTransfer {
   bytes            entities     = 8;  // packed TransferFrame records, length-prefixed
   bytes            sessions     = 9;  // packed SessionTransfer records
   CellBounds       bounds       = 10; // world-space bounds of dest cell
+  // Cross-cell border-replica seed for transparent handoffs. Populated
+  // by the source side at SPLIT/MERGE/MIGRATE serialize time so the
+  // destination's spatial grid is complete (locals + cross-cell context)
+  // before its first replication tick. See
+  // docs/superpowers/specs/2026-05-28-transparent-cell-transfers-design.md.
+  repeated BorderContextEntry context = 11;
 }
 
 enum CellTransferKind {
