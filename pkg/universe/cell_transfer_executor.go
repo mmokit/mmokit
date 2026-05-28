@@ -80,6 +80,14 @@ type cellTransferExecutor struct {
 	// (rollback path) — without that, the survivor would stay frozen
 	// forever and stop emitting handoffs.
 	mergeSurvivors map[uint64]*Cell
+
+	// transferSrcCells tracks the source cell whose active players were
+	// deactivated (StateActive→StateTransferring) by Execute, keyed by
+	// request ID, for ALL transfer kinds. Abort uses it to reactivate those
+	// players if the transfer rolls back and the source cell survives.
+	// Like mergeSources, a success-path entry lingers until overwritten —
+	// the source cell is torn down at commit so reactivation is moot there.
+	transferSrcCells map[uint64]*Cell
 }
 
 // pendingReceive tracks a cell that was just created on this host in response
@@ -98,9 +106,10 @@ func newCellTransferExecutor(coord *Process, host *Host) *cellTransferExecutor {
 		coord:          coord,
 		host:           host,
 		log:            coord.Log,
-		pending:        make(map[uint64]*pendingReceive),
-		mergeSources:   make(map[uint64]*Cell),
-		mergeSurvivors: make(map[uint64]*Cell),
+		pending:          make(map[uint64]*pendingReceive),
+		mergeSources:     make(map[uint64]*Cell),
+		mergeSurvivors:   make(map[uint64]*Cell),
+		transferSrcCells: make(map[uint64]*Cell),
 	}
 }
 
@@ -177,6 +186,15 @@ func (e *cellTransferExecutor) Execute(cmd cellTransferCommand) error {
 		if err != nil {
 			return fmt.Errorf("collect border context: %w", err)
 		}
+		// Stop this (doomed) source cell from viewing the players it just
+		// serialized for transfer. Without this the source keeps them
+		// StateActive — an active viewer — and keeps sending them WorldDelta
+		// frames until its deferred commit teardown (~16 ticks later), so
+		// BOTH source and destination send the player every tick → conflicting
+		// same-tick samples → interpolation jitter. Runs last + on-loop, only
+		// on full serialize success, so a serialize failure leaves the source
+		// untouched (nothing to reactivate in the runErr path below).
+		srcCell.Stage.DeactivateTransferViewers()
 		return nil
 	})
 	if runErr != nil {
@@ -216,26 +234,48 @@ func (e *cellTransferExecutor) Execute(cmd cellTransferCommand) error {
 	e.log.Log(CatMeshCell, "executor[%s]: Execute req=%d kind=%s src=%s dest=%s dest-host=%s ents=%d sess=%d ctx=%d",
 		e.host.ID, cmd.RequestID, cmd.Kind, cmd.SrcCellID, cmd.DestCellID, cmd.DestHostID, len(ents), len(sess), len(ctxEntries))
 
-	// Register this cell as the drain source for the request BEFORE
-	// shipping, so a racing Abort (even one that arrives before ship
-	// completes) can find and clear it. On ship failure we clear inline.
+	// Register source-cell state for the request BEFORE shipping, so a racing
+	// Abort (even one arriving before ship completes) can find and undo it.
+	// transferSrcCells (all kinds) lets Abort reactivate the players we just
+	// deactivated; mergeSources (merge only) lets it clear the drain flag.
+	// On ship failure we undo inline below.
+	e.mu.Lock()
+	e.transferSrcCells[cmd.RequestID] = srcCell
 	if cmd.Kind == CellTransferMerge {
-		e.mu.Lock()
 		e.mergeSources[cmd.RequestID] = srcCell
-		e.mu.Unlock()
 	}
+	e.mu.Unlock()
 	if err := e.shipToDestination(cmd.DestHostID, string(cmd.DestCellID), proto); err != nil {
-		// Ship failed (e.g. destination host unreachable). Release drain
-		// flag so the donor can resume handoffs on retry/abort.
+		// Ship failed (e.g. destination host unreachable). Undo source-side
+		// state: release the merge drain flag and reactivate the players we
+		// deactivated, so the surviving source keeps serving them.
 		if cmd.Kind == CellTransferMerge {
 			srcCell.Stage.SetDrainingForMerge(false)
-			e.mu.Lock()
-			delete(e.mergeSources, cmd.RequestID)
-			e.mu.Unlock()
 		}
+		e.mu.Lock()
+		delete(e.mergeSources, cmd.RequestID)
+		delete(e.transferSrcCells, cmd.RequestID)
+		e.mu.Unlock()
+		e.reactivateSourceViewers(srcCell)
 		return err
 	}
 	return nil
+}
+
+// reactivateSourceViewers returns a source cell's transfer-deactivated players
+// to StateActive, on the cell's game loop. Called on ship failure or abort
+// when the source cell survives a rolled-back transfer. No-op if the cell has
+// no deactivated viewers.
+func (e *cellTransferExecutor) reactivateSourceViewers(cell *Cell) {
+	if cell == nil || cell.Stage == nil {
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), executorAdminTimeout)
+	defer cancel()
+	_ = cell.Engine.RunOnLoop(ctx, func() error {
+		cell.Stage.ReactivateTransferViewers()
+		return nil
+	})
 }
 
 // shipToDestination routes a populated CellTransfer to the destination host.
@@ -678,11 +718,25 @@ func (e *cellTransferExecutor) Abort(proto *meshpb.CellTransferAbort) {
 	if hadSurv {
 		delete(e.mergeSurvivors, proto.RequestId)
 	}
+	srcDeact, hadDeact := e.transferSrcCells[proto.RequestId]
+	if hadDeact {
+		delete(e.transferSrcCells, proto.RequestId)
+	}
 	e.mu.Unlock()
 	if hadSrc && src != nil && src.Stage != nil {
 		src.Stage.SetDrainingForMerge(false)
 		e.log.Log(CatMeshCell, "executor[%s]: abort req=%d cleared merge drain flag on donor %s",
 			e.host.ID, proto.RequestId, src.MeshID)
+	}
+	// Reactivate any players the source deactivated for this transfer so the
+	// surviving (un-committed) source cell resumes serving them. Single-host:
+	// Execute and Abort run on the same executor, so this fires. Cross-host
+	// abort routing to the source host is a follow-up (matches the existing
+	// mergeSources cross-host limitation).
+	if hadDeact && srcDeact != nil {
+		e.reactivateSourceViewers(srcDeact)
+		e.log.Log(CatMeshCell, "executor[%s]: abort req=%d reactivated source viewers on %s",
+			e.host.ID, proto.RequestId, srcDeact.MeshID)
 	}
 	if hadSurv && surv != nil && surv.Stage != nil {
 		surv.Stage.SetDrainingForMerge(false)

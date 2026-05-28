@@ -64,6 +64,7 @@ func NewPlayerManager() *PlayerManager {
 		{From: StateActive, To: StateTransferring},
 		{From: StateActive, To: StateDisconnected},
 		{From: StateTransferring, To: StateDisconnected},
+		{From: StateTransferring, To: StateActive}, // transfer aborted: return to active
 		{From: StateDisconnected, To: StateActive},
 	}
 	for i := range defaults {

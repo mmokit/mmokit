@@ -159,6 +159,19 @@ type Stage struct {
 	// with handoffs disabled.
 	drainingForMerge atomic.Bool
 
+	// transferDeactivatedViewers holds the player sessions this cell
+	// transitioned StateActive→StateTransferring when it was serialized for a
+	// cell transfer (split/merge/migrate). Deactivating them drops the player
+	// from this cell's ActiveViewers (NewPlayerViewerSource filters
+	// StateActive), so the doomed source cell stops sending the migrated
+	// player WorldDelta frames — fixing the dual-viewer race where the source
+	// kept replicating to the player until its deferred commit teardown,
+	// duplicating every frame the destination cell already sends (~1s of
+	// interpolation jitter). Recorded so an aborted transfer can return them
+	// to StateActive; lives on the stage so the normal success path (cell torn
+	// down at commit) GCs it with the stage. Loop-goroutine only.
+	transferDeactivatedViewers []*engine.PlayerSession
+
 	// dispatcher routes typed messages to registered handlers (mmokit.Handle /
 	// Entity.Send). Lazily initialized via Stage.Dispatcher().
 	dispatcher *MessageDispatcher
@@ -322,6 +335,38 @@ func (b *Stage) SetDrainingForMerge(v bool) {
 // this cell's crossings — see SetDrainingForMerge.
 func (b *Stage) IsDrainingForMerge() bool {
 	return b.drainingForMerge.Load()
+}
+
+// DeactivateTransferViewers transitions every StateActive player on this cell
+// to StateTransferring, dropping them from the cell's ActiveViewers so it
+// stops sending them WorldDelta frames. Called by the executor at serialize
+// time for split/merge/migrate — all of which fully evacuate the source cell,
+// so every active player here is leaving. Recorded for ReactivateTransferViewers
+// (abort recovery). MUST run on this cell's game-loop goroutine (it mutates
+// engine.Players). Idempotent across the 4 per-quadrant SPLIT Execute calls:
+// the first transitions all players, the rest find none still StateActive.
+func (b *Stage) DeactivateTransferViewers() {
+	var moved []*engine.PlayerSession
+	b.eng.Players.ForEach(engine.StateActive, func(s *engine.PlayerSession) {
+		moved = append(moved, s)
+	})
+	for _, s := range moved {
+		_ = b.eng.Players.Transition(s, engine.StateTransferring)
+	}
+	b.transferDeactivatedViewers = append(b.transferDeactivatedViewers, moved...)
+}
+
+// ReactivateTransferViewers returns the sessions deactivated by
+// DeactivateTransferViewers to StateActive. Called on the source cell when a
+// transfer is aborted or its serialize/ship fails and the source cell survives.
+// MUST run on this cell's game-loop goroutine.
+func (b *Stage) ReactivateTransferViewers() {
+	for _, s := range b.transferDeactivatedViewers {
+		if s.State == engine.StateTransferring {
+			_ = b.eng.Players.Transition(s, engine.StateActive)
+		}
+	}
+	b.transferDeactivatedViewers = nil
 }
 
 // Bridge returns the bridge for inter-cell communication.
