@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
 	"sync"
 	"time"
 
@@ -128,6 +129,7 @@ func (e *cellTransferExecutor) Execute(cmd cellTransferCommand) error {
 	// called SplitCell and this executor tried to schedule back.
 	var ents [][]byte
 	var sess [][]byte
+	var ctxEntries []*meshpb.BorderContextEntry
 	ctx, cancel := context.WithTimeout(context.Background(), executorAdminTimeout)
 	defer cancel()
 	runErr := srcCell.Engine.RunOnLoop(ctx, func() error {
@@ -164,6 +166,17 @@ func (e *cellTransferExecutor) Execute(cmd cellTransferCommand) error {
 			return err
 		}
 		sess = serializeEntitylessSessions(srcCell)
+
+		// Collect cross-cell visibility context for the destination so its
+		// first replication frame is complete — no async rubber-band while
+		// border replication catches up. Runs on the same loop tick as the
+		// authoritative serialize so the snapshot is coherent. Nil-safe
+		// against DynamicPartitioning (defaults: include=true, radius=0,
+		// maxCount=0). See the transparent-cell-transfers design doc §4.3.
+		ctxEntries, err = collectTransferContext(e, srcCell, cmd)
+		if err != nil {
+			return fmt.Errorf("collect border context: %w", err)
+		}
 		return nil
 	})
 	if runErr != nil {
@@ -197,10 +210,11 @@ func (e *cellTransferExecutor) Execute(cmd cellTransferCommand) error {
 		Bounds: &meshpb.CellBounds{
 			MinX: minX, MinY: minY, MaxX: maxX, MaxY: maxY,
 		},
+		Context: ctxEntries,
 	}
 
-	e.log.Log(CatMeshCell, "executor[%s]: Execute req=%d kind=%s src=%s dest=%s dest-host=%s ents=%d sess=%d",
-		e.host.ID, cmd.RequestID, cmd.Kind, cmd.SrcCellID, cmd.DestCellID, cmd.DestHostID, len(ents), len(sess))
+	e.log.Log(CatMeshCell, "executor[%s]: Execute req=%d kind=%s src=%s dest=%s dest-host=%s ents=%d sess=%d ctx=%d",
+		e.host.ID, cmd.RequestID, cmd.Kind, cmd.SrcCellID, cmd.DestCellID, cmd.DestHostID, len(ents), len(sess), len(ctxEntries))
 
 	// Register this cell as the drain source for the request BEFORE
 	// shipping, so a racing Abort (even one that arrives before ship
@@ -836,6 +850,110 @@ func serializeQuadrantEntities(src *Cell, quadrant int) ([][]byte, error) {
 		out = append(out, data)
 	}
 	return out, nil
+}
+
+// collectTransferContext builds the per-kind shouldInclude predicate and runs
+// it through Stage.collectBorderContextFor. Must be called on the source
+// cell's game loop (it reads ECS via collectBorderContextFor). Returns nil
+// (no error) when context collection is disabled or the kind doesn't define a
+// predicate.
+//
+// SPLIT: a context entity is anything within the target child quadrant's AoI
+// margin that is NOT already authoritative on that child — i.e. sibling-
+// quadrant locals (attributed to the owning sibling child) and replicas
+// (attributed to their existing source). MERGE/MIGRATE: only replicas qualify;
+// the donor/source locals become authoritative on the destination, so they
+// ship as Entities, not Context.
+func collectTransferContext(e *cellTransferExecutor, src *Cell, cmd cellTransferCommand) ([]*meshpb.BorderContextEntry, error) {
+	cfg := e.coord.cfg.DynamicPartitioning
+	includeContext := cfg == nil || cfg.IncludeBorderContext
+	if !includeContext {
+		return nil, nil
+	}
+
+	aoiR := src.Stage.GetAoIRadius()
+	if cfg != nil && cfg.BorderContextRadius > 0 {
+		aoiR = cfg.BorderContextRadius
+	}
+	maxCount := 0
+	if cfg != nil {
+		maxCount = cfg.BorderContextMaxCount
+	}
+
+	var shouldInclude func(en ecs.Entity, px, py float32, isRep bool, repSrc string) (bool, string)
+	switch cmd.Kind {
+	case CellTransferSplit:
+		half := src.Cell.Size(coords.CellSize) / 2
+		q := int(cmd.Quadrant)
+		qx := float32(q & 1)
+		qy := float32((q >> 1) & 1)
+		// Child quadrant rect, in the same coordinate space as pos/half.
+		rectMinX := qx * half
+		rectMaxX := rectMinX + half
+		rectMinY := qy * half
+		rectMaxY := rectMinY + half
+		children := src.Cell.Children() // [4]CellID ordered by quadrant index
+		shouldInclude = func(en ecs.Entity, px, py float32, isRep bool, repSrc string) (bool, string) {
+			if pointRectDist(px, py, rectMinX, rectMinY, rectMaxX, rectMaxY) > aoiR {
+				return false, ""
+			}
+			if isRep {
+				return true, repSrc
+			}
+			// Local: authoritative on THIS child iff it sits in this
+			// quadrant — those ship as Entities, so skip them here.
+			exi := 0
+			if px >= half {
+				exi = 1
+			}
+			eyi := 0
+			if py >= half {
+				eyi = 1
+			}
+			eq := exi | (eyi << 1)
+			if eq == q {
+				return false, ""
+			}
+			return true, string(children[eq].MeshID())
+		}
+	case CellTransferMerge, CellTransferMigrate:
+		// Only replicas qualify: donor/source locals become authoritative on
+		// the destination and ship as Entities. Replicas keep their existing
+		// source attribution so the destination seeds them as replicas.
+		shouldInclude = func(en ecs.Entity, px, py float32, isRep bool, repSrc string) (bool, string) {
+			if isRep {
+				return true, repSrc
+			}
+			return false, ""
+		}
+	default:
+		return nil, nil
+	}
+
+	return src.Stage.collectBorderContextFor(maxCount, shouldInclude)
+}
+
+// pointRectDist returns the Euclidean distance from point (px,py) to the
+// axis-aligned rectangle [minX,maxX]×[minY,maxY]. Returns 0 when the point
+// is inside the rect. Used to AoI-gate split context against the target
+// child quadrant's bounds.
+func pointRectDist(px, py, minX, minY, maxX, maxY float32) float32 {
+	dx := float32(0)
+	if px < minX {
+		dx = minX - px
+	} else if px > maxX {
+		dx = px - maxX
+	}
+	dy := float32(0)
+	if py < minY {
+		dy = minY - py
+	} else if py > maxY {
+		dy = py - maxY
+	}
+	if dx == 0 && dy == 0 {
+		return 0
+	}
+	return float32(math.Sqrt(float64(dx*dx + dy*dy)))
 }
 
 // flushDuePromotesForCommit drains pending Replica→Live promotes BEFORE a

@@ -11,6 +11,7 @@ import (
 
 	"github.com/mlange-42/ark/ecs"
 
+	meshpb "github.com/zenion/mmoserver/gen/go/meshpb"
 	"github.com/zenion/mmoserver/pkg/component"
 	"github.com/zenion/mmoserver/pkg/coords"
 	"github.com/zenion/mmoserver/pkg/engine"
@@ -1318,6 +1319,65 @@ func (b *Stage) upsertBorderReplicaFromTransfer(frame *TransferFrame, sourceCell
 		localX, localY, frame.Collider.Radius, frame.VelX, frame.VelY, frame.Rotation,
 		sourceCellID, producedAtMs, nil,
 	)
+}
+
+// collectBorderContextFor walks this stage's networked entities (locals +
+// replicas, excluding Ghost/Dormant) and serializes the ones the caller's
+// shouldInclude predicate accepts into BorderContextEntry blobs. Used at
+// SPLIT/MERGE/MIGRATE serialize time to ship cross-cell visibility to the
+// destination so its first replication frame is complete. maxCount > 0
+// caps the result (overflow logged; remainder falls back to async border
+// replication). The predicate receives per-entity replica info so callers
+// don't need access to the private replicaMap.
+//
+// Must be called from the cell's game loop goroutine (it reads ECS).
+func (b *Stage) collectBorderContextFor(
+	maxCount int,
+	shouldInclude func(e ecs.Entity, posX, posY float32, isReplica bool, replicaSource string) (include bool, sourceCellID string),
+) ([]*meshpb.BorderContextEntry, error) {
+	// Unlike the authoritative serializers, we do NOT exclude Replica here —
+	// outer-neighbor replicas are exactly the cross-cell context we want to
+	// ship. Ghost (proxy) and Dormant entities are never visibility context.
+	filter := ecs.NewFilter1[component.Position](b.eng.ECS).
+		Without(ecs.C[component.Ghost](), ecs.C[component.Dormant]())
+
+	var result []*meshpb.BorderContextEntry
+	query := filter.Query()
+	// defer Close() so the world unlocks even if SerializeEntity panics on
+	// game-specific Scan code (see serializeAllEntities for the full rationale).
+	defer query.Close()
+	for query.Next() {
+		entity := query.Entity()
+		pos := query.Get()
+
+		isReplica := b.replicaMap.HasAll(entity)
+		replicaSource := ""
+		if isReplica {
+			replicaSource = b.replicaMap.Get(entity).SourceCellID
+		}
+
+		include, sourceCellID := shouldInclude(entity, pos.X, pos.Y, isReplica, replicaSource)
+		if !include {
+			continue
+		}
+
+		if maxCount > 0 && len(result) >= maxCount {
+			b.eng.Log.Log(CatMeshTransfer,
+				"[%s] border context capped at maxCount=%d; remainder falls back to async border replication",
+				b.cellID, maxCount)
+			break
+		}
+
+		data, err := b.SerializeEntity(entity)
+		if err != nil {
+			return nil, fmt.Errorf("serialize border context entity: %w", err)
+		}
+		result = append(result, &meshpb.BorderContextEntry{
+			Entity:       data,
+			SourceCellId: sourceCellID,
+		})
+	}
+	return result, nil
 }
 
 // ---------------------------------------------------------------------------
