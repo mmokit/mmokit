@@ -1279,6 +1279,46 @@ func (b *Stage) upsertBorderReplica(
 	}
 }
 
+// upsertBorderReplicaFromTransfer materializes a TransferFrame as a border
+// replica on this Stage. Used at SPLIT/MERGE/MIGRATE populate time to seed
+// cross-cell visibility before any tick runs, so the destination's first
+// replication frame is complete (locals + context) and clients see no
+// transition artifact. Mirrors ApplyBorderFrame's coord conversion and
+// routes through the unchanged upsertBorderReplica primitive; the only
+// difference is the trigger (commit-time seed vs steady-state border tick).
+func (b *Stage) upsertBorderReplicaFromTransfer(frame *TransferFrame, sourceCellID MeshCellID) {
+	// World→local conversion against this cell's root, mirroring
+	// ApplyBorderFrame: TransferFrame positions are world-absolute.
+	cellSize := coords.CellSize
+	rootCell := b.cell
+	for rootCell.Depth > 0 {
+		rootCell = rootCell.Parent()
+	}
+	recvCellX := float32(rootCell.X) * cellSize
+	recvCellY := float32(rootCell.Y) * cellSize
+	localX := frame.PosX - recvCellX
+	localY := frame.PosY - recvCellY
+
+	// TransferFrame carries no producedAtMs, so stamp the seed with the
+	// destination cell's clock at populate time. In single-host all cells
+	// share one ClusterClock so this stays monotonic with the client's
+	// existing samples; the seed is overwritten by the first real border
+	// frame from the owning neighbor within ~1 tick regardless.
+	var producedAtMs uint64
+	if b.clusterClock != nil {
+		producedAtMs = b.clusterClock.TickTime(b.eng.TickIntervalMs())
+	}
+
+	// nil componentTail: the seed provides only core transform state
+	// (position/velocity/rotation/collider). Game-specific component state
+	// is filled by the first real border frame from the owning neighbor
+	// ~1 tick later.
+	b.upsertBorderReplica(
+		frame.NetworkID, frame.Epoch, frame.EntityType,
+		localX, localY, frame.Collider.Radius, frame.VelX, frame.VelY, frame.Rotation,
+		sourceCellID, producedAtMs, nil,
+	)
+}
 
 // ---------------------------------------------------------------------------
 // Lifecycle management (ghost, replica, cooldown TTLs)
