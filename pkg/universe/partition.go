@@ -107,6 +107,34 @@ type PartitionConfig struct {
 	// at most one migration per tick, so this is mostly a safety rail;
 	// T9+ may expand it.
 	RebalanceMaxConcurrent int
+
+	// ─────────────────────────────────────────────────────────────────────
+	// Transparent cell transfers — source-side border-replica context.
+	//
+	// On SPLIT/MERGE/MIGRATE the source cell ships its cross-cell visible
+	// set (sibling locals + outer-neighbor replicas) to the destination so
+	// the destination's first replication frame is complete and clients see
+	// no transition artifact. See
+	// docs/superpowers/specs/2026-05-28-transparent-cell-transfers-design.md.
+	// ─────────────────────────────────────────────────────────────────────
+
+	// IncludeBorderContext enables source-side context collection at
+	// transfer commit time. Default: true. Disable for tests or
+	// minimal-bandwidth scenarios (legacy behavior — destination
+	// reconstructs cross-cell visibility via async border replication).
+	IncludeBorderContext bool
+
+	// BorderContextRadius is the AoI margin used when collecting context
+	// entities. 0 means "use the cell's replication AoI radius" (the
+	// default). Tunable for games whose context-seed reach differs from
+	// the replication AoI.
+	BorderContextRadius float32
+
+	// BorderContextMaxCount caps the number of context entities serialized
+	// per destination cell, bounding transfer payload size. 0 = unbounded
+	// (default). On overflow, the first N entries ship and a structured
+	// warning logs; the remainder fall back to async border replication.
+	BorderContextMaxCount int
 }
 
 // DefaultPartitionConfig returns a PartitionConfig with sensible defaults.
@@ -128,6 +156,9 @@ func DefaultPartitionConfig() *PartitionConfig {
 		RebalanceMinDelta:      0.20,
 		RebalanceCooldown:      30 * time.Second,
 		RebalanceMaxConcurrent: 1,
+		IncludeBorderContext:   true, // transparent transfers on by default
+		// BorderContextRadius: 0 → use the cell's replication AoI radius.
+		// BorderContextMaxCount: 0 → unbounded.
 	}
 }
 
