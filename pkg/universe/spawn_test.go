@@ -14,8 +14,17 @@ import (
 
 func newTestStage(t *testing.T) *Stage {
 	t.Helper()
+	return newTestStageAt(t, CellID{X: 0, Y: 0})
+}
+
+// newTestStageAt builds a test stage rooted at an arbitrary grid cell. Use
+// when a test must distinguish base-cell-local from world coordinates (e.g.
+// the border-context regression guard, which only catches a root-origin
+// offset bug at a non-(0,0) root).
+func newTestStageAt(t *testing.T, cell CellID) *Stage {
+	t.Helper()
 	eng := engine.New(engine.DefaultConfig(), net.NewConnManager(), logger.New())
-	return NewStage(eng, CellID{X: 0, Y: 0}, 100, nil)
+	return NewStage(eng, cell, 100, nil)
 }
 
 // TestSpawn_AttachesEveryComponent verifies that Stage.Spawn attaches each

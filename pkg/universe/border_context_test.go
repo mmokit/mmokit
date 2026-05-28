@@ -46,6 +46,38 @@ func TestUpsertBorderReplicaFromTransfer_SeedsReplica(t *testing.T) {
 	_ = ent
 }
 
+// TestUpsertBorderReplicaFromTransfer_NonOriginRoot is the regression guard for
+// the coordinate double-subtraction bug. TransferFrame positions are already
+// base-cell-local (relative to the entity's root cell origin), so the
+// materialized replica's Position must equal frame.PosX/PosY verbatim
+// regardless of the destination cell's grid position — matching what the
+// authoritative SpawnFromTransferCore path does. A prior version subtracted the
+// root-cell world origin, which was a no-op at (0,0) but offset replicas by a
+// full cell at any non-origin root (landing 4node's (1,0)/(0,1)/(1,1) context
+// entities thousands of units away). This test runs at root (1,0) so the bug
+// would manifest as Position.X = 300 - CellSize instead of 300.
+func TestUpsertBorderReplicaFromTransfer_NonOriginRoot(t *testing.T) {
+	stage := newTestStageAt(t, CellID{X: 1, Y: 0})
+
+	frame := &TransferFrame{
+		NetworkID:  7777,
+		EntityType: 1,
+		PosX:       300,
+		PosY:       50,
+		Collider:   component.Collider{Radius: 5},
+	}
+	stage.upsertBorderReplicaFromTransfer(frame, MeshCellID("cell_2_0"))
+
+	ent, _, ok := stage.netIDIdx.Lookup(7777)
+	if !ok {
+		t.Fatalf("expected netID 7777 present after upsert")
+	}
+	pos := ecs.NewMap1[component.Position](stage.eng.ECS).Get(ent)
+	if pos.X != 300 || pos.Y != 50 {
+		t.Errorf("replica Position = (%.1f,%.1f), want (300,50) — base-cell-local coords must transfer verbatim (root origin must NOT be subtracted)", pos.X, pos.Y)
+	}
+}
+
 // TestCollectBorderContextFor_SplitFilterAndSource exercises the Stage method
 // in isolation: the caller's shouldInclude predicate mimics the SPLIT case
 // for "this child = quadrant 0" — local-in-quadrant-0 is authoritative and

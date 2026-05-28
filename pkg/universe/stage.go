@@ -1284,21 +1284,18 @@ func (b *Stage) upsertBorderReplica(
 // replica on this Stage. Used at SPLIT/MERGE/MIGRATE populate time to seed
 // cross-cell visibility before any tick runs, so the destination's first
 // replication frame is complete (locals + context) and clients see no
-// transition artifact. Mirrors ApplyBorderFrame's coord conversion and
-// routes through the unchanged upsertBorderReplica primitive; the only
-// difference is the trigger (commit-time seed vs steady-state border tick).
+// transition artifact. Routes through the unchanged upsertBorderReplica
+// primitive; the only difference is the trigger (commit-time seed vs
+// steady-state border tick).
 func (b *Stage) upsertBorderReplicaFromTransfer(frame *TransferFrame, sourceCellID MeshCellID) {
-	// World→local conversion against this cell's root, mirroring
-	// ApplyBorderFrame: TransferFrame positions are world-absolute.
-	cellSize := coords.CellSize
-	rootCell := b.cell
-	for rootCell.Depth > 0 {
-		rootCell = rootCell.Parent()
-	}
-	recvCellX := float32(rootCell.X) * cellSize
-	recvCellY := float32(rootCell.Y) * cellSize
-	localX := frame.PosX - recvCellX
-	localY := frame.PosY - recvCellY
+	// TransferFrame positions are ALREADY base-cell-local (relative to the
+	// entity's root cell origin) — SerializeEntityCore copies component.Position
+	// verbatim and SpawnFromTransferCore writes frame.PosX/PosY straight into
+	// Position with no conversion. upsertBorderReplica's localX/localY params
+	// are in that same base-cell-local space, so pass them through unchanged.
+	// (Do NOT subtract the root origin like ApplyBorderFrame does — that path
+	// decodes WORLD-absolute wire bytes; this one already has local coords. The
+	// bug it replaces was masked at root cell (0,0) where the offset is zero.)
 
 	// TransferFrame carries no producedAtMs, so stamp the seed with the
 	// destination cell's clock at populate time. In single-host all cells
@@ -1316,7 +1313,7 @@ func (b *Stage) upsertBorderReplicaFromTransfer(frame *TransferFrame, sourceCell
 	// ~1 tick later.
 	b.upsertBorderReplica(
 		frame.NetworkID, frame.Epoch, frame.EntityType,
-		localX, localY, frame.Collider.Radius, frame.VelX, frame.VelY, frame.Rotation,
+		frame.PosX, frame.PosY, frame.Collider.Radius, frame.VelX, frame.VelY, frame.Rotation,
 		sourceCellID, producedAtMs, nil,
 	)
 }
