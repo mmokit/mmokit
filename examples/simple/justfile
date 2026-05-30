@@ -1,0 +1,42 @@
+root := `git rev-parse --show-toplevel`
+bin  := root + "/bin/simple"
+
+# Postgres URL for the demo. Uses its own database (mmo_simple) so it
+# doesn't share admin state with the space-game's `mmo` database. The
+# database is created on first `just db-up` (idempotent — works on a
+# fresh or existing volume). Override via the POSTGRES_URL env var.
+postgres_url := env("POSTGRES_URL", "postgres://mmo:mmo@localhost:5432/mmo_simple?sslmode=disable")
+
+# build the admin SPA bundle (embedded into the binary via go:embed)
+admin-build:
+    cd {{root}} && just admin-build
+
+# build the Go binary (web client is embedded via go:embed in main.go)
+build-go:
+    cd {{root}} && go build -o bin/simple ./examples/simple
+
+# build the admin SPA, then the Go binary
+build: admin-build build-go
+
+# start Postgres and ensure the mmo_simple database exists (idempotent —
+# db-init/ seeds it on a fresh volume, the CREATE DATABASE guard creates
+# it on an already-initialized volume so you never need a `just db-reset`)
+db-up:
+    cd {{root}} && just db-up
+    cd {{root}} && docker compose exec -T postgres sh -c 'until pg_isready -U mmo -d mmo >/dev/null 2>&1; do sleep 0.5; done'
+    cd {{root}} && docker compose exec -T postgres psql -U mmo -d mmo -tc "SELECT 1 FROM pg_database WHERE datname='mmo_simple'" | grep -q 1 \
+        || docker compose exec -T postgres psql -U mmo -d mmo -c "CREATE DATABASE mmo_simple OWNER mmo"
+
+# build + run: client on :5174 (bunx serve), server /ws+/auth on :8080,
+# admin on :9101/admin/ (admin / admin)
+run: db-up build
+    #!/usr/bin/env bash
+    set -euo pipefail
+    tmux kill-session -t simple-web 2>/dev/null || true
+    tmux new-session -d -s simple-web -c "{{root}}/examples/simple" 'bunx serve . --single --listen 5174'
+    trap 'tmux kill-session -t simple-web 2>/dev/null' INT TERM EXIT
+    {{bin}} '--postgres-url={{postgres_url}}' --cors-origins=http://localhost:5174 --dev-insecure-cookie
+
+# remove the Go binary
+clean:
+    rm -f {{root}}/bin/simple

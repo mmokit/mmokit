@@ -38,13 +38,14 @@ admin-build:
 # the binary ships with the previous build's bundles.
 build: sdk build-web admin-build build-go
 
-# build and run `all` preset (serves the built web/dist — no vite needed).
+# build and run the `all` preset. The binary serves only /ws + /auth on
+# :8080 (no web client — use `just dev` for the vite-served browser client).
 # Admin dashboard is on http://localhost:9101/admin/ (login: josh / localdev).
 run: build
     cd {{root}} && ./bin/4node-basic '--postgres-url={{postgres_url}}'
 
 # build Go + run with vite dev server (HMR on :5173, Go backend on :8080)
-# Disables static serving on the Go side so vite is the sole asset source.
+# The Go side no longer serves web assets; vite is the sole client asset source.
 # We still rebuild the admin SPA — the game client uses HMR but the admin
 # dashboard is served from the embedded go:embed bundle.
 dev *ARGS: admin-build build-go
@@ -53,7 +54,7 @@ dev *ARGS: admin-build build-go
     tmux kill-session -t 4node-vite 2>/dev/null || true
     tmux new-session -d -s 4node-vite -c "{{root}}/examples/4node-basic/web" 'bun run dev'
     trap 'tmux kill-session -t 4node-vite 2>/dev/null' INT TERM EXIT
-    cd {{root}} && ./bin/4node-basic --web-dir=disabled '--postgres-url={{postgres_url}}' --dev-insecure-cookie {{ARGS}}
+    cd {{root}} && ./bin/4node-basic '--postgres-url={{postgres_url}}' --dev-insecure-cookie {{ARGS}}
 
 # All-roles dev with the echo service enabled. Bring up Postgres first
 # (`just db-up` from the repo root) — echo requires DB. Vite runs on
@@ -64,12 +65,12 @@ echo-dev *ARGS: build-go
     tmux kill-session -t 4node-vite 2>/dev/null || true
     tmux new-session -d -s 4node-vite -c "{{root}}/examples/4node-basic/web" 'bun run dev'
     trap 'tmux kill-session -t 4node-vite 2>/dev/null' INT TERM EXIT
-    cd {{root}} && ./bin/4node-basic --web-dir=disabled --mode=all,service --services=echo,chat '--postgres-url={{postgres_url}}' --dev-insecure-cookie {{ARGS}}
+    cd {{root}} && ./bin/4node-basic --mode=all,service --services=echo,chat '--postgres-url={{postgres_url}}' --dev-insecure-cookie {{ARGS}}
 
 # Tmux session `basic-dist` with coord + 2 nodes + gateway panes, each
 # with its own interactive console. Logs mirror to log/distributed-basic
-# via tmux pipe-pane (keeps the pane's TTY intact for readline). Browser
-# at http://localhost:8080 — gateway serves the embedded web/dist.
+# via tmux pipe-pane (keeps the pane's TTY intact for readline). The
+# gateway serves only /ws + /auth on :8080 — no embedded web client.
 #
 # Host IDs test-node-0 + test-node-3 are chosen because the fnv64a
 # rendezvous hash produces a 2-2 cell split for the 2x2 grid; generic

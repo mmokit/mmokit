@@ -127,7 +127,7 @@ function handleFrame(buf) {
 }
 
 function connect() {
-  const url = (location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/ws';
+  const url = (location.protocol === 'https:' ? 'wss://' : 'ws://') + location.hostname + ':8080' + '/ws';
   const ws = new WebSocket(url);
   ws.binaryType = 'arraybuffer';
   ws.onopen = () => { connEl.textContent = 'open'; connEl.className = 'val ok'; };
