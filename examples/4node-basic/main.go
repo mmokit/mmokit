@@ -2,16 +2,12 @@ package main
 
 import (
 	"context"
-	"embed"
 	"log"
 
 	"github.com/zenion/mmoserver/pkg/mmokit"
 
 	"github.com/zenion/mmoserver/examples/4node-basic/services/echo"
 )
-
-//go:embed all:web/dist
-var webDist embed.FS
 
 func main() {
 	process := mmokit.New(mmokit.Config{
@@ -23,8 +19,6 @@ func main() {
 		CellSize:         CellSize,
 		TickRate:         TickRate,
 		AoIRadius:        AoIRadius,
-		StaticFS:         webDist,
-		StaticFSPrefix:   "web/dist",
 	})
 
 	process.OnResolveSpawn(func(s *mmokit.PlayerSession) mmokit.Location {

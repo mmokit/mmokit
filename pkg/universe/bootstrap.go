@@ -5,7 +5,6 @@ import (
 	"flag"
 	"fmt"
 	"io"
-	"io/fs"
 	"net/http"
 	"os"
 	"strings"
@@ -94,11 +93,11 @@ func (c *Config) BindFlags() {
 	stringFlag("log",
 		"comma-separated log categories/groups to enable (e.g. mesh,net:conn)",
 		"", &c.LogCategories)
-	stringFlag("web-dir",
-		"web asset source: 'embed' (Config.StaticFS), '' or 'disabled' (off), or a filesystem path",
-		"embed", &c.WebDir)
+	stringFlag("cors-origins",
+		"comma-separated allowlist of browser origins for credentialed cross-origin requests (empty = none)",
+		"", &c.CORSOrigins)
 	intFlag("port",
-		"HTTP server port for /ws, /metrics, and static assets (gateway role only; -1 disables)",
+		"HTTP server port for /ws, /metrics, /auth (gateway role only; -1 disables)",
 		8080, &c.HTTPPort)
 	flag.BoolVar(&c.Headless, "headless", c.Headless,
 		"disable interactive console (for non-TTY environments)")
@@ -159,7 +158,7 @@ func (c *Process) dumpSchemaAndExit() {
 }
 
 // startHTTPListener binds the engine-owned client HTTP server on c.cfg.HTTPPort
-// and serves /ws, /metrics, and static assets. No-op unless the process has
+// and serves /ws, /auth, /metrics, and diagnostics. No-op unless the process has
 // the Gateway role. HTTPPort < 0 unconditionally disables the listener so
 // tests that call coord.Start directly can share a port-less config.
 func (c *Process) startHTTPListener() {
@@ -183,30 +182,6 @@ func (c *Process) startHTTPListener() {
 	mux.Handle("/commands", handleCommandList(c.registry))
 	mux.Handle("/commands/", handleCommandDescribe(c.registry))
 	mux.HandleFunc("/events", handleCommitLogEvents(c.commitLog))
-
-	switch c.cfg.WebDir {
-	case "", "disabled":
-		c.Log.Log(CatMeshCell, "http: static asset serving disabled")
-	case "embed":
-		if c.cfg.StaticFS == nil {
-			c.Log.Log(CatMeshCell, "http: WebDir=embed but Config.StaticFS is nil — skipping static serving")
-			break
-		}
-		rootFS := c.cfg.StaticFS
-		if c.cfg.StaticFSPrefix != "" {
-			sub, err := fs.Sub(c.cfg.StaticFS, c.cfg.StaticFSPrefix)
-			if err != nil {
-				c.Log.Log(CatMeshCell, "http: fs.Sub(%q) failed: %v — skipping static serving", c.cfg.StaticFSPrefix, err)
-				break
-			}
-			rootFS = sub
-		}
-		mux.Handle("/", http.FileServer(http.FS(rootFS)))
-		c.Log.Log(CatMeshCell, "http: serving embedded static assets from StaticFS")
-	default:
-		mux.Handle("/", http.FileServer(http.Dir(c.cfg.WebDir)))
-		c.Log.Log(CatMeshCell, "http: serving static assets from %s", c.cfg.WebDir)
-	}
 
 	if c.cfg.HTTPRoutes != nil {
 		c.cfg.HTTPRoutes(mux)

@@ -7,26 +7,27 @@
 // shows up in the engine's PlayerManager. Production games never set
 // this; it's a dev/example escape hatch.
 //
-// Run:   go run ./examples/simple
-// Open:  http://localhost:8080
+// The admin dashboard is left enabled (the engine default), so this demo
+// needs a Postgres to back it. Use the justfile — `just run` brings up
+// Postgres, ensures the mmo_simple database exists, and passes
+// --postgres-url for you.
+//
+// Run:   just run        (from examples/simple/)
+// Open:  http://localhost:5174            game client (run `just web-serve`)
+//        http://localhost:9101/admin/     admin dashboard (login admin / admin)
 package main
 
 import (
-	"embed"
-
 	"github.com/zenion/mmoserver/pkg/mmokit"
 )
 
-//go:embed index.html
-var webFS embed.FS
-
 func main() {
-	process := mmokit.New(mmokit.Config{
+	cfg := mmokit.Config{
 		Name:          "simple",
-		WebDir:        "embed",
-		StaticFS:      webFS,
 		AnonymousAuth: true,
-	})
+	}
+
+	process := mmokit.New(cfg)
 
 	process.AddSystem(mmokit.NewSystem(&SineWaveSystem{}))
 

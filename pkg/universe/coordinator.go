@@ -72,6 +72,14 @@ type Config struct {
 	// --dev-insecure-cookie CLI flag for plain-HTTP local dev.
 	DevInsecureCookie bool
 
+	// CORSOrigins is a comma-separated allowlist of browser origins
+	// permitted to make credentialed cross-origin requests to the gateway
+	// HTTP endpoints (/auth/*, diagnostics). Empty = no CORS headers
+	// (same-origin / vite-proxy dev path). When non-empty, auth cookies are
+	// also switched to SameSite=None; Secure so they ride cross-site
+	// requests. Bound by --cors-origins.
+	CORSOrigins string
+
 	// GatewayMode selects dispatch behavior for colocated destinations in
 	// multi-host mode. "local-shortcut" (default) uses the direct-channel
 	// cellBridge path for cells on the same host. "always-proxy" forces
@@ -182,35 +190,15 @@ type Config struct {
 	GatewayID string
 
 	// HTTPPort is the listen port for the engine-owned client HTTP server
-	// (WebSocket /ws, /metrics, and static assets). Bound by --port. The
+	// (WebSocket /ws, /metrics, /auth). Bound by --port. The
 	// listener is only started on processes with the Gateway role. Set to
 	// -1 to disable the engine HTTP listener regardless of role (used by
 	// in-process integration tests that share the default port).
 	// Default: 8080.
 	HTTPPort int
 
-	// WebDir selects the static-asset source for the engine HTTP server:
-	//   "embed"     → serve from Config.StaticFS (sub by StaticFSPrefix if set)
-	//   ""          → no static serving
-	//   "disabled"  → no static serving
-	//   <fs-path>   → http.FileServer(http.Dir(path)) for dev iteration
-	// Bound by --web-dir. Default: "embed".
-	WebDir string
-
-	// StaticFS is the embedded web-asset filesystem the engine serves when
-	// WebDir == "embed". Games typically pass the raw //go:embed FS; set
-	// StaticFSPrefix to the subdirectory inside that FS (e.g. "web/dist")
-	// and the engine calls fs.Sub for you. Nil is tolerated: the engine
-	// logs a warning and skips static serving.
-	StaticFS fs.FS
-
-	// StaticFSPrefix is the optional sub-path inside StaticFS. When non-empty
-	// the engine calls fs.Sub(StaticFS, StaticFSPrefix) before mounting the
-	// file server. Example: "web/dist".
-	StaticFSPrefix string
-
 	// HTTPRoutes is an optional hook invoked after the engine mounts its
-	// default handlers (/ws, /metrics, static) so games can add custom
+	// default handlers (/ws, /metrics, /auth, diagnostics) so games can add custom
 	// routes or override defaults. Runs last so game routes win.
 	HTTPRoutes func(mux *http.ServeMux)
 
@@ -721,9 +709,6 @@ func New(cfg Config) *Process {
 	}
 	if cfg.HTTPPort == 0 {
 		cfg.HTTPPort = 8080
-	}
-	if cfg.WebDir == "" {
-		cfg.WebDir = "embed"
 	}
 	if cfg.ClusterClockSyncInterval <= 0 {
 		cfg.ClusterClockSyncInterval = 10 * time.Second

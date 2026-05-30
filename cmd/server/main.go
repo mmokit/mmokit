@@ -16,17 +16,17 @@ import (
 	"github.com/zenion/mmoserver/pkg/coords"
 	"github.com/zenion/mmoserver/pkg/mmokit"
 	"github.com/zenion/mmoserver/pkg/world/jsonrepo"
-	webpixi "github.com/zenion/mmoserver/web-pixi"
 )
 
 func main() {
 	platformCfg := mmokit.DefaultEngineConfig()
 	connMgr := mmokit.NewConnManager()
 
-	// The engine's startHTTPListener owns /ws, /metrics, and static asset
-	// serving on any gateway-role process. The space game's web client lives
-	// in web-pixi/dist and is embedded via the webpixi package. UDP is started
-	// separately below — different protocol, same ConnManager.
+	// The engine's startHTTPListener owns /ws, /auth, and /metrics on any
+	// gateway-role process. The web client is no longer embedded — it is
+	// built into web-pixi/dist and served by a separate static host (see
+	// the root justfile's `web-serve` target). UDP is started separately
+	// below — different protocol, same ConnManager.
 	// Engine-default typed events (Pong, DebugInfo, WorldDelta,
 	// PlayerEntityAssigned, CellChange, ServerConfig) are auto-registered
 	// by mmokit.New from cfg.Name. Game-specific events are registered by
@@ -38,8 +38,6 @@ func main() {
 		Name:           "space",
 		TickRate:       platformCfg.TickRate,
 		ConnManager:    connMgr,
-		StaticFS:       webpixi.FS,
-		StaticFSPrefix: "dist",
 	}
 	worldDir := flag.String("world-dir", "world", "directory containing world manifest JSON files")
 	coordCfg.BindFlags()
@@ -394,7 +392,7 @@ func main() {
 	coordinator.Build()
 
 	// Only processes with the gateway role terminate client connections.
-	// HTTP (/ws, /metrics, static web client) is owned by the engine's
+	// HTTP (/ws, /auth, /metrics) is owned by the engine's
 	// startHTTPListener — started inside coordinator.Start below. UDP is a
 	// separate protocol and has to be launched manually here.
 	if coordinator.ServesClients() {

@@ -3,11 +3,7 @@ package universe
 import (
 	"flag"
 	"io"
-	"io/fs"
-	"net/http"
-	"net/http/httptest"
 	"testing"
-	"testing/fstest"
 )
 
 // TestBindFlagsPreParseDefault verifies that a Config field set before
@@ -55,8 +51,8 @@ func TestBindFlagsEngineDefault(t *testing.T) {
 	if cfg.GatewayMode != "local-shortcut" {
 		t.Errorf("cfg.GatewayMode = %q, want %q", cfg.GatewayMode, "local-shortcut")
 	}
-	if cfg.WebDir != "embed" {
-		t.Errorf("cfg.WebDir = %q, want %q", cfg.WebDir, "embed")
+	if cfg.CORSOrigins != "" {
+		t.Errorf("cfg.CORSOrigins = %q, want %q", cfg.CORSOrigins, "")
 	}
 	if cfg.HTTPPort != 8080 {
 		t.Errorf("cfg.HTTPPort = %d, want 8080", cfg.HTTPPort)
@@ -108,50 +104,6 @@ func TestBindFlagsDroppedFlags(t *testing.T) {
 	}
 	if fs.Lookup("two-hosts") != nil {
 		t.Error("--two-hosts flag should not exist (decommissioned)")
-	}
-}
-
-// TestStaticFSSubPrefix ensures that Config.StaticFS + StaticFSPrefix resolves
-// via fs.Sub so game code can pass the raw //go:embed FS without calling
-// fs.Sub itself. Exercised by replicating the tiny fs.Sub path inline here —
-// we deliberately don't drive startHTTPListener because unit tests shouldn't
-// bind a real TCP port.
-func TestStaticFSSubPrefix(t *testing.T) {
-	embedded := fstest.MapFS{
-		"web/dist/index.html":  &fstest.MapFile{Data: []byte("<html>root</html>")},
-		"web/dist/app.js":      &fstest.MapFile{Data: []byte("console.log(1)")},
-		"unrelated/ignore.txt": &fstest.MapFile{Data: []byte("ignore me")},
-	}
-
-	rootFS, err := fs.Sub(embedded, "web/dist")
-	if err != nil {
-		t.Fatalf("fs.Sub: %v", err)
-	}
-
-	mux := http.NewServeMux()
-	mux.Handle("/", http.FileServer(http.FS(rootFS)))
-
-	srv := httptest.NewServer(mux)
-	defer srv.Close()
-
-	resp, err := http.Get(srv.URL + "/index.html")
-	if err != nil {
-		t.Fatalf("GET /index.html: %v", err)
-	}
-	defer resp.Body.Close()
-	body, _ := io.ReadAll(resp.Body)
-	if string(body) != "<html>root</html>" {
-		t.Errorf("body = %q, want %q", string(body), "<html>root</html>")
-	}
-
-	// File outside the sub-path must NOT be served.
-	resp2, err := http.Get(srv.URL + "/unrelated/ignore.txt")
-	if err != nil {
-		t.Fatalf("GET /unrelated/ignore.txt: %v", err)
-	}
-	defer resp2.Body.Close()
-	if resp2.StatusCode != http.StatusNotFound {
-		t.Errorf("expected 404 for /unrelated/ignore.txt outside sub-path, got %d", resp2.StatusCode)
 	}
 }
 
