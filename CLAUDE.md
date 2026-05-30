@@ -16,7 +16,7 @@ just client-sdk examples/4node-basic  # generate typed TS client SDK
 just clean          # remove bin/
 ```
 
-The web test client is served at `http://localhost:8080` automatically.
+The web client is served separately (vite dev server via `just dev`, or a standalone static host via `just web-serve`); the server exposes only `/ws` and `/auth` on `http://localhost:8080`.
 
 ## Architecture
 
