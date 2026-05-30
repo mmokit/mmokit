@@ -14,7 +14,8 @@
 //
 // Run:   just run        (from examples/simple/)
 // Open:  http://localhost:5174            game client (run `just web-serve`)
-//        http://localhost:9101/admin/     admin dashboard (login admin / admin)
+//
+//	http://localhost:9101/admin/     admin dashboard (login admin / admin)
 package main
 
 import (
@@ -22,12 +23,10 @@ import (
 )
 
 func main() {
-	cfg := mmokit.Config{
+	process := mmokit.New(mmokit.Config{
 		Name:          "simple",
 		AnonymousAuth: true,
-	}
-
-	process := mmokit.New(cfg)
+	})
 
 	process.AddSystem(mmokit.NewSystem(&SineWaveSystem{}))
 
