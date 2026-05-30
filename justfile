@@ -1,9 +1,10 @@
-# build the web-pixi client (vite → web-pixi/dist) — required before go
-# build so the webpixi package's //go:embed has real content to include.
+# build the web-pixi client (vite → web-pixi/dist). Served standalone via
+# `just web-serve`; no longer embedded into the Go binary.
 build-web:
     cd web-pixi && bun install --frozen-lockfile && bun run build
 
-# build the Go binary only (assumes web-pixi/dist already exists)
+# build the Go binary only (the web client is no longer embedded — it is
+# served separately via `just web-serve`)
 build-go:
     go build -o bin/server ./cmd/server
 
@@ -50,10 +51,17 @@ dev: build
     trap 'tmux kill-session -t space-vite 2>/dev/null' INT TERM EXIT
     ./bin/server --dev-insecure-cookie
 
+# serve the built web client (web-pixi/dist) as a standalone static host.
+# Run alongside `just run` (server on :8080) for a no-vite build+run setup.
+# Pass the matching origin to the server: --cors-origins=http://localhost:5174
+web-serve port="5174":
+    cd web-pixi && bunx serve dist --single --listen {{port}}
+
 # Tmux session `space-dist` with coord + 3 nodes + gateway panes, each
 # with its own interactive console. Logs mirror to log/distributed-space
-# via tmux pipe-pane (keeps the pane's TTY intact for readline). Browser
-# at http://localhost:8080 — gateway serves the embedded web-pixi/dist.
+# via tmux pipe-pane (keeps the pane's TTY intact for readline).
+# Gateway serves only /ws + /auth on :8080; serve the web client separately
+# with `just web-serve` (or `just dev` for vite) and point it at :8080.
 
 # run the space game in 5-process distributed mode (tmux)
 distributed-space: build db-up
