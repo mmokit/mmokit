@@ -34,6 +34,19 @@ func DefaultHTTPOpts() HTTPOpts {
 	}
 }
 
+// CrossSiteHTTPOpts returns o adjusted for cross-site delivery: the
+// browser only sends a cookie on a cross-origin credentialed request when
+// it is SameSite=None, and SameSite=None is rejected without Secure. This
+// forces both, overriding any dev-insecure Secure=false base — callers
+// running cross-origin must use HTTPS (localhost is a secure context, so
+// local plain-http testing still works). Applied by the mmokit facade
+// when Config.CORSOrigins is set.
+func CrossSiteHTTPOpts(o HTTPOpts) HTTPOpts {
+	o.SameSite = http.SameSiteNoneMode
+	o.CookieSecure = true
+	return o
+}
+
 // effective returns o with empty fields filled from DefaultHTTPOpts.
 // Used so callers can override only the fields they care about.
 //

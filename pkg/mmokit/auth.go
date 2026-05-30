@@ -72,6 +72,13 @@ func RegisterAuthService(p *universe.Process, opts AuthOpts) error {
 	if p.Config().DevInsecureCookie {
 		opts.HTTPOpts.CookieSecure = false
 	}
+	// Cross-origin serving (Config.CORSOrigins set) requires SameSite=None;
+	// Secure so the session cookie rides cross-site fetch(credentials:
+	// 'include'). This wins over --dev-insecure-cookie (Secure forced true);
+	// localhost is a secure context so local cross-origin testing still works.
+	if p.Config().CORSOrigins != "" {
+		opts.HTTPOpts = auth.CrossSiteHTTPOpts(opts.HTTPOpts)
+	}
 
 	// liveService captures the running *auth.Service after Service.Init.
 	// The typed-op handlers below resolve it lazily via the closure so the
