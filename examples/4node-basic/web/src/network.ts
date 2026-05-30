@@ -11,6 +11,7 @@ import { recordDeletion } from "./replicationAudit.js";
 import { mountEchoPanel } from "./echo_panel.js";
 import { mountChatPanel } from "./chat_panel.js";
 import { presenceOf } from "./debug-presence.js";
+import { backendWsUrl } from "./config.js";
 
 let showGameCallback: (() => void) | null = null;
 
@@ -23,9 +24,8 @@ function setStatus(msg: string): void {
 }
 
 export function connect(name: string): void {
-  const proto = location.protocol === "https:" ? "wss:" : "ws:";
   const client = new BasicClient({
-    url: `${proto}//${location.host}/ws`,
+    url: backendWsUrl(),
     onOpen: () => setStatus(`connected as ${name} — waiting for spawn...`),
     onClose: () => setStatus("disconnected"),
     onError: () => setStatus("connection error"),

@@ -60,8 +60,10 @@ web-serve port="5174":
 # Tmux session `space-dist` with coord + 3 nodes + gateway panes, each
 # with its own interactive console. Logs mirror to log/distributed-space
 # via tmux pipe-pane (keeps the pane's TTY intact for readline).
-# Gateway serves only /ws + /auth on :8080; serve the web client separately
-# with `just web-serve` (or `just dev` for vite) and point it at :8080.
+# Gateway serves only /ws + /auth on :8080; the web client (web-pixi/dist) is
+# served on :5174 by a detached `space-web` session this recipe starts, with
+# its config.json auto-pointed at :8080 and the gateway allowlisting :5174 via
+# --cors-origins. Open http://localhost:5174 in a browser.
 
 # run the space game in 5-process distributed mode (tmux)
 distributed-space: build db-up
@@ -74,6 +76,15 @@ distributed-space: build db-up
     logdir="$root/log/distributed-space"
     tmux kill-session -t space-dist 2>/dev/null || true
     mkdir -p "$logdir"
+
+    # Serve the web client standalone on :5174. Point its config.json at the
+    # gateway on :8080 (the built default is same-origin, which would be wrong
+    # here since the page is on :5174). Runs in a detached session so the
+    # 5-pane process layout below stays intact; killed on exit.
+    echo '{ "backendUrl": "http://localhost:8080" }' > "$root/web-pixi/dist/config.json"
+    tmux kill-session -t space-web 2>/dev/null || true
+    tmux new-session -d -s space-web -c "$root/web-pixi/dist" 'bunx serve . --single --listen 5174'
+    trap 'tmux kill-session -t space-web 2>/dev/null' EXIT
 
     # Layout: coordinator as a wide bottom pane (30% of window height),
     # workers + gateway as a thin equal-width row above it.
@@ -124,9 +135,10 @@ distributed-space: build db-up
 
     tmux attach-session -t space-dist
 
-# kill the distributed-space tmux session (all 5 processes)
+# kill the distributed-space tmux session (all 5 processes) + the web host
 distributed-space-stop:
     tmux kill-session -t space-dist 2>/dev/null || true
+    tmux kill-session -t space-web 2>/dev/null || true
 
 # tail all distributed-space pane logs
 distributed-space-logs:

@@ -33,16 +33,30 @@ admin-build:
     cd {{root}} && just admin-build
 
 # build TS SDK first, then web client + admin SPA, then Go binary. SDK runs
-# first so the web client picks up any schema changes; the Go binary embeds
-# both bundles via go:embed so they must be built BEFORE the Go binary or
-# the binary ships with the previous build's bundles.
+# first so the web client picks up any schema changes. The admin SPA is
+# embedded into the Go binary via go:embed (so it must be built first); the
+# game web client is NOT embedded — it's built to web/dist and served
+# standalone (see `web-serve`).
 build: sdk build-web admin-build build-go
 
-# build and run the `all` preset. The binary serves only /ws + /auth on
-# :8080 (no web client — use `just dev` for the vite-served browser client).
-# Admin dashboard is on http://localhost:9101/admin/ (login: josh / localdev).
+# serve the built web client (web/dist) as a standalone static host on :5174.
+# The client reads web/dist/config.json at boot for the backend URL.
+web-serve port="5174":
+    cd {{root}}/examples/4node-basic/web/dist && bunx serve . --single --listen {{port}}
+
+# build + run: client on :5174 (bunx serve), server /ws+/auth on :8080,
+# admin on :9101/admin/ (login: josh / localdev). The client dials the
+# backend cross-origin, so the server allowlists :5174 via --cors-origins.
 run: build
-    cd {{root}} && ./bin/4node-basic '--postgres-url={{postgres_url}}'
+    #!/usr/bin/env bash
+    set -euo pipefail
+    # Point the standalone client's config.json at the backend on :8080 (the
+    # built default is same-origin, which would be wrong on :5174).
+    echo '{ "backendUrl": "http://localhost:8080" }' > "{{root}}/examples/4node-basic/web/dist/config.json"
+    tmux kill-session -t 4node-web 2>/dev/null || true
+    tmux new-session -d -s 4node-web -c "{{root}}/examples/4node-basic/web/dist" 'bunx serve . --single --listen 5174'
+    trap 'tmux kill-session -t 4node-web 2>/dev/null' INT TERM EXIT
+    cd {{root}} && ./bin/4node-basic '--postgres-url={{postgres_url}}' --cors-origins=http://localhost:5174 --dev-insecure-cookie
 
 # build Go + run with vite dev server (HMR on :5173, Go backend on :8080)
 # The Go side no longer serves web assets; vite is the sole client asset source.
@@ -70,7 +84,9 @@ echo-dev *ARGS: build-go
 # Tmux session `basic-dist` with coord + 2 nodes + gateway panes, each
 # with its own interactive console. Logs mirror to log/distributed-basic
 # via tmux pipe-pane (keeps the pane's TTY intact for readline). The
-# gateway serves only /ws + /auth on :8080 — no embedded web client.
+# gateway serves only /ws + /auth on :8080; the web client (web/dist) is
+# served standalone on :5174 by a pane in this session, and the gateway
+# allowlists that origin via --cors-origins so cross-origin auth works.
 #
 # Host IDs test-node-0 + test-node-3 are chosen because the fnv64a
 # rendezvous hash produces a 2-2 cell split for the 2x2 grid; generic
@@ -84,6 +100,9 @@ distributed: build
     logdir="{{root}}/log/distributed-basic"
     tmux kill-session -t basic-dist 2>/dev/null || true
     mkdir -p "$logdir"
+    # Point the standalone client's config.json at the gateway on :8080 (the
+    # built default is same-origin, which would be wrong on :5174).
+    echo '{ "backendUrl": "http://localhost:8080" }' > "{{root}}/examples/4node-basic/web/dist/config.json"
 
     # Each split-window (without -d) makes the new pane active, so the
     # following pipe-pane targets it without needing explicit indices
@@ -95,7 +114,7 @@ distributed: build
     tmux pipe-pane -t basic-dist -o "cat > $logdir/coordinator.log"
 
     tmux split-window -t basic-dist -c "{{root}}" \
-        "{{bin}} --mode=gateway,service --services=auth,chat --coordinator-addr={{control_addr}} --gateway-id={{gateway_id}} --port={{gateway_port}} '--postgres-url={{postgres_url}}' --dev-insecure-cookie"
+        "{{bin}} --mode=gateway,service --services=auth,chat --coordinator-addr={{control_addr}} --gateway-id={{gateway_id}} --port={{gateway_port}} '--postgres-url={{postgres_url}}' --cors-origins=http://localhost:5174 --dev-insecure-cookie"
     tmux pipe-pane -t basic-dist -o "cat > $logdir/gateway.log"
     tmux select-layout -t basic-dist tiled
 
@@ -107,6 +126,12 @@ distributed: build
     tmux split-window -t basic-dist -c "{{root}}" \
         "{{bin}} --mode=host --coordinator-addr={{control_addr}} --host-id={{host_b_id}} '--postgres-url={{postgres_url}}'"
     tmux pipe-pane -t basic-dist -o "cat > $logdir/host-b.log"
+    tmux select-layout -t basic-dist tiled
+
+    # Web client (web/dist) served standalone on :5174 — open it in a browser.
+    tmux split-window -t basic-dist -c "{{root}}/examples/4node-basic/web/dist" \
+        "bunx serve . --single --listen 5174"
+    tmux pipe-pane -t basic-dist -o "cat > $logdir/web.log"
     tmux select-layout -t basic-dist tiled
 
     tmux attach-session -t basic-dist

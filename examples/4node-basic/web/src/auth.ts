@@ -4,6 +4,8 @@
 // /auth/login (account already exists). On 401, /auth/me clears the
 // stale cookie server-side, so a bad cookie self-heals on next click.
 
+import { backendBase } from "./config.js";
+
 const DEV_PASSWORD = "4node-demo-password";
 
 interface MeResponse {
@@ -13,16 +15,16 @@ interface MeResponse {
 }
 
 async function postJSON(path: string, body: unknown): Promise<Response> {
-  return fetch(path, {
+  return fetch(`${backendBase()}${path}`, {
     method: "POST",
-    credentials: "same-origin",
+    credentials: "include",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
   });
 }
 
 async function authMe(): Promise<MeResponse | null> {
-  const res = await fetch("/auth/me", { credentials: "same-origin" });
+  const res = await fetch(`${backendBase()}/auth/me`, { credentials: "include" });
   if (res.status === 401) return null;
   if (!res.ok) throw new Error(`/auth/me: HTTP ${res.status}`);
   return (await res.json()) as MeResponse;

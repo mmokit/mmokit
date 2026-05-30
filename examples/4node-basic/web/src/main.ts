@@ -1,5 +1,6 @@
 import { connect, onShowGame } from "./network.js";
 import { loginAsName } from "./auth.js";
+import { loadRuntimeConfig } from "./config.js";
 import { setupInput } from "./input.js";
 import { startRenderLoop } from "./renderer.js";
 import { state } from "./state.js";
@@ -40,6 +41,7 @@ connectBtn.addEventListener("click", async () => {
   }
   status.textContent = "authenticating...";
   try {
+    await loadRuntimeConfig();
     const username = await loginAsName(name);
     status.textContent = "connecting...";
     connect(username);
