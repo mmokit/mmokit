@@ -2,6 +2,7 @@ import { Application, Container } from "pixi.js";
 import { TICK_INTERVAL } from "./constants";
 import { interpolateEntities } from "./interpolation";
 import { createInitialState } from "./state";
+import { loadRuntimeConfig } from "./config";
 import { setupInput, sendInput, tickChannelAim } from "./input";
 import { connect } from "./network";
 import { authLogout } from "./auth";
@@ -43,6 +44,7 @@ import { DungeonOverlay } from "./dungeon-overlay";
 import { devOverlay } from "./ui/dev-overlay";
 
 async function main() {
+  await loadRuntimeConfig();
   const state = createInitialState();
   if (import.meta.env.DEV) {
     (window as unknown as { __state: unknown }).__state = state;

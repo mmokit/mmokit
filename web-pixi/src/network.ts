@@ -28,6 +28,7 @@ import {
   EntityType,
 } from "../sdk/index.js";
 import { CELL_SIZE } from "./constants";
+import { backendWsUrl } from "./config";
 import { updateEntityFromServer } from "./interpolation";
 import { observeFrameStamps } from "./clockSync";
 import { devOverlay } from "./ui/dev-overlay";
@@ -163,13 +164,12 @@ function applyDeltaUpdate(state: GameState, update: DeltaWorldUpdate): void {
 }
 
 export function connect(state: GameState, callbacks: NetworkCallbacks): void {
-  const proto = window.location.protocol === "https:" ? "wss:" : "ws:";
   const statusEl = document.getElementById("status")!;
 
   let pingInterval: ReturnType<typeof setInterval> | null = null;
 
   const client = new SpaceClient({
-    url: `${proto}//${window.location.host}/ws`,
+    url: backendWsUrl(),
     onOpen: () => {
       state.connected = true;
       statusEl.textContent = "Connected - Authenticating...";

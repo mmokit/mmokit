@@ -2,6 +2,8 @@
 // pattern. The session cookie is HttpOnly and managed by the browser;
 // JS never sees the token.
 
+import { backendBase } from "./config";
+
 export interface MeResponse {
   userId: string;
   username: string;
@@ -14,9 +16,9 @@ export interface AuthError extends Error {
 }
 
 async function postJSON<T>(path: string, body: unknown): Promise<T> {
-  const res = await fetch(path, {
+  const res = await fetch(`${backendBase()}${path}`, {
     method: "POST",
-    credentials: "same-origin",
+    credentials: "include",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
   });
@@ -55,7 +57,7 @@ export function authLogout(): Promise<void> {
 }
 
 export async function authMe(): Promise<MeResponse | null> {
-  const res = await fetch("/auth/me", { credentials: "same-origin" });
+  const res = await fetch(`${backendBase()}/auth/me`, { credentials: "include" });
   if (res.status === 401) return null;
   if (!res.ok) throw await parseError(res);
   return (await res.json()) as MeResponse;
