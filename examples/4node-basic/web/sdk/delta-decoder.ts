@@ -22,7 +22,10 @@ function decodePlayerEntitySnapshot(snap: Uint8Array, initial: Uint8Array | null
   const radius = unVel(readInt16(snap, o), 500); o += 2;
   const width = unVel(readInt16(snap, o), 500); o += 2;
   const height = unVel(readInt16(snap, o), 500); o += 2;
-  const name = initial ? decodeLengthPrefixedStringU8(initial) : (existing?.name ?? "");
+  let initialOff = 0;
+  const name = initial && initialOff < initial.length ? decodeLengthPrefixedStringU8(initial.subarray(initialOff)) : (existing?.name ?? "");
+  if (initial && initialOff < initial.length) initialOff += 1 + initial[initialOff];
+  void initialOff;
   return { netID: 0, producedAtMs: 0, entityType: 1, worldX, worldY, velX, velY, radius, width, height, name };
 }
 
@@ -38,7 +41,10 @@ function decodeBotEntitySnapshot(snap: Uint8Array, initial: Uint8Array | null, e
   const radius = unVel(readInt16(snap, o), 500); o += 2;
   const width = unVel(readInt16(snap, o), 500); o += 2;
   const height = unVel(readInt16(snap, o), 500); o += 2;
-  const name = initial ? decodeLengthPrefixedStringU8(initial) : (existing?.name ?? "");
+  let initialOff = 0;
+  const name = initial && initialOff < initial.length ? decodeLengthPrefixedStringU8(initial.subarray(initialOff)) : (existing?.name ?? "");
+  if (initial && initialOff < initial.length) initialOff += 1 + initial[initialOff];
+  void initialOff;
   return { netID: 0, producedAtMs: 0, entityType: 2, worldX, worldY, velX, velY, radius, width, height, name };
 }
 

@@ -9,6 +9,15 @@
       ],
       "radius": 50,
       "density": 3
+    },
+    {
+      "id": "0_0_belt_2",
+      "world_pos": [
+        8019,
+        8161
+      ],
+      "radius": 80,
+      "density": 1
     }
   ]
 }
