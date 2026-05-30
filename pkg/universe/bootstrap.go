@@ -188,7 +188,10 @@ func (c *Process) startHTTPListener() {
 	}
 
 	addr := fmt.Sprintf(":%d", c.cfg.HTTPPort)
-	c.httpServer = &http.Server{Addr: addr, Handler: mux}
+	c.httpServer = &http.Server{Addr: addr, Handler: corsMiddleware(c.cfg.CORSOrigins, mux)}
+	if c.cfg.CORSOrigins != "" {
+		c.Log.Log(CatMeshCell, "http: CORS enabled for origins: %s", c.cfg.CORSOrigins)
+	}
 	c.Log.Log(CatMeshCell, "http: listening on %s (roles=%s)", addr, c.roles)
 
 	go func() {
