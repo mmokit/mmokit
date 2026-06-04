@@ -107,6 +107,30 @@ func (gl *GameLoop) RemoveSystemLive(name string) bool {
 	return false
 }
 
+// SystemByName returns the first system registered under name. MUST be called
+// on the loop goroutine.
+func (gl *GameLoop) SystemByName(name string) (System, bool) {
+	for i, n := range gl.systemNames {
+		if n == name {
+			return gl.systems[i], true
+		}
+	}
+	return nil, false
+}
+
+// ReplaceSystemLive swaps the system registered under name in place, preserving
+// its tick-order slot and timing/profiler indices (name and count unchanged).
+// Returns false if no such system exists. MUST be called on the loop goroutine.
+func (gl *GameLoop) ReplaceSystemLive(name string, s System) bool {
+	for i, n := range gl.systemNames {
+		if n == name {
+			gl.systems[i] = s
+			return true
+		}
+	}
+	return false
+}
+
 // Run starts the fixed-timestep game loop. Blocks until ctx is cancelled.
 func (gl *GameLoop) Run(ctx context.Context) {
 	tickInterval := time.Duration(1000/gl.engine.Config.TickRate) * time.Millisecond
