@@ -12,6 +12,7 @@ build-go:
 wasm-build:
     mkdir -p dist/wasmmods
     GOOS=wasip1 GOARCH=wasm go build -buildmode=c-shared -o dist/wasmmods/shieldregen.wasm ./examples/4node-basic/wasmmods/shieldregen/
+    GOOS=wasip1 GOARCH=wasm go build -buildmode=c-shared -o dist/wasmmods/pulse.wasm ./examples/4node-basic/wasmmods/pulse/
 
 # build TS SDK + web client + server into bin/server
 # space-sdk runs first so the web client picks up any schema changes.
