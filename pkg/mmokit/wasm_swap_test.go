@@ -23,6 +23,18 @@ func readShieldCurrent(stage *pkguniverse.Stage) float32 {
 	return out
 }
 
+func TestWasmSystem_ImplementsCloser(t *testing.T) {
+	wasmPath := buildWasmModule(t, "../../examples/4node-basic/wasmmods/shieldregen")
+	sys := mmokit.NewWasmSystem[gamecomp.Shield](wasmPath).Factory()
+	c, ok := sys.(interface{ Close() error })
+	if !ok {
+		t.Fatal("wasm system does not implement Close() error")
+	}
+	if err := c.Close(); err != nil {
+		t.Fatalf("Close: %v", err)
+	}
+}
+
 func TestWasmSwap_PreservesStateAndBehavior(t *testing.T) {
 	wasmPath := buildWasmModule(t, "../../examples/4node-basic/wasmmods/shieldregen")
 

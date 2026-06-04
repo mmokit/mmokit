@@ -94,6 +94,12 @@ func (s *wasmSystem[T]) Restore(state []byte) error {
 	return s.mod.Restore(context.Background(), state)
 }
 
+// Close releases the underlying wasm module instance (true unload). Call after
+// the system has been removed from / replaced on the loop.
+func (s *wasmSystem[T]) Close() error {
+	return s.mod.Close(context.Background())
+}
+
 func (s *wasmSystem[T]) Init() {
 	s.Stage().Engine().Log.RegisterCategories(catWasmSystem)
 }
