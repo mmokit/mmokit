@@ -8,11 +8,11 @@ import (
 	"io/fs"
 	"log"
 	stdnet "net"
-	"strconv"
-	"strings"
 	"net/http"
 	"os"
 	"os/signal"
+	"strconv"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"syscall"
@@ -24,7 +24,6 @@ import (
 	"google.golang.org/grpc/keepalive"
 
 	meshpb "github.com/zenion/mmoserver/gen/go/meshpb"
-	"github.com/zenion/mmoserver/pkg/services/auth"
 	"github.com/zenion/mmoserver/pkg/cmdsys"
 	"github.com/zenion/mmoserver/pkg/component"
 	"github.com/zenion/mmoserver/pkg/coords"
@@ -35,6 +34,7 @@ import (
 	"github.com/zenion/mmoserver/pkg/ops"
 	"github.com/zenion/mmoserver/pkg/persist/postgres"
 	"github.com/zenion/mmoserver/pkg/service"
+	"github.com/zenion/mmoserver/pkg/services/auth"
 	"github.com/zenion/mmoserver/pkg/spatial"
 )
 
@@ -42,12 +42,12 @@ const netIDRangeSize uint32 = 10_000_000
 
 // Config holds all Process configuration. Zero values use sensible defaults.
 type Config struct {
-	CellsX              uint32  // number of cells wide (0 = 1)
-	CellsY              uint32  // number of cells tall (0 = 1)
-	CellSize            float32 // world units per cell (0 = default 8192)
-	SpatialBucketSize   float32 // spatial hash bucket size (0 = CellSize/10)
-	TickRate            int     // game loop tick rate (0 = 20)
-	AoIRadius           float32 // area-of-interest radius (0 = 500)
+	CellsX            uint32  // number of cells wide (0 = 1)
+	CellsY            uint32  // number of cells tall (0 = 1)
+	CellSize          float32 // world units per cell (0 = default 8192)
+	SpatialBucketSize float32 // spatial hash bucket size (0 = CellSize/10)
+	TickRate          int     // game loop tick rate (0 = 20)
+	AoIRadius         float32 // area-of-interest radius (0 = 500)
 
 	// VelQuantScale is the max-velocity range for the standard engine
 	// bindings: int16 = (vel / VelQuantScale) * 32767. Larger values
@@ -61,11 +61,11 @@ type Config struct {
 	// Default 500 (max 500 units; precision ~0.015 = scale/32767).
 	SizeQuantScale float32
 
-	Headless bool
+	Headless            bool
 	DynamicPartitioning *PartitionConfig // nil = disabled (default)
 	ConnManager         *net.ConnManager
 	Logger              *logger.Logger
-	LogCategories       string                             // comma-separated categories/groups to enable (overrides default enabled list)
+	LogCategories       string // comma-separated categories/groups to enable (overrides default enabled list)
 
 	// DevInsecureCookie disables the Secure flag on the auth session
 	// cookie. Default false (production-safe). Flip via the
@@ -429,8 +429,8 @@ type Process struct {
 	// hosts via Heartbeat metrics. Keyed by cellID. Used by the admin
 	// dashboard's LocalClusterView when the coordinator process owns no
 	// cells locally (distributed mode). Empty in single-process all-in-one.
-	remoteCellMetrics      map[MeshCellID]remoteMetricsEntry
-	remoteCellMetricsMu    sync.RWMutex
+	remoteCellMetrics   map[MeshCellID]remoteMetricsEntry
+	remoteCellMetricsMu sync.RWMutex
 
 	ConnMgr *net.ConnManager
 	Log     *logger.Logger
@@ -441,10 +441,10 @@ type Process struct {
 	// to coord.Control.hostRegistry, then the raw fields unexport.
 	Control *ControlPlane
 
-	console      *engine.Console // nil if headless
-	cfg          Config
-	netIDAlloc   *NetIDAllocator
-	partState    *partitionState // nil if dynamic partitioning disabled
+	console    *engine.Console // nil if headless
+	cfg        Config
+	netIDAlloc *NetIDAllocator
+	partState  *partitionState // nil if dynamic partitioning disabled
 
 	// protocol is the schema dumper synthesized by mmokit.New from
 	// cfg.Name. Typed as any so pkg/universe stays import-free of
@@ -514,8 +514,8 @@ type Process struct {
 	onPlayerJoin  []func(*engine.PlayerSession, *Stage)
 	onPlayerLeave []func(*engine.PlayerSession, *Stage)
 
-	mu            sync.RWMutex
-	players       map[string]*PlayerLocation // username -> location (active + disconnected)
+	mu      sync.RWMutex
+	players map[string]*PlayerLocation // username -> location (active + disconnected)
 	// activeUsers indexes the same logical record by canonical user_id from
 	// auth.users. The auth-service path stamps userID in the gateway's
 	// authState; cell-side callers only have username, so both indexes are
@@ -1249,6 +1249,14 @@ func (c *Process) RegisterCommand(cmd cmdsys.Command) error {
 // mmokit facade (RegisterAuthService) and tests that need to inspect or
 // adjust knobs after construction.
 func (c *Process) Config() *Config { return &c.cfg }
+
+// HostIDForCell returns the id of the host owning cell, or "" if not found.
+// Exported wrapper around the internal locking helper so the mmokit facade
+// (which can't take c.mu / host.mu) can resolve a cell's owning host for
+// --node filtering in fan-out verbs.
+func (c *Process) HostIDForCell(cell *Cell) string {
+	return localHostIDFor(c, cell)
+}
 
 // AppendExtraMigrations adds an additional migration filesystem to
 // Config.ExtraMigrations. Called by service-registration helpers (e.g.
@@ -1998,18 +2006,18 @@ func (c *Process) buildStandaloneGateway() {
 	hn.SetCoord(c)
 
 	c.gateway = &Gateway{
-		id:           gwID,
-		connMgr:      c.ConnMgr,
-		log:          c.Log,
-		coord:        nil, // standalone: no direct coordinator reference
-		process:      c,   // local process backref — always set, used for cmdsys dispatch + serviceRouting
-		cfg:          &c.cfg,
-		sessions:     make(map[uint32]*localSession),
-		authStates:   make(map[uint32]connAuthState),
-		topology:     newCachedTopology(nil), // populated by PeerList broadcasts
-		hostNetwork:  hn,
-		spawnOrch:    newSpawnOrchestrator(),
-		tickRate:     uint32(cfg.TickRate),
+		id:          gwID,
+		connMgr:     c.ConnMgr,
+		log:         c.Log,
+		coord:       nil, // standalone: no direct coordinator reference
+		process:     c,   // local process backref — always set, used for cmdsys dispatch + serviceRouting
+		cfg:         &c.cfg,
+		sessions:    make(map[uint32]*localSession),
+		authStates:  make(map[uint32]connAuthState),
+		topology:    newCachedTopology(nil), // populated by PeerList broadcasts
+		hostNetwork: hn,
+		spawnOrch:   newSpawnOrchestrator(),
+		tickRate:    uint32(cfg.TickRate),
 		// wsAddr: TODO — plumb via Config.GatewayWSAddr when flag lands
 	}
 	c.gateway.sessionRoutes = c.sessionRoutes
@@ -2351,7 +2359,9 @@ func (c *Process) createNode(cell CellID, spatialBucketSize float32, owningHost 
 	// reflected.
 	eng.Players.SetSessionCallbacks(
 		func(username string) { c.notifySessionActive(username, c.HostForCellID(node.MeshID), node.MeshID) },
-		func(username string) { c.notifySessionDisconnected(username, c.HostForCellID(node.MeshID), node.MeshID) },
+		func(username string) {
+			c.notifySessionDisconnected(username, c.HostForCellID(node.MeshID), node.MeshID)
+		},
 		func(username string) { c.notifySessionRemoved(username) },
 	)
 
@@ -2699,7 +2709,6 @@ func (c *Process) startConsole(ctx context.Context) {
 
 	c.console.Run(ctx)
 }
-
 
 // cellToHostResolver returns a closure that maps a cell ID string to its
 // owning host ID. Used by newBridgeForCell / grpcBridge to route cross-host dispatch.
@@ -3285,11 +3294,11 @@ func (c *Process) notifyPlayerMigrated(gatewayID string, connID uint32, srcHost,
 		CoordEpoch: c.coordEpoch,
 		Msg: &meshpb.CoordMessage_UpstreamSwitch{
 			UpstreamSwitch: &meshpb.UpstreamSwitch{
-				GatewayId:  key.GatewayID,
-				ConnId:     connID,
-				NewHostId:  destHost,
-				NewCellId:  string(destCellID),
-				NewEpoch:   newEpoch,
+				GatewayId: key.GatewayID,
+				ConnId:    connID,
+				NewHostId: destHost,
+				NewCellId: string(destCellID),
+				NewEpoch:  newEpoch,
 			},
 		},
 	}
@@ -3320,11 +3329,11 @@ func (c *Process) dispatchUpstreamSwitch(key SessionKey, destHost string, destCe
 		CoordEpoch: c.coordEpoch,
 		Msg: &meshpb.CoordMessage_UpstreamSwitch{
 			UpstreamSwitch: &meshpb.UpstreamSwitch{
-				GatewayId:  key.GatewayID,
-				ConnId:     key.ConnID,
-				NewHostId:  destHost,
-				NewCellId:  string(destCellID),
-				NewEpoch:   newEpoch,
+				GatewayId: key.GatewayID,
+				ConnId:    key.ConnID,
+				NewHostId: destHost,
+				NewCellId: string(destCellID),
+				NewEpoch:  newEpoch,
 			},
 		},
 	}
@@ -3825,4 +3834,3 @@ func (c *Process) HarnessLocalHostCells() []*Cell {
 	lh.mu.RUnlock()
 	return out
 }
-
