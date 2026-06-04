@@ -810,6 +810,9 @@ func New(cfg Config) *Process {
 	}
 	proc := universe.New(cfg)
 	proc.SetProtocol(NewProtocol(cfg.Name))
+	if err := registerWasmVerbs(proc); err != nil {
+		panic(fmt.Sprintf("mmokit.New: register wasm verbs: %v", err))
+	}
 	return proc
 }
 

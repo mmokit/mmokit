@@ -4,6 +4,7 @@ import (
 	"context"
 	"log"
 
+	gamecomp "github.com/zenion/mmoserver/internal/component"
 	"github.com/zenion/mmoserver/pkg/mmokit"
 
 	"github.com/zenion/mmoserver/examples/4node-basic/services/echo"
@@ -28,9 +29,6 @@ func main() {
 	process.OnConsoleReady(func(p *mmokit.Process, console *mmokit.Console) {
 		if err := registerBotCommands(p, console.Registry()); err != nil {
 			log.Printf("4node-basic: failed to register bot commands: %v", err)
-		}
-		if err := registerWasmCommands(p, console.Registry()); err != nil {
-			log.Printf("4node-basic: failed to register wasm commands: %v", err)
 		}
 	})
 
@@ -84,6 +82,11 @@ func main() {
 	process.AddSystem(mmokit.NewDebugBroadcaster())
 	process.AddSystem(mmokit.NewSystem(&BotSystem{}))
 	process.AddSystem(mmokit.NewNetworkSystem())
+
+	// Hot-swappable wasm game systems — boot into every cell on every node and
+	// are runtime-swappable by name via `wasm load/unload/swap <name>`.
+	mmokit.AddWasmSystem[gamecomp.Shield](process, "dist/wasmmods/shieldregen.wasm")
+	mmokit.AddWasmSystem[mmokit.Collider](process, "dist/wasmmods/pulse.wasm")
 
 	log.Printf("4node-basic: grid %dx%d cells, cell size %.0f, AoI %.0f", CellsX, CellsY, CellSize, AoIRadius)
 

@@ -21,6 +21,7 @@ sdk:
 
 # build the Go binary only (skip web)
 build-go:
+    cd {{root}} && just wasm-build
     cd {{root}} && go build -o bin/4node-basic ./examples/4node-basic
 
 # build the web client (bun install + vite build → web/dist)
