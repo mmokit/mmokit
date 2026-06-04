@@ -59,8 +59,16 @@ type tuneGetResult struct {
 	Value  string
 }
 
-// publishTunables is replaced by the real SSE publisher in Task E1.
-func publishTunables(p *universe.Process, system string) {}
+// publishTunables pushes a system's current tunable rows on the admin "tunables"
+// SSE topic so open /tunables dashboards update live when any operator changes a
+// value. No-op when no admin subscribers are listening (PublishAdminTopic guards
+// that). Called after tune.set / tune.reset mutate the registry.
+func publishTunables(p *universe.Process, system string) {
+	PublishAdminTopic(p, "tunables", map[string]any{
+		"system": system,
+		"rows":   rowsFor(tuneRegistryFor(p), system),
+	})
+}
 
 // registerTuneVerbs registers tune.list/get/set/reset on the process registry.
 // All RouteAllHosts: fan out to every host, each iterating its local cells.
