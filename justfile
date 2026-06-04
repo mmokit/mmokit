@@ -8,6 +8,11 @@ build-web:
 build-go:
     go build -o bin/server ./cmd/server
 
+# build all hot-swappable wasm system modules into dist/wasmmods/
+wasm-build:
+    mkdir -p dist/wasmmods
+    GOOS=wasip1 GOARCH=wasm go build -buildmode=c-shared -o dist/wasmmods/shieldregen.wasm ./examples/4node-basic/wasmmods/shieldregen/
+
 # build TS SDK + web client + server into bin/server
 # space-sdk runs first so the web client picks up any schema changes.
 build: space-sdk build-web admin-build build-go
