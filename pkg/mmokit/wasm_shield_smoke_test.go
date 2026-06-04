@@ -12,7 +12,7 @@ import (
 // expected ABI version and column declaration. Guards against the
 // init()-vs-main() and -buildmode=c-shared pitfalls.
 func TestShieldModule_LoadsAndDeclaresQuery(t *testing.T) {
-	wasmPath := buildWasmModule(t, "../../examples/4node-basic/wasmmods/shieldregen")
+	wasmPath := buildWasmModule(t, "internal/testmods/shieldregen")
 
 	ctx := context.Background()
 	rt := wasmhost.New(ctx)

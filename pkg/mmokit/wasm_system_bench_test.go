@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"testing"
 
-	gamecomp "github.com/zenion/mmoserver/internal/component"
 	"github.com/zenion/mmoserver/pkg/mmokit"
+	"github.com/zenion/mmoserver/pkg/mmokit/internal/testmods/podcomp"
 )
 
 // benchShield runs b.N ticks of either the native ShieldRegen loop or the
@@ -15,20 +15,20 @@ import (
 func benchShield(b *testing.B, n int, useWasm bool) {
 	stage, eng := newTestStage(b)
 	for i := 0; i < n; i++ {
-		stage.Spawn(mmokit.Position{}, gamecomp.Shield{Current: 0, Max: 1e30, RegenRate: 1})
+		stage.Spawn(mmokit.Position{}, podcomp.Shield{Current: 0, Max: 1e30, RegenRate: 1})
 	}
 	const dt = float32(0.05)
 
 	var tick func()
 	if useWasm {
-		wasmPath := buildWasmModule(b, "../../examples/4node-basic/wasmmods/shieldregen")
-		sys := mmokit.NewWasmSystem[gamecomp.Shield](wasmPath).Factory()
+		wasmPath := buildWasmModule(b, "internal/testmods/shieldregen")
+		sys := mmokit.NewWasmSystem[podcomp.Shield](wasmPath).Factory()
 		mmokit.WireSystem(sys, stage.ECSWorld(), eng, stage)
 		tick = func() { sys.Update(dt) }
 	} else {
 		// Native ShieldRegen, identical math to internal/game/system_shieldregen.go.
 		tick = func() {
-			mmokit.ForEach1(stage, func(_ mmokit.Entity, sh *gamecomp.Shield) {
+			mmokit.ForEach1(stage, func(_ mmokit.Entity, sh *podcomp.Shield) {
 				if sh.DamageCooldown > 0 {
 					sh.DamageCooldown -= dt
 					return

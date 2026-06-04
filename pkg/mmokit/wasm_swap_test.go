@@ -4,8 +4,8 @@ import (
 	"encoding/binary"
 	"testing"
 
-	gamecomp "github.com/zenion/mmoserver/internal/component"
 	"github.com/zenion/mmoserver/pkg/mmokit"
+	"github.com/zenion/mmoserver/pkg/mmokit/internal/testmods/podcomp"
 	pkguniverse "github.com/zenion/mmoserver/pkg/universe"
 )
 
@@ -19,13 +19,13 @@ func decodeTicks(b []byte) uint64 {
 // readShieldCurrent returns the Current of the single spawned Shield entity.
 func readShieldCurrent(stage *pkguniverse.Stage) float32 {
 	var out float32
-	mmokit.ForEach1(stage, func(_ mmokit.Entity, sh *gamecomp.Shield) { out = sh.Current })
+	mmokit.ForEach1(stage, func(_ mmokit.Entity, sh *podcomp.Shield) { out = sh.Current })
 	return out
 }
 
 func TestWasmSystem_ImplementsCloser(t *testing.T) {
-	wasmPath := buildWasmModule(t, "../../examples/4node-basic/wasmmods/shieldregen")
-	sys := mmokit.NewWasmSystem[gamecomp.Shield](wasmPath).Factory()
+	wasmPath := buildWasmModule(t, "internal/testmods/shieldregen")
+	sys := mmokit.NewWasmSystem[podcomp.Shield](wasmPath).Factory()
 	c, ok := sys.(interface{ Close() error })
 	if !ok {
 		t.Fatal("wasm system does not implement Close() error")
@@ -36,12 +36,12 @@ func TestWasmSystem_ImplementsCloser(t *testing.T) {
 }
 
 func TestWasmSwap_PreservesStateAndBehavior(t *testing.T) {
-	wasmPath := buildWasmModule(t, "../../examples/4node-basic/wasmmods/shieldregen")
+	wasmPath := buildWasmModule(t, "internal/testmods/shieldregen")
 
 	stage, eng := newTestStage(t)
-	stage.Spawn(mmokit.Position{}, gamecomp.Shield{Current: 50, Max: 100, RegenRate: 10})
+	stage.Spawn(mmokit.Position{}, podcomp.Shield{Current: 50, Max: 100, RegenRate: 10})
 
-	def := mmokit.NewWasmSystem[gamecomp.Shield](wasmPath)
+	def := mmokit.NewWasmSystem[podcomp.Shield](wasmPath)
 
 	// v1: tick twice. Each tick regenerates RegenRate*dt = 10*0.5 = 5.
 	sys1 := def.Factory()

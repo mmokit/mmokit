@@ -16,7 +16,7 @@ import (
 	"github.com/zenion/mmoserver/pkg/spatial"
 	"github.com/zenion/mmoserver/pkg/universe"
 
-	gamecomp "github.com/zenion/mmoserver/internal/component"
+	"github.com/zenion/mmoserver/pkg/mmokit/internal/testmods/podcomp"
 )
 
 // buildShieldWasmForTest compiles the shieldregen example module to a wasip1
@@ -25,7 +25,7 @@ func buildShieldWasmForTest(t *testing.T) string {
 	t.Helper()
 	out := filepath.Join(t.TempDir(), "shieldregen.wasm")
 	cmd := exec.Command("go", "build", "-buildmode=c-shared", "-o", out, ".")
-	cmd.Dir = "../../examples/4node-basic/wasmmods/shieldregen"
+	cmd.Dir = "internal/testmods/shieldregen"
 	cmd.Env = append(os.Environ(), "GOOS=wasip1", "GOARCH=wasm")
 	if b, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("build shield wasm: %v\n%s", err, b)
@@ -80,7 +80,7 @@ func TestWasmVerbs_LoadListUnload(t *testing.T) {
 	// Register the wasm system in the per-process registry. The bare proc is
 	// never Built, so AddWasmSystem records the entry without auto-loading it
 	// into any cell — load is driven entirely by the verb below.
-	AddWasmSystem[gamecomp.Shield](proc, shieldPath)
+	AddWasmSystem[podcomp.Shield](proc, shieldPath)
 	if err := registerWasmVerbs(proc); err != nil {
 		t.Fatalf("registerWasmVerbs: %v", err)
 	}
@@ -158,7 +158,7 @@ func TestWasmVerbs_Swap_PreservesState(t *testing.T) {
 	proc := universe.New(universe.Config{Headless: true, Mode: "all", CellsX: 1, CellsY: 1})
 	proc.Cells = map[universe.MeshCellID]*universe.Cell{"cell_0_0": c0}
 
-	AddWasmSystem[gamecomp.Shield](proc, shieldPath)
+	AddWasmSystem[podcomp.Shield](proc, shieldPath)
 	if err := registerWasmVerbs(proc); err != nil {
 		t.Fatalf("registerWasmVerbs: %v", err)
 	}
@@ -179,7 +179,7 @@ func TestWasmVerbs_Swap_PreservesState(t *testing.T) {
 	// tick. The adapter skips the module call when zero entities match T, which
 	// would otherwise freeze the module's internal tick counter at 0.
 	if err := c0.Engine.RunOnLoop(context.Background(), func() error {
-		c0.Stage.Spawn(Position{}, gamecomp.Shield{Current: 0, Max: 1e9, RegenRate: 1})
+		c0.Stage.Spawn(Position{}, podcomp.Shield{Current: 0, Max: 1e9, RegenRate: 1})
 		return nil
 	}); err != nil {
 		t.Fatalf("spawn shield: %v", err)

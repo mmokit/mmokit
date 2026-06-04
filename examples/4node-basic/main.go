@@ -4,7 +4,6 @@ import (
 	"context"
 	"log"
 
-	gamecomp "github.com/zenion/mmoserver/internal/component"
 	"github.com/zenion/mmoserver/pkg/mmokit"
 
 	"github.com/zenion/mmoserver/examples/4node-basic/services/echo"
@@ -85,7 +84,6 @@ func main() {
 
 	// Hot-swappable wasm game systems — boot into every cell on every node and
 	// are runtime-swappable by name via `wasm load/unload/swap <name>`.
-	mmokit.AddWasmSystem[gamecomp.Shield](process, "dist/wasmmods/shieldregen.wasm")
 	mmokit.AddWasmSystem[mmokit.Collider](process, "dist/wasmmods/pulse.wasm")
 
 	log.Printf("4node-basic: grid %dx%d cells, cell size %.0f, AoI %.0f", CellsX, CellsY, CellSize, AoIRadius)

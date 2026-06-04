@@ -3,20 +3,19 @@
 package main
 
 import (
-	gamecomp "github.com/zenion/mmoserver/internal/component"
+	"github.com/zenion/mmoserver/pkg/mmokit/internal/testmods/podcomp"
 	"github.com/zenion/mmoserver/pkg/wasmsys"
 )
 
-// shieldRegen mirrors internal/game/system_shieldregen.go, but as a
-// hot-swappable module. ticks is internal state that must survive a swap.
+const shieldTypeID uint32 = 1
+
 type shieldRegen struct{ ticks uint64 }
 
 func (s *shieldRegen) Query() wasmsys.Query {
-	return wasmsys.ReadWrite[gamecomp.Shield](gamecomp.ShieldTypeID)
+	return wasmsys.ReadWrite[podcomp.Shield](shieldTypeID)
 }
-
 func (s *shieldRegen) Update(ctx *wasmsys.Ctx, dt float32) {
-	shields := wasmsys.Column[gamecomp.Shield](ctx)
+	shields := wasmsys.Column[podcomp.Shield](ctx)
 	for i := range shields {
 		sh := &shields[i]
 		if sh.DamageCooldown > 0 {
@@ -29,7 +28,6 @@ func (s *shieldRegen) Update(ctx *wasmsys.Ctx, dt float32) {
 	}
 	s.ticks++
 }
-
 func (s *shieldRegen) Snapshot() []byte {
 	b := make([]byte, 8)
 	for i := 0; i < 8; i++ {
@@ -46,6 +44,5 @@ func (s *shieldRegen) Restore(b []byte) {
 		s.ticks = v
 	}
 }
-
 func init() { wasmsys.Register(&shieldRegen{}) }
 func main() {}
