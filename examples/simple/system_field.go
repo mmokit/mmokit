@@ -18,6 +18,7 @@ type WaveStateMsg struct {
 // system — so the positions broadcast here are already this tick's.
 type FieldSystem struct {
 	mmokit.SystemBase
+	Baseline float32 `tune:"default=0,min=-200,max=200,step=10"`
 	entities mmokit.Query[struct {
 		Pos *mmokit.Position
 	}]
@@ -37,7 +38,7 @@ func (s *FieldSystem) Init() {
 func (s *FieldSystem) Update(dt float32) {
 	msg := WaveStateMsg{Positions: make([]WavePos, 0, 64)}
 	for _, e := range s.entities.Iter {
-		msg.Positions = append(msg.Positions, WavePos{X: e.Pos.X, Y: e.Pos.Y})
+		msg.Positions = append(msg.Positions, WavePos{X: e.Pos.X, Y: e.Pos.Y + s.Baseline})
 	}
 	mmokit.SendEventToAll(s.Engine(), &msg)
 }

@@ -5,14 +5,12 @@
 // dots and broadcasts their positions — the *movement* lives here, in a module
 // you can rebuild and hot-swap into a running server.
 //
-// The phase accumulator is preserved across a swap (snapshot/restore), so the
-// motion morphs smoothly instead of jumping when you swap.
-//
-// EDIT the constants or the waveY formula below, then:
-//
-//	just wasm-build           # (from examples/simple/)
-//	# in the server console:
-//	wasm swap wave            # the entire field's motion changes live
+// Amplitude/freqHz/spread are now runtime tunables: edit the defaults here OR
+// change them live with `tune set wave amplitude 420` / the admin /tunables
+// sliders, no rebuild needed. `wasm swap wave` still hot-reloads code changes
+// (e.g. a new waveY formula), preserving the live tunable values + the wave
+// phase accumulator (snapshot/restore) so the motion morphs smoothly instead of
+// jumping.
 package main
 
 import (
@@ -22,34 +20,26 @@ import (
 	"github.com/zenion/mmoserver/pkg/wasmsys"
 )
 
-// ─── tunables — edit, `just wasm-build`, then `wasm swap wave` ──────────────────
-const (
-	amplitude float32 = 220   // peak height (world units) — try 60 (calm) or 420 (wild)
-	freqHz    float32 = 0.6   // temporal frequency — try 0.2 (slow) or 2.5 (frantic)
-	spread    float32 = 0.012 // radians per pixel of X (wavelength) — try 0.04 for tight ripples
-)
-
-// waveY is the SHAPE of the field. Default is a traveling sine. Swap the body
-// for one of these and `wasm swap wave` to see the motion transform live:
-//
-//	bounce:   return amplitude * float32(math.Abs(math.Sin(theta)))           // hopping
-//	triangle: return amplitude * float32(2/math.Pi*math.Asin(math.Sin(theta))) // zig-zag
-//	beat:     return amplitude * 0.5 * float32(math.Sin(theta)+math.Sin(theta*1.7)) // two-tone interference
-//	pulse:    if math.Sin(theta) > 0 { return amplitude }; return -amplitude  // square wave
-func waveY(theta float64) float32 {
-	return amplitude * float32(math.Sin(theta))
+// wave is the hot-swappable game logic computing the field's vertical motion.
+// Amplitude/FreqHz/Spread are runtime tunables (slide them live); phase is
+// internal state preserved across a hot-swap via Snapshot/Restore.
+type wave struct {
+	Amplitude float32 `tune:"default=220,min=60,max=420,step=10"`
+	FreqHz    float32 `tune:"default=0.6,min=0.1,max=3,step=0.1"`
+	Spread    float32 `tune:"default=0.012,min=0,max=0.05,step=0.001"`
+	phase     float32
 }
-
-type wave struct{ phase float32 }
 
 func (w *wave) Query() wasmsys.Query { return wasmsys.ReadWrite[comp.Position]() }
 
+// Swap the math.Sin formula below + `wasm swap wave` to morph the motion live
+// (e.g. math.Abs(math.Sin) → bounce, square wave → pulse).
 func (w *wave) Update(ctx *wasmsys.Ctx, dt float32) {
 	w.phase += dt
-	t := 2 * math.Pi * float64(freqHz) * float64(w.phase)
+	t := 2 * math.Pi * float64(w.FreqHz) * float64(w.phase)
 	pos := wasmsys.Column[comp.Position](ctx)
 	for i := range pos {
-		pos[i].Y = waveY(t + float64(pos[i].X)*float64(spread))
+		pos[i].Y = w.Amplitude * float32(math.Sin(t+float64(pos[i].X)*float64(w.Spread)))
 	}
 }
 
@@ -58,4 +48,4 @@ func (w *wave) Snapshot() []byte { return wasmsys.MarshalState(w.phase) }
 func (w *wave) Restore(b []byte) { wasmsys.UnmarshalState(b, &w.phase) }
 
 func init() { wasmsys.Register(&wave{}) }
-func main() {}
+func main()  {}
