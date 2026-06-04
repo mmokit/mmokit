@@ -6,6 +6,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/zenion/mmoserver/pkg/cmdsys"
 	"github.com/zenion/mmoserver/pkg/coords"
@@ -69,11 +70,12 @@ func newVerbCell(t *testing.T, id string) *universe.Cell {
 func TestWasmVerbs_LoadListUnload(t *testing.T) {
 	shieldPath := buildShieldWasmForTest(t)
 
-	c0 := newVerbCell(t, "0_0")
+	c0 := newVerbCell(t, "cell_0_0")
 	// universe.New gives a fully-wired cmdsys.Registry (no Build required);
 	// we then inject our hand-built cell so the verbs have something to act on.
+	// Use the canonical mesh key ("cell_0_0") so --cell filters resolve as in prod.
 	proc := universe.New(universe.Config{Headless: true, Mode: "all", CellsX: 1, CellsY: 1})
-	proc.Cells = map[universe.MeshCellID]*universe.Cell{"0_0": c0}
+	proc.Cells = map[universe.MeshCellID]*universe.Cell{"cell_0_0": c0}
 
 	// Register the wasm system in the per-process registry. The bare proc is
 	// never Built, so AddWasmSystem records the entry without auto-loading it
@@ -140,5 +142,88 @@ func TestWasmVerbs_LoadListUnload(t *testing.T) {
 	// unload again → not-loaded.
 	if got := call("wasm.unload", wasmNameArgs{Name: "shieldregen"}); got.Rows[0].Status != "not-loaded" {
 		t.Fatalf("second unload rows=%+v", got.Rows)
+	}
+}
+
+// TestWasmVerbs_Swap_PreservesState covers the swap handler's snapshot → restore
+// → ReplaceSystemLive → Close orchestration: after a swap, the freshly-built
+// replacement instance must continue from the outgoing instance's internal tick
+// counter (a broken restore would reset it to ~0). The loop runs live, so we
+// poll wasm.list (which reads the counter safely on the loop goroutine) until it
+// passes a threshold, then assert continuity across the swap.
+func TestWasmVerbs_Swap_PreservesState(t *testing.T) {
+	shieldPath := buildShieldWasmForTest(t)
+
+	c0 := newVerbCell(t, "cell_0_0")
+	proc := universe.New(universe.Config{Headless: true, Mode: "all", CellsX: 1, CellsY: 1})
+	proc.Cells = map[universe.MeshCellID]*universe.Cell{"cell_0_0": c0}
+
+	AddWasmSystem[gamecomp.Shield](proc, shieldPath)
+	if err := registerWasmVerbs(proc); err != nil {
+		t.Fatalf("registerWasmVerbs: %v", err)
+	}
+	reg := proc.CmdRegistry()
+	call := func(verb string, args any) wasmOpResult {
+		cmd, ok := reg.Lookup(verb)
+		if !ok {
+			t.Fatalf("verb %q not registered", verb)
+		}
+		res, err := cmd.Handler(context.Background(), &cmdsys.Env{}, args)
+		if err != nil {
+			t.Fatalf("%s: %v", verb, err)
+		}
+		return res.(wasmOpResult)
+	}
+
+	// Spawn a Shield entity (on the loop goroutine) so the system has work each
+	// tick. The adapter skips the module call when zero entities match T, which
+	// would otherwise freeze the module's internal tick counter at 0.
+	if err := c0.Engine.RunOnLoop(context.Background(), func() error {
+		c0.Stage.Spawn(Position{}, gamecomp.Shield{Current: 0, Max: 1e9, RegenRate: 1})
+		return nil
+	}); err != nil {
+		t.Fatalf("spawn shield: %v", err)
+	}
+
+	if got := call("wasm.load", wasmNameArgs{Name: "shieldregen"}); got.Rows[0].Status != "loaded" {
+		t.Fatalf("load rows=%+v", got.Rows)
+	}
+
+	// Wait until the live module's tick counter advances comfortably past a
+	// threshold so a reset-to-zero after swap is unambiguous.
+	const threshold = 10
+	deadline := time.Now().Add(5 * time.Second)
+	var ticks uint64
+	for {
+		rows := call("wasm.list", wasmListArgs{}).Rows
+		if len(rows) == 1 {
+			ticks = rows[0].Ticks
+		}
+		if ticks >= threshold {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("module tick counter only reached %d before deadline (loop not ticking?)", ticks)
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+
+	// Swap. The returned Ticks is the snapshot captured at swap time (on-loop),
+	// so it must be >= threshold.
+	swapRow := call("wasm.swap", wasmNameArgs{Name: "shieldregen"}).Rows[0]
+	if swapRow.Status != "swapped" {
+		t.Fatalf("swap status=%q want swapped", swapRow.Status)
+	}
+	if swapRow.Ticks < threshold {
+		t.Fatalf("swap snapshot ticks=%d < threshold %d", swapRow.Ticks, threshold)
+	}
+
+	// The replacement must continue from the preserved counter, never reset.
+	after := call("wasm.list", wasmListArgs{}).Rows[0].Ticks
+	if after < swapRow.Ticks {
+		t.Fatalf("post-swap ticks=%d < swap ticks=%d — state NOT preserved across swap", after, swapRow.Ticks)
+	}
+	if _, ok := c0.Loop.SystemByName("shieldregen"); !ok {
+		t.Fatal("system missing from loop after swap")
 	}
 }
