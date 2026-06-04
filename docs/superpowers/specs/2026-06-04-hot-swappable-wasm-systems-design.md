@@ -304,6 +304,11 @@ Cluster-wide atomic add/remove/swap via the commit-plan / `ClusterClock` orchest
 - Standard-Go-wasip1 vs. TinyGo for module builds — start with standard Go (full language);
   evaluate TinyGo later purely for module size / instantiation latency.
 - Module packaging/distribution (where `.wasm` artifacts live, how a deploy delivers them).
+  Phase 0 builds modules only via the explicit `just wasm-build` recipe (into `dist/wasmmods/`);
+  it is intentionally NOT wired into the top-level `just build`. The `wasm.load` console
+  command stats the path and returns a "run `just wasm-build` first" error if the artifact is
+  absent, so a server that never built the module degrades gracefully. A future phase decides
+  whether module builds join the main build graph and how artifacts are delivered to a cluster.
 
 ## Phase 0 benchmark results (measured)
 

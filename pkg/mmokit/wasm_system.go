@@ -26,6 +26,14 @@ var wasmRuntime = wasmhost.New(context.Background())
 //
 // The module bytes are read and ABI-checked once at registration; each cell
 // instantiates its own module with independent linear memory/state.
+//
+// Phase 0 caveat: T (not the module's declared typeID) drives the gather/scatter
+// element size, so the CALLER is responsible for matching T to the component the
+// module declares in its Query(). A mismatched T (e.g. NewWasmSystem[WrongType]
+// against a module declaring a different column) is NOT caught here and would
+// silently corrupt memory via a misaligned scatter. Phase 1's component-layout
+// hash in the ABI version closes this gap; until then, keep T and the module's
+// component in lockstep.
 func NewWasmSystem[T any](modulePath string) SystemDef {
 	wasm, err := os.ReadFile(modulePath)
 	if err != nil {
