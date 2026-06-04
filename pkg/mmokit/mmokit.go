@@ -154,20 +154,8 @@ type MetricsTimingStats = metrics.TimingStats
 // MetricsTickStats contains per-system tick timing breakdown for detailed profiling.
 type MetricsTickStats = metrics.TickStats
 
-// Configurable provides runtime read/write access to a configuration struct's fields.
-// Used by the built-in "config" command group for generic get/set/list.
-type Configurable = engine.Configurable
-
-// ReflectConfig wraps any struct pointer as a Configurable using reflection,
-// enabling runtime get/set of exported fields by name.
-type ReflectConfig = engine.ReflectConfig
-
 // Table builds column-aligned text output for the console (headers + rows).
 type Table = engine.Table
-
-// BuiltinOpts configures which built-in console command groups to register.
-// Each non-nil field enables the corresponding commands (config, entity, node, etc.).
-type BuiltinOpts = engine.BuiltinOpts
 
 // PlayerManager owns player sessions and enforces lifecycle state transitions
 // (pending -> active -> dead, transferring, disconnected). Supports custom states,
@@ -831,9 +819,6 @@ var (
 
 	// NewPlayerManager creates a PlayerManager with built-in states and transitions.
 	NewPlayerManager = engine.NewPlayerManager
-
-	// NewReflectConfig wraps a struct pointer as a Configurable using reflection.
-	NewReflectConfig = engine.NewReflectConfig
 
 	// NewTable creates a Table with the given column headers for console output.
 	NewTable = engine.NewTable

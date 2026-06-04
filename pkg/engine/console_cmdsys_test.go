@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/zenion/mmoserver/pkg/cmdsys"
-	"github.com/zenion/mmoserver/pkg/logger"
 )
 
 // newTestAdapter creates a cmdsysAdapter with no ExecOnLoop — handlers run
@@ -61,52 +60,7 @@ func TestCmdsysAdapter_TypedCommand(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// 2. config set end-to-end via RegisterBuiltins + fake Configurable
-// ---------------------------------------------------------------------------
-
-type builtinTestConfig struct {
-	Foo string
-	Bar int
-}
-
-func TestBuiltins_ConfigSet(t *testing.T) {
-	cfg := &builtinTestConfig{Foo: "initial", Bar: 42}
-	rc := NewReflectConfig(cfg)
-
-	var changedField string
-	opts := BuiltinOpts{
-		Config: rc,
-		ConfigOnChanged: func(field string) {
-			changedField = field
-		},
-	}
-
-	a := newTestAdapter()
-	// Wire opts into typed commands directly rather than going through Console
-	// (which needs readline). We call the same helper the Console uses.
-	c := &Console{
-		adapter:     a,
-		log:         logger.New(),
-		completions: make(map[string][]string),
-		builtinCats: make(map[string]bool),
-	}
-	c.RegisterBuiltins(opts)
-
-	// Dispatch "config.set Foo newval" synchronously.
-	out := a.DispatchRaw("config.set Foo newval")
-	if !strings.Contains(out, "initial") || !strings.Contains(out, "newval") {
-		t.Errorf("expected old->new in output, got: %q", out)
-	}
-	if cfg.Foo != "newval" {
-		t.Errorf("expected Foo=\"newval\", got %q", cfg.Foo)
-	}
-	if changedField != "Foo" {
-		t.Errorf("expected ConfigOnChanged(\"Foo\"), got %q", changedField)
-	}
-}
-
-// ---------------------------------------------------------------------------
-// 3. Help output includes every registered command grouped by capability namespace
+// 2. Help output includes every registered command grouped by capability namespace
 // ---------------------------------------------------------------------------
 
 func TestCmdsysAdapter_HelpCoversAllRegistered(t *testing.T) {
@@ -189,7 +143,7 @@ func TestConsole_DispatcherAccessor(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// 5. Group dispatch: "config list" routes to "config.list"
+// 5. Group dispatch: "mygroup dosomething" routes to "mygroup.dosomething"
 // ---------------------------------------------------------------------------
 
 func TestCmdsysAdapter_GroupDispatch(t *testing.T) {

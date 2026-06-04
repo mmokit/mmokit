@@ -320,7 +320,7 @@ func renderDispatchResult(res cmdsys.Result, asJSON bool) string {
 }
 
 // DispatchRaw is like Dispatch but used for internal re-dispatch (e.g. group
-// shim routing "config get" → "config.get") or in tests.
+// shim routing "cell split" → "cell.split") or in tests.
 func (a *cmdsysAdapter) DispatchRaw(raw string) string {
 	raw = strings.TrimSpace(raw)
 	if raw == "" {

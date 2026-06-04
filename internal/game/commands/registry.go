@@ -9,9 +9,8 @@ import (
 )
 
 // RegisterAll registers space-game admin commands. Generic
-// player/entity/cell/cluster commands are registered by the engine via
-// mmokit.RegisterBuiltins; only game-specific verbs (damage, heal, kill,
-// give, currency) live here.
+// player/entity/cell/cluster commands are registered by the engine; only
+// game-specific verbs (damage, heal, kill, give, currency) live here.
 //
 // worldRepo + worldSnap are the coord-level (process-wide) world manifest
 // handles loaded in cmd/server/main.go. They're held by a worldEditor

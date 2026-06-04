@@ -284,8 +284,7 @@ type Config struct {
 	PlayerRouter PlayerRouter
 
 	// Console configures the interactive admin console (optional). Pointer
-	// so zero value (nil) means "not set" — ConsoleOpts contains func
-	// fields and is not directly comparable.
+	// so zero value (nil) means "not set".
 	Console *ConsoleOpts
 
 	// AuthResolver validates a cookie/session token at WS-upgrade time
@@ -377,13 +376,9 @@ func collectServiceMigrations(reg *service.Registry) []postgres.Option {
 }
 
 // ConsoleOpts provides game-specific console configuration.
-// All fields are optional — omit what your game doesn't need.
-type ConsoleOpts struct {
-	Config          engine.Configurable // enables "config list/get/set"
-	ConfigSave      func() error        // enables "config save"
-	ConfigReset     func()              // enables "config reset"
-	ConfigOnChanged func(field string)  // called on the game loop after "config set" mutates a field
-}
+// Currently empty — retained as the extension point referenced by Config and
+// re-exported by mmokit.
+type ConsoleOpts struct{}
 
 // PlayerLocation tracks a player's current cell+host and whether the session is
 // active or in a disconnected grace period. Single source of truth for
@@ -2680,45 +2675,14 @@ func (c *Process) startConsole(ctx context.Context) {
 	c.console = engine.NewConsoleWithDispatcher(c.Log, c.registry, c.dispatcher)
 	c.console.SetPrompt(fmt.Sprintf("%s > ", c.promptLabel()))
 
-	// Resolve the first cell's engine — used for both perf builtins and the
-	// loop-safe entity/config handler wiring below.
-	var defaultEng *engine.Engine
-	for _, node := range c.Cells {
-		defaultEng = node.Engine
-		break
-	}
-
-	builtinOpts := engine.BuiltinOpts{
-		Engine: defaultEng,
-	}
-
-	// Merge game-provided builtins if Console was set.
-	co := c.consoleOpts
-	if co != nil {
-		builtinOpts.Config = co.Config
-		builtinOpts.ConfigSave = co.ConfigSave
-		builtinOpts.ConfigReset = co.ConfigReset
-		builtinOpts.ConfigOnChanged = co.ConfigOnChanged
-	}
-
 	// Wire dynamic completion sources so tab-complete on args like
 	// <hostID>, <cellID>, <gatewayID>, <sessionKey> pulls live values
 	// from the coord's registries. `players` is set by game lifecycle.
 	c.wireCompletionSources()
 
-	// Let the game (if any) register its own commands. Games that need custom
-	// config opts call console.RegisterBuiltins(...) themselves in these hooks.
+	// Let the game (if any) register its own commands via the OnConsoleReady hooks.
 	for _, hook := range c.onConsoleReady {
 		hook(c, c.console)
-	}
-
-	// Fallback: register the coordinator-level config builtins if the game
-	// didn't (e.g. pure-coordinator mode with no local cells). The cluster-aware
-	// entity.* commands are registered unconditionally in registerAllBuiltins.
-	if builtinOpts.Config != nil {
-		if _, ok := c.registry.Lookup("config.list"); !ok {
-			c.console.RegisterBuiltins(builtinOpts)
-		}
 	}
 
 	c.console.Run(ctx)

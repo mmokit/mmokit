@@ -6,26 +6,12 @@ import (
 	"strings"
 )
 
-// resultRenderers maps result types (by reflect.Type) to custom renderers.
-// Registered via registerResultRenderer; checked first in renderResult.
-var resultRenderers = map[reflect.Type]func(any) string{}
-
-// registerResultRenderer registers a custom text renderer for a given result type.
-// proto is a zero value of the type (e.g. configGetResult{}).
-func registerResultRenderer(proto any, fn func(any) string) {
-	resultRenderers[reflect.TypeOf(proto)] = fn
-}
-
 // renderResult formats a typed result struct into human-readable console text.
-// If a custom renderer is registered for the type, it is used first.
 // If the result contains a slice field tagged cmd:"table", that slice is rendered
 // as a Table. Otherwise each exported field is rendered as "Field: Value".
 func renderResult(v any) string {
 	if v == nil {
 		return ""
-	}
-	if fn, ok := resultRenderers[reflect.TypeOf(v)]; ok {
-		return fn(v)
 	}
 	rv := reflect.ValueOf(v)
 	if rv.Kind() == reflect.Pointer {

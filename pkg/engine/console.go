@@ -20,10 +20,10 @@ type Console struct {
 	adapter *cmdsysAdapter
 	log     *logger.Logger
 
-	compMu                sync.RWMutex
-	completions           map[string][]string
-	completionSources     map[string]func() []string                  // dynamic providers called per tab
-	completionSourcesCtx  map[string]func(tokens []string) []string  // contextual providers; receive prior tokens
+	compMu               sync.RWMutex
+	completions          map[string][]string
+	completionSources    map[string]func() []string                // dynamic providers called per tab
+	completionSourcesCtx map[string]func(tokens []string) []string // contextual providers; receive prior tokens
 
 	// Categories registered by framework (before game builtins) for help separator.
 	builtinCats map[string]bool
@@ -43,12 +43,12 @@ func NewConsoleWithDispatcher(gameLog *logger.Logger, reg *cmdsys.Registry, d *c
 
 func newConsoleWith(gameLog *logger.Logger, adapter *cmdsysAdapter) *Console {
 	c := &Console{
-		adapter:           adapter,
-		log:               gameLog,
-		completions:       make(map[string][]string),
+		adapter:              adapter,
+		log:                  gameLog,
+		completions:          make(map[string][]string),
 		completionSources:    make(map[string]func() []string),
 		completionSourcesCtx: make(map[string]func(tokens []string) []string),
-		builtinCats:       make(map[string]bool),
+		builtinCats:          make(map[string]bool),
 	}
 
 	c.refreshCategoryCompletions()
@@ -122,9 +122,9 @@ func (c *Console) SetPrompt(s string) {
 }
 
 // snapshotBuiltinCategories marks every category currently present in the
-// Registry as framework-provided. Called after the engine's own RegisterBuiltins
-// path runs so the help renderer can emit the "── Game Commands ──" separator
-// between framework and game-registered commands.
+// Registry as framework-provided. Called during console construction so the
+// help renderer can emit the "── Game Commands ──" separator between framework
+// and game-registered commands.
 func (c *Console) snapshotBuiltinCategories() {
 	for _, v := range c.adapter.Registry.List() {
 		cat := v
@@ -285,8 +285,8 @@ func (c *Console) registerPlatformCommands() {
 		Route:       cmdsys.RouteLocal,
 		Args:        helpArgs{},
 		Result:      helpResult{},
-		Usage:   "help [command|group]",
-		Aliases: []string{"h", "?"},
+		Usage:       "help [command|group]",
+		Aliases:     []string{"h", "?"},
 		Examples: []string{
 			"help",
 			"help cell split",
@@ -522,11 +522,11 @@ func filterMap(m map[string]bool, prefix string) ([][]rune, int) {
 // perf block. It is populated by the universe layer from a PerfCellSnapshot;
 // engine/console.go does no structural ECS or cell lookups itself.
 type PerfSnapshotText struct {
-	TickHz        int
-	BudgetMS      int
-	Tick          TimingStats
-	SystemNames   []string
-	SystemTimings []TimingStats
+	TickHz            int
+	BudgetMS          int
+	Tick              TimingStats
+	SystemNames       []string
+	SystemTimings     []TimingStats
 	EntitiesReal      int
 	EntitiesReplica   int
 	EntitiesGhost     int

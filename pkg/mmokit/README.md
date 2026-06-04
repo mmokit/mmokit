@@ -399,7 +399,7 @@ Interactive admin CLI with tab completion, built-in commands, and game-extensibl
 - `cell list/info/split/merge/migrate/cooldowns/config` — multi-cell status + dynamic partition management
 - `host list` — host roster (live / leaving / dead)
 - `log on/off/toggle/only <category>` — runtime log filtering; live-tail State Integrity events via `log events:*`
-- `config list/get/set/save/reset` — runtime config editing (when game provides `Configurable`)
+- `tune list/get/set/reset` — runtime config editing for registered tunables
 - `commit.log [--n=N|--commit=ID|--cell=CELLID|--since=DUR]` — query the in-memory commit event ring
 
 ## Observability
