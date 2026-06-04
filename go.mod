@@ -9,6 +9,7 @@ require (
 	github.com/google/uuid v1.6.0
 	github.com/jackc/pgx/v5 v5.9.1
 	github.com/mlange-42/ark v0.7.1
+	github.com/tetratelabs/wazero v1.8.2
 	golang.org/x/crypto v0.50.0
 	golang.org/x/term v0.43.0
 	google.golang.org/grpc v1.80.0
