@@ -11,15 +11,20 @@ import (
 
 var (
 	registered System
-	arenaBuf   []byte // host-writable scratch: [header][column]
-	snapBuf    []byte // holds snapshot bytes so their pointer stays alive
+	arenaBuf   []byte    // host-writable scratch: [header][column]
+	snapBuf    []byte    // holds snapshot bytes so their pointer stays alive
+	paramset   *paramSet // built from the registered system in Register
+	schemaBuf  []byte    // holds the encoded schema so its pointer stays alive
 )
 
 // Register records the module's System. Call from the module's init() (NOT
 // main): the host instantiates the module as a reactor, which runs
 // _initialize (package init) but never _start (main), so a Register call in
 // main would never execute and the ABI exports would trap on a nil system.
-func Register(s System) { registered = s }
+func Register(s System) {
+	registered = s
+	paramset = buildParamSet(s)
+}
 
 // Precondition: min >= wasmabi.HeaderSize (the host never requests a smaller arena).
 //
@@ -78,4 +83,32 @@ func wasmRestore(ptr uint32, length uint32) {
 		copy(cp, src)
 		s.Restore(cp)
 	}
+}
+
+//go:wasmexport wasmsys_params_schema
+func wasmParamsSchema() uint64 {
+	if paramset == nil || len(paramset.schema) == 0 {
+		return 0
+	}
+	schemaBuf = wasmabi.EncodeSchema(paramset.schema)
+	if len(schemaBuf) == 0 {
+		return 0
+	}
+	ptr := uint64(uint32(uintptr(unsafe.Pointer(&schemaBuf[0]))))
+	return ptr<<32 | uint64(uint32(len(schemaBuf)))
+}
+
+//go:wasmexport wasmsys_params_set
+func wasmParamsSet(ptr uint32, length uint32) {
+	if paramset == nil || length == 0 {
+		return
+	}
+	src := unsafe.Slice((*byte)(unsafe.Pointer(uintptr(ptr))), int(length))
+	cp := make([]byte, length)
+	copy(cp, src)
+	block, err := wasmabi.DecodeBlock(cp)
+	if err != nil {
+		return
+	}
+	paramset.scatter(block)
 }
