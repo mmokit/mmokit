@@ -304,3 +304,46 @@ Cluster-wide atomic add/remove/swap via the commit-plan / `ClusterClock` orchest
 - Standard-Go-wasip1 vs. TinyGo for module builds — start with standard Go (full language);
   evaluate TinyGo later purely for module size / instantiation latency.
 - Module packaging/distribution (where `.wasm` artifacts live, how a deploy delivers them).
+
+## Phase 0 benchmark results (measured)
+
+Measured 2026-06-04 on `Intel(R) Core(TM) i9-14900KF`, `go version go1.26.2 linux/amd64`.
+The wasm path runs under wazero's default runtime config, which selects the optimizing
+**compiler** backend on amd64 (not the interpreter). Benchmark:
+`pkg/mmokit/wasm_system_bench_test.go::BenchmarkShield` — `b.N` ticks of ShieldRegen over N
+non-saturating Shield entities (`Max = 1e30`, so every entity regenerates every tick on both
+the native loop and the wasm-backed system). Run with `-benchtime=200ms -benchmem`.
+
+```
+goos: linux
+goarch: amd64
+pkg: github.com/zenion/mmoserver/pkg/mmokit
+cpu: Intel(R) Core(TM) i9-14900KF
+BenchmarkShield/native/100-32         	  472488	       494.7 ns/op	     185 B/op	       3 allocs/op
+BenchmarkShield/wasm/100-32           	   54862	      3896 ns/op	    2620 B/op	      12 allocs/op
+BenchmarkShield/native/1000-32        	   63357	      3759 ns/op	     185 B/op	       3 allocs/op
+BenchmarkShield/wasm/1000-32          	    7606	     35018 ns/op	   20904 B/op	      12 allocs/op
+BenchmarkShield/native/10000-32       	    6328	     36224 ns/op	     185 B/op	       3 allocs/op
+BenchmarkShield/wasm/10000-32         	     699	    330325 ns/op	  211945 B/op	      12 allocs/op
+```
+
+### Interpretation
+
+The per-tick **fixed** boundary overhead is roughly `wasm/100 − native/100` ≈ 3896 − 495 ≈
+**3.4 µs/tick** — dominated by the host↔guest crossing (memory-region handoff, exported-call
+invocation) since at N=100 the actual column copy is small. From there the wasm cost grows
+**linearly in N** (3.9 µs → 35 µs → 330 µs as N goes 100 → 1k → 10k, very close to 10× per 10×),
+which is the column-copy component: the bytes moved across the boundary (`B/op` 2.6 KB → 21 KB →
+212 KB) and the per-entity work inside the module scale with entity count, mirroring the native
+loop's own linear growth (495 ns → 3.8 µs → 36 µs). Allocs are flat (3 native / 12 wasm) and
+independent of N, confirming the 12 wasm allocs are per-tick fixed (buffer setup for the
+crossing), not per-entity.
+
+This **supports** the hypothesis: the boundary cost is a per-tick fixed overhead (~3.4 µs here)
+plus a copy term linear in N — there is no super-linear or compounding per-entity penalty. The
+honest caveat is the magnitude of the linear term: at these N the wasm path is ~9–10× the native
+loop (e.g. 330 µs vs 36 µs at 10k entities), so per-tick the absolute cost is real and the
+copy-per-entity overhead is the thing Phase 1 must attack (precompiled module + zero-copy /
+shared-memory column views), not the fixed crossing. The fixed crossing alone (~3.4 µs) is
+negligible against a 50 ms tick budget; the linear copy is what determines whether a hot system
+with tens of thousands of entities stays in budget.

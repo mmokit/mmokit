@@ -17,7 +17,7 @@ import (
 
 // newTestStage spins up a single-cell Stage with the minimum wiring needed
 // for mmokit tests: ECS, spatial grid, NetID index. No game world, no bridge.
-func newTestStage(t *testing.T) (*pkguniverse.Stage, *engine.Engine) {
+func newTestStage(t testing.TB) (*pkguniverse.Stage, *engine.Engine) {
 	t.Helper()
 	log := logger.New()
 	cm := net.NewConnManager()
@@ -79,12 +79,12 @@ type routedAction struct {
 	action *pkguniverse.CrossCellAction
 }
 
-func (b *loopbackBridge) PreTick()                                                    {}
-func (b *loopbackBridge) PostSystems()                                                {}
-func (b *loopbackBridge) CellOwner(pkguniverse.CellID) string                         { return "" }
-func (b *loopbackBridge) CellOwnerAtPos(float32, float32) string                      { return "" }
-func (b *loopbackBridge) OnPlayerTransfer(uint32, pkguniverse.MeshCellID)             {}
-func (b *loopbackBridge) RequestRespawn(uint32, string)                               {}
+func (b *loopbackBridge) PreTick()                                        {}
+func (b *loopbackBridge) PostSystems()                                    {}
+func (b *loopbackBridge) CellOwner(pkguniverse.CellID) string             { return "" }
+func (b *loopbackBridge) CellOwnerAtPos(float32, float32) string          { return "" }
+func (b *loopbackBridge) OnPlayerTransfer(uint32, pkguniverse.MeshCellID) {}
+func (b *loopbackBridge) RequestRespawn(uint32, string)                   {}
 func (b *loopbackBridge) SendBorderFrame(pkguniverse.MeshCellID, pkguniverse.MeshCellID, []byte) {
 }
 func (b *loopbackBridge) SendHandoff(pkguniverse.MeshCellID, *pkguniverse.HandoffPayload) bool {
