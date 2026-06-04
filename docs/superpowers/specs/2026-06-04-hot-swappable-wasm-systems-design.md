@@ -142,6 +142,14 @@ columns to copy); no `SystemBase`/live ECS handle (the world stays host-side); `
 returns a `[]T` aliasing the host-copied buffer; `main()`+`Register` export the ABI entrypoints.
 The arithmetic and control flow are verbatim.
 
+**On the explicit `Query()` (and why it is generated later, not now):** the host must copy the
+declared columns into linear memory *before* calling `Update`, so the column set must be known
+ahead of execution — runtime/probe discovery is unreliable for conditionally-accessed columns
+(`if rare { Column[Health](ctx) }` would not reveal `Health` until that branch first fires, by
+which point the column needed to already be mapped). The set *can* be inferred, but only by
+**build-time static analysis** (codegen), not from runtime calls. Phase 0 keeps `Query()`
+hand-written (zero tooling); Phase 1 promotes it to a generated manifest (see Phasing).
+
 ## Architecture
 
 ### 1. The two sides
@@ -272,6 +280,15 @@ agreed bar for "limited system."
 ### Phase 1
 Commands host-imports (spawn/despawn/add/remove), `lookup_component`, `send_event`, `log`,
 multi-component queries; port a second, *mutating* system.
+
+**Codegen-derived query manifest.** Replace the hand-written `Query()` with a `//go:generate
+wasmsys-gen` build step that statically analyzes the module package (`x/tools/go/packages`),
+collects every `Column[T]` (read-write) and `View[T]` (read-only) call site, and emits the
+column manifest as exported module metadata the host reads at load. Access mode rides on the
+accessor name (`Column` = RW, `View` = RO). Constraints: concrete type args at each call site
+only (no `Column[T]` where `T` is a type parameter); the analyzer walks the package call graph
+so accessors in helper functions are still discovered. An explicit override remains available for
+the rare dynamically-determined column.
 
 ### Phase 2
 Tick-order declarations + multiple coexisting modules + host-side resources; decide the
