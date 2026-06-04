@@ -40,6 +40,18 @@ func (gl *GameLoop) SetEventsCh(ch <-chan net.PlayerEvent) {
 // Used by schema introspection to walk systems and extract router metadata.
 func (gl *GameLoop) Systems() []System { return gl.systems }
 
+// EachSystem calls fn for every system in tick order with its registered name
+// (parallel to systemNames). Call on the loop goroutine.
+func (gl *GameLoop) EachSystem(fn func(name string, s System)) {
+	for i, s := range gl.systems {
+		name := ""
+		if i < len(gl.systemNames) {
+			name = gl.systemNames[i]
+		}
+		fn(name, s)
+	}
+}
+
 // NewGameLoop creates a game loop with the given systems and lifecycle hooks.
 // names provides profiling labels for each system (must match len(systems)).
 func NewGameLoop(eng *Engine, systems []System, names []string, hooks Hooks) *GameLoop {
