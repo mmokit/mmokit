@@ -19,6 +19,9 @@ type Module struct {
 	abiVersion api.Function
 	snapshot   api.Function
 	restore    api.Function
+
+	paramsSchema api.Function
+	paramsSet    api.Function
 }
 
 // Load instantiates a compiled wasm image and binds its exports.
@@ -36,6 +39,8 @@ func Load(ctx context.Context, rt *Runtime, wasm []byte) (*Module, error) {
 		snapshot:   mod.ExportedFunction(wasmabi.ExportSnapshot),
 		restore:    mod.ExportedFunction(wasmabi.ExportRestore),
 	}
+	m.paramsSchema = mod.ExportedFunction(wasmabi.ExportParamsSchema)
+	m.paramsSet = mod.ExportedFunction(wasmabi.ExportParamsSet)
 	for name, fn := range map[string]api.Function{
 		wasmabi.ExportArena: m.arena, wasmabi.ExportUpdate: m.update,
 		wasmabi.ExportQuery: m.query, wasmabi.ExportABIVersion: m.abiVersion,
@@ -128,6 +133,45 @@ func (m *Module) Restore(ctx context.Context, state []byte) error {
 		return err
 	}
 	_, err = m.restore.Call(ctx, uint64(ptr+wasmabi.HeaderSize), uint64(len(state)))
+	return err
+}
+
+// ParamsSchema returns the module's tunable schema, or nil if the module
+// declares no params (export absent or empty).
+func (m *Module) ParamsSchema(ctx context.Context) ([]wasmabi.ParamField, error) {
+	if m.paramsSchema == nil {
+		return nil, nil
+	}
+	r, err := m.paramsSchema.Call(ctx)
+	if err != nil {
+		return nil, err
+	}
+	packed := r[0]
+	ptr, length := uint32(packed>>32), uint32(packed)
+	if length == 0 {
+		return nil, nil
+	}
+	b, ok := m.mod.Memory().Read(ptr, length)
+	if !ok {
+		return nil, fmt.Errorf("wasmhost: params schema read out of range")
+	}
+	cp := make([]byte, length)
+	copy(cp, b)
+	return wasmabi.DecodeSchema(cp)
+}
+
+// ParamsSet pushes a value block (one float64 per schema field, in order) into
+// the guest. No-op if the module declares no params.
+func (m *Module) ParamsSet(ctx context.Context, block []float64) error {
+	if m.paramsSet == nil || len(block) == 0 {
+		return nil
+	}
+	payload := wasmabi.EncodeBlock(block)
+	ptr, err := m.arenaWrite(ctx, 0, payload)
+	if err != nil {
+		return err
+	}
+	_, err = m.paramsSet.Call(ctx, uint64(ptr+wasmabi.HeaderSize), uint64(len(payload)))
 	return err
 }
 
