@@ -22,11 +22,12 @@ type Hooks struct {
 
 // GameLoop runs the fixed-timestep tick loop.
 type GameLoop struct {
-	engine     *Engine
-	systems    []System
-	hooks      Hooks
-	sysTimings []time.Duration         // reusable scratch buffer
-	eventsCh   <-chan net.PlayerEvent   // per-node events (nil = use ConnMgr.Events())
+	engine      *Engine
+	systems     []System
+	hooks       Hooks
+	sysTimings  []time.Duration        // reusable scratch buffer
+	systemNames []string               // profiling labels, parallel to systems
+	eventsCh    <-chan net.PlayerEvent // per-node events (nil = use ConnMgr.Events())
 }
 
 // SetEventsCh sets a per-node events channel. When set, processEvents
@@ -73,11 +74,37 @@ func NewGameLoop(eng *Engine, systems []System, names []string, hooks Hooks) *Ga
 	}
 
 	return &GameLoop{
-		engine:     eng,
-		systems:    systems,
-		hooks:      merged,
-		sysTimings: make([]time.Duration, len(systems)),
+		engine:      eng,
+		systems:     systems,
+		hooks:       merged,
+		sysTimings:  make([]time.Duration, len(systems)),
+		systemNames: names,
 	}
+}
+
+// AddSystemLive appends a system to the running loop. MUST be called on the
+// loop goroutine (e.g. via engine.RunOnLoop). It resizes the timing buffer and
+// rebuilds the profiler so the new system appears in perf output.
+func (gl *GameLoop) AddSystemLive(name string, s System) {
+	gl.systems = append(gl.systems, s)
+	gl.systemNames = append(gl.systemNames, name)
+	gl.sysTimings = make([]time.Duration, len(gl.systems))
+	gl.engine.Perf = NewTickProfile(gl.systemNames)
+}
+
+// RemoveSystemLive removes the first system registered under name. Returns
+// false if no such system exists. MUST be called on the loop goroutine.
+func (gl *GameLoop) RemoveSystemLive(name string) bool {
+	for i, n := range gl.systemNames {
+		if n == name {
+			gl.systems = append(gl.systems[:i], gl.systems[i+1:]...)
+			gl.systemNames = append(gl.systemNames[:i], gl.systemNames[i+1:]...)
+			gl.sysTimings = make([]time.Duration, len(gl.systems))
+			gl.engine.Perf = NewTickProfile(gl.systemNames)
+			return true
+		}
+	}
+	return false
 }
 
 // Run starts the fixed-timestep game loop. Blocks until ctx is cancelled.
