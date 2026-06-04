@@ -16,6 +16,7 @@
   import Logs from "./routes/logs.svelte";
   import Settings from "./routes/settings.svelte";
   import Users from "./routes/users.svelte";
+  import Tunables from "./routes/tunables.svelte";
   import WorldEditor from "./routes/world-editor.svelte";
   import Sidebar from "./components/Sidebar.svelte";
   import TopBar from "./components/TopBar.svelte";
@@ -113,6 +114,8 @@
           <Logs />
         {:else if path === "/users"}
           <Users />
+        {:else if path === "/tunables"}
+          <Tunables />
         {:else if path === "/world-editor"}
           <WorldEditor />
         {:else if path === "/settings"}

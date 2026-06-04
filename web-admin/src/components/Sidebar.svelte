@@ -2,6 +2,7 @@
   import {
     Globe, Boxes, Users, List, Scroll, Settings, ShieldCheck,
     Bot, Database, Gauge, Layers, Zap, Server, Cpu, Radio, MapPinned,
+    SlidersHorizontal,
   } from "$lib/icons";
   import { navigate, route } from "$lib/router";
   import { panelsStore } from "$lib/stores.svelte";
@@ -42,6 +43,7 @@
     { id: "audit",    label: "Audit",    icon: ShieldCheck, group: "TELEMETRY", path: "/audit",    glyph: "A" },
     { id: "logs",     label: "Logs",     icon: Scroll,      group: "TELEMETRY", path: "/logs",     glyph: "L" },
     { id: "users",    label: "Admin Users", icon: ShieldCheck, group: "CONFIG", path: "/users", glyph: "U" },
+    { id: "tunables", label: "Tunables", icon: SlidersHorizontal, group: "CONFIG", path: "/tunables", glyph: "T" },
     { id: "settings", label: "Settings", icon: Settings,    group: "CONFIG",    path: "/settings", glyph: "S" },
   ];
 
