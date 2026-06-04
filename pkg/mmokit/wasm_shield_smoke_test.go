@@ -4,6 +4,8 @@ import (
 	"context"
 	"testing"
 
+	"github.com/zenion/mmoserver/pkg/mmokit/internal/testmods/podcomp"
+	"github.com/zenion/mmoserver/pkg/wasmabi"
 	"github.com/zenion/mmoserver/pkg/wasmhost"
 )
 
@@ -29,7 +31,7 @@ func TestShieldModule_LoadsAndDeclaresQuery(t *testing.T) {
 		t.Fatalf("ABIVersion=%d want 1", v)
 	}
 	id, rw := m.Query(ctx)
-	if id != 1 || !rw {
-		t.Fatalf("Query=(%d,%v) want (1,true)  [Shield typeID=1, ReadWrite]", id, rw)
+	if want := wasmabi.ElemSize[podcomp.Shield](); id != want || !rw {
+		t.Fatalf("Query=(%d,%v) want (%d,true)  [Shield elem size, ReadWrite]", id, rw, want)
 	}
 }

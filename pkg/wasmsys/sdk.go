@@ -4,6 +4,8 @@
 package wasmsys
 
 import (
+	"bytes"
+	"encoding/binary"
 	"unsafe"
 
 	"github.com/zenion/mmoserver/pkg/wasmabi"
@@ -26,17 +28,18 @@ type Stateful interface {
 
 // Query is a column declaration produced by ReadWrite[T] / Read[T].
 type Query struct {
-	typeID    uint32
+	elemSize  uint32
 	readWrite bool
 }
 
 // ReadWrite declares a column the host copies in and reads back after Update.
-func ReadWrite[T any](typeID uint32) Query { return Query{typeID, true} }
+// The column element size is derived from T and checked by the host at load.
+func ReadWrite[T any]() Query { return Query{wasmabi.ElemSize[T](), true} }
 
-// Read declares a column the host copies in but does not read back.
-func Read[T any](typeID uint32) Query { return Query{typeID, false} }
+// Read declares a read-only column (copied in, not read back).
+func Read[T any]() Query { return Query{wasmabi.ElemSize[T](), false} }
 
-func (q Query) encode() uint64 { return wasmabi.EncodeQuery(q.typeID, q.readWrite) }
+func (q Query) encode() uint64 { return wasmabi.EncodeQuery(q.elemSize, q.readWrite) }
 
 // Ctx is handed to Update. It exposes the mapped column via Column/View. The
 // base pointer is the address of the column data (arena + HeaderSize), set by
@@ -58,3 +61,20 @@ func Column[T any](ctx *Ctx) []T {
 // View is Column for read-only systems (identical mechanics; intent marker
 // that becomes the RW/RO discriminator for the Phase 1 codegen).
 func View[T any](ctx *Ctx) []T { return Column[T](ctx) }
+
+// MarshalState serializes a fixed-size value (or struct of fixed-size fields)
+// to little-endian bytes — a convenience for a System's Snapshot(). Example:
+//
+//	func (s *mySys) Snapshot() []byte { return wasmsys.MarshalState(s.ticks) }
+func MarshalState(v any) []byte {
+	var buf bytes.Buffer
+	_ = binary.Write(&buf, binary.LittleEndian, v)
+	return buf.Bytes()
+}
+
+// UnmarshalState is the inverse, for Restore(). ptr must be a pointer:
+//
+//	func (s *mySys) Restore(b []byte) { wasmsys.UnmarshalState(b, &s.ticks) }
+func UnmarshalState(data []byte, ptr any) {
+	_ = binary.Read(bytes.NewReader(data), binary.LittleEndian, ptr)
+}

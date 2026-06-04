@@ -26,21 +26,17 @@ import (
 
 // ─── tunables: edit, `just wasm-build`, then `wasm swap <cell> pulse` ───────────
 const (
-	minRadius float32 = 6    // smallest circle radius
-	maxRadius float32 = 48   // largest circle radius
-	rate      float32 = 0.06 // phase radians added per tick (20 ticks/s) — bigger = faster pulse
+	minRadius float32 = 6   // smallest circle radius
+	maxRadius float32 = 48  // largest circle radius
+	rate      float32 = 0.5 // phase radians added per tick (20 ticks/s) — bigger = faster pulse
 )
-
-// colliderTypeID is informational in Phase 0 (the Go type drives gather size);
-// it just has to be a stable nonzero id distinct from other demo modules.
-const colliderTypeID uint32 = 3
 
 // pulse drives Collider.Radius from an internal phase counter. ticks is the
 // preserved-across-swap internal state.
 type pulse struct{ ticks uint64 }
 
 func (s *pulse) Query() wasmsys.Query {
-	return wasmsys.ReadWrite[comp.Collider](colliderTypeID)
+	return wasmsys.ReadWrite[comp.Collider]()
 }
 
 func (s *pulse) Update(ctx *wasmsys.Ctx, dt float32) {
@@ -55,23 +51,8 @@ func (s *pulse) Update(ctx *wasmsys.Ctx, dt float32) {
 	s.ticks++
 }
 
-func (s *pulse) Snapshot() []byte {
-	b := make([]byte, 8)
-	for i := 0; i < 8; i++ {
-		b[i] = byte(s.ticks >> (8 * i))
-	}
-	return b
-}
-
-func (s *pulse) Restore(b []byte) {
-	if len(b) == 8 {
-		var v uint64
-		for i := 0; i < 8; i++ {
-			v |= uint64(b[i]) << (8 * i)
-		}
-		s.ticks = v
-	}
-}
+func (s *pulse) Snapshot() []byte { return wasmsys.MarshalState(s.ticks) }
+func (s *pulse) Restore(b []byte) { wasmsys.UnmarshalState(b, &s.ticks) }
 
 func init() { wasmsys.Register(&pulse{}) }
 func main() {}

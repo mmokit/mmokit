@@ -53,7 +53,7 @@ func (m *Module) ABIVersion(ctx context.Context) uint64 {
 	return r[0]
 }
 
-func (m *Module) Query(ctx context.Context) (typeID uint32, readWrite bool) {
+func (m *Module) Query(ctx context.Context) (elemSize uint32, readWrite bool) {
 	r, _ := m.query.Call(ctx)
 	return wasmabi.DecodeQuery(r[0])
 }

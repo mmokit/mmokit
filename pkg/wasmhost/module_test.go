@@ -5,6 +5,8 @@ import (
 	"encoding/binary"
 	"math"
 	"testing"
+
+	"github.com/zenion/mmoserver/pkg/wasmabi"
 )
 
 func f32sToBytes(v []float32) []byte {
@@ -36,8 +38,8 @@ func TestModule_UpdateBridgesColumn(t *testing.T) {
 		t.Fatalf("ABIVersion=%d want 1", got)
 	}
 	id, rw := m.Query(ctx)
-	if id != 42 || !rw {
-		t.Fatalf("Query=(%d,%v) want (42,true)", id, rw)
+	if id != wasmabi.ElemSize[float32]() || !rw {
+		t.Fatalf("Query=(%d,%v) want (%d,true)", id, rw, wasmabi.ElemSize[float32]())
 	}
 
 	in := f32sToBytes([]float32{1, 2, 3})

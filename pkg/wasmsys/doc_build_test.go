@@ -7,5 +7,5 @@ import "testing"
 // toolchain; the real wasip1 compile is validated by the fixture builds in
 // later tasks.
 func TestPackageCompiles(t *testing.T) {
-	_ = ReadWrite[int32](1)
+	_ = ReadWrite[int32]()
 }

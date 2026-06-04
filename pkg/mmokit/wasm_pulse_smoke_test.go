@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/zenion/mmoserver/pkg/mmokit"
+	"github.com/zenion/mmoserver/pkg/wasmabi"
 	"github.com/zenion/mmoserver/pkg/wasmhost"
 )
 
@@ -29,8 +30,8 @@ func TestPulseModule_LoadsAndDeclaresQuery(t *testing.T) {
 		t.Fatalf("ABIVersion=%d want 1", v)
 	}
 	id, rw := m.Query(ctx)
-	if id != 3 || !rw {
-		t.Fatalf("Query=(%d,%v) want (3,true)  [Collider typeID=3, ReadWrite]", id, rw)
+	if want := wasmabi.ElemSize[mmokit.Collider](); id != want || !rw {
+		t.Fatalf("Query=(%d,%v) want (%d,true)  [Collider elem size, ReadWrite]", id, rw, want)
 	}
 }
 

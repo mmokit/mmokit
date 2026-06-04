@@ -8,7 +8,7 @@ import "github.com/zenion/mmoserver/pkg/wasmsys"
 // internal state to exercise snapshot/restore.
 type inc struct{ ticks uint32 }
 
-func (s *inc) Query() wasmsys.Query { return wasmsys.ReadWrite[float32](42) }
+func (s *inc) Query() wasmsys.Query { return wasmsys.ReadWrite[float32]() }
 
 func (s *inc) Update(ctx *wasmsys.Ctx, dt float32) {
 	col := wasmsys.Column[float32](ctx)
@@ -18,14 +18,8 @@ func (s *inc) Update(ctx *wasmsys.Ctx, dt float32) {
 	s.ticks++
 }
 
-func (s *inc) Snapshot() []byte {
-	return []byte{byte(s.ticks), byte(s.ticks >> 8), byte(s.ticks >> 16), byte(s.ticks >> 24)}
-}
-func (s *inc) Restore(b []byte) {
-	if len(b) == 4 {
-		s.ticks = uint32(b[0]) | uint32(b[1])<<8 | uint32(b[2])<<16 | uint32(b[3])<<24
-	}
-}
+func (s *inc) Snapshot() []byte { return wasmsys.MarshalState(s.ticks) }
+func (s *inc) Restore(b []byte) { wasmsys.UnmarshalState(b, &s.ticks) }
 
 // Registration runs in init() so it fires under reactor instantiation
 // (_initialize), which runs package init funcs but not main().

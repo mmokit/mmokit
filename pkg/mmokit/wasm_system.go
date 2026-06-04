@@ -27,13 +27,15 @@ var wasmRuntime = wasmhost.New(context.Background())
 // The module bytes are read and ABI-checked once at registration; each cell
 // instantiates its own module with independent linear memory/state.
 //
-// Phase 0 caveat: T (not the module's declared typeID) drives the gather/scatter
-// element size, so the CALLER is responsible for matching T to the component the
-// module declares in its Query(). A mismatched T (e.g. NewWasmSystem[WrongType]
-// against a module declaring a different column) is NOT caught here and would
-// silently corrupt memory via a misaligned scatter. Phase 1's component-layout
-// hash in the ABI version closes this gap; until then, keep T and the module's
-// component in lockstep.
+// Phase 0 caveat: T drives the gather/scatter element size, so the CALLER is
+// responsible for matching T to the component the module declares in its
+// Query(). The module declares its column's byte size (auto-derived from its
+// own component type), and this constructor VALIDATES that the declared size
+// matches sizeof(T) at load — so a differing-size mismatch (e.g.
+// NewWasmSystem[WrongType] against a module declaring a different column)
+// panics here instead of silently corrupting memory via a misaligned scatter.
+// A same-size-but-different-meaning type (e.g. a 4-byte PodVal over a float32
+// column) still passes validation and remains the caller's responsibility.
 func NewWasmSystem[T any](modulePath string) SystemDef {
 	wasm, err := os.ReadFile(modulePath)
 	if err != nil {
@@ -48,7 +50,12 @@ func NewWasmSystem[T any](modulePath string) SystemDef {
 		probe.Close(context.Background())
 		panic(fmt.Sprintf("mmokit.NewWasmSystem: %s ABI v%d, host v%d", modulePath, v, wasmabi.ABIVersion))
 	}
-	_, readWrite := probe.Query(context.Background())
+	sz, readWrite := probe.Query(context.Background())
+	if want := wasmabi.ElemSize[T](); sz != want {
+		probe.Close(context.Background())
+		var z T
+		panic(fmt.Sprintf("mmokit.NewWasmSystem: %s declares a %d-byte column but registered type %T is %d bytes — T must match the module's component", modulePath, sz, z, want))
+	}
 	probe.Close(context.Background())
 
 	return SystemDef{
