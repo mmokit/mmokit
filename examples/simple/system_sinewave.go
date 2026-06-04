@@ -3,11 +3,12 @@ package main
 import (
 	"math"
 
+	"github.com/zenion/mmoserver/examples/simple/wavecomp"
 	"github.com/zenion/mmoserver/pkg/mmokit"
 )
 
 type WavePos struct {
-	X, Y float32
+	X, Y, Hue float32
 }
 
 type WaveStateMsg struct {
@@ -18,6 +19,7 @@ type SineWaveSystem struct {
 	mmokit.SystemBase
 	entities mmokit.Query[struct {
 		Pos *mmokit.Position
+		Hue *wavecomp.Hue
 	}]
 	elapsed float32
 }
@@ -35,7 +37,10 @@ func (s *SineWaveSystem) Init() {
 	const span = 1200.0
 	for i := range count {
 		x := float32(i) * (span / float32(count-1))
-		s.Stage().Spawn(mmokit.Position{X: x, Y: 0})
+		// Seed a rainbow spread across the field; the colorwave wasm module
+		// scrolls it over time (and is hot-swappable).
+		hue := float32(i) / float32(count)
+		s.Stage().Spawn(mmokit.Position{X: x, Y: 0}, wavecomp.Hue{Value: hue})
 	}
 }
 
@@ -46,7 +51,9 @@ func (s *SineWaveSystem) Update(dt float32) {
 	msg := WaveStateMsg{Positions: make([]WavePos, 0, 64)}
 	for _, e := range s.entities.Iter {
 		e.Pos.Y = float32(math.Sin(t+float64(e.Pos.X)*waveSpread)) * waveAmp
-		msg.Positions = append(msg.Positions, WavePos{X: e.Pos.X, Y: e.Pos.Y})
+		// Hue is driven by the hot-swappable colorwave wasm module (read here a
+		// tick later — invisible for color).
+		msg.Positions = append(msg.Positions, WavePos{X: e.Pos.X, Y: e.Pos.Y, Hue: e.Hue.Value})
 	}
 
 	mmokit.SendEventToAll(s.Engine(), &msg)

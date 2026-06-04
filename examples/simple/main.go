@@ -19,6 +19,7 @@
 package main
 
 import (
+	"github.com/zenion/mmoserver/examples/simple/wavecomp"
 	"github.com/zenion/mmoserver/pkg/mmokit"
 )
 
@@ -29,6 +30,11 @@ func main() {
 	})
 
 	process.AddSystem(mmokit.NewSystem(&SineWaveSystem{}))
+
+	// Hot-swappable wasm system that drives each entity's Hue. Edit
+	// wasmmods/colorwave/main.go, `just wasm-build`, then `wasm swap colorwave`
+	// to change the color behavior live.
+	mmokit.AddWasmSystem[wavecomp.Hue](process, "dist/wasmmods/colorwave.wasm")
 
 	process.Start()
 }
