@@ -65,6 +65,27 @@ type wasmSystem[T any] struct {
 	col       []T // reused gather buffer
 }
 
+// SwappableSystem is implemented by hot-loadable systems that can serialize
+// their internal state across an unload/swap. The live-swap protocol snapshots
+// the outgoing instance and restores it into the incoming one so internal
+// state (caches, counters, in-flight machines) survives the code swap.
+type SwappableSystem interface {
+	Snapshot() ([]byte, error)
+	Restore(state []byte) error
+}
+
+// Snapshot serializes the module's internal state (empty if the module is
+// stateless). Safe to call between ticks on the loop goroutine.
+func (s *wasmSystem[T]) Snapshot() ([]byte, error) {
+	return s.mod.Snapshot(context.Background())
+}
+
+// Restore loads previously-snapshotted internal state into a freshly-loaded
+// module instance. Call before the instance's first tick.
+func (s *wasmSystem[T]) Restore(state []byte) error {
+	return s.mod.Restore(context.Background(), state)
+}
+
 func (s *wasmSystem[T]) Init() {
 	s.Stage().Engine().Log.RegisterCategories(catWasmSystem)
 }
@@ -95,3 +116,4 @@ func (s *wasmSystem[T]) Update(dt float32) {
 
 // Compile-time assertion that wasmSystem satisfies the engine System contract.
 var _ engine.System = (*wasmSystem[struct{}])(nil)
+var _ SwappableSystem = (*wasmSystem[struct{}])(nil)
