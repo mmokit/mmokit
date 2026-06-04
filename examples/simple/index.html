@@ -95,8 +95,7 @@ function decodeWaveFrame(view, off, bodyEnd) {
   for (let i = 0; i < count; i++) {
     const x = view.getFloat32(off, true); off += 4;
     const y = view.getFloat32(off, true); off += 4;
-    const hue = view.getFloat32(off, true); off += 4; // [0,1), driven by the colorwave wasm module
-    positions[i] = { x, y, hue };
+    positions[i] = { x, y };
   }
   // off should equal bodyEnd at this point for a well-formed frame.
   return positions;
@@ -165,9 +164,7 @@ function currentSamples() {
   for (let i = 0; i < n; i++) {
     const p = prev.samples[i];
     const q = next.samples[i];
-    // Interpolate position; take hue from the latest snapshot (it wraps
-    // 0.99→0.01, so lerping would glitch — and 20Hz color is plenty smooth).
-    out[i] = { x: p.x + (q.x - p.x) * a, y: p.y + (q.y - p.y) * a, hue: q.hue };
+    out[i] = { x: p.x + (q.x - p.x) * a, y: p.y + (q.y - p.y) * a };
   }
   return out;
 }
@@ -209,8 +206,8 @@ function draw() {
 
   for (const s of samples) {
     const p = project(s, w, h);
-    // Hue is server-driven by the colorwave wasm module ([0,1) → degrees).
-    const hue = (s.hue ?? 0) * 360;
+    const t = (s.x - WORLD_X_MIN) / (WORLD_X_MAX - WORLD_X_MIN);
+    const hue = 200 + t * 160;
     ctx.fillStyle = `hsl(${hue}, 80%, 62%)`;
     ctx.shadowColor = `hsla(${hue}, 90%, 60%, 0.6)`;
     ctx.shadowBlur = 16;

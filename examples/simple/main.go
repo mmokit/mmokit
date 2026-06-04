@@ -19,7 +19,6 @@
 package main
 
 import (
-	"github.com/zenion/mmoserver/examples/simple/wavecomp"
 	"github.com/zenion/mmoserver/pkg/mmokit"
 )
 
@@ -29,12 +28,14 @@ func main() {
 		AnonymousAuth: true,
 	})
 
-	process.AddSystem(mmokit.NewSystem(&SineWaveSystem{}))
+	// The field's MOTION is a hot-swappable wasm module — it runs before the
+	// broadcaster below so each frame carries this tick's positions. Edit
+	// wasmmods/wave/main.go, `just wasm-build`, then `wasm swap wave` to morph
+	// the motion of the whole field live.
+	mmokit.AddWasmSystem[mmokit.Position](process, "dist/wasmmods/wave.wasm")
 
-	// Hot-swappable wasm system that drives each entity's Hue. Edit
-	// wasmmods/colorwave/main.go, `just wasm-build`, then `wasm swap colorwave`
-	// to change the color behavior live.
-	mmokit.AddWasmSystem[wavecomp.Hue](process, "dist/wasmmods/colorwave.wasm")
+	// Native scaffold: spawns the field + broadcasts positions to clients.
+	process.AddSystem(mmokit.NewSystem(&FieldSystem{}))
 
 	process.Start()
 }
