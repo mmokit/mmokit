@@ -813,6 +813,9 @@ func New(cfg Config) *Process {
 	if err := registerWasmVerbs(proc); err != nil {
 		panic(fmt.Sprintf("mmokit.New: register wasm verbs: %v", err))
 	}
+	if err := registerTuneVerbs(proc); err != nil {
+		panic(fmt.Sprintf("mmokit.New: registerTuneVerbs: %v", err))
+	}
 	return proc
 }
 

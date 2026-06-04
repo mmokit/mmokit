@@ -179,6 +179,31 @@ func registeredNames(p *universe.Process) []string {
 	return names
 }
 
+// cellsMatching returns the process's local cells matching the optional
+// node / cell filters. An empty filter matches everything. The cell filter
+// accepts either a canonical mesh id or a short form (e.g. "0_0").
+func cellsMatching(proc *universe.Process, node, cell string) []*universe.Cell {
+	var wantCell string
+	if cell != "" {
+		if canon, err := ParseCellID(cell); err == nil {
+			wantCell = string(canon.MeshID())
+		} else {
+			wantCell = cell
+		}
+	}
+	var out []*universe.Cell
+	for id, c := range proc.Cells {
+		if node != "" && proc.HostIDForCell(c) != node {
+			continue
+		}
+		if cell != "" && string(id) != wantCell {
+			continue
+		}
+		out = append(out, c)
+	}
+	return out
+}
+
 // registerWasmVerbs registers the wasm.list/load/unload/swap verbs on the
 // process command registry. All four are RouteAllHosts: in distributed mode
 // they fan out to every host, which iterates its own local cells. Handlers
@@ -186,30 +211,6 @@ func registeredNames(p *universe.Process) []string {
 // once per process (Register errors on a duplicate verb).
 func registerWasmVerbs(proc *universe.Process) error {
 	reg := proc.CmdRegistry()
-
-	// targetCells resolves the set of local cells matching the optional
-	// node / cell filters. An empty filter matches everything.
-	targetCells := func(node, cell string) []*universe.Cell {
-		var wantCell string
-		if cell != "" {
-			if canon, err := ParseCellID(cell); err == nil {
-				wantCell = string(canon.MeshID())
-			} else {
-				wantCell = cell
-			}
-		}
-		var out []*universe.Cell
-		for id, c := range proc.Cells {
-			if node != "" && proc.HostIDForCell(c) != node {
-				continue
-			}
-			if cell != "" && string(id) != wantCell {
-				continue
-			}
-			out = append(out, c)
-		}
-		return out
-	}
 
 	// wasm.load — instantiate a registered wasm system onto matching cells.
 	if err := reg.Register(cmdsys.Command{
@@ -224,7 +225,7 @@ func registerWasmVerbs(proc *universe.Process) error {
 				return nil, fmt.Errorf("unknown wasm system %q (registered: %s)", args.Name, strings.Join(registeredNames(proc), ", "))
 			}
 			var rows []wasmOpRow
-			for _, cell := range targetCells(args.Node, args.Cell) {
+			for _, cell := range cellsMatching(proc, args.Node, args.Cell) {
 				newSys, err := entry.build(entry.path)
 				if err != nil {
 					return nil, err
@@ -260,7 +261,7 @@ func registerWasmVerbs(proc *universe.Process) error {
 		Handler: func(ctx context.Context, env *cmdsys.Env, raw any) (any, error) {
 			args := raw.(wasmNameArgs)
 			var rows []wasmOpRow
-			for _, cell := range targetCells(args.Node, args.Cell) {
+			for _, cell := range cellsMatching(proc, args.Node, args.Cell) {
 				row, err := CmdOnLoop(ctx, cell.Engine, func() (wasmOpRow, error) {
 					key := string(cell.MeshID)
 					old, ok := cell.Loop.SystemByName(args.Name)
@@ -296,7 +297,7 @@ func registerWasmVerbs(proc *universe.Process) error {
 				return nil, fmt.Errorf("unknown wasm system %q (registered: %s)", args.Name, strings.Join(registeredNames(proc), ", "))
 			}
 			var rows []wasmOpRow
-			for _, cell := range targetCells(args.Node, args.Cell) {
+			for _, cell := range cellsMatching(proc, args.Node, args.Cell) {
 				newSys, err := entry.build(entry.path)
 				if err != nil {
 					return nil, err
@@ -340,7 +341,7 @@ func registerWasmVerbs(proc *universe.Process) error {
 			args := raw.(wasmListArgs)
 			names := registeredNames(proc)
 			var rows []wasmOpRow
-			for _, cell := range targetCells(args.Node, args.Cell) {
+			for _, cell := range cellsMatching(proc, args.Node, args.Cell) {
 				for _, name := range names {
 					row, _ := CmdOnLoop(ctx, cell.Engine, func() (wasmOpRow, error) {
 						key := string(cell.MeshID)
