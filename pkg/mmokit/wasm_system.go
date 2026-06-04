@@ -8,6 +8,7 @@ import (
 	"unsafe"
 
 	"github.com/zenion/mmoserver/pkg/engine"
+	"github.com/zenion/mmoserver/pkg/tunable"
 	"github.com/zenion/mmoserver/pkg/wasmabi"
 	"github.com/zenion/mmoserver/pkg/wasmhost"
 )
@@ -78,6 +79,10 @@ type wasmSystem[T any] struct {
 	mod       *wasmhost.Module
 	readWrite bool
 	col       []T // reused gather buffer
+
+	schema []wasmabi.ParamField // harvested once at Init
+	defs   []tunable.Def        // cached descriptor list (kind/bounds)
+	values map[string]float64   // current values by field name (this instance's view)
 }
 
 // SwappableSystem is implemented by hot-loadable systems that can serialize
@@ -109,6 +114,70 @@ func (s *wasmSystem[T]) Close() error {
 
 func (s *wasmSystem[T]) Init() {
 	s.Stage().Engine().Log.RegisterCategories(catWasmSystem)
+	s.harvestParams()
+}
+
+func (s *wasmSystem[T]) harvestParams() {
+	fields, err := s.mod.ParamsSchema(context.Background())
+	if err != nil || len(fields) == 0 {
+		return
+	}
+	s.schema = fields
+	s.values = make(map[string]float64, len(fields))
+	s.defs = make([]tunable.Def, len(fields))
+	for i, f := range fields {
+		kind := tunable.Kind(f.Kind)
+		d := tunable.Def{Name: f.Name, Kind: kind}
+		if f.BoundsMask&wasmabi.BoundDefault != 0 {
+			d.Default = tunable.FromF64(kind, f.Default)
+		}
+		if f.BoundsMask&wasmabi.BoundMin != 0 {
+			d.Min = tunable.FromF64(kind, f.Min)
+		}
+		if f.BoundsMask&wasmabi.BoundMax != 0 {
+			d.Max = tunable.FromF64(kind, f.Max)
+		}
+		if f.BoundsMask&wasmabi.BoundStep != 0 {
+			d.Step = tunable.FromF64(kind, f.Step)
+		}
+		s.defs[i] = d
+		s.values[f.Name] = f.Default // guest already applied defaults at init
+	}
+}
+
+// Tunables reports the module's current tunable values (this instance's view).
+func (s *wasmSystem[T]) Tunables() []tunable.Def {
+	out := make([]tunable.Def, len(s.defs))
+	for i, d := range s.defs {
+		d.Value = tunable.FromF64(d.Kind, s.values[d.Name])
+		out[i] = d
+	}
+	return out
+}
+
+// Set validates, updates this instance's value, and pushes the full block to
+// the guest (params_set replaces the whole block, so we always send all).
+func (s *wasmSystem[T]) Set(name, value string) error {
+	for i := range s.defs {
+		if s.defs[i].Name != name {
+			continue
+		}
+		if err := s.defs[i].Validate(value); err != nil {
+			return err
+		}
+		v, _ := tunable.ToF64(s.defs[i].Kind, value)
+		s.values[name] = v
+		return s.pushBlock()
+	}
+	return fmt.Errorf("wasm module has no tunable %q", name)
+}
+
+func (s *wasmSystem[T]) pushBlock() error {
+	block := make([]float64, len(s.schema))
+	for i, f := range s.schema {
+		block[i] = s.values[f.Name]
+	}
+	return s.mod.ParamsSet(context.Background(), block)
 }
 
 func (s *wasmSystem[T]) Update(dt float32) {
@@ -138,3 +207,4 @@ func (s *wasmSystem[T]) Update(dt float32) {
 // Compile-time assertion that wasmSystem satisfies the engine System contract.
 var _ engine.System = (*wasmSystem[struct{}])(nil)
 var _ SwappableSystem = (*wasmSystem[struct{}])(nil)
+var _ tunable.Source = (*wasmSystem[struct{}])(nil)
