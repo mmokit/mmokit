@@ -238,6 +238,9 @@ func registerWasmVerbs(proc *universe.Process) error {
 					}
 					WireSystem(newSys, cell.Stage.ECSWorld(), cell.Engine, cell.Stage)
 					cell.Loop.AddSystemLive(args.Name, newSys)
+					if src, ok := tunableSourceFor(newSys); ok {
+						syncSource(tuneRegistryFor(proc), args.Name, src)
+					}
 					return wasmOpRow{Cell: key, Name: args.Name, Status: "loaded"}, nil
 				})
 				if err != nil {
@@ -308,6 +311,9 @@ func registerWasmVerbs(proc *universe.Process) error {
 					if !ok {
 						WireSystem(newSys, cell.Stage.ECSWorld(), cell.Engine, cell.Stage)
 						cell.Loop.AddSystemLive(args.Name, newSys)
+						if src, ok := tunableSourceFor(newSys); ok {
+							syncSource(tuneRegistryFor(proc), args.Name, src)
+						}
 						return wasmOpRow{Cell: key, Name: args.Name, Status: "loaded"}, nil
 					}
 					state := snapshotIfSwappable(old)
@@ -316,6 +322,9 @@ func registerWasmVerbs(proc *universe.Process) error {
 					}
 					WireSystem(newSys, cell.Stage.ECSWorld(), cell.Engine, cell.Stage)
 					cell.Loop.ReplaceSystemLive(args.Name, newSys)
+					if src, ok := tunableSourceFor(newSys); ok {
+						syncSource(tuneRegistryFor(proc), args.Name, src)
+					}
 					closeIfCloser(old)
 					return wasmOpRow{Cell: key, Name: args.Name, Status: "swapped", Ticks: decodeTicks8(state)}, nil
 				})
