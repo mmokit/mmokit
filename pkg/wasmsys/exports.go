@@ -15,7 +15,10 @@ var (
 	snapBuf    []byte // holds snapshot bytes so their pointer stays alive
 )
 
-// Register records the module's System. Call from the module's main().
+// Register records the module's System. Call from the module's init() (NOT
+// main): the host instantiates the module as a reactor, which runs
+// _initialize (package init) but never _start (main), so a Register call in
+// main would never execute and the ABI exports would trap on a nil system.
 func Register(s System) { registered = s }
 
 // Precondition: min >= wasmabi.HeaderSize (the host never requests a smaller arena).
