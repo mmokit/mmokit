@@ -297,6 +297,32 @@ pointerful-component strategy (marshal vs. formally stays-native).
 ### Phase 3
 Cluster-wide atomic add/remove/swap via the commit-plan / `ClusterClock` orchestrator.
 
+## Declarative registration + cluster lifecycle (delivered)
+
+Phase-1 ergonomics layered on the Phase 0 stack:
+
+- **Declarative startup registration** — `mmokit.AddWasmSystem[T](process, "dist/wasmmods/pulse.wasm")`
+  (name auto-derived from the filename → `pulse`) and `mmokit.AddWasmSystemNamed[T](process, name, path)`
+  for an explicit name. One call (a) adds the system via the normal `systemDefs` path so it boots into
+  **every cell on every node** at startup, and (b) records `name → {path, typed builder}` in a per-Process
+  registry for runtime ops. This is the "AddSystem you already know," so a game's wasm systems are declared
+  alongside its native ones; the recompile→push loop is: edit the module → `just wasm-build` → `wasm swap <name>`.
+- **Name-based lifecycle verbs** (framework-provided, auto-registered in `mmokit.New`, so console + admin get
+  them for free), routed `RouteAllHosts` — each host applies to all its local cells:
+  - `wasm list` — registered systems × cells with load state + the module's internal tick counter.
+  - `wasm load <name> [--node N] [--cell C]` — install on target cells (default: all cells, all nodes).
+  - `wasm unload <name> [--node N] [--cell C]` — remove and `Close()` the instance (true unload).
+  - `wasm swap <name> [--node N] [--cell C]` — rebuild from the registered path, snapshot the live
+    instance → restore into the replacement → `ReplaceSystemLive` **in place** (tick-order slot preserved)
+    → `Close()` the old instance. State (e.g. accumulators, phases) survives the swap.
+- **Loop primitives:** `GameLoop.SystemByName` and in-place `ReplaceSystemLive`; the wasm adapter implements
+  `Close() error` so unload/swap drop the wazero instance.
+- **Targeting:** default is every cell on every node; `--node` narrows to one host (cell→host via
+  `Process.HostIDForCell`), `--cell` to one cell. Distributed `--node` targeting is exercised manually via
+  `just distributed`.
+- **Known behavior:** the host adapter skips the module call (and thus the module's internal counter) on a
+  tick where zero entities match the system's component — stateful counters advance only when there is work.
+
 ## Open questions (deferred, not blocking Phase 0)
 
 - Exact host-side resource API for global state (Phase 2).
