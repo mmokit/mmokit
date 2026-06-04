@@ -10,6 +10,12 @@ import (
 	"github.com/zenion/mmoserver/pkg/universe"
 )
 
+func init() {
+	universe.OnCellSystemsReady = func(p *universe.Process, cell *universe.Cell) {
+		SyncCellTunables(p, cell)
+	}
+}
+
 // tunableSourceFor resolves a system to a tunable.Source: the wasm adapter
 // implements Source directly; a native struct with tune-tagged fields is
 // wrapped via reflection; anything else reports false.

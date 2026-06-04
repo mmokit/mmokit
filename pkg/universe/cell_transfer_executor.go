@@ -425,6 +425,7 @@ func (e *cellTransferExecutor) Receive(proto *meshpb.CellTransfer) error {
 	// Two-phase init: World.Init then system Init. Mirrors Build()'s order.
 	node.Stage.Init()
 	initSystems(systems)
+	fireCellSystemsReady(e.coord, node)
 
 	// Start the game loop before enqueuing the populate closure so the
 	// PendingAdminCmds drain actually runs.

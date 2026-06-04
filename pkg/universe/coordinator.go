@@ -1865,6 +1865,7 @@ func (c *Process) Build() {
 		}
 		for _, s := range setups {
 			initSystems(s.systems)
+			fireCellSystemsReady(c, s.cell)
 		}
 	}
 	// For coordinator and remote-host modes, cell creation and host wiring are
@@ -2038,6 +2039,19 @@ func (c *Process) buildStandaloneGateway() {
 	c.gateway.connMgr.OnUpgrade = c.gateway.onWSUpgrade
 
 	c.Log.Log(CatNetConn, "coordinator: standalone gateway %q -> coordinator %s (grpc=%s)", gwID, cfg.CoordinatorAddr, hn.Addr())
+}
+
+// OnCellSystemsReady, if set, is invoked after a cell's systems are constructed
+// and Init'd — boot, dynamic assignment, and split/transfer alike — on the
+// goroutine that built the cell, BEFORE its game loop starts ticking. mmokit
+// sets this (via init()) to apply registry tunable values to fresh system
+// instances. It must not be on the per-tick path.
+var OnCellSystemsReady func(p *Process, cell *Cell)
+
+func fireCellSystemsReady(p *Process, cell *Cell) {
+	if OnCellSystemsReady != nil && p != nil && cell != nil {
+		OnCellSystemsReady(p, cell)
+	}
 }
 
 // initSystems calls Init() on each system that implements it, then
@@ -2783,6 +2797,7 @@ func (c *Process) assignCellOnNode(cellID MeshCellID) {
 	// entity kinds + world state; then systems discover them.
 	node.Stage.Init()
 	initSystems(systems)
+	fireCellSystemsReady(c, node)
 
 	go node.Run(context.Background())
 
