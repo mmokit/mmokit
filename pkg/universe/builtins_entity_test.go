@@ -400,3 +400,71 @@ func TestComponentAccessors_ReturnsLivePointer(t *testing.T) {
 		t.Errorf("pos = %+v, want {12 34}", *pos)
 	}
 }
+
+// ── entity.inspect handler ────────────────────────────────────────────────────
+
+// registerProbeKind registers a kind (id 7, "Probe") whose only component is
+// Position, using the low-level accessor primitive. Returns the stage.
+func registerProbeKind(t *testing.T, coord *Process) *Stage {
+	t.Helper()
+	stage := coord.Cells["0_0"].Stage
+	w := stage.ECSWorld()
+	def := EntityKindDef{Kind: 7, Name: "Probe"}
+	posType := reflect.TypeFor[component.Position]()
+	KindComponentByID(&def, w, ecs.TypeID(w, posType), posType, KindComponentRequired)
+	stage.RegisterEntityKind(def)
+	return stage
+}
+
+func TestEntityInspectHandler_ReturnsComponentFields(t *testing.T) {
+	coord := newTestCoordWithStage(t, "0_0", "host-a")
+	withFreshRegistry(coord)
+	if err := registerEntityCommands(coord); err != nil {
+		t.Fatalf("registerEntityCommands: %v", err)
+	}
+	stage := registerProbeKind(t, coord)
+	stage.Spawn(component.Position{X: 11, Y: 22}, component.EntityKind{Type: 7})
+	netID := findFirstLiveNetID(t, stage)
+
+	cmd, _ := coord.registry.Lookup("entity.inspect")
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
+	res, err := cmd.Handler(ctx, &cmdsys.Env{}, entityInspectArgs{NetID: netID})
+	if err != nil {
+		t.Fatalf("inspect handler: %v", err)
+	}
+	out := res.(entityInspectResult)
+	if out.Kind != "Probe" {
+		t.Errorf("Kind = %q, want Probe", out.Kind)
+	}
+	var sawX bool
+	for _, r := range out.Components {
+		if r.Component == "Position" && r.Field == "X" {
+			sawX = true
+			if r.Value != "11" {
+				t.Errorf("Position.X value = %q, want 11", r.Value)
+			}
+			if !r.Editable {
+				t.Error("Position.X should be editable")
+			}
+		}
+	}
+	if !sawX {
+		t.Errorf("expected a Position.X row; got %+v", out.Components)
+	}
+}
+
+func TestEntityInspectHandler_UnknownNetID(t *testing.T) {
+	coord := newTestCoordWithStage(t, "0_0", "host-a")
+	withFreshRegistry(coord)
+	if err := registerEntityCommands(coord); err != nil {
+		t.Fatalf("registerEntityCommands: %v", err)
+	}
+	cmd, _ := coord.registry.Lookup("entity.inspect")
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	if _, err := cmd.Handler(ctx, &cmdsys.Env{}, entityInspectArgs{NetID: 99999}); err == nil {
+		t.Fatal("expected error for unknown netID")
+	}
+}

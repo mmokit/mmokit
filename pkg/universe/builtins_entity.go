@@ -44,6 +44,26 @@ type entityDespawnResult struct {
 	HostID string
 }
 
+// ── entity.inspect ───────────────────────────────────────────────────────────
+
+type entityInspectArgs struct {
+	NetID uint32 `cmd:"help=entity network ID"`
+}
+
+type entityInspectRow struct {
+	Component string
+	Field     string // dotted path WITHIN the component (maps to entity.modify)
+	Type      string
+	Value     string
+	Editable  bool
+}
+
+type entityInspectResult struct {
+	NetID      uint32
+	Kind       string
+	Components []entityInspectRow `cmd:"table"`
+}
+
 // ── entity.list ─────────────────────────────────────────────────────────────
 
 type entityListArgs struct {
@@ -289,6 +309,17 @@ func registerEntityCommands(coord *Process) error {
 	}); err != nil {
 		return fmt.Errorf("entity.summary: %w", err)
 	}
+	if err := reg.Register(cmdsys.Command{
+		Verb:        "entity.inspect",
+		Capability:  "entity.inspect",
+		Description: "list an entity's components and field values by network ID",
+		Route:       cmdsys.RouteEntityOwner,
+		Args:        entityInspectArgs{},
+		Result:      entityInspectResult{},
+		Handler:     entityInspectHandler(coord),
+	}); err != nil {
+		return fmt.Errorf("entity.inspect: %w", err)
+	}
 	return nil
 }
 
@@ -382,6 +413,56 @@ func entityDespawnHandler(coord *Process) cmdsys.HandlerFunc {
 			}, nil
 		})
 		return result, err
+	}
+}
+
+func entityInspectHandler(coord *Process) cmdsys.HandlerFunc {
+	return func(ctx context.Context, env *cmdsys.Env, raw any) (any, error) {
+		args := raw.(entityInspectArgs)
+
+		ownerCell, ownerCellID, ok := findCellOwningNetID(coord, args.NetID)
+		if !ok {
+			return nil, fmt.Errorf("entity.inspect: netID %d not found on any local cell", args.NetID)
+		}
+
+		return runOnCell(ctx, ownerCell, func() (entityInspectResult, error) {
+			entity, pres, exists := ownerCell.Stage.LookupNetID(args.NetID)
+			if !exists || pres != PresenceLive {
+				return entityInspectResult{}, fmt.Errorf("entity.inspect: netID %d not live in cell %s", args.NetID, ownerCellID)
+			}
+
+			kindMap := ecs.NewMap1[component.EntityKind](ownerCell.Stage.ECSWorld())
+			if !kindMap.HasAll(entity) {
+				return entityInspectResult{}, fmt.Errorf("entity.inspect: netID %d has no EntityKind", args.NetID)
+			}
+			kindType := kindMap.Get(entity).Type
+			def, ok := ownerCell.Stage.EntityKindDefs()[kindType]
+			if !ok {
+				return entityInspectResult{}, fmt.Errorf("entity.inspect: kind %d not registered", kindType)
+			}
+
+			var rows []entityInspectRow
+			for _, acc := range def.ComponentAccessors() {
+				comp, present := acc.Get(entity)
+				if !present {
+					continue
+				}
+				for _, fi := range ListFields(comp) {
+					rows = append(rows, entityInspectRow{
+						Component: acc.Name,
+						Field:     fi.Path,
+						Type:      fi.Type,
+						Value:     fi.Value,
+						Editable:  fi.Editable,
+					})
+				}
+			}
+			return entityInspectResult{
+				NetID:      args.NetID,
+				Kind:       resolveKindName(ownerCell.Stage, kindType),
+				Components: rows,
+			}, nil
+		})
 	}
 }
 
