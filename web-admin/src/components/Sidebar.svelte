@@ -35,16 +35,16 @@
   }
 
   const builtinItems: Item[] = [
-    { id: "cluster",  label: "Cells",    icon: Globe,       group: "MESH",      path: "/cluster",  glyph: "C" },
-    { id: "nodes",    label: "Nodes",    icon: Boxes,       group: "MESH",      path: "/nodes",    glyph: "N" },
-    { id: "world-editor", label: "World Editor", icon: MapPinned, group: "MESH", path: "/world-editor", glyph: "W" },
+    { id: "cluster",  label: "Cells",    icon: Globe,       group: "ENGINE",    path: "/cluster",  glyph: "C" },
+    { id: "nodes",    label: "Nodes",    icon: Boxes,       group: "ENGINE",    path: "/nodes",    glyph: "N" },
+    { id: "world-editor", label: "World Editor", icon: MapPinned, group: "ENGINE", path: "/world-editor", glyph: "W" },
+    { id: "tunables", label: "Tunables", icon: SlidersHorizontal, group: "ENGINE", path: "/tunables", glyph: "T" },
     { id: "players",  label: "Players",  icon: Users,       group: "PEOPLE",    path: "/players",  glyph: "P" },
     { id: "events",   label: "Events",   icon: List,        group: "TELEMETRY", path: "/events",   glyph: "E" },
     { id: "audit",    label: "Audit",    icon: ShieldCheck, group: "TELEMETRY", path: "/audit",    glyph: "A" },
     { id: "logs",     label: "Logs",     icon: Scroll,      group: "TELEMETRY", path: "/logs",     glyph: "L" },
-    { id: "users",    label: "Admin Users", icon: ShieldCheck, group: "CONFIG", path: "/users", glyph: "U" },
-    { id: "tunables", label: "Tunables", icon: SlidersHorizontal, group: "CONFIG", path: "/tunables", glyph: "T" },
-    { id: "settings", label: "Settings", icon: Settings,    group: "CONFIG",    path: "/settings", glyph: "S" },
+    { id: "users",    label: "Admin Users", icon: ShieldCheck, group: "ADMIN",  path: "/users",    glyph: "U" },
+    { id: "settings", label: "Settings", icon: Settings,    group: "ADMIN",     path: "/settings", glyph: "S" },
   ];
 
   let panels = $derived<PanelDef[]>(panelsStore.value ?? []);
