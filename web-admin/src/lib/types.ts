@@ -180,3 +180,30 @@ export type LogEntry = {
   t: string;      // ISO timestamp
 };
 
+// Entity inspect/list types mirror the Go result structs in
+// pkg/universe/builtins_entity.go (entityRow / entityInspectRow /
+// entityInspectResult). Those structs have no json tags, so the wire keys are
+// the exported Go field names verbatim.
+export type EntityListRow = {
+  NetID: number;
+  Kind: string;
+  WorldX: number;
+  WorldY: number;
+  CellID: string;
+  HostID: string;
+};
+
+export type EntityInspectRow = {
+  Component: string;
+  Field: string;
+  Type: string;
+  Value: string;
+  Editable: boolean;
+};
+
+export type EntityInspectResult = {
+  NetID: number;
+  Kind: string;
+  Components: EntityInspectRow[];
+};
+

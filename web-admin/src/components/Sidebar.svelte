@@ -39,6 +39,7 @@
     { id: "nodes",    label: "Nodes",    icon: Boxes,       group: "ENGINE",    path: "/nodes",    glyph: "N" },
     { id: "world-editor", label: "World Editor", icon: MapPinned, group: "ENGINE", path: "/world-editor", glyph: "W" },
     { id: "tunables", label: "Tunables", icon: SlidersHorizontal, group: "ENGINE", path: "/tunables", glyph: "T" },
+    { id: "entities", label: "Entities", icon: Boxes,       group: "ENGINE",    path: "/entities", glyph: "Y" },
     { id: "players",  label: "Players",  icon: Users,       group: "PEOPLE",    path: "/players",  glyph: "P" },
     { id: "events",   label: "Events",   icon: List,        group: "TELEMETRY", path: "/events",   glyph: "E" },
     { id: "audit",    label: "Audit",    icon: ShieldCheck, group: "TELEMETRY", path: "/audit",    glyph: "A" },

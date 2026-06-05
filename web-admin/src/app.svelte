@@ -17,6 +17,7 @@
   import Settings from "./routes/settings.svelte";
   import Users from "./routes/users.svelte";
   import Tunables from "./routes/tunables.svelte";
+  import Entities from "./routes/entities.svelte";
   import WorldEditor from "./routes/world-editor.svelte";
   import Sidebar from "./components/Sidebar.svelte";
   import TopBar from "./components/TopBar.svelte";
@@ -116,6 +117,8 @@
           <Users />
         {:else if path === "/tunables"}
           <Tunables />
+        {:else if path === "/entities"}
+          <Entities />
         {:else if path === "/world-editor"}
           <WorldEditor />
         {:else if path === "/settings"}
