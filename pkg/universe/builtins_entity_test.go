@@ -85,6 +85,8 @@ func TestEntityCommandsRegistration(t *testing.T) {
 		{"entity.despawn", cmdsys.RouteEntityOwner, "entity.despawn"},
 		{"entity.list", cmdsys.RouteAllHosts, "entity.list"},
 		{"entity.tp", cmdsys.RouteEntityOwner, "entity.tp"},
+		{"entity.inspect", cmdsys.RouteEntityOwner, "entity.inspect"},
+		{"entity.modify", cmdsys.RouteEntityOwner, "entity.modify"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.verb, func(t *testing.T) {
@@ -121,6 +123,8 @@ func TestEntityCommandsArgResultTypes(t *testing.T) {
 		{"entity.despawn", entityDespawnArgs{}, entityDespawnResult{}},
 		{"entity.list", entityListArgs{}, entityListResult{}},
 		{"entity.tp", entityTpArgs{}, entityTpResult{}},
+		{"entity.inspect", entityInspectArgs{}, entityInspectResult{}},
+		{"entity.modify", entityModifyArgs{}, entityModifyResult{}},
 	} {
 		t.Run(tt.verb, func(t *testing.T) {
 			cmd, _ := coord.registry.Lookup(tt.verb)
