@@ -5,6 +5,7 @@
   import {
     fetchTunables,
     setTunable,
+    resetTunable,
     groupRows,
     type TuneSystem,
     type TuneRow,
@@ -85,6 +86,48 @@
     }
   }
 
+  // Reset to tag defaults. tune.reset re-publishes the post-reset rows on the
+  // SSE topic; we also snap values locally so the controls move immediately.
+  // Fields with no declared default ("") are left as-is (tune.reset skips them).
+  async function resetField(system: string, r: TuneRow) {
+    if (r.Default === "") return;
+    applyLocal(system, r.Field, r.Default);
+    try {
+      await resetTunable(system, r.Field);
+    } catch (e) {
+      flashError(e instanceof ApiError ? e.message : (e as Error).message);
+      void refresh();
+    }
+  }
+
+  function snapSystemLocal(system: string) {
+    const si = systems.findIndex((s) => s.name === system);
+    if (si < 0) return;
+    for (const f of systems[si].fields) {
+      if (f.Default !== "") applyLocal(system, f.Field, f.Default);
+    }
+  }
+
+  async function resetSystem(system: string) {
+    snapSystemLocal(system);
+    try {
+      await resetTunable(system);
+    } catch (e) {
+      flashError(e instanceof ApiError ? e.message : (e as Error).message);
+      void refresh();
+    }
+  }
+
+  async function resetAll() {
+    for (const s of systems) snapSystemLocal(s.name);
+    try {
+      await Promise.all(systems.map((s) => resetTunable(s.name)));
+    } catch (e) {
+      flashError(e instanceof ApiError ? e.message : (e as Error).message);
+      void refresh();
+    }
+  }
+
   // Per-field debounce timers for the slider oninput stream (~80ms).
   const timers = new Map<string, ReturnType<typeof setTimeout>>();
   onDestroy(() => {
@@ -139,12 +182,23 @@
 <main class="p-4 space-y-3">
   <div class="flex items-center justify-between">
     <h2 class="text-accent-300 text-[11px] uppercase tracking-wide">Tunables</h2>
-    <button
-      class="px-2 py-0.5 text-[10.5px] bg-white/5 border border-white/10 rounded hover:bg-white/10"
-      onclick={() => void refresh()}
-    >
-      refresh
-    </button>
+    <div class="flex items-center gap-2">
+      {#if systems.length > 0}
+        <button
+          class="px-2 py-0.5 text-[10.5px] bg-white/5 border border-white/10 rounded text-slate-300 hover:bg-amber-500/10 hover:border-amber-500/40 hover:text-amber-200"
+          title="Reset every tunable in every system to its default"
+          onclick={() => void resetAll()}
+        >
+          reset all
+        </button>
+      {/if}
+      <button
+        class="px-2 py-0.5 text-[10.5px] bg-white/5 border border-white/10 rounded hover:bg-white/10"
+        onclick={() => void refresh()}
+      >
+        refresh
+      </button>
+    </div>
   </div>
 
   {#if loading}
@@ -161,11 +215,20 @@
     <div class="space-y-3">
       {#each systems as sys (sys.name)}
         <section class="bg-[#0d1117] border border-white/10 rounded-lg p-3">
-          <h3
-            class="text-slate-300 text-[11px] uppercase tracking-wide mb-2 font-mono"
-          >
-            {sys.name}
-          </h3>
+          <div class="flex items-center justify-between mb-2">
+            <h3
+              class="text-slate-300 text-[11px] uppercase tracking-wide font-mono"
+            >
+              {sys.name}
+            </h3>
+            <button
+              class="px-1.5 py-0.5 text-[10px] text-slate-500 border border-transparent rounded hover:text-amber-200 hover:border-amber-500/40"
+              title="Reset all of {sys.name}'s tunables to their defaults"
+              onclick={() => void resetSystem(sys.name)}
+            >
+              reset
+            </button>
+          </div>
           <div class="space-y-1.5">
             {#each sys.fields as f (f.Field)}
               <div class="flex items-center gap-3 text-[12px]">
@@ -230,6 +293,18 @@
                     default {f.Default || "—"}
                   </span>
                 {/if}
+
+                <button
+                  class="ml-auto shrink-0 w-6 text-center text-[13px] leading-none text-slate-600 hover:text-amber-200 disabled:opacity-25 disabled:hover:text-slate-600"
+                  title={f.Default !== ""
+                    ? `Reset ${f.Field} to ${f.Default}`
+                    : "No default to reset to"}
+                  aria-label="Reset {f.Field}"
+                  disabled={f.Default === ""}
+                  onclick={() => void resetField(sys.name, f)}
+                >
+                  ↺
+                </button>
               </div>
             {/each}
           </div>

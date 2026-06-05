@@ -101,3 +101,16 @@ export async function setTunable(
     Value: value,
   });
 }
+
+// resetTunable resets one field (when `field` is given) or every field in a
+// system (when omitted) to its tag default via the tune.reset verb. Like
+// tune.set, the verb publishes the post-reset rows on the "tunables" SSE topic,
+// so the page picks up the authoritative values from the stream.
+export async function resetTunable(
+  system: string,
+  field?: string,
+): Promise<void> {
+  const args: { System: string; Field?: string } = { System: system };
+  if (field) args.Field = field;
+  await apiPost<InvokeResp>("/admin/api/commands/tune.reset", args);
+}
