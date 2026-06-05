@@ -20,6 +20,12 @@ import (
 type BotSystem struct {
 	mmokit.SystemBase
 
+	// RetargetPeriod is a runtime tunable (ticks between a bot picking a new
+	// wander target; 20 ticks = 1s). Lower = more frantic, higher = lazier.
+	// Tweak it live via `tune set Bot retargetPeriod 40` or the admin
+	// /tunables sliders — it shows up alongside the wasm `pulse` tunables.
+	RetargetPeriod uint16 `tune:"default=100,min=10,max=400,step=10"`
+
 	bots mmokit.Query[BotComponents]
 }
 
@@ -44,14 +50,12 @@ func (s *BotSystem) Update(dt float32) {
 	padX := sizeX * 0.05
 	padY := sizeY * 0.05
 
-	const retargetPeriod = 100 // 5s at 20Hz
-
 	for _, b := range s.bots.Iter {
 		if b.Behavior.TicksUntilRetarget > 0 {
 			b.Behavior.TicksUntilRetarget--
 			continue
 		}
-		b.Behavior.TicksUntilRetarget = retargetPeriod
+		b.Behavior.TicksUntilRetarget = s.RetargetPeriod
 		tx := minX + padX + rand.Float32()*(sizeX-2*padX)
 		ty := minY + padY + rand.Float32()*(sizeY-2*padY)
 		b.MoveTarget.SetTarget(tx, ty)
