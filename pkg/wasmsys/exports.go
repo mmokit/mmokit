@@ -15,6 +15,7 @@ var (
 	snapBuf    []byte    // holds snapshot bytes so their pointer stays alive
 	paramset   *paramSet // built from the registered system in Register
 	schemaBuf  []byte    // holds the encoded schema so its pointer stays alive
+	stateset   *stateSet // auto-snapshot fields, used when the system isn't Stateful
 )
 
 // Register records the module's System. Call from the module's init() (NOT
@@ -24,6 +25,7 @@ var (
 func Register(s System) {
 	registered = s
 	paramset = buildParamSet(s)
+	stateset = buildStateSet(s)
 }
 
 // Precondition: min >= wasmabi.HeaderSize (the host never requests a smaller arena).
@@ -63,7 +65,7 @@ func wasmSnapshot() uint64 {
 	if s, ok := registered.(Stateful); ok {
 		snapBuf = s.Snapshot()
 	} else {
-		snapBuf = nil
+		snapBuf = stateset.marshal()
 	}
 	if len(snapBuf) == 0 {
 		return 0
@@ -77,11 +79,13 @@ func wasmRestore(ptr uint32, length uint32) {
 	if length == 0 {
 		return
 	}
+	src := unsafe.Slice((*byte)(unsafe.Pointer(uintptr(ptr))), int(length))
+	cp := make([]byte, length)
+	copy(cp, src)
 	if s, ok := registered.(Stateful); ok {
-		src := unsafe.Slice((*byte)(unsafe.Pointer(uintptr(ptr))), int(length))
-		cp := make([]byte, length)
-		copy(cp, src)
 		s.Restore(cp)
+	} else {
+		stateset.unmarshal(cp)
 	}
 }
 

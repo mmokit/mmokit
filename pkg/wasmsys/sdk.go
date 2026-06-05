@@ -1,6 +1,12 @@
 // Package wasmsys is the authoring SDK compiled INTO a hot-swappable system
 // module (GOOS=wasip1 GOARCH=wasm). A module defines one System, declares its
 // column via Query(), and loops over the column inside Update().
+//
+// A system's internal state is auto-snapshotted across a hot-swap from its
+// exported, non-tunable, fixed-size fields — no hand-written Snapshot/Restore
+// is needed for the common case. Implement the Stateful interface only for
+// state that needs custom encoding (e.g. unexported or variable-size fields);
+// it takes precedence over the auto-snapshot path.
 package wasmsys
 
 import (
@@ -79,6 +85,66 @@ func MarshalState(v any) []byte {
 //	func (s *mySys) Restore(b []byte) { wasmsys.UnmarshalState(b, &s.ticks) }
 func UnmarshalState(data []byte, ptr any) {
 	_ = binary.Read(bytes.NewReader(data), binary.LittleEndian, ptr)
+}
+
+// stateSet is the guest-side reflection over a system's AUTO-SNAPSHOT fields:
+// exported, non-tune-tagged, fixed-size (binary-marshalable) fields. The
+// framework derives Snapshot/Restore from these when the system does not
+// implement Stateful itself. Tunables (tune-tagged) are config, not state, so
+// they are excluded; unexported fields can't be reflect-marshaled so they are
+// skipped (use a Stateful impl for those, or export them). Fixed-size means
+// binary.Size >= 0 (use intN/uintN/float32/64/bool/arrays/structs thereof —
+// a bare `int` is NOT fixed-size and is skipped).
+type stateSet struct {
+	v       reflect.Value // addressable system struct
+	indices []int         // field indices that are auto-snapshot state
+}
+
+func buildStateSet(sys any) *stateSet {
+	rv := reflect.ValueOf(sys)
+	if rv.Kind() != reflect.Pointer || rv.Elem().Kind() != reflect.Struct {
+		return &stateSet{}
+	}
+	elem := rv.Elem()
+	t := elem.Type()
+	ss := &stateSet{v: elem}
+	for i := range t.NumField() {
+		sf := t.Field(i)
+		if sf.PkgPath != "" {
+			continue // unexported
+		}
+		if _, ok := sf.Tag.Lookup("tune"); ok {
+			continue // tunable config, not snapshot state
+		}
+		if binary.Size(elem.Field(i).Interface()) < 0 {
+			continue // not fixed-size — author should use Stateful
+		}
+		ss.indices = append(ss.indices, i)
+	}
+	return ss
+}
+
+// marshal serializes the auto-snapshot fields in declared order (little-endian).
+func (ss *stateSet) marshal() []byte {
+	if ss == nil || len(ss.indices) == 0 {
+		return nil
+	}
+	var buf bytes.Buffer
+	for _, i := range ss.indices {
+		_ = binary.Write(&buf, binary.LittleEndian, ss.v.Field(i).Interface())
+	}
+	return buf.Bytes()
+}
+
+// unmarshal restores the auto-snapshot fields from a marshal() blob.
+func (ss *stateSet) unmarshal(data []byte) {
+	if ss == nil || len(ss.indices) == 0 || len(data) == 0 {
+		return
+	}
+	r := bytes.NewReader(data)
+	for _, i := range ss.indices {
+		_ = binary.Read(r, binary.LittleEndian, ss.v.Field(i).Addr().Interface())
+	}
 }
 
 // paramField binds a guest struct field to its tunable kind for the params ABI.
