@@ -115,14 +115,17 @@ func registerTuneVerbs(proc *universe.Process) error {
 			if err := d.Validate(a.Value); err != nil {
 				return nil, err
 			}
+			// Thread the canonical field name (d.Name) downstream so the
+			// registry key and the per-cell Source.Set match exactly even when
+			// the operator typed a different case.
 			if a.Cell == "" && a.Node == "" {
-				reg.setValue(a.System, a.Field, a.Value)
+				reg.setValue(a.System, d.Name, a.Value)
 			}
-			if err := applySet(ctx, a.System, a.Field, a.Value, a.Node, a.Cell); err != nil {
+			if err := applySet(ctx, a.System, d.Name, a.Value, a.Node, a.Cell); err != nil {
 				return nil, err
 			}
 			publishTunables(proc, a.System)
-			proc.Log.Log(catTune, "tune set %s.%s=%s (cell=%q node=%q)", a.System, a.Field, a.Value, a.Cell, a.Node)
+			proc.Log.Log(catTune, "tune set %s.%s=%s (cell=%q node=%q)", a.System, d.Name, a.Value, a.Cell, a.Node)
 			return tuneResult{Rows: rowsFor(reg, a.System)}, nil
 		},
 	}); err != nil {
@@ -142,11 +145,13 @@ func registerTuneVerbs(proc *universe.Process) error {
 		Route:       cmdsys.RouteLocal, Args: tuneGetArgs{}, Result: tuneGetResult{},
 		Handler: func(ctx context.Context, env *cmdsys.Env, raw any) (any, error) {
 			a := raw.(tuneGetArgs)
-			v, ok := tuneRegistryFor(proc).value(a.System, a.Field)
+			reg := tuneRegistryFor(proc)
+			d, ok := findDef(reg.defs(a.System), a.Field)
 			if !ok {
 				return nil, fmt.Errorf("no tunable %s.%s", a.System, a.Field)
 			}
-			return tuneGetResult{System: a.System, Field: a.Field, Value: v}, nil
+			v, _ := reg.value(a.System, d.Name)
+			return tuneGetResult{System: a.System, Field: d.Name, Value: v}, nil
 		},
 	}); err != nil {
 		return fmt.Errorf("tune.get: %w", err)
@@ -161,7 +166,7 @@ func registerTuneVerbs(proc *universe.Process) error {
 			a := raw.(tuneResetArgs)
 			reg := tuneRegistryFor(proc)
 			for _, d := range reg.defs(a.System) {
-				if a.Field != "" && d.Name != a.Field {
+				if a.Field != "" && !strings.EqualFold(d.Name, a.Field) {
 					continue
 				}
 				if d.Default == "" {
@@ -220,9 +225,13 @@ func rowsFor(reg *tuneRegistry, system string) []tuneRow {
 	return rows
 }
 
+// findDef resolves a user-supplied field name to its descriptor
+// case-insensitively (field names are PascalCase Go identifiers; operators type
+// them however they like). The returned Def carries the canonical Name, which
+// callers thread downstream so the registry stays consistently keyed.
 func findDef(defs []tunable.Def, field string) (tunable.Def, bool) {
 	for _, d := range defs {
-		if d.Name == field {
+		if strings.EqualFold(d.Name, field) {
 			return d, true
 		}
 	}
