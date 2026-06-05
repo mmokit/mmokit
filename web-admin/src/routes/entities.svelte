@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { untrack } from "svelte";
   import { ApiError } from "$lib/api";
   import { listEntities } from "$lib/entities";
   import type { EntityListRow } from "$lib/types";
@@ -26,11 +27,11 @@
     }
   }
 
-  // Initial fetch on mount. refresh() reads kindFilter, but it is not
-  // reactively tracked here (called inside an async fn), so this effect runs
-  // once. Re-fetches are driven by the Refresh button / Enter on the filters.
+  // Initial fetch on mount only. refresh() reads kindFilter synchronously, so
+  // we untrack it here to keep this effect from re-running on filter changes —
+  // re-fetches are driven explicitly by the Refresh button and the kind dropdown.
   $effect(() => {
-    refresh();
+    untrack(refresh);
   });
 
   // Distinct kinds present in the current result set — drives the kind filter
