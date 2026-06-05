@@ -64,6 +64,23 @@ type entityInspectResult struct {
 	Components []entityInspectRow `cmd:"table"`
 }
 
+// ── entity.modify ────────────────────────────────────────────────────────────
+
+type entityModifyArgs struct {
+	NetID     uint32 `cmd:"help=entity network ID"`
+	Component string `cmd:"help=component name, e.g. Health"`
+	Field     string `cmd:"help=dotted field path within the component, e.g. Current"`
+	Value     string `cmd:"help=new value (coerced to the field's type)"`
+}
+
+type entityModifyResult struct {
+	NetID     uint32
+	Component string
+	Field     string
+	Old       string
+	New       string
+}
+
 // ── entity.list ─────────────────────────────────────────────────────────────
 
 type entityListArgs struct {
@@ -320,6 +337,17 @@ func registerEntityCommands(coord *Process) error {
 	}); err != nil {
 		return fmt.Errorf("entity.inspect: %w", err)
 	}
+	if err := reg.Register(cmdsys.Command{
+		Verb:        "entity.modify",
+		Capability:  "entity.modify",
+		Description: "set a scalar field on a component of a live entity by network ID",
+		Route:       cmdsys.RouteEntityOwner,
+		Args:        entityModifyArgs{},
+		Result:      entityModifyResult{},
+		Handler:     entityModifyHandler(coord),
+	}); err != nil {
+		return fmt.Errorf("entity.modify: %w", err)
+	}
 	return nil
 }
 
@@ -461,6 +489,64 @@ func entityInspectHandler(coord *Process) cmdsys.HandlerFunc {
 				NetID:      args.NetID,
 				Kind:       resolveKindName(ownerCell.Stage, kindType),
 				Components: rows,
+			}, nil
+		})
+	}
+}
+
+func entityModifyHandler(coord *Process) cmdsys.HandlerFunc {
+	return func(ctx context.Context, env *cmdsys.Env, raw any) (any, error) {
+		args := raw.(entityModifyArgs)
+
+		ownerCell, ownerCellID, ok := findCellOwningNetID(coord, args.NetID)
+		if !ok {
+			return nil, fmt.Errorf("entity.modify: netID %d not found on any local cell", args.NetID)
+		}
+
+		return runOnCell(ctx, ownerCell, func() (entityModifyResult, error) {
+			entity, pres, exists := ownerCell.Stage.LookupNetID(args.NetID)
+			if !exists || pres != PresenceLive {
+				return entityModifyResult{}, fmt.Errorf("entity.modify: netID %d not live in cell %s", args.NetID, ownerCellID)
+			}
+
+			kindMap := ecs.NewMap1[component.EntityKind](ownerCell.Stage.ECSWorld())
+			if !kindMap.HasAll(entity) {
+				return entityModifyResult{}, fmt.Errorf("entity.modify: netID %d has no EntityKind", args.NetID)
+			}
+			kindType := kindMap.Get(entity).Type
+			def, ok := ownerCell.Stage.EntityKindDefs()[kindType]
+			if !ok {
+				return entityModifyResult{}, fmt.Errorf("entity.modify: kind %d not registered", kindType)
+			}
+
+			var comp any
+			var found bool
+			var available []string
+			for _, acc := range def.ComponentAccessors() {
+				available = append(available, acc.Name)
+				if acc.Name == args.Component {
+					c, present := acc.Get(entity)
+					if !present {
+						return entityModifyResult{}, fmt.Errorf("entity.modify: entity lacks component %q", args.Component)
+					}
+					comp, found = c, true
+					break
+				}
+			}
+			if !found {
+				return entityModifyResult{}, fmt.Errorf("entity.modify: unknown component %q (available: %v)", args.Component, available)
+			}
+
+			oldStr, newStr, err := SetFieldByPath(comp, args.Field, args.Value)
+			if err != nil {
+				return entityModifyResult{}, fmt.Errorf("entity.modify: %w", err)
+			}
+			return entityModifyResult{
+				NetID:     args.NetID,
+				Component: args.Component,
+				Field:     args.Field,
+				Old:       oldStr,
+				New:       newStr,
 			}, nil
 		})
 	}

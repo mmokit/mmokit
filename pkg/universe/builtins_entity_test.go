@@ -468,3 +468,67 @@ func TestEntityInspectHandler_UnknownNetID(t *testing.T) {
 		t.Fatal("expected error for unknown netID")
 	}
 }
+
+// ── entity.modify handler ─────────────────────────────────────────────────────
+
+func TestEntityModifyHandler_SetsField(t *testing.T) {
+	coord := newTestCoordWithStage(t, "0_0", "host-a")
+	withFreshRegistry(coord)
+	if err := registerEntityCommands(coord); err != nil {
+		t.Fatalf("registerEntityCommands: %v", err)
+	}
+	stage := registerProbeKind(t, coord)
+	e := stage.Spawn(component.Position{X: 11, Y: 22}, component.EntityKind{Type: 7})
+	netID := findFirstLiveNetID(t, stage)
+
+	cmd, _ := coord.registry.Lookup("entity.modify")
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
+	res, err := cmd.Handler(ctx, &cmdsys.Env{}, entityModifyArgs{
+		NetID: netID, Component: "Position", Field: "X", Value: "99",
+	})
+	if err != nil {
+		t.Fatalf("modify handler: %v", err)
+	}
+	out := res.(entityModifyResult)
+	if out.Old != "11" || out.New != "99" {
+		t.Errorf("old/new = %q/%q, want 11/99", out.Old, out.New)
+	}
+	// Verify the live component changed.
+	pos := ecs.NewMap1[component.Position](stage.ECSWorld()).Get(e.Handle())
+	if pos.X != 99 {
+		t.Errorf("live Position.X = %v, want 99", pos.X)
+	}
+}
+
+func TestEntityModifyHandler_Errors(t *testing.T) {
+	coord := newTestCoordWithStage(t, "0_0", "host-a")
+	withFreshRegistry(coord)
+	if err := registerEntityCommands(coord); err != nil {
+		t.Fatalf("registerEntityCommands: %v", err)
+	}
+	stage := registerProbeKind(t, coord)
+	stage.Spawn(component.Position{X: 1, Y: 2}, component.EntityKind{Type: 7})
+	netID := findFirstLiveNetID(t, stage)
+	cmd, _ := coord.registry.Lookup("entity.modify")
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
+	// Unknown component.
+	if _, err := cmd.Handler(ctx, &cmdsys.Env{}, entityModifyArgs{NetID: netID, Component: "Nope", Field: "X", Value: "1"}); err == nil {
+		t.Error("expected error for unknown component")
+	}
+	// Unknown field.
+	if _, err := cmd.Handler(ctx, &cmdsys.Env{}, entityModifyArgs{NetID: netID, Component: "Position", Field: "Z", Value: "1"}); err == nil {
+		t.Error("expected error for unknown field")
+	}
+	// Bad value.
+	if _, err := cmd.Handler(ctx, &cmdsys.Env{}, entityModifyArgs{NetID: netID, Component: "Position", Field: "X", Value: "abc"}); err == nil {
+		t.Error("expected error for uncoercible value")
+	}
+	// Unknown netID.
+	if _, err := cmd.Handler(ctx, &cmdsys.Env{}, entityModifyArgs{NetID: 99999, Component: "Position", Field: "X", Value: "1"}); err == nil {
+		t.Error("expected error for unknown netID")
+	}
+}
