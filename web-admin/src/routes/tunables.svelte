@@ -161,9 +161,23 @@
     debouncedCommit(system, r.Field, v);
   }
 
-  // Unbounded number / toggle: commit on change (no debounce needed).
+  // Coerce a typed value to something the backend will accept: clamp to
+  // [Min,Max] when bounded, and round to an integer for int/uint kinds (the Go
+  // side parses those with ParseInt and would reject a decimal). Left as-is if
+  // unparseable so the backend can surface the real error.
+  function normalizeNumeric(r: TuneRow, raw: string): string {
+    let n = parseFloat(raw);
+    if (Number.isNaN(n)) return raw;
+    if (r.Min !== "") n = Math.max(n, parseFloat(r.Min));
+    if (r.Max !== "") n = Math.min(n, parseFloat(r.Max));
+    if (r.Kind === "int" || r.Kind === "uint") n = Math.round(n);
+    return String(n);
+  }
+
+  // Manual number entry (both the bounded slider's value box and unbounded
+  // fields): normalize then commit on change.
   function onNumberChange(system: string, r: TuneRow, e: Event) {
-    const v = (e.currentTarget as HTMLInputElement).value;
+    const v = normalizeNumeric(r, (e.currentTarget as HTMLInputElement).value);
     applyLocal(system, r.Field, v);
     void commit(system, r.Field, v);
   }
@@ -269,11 +283,15 @@
                     value={f.Value}
                     oninput={(e) => onSlide(sys.name, f, e)}
                   />
-                  <span
-                    class="w-20 shrink-0 text-right font-mono tabular-nums text-accent-300"
-                  >
-                    {f.Value}
-                  </span>
+                  <input
+                    type="number"
+                    class="w-20 shrink-0 bg-white/5 border border-white/10 rounded px-1.5 py-0.5 text-right font-mono tabular-nums text-accent-300 focus:outline-none focus:border-accent-300/40"
+                    min={f.Min}
+                    max={f.Max}
+                    step={f.Kind === "float" ? "any" : "1"}
+                    value={f.Value}
+                    onchange={(e) => onNumberChange(sys.name, f, e)}
+                  />
                   <span
                     class="w-28 shrink-0 text-[10px] font-mono text-slate-600 text-right"
                   >
