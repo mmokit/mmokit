@@ -48,4 +48,4 @@ func (w *wave) Update(ctx *wasmsys.Ctx, dt float32) {
 }
 
 func init() { wasmsys.Register(&wave{}) }
-func main()  {}
+func main() {}
