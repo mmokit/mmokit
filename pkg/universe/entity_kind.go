@@ -47,6 +47,22 @@ type EntityKindDef struct {
 	NetworkBindings []system.ComponentBinding
 }
 
+// ComponentAccessor exposes one component on an entity for runtime inspection
+// and mutation. Built during kind registration with the concrete component
+// type in scope, so it can resolve the component without a typed Map1[T].
+type ComponentAccessor struct {
+	Name string       // component struct type name, e.g. "Health"
+	Type reflect.Type // the component struct type
+	// Get returns a *T (as any) pointing at the entity's live component
+	// storage, or (nil, false) if the entity lacks the component. The returned
+	// pointer aliases live ECS storage and is only valid for immediate,
+	// synchronous use within a single on-loop call — a structural ECS mutation
+	// (adding or removing any component on the same archetype) may relocate
+	// storage and invalidate it. Read or copy the value out before yielding;
+	// never store the pointer across ticks.
+	Get func(entity ecs.Entity) (any, bool)
+}
+
 // kindComponent holds closures for one component's registration across subsystems.
 type kindComponent struct {
 	// registerTransfer registers this component with a ReplicationRegistry
@@ -57,6 +73,10 @@ type kindComponent struct {
 	// have one. Used for auto-filling on transfer receive (Stage.Spawn requires
 	// the caller to pass kind components explicitly).
 	ensureExists func(entity ecs.Entity)
+
+	// buildAccessor constructs a ComponentAccessor for this component bound to
+	// the registration-time world. nil only if registration predates accessors.
+	buildAccessor func() ComponentAccessor
 }
 
 // KindComponentByID registers a component on an EntityKindDef from a
@@ -84,6 +104,18 @@ func KindComponentByID(
 			}
 		},
 	}
+	kc.buildAccessor = func() ComponentAccessor {
+		return ComponentAccessor{
+			Name: t.Name(),
+			Type: t,
+			Get: func(entity ecs.Entity) (any, bool) {
+				if !u.Has(entity, id) {
+					return nil, false
+				}
+				return reflect.NewAt(t, u.Get(entity, id)).Interface(), true
+			},
+		}
+	}
 	if mode != KindComponentLocal {
 		kc.registerTransfer = func(reg *ReplicationRegistry) {
 			RegisterComponentByID(reg, w, id, t, opts...)
@@ -98,4 +130,17 @@ func KindComponentByID(
 // Components returns the number of registered components.
 func (def *EntityKindDef) Components() int {
 	return len(def.components)
+}
+
+// ComponentAccessors returns one accessor per registered component (including
+// local-only components), in registration order. Used by entity.inspect /
+// entity.modify to enumerate and mutate component fields generically.
+func (def *EntityKindDef) ComponentAccessors() []ComponentAccessor {
+	out := make([]ComponentAccessor, 0, len(def.components))
+	for _, kc := range def.components {
+		if kc.buildAccessor != nil {
+			out = append(out, kc.buildAccessor())
+		}
+	}
+	return out
 }

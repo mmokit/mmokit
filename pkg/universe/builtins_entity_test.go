@@ -20,6 +20,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/mlange-42/ark/ecs"
+
 	"github.com/zenion/mmoserver/pkg/cmdsys"
 	"github.com/zenion/mmoserver/pkg/component"
 	"github.com/zenion/mmoserver/pkg/coords"
@@ -359,3 +361,42 @@ func findFirstLiveNetID(t *testing.T, stage *Stage) uint32 {
 	return 0
 }
 
+
+// ── ComponentAccessors ────────────────────────────────────────────────────────
+
+func TestComponentAccessors_ReturnsLivePointer(t *testing.T) {
+	coords.SetCellSize(1024)
+	log := logger.New()
+	eng := engine.New(engine.DefaultConfig(), netpkg.NewConnManager(), log)
+	parsed, _ := ParseCellID("0_0")
+	stage := NewStage(eng, parsed, 300, nil)
+	w := stage.ECSWorld()
+
+	// Build a kind def with Position as a Required component via the same
+	// low-level primitive mmokit.RegisterKind uses.
+	def := EntityKindDef{Kind: 7, Name: "Probe"}
+	posType := reflect.TypeFor[component.Position]()
+	KindComponentByID(&def, w, ecs.TypeID(w, posType), posType, KindComponentRequired)
+	stage.RegisterEntityKind(def)
+
+	e := stage.Spawn(component.Position{X: 12, Y: 34}, component.EntityKind{Type: 7})
+
+	accs := stage.EntityKindDefs()[7].ComponentAccessors()
+	if len(accs) != 1 {
+		t.Fatalf("ComponentAccessors len = %d, want 1", len(accs))
+	}
+	if accs[0].Name != "Position" {
+		t.Errorf("accessor Name = %q, want Position", accs[0].Name)
+	}
+	got, ok := accs[0].Get(e.Handle())
+	if !ok {
+		t.Fatal("Get returned ok=false for present component")
+	}
+	pos, ok := got.(*component.Position)
+	if !ok {
+		t.Fatalf("Get returned %T, want *component.Position", got)
+	}
+	if pos.X != 12 || pos.Y != 34 {
+		t.Errorf("pos = %+v, want {12 34}", *pos)
+	}
+}
