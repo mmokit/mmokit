@@ -1,0 +1,217 @@
+# C# Client SDK Generation + Windows/Unity Deploy Workflow
+
+**Date:** 2026-06-06
+**Status:** Design approved, pending implementation plan
+**Target game:** `examples/4node-basic` (the actual 4node-basic backend, with a new Unity frontend)
+
+## Goal
+
+Generate a typed **C# client SDK** from the existing protocol schema (`--dump-schema`)
+so a Unity load-test/demo client can connect to the 4node-basic server over the
+project's **UDP transport**, authenticate, send input, and render interpolated
+entity state. The generated SDK deploys directly to a Windows filesystem path
+(reachable from WSL at `/mnt/c/...`) so it can be pulled into a Unity project's
+`Assets/` tree.
+
+This is the C# analog of the existing TypeScript SDK (`cmd/sdkgen` → `web-pixi/sdk/`)
+and the Go load-test bot (`internal/bot/`), unified under one schema.
+
+## Scope
+
+| Piece | In scope |
+|---|---|
+| 1. C# generator backend (`--lang=csharp` in `cmd/sdkgen`) | ✅ |
+| 2. C# `_core` runtime — UDP transport port + delta-decoder + interpolation | ✅ |
+| 3. Server-side: UDP transport op-channel (`0x01`) support | ✅ |
+| 4. Windows deploy workflow (`UNITY_SDK_DIR` env var → `/mnt/c` justfile recipe) | ✅ |
+| 5. Cross-language wire-safety test (golden bytes) | ✅ |
+| 6. The Unity demo/load-test project itself | ❌ Built in Unity, consuming this SDK |
+
+## Guiding principle: minimize duplication
+
+The surface that **iterates in mmokit** — entity kinds, components,
+`RegisterEvent`/`HandleClient`/`RegisterOp`, field encodings — is 100%
+schema-driven and therefore **fully code-generated for C#**. Adding a component,
+event, or op in Go and re-running `--dump-schema` regenerates the C# SDK with
+zero hand edits.
+
+The **only** hand-written C# is the low-churn primitives:
+
+- UDP framing protocol (frozen; Glenn-Fiedler-style; does not change when game
+  types change)
+- quantize read helpers (`qvel`/`qangle`/`qnorm`/`f32`/integers — stable)
+- interpolation ring buffer
+
+So high-churn files are generated; hand-written files rarely change. Protocol
+constants (packet type bytes, `protocol_id`, timeouts, quantize scales) live in
+**one place** (Go: `pkg/net/udpproto`, `pkg/quantize`) and the C# port is guarded
+against drift by a golden-bytes cross-language test (§6).
+
+## A. Generator architecture (the language-backend seam)
+
+Refactor `cmd/sdkgen` so a `Backend` interface owns the language-specific
+emission; `main.go`'s file-dispatch (which files to emit based on schema
+contents) and schema decode stay shared and language-agnostic.
+
+```go
+type Backend interface {
+    Lang() string                      // "ts" | "csharp"
+    FileExt() string                   // ".ts" | ".cs"
+    CoreFiles() []CoreFile             // runtime files to copy into _core/
+    EncodingToType(enc string) string  // "qvel" -> "number"/"float"
+    Transport(s ProtocolSchema) string
+    Entities(s ProtocolSchema) string
+    DeltaDecoder(s ProtocolSchema) string
+    Client(s ProtocolSchema) string
+    Broadcasts(s ProtocolSchema) string
+    Inputs(s ProtocolSchema) string
+    Operations(s ProtocolSchema) string
+    EntityType(s ProtocolSchema) string
+    Index(s ProtocolSchema) string
+}
+```
+
+- `tsBackend` wraps the **existing** functions in `generate.go` / `broadcasts.go` /
+  `inputs.go` / `operations.go` / `entitytype.go` / `server_events.go`. Behavior
+  preserved — `just space-sdk` and `just client-sdk` output byte-identical to today.
+- `csharpBackend` is new.
+- `--lang` flag defaults to `ts` (no change to existing recipes).
+- The conditional file emission in `main.go` (emit `broadcasts` only when broadcast
+  or server-event types exist, etc.) stays shared — it is schema-driven, not
+  language-driven.
+
+## B. Server-side: UDP op-channel support (the one real gap)
+
+Auth and every typed op (`RegisterOp[Req,Res]`) flow over **channel `0x01`**
+(operations). The op path is already transport-agnostic at the gateway:
+
+```
+connect (unauthenticated)
+  -> client sends authRegister/authLogin op over reliable 0x01
+  -> runSessionPump -> op-router -> auth.handleLogin
+  -> AuthLoginSucceededEvent on service.Bus
+  -> gateway.onAuthSuccess(connID, userID, username, token)
+  -> dispatchPostAuthAssignment -> PlayerAssignment -> spawn
+```
+
+This works identically for WS and UDP **except** that `UDPTransport` does not
+demux channel `0x01`:
+
+- `pkg/net/udp_transport.go:172` `routePayload` buckets `0x00` → event queue and
+  dumps everything else there too; there is no op queue.
+- `pkg/net/udp_transport.go:108` `DrainOpInput()` hard-returns `nil`.
+
+### Fix (mirrors WS `Conn`, `pkg/net/conn.go:52-109`)
+
+1. Add `opInbound [][]byte` (+ its own guard or reuse `inMu`) to `UDPTransport`.
+2. In `routePayload`, route `ChannelOperation` (`0x01`) → `opInbound`; keep `0x00`
+   → `inbound`; preserve the legacy no-prefix fallback. Apply on **both** the
+   reliable and unreliable inbound paths (auth ops are sent reliable).
+3. Implement `DrainOpInput()` to drain `opInbound` under the lock.
+
+No other server change is required — auth handlers, the bus event, `onAuthSuccess`,
+and PlayerAssignment are all transport-agnostic.
+
+### Consequence for the C# client
+
+The C# SDK authenticates **entirely over the op channel** (`authRegister` /
+`authLogin` typed ops over UDP-reliable). **No HTTP client is needed in Unity** —
+the SDK does not call `/auth/register` or `/auth/login` over HTTP; it uses the
+generated typed ops. (HTTP auth remains available for the web client; it is simply
+not the path the C# SDK takes.)
+
+## C. C# `_core` runtime (hand-ported, copied like the TS cores)
+
+Kept in-repo as the single source for the C# ports and copied into the SDK output
+`_core/` by `csharpBackend.CoreFiles()`, exactly as the TS cores are copied today.
+
+| File | Source it ports | Content |
+|---|---|---|
+| `_core/UdpTransport.cs` | `pkg/net/udpproto` + `pkg/net/udpclient` | ConnReq/ConnAccept handshake, 16-bit seq reliability + 32-bit ACK bitfield, unreliable channel, keepalive/timeout. Channel-byte prefix on send (`0x00`/`0x01`); demux on recv. Uses `System.Net.Sockets.UdpClient`. |
+| `_core/DeltaDecoderCore.cs` | `pkg/quantize/ts/delta-decoder-core.ts` (+ Go `pkg/quantize`) | big-endian `BigEndianReader`; quantize decode for `qvel`/`qangle`/`qnorm`/`f32`/`u8`/`u16`/`u32`/`i16`/`bool`. |
+| `_core/InterpolationCore.cs` | `pkg/quantize/ts/interpolation-core.ts` | per-entity ring keyed by `producedAtMs`; render-delay + extrapolation cap. |
+
+Suggested in-repo home for the ports: `pkg/net/cs/UdpTransport.cs` and
+`pkg/quantize/cs/*.cs` (mirroring the existing `pkg/quantize/ts/` convention), with
+sdkgen flags pointing at them (parallel to the existing `--core` / `--interp` flags).
+
+## D. Emitted C# files & type mapping
+
+`csharpBackend` emits into the target dir under one namespace (default `Mmokit.Sdk`,
+overridable via a `--namespace` flag):
+
+| TS file | C# file | Content (all schema-generated) |
+|---|---|---|
+| `entities.ts` | `Entities.cs` | one `struct`/`class` per entity kind, from `EntitySchema` |
+| `delta-decoder.ts` | `DeltaDecoder.cs` | per-entity decode, from the same `writeFieldDecoder` schema walk |
+| `entityType.ts` | `EntityType.cs` | `enum` of kind IDs |
+| `broadcasts.ts` | `Events.cs` | server-event + broadcast classes with `static Decode(...)` |
+| `inputs.ts` | `Inputs.cs` | client-input classes with `Encode()` |
+| `operations.ts` | `Operations.cs` | op Req/Res classes (incl. `authLogin`/`authRegister`) |
+| `client.ts` | `Client.cs` | typed facade: `Connect`, `AuthLogin`, `OnEvent`, `SendInput`, op calls |
+| `index.ts` | (n/a) | C# uses namespaces; no barrel file. Optionally emit an `.asmdef`. |
+| `_core/*` | `_core/*.cs` | §C ports |
+
+`EncodingToType` map: `f32`→`float`; `qvel`/`qangle`/`qnorm`→`float` (decoded
+value); `u8`→`byte`; `u16`→`ushort`; `u32`→`uint`; `i16`→`short`; `bool`→`bool`;
+`string`→`string`.
+
+Optionally emit a `Mmokit.Sdk.asmdef` so Unity treats the SDK as its own assembly
+(keeps compile times down and namespaces clean). Decision deferred to the plan;
+default to emitting one.
+
+## E. Windows deploy workflow
+
+A dedicated justfile recipe (not folded into the default `just build`, because it
+writes a Windows path that is absent in headless/CI environments):
+
+```just
+# generate the C# client SDK for 4node-basic into the Unity Assets tree.
+# Override the target with UNITY_SDK_DIR (defaults to a /mnt/c path).
+csharp-sdk:
+    go run ./examples/4node-basic --dump-schema \
+        "--postgres-url={{ env('POSTGRES_URL', 'postgres://mmo:mmo@localhost:5432/mmo_4node?sslmode=disable') }}" \
+      | go run ./cmd/sdkgen --lang=csharp \
+          --out "{{ env('UNITY_SDK_DIR', '<WINDOWS-HOME>/UnityProj/Assets/Mmokit/Sdk') }}"
+```
+
+- `UNITY_SDK_DIR` overrides the target per machine; default points at a `/mnt/c`
+  Unity `Assets/` path.
+- The generator writes straight to the target — no intermediate repo copy.
+- A mirror recipe may be added in `examples/4node-basic/justfile` (`just csharp-sdk`)
+  delegating to the root recipe, matching the existing `sdk` recipe pattern.
+
+## F. Testing strategy
+
+1. **Generator golden test** (`cmd/sdkgen`): golden-file test for the C# backend so
+   schema changes surface as reviewable `.cs` diffs.
+2. **UDP op-channel test** (`pkg/net`): assert an inbound `0x01` reliable frame lands
+   in `DrainOpInput()` and a `0x00` frame in `DrainInput()`.
+3. **Cross-language wire-safety test (golden bytes — DRY drift guard):**
+   - A Go test emits canonical frames (a reliable handshake, an unreliable world
+     delta, a quantized sample set) to golden byte files under `testdata/`.
+   - A C# decode test (run via `dotnet test`) reads the **same** golden files and
+     asserts the C# `_core` decodes them to the expected values, and re-encodes to
+     identical bytes where applicable.
+   - This cross-checks both languages against one source of truth and fails loudly
+     if the hand-ported C# core drifts from `udpproto`/`quantize`.
+4. **End-to-end smoke (manual/optional in CI):** a `dotnet`-run console harness using
+   the generated SDK connects to a running 4node-basic server over UDP,
+   authenticates via `authLogin`, and receives world frames — the C# analog of the
+   Go bot. Delivered as inline instructions, not a committed `*_SMOKE.md`.
+
+## Dependencies & sequencing
+
+1. Server UDP op-channel fix (§B) — unblocks auth; small and self-contained; land first.
+2. Generator backend seam (§A) — refactor with TS output unchanged (golden-verified).
+3. C# `_core` ports (§C) + cross-language golden test (§F.3).
+4. C# emitters (§D) + generator golden test (§F.1).
+5. `csharp-sdk` deploy recipe (§E).
+6. (User) Unity project consuming the SDK; e2e smoke (§F.4) validates the whole chain.
+
+## Open items (resolve during planning, not blocking)
+
+- Whether to emit a `.asmdef` (lean: yes).
+- `--namespace` default (`Mmokit.Sdk`) — confirm preferred Unity namespace.
+- Exact in-repo home for the C# ports (`pkg/net/cs/`, `pkg/quantize/cs/`) vs a single
+  `sdk/_core-cs/` source dir.
