@@ -13,9 +13,8 @@
     "verbatimModuleSyntax": true,
     "lib": ["ES2022", "DOM", "DOM.Iterable"],
     "types": ["vitest/globals"],
-    "baseUrl": ".",
     "paths": {
-      "$lib/*": ["src/lib/*"]
+      "$lib/*": ["./src/lib/*"]
     }
   },
   "include": ["src/**/*.ts", "src/**/*.svelte"],
