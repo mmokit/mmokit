@@ -1273,16 +1273,13 @@ func (c *Process) EntityHostForNetID(netID uint32) string {
 			if cell.Stage == nil {
 				continue
 			}
-			// Check the per-tick NetID map rebuilt by SpatialSystem.
-			// The map is rebuilt each tick so accessing it from outside the
-			// game loop is technically racy; however, EntityHostForNetID is
-			// only called from console commands (which run via engine.RunOnLoop)
-			// or from the route resolver (which is called during Invoke, also
-			// typically from a game-loop-proxied context). For cross-process
-			// tests where cells are run via goroutines, the map may lag by one
-			// tick — acceptable for routing purposes.
-			// Try the replication map (always populated, no tick dependency).
-			if _, ok := cell.Stage.ReplicaNetIDs()[netID]; ok {
+			// Consult the authoritative netID index (LookupNetID), the same
+			// thread-safe Live+Replica index the entity command handlers use.
+			// Route to the host whose cell holds the entity as Live — that's
+			// the authoritative owner. (The earlier ReplicaNetIDs() path only
+			// tracked border replicas, so it missed any live entity not near a
+			// cell boundary, breaking RouteEntityOwner for them.)
+			if _, pres, ok := cell.Stage.LookupNetID(netID); ok && pres == PresenceLive {
 				return hostID
 			}
 		}

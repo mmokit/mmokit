@@ -536,3 +536,23 @@ func TestEntityModifyHandler_Errors(t *testing.T) {
 		t.Error("expected error for unknown netID")
 	}
 }
+
+// ── EntityHostForNetID (RouteEntityOwner resolution) ──────────────────────────
+
+// A live entity that is NOT a border replica must still resolve to its owning
+// host — this is the path RouteEntityOwner (entity.inspect/modify/despawn/tp)
+// depends on. Regression for the bug where EntityHostForNetID scanned only the
+// border-replica map and returned "no owner" for ordinary live entities.
+func TestEntityHostForNetID_ResolvesLiveEntity(t *testing.T) {
+	coord := newTestCoordWithStage(t, "0_0", "host-a")
+	stage := coord.Cells["0_0"].Stage
+	stage.Spawn(component.Position{X: 5, Y: 5}, component.EntityKind{Type: 1})
+	netID := findFirstLiveNetID(t, stage)
+
+	if got := coord.EntityHostForNetID(netID); got != "host-a" {
+		t.Errorf("EntityHostForNetID(%d) = %q, want host-a", netID, got)
+	}
+	if got := coord.EntityHostForNetID(99999); got != "" {
+		t.Errorf("EntityHostForNetID(unknown) = %q, want empty", got)
+	}
+}
