@@ -194,6 +194,17 @@ func (c *Cell) drainPendingPromotes(currentClusterTick uint64) {
 				hasRecentCC    bool
 				recentStampMs  uint64
 				hasRecentStamp bool
+				// De-stale state beyond motion: the blob captured every
+				// component at crossing-tick (commitTick−lead), but border
+				// replication kept the replica current up to commit. Capture
+				// the replica's fresh values for ALL border-replicated
+				// components so the first post-handoff frame doesn't serve a
+				// stale value that then snaps — e.g. the WASM-pulsed
+				// Collider.Radius (the visible "size jumps at the cell line"
+				// bug) or game Health/Shield.
+				recentRadius    float32
+				hasRecentRadius bool
+				recentComps     []ComponentSlice
 			)
 			if ent, presence, ok := c.Stage.LookupNetID(p.netID); ok && presence == PresenceReplica {
 				if c.Stage.posMap.HasAll(ent) {
@@ -221,6 +232,29 @@ func (c *Cell) drainPendingPromotes(currentClusterTick uint64) {
 					rep := c.Stage.replicaMap.Get(ent)
 					recentStampMs = rep.ProducedAtMs
 					hasRecentStamp = rep.ProducedAtMs > 0
+				}
+				// Collider: copy only Radius — border frames carry only the
+				// (pulse-animated) radius, so the replica's Width/Height/Layer/
+				// Shape are zero. The blob has the correct static fields; we
+				// only de-stale the animated radius.
+				if c.Stage.colliderMap.HasAll(ent) {
+					recentRadius = c.Stage.colliderMap.Get(ent).Radius
+					hasRecentRadius = true
+				}
+				// Every non-core registered component the replica carries was
+				// refreshed by the border-frame component tail each tick, so
+				// the replica's value is fresher than the blob's. Capture it
+				// for re-apply after the blob spawn. (Core components — Pos/
+				// Vel/Rot/CellCoord — are handled by the motion capture above.)
+				if reg := c.Stage.ReplicationRegistry(); reg != nil {
+					for _, rep := range reg.All() {
+						if rep.IsTransferCore || rep.Scan == nil {
+							continue
+						}
+						if d := rep.Scan(ent); d != nil {
+							recentComps = append(recentComps, ComponentSlice{ID: rep.ID, Data: d})
+						}
+					}
 				}
 				c.Stage.RemoveReplicaByNetID(p.netID)
 			}
@@ -282,6 +316,23 @@ func (c *Cell) drainPendingPromotes(currentClusterTick uint64) {
 					cc := c.Stage.cellMap.Get(newEnt)
 					cc.CellX = recentCellX
 					cc.CellY = recentCellY
+				}
+			}
+			// De-stale non-motion components from the replica's tip too — the
+			// blob's values are crossing-tick stale (commitTick−lead). Without
+			// this, any per-tick-changing component is served stale on the
+			// first post-handoff frame and snaps a tick later (the visible
+			// size jump for the pulse-animated Collider.Radius).
+			if hasRecentRadius && c.Stage.colliderMap.HasAll(newEnt) {
+				c.Stage.colliderMap.Get(newEnt).Radius = recentRadius
+			}
+			if len(recentComps) > 0 {
+				if reg := c.Stage.ReplicationRegistry(); reg != nil {
+					for _, cs := range recentComps {
+						if rep := reg.Get(cs.ID); rep != nil && rep.Apply != nil {
+							rep.Apply(newEnt, cs.Data)
+						}
+					}
 				}
 			}
 			c.Log.Log(CatMeshTransfer,

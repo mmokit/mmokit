@@ -238,6 +238,65 @@ func TestDrainPendingPromotes_BorderReplicaTip_WorldXCorrect(t *testing.T) {
 	}
 }
 
+// TestDrainPendingPromotes_DeStalesColliderRadius is the regression test for
+// the "size jumps at the cell line" bug. Collider.Radius is animated every tick
+// by the WASM pulse mod. The transfer blob captures the radius at CROSSING time
+// (commitTick − HandoffLeadTicks); the border-replica is refreshed every tick
+// right up to the commit. drainPendingPromotes must serve the FRESH replica
+// radius on promote, not the stale blob value — otherwise the player's first
+// post-handoff frame carries a 2-tick-old size, then snaps forward (the visible
+// dip-and-jump). Generalizes the existing motion-only de-stale to Collider.
+func TestDrainPendingPromotes_DeStalesColliderRadius(t *testing.T) {
+	const cellSize = float32(1024)
+	coords.SetCellSize(cellSize)
+
+	// Source: blob captures the STALE radius at crossing time.
+	src := newTestWorldBase(t, CellID{X: 0, Y: 0})
+	rec := &handoffRecordingBridge{}
+	hd := NewHandoffDriver(src, rec)
+
+	const staleRadius = float32(5)
+	ent := src.Spawn(
+		component.Position{X: 1030, Y: 500},
+		component.Velocity{X: 0, Y: 0},
+		component.EntityKind{Type: 1},
+		component.Collider{Radius: staleRadius},
+	).Handle()
+	netID := src.NetworkIDMap().Get(ent).ID
+	src.QueueCrossing(CrossingEvent{Entity: ent, NetID: netID, DestCellID: "cell_1_0"})
+	hd.Tick(10) // commitTick=12
+	blob := rec.handoffs[0].TransferBlob
+
+	// Destination: border-replica refreshed with a FRESHER radius — the entity
+	// breathed between crossing and commit.
+	dst := newMinimalCell(t, CellID{X: 1, Y: 0})
+	const freshRadius = float32(42)
+	dst.Stage.ApplyBorderFrame(replication.Frame{Entries: []replication.FrameEntry{{
+		NetID:    replication.NetID{ID: netID, Epoch: 1},
+		Kind:     1,
+		DeltaBuf: buildWireEntry(1030, 500, freshRadius, 0, 0),
+	}}}, "cell_0_0")
+
+	colMap := ecs.NewMap1[component.Collider](dst.Stage.ECSWorld())
+	if r := colMap.Get(dst.Stage.replicaNetIDs[netID]).Radius; r != freshRadius {
+		t.Fatalf("precondition: replica radius=%.1f want %.1f", r, freshRadius)
+	}
+
+	dst.pendingPromotes = map[uint64][]pendingPromote{
+		12: {{netID: netID, epoch: rec.handoffs[0].Epoch, transferBlob: blob}},
+	}
+	dst.drainPendingPromotes(12)
+
+	liveEnt, pres, ok := dst.Stage.LookupNetID(netID)
+	if !ok || pres != PresenceLive {
+		t.Fatalf("entity not live after drain (ok=%v pres=%v)", ok, pres)
+	}
+	if r := colMap.Get(liveEnt).Radius; r != freshRadius {
+		t.Fatalf("promoted Collider.Radius=%.1f, want %.1f — served the stale blob "+
+			"value instead of the fresh border-replica value", r, freshRadius)
+	}
+}
+
 // TestDrainPendingPromotes_NoReplica_WorldXCorrect verifies the fast-mover
 // case: no border replica exists at commit time, so the entity spawns purely
 // from the transfer blob. The blob has normalized coords (PosX=6, CellX=1),

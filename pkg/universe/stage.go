@@ -1283,6 +1283,15 @@ func (b *Stage) upsertBorderReplica(
 		if b.rotMap.HasAll(ent) {
 			b.rotMap.Get(ent).Angle = angle
 		}
+		// Refresh the collider radius from the frame. Radius is a per-tick
+		// animated field (e.g. the WASM pulse mod breathes it), so a replica
+		// whose radius froze at its creation value would render a stale size —
+		// visible as a size jump when a viewer crosses the boundary and the
+		// entity flips between live (breathing) and replica (frozen). Mirrors
+		// the create branch, which seeds Collider from the same radius arg.
+		if b.colliderMap.HasAll(ent) {
+			b.colliderMap.Get(ent).Radius = radius
+		}
 		if b.replicaMap.HasAll(ent) {
 			rep := b.replicaMap.Get(ent)
 			rep.TTL = 30

@@ -170,6 +170,38 @@ func TestApplyBorderFrame_UpdatesExistingReplica(t *testing.T) {
 	}
 }
 
+// TestApplyBorderFrame_UpdatesReplicaRadius is the regression guard for the
+// "size jumps at cell lines" bug. Collider.Radius is a per-tick-animated field
+// (the WASM pulse mod breathes it). A border replica is created with the radius
+// from its first frame, but every subsequent border frame carries a fresh
+// radius — the update branch must apply it. Before the fix the update path
+// dropped the radius parameter, freezing the replica's size at its creation
+// value, so an entity viewed as a replica from a neighbor cell showed a stale
+// size and visibly jumped when the viewer crossed the boundary (live↔replica).
+func TestApplyBorderFrame_UpdatesReplicaRadius(t *testing.T) {
+	base := newTestWorldBase(t, CellID{X: 1, Y: 0})
+
+	// Create with radius 10.
+	base.ApplyBorderFrame(replication.Frame{Entries: []replication.FrameEntry{{
+		NetID:    replication.NetID{ID: 7, Epoch: 1},
+		Kind:     2,
+		DeltaBuf: buildWireEntry(1100, 200, 10, 0, 0),
+	}}}, "source")
+
+	// Update with radius 40 (the entity breathed between frames).
+	base.ApplyBorderFrame(replication.Frame{Entries: []replication.FrameEntry{{
+		NetID:    replication.NetID{ID: 7, Epoch: 2},
+		Kind:     2,
+		DeltaBuf: buildWireEntry(1100, 200, 40, 0, 0),
+	}}}, "source")
+
+	ent := base.replicaNetIDs[7]
+	col := ecs.NewMap1[component.Collider](base.ECSWorld()).Get(ent)
+	if col.Radius != 40 {
+		t.Fatalf("replica Collider.Radius = %.1f, want 40 (radius frozen at creation value)", col.Radius)
+	}
+}
+
 func TestApplyBorderFrame_DropsStaleEpoch(t *testing.T) {
 	// Send a frame at epoch 5, then a stale frame at epoch 3 — the stale
 	// one must not overwrite state.
