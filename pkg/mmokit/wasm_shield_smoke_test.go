@@ -27,8 +27,8 @@ func TestShieldModule_LoadsAndDeclaresQuery(t *testing.T) {
 	}
 	defer m.Close(ctx)
 
-	if v := m.ABIVersion(ctx); v != 1 {
-		t.Fatalf("ABIVersion=%d want 1", v)
+	if v := m.ABIVersion(ctx); v != wasmabi.ABIVersion {
+		t.Fatalf("ABIVersion=%d want %d", v, wasmabi.ABIVersion)
 	}
 	id, rw := m.Query(ctx)
 	if want := wasmabi.ElemSize[podcomp.Shield](); id != want || !rw {

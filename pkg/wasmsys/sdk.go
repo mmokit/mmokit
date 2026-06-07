@@ -55,7 +55,19 @@ func (q Query) encode() uint64 { return wasmabi.EncodeQuery(q.elemSize, q.readWr
 type Ctx struct {
 	base  unsafe.Pointer
 	count uint32
+	nowMs uint64
 }
+
+// NowMs is the host's cluster-coherent wall clock in milliseconds for this
+// tick. It is identical across every cell and host (sourced from the engine's
+// ClusterClock, tick-aligned), so an animation phase derived from it stays
+// continuous when an entity crosses a cell boundary — unlike a cell-local tick
+// counter, which jumps to the destination cell's phase on handoff.
+func (c *Ctx) NowMs() uint64 { return c.nowMs }
+
+// TimeSec is NowMs expressed in seconds — the convenient unit for feeding a
+// phase into trig (e.g. sin(TimeSec * radPerSec)).
+func (c *Ctx) TimeSec() float64 { return float64(c.nowMs) / 1000 }
 
 // Column returns a writable view over the host-mapped column. Mutations are
 // read back by the host when the system declared ReadWrite.

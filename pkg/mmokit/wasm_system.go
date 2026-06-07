@@ -191,7 +191,10 @@ func (s *wasmSystem[T]) Update(dt float32) {
 	size := int(unsafe.Sizeof(s.col[0]))
 	in := unsafe.Slice((*byte)(unsafe.Pointer(&s.col[0])), n*size)
 
-	out, err := s.mod.Update(context.Background(), uint32(n), dt, in)
+	// Cluster-coherent tick time — identical on every cell/host this tick, so
+	// time-based modules animate continuously across a cell-boundary handoff.
+	nowMs := stage.ClusterTimeMs()
+	out, err := s.mod.Update(context.Background(), uint32(n), dt, nowMs, in)
 	if err != nil {
 		stage.Engine().Log.Log(catWasmSystem, "update failed: %v", err)
 		return

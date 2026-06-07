@@ -84,13 +84,15 @@ func (m *Module) arenaWrite(ctx context.Context, count uint32, payload []byte) (
 }
 
 // Update bridges one tick: write count+column into the arena, call update,
-// and read the (possibly mutated) column back. in/out lengths match.
-func (m *Module) Update(ctx context.Context, count uint32, dt float32, in []byte) ([]byte, error) {
+// and read the (possibly mutated) column back. in/out lengths match. nowMs is
+// the host's cluster-coherent wall clock (ms) for this tick, passed through to
+// the guest so time-based systems share one timeline across cells/hosts.
+func (m *Module) Update(ctx context.Context, count uint32, dt float32, nowMs uint64, in []byte) ([]byte, error) {
 	ptr, err := m.arenaWrite(ctx, count, in)
 	if err != nil {
 		return nil, err
 	}
-	if _, err := m.update.Call(ctx, api.EncodeF32(dt)); err != nil {
+	if _, err := m.update.Call(ctx, api.EncodeF32(dt), nowMs); err != nil {
 		return nil, err
 	}
 	out, ok := m.mod.Memory().Read(ptr+wasmabi.HeaderSize, uint32(len(in)))

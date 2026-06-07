@@ -19,13 +19,18 @@ func ElemSize[T any]() uint32 {
 // ABIVersion is bumped whenever the export/import contract or the agreed
 // component layouts change. The host rejects any module whose embedded
 // version differs. Phase 1 will replace the manual bump with a layout hash.
-const ABIVersion uint64 = 1
+//
+// v2: wasmsys_update gained a cluster-coherent `nowMs` argument so guests can
+// drive time-based animation from a clock that is identical across every cell
+// and host (see ClusterClock), instead of a cell-local tick counter that jumps
+// when an entity crosses a cell boundary.
+const ABIVersion uint64 = 2
 
 // Exported function names the guest provides (see pkg/wasmsys/exports.go).
 const (
 	ExportArena      = "wasmsys_arena"       // (min u32) -> ptr u32
 	ExportInit       = "wasmsys_init"        // ()
-	ExportUpdate     = "wasmsys_update"      // (dt f32)
+	ExportUpdate     = "wasmsys_update"      // (dt f32, nowMs u64)
 	ExportSnapshot   = "wasmsys_snapshot"    // () -> (ptr<<32 | len) u64
 	ExportRestore    = "wasmsys_restore"     // (ptr u32, len u32)
 	ExportQuery      = "wasmsys_query"       // () -> encoded query u64

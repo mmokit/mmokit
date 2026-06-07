@@ -396,6 +396,24 @@ func (b *Stage) Cell() CellID { return b.cell }
 // Process returns the coordinator that owns this node, or nil in single-node mode.
 func (b *Stage) Process() *Process { return b.coord }
 
+// ClusterClock returns this cell's cluster clock — the cross-cell/cross-host
+// coherent time source used to stamp outbound replication. Never nil for a
+// stage built via NewStage (falls back to a local-wall-clock instance until a
+// CoordTimeSync is observed). Tests can drive it via (*ClusterClock).SetNowFn.
+func (b *Stage) ClusterClock() *ClusterClock { return b.clusterClock }
+
+// ClusterTimeMs returns the cluster-coherent wall clock in milliseconds,
+// quantized to this cell's tick boundary (the same stamp used for replication
+// producedAtMs). Identical across every cell and host on a given cluster tick,
+// so it is the right basis for time-based animation that must stay continuous
+// across a cell-boundary handoff.
+func (b *Stage) ClusterTimeMs() uint64 {
+	if b.clusterClock == nil {
+		return 0
+	}
+	return b.clusterClock.TickTime(b.eng.TickIntervalMs())
+}
+
 // FromSplit returns true if this world was created during a cell split.
 // Split-created worlds should skip initial entity spawning since entities
 // arrive via transfer from the parent cell.

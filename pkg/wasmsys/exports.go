@@ -43,7 +43,7 @@ func wasmArena(min uint32) uint32 {
 func wasmInit() {}
 
 //go:wasmexport wasmsys_update
-func wasmUpdate(dt float32) {
+func wasmUpdate(dt float32, nowMs uint64) {
 	// Precondition: the host has called wasmsys_arena(>=HeaderSize) and written the header this tick.
 	count := binary.LittleEndian.Uint32(arenaBuf[0:4])
 	var base unsafe.Pointer
@@ -51,7 +51,10 @@ func wasmUpdate(dt float32) {
 		// Safe to hold across Update: Go's wasip1 GC is currently non-moving, so this pointer stays valid for the duration of the call.
 		base = unsafe.Pointer(&arenaBuf[wasmabi.HeaderSize])
 	}
-	registered.Update(&Ctx{base: base, count: count}, dt)
+	// nowMs is the host's cluster-coherent wall clock (ms), identical across
+	// every cell and host this tick — drive time-based animation from it so
+	// the result is seamless when an entity crosses a cell boundary.
+	registered.Update(&Ctx{base: base, count: count, nowMs: nowMs}, dt)
 }
 
 //go:wasmexport wasmsys_query

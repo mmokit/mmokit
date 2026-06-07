@@ -25,7 +25,7 @@ func TestParamsSchemaAndSet(t *testing.T) {
 	// Gain default 2 → column doubles.
 	col := []float32{1, 2, 3}
 	in := f32sToBytes(col)
-	out, err := m.Update(ctx, 3, 0.1, in)
+	out, err := m.Update(ctx, 3, 0.1, 0, in)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -36,7 +36,7 @@ func TestParamsSchemaAndSet(t *testing.T) {
 	if err := m.ParamsSet(ctx, []float64{3, 1}); err != nil {
 		t.Fatal(err)
 	}
-	out, err = m.Update(ctx, 3, 0.1, f32sToBytes(col))
+	out, err = m.Update(ctx, 3, 0.1, 0, f32sToBytes(col))
 	if err != nil {
 		t.Fatal(err)
 	}

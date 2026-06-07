@@ -34,8 +34,8 @@ func TestModule_UpdateBridgesColumn(t *testing.T) {
 	}
 	defer m.Close(ctx)
 
-	if got := m.ABIVersion(ctx); got != 1 {
-		t.Fatalf("ABIVersion=%d want 1", got)
+	if got := m.ABIVersion(ctx); got != wasmabi.ABIVersion {
+		t.Fatalf("ABIVersion=%d want %d", got, wasmabi.ABIVersion)
 	}
 	id, rw := m.Query(ctx)
 	if id != wasmabi.ElemSize[float32]() || !rw {
@@ -43,7 +43,7 @@ func TestModule_UpdateBridgesColumn(t *testing.T) {
 	}
 
 	in := f32sToBytes([]float32{1, 2, 3})
-	out, err := m.Update(ctx, 3, 0.05, in)
+	out, err := m.Update(ctx, 3, 0.05, 0, in)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -64,8 +64,8 @@ func TestModule_SnapshotRestore(t *testing.T) {
 
 	m1, _ := Load(ctx, rt, wasm)
 	in := f32sToBytes([]float32{0})
-	m1.Update(ctx, 1, 0.05, in)
-	m1.Update(ctx, 1, 0.05, in) // ticks == 2
+	m1.Update(ctx, 1, 0.05, 0, in)
+	m1.Update(ctx, 1, 0.05, 0, in) // ticks == 2
 	state, err := m1.Snapshot(ctx)
 	if err != nil {
 		t.Fatal(err)

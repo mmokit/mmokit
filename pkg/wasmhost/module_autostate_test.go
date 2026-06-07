@@ -28,7 +28,7 @@ func TestAutoSnapshotRoundTrip(t *testing.T) {
 	// Tick 3 times → Count == 3 (mirrored into the column).
 	in := i32bytes([]int32{0})
 	for range 3 {
-		in, err = m1.Update(ctx, 1, 0.1, in)
+		in, err = m1.Update(ctx, 1, 0.1, 0, in)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -55,7 +55,7 @@ func TestAutoSnapshotRoundTrip(t *testing.T) {
 	if err := m2.Restore(ctx, snap); err != nil {
 		t.Fatal(err)
 	}
-	out, err := m2.Update(ctx, 1, 0.1, i32bytes([]int32{0}))
+	out, err := m2.Update(ctx, 1, 0.1, 0, i32bytes([]int32{0}))
 	if err != nil {
 		t.Fatal(err)
 	}
