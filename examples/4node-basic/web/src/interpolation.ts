@@ -2,6 +2,7 @@ import type { AnyEntity } from "../sdk/entities.js";
 import {
   pushSample as coreSPush,
   interpolateRing,
+  isStaleSample,
   lerp,
   lerpAngle,
 } from "../sdk/_core/interpolation-core.js";
@@ -65,6 +66,16 @@ export function updateEntityFromServer(
     entities.set(id, ent);
     return;
   }
+  // Skip frames older than the newest sample we already hold. At a cell
+  // boundary the same netID is delivered from two cell authorities; the
+  // ex-authority's final in-flight frame can arrive last. The position ring
+  // drops it (pushSample), but Object.assign below would still snap
+  // non-interpolated fields (radius/size, …) backward to the stale value —
+  // flickering — so gate the whole snapshot on the same rule.
+  if (isStaleSample(existing, producedAtMs)) {
+    return;
+  }
+
   const prevRot = existing.renderRot;
   Object.assign(existing, serverState);
   existing.prevX = existing.renderX;

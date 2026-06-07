@@ -2,6 +2,7 @@ import type { AnyEntity } from "../sdk/index.js";
 import {
   pushSample as coreSPush,
   interpolateRing,
+  isStaleSample,
   lerp,
   lerpAngle,
 } from "../sdk/_core/interpolation-core.js";
@@ -47,6 +48,14 @@ export function updateEntityFromServer(
       renderY: first.worldY,
       renderRot: first.rotation,
     });
+    return;
+  }
+  // Skip frames older than the newest sample held. At a cell boundary the same
+  // netID arrives from two cell authorities; the ex-authority's final in-flight
+  // frame can land last. pushSample drops it from the ring, but
+  // `existing.current = serverState` would still snap non-interpolated fields
+  // (size, health, …) backward — flicker — so gate the whole snapshot.
+  if (isStaleSample(existing, producedAtMs)) {
     return;
   }
   pushSample(existing, sampleFrom(serverState, producedAtMs, existing.renderRot));

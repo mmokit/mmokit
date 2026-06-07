@@ -79,6 +79,26 @@ export function pushSample(ring: SampleRing, s: Sample, ringSize: number): void 
 }
 
 /**
+ * Reports whether a sample stamped producedAtMs is older than the newest
+ * sample already in the ring — i.e. whether pushSample would drop it.
+ *
+ * Glue code snapshots an entity's non-interpolated fields (radius/size,
+ * health, shield, …) straight onto the latest server state, separately from
+ * the position ring. Gate that snapshot on this predicate so those fields obey
+ * the SAME monotonicity rule pushSample enforces for position: at a cell
+ * boundary the same netID is delivered from two cell authorities (the demoting
+ * source and the promoting destination), and the ex-authority's final
+ * in-flight frame can arrive last. Without the gate it snaps non-interpolated
+ * fields backward for a frame — a visible flicker — even though the position
+ * ring correctly ignores it.
+ */
+export function isStaleSample(ring: SampleRing, producedAtMs: number): boolean {
+  const samples = ring.samples;
+  const tip = samples.length > 0 ? samples[samples.length - 1] : null;
+  return tip !== null && producedAtMs < tip.producedAtMs;
+}
+
+/**
  * Compute the interpolated render position for one sample ring at
  * the given render time.
  *

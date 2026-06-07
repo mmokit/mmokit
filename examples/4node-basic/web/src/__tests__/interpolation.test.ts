@@ -139,6 +139,34 @@ describe("updateEntityFromServer — handoff robustness", () => {
     expect(ent.samples[0].worldX).toBe(100);
     expect(ent.samples[1].worldX).toBe(110);
   });
+
+  // Regression: at a cell boundary the same netID is delivered from two
+  // producers (the demoting source cell and the promoting destination cell).
+  // The ex-authority's final in-flight frame can arrive AFTER the new
+  // authority's frame. The sample ring already drops such stale frames for
+  // position (interpolation-core pushSample), but non-interpolated fields
+  // (radius/size, and anything snapped via Object.assign) must not be applied
+  // from a stale frame either — otherwise radius snaps backward then forward,
+  // flickering between a few sizes while position stays smooth. This is the
+  // WASM-pulse "size jumps at cell lines" bug.
+  test("stale out-of-order frame does not snap non-interpolated fields backward", () => {
+    const entities = new Map<number, ClientEntity>();
+    const base = { entityType: 1 as const, width: 20, height: 20, name: "" };
+    // Seed, then a fresh newer frame sets radius=20 at t=1100.
+    updateEntityFromServer(entities, { netID: 9, producedAtMs: 1000, worldX: 100, worldY: 0, velX: 0, velY: 0, radius: 10, ...base }, 1000);
+    updateEntityFromServer(entities, { netID: 9, producedAtMs: 1100, worldX: 110, worldY: 0, velX: 0, velY: 0, radius: 20, ...base }, 1100);
+
+    // Ex-authority's last frame races in late: older stamp (1050), radius=5.
+    updateEntityFromServer(entities, { netID: 9, producedAtMs: 1050, worldX: 105, worldY: 0, velX: 0, velY: 0, radius: 5, ...base }, 1050);
+
+    const ent = entities.get(9)!;
+    // Stale frame must be ignored wholesale — radius and current pos unchanged.
+    expect(ent.radius).toBe(20);
+    expect(ent.worldX).toBe(110);
+    // Ring tip stays the newest sample; stale sample not appended.
+    expect(ent.samples.length).toBe(2);
+    expect(ent.samples[ent.samples.length - 1].producedAtMs).toBe(1100);
+  });
 });
 
 describe("interpolation smoothness — gap preserves baseline (handoff regression)", () => {
