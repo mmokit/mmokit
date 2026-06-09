@@ -109,7 +109,7 @@ func (b csharpBackend) genEntities(schema ProtocolSchema) string {
 				if f.Initial {
 					continue
 				}
-				fmt.Fprintf(&sb, "        public %s %s;\n", encodingToCSharpType(f.Encoding), f.Name)
+				fmt.Fprintf(&sb, "        public %s %s%s;\n", encodingToCSharpType(f.Encoding), f.Name, csEntityFieldInit(f.Encoding))
 			}
 		}
 		for _, binding := range ent.Bindings {
@@ -117,7 +117,7 @@ func (b csharpBackend) genEntities(schema ProtocolSchema) string {
 				if !f.Initial {
 					continue
 				}
-				fmt.Fprintf(&sb, "        public %s %s;\n", encodingToCSharpType(f.Encoding), f.Name)
+				fmt.Fprintf(&sb, "        public %s %s%s;\n", encodingToCSharpType(f.Encoding), f.Name, csEntityFieldInit(f.Encoding))
 			}
 		}
 		if ent.VarTail != nil {
@@ -131,7 +131,7 @@ func (b csharpBackend) genEntities(schema ProtocolSchema) string {
 			fmt.Fprintf(&sb, "    /// Item record for %s.%s.\n", name, ent.VarTail.Name)
 			fmt.Fprintf(&sb, "    public sealed class %s\n    {\n", item)
 			for _, f := range ent.VarTail.ItemFields {
-				fmt.Fprintf(&sb, "        public %s %s;\n", encodingToCSharpType(f.Encoding), f.Name)
+				fmt.Fprintf(&sb, "        public %s %s%s;\n", encodingToCSharpType(f.Encoding), f.Name, csEntityFieldInit(f.Encoding))
 			}
 			sb.WriteString("    }\n\n")
 		}
@@ -183,6 +183,16 @@ func csharpIdent(name string, kind uint8) string {
 // entity data class holds. Quantized numerics decode to float; integer
 // encodings keep their width; bool/string map directly. Mirrors the type the
 // Plan 7 DeltaDecoder will produce into these fields.
+// csEntityFieldInit returns the initializer for a decoded entity field so
+// reference-typed fields (strings) are never null — silences CS8618 in the
+// consumer's Unity project. Scalars need no initializer (default 0/false).
+func csEntityFieldInit(enc string) string {
+	if enc == "string" {
+		return ` = ""`
+	}
+	return ""
+}
+
 func encodingToCSharpType(enc string) string {
 	switch enc {
 	case "string":

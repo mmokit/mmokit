@@ -17,7 +17,11 @@ func csReflectClassName(goName string) string {
 // Struct fields and struct-slice items are NOT supported in this plan — the
 // emitter panics so a struct-bearing schema fails loudly. Slices of scalars/
 // strings map to List<T>.
-func csReflectFieldType(f BroadcastFieldSchema) string {
+// csReflectFieldType maps a field encoding to its C# type. `prefix` is the
+// owning class name, used to synthesize nested class names for struct fields
+// (the reflect codec has no name for an inline struct, so we derive a stable
+// one per owner+field). Slices of structs nest one level deeper as <...>Item.
+func csReflectFieldType(prefix string, f BroadcastFieldSchema) string {
 	switch f.Encoding {
 	case "f32":
 		return "float"
@@ -49,24 +53,54 @@ func csReflectFieldType(f BroadcastFieldSchema) string {
 		if f.Item == nil {
 			panic(fmt.Sprintf("sdkgen csharp: slice field %q missing item", f.Name))
 		}
-		if f.Item.Encoding == "struct" || f.Item.Encoding == "slice" {
-			panic(fmt.Sprintf("sdkgen csharp: slice-of-%s field %q not yet supported", f.Item.Encoding, f.Name))
+		if f.Item.Encoding == "struct" {
+			return "List<" + csNestedName(prefix, f.Name) + "Item>"
 		}
-		return "List<" + csReflectScalarType(*f.Item) + ">"
+		if f.Item.Encoding == "slice" {
+			panic(fmt.Sprintf("sdkgen csharp: slice-of-slice field %q not supported", f.Name))
+		}
+		return "List<" + csReflectFieldType(prefix, *f.Item) + ">"
 	case "struct":
-		panic(fmt.Sprintf("sdkgen csharp: struct field %q not yet supported (Plan 6b)", f.Name))
+		return csNestedName(prefix, f.Name)
 	default:
 		panic(fmt.Sprintf("sdkgen csharp: unsupported reflect field encoding %q", f.Encoding))
 	}
 }
 
-// csReflectScalarType is csReflectFieldType restricted to non-composite items.
-func csReflectScalarType(f BroadcastFieldSchema) string {
-	switch f.Encoding {
-	case "struct", "slice":
-		panic(fmt.Sprintf("sdkgen csharp: composite slice item %q not supported", f.Encoding))
+// csNestedName synthesizes the nested-class name for a struct/struct-slice
+// field: "<OwnerClass>_<Field>". Stable + collision-free per owner.
+func csNestedName(prefix, fieldName string) string {
+	return prefix + "_" + titleCase(fieldName)
+}
+
+// emitNestedClasses emits, depth-first, a sealed class for every struct field
+// (and struct-slice item) reachable from `fields`, owned by `prefix`. Each is
+// a plain data carrier (no TypeID/Decode/Encode of its own — its bytes are
+// inlined into the owner's Decode/Encode).
+func emitNestedClasses(sb *strings.Builder, prefix string, fields []BroadcastFieldSchema) {
+	for _, f := range fields {
+		switch f.Encoding {
+		case "struct":
+			cls := csNestedName(prefix, f.Name)
+			emitNestedClasses(sb, cls, f.Fields) // inner structs first
+			emitNestedDataClass(sb, cls, f.Fields)
+		case "slice":
+			if f.Item != nil && f.Item.Encoding == "struct" {
+				cls := csNestedName(prefix, f.Name) + "Item"
+				emitNestedClasses(sb, cls, f.Item.Fields)
+				emitNestedDataClass(sb, cls, f.Item.Fields)
+			}
+		}
 	}
-	return csReflectFieldType(f)
+}
+
+// emitNestedDataClass emits one nested data class (fields only).
+func emitNestedDataClass(sb *strings.Builder, name string, fields []BroadcastFieldSchema) {
+	fmt.Fprintf(sb, "    public sealed class %s\n    {\n", name)
+	for _, f := range fields {
+		fmt.Fprintf(sb, "        public %s %s%s;\n", csReflectFieldType(name, f), f.Name, csReflectFieldInit(f))
+	}
+	sb.WriteString("    }\n\n")
 }
 
 // csReflectFieldInit returns the C# field initializer (so reference-typed
@@ -78,7 +112,7 @@ func csReflectFieldInit(f BroadcastFieldSchema) string {
 		return ` = ""`
 	case "bytes":
 		return " = System.Array.Empty<byte>()"
-	case "slice":
+	case "slice", "struct":
 		return " = new()"
 	default:
 		return ""
@@ -159,35 +193,73 @@ func csReflectWriteCall(enc, expr string) string {
 }
 
 // writeCsFieldDecode emits decode for one field into `target` (e.g. "m.foo").
-func writeCsFieldDecode(sb *strings.Builder, target string, f BroadcastFieldSchema) {
-	if f.Encoding == "slice" {
+// writeCsFieldDecode emits decode for one field into `target` (e.g. "m.foo").
+// `prefix` is the owning class (for nested struct names); `depth` keeps slice
+// loop variables unique across nesting levels.
+func writeCsFieldDecode(sb *strings.Builder, target string, f BroadcastFieldSchema, prefix string, depth int) {
+	switch f.Encoding {
+	case "struct":
+		cls := csNestedName(prefix, f.Name)
+		fmt.Fprintf(sb, "            %s = new %s();\n", target, cls)
+		for _, inner := range f.Fields {
+			writeCsFieldDecode(sb, target+"."+inner.Name, inner, cls, depth)
+		}
+	case "slice":
 		item := *f.Item
-		fmt.Fprintf(sb, "            { int _n = r.ReadSliceLen(); for (int _i = 0; _i < _n; _i++) %s.Add(r.%s); }\n",
-			target, csReflectReadCall(item.Encoding))
-		return
+		n, it := fmt.Sprintf("_n%d", depth), fmt.Sprintf("_it%d", depth)
+		if item.Encoding == "struct" {
+			itemCls := csNestedName(prefix, f.Name) + "Item"
+			fmt.Fprintf(sb, "            { int %s = r.ReadSliceLen(); for (int _k%d = 0; _k%d < %s; _k%d++) { var %s = new %s();\n", n, depth, depth, n, depth, it, itemCls)
+			for _, inner := range item.Fields {
+				writeCsFieldDecode(sb, it+"."+inner.Name, inner, itemCls, depth+1)
+			}
+			fmt.Fprintf(sb, "            %s.Add(%s); } }\n", target, it)
+		} else {
+			fmt.Fprintf(sb, "            { int %s = r.ReadSliceLen(); for (int _k%d = 0; _k%d < %s; _k%d++) %s.Add(r.%s); }\n", n, depth, depth, n, depth, target, csReflectReadCall(item.Encoding))
+		}
+	default:
+		fmt.Fprintf(sb, "            %s = r.%s;\n", target, csReflectReadCall(f.Encoding))
 	}
-	fmt.Fprintf(sb, "            %s = r.%s;\n", target, csReflectReadCall(f.Encoding))
 }
 
 // writeCsFieldEncode emits encode for one field from `src` (e.g. "this.foo").
-func writeCsFieldEncode(sb *strings.Builder, src string, f BroadcastFieldSchema) {
-	if f.Encoding == "slice" {
+func writeCsFieldEncode(sb *strings.Builder, src string, f BroadcastFieldSchema, prefix string, depth int) {
+	switch f.Encoding {
+	case "struct":
+		cls := csNestedName(prefix, f.Name)
+		for _, inner := range f.Fields {
+			writeCsFieldEncode(sb, src+"."+inner.Name, inner, cls, depth)
+		}
+	case "slice":
 		item := *f.Item
-		fmt.Fprintf(sb, "            w.WriteSliceLen(%s.Count); foreach (var _v in %s) w.%s;\n",
-			src, src, csReflectWriteCall(item.Encoding, "_v"))
-		return
+		v := fmt.Sprintf("_v%d", depth)
+		if item.Encoding == "struct" {
+			itemCls := csNestedName(prefix, f.Name) + "Item"
+			fmt.Fprintf(sb, "            w.WriteSliceLen(%s.Count); foreach (var %s in %s) {\n", src, v, src)
+			for _, inner := range item.Fields {
+				writeCsFieldEncode(sb, v+"."+inner.Name, inner, itemCls, depth+1)
+			}
+			sb.WriteString("            }\n")
+		} else {
+			fmt.Fprintf(sb, "            w.WriteSliceLen(%s.Count); foreach (var %s in %s) w.%s;\n", src, v, src, csReflectWriteCall(item.Encoding, v))
+		}
+	default:
+		fmt.Fprintf(sb, "            w.%s;\n", csReflectWriteCall(f.Encoding, src))
 	}
-	fmt.Fprintf(sb, "            w.%s;\n", csReflectWriteCall(f.Encoding, src))
 }
 
-// writeCsReflectClass emits one C# class for a reflect-codec type. withEncode
-// adds Encode(); withDecode adds static Decode(byte[]).
+// writeCsReflectClass emits one C# class for a reflect-codec type (plus any
+// nested struct classes it needs). withEncode adds Encode(); withDecode adds
+// static Decode(byte[]).
 func writeCsReflectClass(sb *strings.Builder, name string, typeID uint32, fields []BroadcastFieldSchema, withEncode, withDecode bool) {
+	// Nested struct/struct-slice classes first (so they're defined before use).
+	emitNestedClasses(sb, name, fields)
+
 	fmt.Fprintf(sb, "    /// Reflect-codec message %s (typeID 0x%08x).\n", name, typeID)
 	fmt.Fprintf(sb, "    public sealed class %s\n    {\n", name)
 	fmt.Fprintf(sb, "        public const uint TypeID = 0x%xu;\n", typeID)
 	for _, f := range fields {
-		fmt.Fprintf(sb, "        public %s %s%s;\n", csReflectFieldType(f), f.Name, csReflectFieldInit(f))
+		fmt.Fprintf(sb, "        public %s %s%s;\n", csReflectFieldType(name, f), f.Name, csReflectFieldInit(f))
 	}
 	sb.WriteString("\n")
 	if withDecode {
@@ -195,7 +267,7 @@ func writeCsReflectClass(sb *strings.Builder, name string, typeID uint32, fields
 		sb.WriteString("            var r = new ReflectReader(buf);\n")
 		fmt.Fprintf(sb, "            var m = new %s();\n", name)
 		for _, f := range fields {
-			writeCsFieldDecode(sb, "m."+f.Name, f)
+			writeCsFieldDecode(sb, "m."+f.Name, f, name, 0)
 		}
 		sb.WriteString("            return m;\n        }\n")
 	}
@@ -206,7 +278,7 @@ func writeCsReflectClass(sb *strings.Builder, name string, typeID uint32, fields
 		sb.WriteString("        public byte[] Encode()\n        {\n")
 		sb.WriteString("            var w = new ReflectWriter();\n")
 		for _, f := range fields {
-			writeCsFieldEncode(sb, "this."+f.Name, f)
+			writeCsFieldEncode(sb, "this."+f.Name, f, name, 0)
 		}
 		sb.WriteString("            return w.ToArray();\n        }\n")
 	}

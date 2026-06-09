@@ -49,6 +49,18 @@ func sampleEntitySchema() ProtocolSchema {
 			{Name: "game.Pong", TypeID: 0x11223344, Fields: []BroadcastFieldSchema{
 				{Name: "nonce", Encoding: "u32"},
 			}},
+			// Exercises struct + slice-of-struct (the chat-style shape the real
+			// 4node schema has — ChannelInfo + []ChannelInfo).
+			{Name: "game.ChatState", TypeID: 0x22334455, Fields: []BroadcastFieldSchema{
+				{Name: "channel", Encoding: "struct", Fields: []BroadcastFieldSchema{
+					{Name: "slug", Encoding: "string"},
+					{Name: "memberCount", Encoding: "i32"},
+				}},
+				{Name: "members", Encoding: "slice", Item: &BroadcastFieldSchema{Name: "member", Encoding: "struct", Fields: []BroadcastFieldSchema{
+					{Name: "userID", Encoding: "string"},
+					{Name: "role", Encoding: "string"},
+				}}},
+			}},
 		},
 		ClientInputTypes: []ClientInputTypeSchema{
 			{Name: "game.SetMoveTarget", TypeID: 0x55667788, Fields: []BroadcastFieldSchema{
@@ -90,7 +102,7 @@ func TestCsharpBackend_Entities(t *testing.T) {
 		"public sealed class ShipEntity : EntityBase",
 		"public float x;",         // f32 → float
 		"public float vx;",        // qvel → float
-		"public string shipName;", // string + initial field present
+		"public string shipName = \"\";", // string field initialized (no CS8618)
 		"public List<ShipStatusEffectsItem> statusEffects = new();",
 		"public sealed class ShipStatusEffectsItem",
 		"public byte kind;",       // u8 → byte
@@ -164,7 +176,7 @@ func TestCsharpBackend_Inputs(t *testing.T) {
 		"public byte[] Encode()",
 		"w.WriteF32(this.x);",
 		"public List<uint> tags = new();",
-		"w.WriteSliceLen(this.tags.Count); foreach (var _v in this.tags) w.WriteU32(_v);",
+		"w.WriteSliceLen(this.tags.Count); foreach (var _v0 in this.tags) w.WriteU32(_v0);",
 	} {
 		if !strings.Contains(out, want) {
 			t.Fatalf("genInputs missing %q in:\n%s", want, out)
@@ -257,5 +269,22 @@ func TestCsharpBackend_OutputFiles_IncludesClient(t *testing.T) {
 	files := csharpBackend{namespace: "Mmokit.Sdk"}.OutputFiles(sampleEntitySchema())
 	if _, ok := files["Client.cs"]; !ok {
 		t.Fatalf("OutputFiles missing Client.cs")
+	}
+}
+
+func TestCsharpBackend_StructFields(t *testing.T) {
+	out := csharpBackend{namespace: "Mmokit.Sdk"}.genEvents(sampleEntitySchema())
+	for _, want := range []string{
+		"public sealed class ChatState_Channel",          // struct field nested class
+		"public sealed class ChatState_MembersItem",     // slice-of-struct item class
+		"public ChatState_Channel channel = new();",      // struct field decl
+		"public List<ChatState_MembersItem> members = new();",
+		"m.channel = new ChatState_Channel();",           // struct inline decode
+		"m.channel.slug = r.ReadString();",
+		"var _it0 = new ChatState_MembersItem();",       // slice-of-struct decode
+	} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("genEvents struct support missing %q in:\n%s", want, out)
+		}
 	}
 }
