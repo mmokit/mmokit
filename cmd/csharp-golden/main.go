@@ -150,6 +150,21 @@ func main() {
 		ExpectedHex: hex.EncodeToString(expected),
 	})
 
+	// --- applyDelta with a variable-length tail: 1 fixed field (2 bytes) +
+	// a changed string tail. Exercises the var-tail rebuild branch.
+	// baseline = fixed[AABB] + u16 len(2) + "xy"; delta changes ONLY the tail:
+	// bitmask 0x02 (tail logical-field bit 1 set, fixed bit 0 clear) + u16 len(3) + "zzz".
+	// result = fixed[AABB] + u16 len(3) + "zzz".
+	vtBaseline := []byte{0xAA, 0xBB, 0x00, 0x02, 0x78, 0x79}        // AABB | 0002 | "xy"
+	vtDelta := []byte{0x02, 0x00, 0x03, 0x7A, 0x7A, 0x7A}          // bitmask | 0003 | "zzz"
+	vtExpected := []byte{0xAA, 0xBB, 0x00, 0x03, 0x7A, 0x7A, 0x7A} // AABB | 0003 | "zzz"
+	m.ApplyDelta = append(m.ApplyDelta, ApplyCase{
+		FieldSizes: []int{2}, HasVarTail: true,
+		BaselineHex: hex.EncodeToString(vtBaseline),
+		DeltaHex:    hex.EncodeToString(vtDelta),
+		ExpectedHex: hex.EncodeToString(vtExpected),
+	})
+
 	// --- strings ---
 	su8 := append([]byte{byte(len("alice"))}, []byte("alice")...)
 	m.Strings = append(m.Strings, StringCase{Kind: "u8", HexBytes: hex.EncodeToString(su8), Expected: "alice"})

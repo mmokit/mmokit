@@ -68,6 +68,15 @@
       "baselineHex": "11223344",
       "deltaHex": "029988",
       "expectedHex": "11229988"
+    },
+    {
+      "fieldSizes": [
+        2
+      ],
+      "hasVarTail": true,
+      "baselineHex": "aabb00027879",
+      "deltaHex": "0200037a7a7a",
+      "expectedHex": "aabb00037a7a7a"
     }
   ],
   "strings": [
