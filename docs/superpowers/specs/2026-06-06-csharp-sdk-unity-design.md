@@ -172,11 +172,13 @@ csharp-sdk:
     go run ./examples/4node-basic --dump-schema \
         "--postgres-url={{ env('POSTGRES_URL', 'postgres://mmo:mmo@localhost:5432/mmo_4node?sslmode=disable') }}" \
       | go run ./cmd/sdkgen --lang=csharp \
-          --out "{{ env('UNITY_SDK_DIR', '<WINDOWS-HOME>/UnityProj/Assets/Mmokit/Sdk') }}"
+          --out "{{ env('UNITY_SDK_DIR', '<WINDOWS-HOME>/unitygames/spacemmo-client/Assets/Mmokit/Sdk') }}"
 ```
 
-- `UNITY_SDK_DIR` overrides the target per machine; default points at a `/mnt/c`
-  Unity `Assets/` path.
+- Default target: `<WINDOWS-HOME>/unitygames/spacemmo-client/Assets/Mmokit/Sdk`
+  (the WSL view of `C:\Users\<YOU>\unitygames\spacemmo-client\Assets`, SDK nested
+  under `Mmokit/Sdk` so it sits in its own folder).
+- `UNITY_SDK_DIR` overrides the target per machine.
 - The generator writes straight to the target — no intermediate repo copy.
 - A mirror recipe may be added in `examples/4node-basic/justfile` (`just csharp-sdk`)
   delegating to the root recipe, matching the existing `sdk` recipe pattern.
