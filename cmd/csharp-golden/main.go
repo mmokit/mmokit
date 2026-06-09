@@ -13,6 +13,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/zenion/mmoserver/pkg/net/udpproto"
 	"github.com/zenion/mmoserver/pkg/quantize"
 )
 
@@ -22,6 +23,37 @@ type Manifest struct {
 	Frame      FrameCase     `json:"frame"`
 	ApplyDelta []ApplyCase   `json:"applyDelta"`
 	Strings    []StringCase  `json:"strings"`
+	Udp        UdpCases      `json:"udp"`
+}
+
+type UdpCases struct {
+	Tokens  []TokenCase  `json:"tokens"`
+	Packets []PacketCase `json:"packets"`
+	SeqCmp  []SeqCase    `json:"seqCmp"`
+}
+
+type TokenCase struct {
+	ClientSalt uint64 `json:"clientSalt"`
+	ServerSalt uint64 `json:"serverSalt"`
+	Token      uint32 `json:"token"`
+}
+
+type PacketCase struct {
+	Kind       string `json:"kind"` // connReq|connAccept|unreliable|reliable|ack|disconnect
+	HexBytes   string `json:"hexBytes"`
+	Token      uint32 `json:"token"`
+	Seq        uint16 `json:"seq"`
+	AckSeq     uint16 `json:"ackSeq"`
+	AckBits    uint32 `json:"ackBits"`
+	ClientSalt uint64 `json:"clientSalt"`
+	ServerSalt uint64 `json:"serverSalt"`
+	PayloadHex string `json:"payloadHex"`
+}
+
+type SeqCase struct {
+	S1      uint16 `json:"s1"`
+	S2      uint16 `json:"s2"`
+	Greater bool   `json:"greater"`
 }
 
 type DequantCase struct {
@@ -170,6 +202,29 @@ func main() {
 	m.Strings = append(m.Strings, StringCase{Kind: "u8", HexBytes: hex.EncodeToString(su8), Expected: "alice"})
 	su16 := append(be16(uint16(len("bobbb"))), []byte("bobbb")...)
 	m.Strings = append(m.Strings, StringCase{Kind: "u16", HexBytes: hex.EncodeToString(su16), Expected: "bobbb"})
+
+	// --- UDP protocol golden cases (udpproto is little-endian) ---
+	var u UdpCases
+	cs, ss := uint64(0x1122334455667788), uint64(0x99AABBCCDDEEFF00)
+	u.Tokens = append(u.Tokens, TokenCase{ClientSalt: cs, ServerSalt: ss, Token: udpproto.MakeToken(cs, ss)})
+
+	pl := []byte{0xDE, 0xAD, 0xBE, 0xEF}
+	u.Packets = append(u.Packets,
+		PacketCase{Kind: "connReq", HexBytes: hex.EncodeToString(udpproto.EncodeConnReq(cs)), ClientSalt: cs},
+		PacketCase{Kind: "connAccept", HexBytes: hex.EncodeToString(udpproto.EncodeConnAccept(cs, ss)), ClientSalt: cs, ServerSalt: ss},
+		PacketCase{Kind: "unreliable", HexBytes: hex.EncodeToString(udpproto.EncodeUnreliable(0xCAFEBABE, pl)), Token: 0xCAFEBABE, PayloadHex: hex.EncodeToString(pl)},
+		PacketCase{Kind: "reliable", HexBytes: hex.EncodeToString(udpproto.EncodeReliable(0xCAFEBABE, 7, pl)), Token: 0xCAFEBABE, Seq: 7, PayloadHex: hex.EncodeToString(pl)},
+		PacketCase{Kind: "ack", HexBytes: hex.EncodeToString(udpproto.EncodeACK(0xCAFEBABE, 12, 0x0000000B)), Token: 0xCAFEBABE, AckSeq: 12, AckBits: 0x0000000B},
+		PacketCase{Kind: "disconnect", HexBytes: hex.EncodeToString(udpproto.EncodeDisconnect(0xCAFEBABE)), Token: 0xCAFEBABE},
+	)
+
+	u.SeqCmp = append(u.SeqCmp,
+		SeqCase{S1: 5, S2: 3, Greater: udpproto.SeqGreaterThan(5, 3)},
+		SeqCase{S1: 3, S2: 5, Greater: udpproto.SeqGreaterThan(3, 5)},
+		SeqCase{S1: 1, S2: 65535, Greater: udpproto.SeqGreaterThan(1, 65535)}, // wrap: 1 > 65535
+		SeqCase{S1: 65535, S2: 1, Greater: udpproto.SeqGreaterThan(65535, 1)},
+	)
+	m.Udp = u
 
 	out := filepath.Join("csharp", "Mmokit.Sdk.Core.Tests", "testdata", "delta_golden.json")
 	if err := os.MkdirAll(filepath.Dir(out), 0o755); err != nil {

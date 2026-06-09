@@ -90,5 +90,104 @@
       "hexBytes": "0005626f626262",
       "expected": "bobbb"
     }
-  ]
+  ],
+  "udp": {
+    "tokens": [
+      {
+        "clientSalt": 1234605616436508552,
+        "serverSalt": 11072869122414935808,
+        "token": 0
+      }
+    ],
+    "packets": [
+      {
+        "kind": "connReq",
+        "hexBytes": "03454d41478877665544332211",
+        "token": 0,
+        "seq": 0,
+        "ackSeq": 0,
+        "ackBits": 0,
+        "clientSalt": 1234605616436508552,
+        "serverSalt": 0,
+        "payloadHex": ""
+      },
+      {
+        "kind": "connAccept",
+        "hexBytes": "04454d4147887766554433221100ffeeddccbbaa99",
+        "token": 0,
+        "seq": 0,
+        "ackSeq": 0,
+        "ackBits": 0,
+        "clientSalt": 1234605616436508552,
+        "serverSalt": 11072869122414935808,
+        "payloadHex": ""
+      },
+      {
+        "kind": "unreliable",
+        "hexBytes": "00bebafecadeadbeef",
+        "token": 3405691582,
+        "seq": 0,
+        "ackSeq": 0,
+        "ackBits": 0,
+        "clientSalt": 0,
+        "serverSalt": 0,
+        "payloadHex": "deadbeef"
+      },
+      {
+        "kind": "reliable",
+        "hexBytes": "01bebafeca0700deadbeef",
+        "token": 3405691582,
+        "seq": 7,
+        "ackSeq": 0,
+        "ackBits": 0,
+        "clientSalt": 0,
+        "serverSalt": 0,
+        "payloadHex": "deadbeef"
+      },
+      {
+        "kind": "ack",
+        "hexBytes": "02bebafeca0c000b000000",
+        "token": 3405691582,
+        "seq": 0,
+        "ackSeq": 12,
+        "ackBits": 11,
+        "clientSalt": 0,
+        "serverSalt": 0,
+        "payloadHex": ""
+      },
+      {
+        "kind": "disconnect",
+        "hexBytes": "05bebafeca",
+        "token": 3405691582,
+        "seq": 0,
+        "ackSeq": 0,
+        "ackBits": 0,
+        "clientSalt": 0,
+        "serverSalt": 0,
+        "payloadHex": ""
+      }
+    ],
+    "seqCmp": [
+      {
+        "s1": 5,
+        "s2": 3,
+        "greater": true
+      },
+      {
+        "s1": 3,
+        "s2": 5,
+        "greater": false
+      },
+      {
+        "s1": 1,
+        "s2": 65535,
+        "greater": true
+      },
+      {
+        "s1": 65535,
+        "s2": 1,
+        "greater": false
+      }
+    ]
+  }
 }

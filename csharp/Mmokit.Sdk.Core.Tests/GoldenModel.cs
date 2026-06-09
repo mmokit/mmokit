@@ -10,7 +10,26 @@ namespace Mmokit.Sdk.Core.Tests
         public FrameCase Frame { get; set; } = new();
         public ApplyCase[] ApplyDelta { get; set; } = Array.Empty<ApplyCase>();
         public StringCase[] Strings { get; set; } = Array.Empty<StringCase>();
+        public UdpCases Udp { get; set; } = new();
     }
+
+    public class UdpCases
+    {
+        public TokenCase[] Tokens { get; set; } = Array.Empty<TokenCase>();
+        public PacketCase[] Packets { get; set; } = Array.Empty<PacketCase>();
+        public SeqCase[] SeqCmp { get; set; } = Array.Empty<SeqCase>();
+    }
+    public class TokenCase { public ulong ClientSalt { get; set; } public ulong ServerSalt { get; set; } public uint Token { get; set; } }
+    public class PacketCase
+    {
+        public string Kind { get; set; } = "";
+        public string HexBytes { get; set; } = "";
+        public uint Token { get; set; } public ushort Seq { get; set; }
+        public ushort AckSeq { get; set; } public uint AckBits { get; set; }
+        public ulong ClientSalt { get; set; } public ulong ServerSalt { get; set; }
+        public string PayloadHex { get; set; } = "";
+    }
+    public class SeqCase { public ushort S1 { get; set; } public ushort S2 { get; set; } public bool Greater { get; set; } }
 
     public class DequantCase { public string Kind { get; set; } = ""; public long Q { get; set; } public double Scale { get; set; } public double Expected { get; set; } }
     public class FrameCase
