@@ -267,3 +267,14 @@ csharp-golden:
 # compile-gate the generated C# SDK (emits a sample SDK + dotnet build)
 csharp-compile-test:
     go test -tags=csharptest ./cmd/sdkgen/ -run TestCsharpSdk_Compiles -v
+
+# generate + deploy the C# client SDK for 4node-basic into the Unity Assets
+# tree. Override the target with UNITY_SDK_DIR (defaults to a /mnt/c path).
+# Control/admin listeners are disabled so the schema dump works even while a
+# dev server is running. Requires Postgres (just db-up).
+csharp-sdk:
+    go run ./examples/4node-basic --dump-schema --control-listen= --admin-listen= \
+        "--postgres-url={{ env('POSTGRES_URL', 'postgres://mmo:mmo@localhost:5432/mmo_4node?sslmode=disable') }}" \
+      | go run ./cmd/sdkgen --lang=csharp \
+          --csharp-core csharp/Mmokit.Sdk.Core \
+          --out "{{ env('UNITY_SDK_DIR', '<WINDOWS-HOME>/unitygames/spacemmo-client/Assets/Mmokit/Sdk') }}"
