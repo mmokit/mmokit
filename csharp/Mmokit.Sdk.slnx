@@ -1,0 +1,4 @@
+<Solution>
+  <Project Path="Mmokit.Sdk.Core.Tests/Mmokit.Sdk.Core.Tests.csproj" />
+  <Project Path="Mmokit.Sdk.Core/Mmokit.Sdk.Core.csproj" />
+</Solution>

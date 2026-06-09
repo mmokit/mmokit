@@ -255,3 +255,11 @@ admin-typecheck:
 # non-exempted file in internal/game/ imports github.com/mlange-42/ark/ecs.
 lint-no-ark:
     ./scripts/no_ark_in_game.sh
+
+# run the C# SDK core unit + golden tests
+csharp-test:
+    cd csharp && dotnet test
+
+# regenerate the C# golden manifest from Go (authoritative wire bytes)
+csharp-golden:
+    go run ./cmd/csharp-golden
