@@ -31,7 +31,7 @@ namespace Mmokit.Sdk.Core
 
         // --- little-endian readers ---
         static ushort GetU16(byte[] b, int o) => (ushort)(b[o] | (b[o + 1] << 8));
-        static uint GetU32(byte[] b, int o) => (uint)(b[o] | (b[o + 1] << 8) | (b[o + 2] << 16) | ((uint)b[o + 3] << 24));
+        static uint GetU32(byte[] b, int o) => (uint)b[o] | ((uint)b[o + 1] << 8) | ((uint)b[o + 2] << 16) | ((uint)b[o + 3] << 24);
         static ulong GetU64(byte[] b, int o) { ulong v = 0; for (int i = 0; i < 8; i++) v |= (ulong)b[o + i] << (8 * i); return v; }
 
         public static uint MakeToken(ulong clientSalt, ulong serverSalt)
