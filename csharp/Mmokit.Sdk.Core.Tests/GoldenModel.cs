@@ -11,6 +11,18 @@ namespace Mmokit.Sdk.Core.Tests
         public ApplyCase[] ApplyDelta { get; set; } = Array.Empty<ApplyCase>();
         public StringCase[] Strings { get; set; } = Array.Empty<StringCase>();
         public UdpCases Udp { get; set; } = new();
+        public ReflectCase Reflect { get; set; } = new();
+    }
+
+    public class ReflectCase
+    {
+        public string HexBytes { get; set; } = "";
+        public float A { get; set; }
+        public uint B { get; set; }
+        public string C { get; set; } = "";
+        public bool D { get; set; }
+        public long E { get; set; }
+        public uint[] F { get; set; } = Array.Empty<uint>();
     }
 
     public class UdpCases

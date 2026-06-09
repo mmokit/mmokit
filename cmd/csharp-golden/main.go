@@ -15,6 +15,7 @@ import (
 
 	"github.com/zenion/mmoserver/pkg/net/udpproto"
 	"github.com/zenion/mmoserver/pkg/quantize"
+	"github.com/zenion/mmoserver/pkg/universe"
 )
 
 // Manifest mirrors the C# GoldenModel DTOs (csharp/.../GoldenModel.cs).
@@ -24,6 +25,30 @@ type Manifest struct {
 	ApplyDelta []ApplyCase   `json:"applyDelta"`
 	Strings    []StringCase  `json:"strings"`
 	Udp        UdpCases      `json:"udp"`
+	Reflect    ReflectCase   `json:"reflect"`
+}
+
+// ReflectCase carries Go's authoritative reflect-codec bytes + the expected
+// decoded field values (flat encodings: f32, u32, string, bool, i64, []u32).
+type ReflectCase struct {
+	HexBytes string   `json:"hexBytes"`
+	A        float32  `json:"a"`
+	B        uint32   `json:"b"`
+	C        string   `json:"c"`
+	D        bool     `json:"d"`
+	E        int64    `json:"e"`
+	F        []uint32 `json:"f"`
+}
+
+// goldenReflect is marshalled by the real reflect codec to anchor the C#
+// ReflectReader/Writer to Go's actual wire bytes. All fields flat.
+type goldenReflect struct {
+	A float32
+	B uint32
+	C string
+	D bool
+	E int64
+	F []uint32
 }
 
 type UdpCases struct {
@@ -225,6 +250,15 @@ func main() {
 		SeqCase{S1: 65535, S2: 1, Greater: udpproto.SeqGreaterThan(65535, 1)},
 	)
 	m.Udp = u
+
+	// --- reflect-codec golden: marshalled by Go's REAL codec, cross-checked
+	// by the C# ReflectReader/Writer. "héllo" is multibyte UTF-8 so the u16
+	// string prefix is exercised as a BYTE length, not a char count. ---
+	gr := goldenReflect{A: 1.5, B: 0xDEADBEEF, C: "héllo", D: true, E: -42, F: []uint32{7, 8, 9}}
+	m.Reflect = ReflectCase{
+		HexBytes: hex.EncodeToString(universe.ReflectMarshal(&gr)),
+		A:        gr.A, B: gr.B, C: gr.C, D: gr.D, E: gr.E, F: gr.F,
+	}
 
 	out := filepath.Join("csharp", "Mmokit.Sdk.Core.Tests", "testdata", "delta_golden.json")
 	if err := os.MkdirAll(filepath.Dir(out), 0o755); err != nil {

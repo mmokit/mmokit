@@ -189,5 +189,18 @@
         "greater": false
       }
     ]
+  },
+  "reflect": {
+    "hexBytes": "0000c03fefbeadde060068c3a96c6c6f01d6ffffffffffffff0300070000000800000009000000",
+    "a": 1.5,
+    "b": 3735928559,
+    "c": "héllo",
+    "d": true,
+    "e": -42,
+    "f": [
+      7,
+      8,
+      9
+    ]
   }
 }
