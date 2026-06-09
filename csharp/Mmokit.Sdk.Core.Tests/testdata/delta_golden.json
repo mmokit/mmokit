@@ -1,0 +1,85 @@
+{
+  "dequant": [
+    {
+      "kind": "unAngle",
+      "q": 43197,
+      "scale": 0,
+      "expected": 0.9999310970306396
+    },
+    {
+      "kind": "unNorm",
+      "q": 153,
+      "scale": 0,
+      "expected": 0.6000000238418579
+    },
+    {
+      "kind": "unVel",
+      "q": 8191,
+      "scale": 50,
+      "expected": 12.498855590820312
+    },
+    {
+      "kind": "unRel",
+      "q": -9830,
+      "scale": 100,
+      "expected": -29.99969482421875
+    }
+  ],
+  "frame": {
+    "hexBytes": "0000002a00000007000000010001000100020000000003e900000007030000018fc52cd27b00040102030400026869000003ea00000008040000018fc52cd3c80003ffaabb0000022b0000029a",
+    "tick": 42,
+    "seq": 7,
+    "flags": 1,
+    "fullCount": 1,
+    "deltaCount": 1,
+    "removedCount": 2,
+    "exitedCount": 0,
+    "full": [
+      {
+        "netID": 1001,
+        "epoch": 7,
+        "entityType": 3,
+        "producedAtMs": 1717000000123,
+        "snapshotHex": "01020304",
+        "initialHex": "6869"
+      }
+    ],
+    "delta": [
+      {
+        "netID": 1002,
+        "epoch": 8,
+        "entityType": 4,
+        "producedAtMs": 1717000000456,
+        "deltaHex": "ffaabb"
+      }
+    ],
+    "removedIDs": [
+      555,
+      666
+    ]
+  },
+  "applyDelta": [
+    {
+      "fieldSizes": [
+        2,
+        2
+      ],
+      "hasVarTail": false,
+      "baselineHex": "11223344",
+      "deltaHex": "029988",
+      "expectedHex": "11229988"
+    }
+  ],
+  "strings": [
+    {
+      "kind": "u8",
+      "hexBytes": "05616c696365",
+      "expected": "alice"
+    },
+    {
+      "kind": "u16",
+      "hexBytes": "0005626f626262",
+      "expected": "bobbb"
+    }
+  ]
+}
