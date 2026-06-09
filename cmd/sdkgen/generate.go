@@ -6,10 +6,11 @@ import (
 	"strings"
 )
 
-// Generator produces TypeScript SDK files from a protocol schema.
+// Generator produces TypeScript SDK file contents from a protocol schema.
+// It is the content engine behind tsBackend; all genXxx methods read only
+// schema.
 type Generator struct {
 	schema ProtocolSchema
-	outDir string
 }
 
 // ---------------------------------------------------------------------------
