@@ -43,6 +43,7 @@ func (b csharpBackend) OutputFiles(schema ProtocolSchema) map[string]func() stri
 	if len(schema.Entities) > 0 {
 		files["EntityType.cs"] = func() string { return b.genEntityType(schema) }
 		files["Entities.cs"] = func() string { return b.genEntities(schema) }
+		files["DeltaDecoder.cs"] = func() string { return b.genDeltaDecoder(schema) }
 	}
 	// Reflect-codec message surface, gated per registry (mirrors tsBackend).
 	if len(schema.BroadcastTypes) > 0 || len(schema.ServerEventTypes) > 0 {

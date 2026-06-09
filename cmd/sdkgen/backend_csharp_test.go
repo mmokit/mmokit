@@ -200,3 +200,30 @@ func TestCsharpBackend_OutputFiles_IncludesReflectFiles(t *testing.T) {
 		}
 	}
 }
+
+func TestCsharpBackend_DeltaDecoder(t *testing.T) {
+	out := csharpBackend{namespace: "Mmokit.Sdk"}.genDeltaDecoder(sampleEntitySchema())
+	for _, want := range []string{
+		"public sealed class DemoDeltaDecoder",
+		"public DeltaWorldUpdate Decode(byte[] data)",
+		"static ShipEntity DecodeShipEntitySnapshot(byte[] snap, byte[]? initial, ShipEntity? existing)",
+		"e.x = DeltaDecoderCore.ReadFloat32(snap, o); o += 4;",
+		"e.vx = (float)DeltaDecoderCore.UnVel(DeltaDecoderCore.ReadInt16(snap, o), 0.01); o += 2;",
+		"e.statusEffects.Add(_it);",
+		"int initialOff = 0;",
+		"Encoding.UTF8.GetString(initial, initialOff + 1, _l)",
+		"case 0: { var e = DecodeShipEntitySnapshot(snap, initial, existing as ShipEntity);",
+		"static bool HasVarTailFor(byte type_)",
+	} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("genDeltaDecoder missing %q in:\n%s", want, out)
+		}
+	}
+}
+
+func TestCsharpBackend_OutputFiles_IncludesDeltaDecoder(t *testing.T) {
+	files := csharpBackend{namespace: "Mmokit.Sdk"}.OutputFiles(sampleEntitySchema())
+	if _, ok := files["DeltaDecoder.cs"]; !ok {
+		t.Fatalf("OutputFiles missing DeltaDecoder.cs")
+	}
+}
