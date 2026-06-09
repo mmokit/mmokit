@@ -105,6 +105,14 @@ type EntityReplicator interface {
 	// InitialData returns one-time data for newly-visible entities (name, skin, etc).
 	// Returns nil if no initial data. Equivalent to Unreal's COND_InitialOnly.
 	InitialData(viewer *ViewerInfo, entry spatial.Entry) []byte
+
+	// HasInitial reports whether this replicator has any initial-only fields.
+	HasInitial() bool
+
+	// InitialHash writes only the initial-only fields into the hasher, so the
+	// system can detect when initial data changed and re-send it to already
+	// visible viewers. Only called when HasInitial() is true.
+	InitialHash(h *Hasher, viewer *ViewerInfo, entry spatial.Entry)
 }
 
 // RelevancyProvider is an optional interface on EntityReplicator.

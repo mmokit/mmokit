@@ -26,6 +26,10 @@ type ComponentBinding interface {
 	snapshot(entity ecs.Entity, w *quantize.SnapshotWriter, viewer *ViewerInfo, entry spatial.Entry)
 	hasInitial() bool
 	initialData(entity ecs.Entity, viewer *ViewerInfo, entry spatial.Entry, buf []byte) []byte
+	// initialHash writes the entity's initial-only fields into the hasher.
+	// No-op for bindings without initial fields. Used to detect when initial
+	// data changed so it can be re-sent to already-visible viewers.
+	initialHash(entity ecs.Entity, h *Hasher, viewer *ViewerInfo, entry spatial.Entry)
 	schema() BindingSchema // machine-readable description for client codegen
 }
 
@@ -146,6 +150,14 @@ func (a *autoReplicator) SnapshotLayout() []int {
 	return a.layout
 }
 
+func (a *autoReplicator) HasInitial() bool { return a.anyInitial }
+
+func (a *autoReplicator) InitialHash(h *Hasher, viewer *ViewerInfo, entry spatial.Entry) {
+	for _, b := range a.bindings {
+		b.initialHash(entry.Entity, h, viewer, entry)
+	}
+}
+
 func (a *autoReplicator) InitialData(viewer *ViewerInfo, entry spatial.Entry) []byte {
 	if !a.anyInitial {
 		return nil
@@ -184,6 +196,7 @@ func (entryPositionBinding) snapshot(_ ecs.Entity, w *quantize.SnapshotWriter, _
 }
 
 func (entryPositionBinding) hasInitial() bool { return false }
+func (entryPositionBinding) initialHash(ecs.Entity, *Hasher, *ViewerInfo, spatial.Entry) {}
 func (entryPositionBinding) initialData(_ ecs.Entity, _ *ViewerInfo, _ spatial.Entry, buf []byte) []byte {
 	return buf
 }
@@ -247,6 +260,7 @@ func (b *viewerRelativePosBinding) snapshot(entity ecs.Entity, w *quantize.Snaps
 }
 
 func (b *viewerRelativePosBinding) hasInitial() bool { return false }
+func (b *viewerRelativePosBinding) initialHash(ecs.Entity, *Hasher, *ViewerInfo, spatial.Entry) {}
 func (b *viewerRelativePosBinding) initialData(_ ecs.Entity, _ *ViewerInfo, _ spatial.Entry, buf []byte) []byte {
 	return buf
 }
@@ -296,6 +310,7 @@ func (b *qVelocityBinding) snapshot(entity ecs.Entity, w *quantize.SnapshotWrite
 }
 
 func (b *qVelocityBinding) hasInitial() bool { return false }
+func (b *qVelocityBinding) initialHash(ecs.Entity, *Hasher, *ViewerInfo, spatial.Entry) {}
 func (b *qVelocityBinding) initialData(_ ecs.Entity, _ *ViewerInfo, _ spatial.Entry, buf []byte) []byte {
 	return buf
 }
@@ -340,6 +355,7 @@ func (b *qAngleBinding) snapshot(entity ecs.Entity, w *quantize.SnapshotWriter, 
 }
 
 func (b *qAngleBinding) hasInitial() bool { return false }
+func (b *qAngleBinding) initialHash(ecs.Entity, *Hasher, *ViewerInfo, spatial.Entry) {}
 func (b *qAngleBinding) initialData(_ ecs.Entity, _ *ViewerInfo, _ spatial.Entry, buf []byte) []byte {
 	return buf
 }
@@ -392,6 +408,7 @@ func (b *qSizeBinding) snapshot(entity ecs.Entity, w *quantize.SnapshotWriter, _
 }
 
 func (b *qSizeBinding) hasInitial() bool { return false }
+func (b *qSizeBinding) initialHash(ecs.Entity, *Hasher, *ViewerInfo, spatial.Entry) {}
 func (b *qSizeBinding) initialData(_ ecs.Entity, _ *ViewerInfo, _ spatial.Entry, buf []byte) []byte {
 	return buf
 }
@@ -450,6 +467,12 @@ func (g *bindingGroup) initialData(entity ecs.Entity, viewer *ViewerInfo, entry 
 		buf = b.initialData(entity, viewer, entry, buf)
 	}
 	return buf
+}
+
+func (g *bindingGroup) initialHash(entity ecs.Entity, h *Hasher, viewer *ViewerInfo, entry spatial.Entry) {
+	for _, b := range g.bindings {
+		b.initialHash(entity, h, viewer, entry)
+	}
 }
 
 func (g *bindingGroup) schema() BindingSchema {
@@ -729,6 +752,27 @@ func (rb *reflectBinding) initialData(entity ecs.Entity, _ *ViewerInfo, _ spatia
 		buf = tf.initFn(v.Field(tf.index).Interface(), buf)
 	}
 	return buf
+}
+
+// initialHash hashes only the initial-only fields. Lenient on a missing
+// component (the combined Hash/Snapshot paths enforce required presence and
+// panic downstream); a binding with no initial fields is a no-op.
+func (rb *reflectBinding) initialHash(entity ecs.Entity, h *Hasher, _ *ViewerInfo, _ spatial.Entry) {
+	if len(rb.initials) == 0 {
+		return
+	}
+	if !rb.reader.has(entity) {
+		if rb.optional {
+			for _, tf := range rb.initials {
+				tf.hashFn(zeroForEncoding(tf.meta.encoding), h)
+			}
+		}
+		return
+	}
+	v := rb.reader.readValue(entity)
+	for _, tf := range rb.initials {
+		tf.hashFn(v.Field(tf.index).Interface(), h)
+	}
 }
 
 func (rb *reflectBinding) schema() BindingSchema {

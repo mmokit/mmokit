@@ -223,6 +223,36 @@ func TestAutoReplicatorInitialData(t *testing.T) {
 	}
 }
 
+func TestAutoReplicatorInitialHash_ChangesWithField(t *testing.T) {
+	world := ecs.NewWorld()
+	nameMap := ecs.NewMap1[testName](world)
+	entity := nameMap.NewEntity(&testName{Name: "Alice"})
+
+	rep := AutoReplicator(2, Component(nameMap))
+	entry := spatial.Entry{Entity: entity}
+	viewer := &ViewerInfo{ConnID: 1}
+
+	if !rep.HasInitial() {
+		t.Fatal("replicator with a net:\"initial\" field must report HasInitial() == true")
+	}
+
+	var h1 Hasher
+	h1.Reset()
+	rep.InitialHash(&h1, viewer, entry)
+	before := h1.Sum()
+
+	nameMap.Get(entity).Name = "renamed"
+
+	var h2 Hasher
+	h2.Reset()
+	rep.InitialHash(&h2, viewer, entry)
+	after := h2.Sum()
+
+	if before == after {
+		t.Fatalf("InitialHash must change when an initial field changes: before=%d after=%d", before, after)
+	}
+}
+
 func TestAutoReplicatorInitialDataNil(t *testing.T) {
 	world := ecs.NewWorld()
 	healthMap := ecs.NewMap1[testHealth](world)

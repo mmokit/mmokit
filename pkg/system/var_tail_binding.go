@@ -90,6 +90,8 @@ func (b *varTailBinding[T]) initialData(_ ecs.Entity, _ *ViewerInfo, _ spatial.E
 	return buf
 }
 
+func (b *varTailBinding[T]) initialHash(ecs.Entity, *Hasher, *ViewerInfo, spatial.Entry) {}
+
 func (b *varTailBinding[T]) schema() BindingSchema {
 	// The BindingSchema describes scalar per-tick wire fields. A var-tail
 	// binding has none; its variable tail is surfaced via VarTailProvider so

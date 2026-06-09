@@ -27,6 +27,8 @@ func (r *testReplicator) Snapshot(w *quantize.SnapshotWriter, viewer *ViewerInfo
 }
 func (r *testReplicator) SnapshotLayout() []int { return []int{4, 4} }
 func (r *testReplicator) InitialData(viewer *ViewerInfo, entry spatial.Entry) []byte { return nil }
+func (r *testReplicator) HasInitial() bool                                           { return false }
+func (r *testReplicator) InitialHash(h *Hasher, viewer *ViewerInfo, entry spatial.Entry) {}
 
 type tieredReplicator struct {
 	testReplicator
@@ -642,6 +644,8 @@ func (r *countingReplicator) Snapshot(w *quantize.SnapshotWriter, viewer *Viewer
 }
 func (r *countingReplicator) SnapshotLayout() []int                                  { return []int{4, 4} }
 func (r *countingReplicator) InitialData(viewer *ViewerInfo, entry spatial.Entry) []byte { return nil }
+func (r *countingReplicator) HasInitial() bool                                              { return false }
+func (r *countingReplicator) InitialHash(h *Hasher, viewer *ViewerInfo, entry spatial.Entry) {}
 
 // TestReplicationSystem_DormantSkippedInAoI verifies the Dormant component
 // excludes an entity from AoI broadcast, even though it's still in the
