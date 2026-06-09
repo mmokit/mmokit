@@ -120,6 +120,34 @@ the SDK does not call `/auth/register` or `/auth/login` over HTTP; it uses the
 generated typed ops. (HTTP auth remains available for the web client; it is simply
 not the path the C# SDK takes.)
 
+### Future requirement: transport encryption
+
+Auth credentials (and everything else) currently travel as **plaintext** over UDP.
+This is acceptable for the dev/load-test demo but MUST be encryptable later. The
+op-channel approach is chosen partly because it keeps a single, controllable
+encryption seam: all traffic — auth included — rides the one UDP transport, so a
+future payload-encryption layer covers auth automatically (unlike a split
+HTTP-TLS-then-UDP design).
+
+The design must not foreclose this. Concretely, both the Go `udpproto` server side
+and the C# `_core/UdpTransport.cs` port must keep the framing layered so encryption
+can be inserted at the transport boundary without touching the op/event layers above:
+
+- The handshake already exchanges client/server salts (`ConnReq`/`ConnAccept`) and
+  derives a shared 32-bit token. That salt exchange is the natural hook to later
+  upgrade into a real key-exchange step (e.g. derive a session key, or layer a
+  Noise/DTLS-style handshake) — the token/salt plumbing must stay accessible, not
+  buried.
+- Channel-byte demux (`0x00`/`0x01`) and reliability operate on the **decrypted**
+  payload. Keep encrypt/decrypt as a single chokepoint at packet send/recv
+  (`sendRaw` / inbound dispatch) so encryption wraps the whole payload below the
+  channel split.
+- No design decision in this spec (auth-over-op-channel, the C# core port, the
+  op-channel demux fix) may assume plaintext beyond the transport boundary.
+
+Implementing encryption is **out of scope for this spec** — but the above seam is a
+hard constraint on the transport implementation so it can be added without rework.
+
 ## C. C# `_core` runtime (hand-ported, copied like the TS cores)
 
 Kept in-repo as the single source for the C# ports and copied into the SDK output
