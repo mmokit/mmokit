@@ -37,6 +37,12 @@ type EntityBaseline struct {
 	Ring     []SentSnapshot
 	RingHead int // next write position
 	RingLen  int // number of valid entries
+
+	// InitialHash is the hash of the initial-only fields last sent to this
+	// viewer for this entity. HasInitialHash is false until the first send.
+	// Used to detect when initial data changed and must be re-sent.
+	InitialHash    uint64
+	HasInitialHash bool
 }
 
 // PushSent stores a sent snapshot in the ring buffer.
