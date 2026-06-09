@@ -227,3 +227,35 @@ func TestCsharpBackend_OutputFiles_IncludesDeltaDecoder(t *testing.T) {
 		t.Fatalf("OutputFiles missing DeltaDecoder.cs")
 	}
 }
+
+func TestCsharpBackend_Client(t *testing.T) {
+	out := csharpBackend{namespace: "Mmokit.Sdk"}.genClient(sampleEntitySchema())
+	for _, want := range []string{
+		"public sealed class DemoClient",
+		"public void Connect(string host, int port, int handshakeTimeoutMs = 5000)",
+		"_transport = UdpTransport.Connect(host, port, handshakeTimeoutMs);",
+		"public DemoDeltaDecoder Decoder { get; } = new();",
+		"public TypedDispatcher TypedEvents { get; } = new();",
+		"public async Task<AuthLoginResponse> AuthLogin(AuthLoginRequest req)",
+		"byte[] raw = await CallOp(AuthLoginRequest.TypeID, req.Encode());",
+		"return AuthLoginResponse.Decode(raw);",
+		"public void SendSetMoveTarget(SetMoveTarget msg, bool reliable = false)",
+		"public Action OnPong(Action<Pong> handler) => TypedEvents.On(Pong.TypeID, b => handler(Pong.Decode(b)));",
+		"frame[0] = 0x01;",
+		"frame[0] = 0x00;",
+	} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("genClient missing %q in:\n%s", want, out)
+		}
+	}
+	if strings.Contains(out, "OperationError.TypeID") {
+		t.Fatalf("genClient should not reference OperationError when absent from schema")
+	}
+}
+
+func TestCsharpBackend_OutputFiles_IncludesClient(t *testing.T) {
+	files := csharpBackend{namespace: "Mmokit.Sdk"}.OutputFiles(sampleEntitySchema())
+	if _, ok := files["Client.cs"]; !ok {
+		t.Fatalf("OutputFiles missing Client.cs")
+	}
+}

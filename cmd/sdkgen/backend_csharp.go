@@ -55,6 +55,11 @@ func (b csharpBackend) OutputFiles(schema ProtocolSchema) map[string]func() stri
 	if len(schema.Operations) > 0 {
 		files["Operations.cs"] = func() string { return b.genOperations(schema) }
 	}
+	// Client.cs ships whenever the schema declares any client-facing surface.
+	if len(schema.Entities) > 0 || len(schema.BroadcastTypes) > 0 || len(schema.ServerEventTypes) > 0 ||
+		len(schema.ClientInputTypes) > 0 || len(schema.Operations) > 0 {
+		files["Client.cs"] = func() string { return b.genClient(schema) }
+	}
 	return files
 }
 
