@@ -263,3 +263,7 @@ csharp-test:
 # regenerate the C# golden manifest from Go (authoritative wire bytes)
 csharp-golden:
     go run ./cmd/csharp-golden
+
+# compile-gate the generated C# SDK (emits a sample SDK + dotnet build)
+csharp-compile-test:
+    go test -tags=csharptest ./cmd/sdkgen/ -run TestCsharpSdk_Compiles -v
