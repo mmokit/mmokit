@@ -327,6 +327,7 @@ type ReplicationSystem struct {
 	fullBuf    []FullPayload
 	deltaBuf   []DeltaPayload
 	hasher     Hasher
+	initHasher Hasher // initial-fields-only hash, kept separate from `hasher`
 	snapWriter *quantize.SnapshotWriter
 	snapBuf    []byte
 	deltaTmp   []byte // reusable buffer for DeltaEncoder output
@@ -676,9 +677,25 @@ func (s *ReplicationSystem) Update(dt float32) {
 				}
 			}
 
-			// Dormancy: skip all replication work for entities unchanged for N ticks.
 			ps := conn.store.Priority(netID)
-			if !isNew && s.cfg.DormancyThreshold > 0 && ps.UnchangedTicks >= s.cfg.DormancyThreshold {
+			bl := conn.store.GetOrCreateBaseline(netID, ringDepth)
+
+			// Detect a change in initial-only fields (name, etc.) so it can be
+			// re-sent to already-visible viewers. Cheap: only the initial
+			// fields are hashed, and only when the kind has any.
+			hasInit := rep.HasInitial()
+			var curInitHash uint64
+			if hasInit {
+				s.initHasher.Reset()
+				rep.InitialHash(&s.initHasher, viewer, entry)
+				curInitHash = s.initHasher.Sum()
+			}
+			initialChanged := hasInit && (!bl.HasInitialHash || bl.InitialHash != curInitHash)
+
+			// Dormancy: skip all replication work for entities unchanged for N
+			// ticks — unless an initial field changed (static entities like
+			// stations are dormant exactly when they get renamed).
+			if !isNew && !initialChanged && s.cfg.DormancyThreshold > 0 && ps.UnchangedTicks >= s.cfg.DormancyThreshold {
 				currentVisible[netID] = true
 				continue
 			}
@@ -688,7 +705,7 @@ func (s *ReplicationSystem) Update(dt float32) {
 			rep.Hash(&s.hasher, viewer, entry)
 			hash := s.hasher.Sum()
 
-			if !isNew && !isKeyframe && conn.store.HasLastHash(netID) {
+			if !isNew && !isKeyframe && !initialChanged && conn.store.HasLastHash(netID) {
 				if conn.store.LastHash(netID) == hash {
 					ps.UnchangedTicks++
 					currentVisible[netID] = true
@@ -699,7 +716,7 @@ func (s *ReplicationSystem) Update(dt float32) {
 			conn.store.SetLastHash(netID, hash)
 
 			// Update divisor gate: skip snapshot on non-divisor ticks.
-			if !isNew && tier.UpdateDivisor > 1 && tick%tier.UpdateDivisor != 0 {
+			if !isNew && !initialChanged && tier.UpdateDivisor > 1 && tick%tier.UpdateDivisor != 0 {
 				currentVisible[netID] = true
 				dist := float32(math.Sqrt(float64(dist2)))
 				distFactor := float32(1.0) - (dist / tierRadius)
@@ -721,11 +738,11 @@ func (s *ReplicationSystem) Update(dt float32) {
 			rep.Snapshot(s.snapWriter, viewer, entry)
 			curr := s.snapWriter.Bytes()
 
-			bl := conn.store.GetOrCreateBaseline(netID, ringDepth)
 			enc := s.deltaEncoders[entityType]
 
-			if isNew || bl.Acked == nil {
-				// Full snapshot with initial data.
+			if isNew || bl.Acked == nil || initialChanged {
+				// Full snapshot with initial data. Reached on first visibility,
+				// missing baseline, OR when an initial-only field changed.
 				snap := make([]byte, len(curr))
 				copy(snap, curr)
 
@@ -740,6 +757,11 @@ func (s *ReplicationSystem) Update(dt float32) {
 					Snapshot:     snap,
 					InitialData:  initData,
 				})
+
+				if hasInit {
+					bl.InitialHash = curInitHash
+					bl.HasInitialHash = true
+				}
 
 				// Store baseline.
 				if s.cfg.AckMode == replication.AckReliable {
