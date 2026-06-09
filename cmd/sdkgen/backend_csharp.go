@@ -16,7 +16,7 @@ type csharpBackend struct {
 
 func (b csharpBackend) Lang() string { return "csharp" }
 
-// CoreFiles copies the five hand-written runtime files into <out>/_core/.
+// CoreFiles copies the hand-written runtime files into <out>/_core/.
 func (b csharpBackend) CoreFiles() []CoreFile {
 	dir := b.coreDir
 	if dir == "" {
@@ -25,6 +25,7 @@ func (b csharpBackend) CoreFiles() []CoreFile {
 	names := []string{
 		"DeltaDecoderCore.cs",
 		"InterpolationCore.cs",
+		"ReflectCodec.cs",
 		"UdpProto.cs",
 		"UdpTransport.cs",
 		"UdpTransport.Socket.cs",
@@ -42,6 +43,16 @@ func (b csharpBackend) OutputFiles(schema ProtocolSchema) map[string]func() stri
 	if len(schema.Entities) > 0 {
 		files["EntityType.cs"] = func() string { return b.genEntityType(schema) }
 		files["Entities.cs"] = func() string { return b.genEntities(schema) }
+	}
+	// Reflect-codec message surface, gated per registry (mirrors tsBackend).
+	if len(schema.BroadcastTypes) > 0 || len(schema.ServerEventTypes) > 0 {
+		files["Events.cs"] = func() string { return b.genEvents(schema) }
+	}
+	if len(schema.ClientInputTypes) > 0 {
+		files["Inputs.cs"] = func() string { return b.genInputs(schema) }
+	}
+	if len(schema.Operations) > 0 {
+		files["Operations.cs"] = func() string { return b.genOperations(schema) }
 	}
 	return files
 }
