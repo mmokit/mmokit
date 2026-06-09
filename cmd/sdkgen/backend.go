@@ -22,15 +22,25 @@ type Backend interface {
 	OutputFiles(schema ProtocolSchema) map[string]func() string
 }
 
-// backendFor selects a backend by --lang token. The C# backend is added in
-// a later plan; until then it returns a clear not-implemented error so the
-// flag is wired and the message is specific.
-func backendFor(lang, coreTS, interpTS string) (Backend, error) {
+// backendOpts carries the language-specific knobs main.go derives from flags.
+type backendOpts struct {
+	CoreTS        string // TS: delta-decoder-core.ts source path
+	InterpTS      string // TS: interpolation-core.ts source path
+	CSharpCoreDir string // C#: dir holding the hand-written _core .cs files
+	Namespace     string // C#: root namespace for generated files
+}
+
+// backendFor selects a backend by --lang token.
+func backendFor(lang string, o backendOpts) (Backend, error) {
 	switch lang {
 	case "ts":
-		return tsBackend{coreTS: coreTS, interpTS: interpTS}, nil
+		return tsBackend{coreTS: o.CoreTS, interpTS: o.InterpTS}, nil
 	case "csharp":
-		return nil, fmt.Errorf("--lang=csharp: C# backend not yet implemented")
+		ns := o.Namespace
+		if ns == "" {
+			ns = "Mmokit.Sdk"
+		}
+		return csharpBackend{namespace: ns, coreDir: o.CSharpCoreDir}, nil
 	default:
 		return nil, fmt.Errorf("unknown --lang %q (want: ts, csharp)", lang)
 	}

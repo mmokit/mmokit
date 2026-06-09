@@ -9,7 +9,7 @@ import (
 
 func TestBackendFor(t *testing.T) {
 	// ts → a working tsBackend, no error.
-	b, err := backendFor("ts", "core.ts", "interp.ts")
+	b, err := backendFor("ts", backendOpts{CoreTS: "core.ts", InterpTS: "interp.ts"})
 	if err != nil {
 		t.Fatalf("backendFor(ts) error = %v, want nil", err)
 	}
@@ -17,14 +17,17 @@ func TestBackendFor(t *testing.T) {
 		t.Fatalf("Lang() = %q, want ts", b.Lang())
 	}
 
-	// csharp → specific not-implemented error (flag wired, message clear).
-	if _, err := backendFor("csharp", "", ""); err == nil ||
-		!strings.Contains(err.Error(), "not yet implemented") {
-		t.Fatalf("backendFor(csharp) error = %v, want 'not yet implemented'", err)
+	// csharp → a working csharpBackend (the Plan 2 not-implemented error is gone).
+	cs, err := backendFor("csharp", backendOpts{})
+	if err != nil {
+		t.Fatalf("backendFor(csharp) error = %v, want nil", err)
+	}
+	if cs.Lang() != "csharp" {
+		t.Fatalf("Lang() = %q, want csharp", cs.Lang())
 	}
 
 	// unknown → generic unknown-lang error.
-	if _, err := backendFor("rust", "", ""); err == nil ||
+	if _, err := backendFor("rust", backendOpts{}); err == nil ||
 		!strings.Contains(err.Error(), "unknown --lang") {
 		t.Fatalf("backendFor(rust) error = %v, want 'unknown --lang'", err)
 	}
