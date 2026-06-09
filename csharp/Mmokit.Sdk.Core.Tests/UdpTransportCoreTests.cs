@@ -34,7 +34,7 @@ namespace Mmokit.Sdk.Core.Tests
             var (t, _, _) = NewCore();
             byte[] pkt = UdpProto.EncodeReliable(0xCAFEBABE, 0, new byte[] { 9, 9 });
             t.HandlePacket(pkt);
-            Assert.True(t.TryRecv(out byte[] got, 0));
+            Assert.True(t.TryRecv(out var got, 0));
             Assert.Equal(new byte[] { 9, 9 }, got);
         }
 
@@ -90,6 +90,24 @@ namespace Mmokit.Sdk.Core.Tests
             clock[0] = 1100; // > keepaliveInterval (1000ms), nothing sent yet
             t.Tick();
             Assert.Contains(sent, p => p[0] == UdpProto.TypeUnreliable && p.Length == UdpProto.UnreliableHeaderSize);
+        }
+
+        [Fact]
+        public void Tick_ConnectionTimeout_ReturnsFalse_AndDisconnects()
+        {
+            var (t, sent, clock) = NewCore();
+            clock[0] = 10_001; // > connectionTimeout (10000ms) since lastRecv=0
+            Assert.False(t.Tick());
+            Assert.Contains(sent, p => p[0] == UdpProto.TypeDisconnect); // Close() sent disconnect
+        }
+
+        [Fact]
+        public void Tick_ReliableTimeout_ReturnsFalse()
+        {
+            var (t, _, clock) = NewCore();
+            t.SendReliable(new byte[] { 7 }); // sentAt = 0, never acked
+            clock[0] = 5001; // > reliableTimeout (5000ms), but < connectionTimeout
+            Assert.False(t.Tick());
         }
     }
 }

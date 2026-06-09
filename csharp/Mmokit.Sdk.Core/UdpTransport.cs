@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
 
 namespace Mmokit.Sdk.Core
 {
@@ -37,6 +38,11 @@ namespace Mmokit.Sdk.Core
         ushort _sendSeq;
         readonly ReliableEntry[] _sendBuf = new ReliableEntry[ReliableBufSize];
 
+        // Recv-tracking trio is written on the receive thread (HandlePacket) and
+        // read on the tick thread (Tick) under the socket loops — guard it. (Go's
+        // memory model tolerates the unsynchronized access; C#'s permits
+        // read-hoisting that could stall ACK flushing, so the lock is required.)
+        readonly object _recvLock = new();
         ushort _recvSeq;
         uint _recvBits;
         bool _ackDirty;
@@ -45,7 +51,8 @@ namespace Mmokit.Sdk.Core
 
         long _lastRecvMs;
         long _lastSendMs;
-        volatile bool _closed;
+        readonly object _closeLock = new();
+        bool _closed;
 
         /// Core ctor (and the testing entry point). The socket factory below
         /// constructs this with a sink that writes to the UdpClient.
@@ -109,31 +116,34 @@ namespace Mmokit.Sdk.Core
 
         void UpdateRecvTracking(ushort seq)
         {
-            if (_recvSeq == 0 && !_ackDirty)
+            lock (_recvLock)
             {
-                _recvSeq = seq;
-                _recvBits = 0;
-            }
-            else if (UdpProto.SeqGreaterThan(seq, _recvSeq))
-            {
-                int diff = (ushort)(seq - _recvSeq);
-                if (diff <= 32)
+                if (_recvSeq == 0 && !_ackDirty)
                 {
-                    // C# masks shift counts to 5 bits (x << 32 == x << 0), but Go
-                    // yields 0 for a shift >= width. At diff==32 we must force 0 to
-                    // match the Go reference, hence the explicit guard.
-                    uint shifted = diff >= 32 ? 0u : (_recvBits << diff);
-                    _recvBits = shifted | (1u << (diff - 1));
+                    _recvSeq = seq;
+                    _recvBits = 0;
                 }
-                else _recvBits = 0;
-                _recvSeq = seq;
+                else if (UdpProto.SeqGreaterThan(seq, _recvSeq))
+                {
+                    int diff = (ushort)(seq - _recvSeq);
+                    if (diff <= 32)
+                    {
+                        // C# masks shift counts to 5 bits (x << 32 == x << 0), but Go
+                        // yields 0 for a shift >= width. At diff==32 we must force 0 to
+                        // match the Go reference, hence the explicit guard.
+                        uint shifted = diff >= 32 ? 0u : (_recvBits << diff);
+                        _recvBits = shifted | (1u << (diff - 1));
+                    }
+                    else _recvBits = 0;
+                    _recvSeq = seq;
+                }
+                else
+                {
+                    int diff = (ushort)(_recvSeq - seq);
+                    if (diff > 0 && diff <= 32) _recvBits |= 1u << (diff - 1);
+                }
+                _ackDirty = true;
             }
-            else
-            {
-                int diff = (ushort)(_recvSeq - seq);
-                if (diff > 0 && diff <= 32) _recvBits |= 1u << (diff - 1);
-            }
-            _ackDirty = true;
         }
 
         void ProcessAck(ushort ackSeq, uint ackBits)
@@ -180,11 +190,18 @@ namespace Mmokit.Sdk.Core
                 }
             }
 
-            if (_ackDirty)
+            // Snapshot the recv-tracking trio under the lock, then emit outside it.
+            bool flushAck;
+            ushort ackSeq;
+            uint ackBits;
+            lock (_recvLock)
             {
-                _sendRaw(UdpProto.EncodeAck(_token, _recvSeq, _recvBits));
-                _ackDirty = false;
+                flushAck = _ackDirty;
+                ackSeq = _recvSeq;
+                ackBits = _recvBits;
+                if (flushAck) _ackDirty = false;
             }
+            if (flushAck) _sendRaw(UdpProto.EncodeAck(_token, ackSeq, ackBits));
 
             if (now - _lastSendMs > KeepaliveIntervalMs)
             {
@@ -195,8 +212,8 @@ namespace Mmokit.Sdk.Core
         }
 
         /// Non-blocking receive (used by tests + pollers). timeoutMs=0 → immediate.
-        public bool TryRecv(out byte[] msg, int timeoutMs)
-            => _inbound.TryTake(out msg!, timeoutMs);
+        public bool TryRecv([MaybeNullWhen(false)] out byte[] msg, int timeoutMs)
+            => _inbound.TryTake(out msg, timeoutMs);
 
         /// Blocking receive. Returns null when the transport is closed.
         public byte[]? Recv()
@@ -207,8 +224,14 @@ namespace Mmokit.Sdk.Core
 
         public void Close()
         {
-            if (_closed) return;
-            _closed = true;
+            // Atomic check-then-set so concurrent Close() callers (consumer +
+            // Tick timeout path) can't both run the body and double-complete the
+            // inbound collection (which would throw on the second call).
+            lock (_closeLock)
+            {
+                if (_closed) return;
+                _closed = true;
+            }
             try { _sendRaw(UdpProto.EncodeDisconnect(_token)); } catch { /* best effort */ }
             _inbound.CompleteAdding();
             CloseSocket(); // partial-class hook; no-op for the core-only ctor
