@@ -279,6 +279,115 @@ func TestReplicationSystem_HashUnchanged_StaysVisible(t *testing.T) {
 	}
 }
 
+// initialReplicator carries a mutable length-prefixed name as initial-only
+// data. Its combined Hash (inherited from testReplicator) covers position only,
+// so a name change does NOT bust the combined hash — the resend is driven purely
+// by the initial-only hash path under test.
+type initialReplicator struct {
+	testReplicator
+	name string
+}
+
+func (r *initialReplicator) HasInitial() bool { return true }
+func (r *initialReplicator) InitialData(viewer *ViewerInfo, entry spatial.Entry) []byte {
+	return append([]byte{byte(len(r.name))}, []byte(r.name)...)
+}
+func (r *initialReplicator) InitialHash(h *Hasher, viewer *ViewerInfo, entry spatial.Entry) {
+	for i := 0; i < len(r.name); i++ {
+		h.Uint8(r.name[i])
+	}
+}
+
+func decodeInitialName(t *testing.T, b []byte) string {
+	t.Helper()
+	if len(b) == 0 {
+		t.Fatal("initialData is empty")
+	}
+	n := int(b[0])
+	if len(b) < 1+n {
+		t.Fatalf("initialData too short: len=%d want>=%d", len(b), 1+n)
+	}
+	return string(b[1 : 1+n])
+}
+
+func findFull(t *testing.T, frames []ReplicationFrame, netID uint32) FullPayload {
+	t.Helper()
+	if len(frames) != 1 {
+		t.Fatalf("expected 1 frame, got %d", len(frames))
+	}
+	for _, f := range frames[0].Full {
+		if f.NetID == netID {
+			return f
+		}
+	}
+	t.Fatalf("no full payload for netID=%d (full=%d deltas=%d)", netID, len(frames[0].Full), len(frames[0].Deltas))
+	return FullPayload{}
+}
+
+// TestReplicationSystem_InitialFieldChange_ReSends verifies that mutating a
+// net:"initial" field re-sends it (as a full entry carrying fresh initialData)
+// to an already-visible viewer, and that an unchanged tick does not re-send.
+func TestReplicationSystem_InitialFieldChange_ReSends(t *testing.T) {
+	world := ecs.NewWorld()
+	grid := spatial.NewHashGrid(100)
+	em := newTestEntityMapper(world)
+	fw := &stubFrameWriter{}
+
+	rep := &initialReplicator{testReplicator: testReplicator{entityType: 0}, name: "alpha"}
+	reg := NewReplicatorRegistry()
+	reg.Register(rep)
+
+	viewerEntity := em.spawn(0, 0, 100, 0)
+	e1 := em.spawn(100, 0, 1, 0)
+	grid.Register(spatial.Entry{Entity: e1, X: 100, Y: 0})
+
+	tick := uint32(1)
+	viewers := &fixedViewerSource{viewers: []ViewerInfo{
+		{ConnID: 1, Entity: viewerEntity, X: 0, Y: 0},
+	}}
+	sys := NewReplicationSystem(ReplicationConfig{
+		World:       world,
+		SpatialGrid: grid,
+		Viewers:     viewers,
+		Frame:       fw,
+		Replicators: reg,
+		AoIRadius:   1000,
+		GetTick:     func() uint32 { return tick },
+	})
+
+	// Tick 1: entity enters — full frame with initialData "alpha".
+	sys.Update(0.05)
+	full := findFull(t, fw.frames, 1)
+	if got := decodeInitialName(t, full.InitialData); got != "alpha" {
+		t.Fatalf("tick1 name = %q, want alpha", got)
+	}
+
+	// Mutate the initial field; position is unchanged.
+	rep.name = "beta"
+	tick = 2
+	fw.frames = nil
+	sys.Update(0.05)
+	full = findFull(t, fw.frames, 1) // must be a FULL entry, not a delta
+	if full.InitialData == nil {
+		t.Fatal("tick2: expected a full entry carrying initialData for the renamed entity")
+	}
+	if got := decodeInitialName(t, full.InitialData); got != "beta" {
+		t.Fatalf("tick2 name = %q, want beta", got)
+	}
+
+	// Tick 3: nothing changed — must NOT re-send a full+initial frame.
+	tick = 3
+	fw.frames = nil
+	sys.Update(0.05)
+	if len(fw.frames) == 1 {
+		for _, f := range fw.frames[0].Full {
+			if f.NetID == 1 && f.InitialData != nil {
+				t.Fatal("tick3: must not re-send initial data when nothing changed")
+			}
+		}
+	}
+}
+
 // ---------------------------------------------------------------------------
 // Task 5: PriorityProvider integration test
 // ---------------------------------------------------------------------------
