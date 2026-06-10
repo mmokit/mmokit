@@ -35,6 +35,7 @@ message HostMessage {
     ServiceAnnounce   service_announce    = 19;  // service framework: host → coord new service instance
     ServiceLeave      service_leave       = 20;  // service framework: host → coord service instance going away
     LogBatch          log_batch           = 21;  // admin log tail: host → coord batched logger entries
+    AdminTopicEvent   admin_topic_event   = 22;  // admin SSE: host → coord game-panel/tunables topic publish
     ServiceEventSubscribe service_event_subscribe = 51;  // services bus: process → coord, whole-set replace of subscribed type names
   }
 }
@@ -117,6 +118,16 @@ message LogEntry {
   string cat        = 1;
   string msg        = 2;
   int64  ts_unix_ms = 3;
+}
+
+// AdminTopicEvent carries one host-side mmokit.PublishAdminTopic call to the
+// coordinator's admin TopicBus. payload is the pre-marshaled JSON payload —
+// opaque to the mesh layer; the coordinator re-publishes it verbatim as
+// json.RawMessage so SSE subscribers see the same shape as a local publish.
+// Best-effort: dropped when the control stream is down.
+message AdminTopicEvent {
+  string topic   = 1;  // TopicBus key, e.g. "tunables", "bots"
+  bytes  payload = 2;
 }
 
 message CellReady {
