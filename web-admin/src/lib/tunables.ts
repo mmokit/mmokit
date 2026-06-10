@@ -5,10 +5,10 @@
 //
 //   { ok: true, result?: <typed result>, targets?: [...], traceId }
 //
-// For a single-target route (tune.list is RouteLocal) the typed result lands in
-// `result`. For a multi-target route (tune.set is RouteAllHosts) a single host
-// still collapses to `result`; with multiple hosts the per-host results appear
-// in `targets[]`. The tune verbs all return a `tuneResult{ Rows []tuneRow }`,
+// All tune verbs are RouteAllHosts (the per-host tunable registries are only
+// populated on cell-bearing hosts, so reads must fan out too). A single host
+// collapses to `result`; with multiple hosts the per-host results appear in
+// `targets[]`. The tune verbs all return a `tuneResult{ Rows []tuneRow }`,
 // and tune.set additionally publishes the post-mutation rows on the "tunables"
 // SSE topic — so the page relies on SSE for the authoritative live state and
 // only uses tune.set's direct response opportunistically.

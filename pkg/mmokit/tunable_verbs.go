@@ -132,17 +132,18 @@ func registerTuneVerbs(proc *universe.Process) error {
 		return fmt.Errorf("tune.set: %w", err)
 	}
 
-	// tune.list / tune.get are RouteLocal: they read this process's in-process
-	// tunable registry, which is populated by SyncCellTunables from locally-owned
-	// cells only. In distributed mode a read on one host therefore reflects just
-	// that host's cells; the mutating verbs (tune.set/reset) are RouteAllHosts and
-	// reach every host. (A future RouteAllHosts list with per-cell columns would
-	// close this asymmetry.)
+	// tune.list / tune.get are RouteAllHosts like the mutating verbs: the
+	// per-process tunable registry is populated by SyncCellTunables from
+	// locally-owned cells only, so a pure-coordinator process (distributed
+	// mode) has an empty registry and a RouteLocal read there returns nothing.
+	// Fanning out reads each cell-bearing host's registry instead; in
+	// single-process mode the colocated host short-circuits to InvokeLocal, so
+	// behavior is unchanged there.
 	if err := reg.Register(cmdsys.Command{
 		Verb: "tune.get", Capability: "tune.get",
 		Description: "show one system tunable's current value",
 		Examples:    []string{"tune get wave amplitude"},
-		Route:       cmdsys.RouteLocal, Args: tuneGetArgs{}, Result: tuneGetResult{},
+		Route:       cmdsys.RouteAllHosts, Args: tuneGetArgs{}, Result: tuneGetResult{},
 		Handler: func(ctx context.Context, env *cmdsys.Env, raw any) (any, error) {
 			a := raw.(tuneGetArgs)
 			reg := tuneRegistryFor(proc)
@@ -186,12 +187,14 @@ func registerTuneVerbs(proc *universe.Process) error {
 		return fmt.Errorf("tune.reset: %w", err)
 	}
 
-	// RouteLocal — see the caveat above tune.get: reads only this host's cells.
+	// RouteAllHosts — see tune.get: each host reports its own registry; the
+	// admin SPA merges targets[] (tunables.ts), the console renders one table
+	// per host.
 	if err := reg.Register(cmdsys.Command{
 		Verb: "tune.list", Capability: "tune.list",
 		Description: "list system tunables and current values",
 		Examples:    []string{"tune list", "tune list --system wave"},
-		Route:       cmdsys.RouteLocal, Args: tuneListArgs{}, Result: tuneResult{},
+		Route:       cmdsys.RouteAllHosts, Args: tuneListArgs{}, Result: tuneResult{},
 		Handler: func(ctx context.Context, env *cmdsys.Env, raw any) (any, error) {
 			a := raw.(tuneListArgs)
 			reg := tuneRegistryFor(proc)
