@@ -114,6 +114,13 @@ type Config struct {
 	// Only used when Mode == "coordinator". Default ":9100".
 	ControlListen string
 
+	// UDPListen is the listen address for the engine-owned client UDP server
+	// (the custom reliable/unreliable game protocol — see pkg/net/udpproto).
+	// Bound only on processes that bear the Gateway role (alongside the HTTP
+	// /ws listener), so every game gets UDP for free. Default ":9000" via
+	// BindFlags. Pass "" to disable.
+	UDPListen string
+
 	// AdminListen is the listen address for an HTTP admin server that
 	// exposes /events, /commands, /metrics, and /admin/*. Bound only on
 	// processes that bear RoleCoordinator — admin state (commit log,
@@ -2483,6 +2490,7 @@ func (c *Process) Start(parent ...context.Context) {
 
 	c.startHTTPListener()
 	c.startAdminHTTPListener()
+	c.startUDPListener(ctx)
 
 	go c.routeEvents(ctx)
 

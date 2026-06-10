@@ -351,20 +351,9 @@ func main() {
 	// on the ConnManager before the HTTP server starts.
 	coordinator.Build()
 
-	// Only processes with the gateway role terminate client connections.
-	// HTTP (/ws, /auth, /metrics) is owned by the engine's
-	// startHTTPListener — started inside coordinator.Start below. UDP is a
-	// separate protocol and has to be launched manually here.
-	if coordinator.ServesClients() {
-		udpServer, err := mmokit.NewUDPServer(platformCfg.UDPAddr, connMgr)
-		if err != nil {
-			log.Fatalf("failed to start UDP server: %v", err)
-		}
-		log.Printf("udp server listening on %s", platformCfg.UDPAddr)
-		go udpServer.Run(ctx)
-	} else {
-		log.Printf("mmoserver starting with roles=%s — no client listeners", coordinator.Roles())
-	}
+	// Client listeners — HTTP (/ws, /auth, /metrics) AND the UDP game protocol
+	// — are engine-owned: startHTTPListener + startUDPListener run inside
+	// coordinator.Start below, gated on the Gateway role. No manual wiring here.
 
 	// Blocks: runs console + handles signals + shuts down nodes
 	coordinator.Start(ctx)

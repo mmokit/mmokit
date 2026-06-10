@@ -1,6 +1,7 @@
 package universe
 
 import (
+	"context"
 	"errors"
 	"flag"
 	"fmt"
@@ -69,6 +70,9 @@ func (c *Config) BindFlags() {
 	stringFlag("control-listen",
 		"MeshControl listen addr (coordinator role)",
 		":9100", &c.ControlListen)
+	stringFlag("udp-listen",
+		"client UDP game protocol listen addr (gateway role; pass empty to disable)",
+		":9000", &c.UDPListen)
 	stringFlag("admin-listen",
 		"admin HTTP listen addr for /events, /commands, /metrics, /admin/* (default :9101, only binds on RoleCoordinator processes; pass empty to disable)",
 		":9101", &c.AdminListen)
@@ -200,6 +204,27 @@ func (c *Process) startHTTPListener() {
 			c.Log.Log(CatMeshCell, "http: listener error: %v", err)
 		}
 	}()
+}
+
+// startUDPListener binds the engine-owned client UDP server on c.cfg.UDPListen
+// and registers inbound connections with the shared ConnManager (same path as
+// the HTTP /ws listener). No-op unless the process has the Gateway role; an
+// empty UDPListen disables it. Stopped when ctx is cancelled (Start's ctx).
+func (c *Process) startUDPListener(ctx context.Context) {
+	if !c.ServesClients() {
+		return
+	}
+	if c.cfg.UDPListen == "" {
+		c.Log.Log(CatMeshCell, "udp: listener disabled (UDPListen empty)")
+		return
+	}
+	udpServer, err := pkgnet.NewUDPServer(c.cfg.UDPListen, c.ConnMgr)
+	if err != nil {
+		c.Log.Log(CatMeshCell, "udp: listener bind error on %s: %v", c.cfg.UDPListen, err)
+		return
+	}
+	c.Log.Log(CatMeshCell, "udp: listening on %s (roles=%s)", c.cfg.UDPListen, c.roles)
+	go udpServer.Run(ctx)
 }
 
 // startAdminHTTPListener binds an admin HTTP server on Config.AdminListen
