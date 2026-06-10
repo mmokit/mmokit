@@ -10,6 +10,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"log"
+	"math"
 	"os"
 	"path/filepath"
 
@@ -26,6 +27,86 @@ type Manifest struct {
 	Strings    []StringCase  `json:"strings"`
 	Udp        UdpCases      `json:"udp"`
 	Reflect    ReflectCase   `json:"reflect"`
+	ClockSync  ClockSyncCase `json:"clockSync"`
+}
+
+// ClockSyncCase pins the sliding-window-max offset estimator across langs.
+type ClockSyncCase struct {
+	Window       int            `json:"window"`
+	Observations []ClockSyncObs `json:"observations"`
+}
+
+// ClockSyncObs is one fed observation plus the offset the estimator must
+// report after consuming it. expectedOffsetMs is computed by the Go reference
+// below — the single source of truth both TS and C# must reproduce.
+type ClockSyncObs struct {
+	ServerMs         float64 `json:"serverMs"`
+	ClientNowMs      float64 `json:"clientNowMs"`
+	ExpectedOffsetMs float64 `json:"expectedOffsetMs"`
+}
+
+// clockSyncRef mirrors clock-sync.ts / ClockSync.cs exactly: offset = max
+// instant (serverMs-clientNowMs) over the last `window` observations.
+type clockSyncRef struct {
+	window      int
+	instants    []float64
+	idx, count  int
+	offset      float64
+	initialized bool
+}
+
+func (r *clockSyncRef) observe(serverMs, clientNowMs float64) {
+	if r.instants == nil {
+		r.instants = make([]float64, r.window)
+	}
+	instant := serverMs - clientNowMs
+	r.instants[r.idx] = instant
+	r.idx = (r.idx + 1) % len(r.instants)
+	if r.count < len(r.instants) {
+		r.count++
+	}
+	if !r.initialized {
+		r.offset = instant
+		r.initialized = true
+		return
+	}
+	max := math.Inf(-1)
+	for i := 0; i < r.count; i++ {
+		if r.instants[i] > max {
+			max = r.instants[i]
+		}
+	}
+	r.offset = max
+}
+
+// buildClockSyncCase exercises: first-obs init, max-tracking (a less-delayed
+// later sample raises the offset), a bursty cluster (clientNow fixed while
+// serverMs advances), and window rollover (old max ages out after `window`).
+func buildClockSyncCase() ClockSyncCase {
+	const window = 40
+	type in struct{ server, client float64 }
+	seq := []in{
+		{1000, 0},     // init -> 1000
+		{1100, 150},   // instant 950, max stays 1000
+		{1200, 180},   // instant 1020, max -> 1020
+		{1300, 300},   // burst start (client fixed at 300): instant 1000
+		{1350, 300},   // instant 1050
+		{1400, 300},   // instant 1100, max -> 1100
+	}
+	// Window rollover: 45 samples at a steady instant of 500 (server advances
+	// 50/step, client advances 50/step). After >window of these, the old 1100
+	// ages out and the offset settles to 500.
+	for i := 0; i < 45; i++ {
+		server := 2000 + float64(i)*50
+		seq = append(seq, in{server, server - 500})
+	}
+	ref := &clockSyncRef{window: window}
+	obs := make([]ClockSyncObs, 0, len(seq))
+	for _, s := range seq {
+		ref.observe(s.server, s.client)
+		obs = append(obs, ClockSyncObs{ServerMs: s.server, ClientNowMs: s.client, ExpectedOffsetMs: ref.offset})
+	}
+	return ClockSyncCase{Window: window, Observations: obs}
 }
 
 // ReflectCase carries Go's authoritative reflect-codec bytes + the expected
@@ -259,6 +340,8 @@ func main() {
 		HexBytes: hex.EncodeToString(universe.ReflectMarshal(&gr)),
 		A:        gr.A, B: gr.B, C: gr.C, D: gr.D, E: gr.E, F: gr.F,
 	}
+
+	m.ClockSync = buildClockSyncCase()
 
 	out := filepath.Join("csharp", "Mmokit.Sdk.Core.Tests", "testdata", "delta_golden.json")
 	if err := os.MkdirAll(filepath.Dir(out), 0o755); err != nil {

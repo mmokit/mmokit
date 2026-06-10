@@ -12,6 +12,20 @@ namespace Mmokit.Sdk.Core.Tests
         public StringCase[] Strings { get; set; } = Array.Empty<StringCase>();
         public UdpCases Udp { get; set; } = new();
         public ReflectCase Reflect { get; set; } = new();
+        public ClockSyncCase ClockSync { get; set; } = new();
+    }
+
+    public class ClockSyncCase
+    {
+        public int Window { get; set; }
+        public ClockSyncObs[] Observations { get; set; } = Array.Empty<ClockSyncObs>();
+    }
+
+    public class ClockSyncObs
+    {
+        public double ServerMs { get; set; }
+        public double ClientNowMs { get; set; }
+        public double ExpectedOffsetMs { get; set; }
     }
 
     public class ReflectCase

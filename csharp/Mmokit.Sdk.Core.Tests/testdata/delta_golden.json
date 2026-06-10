@@ -202,5 +202,265 @@
       8,
       9
     ]
+  },
+  "clockSync": {
+    "window": 40,
+    "observations": [
+      {
+        "serverMs": 1000,
+        "clientNowMs": 0,
+        "expectedOffsetMs": 1000
+      },
+      {
+        "serverMs": 1100,
+        "clientNowMs": 150,
+        "expectedOffsetMs": 1000
+      },
+      {
+        "serverMs": 1200,
+        "clientNowMs": 180,
+        "expectedOffsetMs": 1020
+      },
+      {
+        "serverMs": 1300,
+        "clientNowMs": 300,
+        "expectedOffsetMs": 1020
+      },
+      {
+        "serverMs": 1350,
+        "clientNowMs": 300,
+        "expectedOffsetMs": 1050
+      },
+      {
+        "serverMs": 1400,
+        "clientNowMs": 300,
+        "expectedOffsetMs": 1100
+      },
+      {
+        "serverMs": 2000,
+        "clientNowMs": 1500,
+        "expectedOffsetMs": 1100
+      },
+      {
+        "serverMs": 2050,
+        "clientNowMs": 1550,
+        "expectedOffsetMs": 1100
+      },
+      {
+        "serverMs": 2100,
+        "clientNowMs": 1600,
+        "expectedOffsetMs": 1100
+      },
+      {
+        "serverMs": 2150,
+        "clientNowMs": 1650,
+        "expectedOffsetMs": 1100
+      },
+      {
+        "serverMs": 2200,
+        "clientNowMs": 1700,
+        "expectedOffsetMs": 1100
+      },
+      {
+        "serverMs": 2250,
+        "clientNowMs": 1750,
+        "expectedOffsetMs": 1100
+      },
+      {
+        "serverMs": 2300,
+        "clientNowMs": 1800,
+        "expectedOffsetMs": 1100
+      },
+      {
+        "serverMs": 2350,
+        "clientNowMs": 1850,
+        "expectedOffsetMs": 1100
+      },
+      {
+        "serverMs": 2400,
+        "clientNowMs": 1900,
+        "expectedOffsetMs": 1100
+      },
+      {
+        "serverMs": 2450,
+        "clientNowMs": 1950,
+        "expectedOffsetMs": 1100
+      },
+      {
+        "serverMs": 2500,
+        "clientNowMs": 2000,
+        "expectedOffsetMs": 1100
+      },
+      {
+        "serverMs": 2550,
+        "clientNowMs": 2050,
+        "expectedOffsetMs": 1100
+      },
+      {
+        "serverMs": 2600,
+        "clientNowMs": 2100,
+        "expectedOffsetMs": 1100
+      },
+      {
+        "serverMs": 2650,
+        "clientNowMs": 2150,
+        "expectedOffsetMs": 1100
+      },
+      {
+        "serverMs": 2700,
+        "clientNowMs": 2200,
+        "expectedOffsetMs": 1100
+      },
+      {
+        "serverMs": 2750,
+        "clientNowMs": 2250,
+        "expectedOffsetMs": 1100
+      },
+      {
+        "serverMs": 2800,
+        "clientNowMs": 2300,
+        "expectedOffsetMs": 1100
+      },
+      {
+        "serverMs": 2850,
+        "clientNowMs": 2350,
+        "expectedOffsetMs": 1100
+      },
+      {
+        "serverMs": 2900,
+        "clientNowMs": 2400,
+        "expectedOffsetMs": 1100
+      },
+      {
+        "serverMs": 2950,
+        "clientNowMs": 2450,
+        "expectedOffsetMs": 1100
+      },
+      {
+        "serverMs": 3000,
+        "clientNowMs": 2500,
+        "expectedOffsetMs": 1100
+      },
+      {
+        "serverMs": 3050,
+        "clientNowMs": 2550,
+        "expectedOffsetMs": 1100
+      },
+      {
+        "serverMs": 3100,
+        "clientNowMs": 2600,
+        "expectedOffsetMs": 1100
+      },
+      {
+        "serverMs": 3150,
+        "clientNowMs": 2650,
+        "expectedOffsetMs": 1100
+      },
+      {
+        "serverMs": 3200,
+        "clientNowMs": 2700,
+        "expectedOffsetMs": 1100
+      },
+      {
+        "serverMs": 3250,
+        "clientNowMs": 2750,
+        "expectedOffsetMs": 1100
+      },
+      {
+        "serverMs": 3300,
+        "clientNowMs": 2800,
+        "expectedOffsetMs": 1100
+      },
+      {
+        "serverMs": 3350,
+        "clientNowMs": 2850,
+        "expectedOffsetMs": 1100
+      },
+      {
+        "serverMs": 3400,
+        "clientNowMs": 2900,
+        "expectedOffsetMs": 1100
+      },
+      {
+        "serverMs": 3450,
+        "clientNowMs": 2950,
+        "expectedOffsetMs": 1100
+      },
+      {
+        "serverMs": 3500,
+        "clientNowMs": 3000,
+        "expectedOffsetMs": 1100
+      },
+      {
+        "serverMs": 3550,
+        "clientNowMs": 3050,
+        "expectedOffsetMs": 1100
+      },
+      {
+        "serverMs": 3600,
+        "clientNowMs": 3100,
+        "expectedOffsetMs": 1100
+      },
+      {
+        "serverMs": 3650,
+        "clientNowMs": 3150,
+        "expectedOffsetMs": 1100
+      },
+      {
+        "serverMs": 3700,
+        "clientNowMs": 3200,
+        "expectedOffsetMs": 1100
+      },
+      {
+        "serverMs": 3750,
+        "clientNowMs": 3250,
+        "expectedOffsetMs": 1100
+      },
+      {
+        "serverMs": 3800,
+        "clientNowMs": 3300,
+        "expectedOffsetMs": 1100
+      },
+      {
+        "serverMs": 3850,
+        "clientNowMs": 3350,
+        "expectedOffsetMs": 1100
+      },
+      {
+        "serverMs": 3900,
+        "clientNowMs": 3400,
+        "expectedOffsetMs": 1100
+      },
+      {
+        "serverMs": 3950,
+        "clientNowMs": 3450,
+        "expectedOffsetMs": 500
+      },
+      {
+        "serverMs": 4000,
+        "clientNowMs": 3500,
+        "expectedOffsetMs": 500
+      },
+      {
+        "serverMs": 4050,
+        "clientNowMs": 3550,
+        "expectedOffsetMs": 500
+      },
+      {
+        "serverMs": 4100,
+        "clientNowMs": 3600,
+        "expectedOffsetMs": 500
+      },
+      {
+        "serverMs": 4150,
+        "clientNowMs": 3650,
+        "expectedOffsetMs": 500
+      },
+      {
+        "serverMs": 4200,
+        "clientNowMs": 3700,
+        "expectedOffsetMs": 500
+      }
+    ]
   }
 }
