@@ -4,8 +4,10 @@ package main
 // the existing *Generator; the file-selection logic here mirrors exactly
 // what main.go did before the backend seam was introduced.
 type tsBackend struct {
-	coreTS   string // path to delta-decoder-core.ts
-	interpTS string // path to interpolation-core.ts
+	coreTS         string // path to delta-decoder-core.ts
+	interpTS       string // path to interpolation-core.ts
+	clockSyncTS    string // path to clock-sync.ts
+	interpBufferTS string // path to interpolation-buffer.ts
 }
 
 func (b tsBackend) Lang() string { return "ts" }
@@ -14,6 +16,8 @@ func (b tsBackend) CoreFiles() []CoreFile {
 	return []CoreFile{
 		{Src: b.coreTS, Dst: "delta-decoder-core.ts"},
 		{Src: b.interpTS, Dst: "interpolation-core.ts"},
+		{Src: b.clockSyncTS, Dst: "clock-sync.ts"},
+		{Src: b.interpBufferTS, Dst: "interpolation-buffer.ts"},
 	}
 }
 

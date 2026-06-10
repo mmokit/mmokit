@@ -24,17 +24,19 @@ type Backend interface {
 
 // backendOpts carries the language-specific knobs main.go derives from flags.
 type backendOpts struct {
-	CoreTS        string // TS: delta-decoder-core.ts source path
-	InterpTS      string // TS: interpolation-core.ts source path
-	CSharpCoreDir string // C#: dir holding the hand-written _core .cs files
-	Namespace     string // C#: root namespace for generated files
+	CoreTS         string // TS: delta-decoder-core.ts source path
+	InterpTS       string // TS: interpolation-core.ts source path
+	ClockSyncTS    string // TS: clock-sync.ts source path
+	InterpBufferTS string // TS: interpolation-buffer.ts source path
+	CSharpCoreDir  string // C#: dir holding the hand-written _core .cs files
+	Namespace      string // C#: root namespace for generated files
 }
 
 // backendFor selects a backend by --lang token.
 func backendFor(lang string, o backendOpts) (Backend, error) {
 	switch lang {
 	case "ts":
-		return tsBackend{coreTS: o.CoreTS, interpTS: o.InterpTS}, nil
+		return tsBackend{coreTS: o.CoreTS, interpTS: o.InterpTS, clockSyncTS: o.ClockSyncTS, interpBufferTS: o.InterpBufferTS}, nil
 	case "csharp":
 		ns := o.Namespace
 		if ns == "" {

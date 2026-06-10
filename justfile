@@ -33,13 +33,13 @@ botclient:
 # Passes POSTGRES_URL through so service-kind-bearing example games (auth, echo,
 # anything with RequiresDB) can build their schema without panicking.
 client-sdk GAME:
-    go run ./{{ GAME }} --dump-schema "--postgres-url={{ env('POSTGRES_URL', 'postgres://mmo:mmo@localhost:5432/mmo?sslmode=disable') }}" | go run ./cmd/sdkgen \
+    go run ./{{ GAME }} --dump-schema --control-listen= --admin-listen= "--postgres-url={{ env('POSTGRES_URL', 'postgres://mmo:mmo@localhost:5432/mmo?sslmode=disable') }}" | go run ./cmd/sdkgen \
         --out {{ GAME }}/web/sdk \
         --core pkg/quantize/ts/delta-decoder-core.ts
 
 # generate typed TS client SDK for the space game → web-pixi/sdk/
 space-sdk:
-    go run ./cmd/server --dump-schema | go run ./cmd/sdkgen \
+    go run ./cmd/server --dump-schema --control-listen= --admin-listen= | go run ./cmd/sdkgen \
         --out web-pixi/sdk \
         --core pkg/quantize/ts/delta-decoder-core.ts
 

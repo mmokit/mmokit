@@ -26,6 +26,8 @@ func main() {
 	lang := flag.String("lang", "ts", "Target language for the generated SDK (ts, csharp)")
 	coreTS := flag.String("core", "pkg/quantize/ts/delta-decoder-core.ts", "Path to delta-decoder-core.ts to copy")
 	interpTS := flag.String("interp", "pkg/quantize/ts/interpolation-core.ts", "Path to interpolation-core.ts to copy")
+	clockSyncTS := flag.String("clock-sync", "pkg/quantize/ts/clock-sync.ts", "Path to clock-sync.ts to copy")
+	interpBufferTS := flag.String("interp-buffer", "pkg/quantize/ts/interpolation-buffer.ts", "Path to interpolation-buffer.ts to copy")
 	namespace := flag.String("namespace", "Mmokit.Sdk", "C#: root namespace for generated files")
 	csharpCore := flag.String("csharp-core", "csharp/Mmokit.Sdk.Core", "C#: dir holding the hand-written _core .cs sources")
 	flag.Parse()
@@ -48,10 +50,12 @@ func main() {
 
 	// Select the language backend.
 	backend, err := backendFor(*lang, backendOpts{
-		CoreTS:        *coreTS,
-		InterpTS:      *interpTS,
-		CSharpCoreDir: *csharpCore,
-		Namespace:     *namespace,
+		CoreTS:         *coreTS,
+		InterpTS:       *interpTS,
+		ClockSyncTS:    *clockSyncTS,
+		InterpBufferTS: *interpBufferTS,
+		CSharpCoreDir:  *csharpCore,
+		Namespace:      *namespace,
 	})
 	if err != nil {
 		log.Fatalf("sdkgen: %v", err)

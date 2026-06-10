@@ -25,6 +25,8 @@ func (b csharpBackend) CoreFiles() []CoreFile {
 	names := []string{
 		"DeltaDecoderCore.cs",
 		"InterpolationCore.cs",
+		"ClockSync.cs",
+		"InterpolationBuffer.cs",
 		"ReflectCodec.cs",
 		"UdpProto.cs",
 		"UdpTransport.cs",
