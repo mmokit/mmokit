@@ -1186,6 +1186,23 @@ func (c *Process) touchActiveUser(userID uuid.UUID, username, gatewayID string, 
 	au.CellID = cellID
 }
 
+// IsUserSessionActive reports whether userID currently holds a LIVE session
+// (not the disconnected grace period). It is the gate the op-channel login
+// guard uses to reject a duplicate-active login with a clean error response
+// — mirroring the gateway's inline duplicate-active check
+// (dispatchPostAuthAssignment) so the two agree. Without this guard the
+// gateway's downstream rejection would Remove() the logging-in connection
+// mid-op-dispatch, dropping the login response and hanging the client.
+func (c *Process) IsUserSessionActive(userID uuid.UUID) bool {
+	if userID == uuid.Nil {
+		return false
+	}
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	loc := c.activeUserLocked(userID)
+	return loc != nil && loc.Active
+}
+
 // activeUserLocked returns a *PlayerLocation-shaped view of the active user
 // indexed by user_id. Caller must hold c.mu (read or write).
 func (c *Process) activeUserLocked(userID uuid.UUID) *PlayerLocation {

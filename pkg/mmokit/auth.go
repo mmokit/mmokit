@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/zenion/mmoserver/pkg/service"
@@ -31,6 +32,12 @@ func DefaultAuthOpts() AuthOpts { return auth.DefaultServiceOpts() }
 // (before Build) but only invoked once a client is connected, by which
 // point Init has long since completed.
 var errAuthServiceNotReady = errors.New("auth service not initialized")
+
+// errDuplicateActiveSession is returned by the typed-op login handler when the
+// credentials are valid but the account already holds a LIVE session. Surfaced
+// to the client as a framework OperationError so the login op completes with a
+// clear rejection instead of hanging — see the AuthLogin handler below.
+var errDuplicateActiveSession = errors.New("login rejected: another session is already active for this account")
 
 // RegisterAuthService registers the engine-tier auth service kind on the
 // coordinator, installs the gateway response-interception hook, and appends
@@ -113,6 +120,18 @@ func RegisterAuthService(p *universe.Process, opts AuthOpts) error {
 			resp, err := liveService.HandleLogin(opCtx, req)
 			if err != nil {
 				return nil, err
+			}
+			// Reject a duplicate-active login with a clean error BEFORE the
+			// AuthLoginSucceededEvent publish below. That publish is a
+			// SYNCHRONOUS, inline fan-out: the gateway's onAuthSuccess →
+			// dispatchPostAuthAssignment runs on this op-dispatch goroutine and,
+			// for an already-active user, calls connMgr.Remove() on this very
+			// connection — dropping the login response the op router is about to
+			// send (the client then hangs). Returning here surfaces a proper
+			// OperationError and never publishes, so the self-kick never fires.
+			// Mirrors the gateway's activeUserLocked(...).Active check.
+			if uid, perr := uuid.Parse(resp.UserID); perr == nil && p.IsUserSessionActive(uid) {
+				return nil, errDuplicateActiveSession
 			}
 			// Phase 2: publish AuthLoginSucceededEvent on the per-process
 			// bus. The gateway subscribes via subscribeToAuthEvents and
