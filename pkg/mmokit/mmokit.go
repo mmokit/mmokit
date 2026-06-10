@@ -804,6 +804,7 @@ func New(cfg Config) *Process {
 	if err := registerTuneVerbs(proc); err != nil {
 		panic(fmt.Sprintf("mmokit.New: registerTuneVerbs: %v", err))
 	}
+	proc.Log.RegisterCategories(catAdmin)
 	return proc
 }
 

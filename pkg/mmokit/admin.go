@@ -1,12 +1,17 @@
 package mmokit
 
 import (
+	"encoding/json"
 	"sync"
 	"time"
 
 	"github.com/zenion/mmoserver/pkg/admin"
 	"github.com/zenion/mmoserver/pkg/universe"
 )
+
+// catAdmin tags engine-side admin plumbing logs (topic forward drops, etc.).
+// Registered in mmokit.New.
+const catAdmin = "admin"
 
 // AdminPanelDef is the mmokit facade alias for admin.PanelDef. Games register
 // custom dashboard panels via mmokit.RegisterAdminPanel.
@@ -104,8 +109,37 @@ func adminLogRing(c *universe.Process, cap int) *admin.LogRing {
 //
 // No-op when no subscribers are listening. Safe to call from any
 // goroutine. The bus is per-Process so test fixtures get isolation.
+//
+// On a remote host- or service-role process (distributed mode) the local
+// bus has no subscribers — the admin SSE server lives on the coordinator —
+// so the payload is JSON-marshaled and forwarded over MeshControl instead.
+// Best-effort: dropped (with a catAdmin log line) when the control
+// stream is down. Callers need no changes either way.
 func PublishAdminTopic(coord *universe.Process, topic string, payload any) {
+	if coord.ForwardsAdminTopics() {
+		b, err := json.Marshal(payload)
+		if err != nil {
+			coord.Log.Log(catAdmin, "PublishAdminTopic: marshal topic %q: %v", topic, err)
+			return
+		}
+		if err := coord.ForwardAdminTopic(topic, b); err != nil {
+			coord.Log.Log(catAdmin, "PublishAdminTopic: topic %q dropped: %v", topic, err)
+		}
+		return
+	}
 	adminBus(coord).Publish(topic, payload)
+}
+
+// remoteAdminTopicBridge returns the OnRemoteAdminTopic callback that
+// re-publishes forwarded host events onto this coordinator's local bus. The
+// payload is the sender's pre-marshaled JSON; json.RawMessage embeds it
+// verbatim when the SSE writer marshals, so dashboard subscribers see the
+// same shape as a local publish.
+func remoteAdminTopicBridge(c *universe.Process) func(topic string, payload []byte) {
+	bus := adminBus(c)
+	return func(topic string, payload []byte) {
+		bus.Publish(topic, json.RawMessage(payload))
+	}
 }
 
 // RegisterAdminPanel adds a game-defined panel to the dashboard sidebar. The
@@ -174,6 +208,9 @@ func DefaultAdminServerFactory() func(*universe.Process) universe.AdminServer {
 				bus.Publish("logs", le)
 			}
 		})
+		// Bridge remote-host admin topic publishes (tunables echoes, game
+		// panel data) into the same bus the SSE multiplexer reads.
+		c.OnRemoteAdminTopic(remoteAdminTopicBridge(c))
 		return server
 	}
 }

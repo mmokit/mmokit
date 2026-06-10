@@ -1,6 +1,7 @@
 package mmokit
 
 import (
+	"encoding/json"
 	"sync"
 	"testing"
 	"time"
@@ -116,5 +117,41 @@ func TestAdminBus_PerProcessIsolation(t *testing.T) {
 	defer subB.mu.Unlock()
 	if len(subB.received) != 0 {
 		t.Fatalf("procB sub received %d deliveries, want 0", len(subB.received))
+	}
+}
+
+// TestRemoteAdminTopicBridge_PublishesRawJSON proves the coordinator-side
+// bridge re-publishes a forwarded payload verbatim as json.RawMessage, so SSE
+// subscribers observe the identical shape a local publish would produce.
+func TestRemoteAdminTopicBridge_PublishesRawJSON(t *testing.T) {
+	t.Parallel()
+	proc := &universe.Process{}
+	t.Cleanup(func() {
+		adminBusMu.Lock()
+		delete(adminBusMap, proc)
+		adminBusMu.Unlock()
+	})
+
+	bus := adminBus(proc)
+	sub := &fakeSub{topics: []string{"tunables"}, notify: make(chan struct{}, 1)}
+	bus.Subscribe(sub, sub.topics...)
+	t.Cleanup(func() { bus.Unsubscribe(sub) })
+
+	fn := remoteAdminTopicBridge(proc)
+	want := `{"system":"wave","rows":[]}`
+	fn("tunables", []byte(want))
+
+	sub.wait(t, 1, 2*time.Second)
+	sub.mu.Lock()
+	defer sub.mu.Unlock()
+	if sub.received[0].topic != "tunables" {
+		t.Errorf("topic = %q, want %q", sub.received[0].topic, "tunables")
+	}
+	raw, ok := sub.received[0].payload.(json.RawMessage)
+	if !ok {
+		t.Fatalf("payload type = %T, want json.RawMessage", sub.received[0].payload)
+	}
+	if string(raw) != want {
+		t.Errorf("payload = %s, want %s", raw, want)
 	}
 }
