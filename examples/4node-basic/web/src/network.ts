@@ -4,7 +4,7 @@ import { type DeltaWorldUpdate } from "../sdk/entities.js";
 import { BasicDeltaDecoder } from "../sdk/delta-decoder.js";
 import { MoveTargetMsg } from "../sdk/inputs.js";
 import { state, setTickRate, type ClientEntity, type CellInfo } from "./state.js";
-import { observeFrameStamps } from "./clockSync.js";
+import { observeFrameStamps } from "../sdk/_core/clock-sync.js";
 import { updateEntityFromServer } from "./interpolation.js";
 import { pruneStaleOnFreshSnapshot } from "./reconcile.js";
 import { recordDeletion } from "./replicationAudit.js";

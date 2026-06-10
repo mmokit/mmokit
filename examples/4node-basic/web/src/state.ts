@@ -1,5 +1,6 @@
 import type { AnyEntity, PlayerEntity } from "../sdk/entities.js";
-import { type ClockSync, newClockSync } from "./clockSync.js";
+import { type ClockSync, newClockSync } from "../sdk/_core/clock-sync.js";
+import { InterpolationBuffer } from "../sdk/_core/interpolation-buffer.js";
 import { newReplicationAudit, type ReplicationAudit } from "./replicationAudit.js";
 
 export interface EntitySample {
@@ -27,7 +28,7 @@ export interface ClientEntity extends Omit<PlayerEntity, "entityType"> {
   isReplica: boolean;
   isGhost: boolean;
   // Interpolation ring — authoritative snapshots with server timestamps.
-  samples: EntitySample[];
+  buffer: InterpolationBuffer;
   // Last rendered values. Used by drawEntity and as fallback rotation.
   renderX: number;
   renderY: number;

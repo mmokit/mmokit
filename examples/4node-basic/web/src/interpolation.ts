@@ -1,14 +1,9 @@
 import type { AnyEntity } from "../sdk/entities.js";
-import {
-  pushSample as coreSPush,
-  interpolateRing,
-  isStaleSample,
-  lerp,
-  lerpAngle,
-} from "../sdk/_core/interpolation-core.js";
+import { lerp, lerpAngle } from "../sdk/_core/interpolation-core.js";
+import { InterpolationBuffer } from "../sdk/_core/interpolation-buffer.js";
+import { type ClockSync, estimatedServerNow } from "../sdk/_core/clock-sync.js";
 import { MAX_EXTRAPOLATE_MS, RENDER_DELAY, RING_SIZE } from "./constants.js";
 import type { ClientEntity, EntitySample } from "./state.js";
-import { type ClockSync, estimatedServerNow } from "./clockSync.js";
 import { recordEntityCreate, type ReplicationAudit } from "./replicationAudit.js";
 
 function entityRotation(e: AnyEntity, fallbackPrev: number): number {
@@ -27,13 +22,17 @@ function sampleFrom(e: AnyEntity, producedAtMs: number, prevRot: number): Entity
   };
 }
 
-export function pushSample(ent: ClientEntity, s: EntitySample): void {
-  coreSPush(ent, s, RING_SIZE);
+function newBuffer(): InterpolationBuffer {
+  return new InterpolationBuffer({
+    ringSize: RING_SIZE,
+    renderDelayMs: RENDER_DELAY,
+    maxExtrapolateMs: MAX_EXTRAPOLATE_MS,
+  });
 }
 
 /**
  * updateEntityFromServer pushes one new authoritative snapshot into
- * the entity's ring (creating the ClientEntity if it doesn't exist
+ * the entity's buffer (creating the ClientEntity if it doesn't exist
  * yet). The per-entity producedAtMs stamp lets the render loop
  * interpolate on true ClusterClock-aligned server-time deltas,
  * immune to network jitter and cell-tick phase drift.
@@ -50,15 +49,16 @@ export function updateEntityFromServer(
 
   if (!existing) {
     if (audit && nowMs !== undefined) recordEntityCreate(audit, nowMs, id);
-    const rot = entityRotation(serverState, 0);
-    const first = sampleFrom(serverState, producedAtMs, rot);
+    const buffer = newBuffer();
+    const first = sampleFrom(serverState, producedAtMs, 0);
+    buffer.push(first);
     const ent: ClientEntity = {
       ...serverState,
       prevX: serverState.worldX,
       prevY: serverState.worldY,
       isReplica: false,
       isGhost: false,
-      samples: [first],
+      buffer,
       renderX: first.worldX,
       renderY: first.worldY,
       renderRot: first.rotation,
@@ -68,24 +68,23 @@ export function updateEntityFromServer(
   }
   // Skip frames older than the newest sample we already hold. At a cell
   // boundary the same netID is delivered from two cell authorities; the
-  // ex-authority's final in-flight frame can arrive last. The position ring
-  // drops it (pushSample), but Object.assign below would still snap
+  // ex-authority's final in-flight frame can arrive last. The position
+  // buffer drops it (push), but Object.assign below would still snap
   // non-interpolated fields (radius/size, …) backward to the stale value —
   // flickering — so gate the whole snapshot on the same rule.
-  if (isStaleSample(existing, producedAtMs)) {
+  if (existing.buffer.isStale(producedAtMs)) {
     return;
   }
-
   const prevRot = existing.renderRot;
   Object.assign(existing, serverState);
   existing.prevX = existing.renderX;
   existing.prevY = existing.renderY;
-  pushSample(existing, sampleFrom(serverState, producedAtMs, prevRot));
+  existing.buffer.push(sampleFrom(serverState, producedAtMs, prevRot));
 }
 
 /**
  * interpolateEntities sets renderX/Y/Rot on every entity by
- * interpolating between the two ring samples that bracket
+ * interpolating between the two buffer samples that bracket
  * (estimatedServerNow - RENDER_DELAY). Packet loss / phase drift
  * are absorbed naturally; extrapolation past the newest sample is
  * capped.
@@ -97,9 +96,8 @@ export function interpolateEntities(
 ): void {
   if (!clock.initialized) return;
   const renderTime = estimatedServerNow(clock, clientNowMs) - RENDER_DELAY;
-
   for (const ent of entities.values()) {
-    const r = interpolateRing(ent, renderTime, MAX_EXTRAPOLATE_MS, RENDER_DELAY);
+    const r = ent.buffer.sampleAt(renderTime);
     if (r) {
       ent.renderX = r.renderX;
       ent.renderY = r.renderY;

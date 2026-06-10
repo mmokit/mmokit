@@ -1,14 +1,25 @@
 import { describe, test, expect, beforeEach } from "bun:test";
-import { pushSample, updateEntityFromServer, interpolateEntities } from "../interpolation";
-import { newClockSync, observeServerTime } from "../clockSync";
+import { updateEntityFromServer, interpolateEntities } from "../interpolation";
+import { newClockSync, observeServerTime } from "../../sdk/_core/clock-sync.js";
+import { InterpolationBuffer } from "../../sdk/_core/interpolation-buffer.js";
 import type { ClientEntity, EntitySample } from "../state";
-import { RING_SIZE, RENDER_DELAY } from "../constants";
+import { RING_SIZE, RENDER_DELAY, MAX_EXTRAPOLATE_MS } from "../constants";
 
 function mkSample(x: number, t: number): EntitySample {
   return { worldX: x, worldY: 0, velX: 10, velY: 0, rotation: 0, producedAtMs: t };
 }
 
+function mkBuffer(): InterpolationBuffer {
+  return new InterpolationBuffer({
+    ringSize: RING_SIZE,
+    renderDelayMs: RENDER_DELAY,
+    maxExtrapolateMs: MAX_EXTRAPOLATE_MS,
+  });
+}
+
 function mkEntity(firstX: number, firstT: number): ClientEntity {
+  const buffer = mkBuffer();
+  buffer.push(mkSample(firstX, firstT));
   return {
     netID: 1,
     entityType: 1,
@@ -25,23 +36,23 @@ function mkEntity(firstX: number, firstT: number): ClientEntity {
     prevY: 0,
     isReplica: false,
     isGhost: false,
-    samples: [mkSample(firstX, firstT)],
+    buffer,
     renderX: firstX,
     renderY: 0,
     renderRot: 0,
   };
 }
 
-describe("pushSample", () => {
+describe("InterpolationBuffer.push", () => {
   test("appends and caps at RING_SIZE", () => {
     const ent = mkEntity(0, 1000);
     for (let i = 1; i <= RING_SIZE + 2; i++) {
-      pushSample(ent, mkSample(i * 10, 1000 + i * 50));
+      ent.buffer.push(mkSample(i * 10, 1000 + i * 50));
     }
-    expect(ent.samples.length).toBe(RING_SIZE);
+    expect(ent.buffer.samples.length).toBe(RING_SIZE);
     // Oldest sample should be the most recently pushed-minus-(RING_SIZE-1).
-    const oldestT = ent.samples[0].producedAtMs;
-    const newestT = ent.samples[ent.samples.length - 1].producedAtMs;
+    const oldestT = ent.buffer.samples[0].producedAtMs;
+    const newestT = ent.buffer.samples[ent.buffer.samples.length - 1].producedAtMs;
     expect(newestT - oldestT).toBe(50 * (RING_SIZE - 1));
   });
 });
@@ -66,7 +77,7 @@ describe("interpolateEntities", () => {
 
   test("two samples with renderTime between them: lerps", () => {
     const ent = mkEntity(0, 1000);
-    pushSample(ent, mkSample(100, 1100));
+    ent.buffer.push(mkSample(100, 1100));
     entities.set(1, ent);
     // We want renderTime = 1050 (halfway). serverNow = clientNow + 1000, so clientNow = 50 + RENDER_DELAY.
     const clientNow = 50 + RENDER_DELAY;
@@ -76,7 +87,7 @@ describe("interpolateEntities", () => {
 
   test("renderTime past newest: extrapolates with velocity (capped)", () => {
     const ent = mkEntity(0, 1000);
-    pushSample(ent, mkSample(100, 1100)); // velX=10
+    ent.buffer.push(mkSample(100, 1100)); // velX=10
     entities.set(1, ent);
     // Force renderTime = 1100 + 40ms, well past newest but inside cap.
     // clientNow => serverNow = 1140 => clientNow = 140 + RENDER_DELAY
@@ -88,7 +99,7 @@ describe("interpolateEntities", () => {
 
   test("renderTime before oldest: holds at oldest", () => {
     const ent = mkEntity(42, 1000);
-    pushSample(ent, mkSample(100, 1100));
+    ent.buffer.push(mkSample(100, 1100));
     entities.set(1, ent);
     // renderTime = 900 (before oldest at 1000)
     const clientNow = -100 + RENDER_DELAY;
@@ -118,7 +129,7 @@ describe("updateEntityFromServer — handoff robustness", () => {
     expect(ent).toBeDefined();
     expect(ent!.renderX).toBe(50);
     expect(ent!.renderY).toBe(60);
-    expect(ent!.samples.length).toBe(1);
+    expect(ent!.buffer.samples.length).toBe(1);
   });
 
   test("second update for known netID appends to ring (preserves interp state)", () => {
@@ -135,9 +146,9 @@ describe("updateEntityFromServer — handoff robustness", () => {
     // Second frame appends.
     updateEntityFromServer(entities, { netID: 555, producedAtMs: 1100, worldX: 110, worldY: 210, velX: 10, velY: 10, ...base }, 1100);
     const ent = entities.get(555)!;
-    expect(ent.samples.length).toBe(2);
-    expect(ent.samples[0].worldX).toBe(100);
-    expect(ent.samples[1].worldX).toBe(110);
+    expect(ent.buffer.samples.length).toBe(2);
+    expect(ent.buffer.samples[0].worldX).toBe(100);
+    expect(ent.buffer.samples[1].worldX).toBe(110);
   });
 
   // Regression: at a cell boundary the same netID is delivered from two
@@ -164,17 +175,17 @@ describe("updateEntityFromServer — handoff robustness", () => {
     expect(ent.radius).toBe(20);
     expect(ent.worldX).toBe(110);
     // Ring tip stays the newest sample; stale sample not appended.
-    expect(ent.samples.length).toBe(2);
-    expect(ent.samples[ent.samples.length - 1].producedAtMs).toBe(1100);
+    expect(ent.buffer.samples.length).toBe(2);
+    expect(ent.buffer.samples[ent.buffer.samples.length - 1].producedAtMs).toBe(1100);
   });
 });
 
 describe("interpolation smoothness — gap preserves baseline (handoff regression)", () => {
   test("one-tick update gap preserves interp ring; no baseline reset", () => {
     const ent = mkEntity(0, 1000);
-    pushSample(ent, mkSample(100, 1100));
+    ent.buffer.push(mkSample(100, 1100));
     // Simulate a dropped tick at t=1200 (no sample pushed).
-    pushSample(ent, mkSample(300, 1300));
+    ent.buffer.push(mkSample(300, 1300));
 
     const entities = new Map<number, ClientEntity>();
     entities.set(1, ent);
