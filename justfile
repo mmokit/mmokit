@@ -264,6 +264,10 @@ csharp-test:
 csharp-golden:
     go run ./cmd/csharp-golden
 
+# run the shared TS core unit/golden tests (bun)
+ts-core-test:
+    bun test pkg/quantize/ts/
+
 # compile-gate the generated C# SDK (emits a sample SDK + dotnet build)
 csharp-compile-test:
     go test -tags=csharptest ./cmd/sdkgen/ -run TestCsharpSdk_Compiles -v
