@@ -32,17 +32,33 @@ namespace Mmokit.Sdk.Core
             byte[] connReq = UdpProto.EncodeConnReq(clientSalt);
             socket.Send(connReq, connReq.Length);
 
-            socket.Client.ReceiveTimeout = handshakeTimeoutMs;
+            // Read until the ConnAccept (0x04). On connect the server also pushes
+            // an unsolicited reliable ServerConfig frame (0x01) that races the
+            // ConnAccept; the two are separate datagrams with no ordering
+            // guarantee. Discard non-ConnAccept datagrams and keep reading until
+            // the deadline — ServerConfig is sent reliably (the server retransmits
+            // it), so the discarded copy is redelivered once our receive loop is
+            // running, and we can't process it pre-handshake anyway (no serverSalt
+            // → no token yet).
+            var handshakeClock = Stopwatch.StartNew();
             IPEndPoint? remote = null;
-            byte[] resp;
-            try { resp = socket.Receive(ref remote); }
-            catch (SocketException ex) { socket.Dispose(); throw new TimeoutException("UDP handshake timed out", ex); }
+            ulong serverSalt = 0, echoedClientSalt = 0;
+            while (true)
+            {
+                int remainingMs = handshakeTimeoutMs - (int)handshakeClock.ElapsedMilliseconds;
+                if (remainingMs <= 0)
+                { socket.Dispose(); throw new TimeoutException("UDP handshake timed out (no ConnAccept received)"); }
+                socket.Client.ReceiveTimeout = remainingMs;
+                byte[] resp;
+                try { resp = socket.Receive(ref remote); }
+                catch (SocketException ex) { socket.Dispose(); throw new TimeoutException("UDP handshake timed out", ex); }
+                if (resp.Length > 0 && resp[0] == UdpProto.TypeConnAccept &&
+                    UdpProto.TryDecodeConnAccept(resp, out echoedClientSalt, out serverSalt) &&
+                    echoedClientSalt == clientSalt)
+                    break;
+                // else: early ServerConfig / stray packet / stale accept — discard, retry.
+            }
             socket.Client.ReceiveTimeout = 0;
-
-            if (resp.Length == 0 || resp[0] != UdpProto.TypeConnAccept)
-            { socket.Dispose(); throw new InvalidOperationException("unexpected handshake response"); }
-            if (!UdpProto.TryDecodeConnAccept(resp, out ulong echoedClientSalt, out ulong serverSalt) || echoedClientSalt != clientSalt)
-            { socket.Dispose(); throw new InvalidOperationException("handshake salt mismatch"); }
 
             uint token = UdpProto.MakeToken(clientSalt, serverSalt);
 

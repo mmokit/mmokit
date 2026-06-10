@@ -85,30 +85,33 @@ func Dial(addr string) (*Client, error) {
 		return nil, err
 	}
 
-	// Wait for accept
+	// Wait for the ConnAccept (0x04). On connect the server also pushes an
+	// unsolicited reliable ServerConfig frame (type 0x01) that races the
+	// ConnAccept; the two are separate datagrams with no ordering guarantee.
+	// Discard any non-ConnAccept datagram and keep reading until the deadline.
+	// ServerConfig is sent reliably (server retransmits every 100ms), so the
+	// discarded copy is redelivered once the receive loop is running — and we
+	// can't process it pre-handshake anyway (no serverSalt → no token yet).
 	conn.SetReadDeadline(time.Now().Add(handshakeTimeout))
 	buf := make([]byte, maxPacket)
-	n, err := conn.Read(buf)
-	if err != nil {
-		conn.Close()
-		return nil, fmt.Errorf("handshake failed: %w", err)
+	var serverSalt uint64
+	for {
+		n, err := conn.Read(buf)
+		if err != nil {
+			conn.Close()
+			return nil, fmt.Errorf("handshake failed: %w", err)
+		}
+		if n == 0 || buf[0] != udpproto.TypeConnAccept {
+			continue // early ServerConfig / stray packet — keep waiting for accept
+		}
+		respClientSalt, srvSalt, derr := udpproto.DecodeConnAccept(buf[:n])
+		if derr != nil || respClientSalt != clientSalt {
+			continue // malformed / stale accept — keep waiting
+		}
+		serverSalt = srvSalt
+		break
 	}
 	conn.SetReadDeadline(time.Time{})
-
-	if n == 0 || buf[0] != udpproto.TypeConnAccept {
-		conn.Close()
-		return nil, errors.New("unexpected handshake response")
-	}
-
-	respClientSalt, serverSalt, err := udpproto.DecodeConnAccept(buf[:n])
-	if err != nil {
-		conn.Close()
-		return nil, err
-	}
-	if respClientSalt != clientSalt {
-		conn.Close()
-		return nil, errors.New("client salt mismatch")
-	}
 
 	token := udpproto.MakeToken(clientSalt, serverSalt)
 
