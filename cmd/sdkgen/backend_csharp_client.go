@@ -39,6 +39,16 @@ func (b csharpBackend) genClient(schema ProtocolSchema) string {
 	sb.WriteString("using System;\nusing System.Collections.Generic;\nusing System.Threading;\nusing System.Threading.Tasks;\nusing Mmokit.Sdk.Core;\n\n")
 	fmt.Fprintf(&sb, "namespace %s\n{\n", b.namespace)
 
+	if hasOpError {
+		sb.WriteString("    /// Thrown when an operation returns a framework OperationError. Carries\n")
+		sb.WriteString("    /// the server-supplied Code + Message so callers can branch on the reason\n")
+		sb.WriteString("    /// (e.g. a duplicate-active login) instead of parsing a string.\n")
+		sb.WriteString("    public sealed class OperationException : System.Exception\n    {\n")
+		sb.WriteString("        public uint Code { get; }\n")
+		sb.WriteString("        public OperationException(uint code, string message) : base(message) { Code = code; }\n")
+		sb.WriteString("    }\n\n")
+	}
+
 	sb.WriteString("    /// Stateless high-level client. Owns transport + decode + dispatch;\n")
 	sb.WriteString("    /// the CONSUMER owns accumulated world state (Unity GameObjects / a bot's\n")
 	sb.WriteString("    /// store). Decode a WorldDelta via OnWorldDelta(m => Decoder.Decode(m.body)).\n")
@@ -118,7 +128,7 @@ func (b csharpBackend) genClient(schema ProtocolSchema) string {
 		sb.WriteString("            TaskCompletionSource<byte[]>? p;\n")
 		sb.WriteString("            lock (_opLock) { if (!_pendingOps.TryGetValue(reqID, out p)) return; _pendingOps.Remove(reqID); }\n")
 		if hasOpError {
-			sb.WriteString("            if (resTypeID == OperationError.TypeID) { var err = OperationError.Decode(opBody); p.TrySetException(new Exception($\"OperationError typeID=0x{resTypeID:x}\")); return; }\n")
+			sb.WriteString("            if (resTypeID == OperationError.TypeID) { var err = OperationError.Decode(opBody); p.TrySetException(new OperationException(err.code, err.message)); return; }\n")
 		}
 		sb.WriteString("            p.TrySetResult(opBody);\n")
 		sb.WriteString("        }\n\n")
