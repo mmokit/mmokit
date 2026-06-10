@@ -1,0 +1,39 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Headless smoke-bot: validates the live UDP round-trip (connect → AuthLogin →
+    OnWorldDelta) outside Unity. It compiles the canonical hand-written runtime
+    (Mmokit.Sdk.Core, via ProjectReference) plus the *generated* schema-driven
+    surface (BasicClient / Entities / Ops / Events / DeltaDecoder), which it picks
+    up from the already-deployed Unity SDK so no schema dump (Postgres) is needed
+    just to build.
+
+    Override the generated-SDK location:
+      dotnet build -p:UnitySdkDir=/path/to/Mmokit/Sdk
+  -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <LangVersion>latest</LangVersion>
+    <AssemblyName>mmokit-smokebot</AssemblyName>
+    <RootNamespace>Mmokit.Sdk.SmokeBot</RootNamespace>
+    <UnitySdkDir Condition="'$(UnitySdkDir)' == ''"><WINDOWS-HOME>/unitygames/spacemmo-client/Assets/Mmokit/Sdk</UnitySdkDir>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Canonical runtime (UdpTransport, ReflectCodec, DeltaDecoderCore, …). -->
+    <ProjectReference Include="../Mmokit.Sdk.Core/Mmokit.Sdk.Core.csproj" />
+    <!-- Generated schema-driven SDK from the deployed Unity copy (root *.cs only,
+         NOT _core/ — the runtime comes from the ProjectReference above). -->
+    <Compile Include="$(UnitySdkDir)/*.cs" />
+  </ItemGroup>
+
+  <!-- Clear error when the generated SDK hasn't been deployed yet. -->
+  <Target Name="CheckGeneratedSdk" BeforeTargets="BeforeBuild">
+    <Error Condition="!Exists('$(UnitySdkDir)/Client.cs')"
+           Text="Generated SDK not found at '$(UnitySdkDir)'. Run `just csharp-sdk` first, or pass -p:UnitySdkDir=/path/to/Mmokit/Sdk." />
+  </Target>
+
+</Project>

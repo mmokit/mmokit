@@ -278,3 +278,12 @@ csharp-sdk:
       | go run ./cmd/sdkgen --lang=csharp \
           --csharp-core csharp/Mmokit.Sdk.Core \
           --out "{{ env('UNITY_SDK_DIR', '<WINDOWS-HOME>/unitygames/spacemmo-client/Assets/Mmokit/Sdk') }}"
+
+# headless C# smoke-bot: live UDP round-trip (connect → AuthLogin → OnWorldDelta)
+# against a RUNNING 4node server. Compiles the generated SDK from UNITY_SDK_DIR.
+# Args: just csharp-smoke [host] [username] [password] [seconds]   (defaults:
+# 127.0.0.1 smokebot 4node-demo-password 12). For WSL2→Windows use the WSL IP.
+csharp-smoke *ARGS:
+    dotnet run --project csharp/Mmokit.Sdk.SmokeBot \
+        -p:UnitySdkDir="{{ env('UNITY_SDK_DIR', '<WINDOWS-HOME>/unitygames/spacemmo-client/Assets/Mmokit/Sdk') }}" \
+        -- {{ARGS}}
