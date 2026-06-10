@@ -299,6 +299,13 @@ func (s *meshControlServer) handleHostControl(stream meshpb.MeshControl_ControlS
 					s.coord.remoteLogBatch(entries)
 				}
 
+			case *meshpb.HostMessage_AdminTopicEvent:
+				if ev := v.AdminTopicEvent; ev != nil {
+					if fn := s.coord.remoteAdminTopic.Load(); fn != nil {
+						(*fn)(ev.Topic, ev.Payload)
+					}
+				}
+
 			case *meshpb.HostMessage_PlayerMigrated:
 				pm := v.PlayerMigrated
 				if pm != nil {

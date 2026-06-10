@@ -493,6 +493,14 @@ type Process struct {
 	// batches.
 	remoteLogBatch func([]RemoteLogEntry)
 
+	// remoteAdminTopic is invoked when a host forwards an AdminTopicEvent
+	// over MeshControl (host-side mmokit.PublishAdminTopic in distributed
+	// mode). Atomic so it can be installed while the control server is
+	// already running (tests do this); fires on the controlServer goroutine
+	// and must not block. nil = drop. Wired by
+	// mmokit.DefaultAdminServerFactory.
+	remoteAdminTopic atomic.Pointer[func(topic string, payload []byte)]
+
 	// kindSpecs holds typed entity-kind registrations from
 	// mmokit.RegisterKind[T]. Realized per-cell during createNode.
 	kindSpecs []kindSpec

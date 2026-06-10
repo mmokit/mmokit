@@ -428,6 +428,25 @@ func (c *meshControlClient) send(msg *meshpb.HostMessage) error {
 	return stream.Send(msg)
 }
 
+// sendIfReady sends msg only when the control stream is currently up,
+// returning an error immediately (no reconnect wait) when it is down. For
+// best-effort telemetry callers (admin topic events): unlike send, it does not
+// wait up to streamReadyTimeout for a reconnect. Send may still block briefly
+// on HTTP/2 flow control under sendMu, but never parks waiting for a stream to
+// appear. Same sendMu serialization, so ordering is preserved relative to other
+// senders.
+func (c *meshControlClient) sendIfReady(msg *meshpb.HostMessage) error {
+	c.connMu.Lock()
+	stream := c.stream
+	c.connMu.Unlock()
+	if stream == nil {
+		return fmt.Errorf("mesh control: stream down, message dropped")
+	}
+	c.sendMu.Lock()
+	defer c.sendMu.Unlock()
+	return stream.Send(msg)
+}
+
 // rootCtxDone returns the rootCtx's Done channel, or a never-closed
 // channel if rootCtx has not been initialized yet (Start not called).
 // Defensive — in practice send is only invoked after Start because
