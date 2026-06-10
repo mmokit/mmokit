@@ -13,7 +13,10 @@ using Mmokit.Sdk; // generated: BasicClient, AuthLoginRequest, WorldDelta, MoveT
 // failure, 2 = authed but no world state arrived (spawn/delta path not flowing).
 
 string host = args.Length > 0 ? args[0] : "127.0.0.1";
-string username = args.Length > 1 ? args[1] : "smokebot";
+// Default to a fresh username each run so AuthRegister always succeeds and the
+// bot exercises the full working path. Pass an explicit username to test the
+// AuthLogin (reconnect) path instead.
+string username = args.Length > 1 ? args[1] : $"smoke-{Guid.NewGuid():N}".Substring(0, 14);
 string password = args.Length > 2 ? args[2] : "4node-demo-password";
 int runSeconds = args.Length > 3 && int.TryParse(args[3], out int s) ? s : 12;
 const int port = 9000;
@@ -65,33 +68,67 @@ catch (Exception ex)
 }
 Console.WriteLine("[smoke] handshake OK (ConnAccept received)");
 
-// 2. Auth over the op channel: register first (mirrors the web demo), then login.
+// 2. Auth over the op channel. Exactly one SUCCESSFUL auth op — a successful
+//    register/login authenticates the connection (the gateway then dispatches
+//    PlayerAssignment → spawn), so a second auth op on the same connection is
+//    redundant. Try register first; a duplicate username comes back as a hard
+//    OperationError op-response (surfaced as an exception), so on any register
+//    rejection we fall through to login. Mirrors the web demo's register-then-
+//    login-on-conflict order.
+bool authed = false;
 try
 {
     var reg = await client.AuthRegister(
         new AuthRegisterRequest { username = username, password = password, email = $"{username}@smoke.local" })
         .WaitAsync(opTimeout);
-    Console.WriteLine(reg.errorCode == 0
-        ? $"[smoke] registered '{reg.username}' (token len={reg.sessionToken.Length})"
-        : $"[smoke] register errorCode={reg.errorCode} ({reg.errorMessage}) — account likely exists, logging in");
-
-    var login = await client.AuthLogin(
-        new AuthLoginRequest { username = username, password = password, mfaCode = "" })
-        .WaitAsync(opTimeout);
-    if (login.errorCode != 0)
+    if (reg.errorCode == 0)
     {
-        Console.Error.WriteLine($"[smoke] LOGIN FAILED: errorCode={login.errorCode} {login.errorMessage}");
-        client.Disconnect();
-        return 1;
+        Console.WriteLine($"[smoke] registered '{reg.username}' (token len={reg.sessionToken.Length}) — authenticated");
+        authed = true;
     }
-    Console.WriteLine($"[smoke] login OK: user='{login.username}' token len={login.sessionToken.Length}");
+    else
+    {
+        Console.WriteLine($"[smoke] register soft-error {reg.errorCode} ({reg.errorMessage}) — logging in");
+    }
 }
 catch (TimeoutException)
 {
-    Console.Error.WriteLine("[smoke] AUTH TIMED OUT — op-channel reply never arrived.");
-    Console.Error.WriteLine("[smoke]   The UDP op channel (0x01) round-trip is not completing server-side.");
+    Console.Error.WriteLine("[smoke] REGISTER TIMED OUT — op-channel reply never arrived (UDP 0x01 round-trip stuck).");
     client.Disconnect();
     return 1;
+}
+catch (Exception ex)
+{
+    Console.WriteLine($"[smoke] register rejected ({ex.Message}) — account likely exists, logging in");
+}
+
+if (!authed)
+{
+    try
+    {
+        var login = await client.AuthLogin(
+            new AuthLoginRequest { username = username, password = password, mfaCode = "" })
+            .WaitAsync(opTimeout);
+        if (login.errorCode != 0)
+        {
+            Console.Error.WriteLine($"[smoke] LOGIN FAILED: errorCode={login.errorCode} {login.errorMessage}");
+            client.Disconnect();
+            return 1;
+        }
+        Console.WriteLine($"[smoke] login OK: user='{login.username}' token len={login.sessionToken.Length}");
+    }
+    catch (TimeoutException)
+    {
+        Console.Error.WriteLine("[smoke] LOGIN TIMED OUT — op-channel reply never arrived (UDP 0x01 round-trip stuck).");
+        client.Disconnect();
+        return 1;
+    }
+    catch (Exception ex)
+    {
+        Console.Error.WriteLine($"[smoke] LOGIN REJECTED: {ex.Message}");
+        client.Disconnect();
+        return 1;
+    }
 }
 
 // 3. Drive movement and watch for server-pushed world state.
