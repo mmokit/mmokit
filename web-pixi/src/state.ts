@@ -1,6 +1,6 @@
 import type { SpaceClient } from "../sdk/index.js";
 import type { AbilityCastEvent, ClientEntity, Explosion, RangeRingEvent, Toast } from "./types";
-import { newClockSync, type ClockSync } from "./clockSync";
+import { newClockSync, type ClockSync } from "../sdk/_core/clock-sync.js";
 
 // Settlement currency item ID — must match server GameConfig.SettlementCurrencyID
 export const SETTLEMENT_CURRENCY_ID = 1;

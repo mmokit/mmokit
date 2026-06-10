@@ -1,14 +1,9 @@
 import type { AnyEntity } from "../sdk/index.js";
-import {
-  pushSample as coreSPush,
-  interpolateRing,
-  isStaleSample,
-  lerp,
-  lerpAngle,
-} from "../sdk/_core/interpolation-core.js";
+import { lerp, lerpAngle } from "../sdk/_core/interpolation-core.js";
+import { InterpolationBuffer } from "../sdk/_core/interpolation-buffer.js";
+import { type ClockSync, estimatedServerNow } from "../sdk/_core/clock-sync.js";
 import { MAX_EXTRAPOLATE_MS, RENDER_DELAY, RING_SIZE } from "./constants";
 import type { ClientEntity, EntitySample } from "./types";
-import { type ClockSync, estimatedServerNow } from "./clockSync";
 
 function entityRotation(e: AnyEntity, fallbackPrev: number): number {
   if ("angle" in e) return e.angle as number;
@@ -27,8 +22,12 @@ function sampleFrom(e: AnyEntity, producedAtMs: number, prevRot: number): Entity
   };
 }
 
-export function pushSample(ent: ClientEntity, s: EntitySample): void {
-  coreSPush(ent, s, RING_SIZE);
+function newBuffer(): InterpolationBuffer {
+  return new InterpolationBuffer({
+    ringSize: RING_SIZE,
+    renderDelayMs: RENDER_DELAY,
+    maxExtrapolateMs: MAX_EXTRAPOLATE_MS,
+  });
 }
 
 export function updateEntityFromServer(
@@ -39,26 +38,25 @@ export function updateEntityFromServer(
   const id = serverState.netID;
   const existing = entities.get(id);
   if (!existing) {
-    const rot = entityRotation(serverState, 0);
-    const first: EntitySample = sampleFrom(serverState, producedAtMs, rot);
+    const buffer = newBuffer();
+    const first = sampleFrom(serverState, producedAtMs, 0);
+    buffer.push(first);
     entities.set(id, {
       current: serverState,
-      samples: [first],
+      buffer,
       renderX: first.worldX,
       renderY: first.worldY,
       renderRot: first.rotation,
     });
     return;
   }
-  // Skip frames older than the newest sample held. At a cell boundary the same
-  // netID arrives from two cell authorities; the ex-authority's final in-flight
-  // frame can land last. pushSample drops it from the ring, but
-  // `existing.current = serverState` would still snap non-interpolated fields
-  // (size, health, …) backward — flicker — so gate the whole snapshot.
-  if (isStaleSample(existing, producedAtMs)) {
+  // Gate the whole snapshot on the same monotonicity rule the ring uses, so
+  // non-interpolated fields (size/health/…) don't snap backward at a cell
+  // boundary when the ex-authority's final frame arrives last.
+  if (existing.buffer.isStale(producedAtMs)) {
     return;
   }
-  pushSample(existing, sampleFrom(serverState, producedAtMs, existing.renderRot));
+  existing.buffer.push(sampleFrom(serverState, producedAtMs, existing.renderRot));
   existing.current = serverState;
 }
 
@@ -70,7 +68,7 @@ export function interpolateEntities(
   if (!clock.initialized) return;
   const renderTime = estimatedServerNow(clock, clientNowMs) - RENDER_DELAY;
   for (const ent of entities.values()) {
-    const r = interpolateRing(ent, renderTime, MAX_EXTRAPOLATE_MS, RENDER_DELAY);
+    const r = ent.buffer.sampleAt(renderTime);
     if (r) {
       ent.renderX = r.renderX;
       ent.renderY = r.renderY;

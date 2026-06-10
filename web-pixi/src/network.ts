@@ -30,7 +30,7 @@ import {
 import { CELL_SIZE } from "./constants";
 import { backendWsUrl } from "./config";
 import { updateEntityFromServer } from "./interpolation";
-import { observeFrameStamps } from "./clockSync";
+import { observeFrameStamps } from "../sdk/_core/clock-sync.js";
 import { devOverlay } from "./ui/dev-overlay";
 import { spawnExplosion } from "./effects/explosion";
 import { SETTLEMENT_CURRENCY_ID, type GameState, type CellInfo } from "./state";

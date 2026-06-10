@@ -1,5 +1,5 @@
 import { describe, test, expect } from "bun:test";
-import { newClockSync, observeServerTime, estimatedServerNow } from "../clockSync";
+import { newClockSync, observeServerTime, estimatedServerNow } from "../../sdk/_core/clock-sync.js";
 
 describe("ClockSync (max-instant)", () => {
   test("initializes on first observation", () => {

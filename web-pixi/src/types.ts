@@ -1,5 +1,6 @@
 import type { Container } from "pixi.js";
 import type { AnyEntity } from "../sdk/index.js";
+import type { InterpolationBuffer } from "../sdk/_core/interpolation-buffer.js";
 
 /**
  * A single authoritative server snapshot of an entity, carrying the
@@ -21,7 +22,7 @@ export interface EntitySample {
 
 export interface ClientEntity {
   current: AnyEntity;            // latest decoded state (for HUD / game logic)
-  samples: EntitySample[];       // ring, samples[0] = oldest, capped at RING_SIZE
+  buffer: InterpolationBuffer;   // per-entity sample ring + playback
   // Interpolated render values (set each frame by interpolateEntities).
   renderX: number;
   renderY: number;

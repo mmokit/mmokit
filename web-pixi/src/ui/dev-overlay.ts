@@ -1,5 +1,5 @@
 import { RENDER_DELAY } from "../constants";
-import { estimatedServerNow } from "../clockSync";
+import { estimatedServerNow } from "../../sdk/_core/clock-sync.js";
 import type { GameState } from "../state";
 
 // Console-log threshold: an observation whose |instant - currentOffset|
@@ -408,7 +408,7 @@ class DevOverlay {
     let ringText = "  (no player entity)";
     const me = state.entities.get(state.myEntityId);
     if (me) {
-      const samples = me.samples;
+      const samples = me.buffer.samples;
       const renderTime = state.clockSync.initialized
         ? estimatedServerNow(state.clockSync, now) - RENDER_DELAY
         : 0;
