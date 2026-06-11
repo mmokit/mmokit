@@ -2,6 +2,7 @@ package universe
 
 import (
 	"context"
+	"crypto/tls"
 	"errors"
 	"flag"
 	"fmt"
@@ -592,6 +593,13 @@ type Process struct {
 	// process has the Gateway role and HTTPPort != -1. Started from Start()
 	// after Build(); shut down at the top of Shutdown() before cells drain.
 	httpServer *http.Server
+
+	// tlsOnce memoizes the resolved client-facing TLS config so both HTTP
+	// listeners present the same certificate. Resolved lazily via
+	// httpTLSConfig(); nil tlsConfig means serve plaintext.
+	tlsOnce       sync.Once
+	tlsConfig     *tls.Config
+	tlsSelfSigned bool
 
 	// adminHTTPServer is an optional admin HTTP server exposing /events,
 	// /commands, and /metrics. Non-nil when Config.AdminListen is set.
