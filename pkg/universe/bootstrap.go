@@ -291,10 +291,18 @@ func (c *Process) startAdminHTTPListener() {
 		c.Log.Log(CatMeshCell, "admin: mounted /admin/* on %s", c.cfg.AdminListen)
 	}
 
-	tlsCfg, _ := c.httpTLSConfig()
+	tlsCfg, selfSigned := c.httpTLSConfig()
 	c.adminHTTPServer = &http.Server{Addr: c.cfg.AdminListen, Handler: mux, TLSConfig: tlsCfg}
 	if tlsCfg == nil && !isLoopbackBind(c.cfg.AdminListen) {
 		c.Log.Log(CatMeshCell, "admin-http: WARNING serving plaintext on non-loopback address %s — admin session cookie is unencrypted; set --tls-cert/--tls-key or terminate TLS at a reverse proxy", c.cfg.AdminListen)
+	}
+	// Log the self-signed banner here only when the client listener did not
+	// (pure-coordinator processes don't serve clients, so this admin listener
+	// is the sole TLS surface and would otherwise emit no warning). When the
+	// client listener ran it already logged it once — httpTLSConfig memoizes,
+	// so we'd be double-logging.
+	if selfSigned && !c.ServesClients() {
+		c.Log.Log(CatMeshCell, "admin-http: WARNING using in-memory self-signed TLS cert (--tls-mode=self-signed) — DO NOT use in production")
 	}
 	c.Log.Log(CatMeshCell, "admin-http: listening on %s (roles=%s, tls=%v)", c.cfg.AdminListen, c.roles, tlsCfg != nil)
 

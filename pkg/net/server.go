@@ -52,9 +52,11 @@ type ConnManager struct {
 	// with no Origin header (native/non-browser clients) are always allowed —
 	// this is deliberate (browsers always send Origin on WS upgrades, so this
 	// is not a CSWSH gap; non-browser request integrity is the auth layer's
-	// job). Entries are host globs matched via path.Match and are scheme/port
-	// agnostic unless written as "scheme://host" (e.g. "*.example.com" matches
-	// any scheme/port; "https://app.example.com" pins the scheme).
+	// job). Entries are matched via path.Match against the Origin's host
+	// (scheme-agnostic unless written "scheme://host"). The host includes a
+	// port when the Origin carries one, so "*.example.com" matches
+	// "app.example.com" but not "app.example.com:8443" — browsers omit default
+	// ports, so this only matters for explicit non-standard ports.
 	AllowedOrigins []string
 }
 

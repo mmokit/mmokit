@@ -6,6 +6,8 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/zenion/mmoserver/pkg/logger"
 )
 
 func writeTempKeyPair(t *testing.T, dir string) (certPath, keyPath string) {
@@ -131,5 +133,31 @@ func TestIsLoopbackBind(t *testing.T) {
 		if got := isLoopbackBind(addr); got != want {
 			t.Errorf("isLoopbackBind(%q)=%v want %v", addr, got, want)
 		}
+	}
+}
+
+func TestHTTPTLSConfig_MemoizesSamePointer(t *testing.T) {
+	p := &Process{cfg: Config{TLSMode: "self-signed"}, Log: logger.New()}
+	cfg1, self1 := p.httpTLSConfig()
+	cfg2, self2 := p.httpTLSConfig()
+	if cfg1 == nil {
+		t.Fatal("expected a tls.Config for self-signed mode")
+	}
+	if cfg1 != cfg2 {
+		t.Error("httpTLSConfig must return the same memoized *tls.Config on repeated calls (both listeners share one cert)")
+	}
+	if !self1 || !self2 {
+		t.Errorf("expected selfSigned=true on both calls, got %v / %v", self1, self2)
+	}
+}
+
+func TestHTTPTLSConfig_BadFilesFallBackToPlaintext(t *testing.T) {
+	p := &Process{cfg: Config{TLSCertFile: "/nonexistent/cert.pem", TLSKeyFile: "/nonexistent/key.pem"}, Log: logger.New()}
+	cfg, self := p.httpTLSConfig()
+	if cfg != nil {
+		t.Error("expected nil tls.Config (fallback to plaintext) when the explicit keypair fails to load")
+	}
+	if self {
+		t.Error("expected selfSigned=false on load failure")
 	}
 }
