@@ -291,11 +291,20 @@ func (c *Process) startAdminHTTPListener() {
 		c.Log.Log(CatMeshCell, "admin: mounted /admin/* on %s", c.cfg.AdminListen)
 	}
 
-	c.adminHTTPServer = &http.Server{Addr: c.cfg.AdminListen, Handler: mux}
-	c.Log.Log(CatMeshCell, "admin-http: listening on %s (roles=%s)", c.cfg.AdminListen, c.roles)
+	tlsCfg, _ := c.httpTLSConfig()
+	c.adminHTTPServer = &http.Server{Addr: c.cfg.AdminListen, Handler: mux, TLSConfig: tlsCfg}
+	if tlsCfg == nil && !isLoopbackBind(c.cfg.AdminListen) {
+		c.Log.Log(CatMeshCell, "admin-http: WARNING serving plaintext on non-loopback address %s — admin session cookie is unencrypted; set --tls-cert/--tls-key or terminate TLS at a reverse proxy", c.cfg.AdminListen)
+	}
+	c.Log.Log(CatMeshCell, "admin-http: listening on %s (roles=%s, tls=%v)", c.cfg.AdminListen, c.roles, tlsCfg != nil)
 
 	go func() {
-		err := c.adminHTTPServer.ListenAndServe()
+		var err error
+		if tlsCfg != nil {
+			err = c.adminHTTPServer.ListenAndServeTLS("", "")
+		} else {
+			err = c.adminHTTPServer.ListenAndServe()
+		}
 		if err != nil && !errors.Is(err, http.ErrServerClosed) {
 			c.Log.Log(CatMeshCell, "admin-http: listener error: %v", err)
 		}
