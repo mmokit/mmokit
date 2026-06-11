@@ -130,13 +130,21 @@ Fix:
 - Remove `InsecureSkipVerify: true`.
 - Drive the accept's `OriginPatterns` from `Config.AllowedWSOrigins`. Default
   (empty) → same-origin only (the websocket library's default-deny for
-  cross-origin). Operators serving the client from a different origin populate
-  the allowlist (this overlaps conceptually with `Config.CORSOrigins`, but WS
-  origin and CORS are distinct mechanisms; keep them as separate knobs to avoid
-  surprising coupling).
-- Localhost dev: the allowlist (or same-origin) covers the vite-proxied setup
-  (`examples/4node-basic/web/vite.config.ts` proxies `ws://localhost:8080`), so
-  dev is unaffected.
+  cross-origin).
+- **`AllowedWSOrigins` falls back to `CORSOrigins` when unset** (resolved by
+  `wsAllowedOrigins(cfg)`). Rationale (revised 2026-06-12 after the original
+  "keep them separate" choice silently broke the cross-origin `examples/simple`
+  client): an origin an operator already trusts for credentialed cross-origin
+  HTTP is one they trust to open a WebSocket, so a cross-origin client needs
+  only `--cors-origins`. The trust models are strictly consistent — there is no
+  real case for trusting an origin for CORS but blocking its WS upgrade — so the
+  coupling removes a two-flag papercut rather than introducing surprise.
+  `--ws-allowed-origins` still overrides when set explicitly.
+- Localhost dev: the vite-proxied examples (`examples/4node-basic`, `web-pixi`)
+  are same-origin through the proxy (`Host`==`Origin`), so unaffected. The
+  proxy-less `examples/simple` (page on :5174, WS on :8080) is cross-origin and
+  works via the CORS fallback since its run recipe already sets
+  `--cors-origins=http://localhost:5174`.
 
 `HandleWebSocket` will need access to the allowed origins — thread
 `Config.AllowedWSOrigins` (or a resolved `[]string`) into the `ConnManager` /

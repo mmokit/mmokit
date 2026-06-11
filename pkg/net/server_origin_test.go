@@ -84,3 +84,25 @@ func TestHandleWebSocket_AllowsListedOrigin(t *testing.T) {
 	}
 	c.Close(websocket.StatusNormalClosure, "")
 }
+
+func TestHandleWebSocket_AllowsSchemeQualifiedOrigin(t *testing.T) {
+	// CORS-derived entries are full "scheme://host" origins; confirm such a
+	// pattern matches the corresponding browser Origin. This is the exact
+	// mechanism the simple example's cross-origin dev setup relies on (page on
+	// :5174 served over http, WS endpoint on :8080).
+	cm := NewConnManager()
+	cm.AllowedOrigins = []string{"http://cross.example.com:5174"}
+	srv := httptest.NewServer(http.HandlerFunc(cm.HandleWebSocket))
+	defer srv.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
+	c, _, err := websocket.Dial(ctx, wsURLFromHTTP(srv.URL), &websocket.DialOptions{
+		HTTPHeader: http.Header{"Origin": []string{"http://cross.example.com:5174"}},
+	})
+	if err != nil {
+		t.Fatalf("expected scheme-qualified allowlisted origin to succeed: %v", err)
+	}
+	c.Close(websocket.StatusNormalClosure, "")
+}

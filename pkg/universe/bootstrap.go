@@ -183,6 +183,27 @@ func (c *Process) dumpSchemaAndExit() {
 	os.Exit(0)
 }
 
+// wsAllowedOrigins resolves the WebSocket Origin allowlist passed to the
+// accept path. Explicit AllowedWSOrigins wins; otherwise it falls back to the
+// CORSOrigins list — a browser origin trusted for credentialed cross-origin
+// HTTP is also trusted to open a WebSocket, so operators serving the client
+// cross-origin only configure --cors-origins. Empty result => same-origin only.
+func wsAllowedOrigins(cfg Config) []string {
+	if len(cfg.AllowedWSOrigins) > 0 {
+		return cfg.AllowedWSOrigins
+	}
+	if cfg.CORSOrigins == "" {
+		return nil
+	}
+	var out []string
+	for _, o := range strings.Split(cfg.CORSOrigins, ",") {
+		if o = strings.TrimSpace(o); o != "" {
+			out = append(out, o)
+		}
+	}
+	return out
+}
+
 // startHTTPListener binds the engine-owned client HTTP server on c.cfg.HTTPPort
 // and serves /ws, /auth, /metrics, and diagnostics. No-op unless the process has
 // the Gateway role. HTTPPort < 0 unconditionally disables the listener so
@@ -198,7 +219,7 @@ func (c *Process) startHTTPListener() {
 	}
 
 	mux := http.NewServeMux()
-	c.ConnMgr.AllowedOrigins = c.cfg.AllowedWSOrigins
+	c.ConnMgr.AllowedOrigins = wsAllowedOrigins(c.cfg)
 	mux.HandleFunc("/ws", c.ConnMgr.HandleWebSocket)
 	// Diagnostic endpoints — heartbeat WS + write-path stats. Live
 	// alongside /ws on the gateway listener so the Bun probe and

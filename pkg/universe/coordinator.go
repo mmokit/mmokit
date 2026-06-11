@@ -144,10 +144,13 @@ type Config struct {
 	TLSMode string
 
 	// AllowedWSOrigins is the WebSocket Origin allowlist for /ws upgrades.
-	// Empty (default) means same-origin only. Browser pages served from a
-	// different origin than the WS endpoint must be listed here. Native /
-	// non-browser clients (no Origin header) are always allowed. Set via
-	// --ws-allowed-origins (comma-separated).
+	// Empty (default) means same-origin only — EXCEPT it falls back to
+	// CORSOrigins when unset (an origin trusted for credentialed cross-origin
+	// HTTP is also trusted to open a WebSocket), so a cross-origin client
+	// typically needs only --cors-origins. Browser pages served from a
+	// different origin than the WS endpoint that don't set CORS must be listed
+	// here. Native / non-browser clients (no Origin header) are always
+	// allowed. Set via --ws-allowed-origins (comma-separated).
 	AllowedWSOrigins []string
 
 	// Admin configures the optional admin dashboard. See AdminConfig.
