@@ -198,6 +198,7 @@ func (c *Process) startHTTPListener() {
 	}
 
 	mux := http.NewServeMux()
+	c.ConnMgr.AllowedOrigins = c.cfg.AllowedWSOrigins
 	mux.HandleFunc("/ws", c.ConnMgr.HandleWebSocket)
 	// Diagnostic endpoints — heartbeat WS + write-path stats. Live
 	// alongside /ws on the gateway listener so the Bun probe and
@@ -214,14 +215,30 @@ func (c *Process) startHTTPListener() {
 	}
 
 	addr := fmt.Sprintf(":%d", c.cfg.HTTPPort)
-	c.httpServer = &http.Server{Addr: addr, Handler: corsMiddleware(c.cfg.CORSOrigins, mux)}
+	tlsCfg, selfSigned := c.httpTLSConfig()
+	c.httpServer = &http.Server{
+		Addr:      addr,
+		Handler:   corsMiddleware(c.cfg.CORSOrigins, mux),
+		TLSConfig: tlsCfg,
+	}
 	if c.cfg.CORSOrigins != "" {
 		c.Log.Log(CatMeshCell, "http: CORS enabled for origins: %s", c.cfg.CORSOrigins)
 	}
-	c.Log.Log(CatMeshCell, "http: listening on %s (roles=%s)", addr, c.roles)
+	if tlsCfg == nil && !isLoopbackBind(addr) {
+		c.Log.Log(CatMeshCell, "http: WARNING serving plaintext on non-loopback address %s — session cookie and client traffic are unencrypted; set --tls-cert/--tls-key or terminate TLS at a reverse proxy", addr)
+	}
+	if selfSigned {
+		c.Log.Log(CatMeshCell, "http: WARNING using in-memory self-signed TLS cert (--tls-mode=self-signed) — DO NOT use in production")
+	}
+	c.Log.Log(CatMeshCell, "http: listening on %s (roles=%s, tls=%v)", addr, c.roles, tlsCfg != nil)
 
 	go func() {
-		err := c.httpServer.ListenAndServe()
+		var err error
+		if tlsCfg != nil {
+			err = c.httpServer.ListenAndServeTLS("", "")
+		} else {
+			err = c.httpServer.ListenAndServe()
+		}
 		if err != nil && !errors.Is(err, http.ErrServerClosed) {
 			c.Log.Log(CatMeshCell, "http: listener error: %v", err)
 		}
