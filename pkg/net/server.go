@@ -46,6 +46,16 @@ type ConnManager struct {
 	// the connection's read loop starts. Used by the gateway to read
 	// cookies set by /auth/* HTTPS endpoints.
 	OnUpgrade func(UpgradeContext)
+
+	// AllowedOrigins is the WebSocket Origin allowlist passed to
+	// websocket.Accept's OriginPatterns. Empty = same-origin only. Requests
+	// with no Origin header (native/non-browser clients) are always allowed —
+	// this is deliberate (browsers always send Origin on WS upgrades, so this
+	// is not a CSWSH gap; non-browser request integrity is the auth layer's
+	// job). Entries are host globs matched via path.Match and are scheme/port
+	// agnostic unless written as "scheme://host" (e.g. "*.example.com" matches
+	// any scheme/port; "https://app.example.com" pins the scheme).
+	AllowedOrigins []string
 }
 
 type route struct {
@@ -219,7 +229,7 @@ func (cm *ConnManager) AddTransport(t Transport) uint32 {
 // HandleWebSocket is the HTTP handler for WebSocket upgrades.
 func (cm *ConnManager) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 	ws, err := websocket.Accept(w, r, &websocket.AcceptOptions{
-		InsecureSkipVerify: true, // Allow any origin for development
+		OriginPatterns: cm.AllowedOrigins,
 	})
 	if err != nil {
 		log.Printf("websocket accept error: %v", err)
