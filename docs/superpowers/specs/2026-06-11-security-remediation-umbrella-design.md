@@ -82,7 +82,15 @@ deployments). Remove `InsecureSkipVerify` and add a WS origin allowlist
 ### Unit 2 — UDP secure framing
 Closes findings #1 and #2. Direction (detail deferred to its own spec):
 - Replace the 32-bit XOR token with a **per-session key** minted server-side and
-  delivered to the client over the authenticated (TLS-protected) WS channel.
+  delivered to the client over an **authenticated HTTPS endpoint** (NOT the WS
+  channel and NOT the UDP op-channel). Decision (2026-06-12): all clients —
+  web and Unity/C# alike — authenticate over HTTPS and receive a session token
+  + per-session UDP key, then open the UDP connection keyed by it. Rationale:
+  HTTPS is the only channel that can host future OIDC/OAuth2 social-auth
+  redirect flows (impossible over a UDP datagram), and it unifies the web and
+  UDP-only Unity clients on one auth path. This makes Unit 2 depend on Unit 1
+  (HTTPS must be available) and supersedes any earlier "key handoff over the WS
+  channel" phrasing.
 - **Per-packet AEAD** using ChaCha20-Poly1305 (recommended: fast pure-software on
   every platform incl. Unity/mobile; available in Go `golang.org/x/crypto/
   chacha20poly1305` and .NET `System.Security.Cryptography.ChaCha20Poly1305`),
