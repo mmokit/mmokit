@@ -76,6 +76,28 @@ func (c *Config) BindFlags() {
 	stringFlag("admin-listen",
 		"admin HTTP listen addr for /events, /commands, /metrics, /admin/* (default :9101, only binds on RoleCoordinator processes; pass empty to disable)",
 		":9101", &c.AdminListen)
+	stringFlag("tls-cert",
+		"path to TLS certificate file for the client/admin HTTP listeners (requires --tls-key; empty = plaintext or proxy-terminated)",
+		"", &c.TLSCertFile)
+	stringFlag("tls-key",
+		"path to TLS private key file (requires --tls-cert)",
+		"", &c.TLSKeyFile)
+	stringFlag("tls-mode",
+		"TLS mode when no cert/key files are set: \"\" (plaintext) or \"self-signed\" (in-memory dev cert)",
+		"", &c.TLSMode)
+	flag.Func("ws-allowed-origins",
+		"comma-separated WebSocket Origin allowlist (empty = same-origin only)",
+		func(s string) error {
+			parts := strings.Split(s, ",")
+			out := make([]string, 0, len(parts))
+			for _, p := range parts {
+				if p = strings.TrimSpace(p); p != "" {
+					out = append(out, p)
+				}
+			}
+			c.AllowedWSOrigins = out
+			return nil
+		})
 	// Default-on: admin dashboard mounts whenever --admin-listen is set.
 	// Operators can explicitly disable via --admin-enabled=false to get
 	// the operational endpoints (/metrics, /commands, /events) without

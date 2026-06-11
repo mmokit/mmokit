@@ -441,7 +441,7 @@ with:
 		c.Log.Log(CatMeshCell, "http: WARNING serving plaintext on non-loopback address %s — session cookie and client traffic are unencrypted; set --tls-cert/--tls-key or terminate TLS at a reverse proxy", addr)
 	}
 	if selfSigned {
-		c.Log.Log(CatMeshCell, "http: WARNING using in-memory self-signed TLS cert (--tls=self-signed) — DO NOT use in production")
+		c.Log.Log(CatMeshCell, "http: WARNING using in-memory self-signed TLS cert (--tls-mode=self-signed) — DO NOT use in production")
 	}
 	c.Log.Log(CatMeshCell, "http: listening on %s (roles=%s, tls=%v)", addr, c.roles, tlsCfg != nil)
 
@@ -715,7 +715,7 @@ Expected: builds `bin/server` and regenerates SDKs cleanly, no errors.
 
 Self-signed TLS path:
 ```bash
-./bin/server --tls=self-signed
+./bin/server --tls-mode=self-signed
 ```
 Expected log lines: `http: WARNING using in-memory self-signed TLS cert ...` and `http: listening on :8080 (roles=..., tls=true)`. A `curl -k https://localhost:8080/...` completes a TLS handshake.
 

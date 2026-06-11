@@ -129,6 +129,26 @@ type Config struct {
 	// "127.0.0.1:9101".
 	AdminListen string
 
+	// TLSCertFile and TLSKeyFile, when both non-empty, enable in-process TLS
+	// on the client and admin HTTP listeners (production self-hosted). When
+	// both empty, the listeners serve plaintext (localhost dev or behind a
+	// TLS-terminating reverse proxy). Set via --tls-cert / --tls-key.
+	TLSCertFile string
+	TLSKeyFile  string
+
+	// TLSMode is an opt-in escape hatch for local TLS testing. When set to
+	// "self-signed" (and no cert/key files are provided), the listeners serve
+	// TLS using an in-memory self-signed cert (SANs: localhost, 127.0.0.1,
+	// ::1). Cert/key files always take precedence. Set via --tls-mode.
+	TLSMode string
+
+	// AllowedWSOrigins is the WebSocket Origin allowlist for /ws upgrades.
+	// Empty (default) means same-origin only. Browser pages served from a
+	// different origin than the WS endpoint must be listed here. Native /
+	// non-browser clients (no Origin header) are always allowed. Set via
+	// --ws-allowed-origins (comma-separated).
+	AllowedWSOrigins []string
+
 	// Admin configures the optional admin dashboard. See AdminConfig.
 	Admin AdminConfig
 
