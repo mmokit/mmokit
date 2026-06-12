@@ -199,9 +199,9 @@ func (c *Cell) drainPendingPromotes(currentClusterTick uint64) {
 				// replication kept the replica current up to commit. Capture
 				// the replica's fresh values for ALL border-replicated
 				// components so the first post-handoff frame doesn't serve a
-				// stale value that then snaps — e.g. the WASM-pulsed
-				// Collider.Radius (the visible "size jumps at the cell line"
-				// bug) or game Health/Shield.
+				// stale value that then snaps — e.g. a WASM-animated
+				// Collider.Radius (the pulse demo's visible "size jumps at
+				// the cell line" bug) or game Health/Shield.
 				recentRadius    float32
 				hasRecentRadius bool
 				recentComps     []ComponentSlice
@@ -234,7 +234,7 @@ func (c *Cell) drainPendingPromotes(currentClusterTick uint64) {
 					hasRecentStamp = rep.ProducedAtMs > 0
 				}
 				// Collider: copy only Radius — border frames carry only the
-				// (pulse-animated) radius, so the replica's Width/Height/Layer/
+				// (animatable) radius, so the replica's Width/Height/Layer/
 				// Shape are zero. The blob has the correct static fields; we
 				// only de-stale the animated radius.
 				if c.Stage.colliderMap.HasAll(ent) {
@@ -321,8 +321,8 @@ func (c *Cell) drainPendingPromotes(currentClusterTick uint64) {
 			// De-stale non-motion components from the replica's tip too — the
 			// blob's values are crossing-tick stale (commitTick−lead). Without
 			// this, any per-tick-changing component is served stale on the
-			// first post-handoff frame and snaps a tick later (the visible
-			// size jump for the pulse-animated Collider.Radius).
+			// first post-handoff frame and snaps a tick later (the pulse
+			// demo's visible size jump on its WASM-animated Collider.Radius).
 			if hasRecentRadius && c.Stage.colliderMap.HasAll(newEnt) {
 				c.Stage.colliderMap.Get(newEnt).Radius = recentRadius
 			}

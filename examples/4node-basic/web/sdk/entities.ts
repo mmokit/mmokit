@@ -18,6 +18,9 @@ export interface PlayerEntity {
   radius: number;
   width: number;
   height: number;
+  r: number;
+  g: number;
+  b: number;
   name: string;
 }
 
@@ -39,6 +42,9 @@ export interface BotEntity {
   radius: number;
   width: number;
   height: number;
+  r: number;
+  g: number;
+  b: number;
   name: string;
 }
 

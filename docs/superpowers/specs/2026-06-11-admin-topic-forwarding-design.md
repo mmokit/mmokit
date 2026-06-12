@@ -27,8 +27,8 @@ is the established precedent for host→coord admin telemetry.
 
 ```proto
 message AdminTopicEvent {
-  string topic        = 1;
-  bytes  payload_json = 2;
+  string topic   = 1;  // TopicBus key, e.g. "tunables", "bots"
+  bytes  payload = 2;  // pre-marshaled JSON
 }
 ```
 

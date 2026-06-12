@@ -23,7 +23,7 @@ type BotSystem struct {
 	// RetargetPeriod is a runtime tunable (ticks between a bot picking a new
 	// wander target; 20 ticks = 1s). Lower = more frantic, higher = lazier.
 	// Tweak it live via `tune set Bot retargetPeriod 40` or the admin
-	// /tunables sliders — it shows up alongside the wasm `pulse` tunables.
+	// /tunables sliders — it shows up alongside the wasm `tint` tunables.
 	RetargetPeriod uint16 `tune:"default=100,min=10,max=400,step=10"`
 
 	bots mmokit.Query[BotComponents]

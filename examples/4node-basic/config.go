@@ -1,5 +1,7 @@
 package main
 
+import "github.com/zenion/mmoserver/pkg/mmokit"
+
 const (
 	TickRate     int     = 20
 	CellsX       uint32  = 2
@@ -12,3 +14,8 @@ const (
 	KindPlayer uint8 = 1
 	KindBot    uint8 = 2
 )
+
+// DefaultTint is the spawn-time entity color — the same blue the renderer
+// used before tint replication existed. The tint wasm module overwrites it
+// every tick while loaded; this is what you see when the module is unloaded.
+var DefaultTint = mmokit.Tint{R: 85, G: 136, B: 204}

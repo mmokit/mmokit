@@ -12,10 +12,6 @@ type WaveStateMsg struct {
 	Positions []WavePos
 }
 
-// FieldSystem is the native scaffold: it spawns the field of dots and broadcasts
-// their positions to every client each tick. The actual MOTION (each dot's Y) is
-// computed by the hot-swappable `wave` wasm module, which runs just before this
-// system — so the positions broadcast here are already this tick's.
 type FieldSystem struct {
 	mmokit.SystemBase
 	Baseline float32 `tune:"default=0,min=-200,max=200,step=10"`

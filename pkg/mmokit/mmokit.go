@@ -45,6 +45,11 @@ type Rotation = component.Rotation
 // radius for broad-phase checks on rectangles.
 type Collider = component.Collider
 
+// Tint is a render color hint (R, G, B bytes) replicated to clients when the
+// entity kind's bundle includes it. The engine never touches it — game logic
+// (systems, wasm modules) drives it to color entities client-side.
+type Tint = component.Tint
+
 // NetworkID is a stable identifier for an entity that is sent to clients.
 type NetworkID = component.NetworkID
 

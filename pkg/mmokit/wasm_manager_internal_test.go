@@ -4,7 +4,7 @@ import "testing"
 
 func TestDeriveWasmName(t *testing.T) {
 	cases := map[string]string{
-		"dist/wasmmods/pulse.wasm": "pulse",
+		"dist/wasmmods/tint.wasm": "tint",
 		"shieldregen.wasm":         "shieldregen",
 		"/a/b/c.wasm":              "c",
 	}

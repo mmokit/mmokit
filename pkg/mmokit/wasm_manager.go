@@ -42,14 +42,14 @@ func wasmRegistryFor(p *universe.Process) *wasmRegistry {
 }
 
 // deriveWasmName turns a module path into a logical name: the base filename
-// without its extension. "dist/wasmmods/pulse.wasm" -> "pulse".
+// without its extension. "dist/wasmmods/tint.wasm" -> "tint".
 func deriveWasmName(path string) string {
 	base := filepath.Base(path)
 	return strings.TrimSuffix(base, filepath.Ext(base))
 }
 
 // AddWasmSystem registers a hot-swappable wasm system over POD component T,
-// naming it after the module file (e.g. ".../pulse.wasm" -> "pulse"). It is
+// naming it after the module file (e.g. ".../tint.wasm" -> "tint"). It is
 // added to the normal system set (so it boots into every cell on every node)
 // AND recorded in the per-process registry for runtime load/swap/unload by name.
 // T must match the component the module declares in its Query().
@@ -216,7 +216,7 @@ func registerWasmVerbs(proc *universe.Process) error {
 	if err := reg.Register(cmdsys.Command{
 		Verb: "wasm.load", Capability: "wasm.load",
 		Description: "load a registered wasm system onto cells (default: all cells on all nodes)",
-		Examples:    []string{"wasm load pulse", "wasm load pulse --cell 0_0"},
+		Examples:    []string{"wasm load tint", "wasm load tint --cell 0_0"},
 		Route:       cmdsys.RouteAllHosts, Args: wasmNameArgs{}, Result: wasmOpResult{},
 		Handler: func(ctx context.Context, env *cmdsys.Env, raw any) (any, error) {
 			args := raw.(wasmNameArgs)
@@ -259,7 +259,7 @@ func registerWasmVerbs(proc *universe.Process) error {
 	if err := reg.Register(cmdsys.Command{
 		Verb: "wasm.unload", Capability: "wasm.unload",
 		Description: "unload a wasm system from cells (default: all cells on all nodes)",
-		Examples:    []string{"wasm unload pulse"},
+		Examples:    []string{"wasm unload tint"},
 		Route:       cmdsys.RouteAllHosts, Args: wasmNameArgs{}, Result: wasmOpResult{},
 		Handler: func(ctx context.Context, env *cmdsys.Env, raw any) (any, error) {
 			args := raw.(wasmNameArgs)
@@ -291,7 +291,7 @@ func registerWasmVerbs(proc *universe.Process) error {
 	if err := reg.Register(cmdsys.Command{
 		Verb: "wasm.swap", Capability: "wasm.swap",
 		Description: "rebuild a registered wasm system from disk and hot-swap in place, preserving state (default: all cells/all nodes)",
-		Examples:    []string{"wasm swap pulse", "wasm swap pulse --node host-b"},
+		Examples:    []string{"wasm swap tint", "wasm swap tint --node host-b"},
 		Route:       cmdsys.RouteAllHosts, Args: wasmNameArgs{}, Result: wasmOpResult{},
 		Handler: func(ctx context.Context, env *cmdsys.Env, raw any) (any, error) {
 			args := raw.(wasmNameArgs)

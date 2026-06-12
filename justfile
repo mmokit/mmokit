@@ -11,7 +11,7 @@ build-go:
 # build all hot-swappable wasm system modules into dist/wasmmods/
 wasm-build:
     mkdir -p dist/wasmmods
-    GOOS=wasip1 GOARCH=wasm go build -buildmode=c-shared -o dist/wasmmods/pulse.wasm ./examples/4node-basic/wasmmods/pulse/
+    GOOS=wasip1 GOARCH=wasm go build -buildmode=c-shared -o dist/wasmmods/tint.wasm ./examples/4node-basic/wasmmods/tint/
 
 # build TS SDK + web client + server into bin/server
 # space-sdk runs first so the web client picks up any schema changes.

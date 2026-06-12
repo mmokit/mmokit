@@ -36,6 +36,17 @@ type Collider struct {
 	Shape  uint8
 }
 
+// Tint is a render color hint (one byte per RGB channel) replicated to
+// clients via the `net:"u8"` tags when included in an entity kind's bundle.
+// Engine systems never read or write it — it exists purely for game logic to
+// drive client-side coloring (e.g. a hot-swappable wasm module animating the
+// world's palette).
+type Tint struct {
+	R uint8 `net:"u8"`
+	G uint8 `net:"u8"`
+	B uint8 `net:"u8"`
+}
+
 // NetworkID is a stable identifier sent to clients.
 // Epoch increments on each authority transfer and is used by receivers
 // to drop stale frames from a previous owner.

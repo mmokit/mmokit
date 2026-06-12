@@ -251,6 +251,7 @@ func spawnBotsOnLoop(cell *mmokit.Cell, count int) int {
 			// Phase the initial countdown so bots from the same spawn batch
 			// don't all retarget on the same tick.
 			BotBehavior{TicksUntilRetarget: retarget},
+			DefaultTint,
 		)
 		spawned++
 	}

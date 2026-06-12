@@ -10,7 +10,7 @@ import {
 } from "./_core/delta-decoder-core.js";
 import type { PlayerEntity, BotEntity, AnyEntity, DeltaWorldUpdate } from "./entities.js";
 
-const PLAYERENTITY_FIELD_SIZES = [4, 4, 2, 2, 2, 2, 2];
+const PLAYERENTITY_FIELD_SIZES = [4, 4, 2, 2, 2, 2, 2, 1, 1, 1];
 const PLAYERENTITY_HAS_VAR_TAIL = false;
 
 function decodePlayerEntitySnapshot(snap: Uint8Array, initial: Uint8Array | null, existing?: PlayerEntity): PlayerEntity {
@@ -22,14 +22,17 @@ function decodePlayerEntitySnapshot(snap: Uint8Array, initial: Uint8Array | null
   const radius = unVel(readInt16(snap, o), 500); o += 2;
   const width = unVel(readInt16(snap, o), 500); o += 2;
   const height = unVel(readInt16(snap, o), 500); o += 2;
+  const r = snap[o]; o += 1;
+  const g = snap[o]; o += 1;
+  const b = snap[o]; o += 1;
   let initialOff = 0;
   const name = initial && initialOff < initial.length ? decodeLengthPrefixedStringU8(initial.subarray(initialOff)) : (existing?.name ?? "");
   if (initial && initialOff < initial.length) initialOff += 1 + initial[initialOff];
   void initialOff;
-  return { netID: 0, producedAtMs: 0, entityType: 1, worldX, worldY, velX, velY, radius, width, height, name };
+  return { netID: 0, producedAtMs: 0, entityType: 1, worldX, worldY, velX, velY, radius, width, height, name, r, g, b };
 }
 
-const BOTENTITY_FIELD_SIZES = [4, 4, 2, 2, 2, 2, 2];
+const BOTENTITY_FIELD_SIZES = [4, 4, 2, 2, 2, 2, 2, 1, 1, 1];
 const BOTENTITY_HAS_VAR_TAIL = false;
 
 function decodeBotEntitySnapshot(snap: Uint8Array, initial: Uint8Array | null, existing?: BotEntity): BotEntity {
@@ -41,11 +44,14 @@ function decodeBotEntitySnapshot(snap: Uint8Array, initial: Uint8Array | null, e
   const radius = unVel(readInt16(snap, o), 500); o += 2;
   const width = unVel(readInt16(snap, o), 500); o += 2;
   const height = unVel(readInt16(snap, o), 500); o += 2;
+  const r = snap[o]; o += 1;
+  const g = snap[o]; o += 1;
+  const b = snap[o]; o += 1;
   let initialOff = 0;
   const name = initial && initialOff < initial.length ? decodeLengthPrefixedStringU8(initial.subarray(initialOff)) : (existing?.name ?? "");
   if (initial && initialOff < initial.length) initialOff += 1 + initial[initialOff];
   void initialOff;
-  return { netID: 0, producedAtMs: 0, entityType: 2, worldX, worldY, velX, velY, radius, width, height, name };
+  return { netID: 0, producedAtMs: 0, entityType: 2, worldX, worldY, velX, velY, radius, width, height, name, r, g, b };
 }
 
 export class BasicDeltaDecoder {

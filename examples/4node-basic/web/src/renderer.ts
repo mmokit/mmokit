@@ -160,7 +160,7 @@ function renderLoop(now: number): void {
     const baseR = Math.max(4, Math.abs(ent.radius) * scale);
     const r = isPlayer ? baseR * 1.4 : baseR;
 
-    // Color by the cell the entity is currently in (debug only). Matches the
+    // Stroke by the cell the entity is currently in (debug only). Matches the
     // cell background color so entities visually belong to their cell. Node
     // identity is shown via the label under the cell coords, not color —
     // that way single-process mode (all cells share one host) still gets 4
@@ -172,8 +172,12 @@ function renderLoop(now: number): void {
       ? CELL_COLORS[cellColorIndex(cellAt)]
       : { fill: "#5588cc", stroke: "#6496FF", bg: "" };
 
-    // Player-only glow halo, drawn beneath the filled circle so cell color +
-    // white stroke render unchanged on top.
+    // Fill from the server-replicated tint (the `r`/`g`/`b` wire fields,
+    // animated server-side by the hot-swappable tint wasm module).
+    const fill = `rgb(${ent.r},${ent.g},${ent.b})`;
+
+    // Player-only glow halo, drawn beneath the filled circle so the tint
+    // fill + white stroke render unchanged on top.
     if (isPlayer) {
       const glowR = r * 2.0;
       const grad = ctx.createRadialGradient(sx, sy, r, sx, sy, glowR);
@@ -187,7 +191,7 @@ function renderLoop(now: number): void {
 
     ctx.save();
     ctx.beginPath(); ctx.arc(sx, sy, r, 0, Math.PI * 2);
-    ctx.fillStyle = nc.fill; ctx.fill();
+    ctx.fillStyle = fill; ctx.fill();
 
     ctx.strokeStyle = isPlayer ? "#ffffff" : nc.stroke;
     ctx.lineWidth = isPlayer ? 2.5 : 1;

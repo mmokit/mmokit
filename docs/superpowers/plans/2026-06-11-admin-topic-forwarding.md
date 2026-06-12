@@ -237,7 +237,7 @@ func (c *Process) ForwardAdminTopic(topic string, payloadJSON []byte) error {
 	}
 	return c.controlClient.sendIfReady(&meshpb.HostMessage{
 		Msg: &meshpb.HostMessage_AdminTopicEvent{
-			AdminTopicEvent: &meshpb.AdminTopicEvent{Topic: topic, PayloadJson: payloadJSON},
+			AdminTopicEvent: &meshpb.AdminTopicEvent{Topic: topic, Payload: payloadJSON},
 		},
 	})
 }
@@ -260,7 +260,7 @@ In `pkg/universe/mesh_control_server.go`, after the `case *meshpb.HostMessage_Lo
 			case *meshpb.HostMessage_AdminTopicEvent:
 				if ev := v.AdminTopicEvent; ev != nil {
 					if fn := s.coord.remoteAdminTopic.Load(); fn != nil {
-						(*fn)(ev.Topic, ev.PayloadJson)
+						(*fn)(ev.Topic, ev.Payload)
 					}
 				}
 ```

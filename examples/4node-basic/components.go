@@ -14,10 +14,12 @@ type BotBehavior struct {
 type PlayerComponents struct {
 	Name       *PlayerName
 	MoveTarget *mmokit.MoveTarget
+	Tint       *mmokit.Tint
 }
 
 type BotComponents struct {
 	Name       *PlayerName
 	MoveTarget *mmokit.MoveTarget
 	Behavior   *BotBehavior
+	Tint       *mmokit.Tint
 }
