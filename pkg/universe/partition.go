@@ -343,7 +343,7 @@ func (c *Process) computeRewireDirectivesLocked(affected []CellID) []rewireDirec
 }
 
 // applyRewireDirectives writes every directive onto its target cell's game
-// loop via PendingAdminCmds so node.Neighbors mutations happen on the same
+// loop via SubmitLoopJob so Cell.Neighbors mutations happen on the same
 // goroutine that reads them from PostSystems. Callers must NOT hold c.mu
 // while invoking this helper — the game loop may itself acquire c.mu while
 // draining the closure, and double-acquiring would deadlock.
@@ -352,11 +352,10 @@ func (c *Process) computeRewireDirectivesLocked(affected []CellID) []rewireDirec
 // the next tick rebuilds its CellViewer set from the new neighbor map.
 //
 // If a cell's game loop is not actively running (e.g. unit-test fixtures
-// that build a Process without calling cell.Run), the PendingAdminCmds
-// channel still accepts writes because it's buffered — the closure will
-// fire on whatever goroutine next drains the channel. Tests that drive the
-// flow synchronously observe consistent neighbor state by running at least
-// one tick (or execOnLoop) before asserting.
+// that build a Process without calling cell.Run), the bounded loop-job queue
+// can still accept the closure, but it will not execute until a loop drains
+// it. Tests that drive the flow synchronously run at least one tick before
+// asserting.
 func (c *Process) applyRewireDirectives(dirs []rewireDirective) {
 	for _, d := range dirs {
 		if d.cell == nil || d.cell.Engine == nil {

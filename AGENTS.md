@@ -6,7 +6,7 @@ This file applies to the entire repository. Keep it focused on durable rules; pu
 
 - Current source, tests, and `justfile` recipes are authoritative.
 - Read the implementation and nearby tests before changing a package. Use the nearest README and `CLAUDE.md` for orientation only, then verify names and behavior with `rg`; several examples in those documents describe removed APIs.
-- Treat `docs/superpowers/{plans,specs}` and `docs/planning/` as dated design history or target architecture, not proof of current behavior. Do not edit historical plans to document a present-day code change.
+- Use `docs/architecture.md` for the maintained architecture overview and `docs/roadmaps/` for active tracking. `docs/planning/` is a historical index. Treat `docs/superpowers/{plans,specs}` as plugin-owned dated design history, not proof of current behavior; do not edit it during ordinary documentation maintenance.
 - Preserve unrelated worktree changes. Never perform broad cleanup, regeneration, or formatting unless the task requires it.
 
 ## Project snapshot
@@ -23,7 +23,7 @@ This is a server-authoritative 2D MMO framework and space-game implementation. T
 - `pkg/wasmabi/`, `pkg/wasmhost/`, `pkg/wasmsys/`: hot-swappable WASM systems.
 - `internal/`: space-game components, systems, items, persistence, and marketplace behavior.
 - `cmd/server/`: production space-game composition root. `cmd/sdkgen/` generates typed client SDKs.
-- `examples/simple/`: smallest current MMOKIT example, including a WASM system.
+- `examples/simple/`: smallest current MMOKIT example with a custom Go system.
 - `examples/4node-basic/`: distributed mesh/auth/chat/admin example with a generated TypeScript client.
 - `web-pixi/`: PixiJS space-game client. `csharp/`: shared C# SDK core and golden tests.
 - `proto/meshpb/`: the only protobuf schema. It is for server-internal MeshControl/MeshData traffic, not the client protocol.
@@ -96,7 +96,7 @@ Do not hand-edit generated or build output. Change the source and regenerate:
 - Space-game schema -> `just space-sdk` -> `web-pixi/sdk/`.
 - 4node schema -> `just client-sdk examples/4node-basic` -> `examples/4node-basic/web/sdk/`.
 - Admin source -> `just admin-build` -> `pkg/admin/static/dist/`.
-- WASM source -> `just wasm-build` or the example-local `just wasm-build` -> ignored `dist/` artifacts.
+- WASM source -> `just wasm-build` -> ignored `dist/` artifacts.
 - C# wire golden source -> `just csharp-golden` -> tracked golden JSON.
 
 Keep generated diffs only when the corresponding source/schema changed.

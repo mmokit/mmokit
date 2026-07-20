@@ -1,7 +1,8 @@
 package net
 
-// Transport is the interface for all network transports (WebSocket, UDP, etc.).
-// All messages are complete protobuf frames ([]byte).
+// Transport is the interface for all client network transports (WebSocket,
+// UDP, etc.). Messages are complete application frames ([]byte); the
+// client-facing protocol is not protobuf.
 type Transport interface {
 	// SendReliable sends a message that must be delivered (e.g. login, spawn, state changes).
 	SendReliable(data []byte)

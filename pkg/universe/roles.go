@@ -106,12 +106,12 @@ var validRoles = map[string]struct{}{
 
 // ParseRoles turns a CLI string into a Roles set. Accepts:
 //   - "" → PresetAll() — default when --mode is omitted
-//   - "all" → PresetAll() (coordinator+host+gateway; service is opt-in)
+//   - "all" → PresetAll() (coordinator+host+gateway+service; service kinds
+//     still run only when selected/auto-added)
 //   - comma-separated list of role names (whitespace-tolerant). The
-//     literal token "all" inside a list expands to coordinator+host+
-//     gateway so "all,service" is shorthand for the dev-server preset
-//     plus services. Examples: "coordinator", "coordinator,gateway",
-//     "all,service", "host", "gateway", "service".
+//     literal token "all" inside a list expands to every built-in role.
+//     Examples: "coordinator", "coordinator,gateway", "all", "host",
+//     "gateway", "service".
 //
 // Bare "host" parses successfully here — it represents a remote host that
 // dials a coordinator. Process.Build() enforces that bare "host"

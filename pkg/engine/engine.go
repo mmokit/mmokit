@@ -68,7 +68,7 @@ func (e *Engine) SetClientInputTick(fn func()) {
 }
 
 // SetNetIDBase sets the base offset for NetworkID allocation.
-// Each node should have a unique base to prevent ID collisions.
+// Each cell must receive a unique range base to prevent ID collisions.
 func (e *Engine) SetNetIDBase(base uint32) {
 	e.netIDBase = base
 }

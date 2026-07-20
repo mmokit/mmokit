@@ -11,18 +11,11 @@ postgres_url := env("POSTGRES_URL", "postgres://mmo:mmo@localhost:5432/mmo_simpl
 admin-build:
     cd {{root}} && just admin-build
 
-# build the hot-swappable wasm system modules into examples/simple/dist/wasmmods/
-# (-buildmode=c-shared is required so the //go:wasmexport reactor exports are reachable)
-wasm-build:
-    mkdir -p {{root}}/examples/simple/dist/wasmmods
-    cd {{root}} && GOOS=wasip1 GOARCH=wasm go build -buildmode=c-shared -o examples/simple/dist/wasmmods/wave.wasm ./examples/simple/wasmmods/wave/
-
-# build the Go binary (web client is embedded via go:embed in main.go).
-# Depends on wasm-build because the server loads the wasm module at startup.
-build-go: wasm-build
+# build the Go binary
+build-go:
     cd {{root}} && go build -o bin/simple ./examples/simple
 
-# build the admin SPA, then the Go binary
+# build the admin SPA and Go binary
 build: admin-build build-go
 
 # start Postgres and ensure the mmo_simple database exists (idempotent —

@@ -70,19 +70,19 @@ func (s *tint) Update(ctx *wasmsys.Ctx, dt float32) {
 	// }
 
 	// ── Variant B: marching rainbow — each entity offset along the wheel
-	for i := range tints {
-		hue := float32(math.Mod(cycle+float64(i)*float64(s.Spread), 1))
-		tints[i] = hsv(hue, 1, 1)
-	}
+	// for i := range tints {
+	// 	hue := float32(math.Mod(cycle+float64(i)*float64(s.Spread), 1))
+	// 	tints[i] = hsv(hue, 1, 1)
+	// }
 
 	// ── Variant C: police strobe — everything snaps red/blue each half-cycle
-	// c := comp.Tint{R: 255, G: 30, B: 30}
-	// if cycle >= 0.5 {
-	// 	c = comp.Tint{R: 40, G: 90, B: 255}
-	// }
-	// for i := range tints {
-	// 	tints[i] = c
-	// }
+	c := comp.Tint{R: 255, G: 30, B: 30}
+	if cycle >= 0.5 {
+		c = comp.Tint{R: 40, G: 90, B: 255}
+	}
+	for i := range tints {
+		tints[i] = c
+	}
 }
 
 // hsv converts hue/saturation/value in [0,1] to an 8-bit RGB Tint.

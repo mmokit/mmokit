@@ -60,16 +60,10 @@ type CrossingEvent struct {
 	BypassCooldown bool       // true for explicit teleports; false for natural boundary crossings
 }
 
-// Stage provides default implementations for all GameWorld interface methods.
-// Embed it in your game world struct to get working multi-node support out of the box.
-//
-// Usage:
-//
-//	type myWorld struct {
-//	    universe.Stage
-//	}
-//
-// All methods can be overridden by defining them on the outer struct.
+// Stage is one cell's runtime surface. It owns the cell's engine/ECS adapters,
+// spatial index, entity-kind registry, messaging hooks, and transfer state.
+// Games attach their own per-cell state through Process state factories rather
+// than embedding Stage.
 type Stage struct {
 	eng         *engine.Engine
 	cell        CellID
@@ -79,7 +73,7 @@ type Stage struct {
 	spatialGrid *spatial.HashGrid
 
 	coord     *Process // set by Process.createNode after world factory
-	fromSplit bool         // true if created during a cell split (skip initial entity spawning)
+	fromSplit bool     // true if created during a cell split (skip initial entity spawning)
 
 	// clusterClock stamps outbound border-frame entries with the
 	// authoritative producer's cluster-coherent wall time. Threaded from
@@ -98,8 +92,8 @@ type Stage struct {
 	// despawn signal that replaces the old passive TTL-decay path.
 	// Keyed on fromCellID (the source cell's mesh ID).
 	borderLastSeen map[MeshCellID]map[uint32]struct{}
-	replRegistry     *ReplicationRegistry
-	velScale         float32 // max velocity for qvel quantization
+	replRegistry   *ReplicationRegistry
+	velScale       float32 // max velocity for qvel quantization
 
 	entityKinds map[uint8]*EntityKindDef // registered via RegisterEntityKind
 
@@ -616,14 +610,14 @@ func (b *Stage) ColliderMap() *ecs.Map1[component.Collider] { return b.colliderM
 func (b *Stage) CellCoordMap() *ecs.Map1[component.CellCoord] { return b.cellMap }
 
 // ---------------------------------------------------------------------------
-// GameWorld interface — default implementations
+// Cell runtime accessors and default lifecycle behavior
 // ---------------------------------------------------------------------------
 
-func (b *Stage) ECSWorld() *ecs.World                                 { return b.eng.ECS }
-func (b *Stage) GetAoIRadius() float32                                { return b.aoiRadius }
-func (b *Stage) SetBridge(bridge Bridge)                              { b.bridge = bridge }
-func (b *Stage) MarkForRemoval(e ecs.Entity)                          { b.eng.MarkForRemoval(e) }
-func (b *Stage) Shutdown()                                            {}
+func (b *Stage) ECSWorld() *ecs.World        { return b.eng.ECS }
+func (b *Stage) GetAoIRadius() float32       { return b.aoiRadius }
+func (b *Stage) SetBridge(bridge Bridge)     { b.bridge = bridge }
+func (b *Stage) MarkForRemoval(e ecs.Entity) { b.eng.MarkForRemoval(e) }
+func (b *Stage) Shutdown()                   {}
 
 // Hooks returns the engine lifecycle hooks for this Stage. If a state
 // registered via mmokit.AddState[T] implements `Hooks() engine.Hooks`,
@@ -739,6 +733,7 @@ func (b *Stage) UpdateCellBounds(cell CellID, cellSize float32) {
 		}
 	}
 }
+
 // ---------------------------------------------------------------------------
 // Transfer serialization
 // ---------------------------------------------------------------------------
@@ -1112,7 +1107,6 @@ func (b *Stage) SpawnLiveFromTransfer(netID uint32, epoch uint32, blob []byte) (
 // ---------------------------------------------------------------------------
 // Replication
 // ---------------------------------------------------------------------------
-
 
 // ---------------------------------------------------------------------------
 // Border frame apply (new path, replaces ApplyProxySummaries)

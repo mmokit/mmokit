@@ -95,15 +95,16 @@ type Config struct {
 	GatewayMode string
 
 	// Mode is a comma-separated role set that selects what this process does.
-	// Accepts role names: coordinator, host, gateway.
-	// Preset aliases: "" or "all" → "coordinator,host,gateway" (default).
+	// Accepts role names: coordinator, host, gateway, service.
+	// Preset aliases: "" or "all" include every built-in role. The service role
+	// remains inert unless service kinds are selected or auto-added.
 	//
 	// Common combinations:
-	//   - "" / "all"                  → coordinator + host + gateway (single-process dev)
+	//   - "" / "all"                  → every built-in role (single-process dev)
 	//   - "coordinator"               → control plane only (MeshControl, HostRegistry, admin console)
 	//   - "coordinator,gateway"       → control plane + embedded WebSocket gateway
 	//   - "coordinator,host"          → control plane + in-process cells, no gateway
-	//   - "coordinator,host,gateway"  → explicit spelling of the default `all` preset
+	//   - "coordinator,host,gateway"  → all core runtime roles without services
 	//   - "host" + CoordinatorAddr    → remote host, dials coordinator, receives cells dynamically
 	//   - "gateway"                   → standalone gateway, dials CoordinatorAddr
 	//
@@ -112,7 +113,8 @@ type Config struct {
 	Mode string
 
 	// ControlListen is the listen address for the MeshControl gRPC server.
-	// Only used when Mode == "coordinator". Default ":9100".
+	// Used by coordinator-bearing role sets when the control plane must accept
+	// remote processes. Default ":9100" when flags are bound.
 	ControlListen string
 
 	// UDPListen is the listen address for the engine-owned client UDP server
@@ -1699,8 +1701,8 @@ func (c *Process) Build() {
 	// HostRegistry, AssignmentEngine). Always runs for pure-coordinator
 	// processes (RoleCoordinator alone) and for coord+gateway-without-host
 	// processes (which cannot function without a remote node joining).
-	// For role sets that include RoleHost (`all` preset, coordinator+host,
-	// coordinator+host+gateway) the listener is OPT-IN via
+	// For role sets that include RoleHost (`all` preset or an explicit
+	// coordinator+host combination) the listener is OPT-IN via
 	// Config.ControlListen — an empty ControlListen means "don't listen,
 	// nobody remote can join us". This preserves the status-quo of
 	// `all` preset dev processes; set ControlListen on an `all` preset or

@@ -27,10 +27,10 @@ type GameLoop struct {
 	hooks       Hooks
 	sysTimings  []time.Duration        // reusable scratch buffer
 	systemNames []string               // profiling labels, parallel to systems
-	eventsCh    <-chan net.PlayerEvent // per-node events (nil = use ConnMgr.Events())
+	eventsCh    <-chan net.PlayerEvent // per-cell events (nil = use ConnMgr.Events())
 }
 
-// SetEventsCh sets a per-node events channel. When set, processEvents
+// SetEventsCh sets a per-cell events channel. When set, processEvents
 // drains from this channel instead of ConnMgr.Events().
 func (gl *GameLoop) SetEventsCh(ch <-chan net.PlayerEvent) {
 	gl.eventsCh = ch

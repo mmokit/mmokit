@@ -16,7 +16,7 @@ import (
 // The test focuses narrowly on T9's atomic-commit surface: the
 // sessionRoutes.remapCell call, the applyRegistryDelta helper, the
 // broadcastPeerListIfReady call, targeted UpstreamSwitch dispatch, and
-// the PendingAdminCmds-routed neighbor rewire (which moved off c.mu in
+// the loop-job-routed neighbor rewire (which moved off c.mu in
 // T9 specifically so it wouldn't race with PostSystems).
 //
 // A successful run means:

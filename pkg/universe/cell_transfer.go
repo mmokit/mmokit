@@ -618,7 +618,7 @@ func (o *cellTransferOrchestrator) BeginMigrate(cellID CellID, destHost string) 
 //
 // Commands are dispatched CONCURRENTLY (one goroutine per command). This is
 // load-bearing for SPLIT correctness: all 4 quadrant serializes target the
-// same parent cell's PendingAdminCmds channel, and running them sequentially
+// same parent cell's loop-job queue, and running them sequentially
 // introduced a full tick between each closure — between closures the
 // parent's game loop ran physics + handoff logic, so entities moved out of
 // the quadrant they'd been snapshotted into and subsequent quadrant
@@ -871,4 +871,3 @@ func (o *cellTransferOrchestrator) liveHostIDsLocked() []string {
 	o.coord.Control.mu.RUnlock()
 	return ids
 }
-

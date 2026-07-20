@@ -1,127 +1,160 @@
-# pkg/net
+# `pkg/net`
 
-Transport-agnostic networking layer. Manages connections over WebSocket (TCP) and custom UDP with both reliable and unreliable channels. No game-specific logic — only deals with `[]byte` frames.
+Game-agnostic client transport layer. It manages byte frames over WebSocket
+and the repository's custom UDP protocol; typed messages and replication live
+in higher-level packages.
 
-## Transport Interface (`transport.go`)
+## Frame channels
 
-All network connections implement the `Transport` interface:
+Application frames use a leading channel byte:
+
+| Channel | Value | Inbound queue |
+| --- | --- | --- |
+| Event / typed client input | `0x00` | `DrainInput` |
+| Correlated operation | `0x01` | `DrainOpInput` |
+
+The WebSocket read pump removes the channel byte before queueing the payload.
+UDP does the same when a recognized channel byte is present. Outbound callers
+provide the complete framed bytes, including the channel byte.
+
+## Transport contract
+
+Every registered connection implements:
 
 ```go
 type Transport interface {
-    SendReliable(data []byte)    // guaranteed delivery (login, death, spawn)
-    SendUnreliable(data []byte)  // fire-and-forget (world updates, input)
-    DrainInput() [][]byte        // return and clear queued inbound messages
+    SendReliable(data []byte)
+    SendUnreliable(data []byte)
+    DrainInput() [][]byte
+    DrainOpInput() [][]byte
+    InjectInput(data []byte)
     Close()
 }
 ```
 
-For WebSocket (TCP), both send methods are identical. For UDP, they use different channels — unreliable messages bypass the reliability layer, avoiding head-of-line blocking.
+`InjectInput` is used by the cell-handoff path to replay event-channel input
+on a destination. `ByteCounter` and `ConnStatsProvider` are optional
+diagnostic interfaces.
 
-## ConnManager (`server.go`)
+Engine hot paths depend on the narrower `ConnSender` interface rather than a
+concrete manager. Both `*ConnManager` and the universe's mesh-backed virtual
+manager satisfy that shape.
 
-Central hub for all active connections (any transport type).
+## Connection manager
 
 ```go
 connMgr := net.NewConnManager()
-go connMgr.ListenAndServe(ctx, ":8080")  // WebSocket
-udpSrv, _ := net.NewUDPServer(":9000", connMgr)
-go udpSrv.Run(ctx)                        // UDP
+err := connMgr.ListenAndServe(ctx, ":8080")
 ```
 
-**Key methods:**
+`ConnManager` assigns monotonically increasing connection IDs and stores any
+registered transport. Its main operations are:
 
-| Method | Description |
-|--------|-------------|
-| `Events() <-chan PlayerEvent` | Channel of connect/disconnect events |
-| `Get(connID) Transport` | Look up a transport by ID |
-| `Send(connID, data)` | Send unreliable (world updates) |
-| `SendReliable(connID, data)` | Send reliable (login, death, spawn, sell) |
-| `DrainInput(connID) [][]byte` | Return all queued input messages |
-| `Remove(connID)` | Force-close and delete a connection |
-| `AddTransport(t Transport) uint32` | Register any transport, returns connID |
+| Method | Purpose |
+| --- | --- |
+| `Events()` | Receive connect and disconnect notifications. |
+| `Get(id)` | Look up a transport. |
+| `AddTransport(t)` | Register a transport and emit a connected event. |
+| `Remove(id)` | Remove and close a transport. |
+| `Unregister(id)` | Remove it without closing and emit a disconnect event. |
+| `Send(id, data)` | Select the transport's unreliable path. |
+| `SendReliable(id, data)` | Select its reliable path. |
+| `DrainInput(id)` / `DrainOpInput(id)` | Drain the two inbound queues. |
+| `InjectInput(id, data)` | Append to a connection's event/input queue. |
+| `ActiveConnIDs()` / `ConnectionCount()` | Return connection snapshots. |
+| `TotalBytesSent()` / `TotalBytesRecv()` | Aggregate active `ByteCounter` transports. |
+| `RemoteAddrString(id)` | Return the direct WebSocket peer address when known. |
 
-**HTTP endpoints served by `ListenAndServe`:**
+`OnUpgrade` runs synchronously after a successful WebSocket upgrade and
+registration but before the read loop. The universe gateway uses it to inspect
+the original HTTP request and authenticate cookies.
 
-- `/ws` — WebSocket game endpoint
-- `/gen/*` — generated protobuf files for clients
-- `/` — web test client
+Set `AllowedOrigins` before accepting WebSockets. An empty list enforces
+same-origin browser requests; native clients without an `Origin` header are
+accepted.
 
-## WebSocket Transport (`ws.go`)
+### Standalone HTTP server
 
-Wraps the existing `Conn` (read/write pumps over WebSocket) to implement `Transport`. Since TCP is always reliable, both send methods are identical.
+`ListenAndServe` mounts:
 
-## Conn (`conn.go`)
+- `/ws`: game WebSocket
+- `/probe-ws`: direct 20 Hz diagnostic heartbeat
+- `/debug/conn-stats`: per-connection write and queue timing JSON
+- routes registered through `Handle` before the server starts
 
-Internal WebSocket connection with non-blocking send and buffered input. Used by `WSTransport`.
+Normal MMOKIT processes let `pkg/universe` own the HTTP mux and mount these
+handlers alongside metrics, commands, authentication, and game routes.
 
-- **Outbound:** 64-message buffered channel, drops if full
-- **Inbound:** Mutex-protected slice, drained atomically
-- **Write pump:** Goroutine drains outbound channel → WebSocket
-- **Read pump:** WebSocket → input buffer, runs until disconnect
+## WebSocket transport
 
-## UDP Protocol (`udpproto/`)
+`WSTransport` wraps the internal `Conn`. Because WebSocket runs over TCP,
+`SendReliable` and `SendUnreliable` both enqueue into the same 64-entry
+outbound channel. Enqueue is non-blocking; a full channel logs and drops the
+frame.
 
-Custom lightweight UDP protocol based on Glenn Fiedler's game networking patterns. Shared between server and Go client.
+The read pump routes binary messages into mutex-protected event or operation
+queues. The write pump records queue delay, write duration, slow-write counts,
+and cumulative byte counters exposed by `/debug/conn-stats`.
 
-### Packet Types
-
-| Type | Byte | Overhead | Description |
-|------|------|----------|-------------|
-| Unreliable | `0x00` | 5 bytes | `[type][token:4][payload]` |
-| Reliable | `0x01` | 7 bytes | `[type][token:4][seq:2][payload]` |
-| ACK | `0x02` | 11 bytes | `[type][token:4][ack_seq:2][ack_bits:4]` |
-| ConnReq | `0x03` | 13 bytes | `[type][protocol_id:4][client_salt:8]` |
-| ConnAccept | `0x04` | 21 bytes | `[type][protocol_id:4][client_salt:8][server_salt:8]` |
-| Disconnect | `0x05` | 5 bytes | `[type][token:4]` |
-
-### Connection Handshake
-
-Client sends `ConnReq` with a random salt. Server responds with `ConnAccept` including its own salt. The XOR of both salts forms a 32-bit connection token used in all subsequent packets.
-
-### Reliability
-
-- 16-bit sequence numbers, 256-entry ring buffer
-- ACKs encode highest received seq + 32-bit bitfield (33 messages per ACK)
-- Retransmit after 100ms, timeout after 5s
-- No head-of-line blocking — unreliable messages flow independently
-
-### Timeouts
-
-- No packet received for 10s → connection dead
-- Keepalive sent if no traffic for 1s
-
-## UDP Server (`udp_server.go`)
-
-Single UDP socket with a read loop that dispatches by connection token. Handles connection handshakes and creates `UDPTransport` instances registered with `ConnManager`.
-
-## UDP Transport (`udp_transport.go`)
-
-Implements `Transport` over UDP. Runs a 10Hz tick loop for retransmission, standalone ACKs, keepalives, and timeout detection.
-
-## Clients
-
-### Go Client (`udpclient/`)
-
-Self-contained Go UDP client:
+## UDP
 
 ```go
-client, _ := udpclient.Dial("localhost:9000")
-client.SendReliable(loginBytes)
-msg, _ := client.Recv()  // blocks
-client.Close()
+udpServer, err := net.NewUDPServer(":9000", connMgr)
+if err != nil {
+    return err
+}
+udpServer.Run(ctx) // blocks until cancellation
 ```
 
-### JS Client (`jsclient/transport.js`)
+The server uses one UDP socket and dispatches datagrams to `UDPTransport`
+instances by token. Datagrams are capped at a 1400-byte receive buffer; this
+protocol does not fragment oversized application messages.
 
-WebSocket transport wrapper with the same reliable/unreliable API shape. Browsers can't do raw UDP, so both methods go through TCP:
+### Packet layout
 
-```js
-import { WSTransport } from './transport.js';
-const t = new WSTransport('ws://localhost:8080/ws');
-t.onOpen(() => t.sendReliable(loginBytes));
-t.onMessage((data) => { ... });
+| Type | Byte | Layout |
+| --- | --- | --- |
+| Unreliable | `0x00` | `[type][token:u32][payload]` |
+| Reliable | `0x01` | `[type][token:u32][seq:u16][payload]` |
+| ACK | `0x02` | `[type][token:u32][ack_seq:u16][ack_bits:u32]` |
+| Connection request | `0x03` | `[type][protocol_id:u32][client_salt:u64]` |
+| Connection accept | `0x04` | `[type][protocol_id:u32][client_salt:u64][server_salt:u64]` |
+| Disconnect | `0x05` | `[type][token:u32]` |
+
+Client and server salts are XOR-folded into the 32-bit demultiplexing token.
+That token is not encryption or application authentication.
+
+The reliable path uses 16-bit sequence numbers, a 256-slot send ring, and an
+ACK containing the highest sequence plus a 32-bit history. Unacknowledged
+packets are retried on the 100 ms transport tick. The API does not report
+remote delivery, and reliable receive does not provide an application-level
+in-order buffer.
+
+An idle transport sends a keepalive after 1 second and times out after 10
+seconds without receiving a packet. `UDPTransport` runs those checks on a
+100 ms ticker.
+
+### Go UDP client
+
+`pkg/net/udpclient` contains the matching standalone client:
+
+```go
+client, err := udpclient.Dial("localhost:9000")
+if err != nil {
+    return err
+}
+defer client.Close()
+
+if err := client.SendReliable(frame); err != nil {
+    return err
+}
+message, err := client.Recv()
 ```
 
-## Thread Safety
+Browser clients use WebSocket; browsers cannot open raw UDP sockets.
 
-`ConnManager` uses `sync.RWMutex` for the connection map. `Conn` uses `sync.Mutex` for input. `UDPTransport` uses separate mutexes for send buffer and inbound queue. The events channel bridges networking goroutines to the game loop.
+## Ownership and copying
+
+Inbound injection and UDP reliable sends copy their payloads. WebSocket
+`Conn.Send` queues the supplied slice without copying it, so callers must treat
+that memory as immutable after sending.

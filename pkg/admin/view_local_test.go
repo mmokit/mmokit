@@ -52,7 +52,7 @@ func TestLocalClusterView_Gateways(t *testing.T) {
 	t.Parallel()
 	v := NewLocalClusterView(newTestProcessForView(t))
 	// Default config (Modes unset) resolves to the "all" preset
-	// (coordinator+host+gateway), so the embedded in-process gateway is
+	// (all built-in roles), so the embedded in-process gateway is
 	// always present in the fixture.
 	gws := v.Gateways()
 	if len(gws) == 0 {

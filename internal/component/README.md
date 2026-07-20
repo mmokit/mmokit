@@ -1,111 +1,100 @@
-# internal/component
+# Space-game components
 
-All ECS component types for the space MMO. These are pure data structs with no methods — behavior lives in systems.
+This package owns ECS state that is specific to the space game. Framework
+components such as `Position`, `Velocity`, `NetworkID`, `EntityKind`,
+`Collider`, `PlayerConn`, `CellCoord`, `Ghost`, and `Replica` live in
+[`pkg/component`](../../pkg/component/) and are normally consumed through
+`pkg/mmokit`.
 
-## Collision Layers
+The component declarations are the source of truth. This README documents the
+rules for changing them rather than duplicating every field.
 
-Collision layer constants live in `pkg/spatial` (`LayerStatic`, `LayerProp`,
-`LayerEntity`). The legacy `LayerPlayer = 1` / `LayerTerrain = 2` pair
-that used to live here was removed because `LayerPlayer` numerically
-collided with `spatial.LayerStatic` (both equal `1`), which caused
-`hasLOSOnGrid` to treat every ship/NPC collider as a sight-blocker —
-NPCs never aggro'd because the caster's own collider always returned a
-hit at the ray origin.
+## Package boundaries
 
-| Layer | Bit value | Members | Blocks |
-|-------|-----------|---------|--------|
-| `LayerStatic` | `1 << 0 = 1` | Stations, dungeon walls | movement, sight, locks, shots |
-| `LayerProp`   | `1 << 1 = 2` | Asteroids | shots only (sight + lock pass through) |
-| `LayerEntity` | `1 << 2 = 4` | Ships, NPCs | nothing |
+- Put reusable engine state in `pkg/component`; put space-game state here.
+- Keep gameplay behavior in `internal/game` systems and typed-message handlers.
+  Small value helpers on collection-like components, such as `Inventory` and
+  `StatusEffects`, are appropriate here.
+- Do not store process-local pointers, services, or unsynchronized shared state
+  in a component.
+- Ark entity handles are process-local. Clear or reconstruct them when a
+  component crosses a cell boundary; see the transfer options in
+  [`internal/game/entity_kinds.go`](../game/entity_kinds.go).
 
-## Entity Kinds
+## Entity kinds and bundles
 
-Wire bytes that identify an entity's kind on the replication channel.
-Names match the second arg passed to `mmokit.RegisterKind` in
-`internal/game/entity_kinds.go`; sdkgen emits a matching TypeScript
-const block from the same kind registry.
+The `Kind*` constants in [`components.go`](components.go) are client wire
+values. Their numeric values are stable protocol contracts. Do not reorder or
+reuse them.
 
-```text
-KindShip, KindAsteroid, KindStation, KindLootCrate, KindNPC
-```
+The matching kind names and component sets are registered in
+[`internal/game/entity_kinds.go`](../game/entity_kinds.go). Bundle structs live
+beside their spawn code in `internal/game/entity_*.go`:
 
-## Components
+- An untagged bundle field is required at spawn and transferred between cells.
+- `mmokit:"local"` creates zero-valued state on the receiving cell instead of
+  serializing it.
+- `mmokit:"optional"` transfers the component when present but does not require
+  every entity of that kind to carry it.
 
-### Transform
+If a component contains maps or other state that the reflection transfer codec
+cannot represent correctly, provide a custom codec through the kind
+registration. `Inventory` is the current example.
 
-| Component | Fields | Description |
-|-----------|--------|-------------|
-| `Position` | `X, Y float32` | World-space position |
-| `Velocity` | `X, Y float32` | Units per second |
-| `Rotation` | `Angle float32` | Radians |
+## Client replication
 
-### Collision
+Fields tagged `net:"..."` participate in the generated client snapshot schema.
+Fields without a `net` tag remain server-only even when their containing
+component transfers between cells.
 
-| Component | Fields | Description |
-|-----------|--------|-------------|
-| `Collider` | `Radius, Width, Height float32; Layer, Shape uint8` | Circle or OBB. Radius is bounding radius for rects. Shape uses `spatial.ShapeCircle` / `spatial.ShapeRect` |
+- `net:"initial"` sends immutable presentation data when an entity becomes
+  visible.
+- Encodings such as `f32`, `u32`, `u8`, `bool`, and `qnorm` select the snapshot
+  representation.
+- Declaration order, encoding, and field names affect the generated client
+  contract. Treat changes as wire changes and regenerate the affected SDKs.
+- Variable-size state needs a deterministic custom binding. Inventory and
+  status effects are implemented in
+  [`internal/game/var_tail_bindings.go`](../game/var_tail_bindings.go).
 
-### Identity
+Collision layers and shapes are defined by [`pkg/spatial`](../../pkg/spatial/).
+Use `LayerStatic`, `LayerProp`, and `LayerEntity`; do not introduce a second set
+of game-local layer values.
 
-| Component | Fields | Description |
-|-----------|--------|-------------|
-| `NetworkID` | `ID uint32` | Stable ID sent to clients |
-| `EntityKind` | `Type uint8` | Entity type constant |
+## Access from game code
 
-### Combat
-
-| Component | Fields | Description |
-|-----------|--------|-------------|
-| `Health` | `Current, Max float32` | Hit points |
-| `Shield` | `Current, Max, RegenRate, RegenDelay, DamageCooldown float32` | Shield with delayed regen |
-
-### Ship
-
-| Component | Fields | Description |
-|-----------|--------|-------------|
-| `ShipControl` | `Thrust, TurnRate, MaxSpeed float32` | Movement parameters |
-| `PlayerConn` | `ConnID uint32` | Links entity to network connection |
-| `PlayerInput` | `Thrust, Turn float32; Fire, Mine, Sell bool; Sequence uint32; TargetNetID uint32; JettisonResource uint8` | Current frame input |
-
-### Resources
-
-| Component | Fields | Description |
-|-----------|--------|-------------|
-| `Inventory` | `Resources [4]float32` | Ore, Crystal, Gas, Metal |
-| `Minable` | `ItemID uint32; Remaining float32` | Mineable resource (ItemID references item registry) |
-| `MiningLaser` | `Range, Rate float32; Active bool; Target ecs.Entity` | Ship mining equipment |
-
-### Lifecycle
-
-| Component | Fields | Description |
-|-----------|--------|-------------|
-| `Lifetime` | `Remaining float32` | Seconds until despawn |
-
-### Markers
-
-| Component | Fields | Description |
-|-----------|--------|-------------|
-| `Station` | (empty) | Tags trade station entities |
-| `LootCrate` | (empty) | Tags dropped cargo entities |
-
-## Usage with Ark ECS
-
-Components are used with Ark's generic mappers:
+Gameplay code should use MMOKIT queries and mutation helpers:
 
 ```go
-// Creation (multi-component)
-mapper := ecs.NewMap8[Position, Velocity, ...](ecsWorld)
-entity := mapper.NewEntity(&Position{X: 0, Y: 0}, &Velocity{}, ...)
+type combatBundle struct {
+    Health *gamecomp.Health
+}
 
-// Access (single-component)
-posMap := ecs.NewMap1[Position](ecsWorld)
-pos := posMap.Get(entity)
+type CombatSystem struct {
+    mmokit.SystemBase
+    query mmokit.Query[combatBundle]
+}
 
-// Query
-filter := ecs.NewFilter2[Position, Velocity](ecsWorld)
-query := filter.Query()
-for query.Next() {
-    pos, vel := query.Get()
-    pos.X += vel.X * dt
+func (s *CombatSystem) Update(dt float32) {
+    for entity, bundle := range s.query.Iter {
+        if bundle.Health.Current <= 0 {
+            s.Commands().Despawn(entity)
+        }
+    }
 }
 ```
+
+Do not perform structural ECS mutation while a query is open. Queue despawns,
+component additions/removals, and other structural work through the stage's
+command buffer. Direct Ark access in production `internal/game` code is limited
+to the existing entity-kind and variable-tail binding glue.
+
+## Validation
+
+After changing a component or kind bundle:
+
+1. Run the nearest `internal/game` tests and `just lint-no-ark`.
+2. Regenerate every affected client SDK and inspect the schema diff.
+3. Run the corresponding TypeScript and/or C# codec tests when wire fields
+   changed.
+4. Add a transfer round-trip test when server-side state must survive handoff.

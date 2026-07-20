@@ -65,20 +65,20 @@ type PlayerConn = component.PlayerConn
 // CellCoord identifies which cell an entity belongs to in the server mesh grid.
 type CellCoord = component.CellCoord
 
-// Ghost marks an entity that is mid-transfer between nodes. Ghost entities are
+// Ghost marks an entity that is mid-transfer between cells. Ghost entities are
 // visible in AoI but not simulated by game systems.
 type Ghost = component.Ghost
 
-// Replica is a read-only copy of an entity owned by a neighboring node. Replicas
+// Replica is a read-only copy of an entity owned by a neighboring cell. Replicas
 // participate in spatial queries and AoI but are never mutated by local systems.
 type Replica = component.Replica
 
 // Dormant marks an entity as sleeping. Dormant entities are excluded from border
 // scanning, game system updates, and client replication. They wake when a player
-// (local or proxy from a neighbor) enters proximity on the authoritative node.
+// (local or represented by a neighbor) enters proximity on the authoritative cell.
 type Dormant = component.Dormant
 
-// TransferCooldown prevents rapid re-transfers after an entity arrives on a new node.
+// TransferCooldown prevents rapid re-transfers after an entity arrives on a new cell.
 type TransferCooldown = component.TransferCooldown
 
 // MoveTarget holds a click-to-move destination with cell coordinates and active flag.
@@ -111,7 +111,7 @@ type SystemDef = engine.SystemDef
 type Hooks = engine.Hooks
 
 // GameLoop runs the fixed-timestep (default 20 Hz) tick loop: process events,
-// drain admin commands, run all systems in order, flush removals, and spawn loot.
+// drain loop jobs and client input, run systems in order, and flush removals.
 type GameLoop = engine.GameLoop
 
 // Console provides an interactive server CLI with readline support, tab completion,
@@ -140,7 +140,7 @@ type TimingStats = engine.TimingStats
 // and is intended for low-frequency scraping.
 type CellMetrics = metrics.CellMetrics
 
-// LoadSnapshot is a point-in-time health report for a single node, including tick
+// LoadSnapshot is a point-in-time health report for a single cell, including tick
 // health, entity counts, network stats, and a composite load score (0.0-1.0+).
 type LoadSnapshot = metrics.LoadSnapshot
 
@@ -249,13 +249,13 @@ var DefaultPartitionConfig = universe.DefaultPartitionConfig
 var DisabledPartitionConfig = universe.DisabledPartitionConfig
 
 // Config holds all Process configuration: grid dimensions (CellsX, CellsY),
-// cell size, tick rate, AoI radius, world factory, console options, and more.
+// cell size, tick rate, AoI radius, roles, listeners, console, and services.
 // Zero values use sensible defaults.
 type Config = universe.Config
 
-// Stage provides default implementations for all GameWorld interface methods.
-// Embed it in your game world struct to get working multi-node support out of the
-// box, including entity spawning, border replication, and cross-cell transfers.
+// Stage is the per-cell runtime surface: ECS access, spawning, spatial state,
+// messaging, replication support, and cross-cell transfer hooks. Games normally
+// receive it from system/player callbacks or resolve cell-local state from it.
 type Stage = universe.Stage
 
 // BroadcastEvent is one queued auto-broadcast event awaiting end-of-tick
@@ -275,13 +275,12 @@ var EncodeTypedEventFrame = universe.EncodeTypedEventFrame
 // writing empty frames.
 var EncodeBatchedTypedEventFrame = universe.EncodeBatchedTypedEventFrame
 
-// WorldBase is a backward-compatibility alias for Stage. internal/game/ embeds
-// *mmokit.WorldBase; this alias keeps that compiling while the rename is in flight.
-// Slated for removal once internal/game is updated to embed *mmokit.Stage directly.
+// WorldBase is a deprecated compatibility alias for Stage. New code should use
+// Stage and register game-owned per-cell state with AddState.
 type WorldBase = universe.Stage
 
-// Process manages multiple Node instances in a grid topology, routes player
-// connections to the correct node, and coordinates entity transfers between nodes.
+// Process composes coordinator, host, gateway, and service roles; owns or routes
+// cells; and coordinates player sessions and entity transfers across hosts.
 // Call Start() to run (blocks until shutdown).
 type Process = universe.Process
 
@@ -377,15 +376,15 @@ type Bridge = universe.Bridge
 // All methods are safe to call but do nothing.
 type NoopBridge = universe.NoopBridge
 
-// NeighborInfo describes a neighbor node's cell offset (DX, DY) relative to
-// the current node. Used by border replication scanning.
+// NeighborInfo describes a neighboring cell's offset (DX, DY) relative to
+// the current cell. Used by border replication.
 type NeighborInfo = universe.NeighborInfo
 
 // BoundarySystem normalizes entity positions into [0, CellSize) and initiates
 // cross-cell transfers when entities cross cell boundaries.
 type BoundarySystem = universe.BoundarySystem
 
-// TransferFrame is the wire format for entity transfers between nodes. Contains
+// TransferFrame is the wire format for entity transfers between cells. Contains
 // core fields (position, velocity, rotation, collider, cell, IDs) plus a
 // Components slice for game-specific serialized data.
 type TransferFrame = universe.TransferFrame
@@ -394,14 +393,14 @@ type TransferFrame = universe.TransferFrame
 // a TransferFrame.
 type ComponentSlice = universe.ComponentSlice
 
-// CrossCellAction is a request sent to the authoritative node when a local entity
-// acts on a replica. The authoritative node processes it.
+// CrossCellAction is a request sent to the authoritative cell when a local entity
+// acts on a replica. The authoritative cell processes it.
 type CrossCellAction = universe.CrossCellAction
 
 // ActionType is a game-defined uint16 identifier for a cross-cell action kind.
 type ActionType = universe.ActionType
 
-// ReplicationRegistry tracks which ECS components should be replicated across nodes.
+// ReplicationRegistry tracks which ECS components replicate across cell boundaries.
 // Register components with RegisterComponent[T] to enable automatic border replication.
 type ReplicationRegistry = universe.ReplicationRegistry
 
@@ -832,8 +831,8 @@ var (
 	// FmtDuration formats a time.Duration as a human-readable string.
 	FmtDuration = engine.FmtDuration
 
-	// NewStage creates a Stage with the given engine, cell, nodeID, AoI radius,
-	// spatial grid, and replication registry. Embed in your game world struct.
+	// NewStage creates a Stage from low-level engine/cell dependencies. Normal game
+	// code receives pre-wired stages from Process callbacks and state factories.
 	NewStage = universe.NewStage
 
 	// NewReplicationRegistry creates an empty registry for cross-cell component replication.
@@ -1231,7 +1230,7 @@ func HarnessLocalHostCells(c *universe.Process) []*universe.Cell {
 }
 
 // CountRealEntities returns the number of entities with a NetworkID that are
-// not replicas or ghosts (i.e. entities owned by this node).
+// not replicas or ghosts (i.e. entities owned by this cell).
 func CountRealEntities(w *ecs.World) int {
 	count := 0
 	filter := ecs.NewFilter1[component.NetworkID](w).

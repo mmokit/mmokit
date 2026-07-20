@@ -219,7 +219,7 @@ func snapshotCells(coord *mmokit.Process) []*mmokit.Cell {
 // spawnBotsOnLoop spawns `count` bot entities into the given cell and returns
 // the actual count. MUST be called from the cell's game loop goroutine — e.g.
 // from inside a cmdsys handler (which already runs on the loop via ExecOnLoop)
-// or from a closure posted to cell.Engine.PendingAdminCmds. Racing with the
+// or from a closure posted with cell.Engine.RunOnLoop. Racing with the
 // game tick from any other goroutine corrupts the ECS.
 func spawnBotsOnLoop(cell *mmokit.Cell, count int) int {
 	stage := cell.Stage

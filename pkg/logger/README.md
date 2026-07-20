@@ -1,47 +1,75 @@
-# pkg/logger
+# `pkg/logger`
 
-Category-based debug logging with dynamic category registration. Each log message belongs to a category that can be toggled on/off at runtime via the server console. The logger is fully generic — categories are registered by the game layer, not hardcoded.
+Thread-safe, category-based debug logging with hierarchical groups, regular
+expression filters, and synchronous hooks.
+
+Categories conventionally use `group:subcategory`, such as `mesh:transfer`.
+Registering a category also registers the text before `:` as a group.
+Enabling or disabling a known group applies the change to all registered
+categories in that group.
 
 ## Usage
 
 ```go
-// Create logger with initial categories enabled
-gameLog := logger.New("connect", "spawn", "combat")
+gameLog := logger.New("combat:hit") // enabled, but not yet registered
+gameLog.RegisterCategories(
+    "combat:hit",
+    "combat:ability",
+    "mesh:transfer",
+)
 
-// Register all known categories (for console tab-completion and help)
-gameLog.RegisterCategories("connect", "spawn", "combat", "mining", "economy", ...)
-
-// Log a message (no-op if category is disabled)
-gameLog.Log("combat", "hit: attacker=%d target=%d damage=%.1f", atkID, tgtID, dmg)
+gameLog.Enable("combat")
+gameLog.Log("combat:hit", "attacker=%d target=%d", attackerID, targetID)
 ```
 
-Game-specific category constants live in the game layer (e.g. `internal/game/logcat.go`), not in this package.
+Keep the calls to `New` and `RegisterCategories` distinct: `New` enables its
+arguments, while `RegisterCategories` populates discovery, group expansion,
+console status, and completion.
 
 ## API
 
-| Method | Description |
-|--------|-------------|
-| `New(enabled ...string)` | Create a logger with the given categories enabled |
-| `RegisterCategories(cats ...string)` | Add categories to the known set (deduplicates) |
-| `Categories() []string` | Returns a copy of all registered categories |
-| `Enable(cats ...string)` | Turn on logging for categories (auto-registers unknown ones) |
-| `Disable(cats ...string)` | Turn off logging for categories |
-| `IsEnabled(cat) bool` | Check if a category is active |
-| `Log(cat, format, args...)` | Log a message if category is enabled |
+| Method | Purpose |
+| --- | --- |
+| `New(enabled ...string)` | Construct a logger with the supplied names enabled. |
+| `RegisterCategories(cats ...string)` | Register known categories and derive groups. |
+| `Categories()` / `Groups()` | Return snapshots of registered names. |
+| `CategoriesInGroup(group)` | Return registered `group:*` categories. |
+| `Enable(cats ...string)` | Enable categories or expand known groups; unknown categories are registered. |
+| `Disable(cats ...string)` | Disable categories or expand known groups. |
+| `IsEnabled(cat)` | Report whether an exact category is enabled. |
+| `EnableFromFlag(csv)` | Disable registered categories, then enable comma-separated categories/groups. |
+| `Log(cat, format, args...)` | Format and emit an enabled, filter-matching message. |
+| `SetFilter(cat, regexp, source)` | Install a filter on one category or a known group. |
+| `ClearFilter(cats...)` | Clear selected filters, or all filters when called without arguments. |
+| `Filters()` | Return a category-to-source-pattern snapshot. |
+| `AddHook(h)` / `RemoveHook(h)` | Attach or detach a log sink. |
 
-## Thread Safety
+`SetFilter` receives a compiled `*regexp.Regexp`; the `source` string is kept
+for status display. Filters are applied after the enabled check.
 
-All methods are safe for concurrent use. `Enable`/`Disable`/`RegisterCategories` use a write lock; `IsEnabled`, `Log`, and `Categories` use a read lock. The logger is shared between the game loop goroutine (which calls `Log`) and the main goroutine (which runs the console and toggles categories).
+## Hooks
 
-## Console Integration
+A hook receives each line that passes both category and filter checks:
 
-The engine console provides these commands for runtime control:
+```go
+type Hook interface {
+    Emit(category, message string, at time.Time)
+}
+```
 
-- `status` / `s` — show which categories are on/off
-- `on <cat|all>` — enable category
-- `off <cat|all>` — disable category
-- `toggle <cat>` / `t <cat>` — toggle category
-- `only <cat> [...]` — enable only these, disable rest
-- `<cat>` — shortcut to toggle (any unrecognized command is tried as a category name)
+Hooks run synchronously in `Log`. They must not block; use a bounded channel
+and a separate consumer for I/O or other substantial work.
 
-Categories are matched by prefix, so `com` matches `combat`, `con` matches `connect`, etc.
+## Console integration
+
+`pkg/engine` exposes logger controls through typed commands:
+
+- `log status`
+- `log on <category|group|all>`
+- `log off <category|group|all>`
+- `log toggle <category>`
+- `log only <category|group> ...`
+- `log filter [category pattern | clear [category]]`
+
+The console resolver accepts exact categories, exact groups, and the first
+registered category matching a prefix.

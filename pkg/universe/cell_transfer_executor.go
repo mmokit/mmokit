@@ -103,9 +103,9 @@ type pendingReceive struct {
 // newCellTransferExecutor builds an executor for the given host.
 func newCellTransferExecutor(coord *Process, host *Host) *cellTransferExecutor {
 	return &cellTransferExecutor{
-		coord:          coord,
-		host:           host,
-		log:            coord.Log,
+		coord:            coord,
+		host:             host,
+		log:              coord.Log,
 		pending:          make(map[uint64]*pendingReceive),
 		mergeSources:     make(map[uint64]*Cell),
 		mergeSurvivors:   make(map[uint64]*Cell),
@@ -428,7 +428,7 @@ func (e *cellTransferExecutor) Receive(proto *meshpb.CellTransfer) error {
 	fireCellSystemsReady(e.coord, node)
 
 	// Start the game loop before enqueuing the populate closure so the
-	// PendingAdminCmds drain actually runs.
+	// loop-job drain actually runs.
 	go node.Run(context.Background())
 
 	// Populate on the new cell's game loop via RunOnLoop (safe against
@@ -795,12 +795,12 @@ func (e *cellTransferExecutor) reportReady(proto *meshpb.CellTransfer, ok bool, 
 		msg := &meshpb.HostMessage{
 			Msg: &meshpb.HostMessage_CellTransferReady{
 				CellTransferReady: &meshpb.CellTransferReady{
-					RequestId:     proto.RequestId,
-					DestCellId:    proto.DestCellId,
-					HostId:        e.host.ID,
-					Ok:            ok,
-					Error:         errMsg,
-					AdoptedUsers:  adoptedUsers,
+					RequestId:    proto.RequestId,
+					DestCellId:   proto.DestCellId,
+					HostId:       e.host.ID,
+					Ok:           ok,
+					Error:        errMsg,
+					AdoptedUsers: adoptedUsers,
 				},
 			},
 		}
@@ -1093,15 +1093,15 @@ func flushDuePromotesForCommit(c *Cell, kind CellTransferKind) {
 // drain those entities die with the donor when it shuts down.
 //
 // Each donor's serialize and the survivor's populate run on their
-// respective game loops via PendingAdminCmds, so reads and writes are
+// respective game loops via RunOnLoop, so reads and writes are
 // race-free with their own systems. Two passes is enough in practice
 // because by the second pass the donors have stopped receiving new
 // arrivals (the orchestrator's handoff-dest-gone protection prevents
 // further sends to deleted donors, and the first pass shipped
 // everything that was in flight when the commit fired).
 //
-// Best-effort: if a donor's admin queue is full or its game loop has
-// already exited, we skip and accept the (now small) loss. Logged at
+// Best-effort: if a donor's loop is unavailable or the scheduling deadline
+// expires, we skip and accept the (now small) loss. Logged at
 // CatMeshCell so it can be triaged if it persists in production.
 func (c *Process) drainDonorResidualsToSurvivor(donors []*Cell, survivor *Cell) {
 	for _, d := range donors {

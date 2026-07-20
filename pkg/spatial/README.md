@@ -1,90 +1,109 @@
-# pkg/spatial
+# `pkg/spatial`
 
-Incremental spatial hash grid for broad-phase collision detection and area-of-interest queries. Supports circles and oriented bounding boxes (OBBs).
+Incremental spatial hash grid for area-of-interest queries, broad-phase
+collision detection, shape-aware overlap tests, and segment raycasts.
 
-## Grid (`grid.go`)
+`HashGrid` is not synchronized. A cell owns and updates its grid on the cell
+loop goroutine.
+
+## Creating and maintaining a grid
 
 ```go
-grid := spatial.NewGrid(512) // 512-unit cells
+grid := spatial.NewHashGrid(128)
+
+grid.Register(spatial.Entry{
+    Entity: entity,
+    X:      100,
+    Y:      200,
+    Radius: 12,
+    Layer:  spatial.LayerEntity,
+    Shape:  spatial.ShapeCircle,
+})
+
+movedBucket := grid.Update(updatedEntry)
+grid.Deregister(entity)
 ```
 
-The grid uses **entity-tracked incremental updates**: entities register once on spawn and are updated each tick. Only cell-boundary crossings trigger rehashing. Static entities (food, stations) are zero-cost after registration.
+`Register` panics when the entity is already tracked. `Update` requires a
+registered entity, overwrites its stored entry, and returns whether it crossed
+a hash-bucket boundary. `Deregister` is a no-op for an unknown entity.
 
-### Tracked Entities (persistent)
+For data rebuilt every tick and not tracked one-to-one with an ECS entity:
 
 ```go
-grid.Register(entry)            // add on spawn
-grid.Update(entry)              // update each tick (rehashes only on cell change)
-grid.Deregister(entity)         // remove on despawn
-grid.IsRegistered(entity) bool  // check if tracked
-grid.TrackedCount() int         // number of tracked entities
+grid.InsertTransient(entry)
+grid.ClearTransient()
 ```
 
-### Transient Entries (per-tick derived data)
+`Reset` clears tracked entries, transient entries, and tracking metadata.
+`TrackedCount` counts only registered persistent entries.
 
-For derived spatial data not 1:1 with entities (e.g. snake body segment checkpoints):
+When using the universe `Stage`, prefer its spawn, movement, and deferred
+despawn paths; those keep the stage-owned grid synchronized. Do not remove Ark
+entities directly.
+
+## Radius queries
 
 ```go
-grid.InsertTransient(entry)  // add derived entry
-grid.ClearTransient()        // clear all transient entries (tracked untouched)
+scratch = grid.QueryRadius(x, y, radius, scratch[:0])
 ```
 
-### Queries
+Results are appended to the supplied slice and include both tracked and
+transient entries. The test is center-to-center distance; an entry's own
+`Radius` does not expand the query.
 
-Both tracked and transient entries appear in query results.
-
-```go
-results = grid.QueryRadius(cx, cy, radius, results[:0])
-```
-
-Returns all entries within `radius` of the point `(cx, cy)`. Uses center-to-center distance. The `results` slice is appended to — pass `results[:0]` to reuse allocation.
+## Collision queries
 
 ```go
-grid.QueryCollisions(collisionMatrix, func(a, b Entry) {
-    // handle collision pair
+matrix := map[uint8]uint8{
+    spatial.LayerEntity: spatial.LayerStatic | spatial.LayerProp,
+}
+
+grid.QueryCollisions(matrix, func(a, b spatial.Entry) {
+    // Each reported pair overlaps and is enabled by at least one matrix side.
 })
 ```
 
-Finds all overlapping pairs filtered by a collision matrix (`layer → bitmask of layers it collides with`).
+Collision queries include tracked and transient entries. They first test
+bounding circles, then use the appropriate narrow phase:
 
-**Two-phase detection:**
+- circle against circle
+- circle against oriented rectangle
+- oriented rectangle against oriented rectangle using the separating axis
+  theorem
 
-1. **Broad-phase:** Bounding circle overlap check (fast reject)
-2. **Narrow-phase:** Shape-aware test based on the pair:
-   - Circle vs Circle — broad-phase is sufficient
-   - OBB vs Circle — transform circle into rect's local space, clamp to half-extents
-   - OBB vs OBB — Separating Axis Theorem (4 axes)
+For rectangles, `Radius` is the broad-phase bounding radius; `Width`,
+`Height`, and `Rotation` define the oriented box.
 
-### Reset
+## Raycasts
 
 ```go
-grid.Reset()  // clear everything: tracked + transient + tracking map
+entity, point, distance, ok := grid.Raycast(
+    spatial.Vec2{X: 0, Y: 0},
+    spatial.Vec2{X: 500, Y: 0},
+    spatial.LayerStatic|spatial.LayerProp,
+)
 ```
 
-### Entry
+`Raycast` walks buckets touched by the segment and returns the nearest circle
+or oriented-rectangle surface whose `Entry.Layer` intersects the mask.
+Raycasts currently inspect tracked entries only, not transient entries.
+
+## Entry fields and layers
 
 ```go
 type Entry struct {
     Entity   ecs.Entity
-    X, Y     float32    // world position
-    Radius   float32    // bounding radius (circle shape or broad-phase for rects)
-    Width    float32    // rect forward axis (0 for circles)
-    Height   float32    // rect side axis (0 for circles)
-    Rotation float32    // entity rotation in radians
-    Layer    uint8      // collision layer bitmask
-    Shape    uint8      // ShapeCircle or ShapeRect
+    X, Y     float32
+    Radius   float32
+    Width    float32
+    Height   float32
+    Rotation float32
+    Layer    uint8
+    Shape    uint8
 }
 ```
 
-## Entity Removal
-
-Hook `Engine.OnEntityRemoved` to call `grid.Deregister()` so entities are removed from the grid when despawned via `MarkForRemoval`/`FlushRemovals`. For direct `ECS.RemoveEntity()` calls (e.g. player state transitions), call `grid.Deregister()` explicitly.
-
-## Performance
-
-- Static entities are zero-cost after `Register` (~94% reduction for games with many static entities)
-- `Update` same-cell (hot path): 1 map lookup + 1 comparison + 1 slice write
-- `Update` cross-cell (rare): swap-delete from old cell + append to new cell
-- Cell size should roughly match the largest entity radius for good distribution
-- `QueryRadius` appends to a caller-provided slice (no allocation per call)
-- The half-neighbor traversal in `QueryCollisions` ensures each pair is checked exactly once
+`Layer` is a bit mask. The package reserves zero for no membership and
+provides `LayerStatic`, `LayerProp`, and `LayerEntity`. `Shape` is either
+`ShapeCircle` or `ShapeRect`.

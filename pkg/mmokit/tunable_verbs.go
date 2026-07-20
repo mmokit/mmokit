@@ -102,7 +102,7 @@ func registerTuneVerbs(proc *universe.Process) error {
 	if err := reg.Register(cmdsys.Command{
 		Verb: "tune.set", Capability: "tune.set",
 		Description: "set a system tunable at runtime (default: all cells/all nodes)",
-		Examples:    []string{"tune set wave amplitude 420", "tune set wave amplitude 300 --cell 0_0"},
+		Examples:    []string{"tune set Field amplitude 420", "tune set Field amplitude 300 --cell 0_0"},
 		Route:       cmdsys.RouteAllHosts, Args: tuneSetArgs{}, Result: tuneResult{},
 		Handler: func(ctx context.Context, env *cmdsys.Env, raw any) (any, error) {
 			a := raw.(tuneSetArgs)
@@ -142,7 +142,7 @@ func registerTuneVerbs(proc *universe.Process) error {
 	if err := reg.Register(cmdsys.Command{
 		Verb: "tune.get", Capability: "tune.get",
 		Description: "show one system tunable's current value",
-		Examples:    []string{"tune get wave amplitude"},
+		Examples:    []string{"tune get Field amplitude"},
 		Route:       cmdsys.RouteAllHosts, Args: tuneGetArgs{}, Result: tuneGetResult{},
 		Handler: func(ctx context.Context, env *cmdsys.Env, raw any) (any, error) {
 			a := raw.(tuneGetArgs)
@@ -161,7 +161,7 @@ func registerTuneVerbs(proc *universe.Process) error {
 	if err := reg.Register(cmdsys.Command{
 		Verb: "tune.reset", Capability: "tune.reset",
 		Description: "reset a system tunable (or all its tunables) to tag defaults",
-		Examples:    []string{"tune reset wave", "tune reset wave amplitude"},
+		Examples:    []string{"tune reset Field", "tune reset Field amplitude"},
 		Route:       cmdsys.RouteAllHosts, Args: tuneResetArgs{}, Result: tuneResult{},
 		Handler: func(ctx context.Context, env *cmdsys.Env, raw any) (any, error) {
 			a := raw.(tuneResetArgs)
@@ -193,7 +193,7 @@ func registerTuneVerbs(proc *universe.Process) error {
 	if err := reg.Register(cmdsys.Command{
 		Verb: "tune.list", Capability: "tune.list",
 		Description: "list system tunables and current values",
-		Examples:    []string{"tune list", "tune list --system wave"},
+		Examples:    []string{"tune list", "tune list --system Field"},
 		Route:       cmdsys.RouteAllHosts, Args: tuneListArgs{}, Result: tuneResult{},
 		Handler: func(ctx context.Context, env *cmdsys.Env, raw any) (any, error) {
 			a := raw.(tuneListArgs)

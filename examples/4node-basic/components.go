@@ -20,6 +20,6 @@ type PlayerComponents struct {
 type BotComponents struct {
 	Name       *PlayerName
 	MoveTarget *mmokit.MoveTarget
-	Behavior   *BotBehavior
 	Tint       *mmokit.Tint
+	Behavior   *BotBehavior
 }

@@ -110,8 +110,8 @@ func stepSplitApplyCoordMutation(c *Process, ctx *CommitContext) error {
 }
 
 // stepSplitApplyRewireDirectives applies the per-cell neighbor rewires via
-// PendingAdminCmds so the writes happen on the same goroutine that reads
-// node.Neighbors from PostSystems, avoiding a race with the game loop.
+// loop jobs so the writes happen on the same goroutine that reads
+// Cell.Neighbors from PostSystems, avoiding a race with the game loop.
 func stepSplitApplyRewireDirectives(c *Process, ctx *CommitContext) error {
 	c.applyRewireDirectives(ctx.SplitDirectives)
 	return nil

@@ -1,145 +1,122 @@
-# internal/game
+# Space-game runtime
 
-Game-specific logic for the space MMO. This package consumes the generic `pkg/engine` and wires in all game behavior through hooks, systems, and admin commands.
+This package composes the reusable MMOKIT engine into the space game. It owns
+space-game systems, entity bundles and spawn paths, typed client messages,
+combat verbs, player lifecycle behavior, world-manifest realization, and the
+per-cell game state.
 
-## GameWorld (`world.go`)
+Current source and tests are authoritative. Historical plans under
+`docs/superpowers` explain why some designs exist but may describe APIs that
+have since changed.
 
-The central game state struct. Embeds `*mmokit.Stage` so all engine fields and methods (ECS, ConnMgr, Log, Tick, MarkForRemoval, NextNetID, etc.) are accessible directly. Game-specific state like the spatial grid lives here, not on the engine.
+## Composition
 
-```go
-type GameWorld struct {
-    *mmokit.Stage
-    Grid   *spatial.Grid
-    Config GameConfig
-    // ... all Ark mappers, player tracking maps, event queues
-}
-```
+The production composition root in [`cmd/server/main.go`](../../cmd/server/main.go)
+performs two game-specific steps for processes that simulate cells:
 
-**Key state:**
+1. `mmokit.AddState` installs the factory returned by
+   [`NewGameWorldStateFactory`](factory.go).
+2. [`GameSetup`](factory.go) registers entity kinds, typed inputs and
+   operations, internal verbs, player-join behavior, and the ordered system
+   pipeline.
 
-| Field | Description |
-|-------|-------------|
-| `PlayerEntities` | `connID → ecs.Entity` for alive players |
-| `NetIDToEntity` | `netID → ecs.Entity` rebuilt each tick by SpatialSystem |
-| `ConnToUsername` | `connID → username` for active connections |
-| `Queue` | Tick-queued game-side events (`PendingLootDrop`, etc.) drained in `postFlush` |
-| `PlayerDB` | In-memory persistent player data |
+`GameWorld` is cell-local state registered through `mmokit.AddState`; it does
+not embed `Stage`. Resolve it with `mmokit.State[GameWorld](stage)` and use its
+stage through package-local access or [`GetStage`](gameworld.go). Shared
+dependencies such as `GameConfig`, `PlayerRepo`, player-session lookup, and the
+world repository are supplied by the state factory.
 
-**Key methods:**
+System registration order in [`factory.go`](factory.go) is semantic. In
+particular, ability processing precedes projectile simulation, lifetime runs
+before AoE resolution, spatial indexing precedes collision, and networking is
+last. Preserve those relationships when adding a system.
 
-- `UsernameInUse(username) bool` — checks for duplicate logins
-- `SavePlayerState(connID, entity)` — persists position/inventory to PlayerDB
+## Source map
 
-## Death pipeline (post-Plan-E)
+| Area | Primary files |
+| --- | --- |
+| Per-cell state and setup | [`gameworld.go`](gameworld.go), [`game.go`](game.go), [`factory.go`](factory.go) |
+| Lifecycle and transfer repair | [`hooks.go`](hooks.go), [`transfer.go`](transfer.go) |
+| Entity bundles and spawn paths | `entity_*.go`, [`entity_kinds.go`](entity_kinds.go) |
+| Systems | `system_*.go` |
+| Cross-cell gameplay messages | `verb_*.go` |
+| Client input and events | [`input_messages.go`](input_messages.go), [`input_handlers.go`](input_handlers.go), [`event_messages.go`](event_messages.go) |
+| Typed operations | `op_*.go` |
+| Persistent player state | [`playerdata.go`](playerdata.go), [`playerdb.go`](playerdb.go), [`player_flusher.go`](player_flusher.go) |
+| Operator commands | [`commands/`](commands/) |
+| World content and dungeons | `entity_poi.go`, `entity_dungeon*.go`, `dungeon_*.go`, [`belts.go`](belts.go) |
 
-Damage and death are typed-message verbs that ride the mmokit framework. There is no
-imperative `MarkPlayerDeath` / `MarkNPCDeath` API anymore.
+## ECS rules
 
-- **`ApplyDamage(target, amount, source)`** (`verb_damage.go`) mutates `Health.Current`
-  and writes `Health.LastDamagedByNetID`. The function is a thin wrapper around a
-  `Damage` typed message routed via `mmokit.Send` so cross-cell damage works without
-  any per-call routing logic.
-- **`deathObserver`** (`verb_death.go`, registered via `mmokit.OnTickEachAll[Health]`)
-  fires the `Killed{Killer}` typed message exactly once per entity per
-  drop-to-zero. Idempotence is enforced via `Health.DeathFired` so cross-cell handoff
-  during death never double-fires.
-- **`killedHandler`** runs on the dying entity's authoritative cell. It branches on
-  `PlayerConn` presence to dispatch `handlePlayerKilled` or `handleNPCKilled`,
-  routes per-currency `KillCredit` typed messages to the killer (cross-cell
-  aware via `mmokit.Send`), and finally calls `MarkForRemoval`. Non-currency loot
-  is enqueued as `PendingLootDrop` and spawned in `postFlush`.
-- **`killCreditHandler`** runs on the killer's authoritative cell. It credits the
-  player's bank, marks the player dirty, and pushes a `GSE_CURRENCY_UPDATE` event
-  to the killer's client. Registered via `mmokit.HandleAllInternal` — server-internal,
-  no AoI broadcast (clients receive the resulting `CurrencyUpdate` event, not the
-  `KillCredit` payload).
+Game systems embed `mmokit.SystemBase`. Declare `mmokit.Query` bundle fields,
+configure non-default filtering in `Init`, and iterate them in `Update`.
+Queries exclude Ghost and Replica entities unless explicitly widened.
 
-## Entity Kinds (`entity_kinds.go`)
+Component pointers returned by a query may be mutated in place. Structural
+changes must go through `s.Commands()` or `stage.Commands()` because the Ark
+world is locked during query iteration. The engine flushes the command buffer
+after each system, so changes from one system are visible to the next system in
+the same tick.
 
-`initEntityKinds(gw)` registers all entity kind definitions via `gw.RegisterEntityKind()`. Each kind definition uses `mmokit.KindComponent()` to declare components that are serialized on transfer and replicated over the network, and `mmokit.KindComponentLocalOnly()` for components added locally after transfer that are not serialized. The network system auto-discovers replicators from these definitions via `BuildReplicators()`.
+Production code in this package must not import Ark directly except
+[`entity_kinds.go`](entity_kinds.go) and
+[`var_tail_bindings.go`](var_tail_bindings.go). Tests are exempt. Prefer the
+MMOKIT wrappers for spawning, lookup, queries, and component mutation.
 
-## Constructor (`game.go`)
+## Entities, transfer, and replication
 
-```go
-gw := game.NewGameWorld(base, gameCfg, playerDB)
-```
+Each `entity_*.go` file declares the registered bundle and canonical spawn path
+for one kind. [`Stage.Spawn`](../../pkg/universe/spawn.go) injects framework
+state such as NetworkID and cell coordinates; spawn functions provide the kind,
+position, collider, and required game components.
 
-`NewGameWorld` accepts a `*mmokit.Stage` (pre-wired by the coordinator), game config, and player database. It initializes all Ark mappers and player tracking maps. When `base.FromSplit()` is false (normal startup), `Init()` spawns initial asteroids and the trade station. When `base.FromSplit()` is true (world created by dynamic cell split), `Init()` skips initial entity spawning since entities are transferred from the parent cell.
+[`RegisterEntityKinds`](entity_kinds.go) defines which components are required,
+optional, local-only, transferred, and replicated to clients. Bundle or
+`net:"..."` changes are protocol changes: update the registration source,
+regenerate affected SDKs, and add transfer/replication coverage.
 
-## Entity Factories (`entity_*.go`)
+Cross-cell gameplay effects use typed verbs registered with
+`mmokit.HandleAllInternal` and routed with `mmokit.Send`; do not add bespoke
+cell-routing logic to damage, healing, status, mining, or death call sites.
+Authority changes are handled by the framework transfer path. Transfer receive
+hooks in [`hooks.go`](hooks.go) reconstruct configuration-derived local state.
 
-Each entity type has its own file containing spawn functions. Spawn functions call `gw.SpawnEntity()` with `mmokit.WithComponents()` to auto-add all components registered on the entity kind, plus any override options. Kind-specific component initialization (e.g., health values, collider radius) is applied after spawning.
+## Player lifecycle and persistence
 
-| Method                                    | File                  |
-|-------------------------------------------|-----------------------|
-| `SpawnPlayer(connID)`                     | `entity_ship.go`      |
-| `SpawnStation()`                          | `entity_station.go`   |
-| `SpawnLootCrate(x, y, resources)`         | `entity_lootcrate.go` |
-| `SpawnAsteroid(...)` / `spawnAsteroids()` | `entity_asteroid.go`  |
-| `SpawnNPC(...)`                           | `entity_npc.go`       |
+The engine `PlayerManager` owns sessions and transitions. Space-game states
+(`dead`, `docking`, and `docked`) are declared in [`game.go`](game.go); their
+constant order must match their registration order. Player spawn and reconnect
+behavior is installed through `Process.OnPlayerJoin` in [`factory.go`](factory.go).
 
-`SpawnPlayer` restores saved position/inventory from PlayerDB if the player has logged in before, otherwise random-spawns near the station. It also sends the `PlayerSpawnedMsg` to the client.
+`PlayerRepo` is a thread-safe in-memory working set backed by PostgreSQL
+repositories. Identity data belongs to `pkg/persist`, while space-game state
+belongs to `internal/persist`. Mutations that must survive restart need to mark
+the player dirty so `PlayerFlusher` can batch both halves into one transaction.
 
-## Lifecycle Hooks (`lifecycle.go`)
+Runtime world content comes from `pkg/world` repositories and the startup
+snapshot. Operator mutations go through the `world.*` command path so the
+JSON-backed manifest and live cell state remain synchronized.
 
-These methods are called by the engine's game loop at specific points in the tick:
+## Messaging and operator actions
 
-| Hook | What it does |
-|------|-------------|
-| `onConnect(connID)` | Adds to PendingConnections, logs |
-| `onDisconnect(connID)` | Saves player state, removes entity immediately, cleans up all maps |
-| `processPendingSessions()` | Processes pending sessions from entity transfers and coordinator-assigned players; transitions to Active |
-| `postFlush()` | Drains `PendingLootDrop` queue into spawned loot crates, processes respawn requests |
-| `getNetID(entity) (uint32, bool)` | Returns NetworkID for FlushRemovals callback |
+- Register client input with `mmokit.HandleClient`; continuous messages may
+  update components directly, while structural/discrete actions are deferred
+  through the stage command buffer.
+- Register server events in [`event_messages.go`](event_messages.go) and emit
+  them with `mmokit.SendEvent`. Field order and registered Go type names are
+  client wire contracts.
+- Register request/response operations with `mmokit.RegisterOp` and choose the
+  appropriate route instead of creating ad hoc frames.
+- Implement operator mutations as typed cmdsys verbs in [`commands/`](commands/)
+  so console and admin HTTP callers share routing, RBAC, and audit behavior.
 
-**Important:** `onDisconnect` removes the entity immediately (not through MarkForRemoval) and appends the netID to RemovedNetIDs directly. This ensures disconnected entities are cleaned up in the same tick.
+## Testing
 
-Death-cue and currency-credit propagation are owned by the typed-message verbs
-described in the **Death pipeline** section above — no per-tick fan-out from a
-`PendingDeaths` slice exists today.
+Use `stage.TickOne(system, dt)` when a unit test depends on the production
+`Update`-then-command-flush contract. Tests for cross-cell behavior should
+assert authority, transfer repair, and stale-epoch handling rather than only
+checking that an entity exists.
 
-## Admin Commands (`commands.go`)
-
-`RegisterCommands(console, coord, playerDB, store, allCells)` registers all game-specific console commands. The coordinator's `ActiveUserCell()` routes player-targeting commands to the correct cell. Data commands (like `players`) read from the shared `PlayerDB` and coordinator's `activeUsers` map without involving any game loop.
-
-**Helper functions:**
-
-- `execOnPlayerCell(coord, allCells, username, fn)` — finds the cell hosting a player via `coord.ActiveUserCell()`, executes `fn` on that cell's game loop
-- `execOnEntityCell(allCells, targetArg, fn)` — finds an entity by netID across all cells, executes `fn` on the owning cell
-- `resolveEntity(gw, input)` — finds any entity by network ID within a single node (used as fallback inside closures)
-- `resolveResource(input)` — maps `"ore"`, `"crystal"`, `"gas"`, `"metal"` (prefix match) to resource index
-
-**`debug` command** toggles the topology debug overlay on all connected clients, sending `SE_CELL_TOPOLOGY` events with cell boundaries, depths, and cell ownership.
-
-**Consolidated `players` command** replaces both `players`/`ps` and `playerdb`/`pdb`:
-
-- `players` — list online players (coordinator data, no game loop)
-- `players --all` — include offline players from PlayerDB
-- `players <username>` — detailed player info
-- `players <username> --live` — real-time ECS data from player's node
-
-## Game Config (`config.go`)
-
-All tunable balance parameters. Separate from engine config (which only has ListenAddr and TickRate).
-
-```go
-cfg := game.DefaultGameConfig()
-```
-
-Supports reflection-based `GetField`/`SetField` for runtime tweaking via console `config`/`set` commands. Array fields (like SellPrices) are not settable through this interface.
-
-Values are copied into components at spawn time (e.g., ShieldRegenRate), so config changes only affect newly spawned entities.
-
-## PlayerDB (`playerdb.go`)
-
-Simple in-memory key-value store for persistent player data (keyed by lowercase username).
-
-```go
-pdata := gw.PlayerDB.GetOrCreate("alice")
-pdata.Flux += earned
-pdata.HasSave = true
-```
-
-Stores: username, flux balance, last position (X, Y), cargo (Resources [4]), and whether the player has a saved position.
-
-Survives disconnect and death. On death, Resources and HasSave are cleared so the player respawns near the station with empty cargo.
+Minimum validation for changes here is the nearest Go test, `go vet ./...`, and
+`just lint-no-ark`. Regenerate and test client SDKs when a kind, replicated
+field, typed event, typed input, broadcast, or operation schema changes.

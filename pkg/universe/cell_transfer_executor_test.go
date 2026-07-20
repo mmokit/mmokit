@@ -27,7 +27,7 @@ import (
 // containing a single source cell. Returns the coord, the host, and the
 // source cell. Drives Build() to populate netIDAlloc and install the host;
 // the source cell's game loop is started so serialize/populate closures
-// drain through PendingAdminCmds.
+// drain through the loop-job queue.
 //
 // srcCellID is ignored by the underlying Build() (which uses depth-0 cells
 // at {0,0}); callers that care about depth should manually createNode a
@@ -60,7 +60,7 @@ func newExecutorTestCoord(t *testing.T) (*Process, *Host, *Cell) {
 	}
 
 	// Run the source cell's game loop in the background so
-	// PendingAdminCmds closures fire.
+	// queued loop-job closures fire.
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(func() {
 		cancel()
@@ -80,7 +80,7 @@ func newExecutorTestCoord(t *testing.T) (*Process, *Host, *Cell) {
 // spawnTestEntity plants an entity at (x, y) on the source cell's ECS
 // world with all the components SerializeEntity needs, then returns the
 // entity. Must be called on the game loop or before Run starts; tests
-// funnel through PendingAdminCmds.
+// funnel through the loop-job queue.
 func spawnTestEntity(cell *Cell, netID uint32, x, y float32) ecs.Entity {
 	w := cell.Engine.ECS
 	e := w.NewEntity()

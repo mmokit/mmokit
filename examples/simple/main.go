@@ -10,8 +10,6 @@ func main() {
 		AnonymousAuth: true,
 	})
 
-	mmokit.AddWasmSystem[mmokit.Position](process, "dist/wasmmods/wave.wasm")
-
 	process.AddSystem(mmokit.NewSystem(&FieldSystem{}))
 
 	process.Start()

@@ -1,69 +1,66 @@
-# pkg/engine
+# `pkg/engine`
 
-Generic MMO server engine. Knows nothing about any specific game — provides the scaffolding that any real-time multiplayer game needs.
+Low-level ECS runtime shared by every cell. It owns the Ark world, player
+sessions, fixed-timestep loop, deferred entity removal, loop-job queue,
+profiling, and interactive console foundations.
 
-## Engine (`engine.go`)
+Game code should normally use the `pkg/mmokit` facade. The universe layer
+constructs and wires engines for cells.
 
-Central platform state. Holds the ECS world, connection manager, logger, tick counter, and entity removal queue. The engine has no spatial dependency — spatial indexing is game-layer concern (e.g. `GameWorld.Grid`).
-
-```go
-eng := engine.New(cfg, connMgr, gameLog)
-```
-
-**Key methods:**
-
-| Method | Description |
-|--------|-------------|
-| `NextNetID() uint32` | Allocates a unique network entity ID (atomic, safe from any goroutine) |
-| `MarkForRemoval(entity)` | Queues an entity for deletion at end of tick |
-| `FlushRemovals(getNetID)` | Deletes all queued entities. The callback lets the game provide NetworkID lookup without the engine importing game types. Fires `OnEntityRemoved(entity)` for each one — Stage uses this to clear the per-cell netID index |
-| `RunOnLoop(ctx, fn)` | Posts a closure to run on the game-loop goroutine. Detects on-loop reentrance (goroutine-ID check) and runs inline when the caller is already on the loop. Off-loop callers queue into a bounded channel drained each tick with an 8ms budget. Replaces the old `PendingAdminCmds` channel for admin + cross-goroutine ECS access |
-
-**Fields the game accesses directly (via embedding):**
-
-- `ECS *ecs.World` — the Ark ECS world
-- `ConnMgr *net.ConnManager` — WebSocket connection manager
-- `Log *logger.Logger` — category-based debug logger
-- `Tick uint32` — current tick number
-- `RemovedNetIDs []uint32` — network IDs removed this tick (for client notifications)
-- `OnEntityRemoved func(ecs.Entity)` — optional hook invoked during `FlushRemovals` for each removed entity. Used by Stage to Deregister from the spatial grid and Exit from the netID index
-
-## Game Loop (`loop.go`)
-
-Fixed-timestep tick loop. The game injects behavior via a `Hooks` struct rather than the engine knowing about game types.
+## Engine state
 
 ```go
-loop := engine.NewGameLoop(eng, systems, hooks)
-go loop.Run(ctx)
+cfg := engine.DefaultConfig()
+eng := engine.New(cfg, connSender, gameLog)
 ```
 
-**Tick order (every 50ms at 20Hz):**
+`New` requires the narrow `net.ConnSender` interface, so a cell can use either
+the gateway's `*net.ConnManager` or a mesh-backed virtual connection manager.
+The engine exposes its ECS world, connection sender, logger, configuration,
+tick counter, player manager, profiler, and optional per-cell metrics.
 
-1. `ClearTickState()` — reset per-tick queues
-2. Process connect/disconnect events → `OnConnect` / `OnDisconnect`
-3. Drain admin commands from console
-4. Engine-internal login processing (`PlayerManager.processPendingSessions`)
-5. Run all systems in registration order
-6. `PreFlush()` — pre-removal notifications
-7. `FlushRemovals(GetNetID)` — delete entities, capture removed IDs
-8. `PostFlush()` — post-removal work (spawns, state changes)
+`DefaultConfig` currently uses HTTP `:8080`, UDP `:9000`, and a 20 Hz tick
+rate.
 
-**Hooks struct:**
+### Network IDs and removal
+
+- `SetNetIDBase` installs the range base granted to the cell.
+- `NextNetID` atomically returns `base + next`.
+- `MarkForRemoval` defers removal until the loop's removal phase.
+- `FlushRemovals` records IDs through `GetNetID`, invokes
+  `OnEntityRemoved`, and then removes still-live entities from Ark.
+
+The universe `Stage` wires the callbacks used to keep its spatial and network
+ID indexes synchronized. Game code should therefore use `Stage`/MMOKIT spawn
+and despawn APIs instead of calling `ECS.RemoveEntity` directly.
+
+## Game loop
 
 ```go
-type Hooks struct {
-    OnConnect      func(connID uint32)
-    OnDisconnect   func(connID uint32)
-    PreFlush       func()
-    PostFlush      func()
-    ClearTickState func()
-    PostTick       func()
-}
+loop := engine.NewGameLoop(eng, systems, systemNames, hooks)
+loop.Run(ctx) // blocks until ctx is cancelled
 ```
 
-The game implements these as methods on its world struct and returns them from a `Hooks()` method.
+Each tick runs in this order:
 
-## System Interface (`system.go`)
+1. Increment `Engine.Tick` and call `ClearTickState`.
+2. Drain connection events and queued loop jobs.
+3. Process pending player sessions and typed client input.
+4. Run systems in registration order, calling `AfterSystem` after each one.
+5. Call `PreFlush`, clear `RemovedNetIDs`, and flush entity removals.
+6. Call `PostFlush` and `PostTick`.
+7. Record tick, per-system, and optional cell metrics.
+
+`AfterSystem` is how the universe layer flushes deferred structural commands,
+making changes queued by system N visible to system N+1 in the same tick.
+
+`AddSystemLive`, `RemoveSystemLive`, `ReplaceSystemLive`, and `SystemByName`
+must be called on the owning loop goroutine. They are primarily used by the
+WASM hot-swap path.
+
+## Systems
+
+The runtime-facing interface is intentionally small:
 
 ```go
 type System interface {
@@ -71,75 +68,60 @@ type System interface {
 }
 ```
 
-Systems capture their game world pointer at construction time. The engine calls `Update(dt)` without passing any world reference, keeping the engine type-agnostic.
+`engine.SystemBase` supplies dependency injection for framework systems:
+`ECSWorld`, `Engine`, `Init`, query discovery, and query construction.
+Game systems should embed the non-generic `mmokit.SystemBase`, which also
+provides `Stage` and the deferred command buffer.
 
-## Console (`console.go`)
+`SystemDef` pairs a display name with a factory. Its optional `Configure`
+hook runs once when the definition is added to a process; the factory then
+creates a fresh system instance for every cell.
 
-Interactive CLI framework. Handles stdin reading, command dispatch, and logger toggle shortcuts.
+## Scheduling work on the loop
 
-```go
-console := engine.NewConsole(eng, gameLog)
-game.RegisterCommands(console, gw)  // game adds its commands
-console.Run(ctx)                     // blocks on main goroutine
-```
-
-The console reads available log categories dynamically from the logger via `gameLog.Categories()` — no hardcoded category list.
-
-**Built-in platform commands:** `help`, `status`, `on`, `off`, `toggle`, `only`, `quit`
-
-**Game command registration:**
+Ark state belongs to the cell-loop goroutine. Off-loop callers should use:
 
 ```go
-console.Register(engine.Command{
-    Name:    "players",
-    Aliases: []string{"ps"},
-    Fn: func(args []string) {
-        result := console.ExecOnGameLoop(func() string {
-            // safely access game state on the game loop goroutine
-            return "..."
-        })
-        fmt.Print(result)
-    },
+err := eng.RunOnLoop(ctx, func() error {
+    // Read or mutate this cell's ECS state.
+    return nil
 })
 ```
 
-`ExecOnGameLoop` sends a closure through `PendingAdminCmds` and blocks until the game loop executes it — this is how console commands safely read/write ECS state.
+`RunOnLoop` executes inline when called reentrantly from the loop. Otherwise
+it queues the closure and waits for completion or context cancellation. Pass a
+deadline and call it only while `HasLoopRunning` is true.
 
-The game sets `console.PrintGameHelp` to a function that prints its help sections.
+`SubmitLoopJob` is the non-blocking, fire-and-forget variant. It returns
+`false` when the bounded queue is full. The loop uses an 8 ms soft drain
+budget per tick and logs jobs taking more than 5 ms; one slow job can exceed
+that budget before the loop stops draining.
 
-Any unrecognized command is tried as a logger category toggle shortcut (prefix match).
+## Console
 
-## Config (`config.go`)
-
-Platform-level configuration. Only holds values the engine itself needs.
-
-```go
-type Config struct {
-    ListenAddr string  // default ":8080"
-    TickRate   int     // default 20
-}
-```
-
-Game-specific balance parameters live in the game's own config struct.
-
-## StateWriter (`persist.go`)
-
-Interface for future async persistence. Defined but not yet wired in.
+The console is backed by `pkg/cmdsys`; legacy untyped command registration
+and `ExecOnGameLoop` are no longer part of the API.
 
 ```go
-type StateWriter interface {
-    Write(key string, data []byte) error
-    Flush(ctx context.Context) error
-    Close() error
-}
+console := engine.NewConsole(gameLog)
+err := console.RegisterTyped(cmdsys.Command{
+    Verb:        "players.list",
+    Capability:  "players.list",
+    Description: "list players",
+    Route:       cmdsys.RouteLocal,
+    Handler:     handler,
+})
+console.Run(ctx)
 ```
 
-## AdminCmd
+Use `NewConsoleWithDispatcher` when the console must share a process-owned
+registry and distributed dispatcher. Built-ins include contextual `help`,
+`quit`, and the `log status/on/off/toggle/only/filter` command group. Commands
+that touch a cell route their work through `Engine.RunOnLoop`.
 
-```go
-type AdminCmd struct {
-    Fn func()
-}
-```
+## Related packages
 
-A closure to execute on the game loop goroutine. The game captures its own world pointer in the closure — the engine never sees game types.
+- `pkg/mmokit`: game-facing facade and system helpers
+- `pkg/universe`: process, cell, stage, mesh, and engine wiring
+- `pkg/query`: bundle-based Ark queries
+- `pkg/cmdsys`: typed commands, routing, RBAC, and audit plumbing

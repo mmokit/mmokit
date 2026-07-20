@@ -147,12 +147,10 @@ func DefaultPlayerRouter(coord *Process, x, y float32) PlayerRouter {
 	}
 }
 
-// DisabledPartitionConfig returns a *PartitionConfig with auto-split and
-// auto-merge both disabled. Use this when a game wants to opt out of the
-// default-on dynamic cell partitioning that New installs when
-// Config.DynamicPartitioning is nil. Keeping the field non-nil prevents the
-// default from re-enabling it, while the zeroed thresholds guarantee the
-// monitor never triggers a split or merge.
+// DisabledPartitionConfig returns a non-nil *PartitionConfig with auto-split
+// and auto-merge disabled. Nil is the normal way to leave dynamic partitioning
+// off; this helper is for callers that need an explicit non-nil sentinel while
+// retaining other partition-related settings.
 func DisabledPartitionConfig() *PartitionConfig {
 	return &PartitionConfig{
 		AutoSplitEnabled: false,
