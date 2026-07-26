@@ -289,3 +289,65 @@ func TestCsharpBackend_StructFields(t *testing.T) {
 		}
 	}
 }
+
+// replicationAckSchema is sampleEntitySchema plus the WorldDelta server event
+// and ReplicationAck client input that the engine registers by default, i.e.
+// the shape every real game schema has.
+func replicationAckSchema() ProtocolSchema {
+	s := sampleEntitySchema()
+	s.ServerEventTypes = append(s.ServerEventTypes, ServerEventTypeSchema{
+		Name: "mmokit.WorldDelta", TypeID: 0x33445566, Fields: []BroadcastFieldSchema{
+			{Name: "body", Encoding: "bytes"},
+			{Name: "streamEpoch", Encoding: "u32"},
+		},
+	})
+	s.ClientInputTypes = append(s.ClientInputTypes, ClientInputTypeSchema{
+		Name: "mmokit.ReplicationAck", TypeID: 0x66778899, Fields: []BroadcastFieldSchema{
+			{Name: "streamEpoch", Encoding: "u32"},
+			{Name: "seq", Encoding: "u32"},
+		},
+	})
+	return s
+}
+
+// TestCsharpBackend_Client_AutoAcksWorldDelta pins the generated datagram
+// ACK. The C# client is the only UDP client, and without an ACK an
+// explicit-ACK connection stalls every frame and then resends a full
+// snapshot — strictly worse than not latching at all.
+func TestCsharpBackend_Client_AutoAcksWorldDelta(t *testing.T) {
+	out := csharpBackend{namespace: "Mmokit.Sdk"}.genClient(replicationAckSchema())
+	for _, want := range []string{
+		// Intercept sits BEFORE the dispatch so an ACK goes out even if a
+		// consumer handler throws.
+		"if (typeID == WorldDelta.TypeID) AckWorldDelta(Sub(body, off, bodyLen));",
+		"void AckWorldDelta(byte[] raw)",
+		"var m = WorldDelta.Decode(raw);",
+		"if (m.body == null || m.body.Length < 8) return;",
+		// Frame seq is the BIG-endian uint32 at offset 4 of the delta body,
+		// even though the outer frame headers are little-endian.
+		"uint seq = ((uint)m.body[4] << 24) | ((uint)m.body[5] << 16) | ((uint)m.body[6] << 8) | m.body[7];",
+		"SendReplicationAck(new ReplicationAck { streamEpoch = m.streamEpoch, seq = seq }, reliable: false);",
+		// The per-input loop emits the sender for free.
+		"public void SendReplicationAck(ReplicationAck msg, bool reliable = true)",
+	} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("genClient missing %q in:\n%s", want, out)
+		}
+	}
+}
+
+// TestCsharpBackend_Client_NoAckWithoutReplicationAck asserts the ACK code is
+// conditional on the schema actually carrying both types, so a game protocol
+// without them generates no dead references.
+func TestCsharpBackend_Client_NoAckWithoutReplicationAck(t *testing.T) {
+	out := csharpBackend{namespace: "Mmokit.Sdk"}.genClient(sampleEntitySchema())
+	for _, unwanted := range []string{
+		"AckWorldDelta",
+		"WorldDelta.TypeID",
+		"SendReplicationAck",
+	} {
+		if strings.Contains(out, unwanted) {
+			t.Fatalf("genClient emitted %q for a schema without ReplicationAck/WorldDelta", unwanted)
+		}
+	}
+}
