@@ -46,7 +46,9 @@ func newTestCoordWithStage(t *testing.T, cellID, hostID string) *Process {
 	stage := NewStage(eng, parsed, 300, nil)
 	stage.SetBridge(moveTestBridge{})
 
-	cell := &Cell{MeshID: MeshCellID(cellID), Engine: eng, Stage: stage}
+	cell := NewCell(MeshCellID(cellID), parsed)
+	cell.Engine = eng
+	cell.Stage = stage
 	host := &Host{
 		ID:    hostID,
 		Cells: map[CellID]*Cell{parsed: cell},

@@ -82,18 +82,15 @@ func newTestCell(cell pkguniverse.CellID) *pkguniverse.Cell {
 	gameLoop := engine.NewGameLoop(eng, gameSystems, systemNames, base.Hooks())
 	gameLoop.SetEventsCh(events)
 
-	node := &pkguniverse.Cell{
-		MeshID:    cell.MeshID(),
-		Cell:      cell,
-		Engine:    eng,
-		Stage:     base,
-		Loop:      gameLoop,
-		Bridge:    pkguniverse.NoopBridge{},
-		Inbox:     make(chan pkguniverse.CellMessage, 256),
-		Events:    events,
-		Neighbors: make(map[pkguniverse.MeshCellID]*pkguniverse.Cell),
-		Log:       log,
-	}
+	node := pkguniverse.NewCell(cell.MeshID(), cell)
+	node.Engine = eng
+	node.Stage = base
+	node.Loop = gameLoop
+	node.Bridge = pkguniverse.NoopBridge{}
+	node.Inbox = make(chan pkguniverse.CellMessage, 256)
+	node.Events = events
+	node.Neighbors = make(map[pkguniverse.MeshCellID]*pkguniverse.Cell)
+	node.Log = log
 
 	base.SetBridge(pkguniverse.NoopBridge{})
 	return node

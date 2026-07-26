@@ -93,12 +93,10 @@ func TestProcessDispatchCellRoutedOp_HappyPath(t *testing.T) {
 	cellID, _ := ParseCellID("cell_0_0")
 	stage := NewStage(eng, cellID, 300, nil)
 	stage.coord = p
-	cell := &Cell{
-		MeshID: cellID.MeshID(),
-		Stage:  stage,
-		Inbox:  make(chan CellMessage, 8),
-		Events: make(chan pkgnet.PlayerEvent, 8),
-	}
+	cell := NewCell(cellID.MeshID(), cellID)
+	cell.Stage = stage
+	cell.Inbox = make(chan CellMessage, 8)
+	cell.Events = make(chan pkgnet.PlayerEvent, 8)
 	if p.Cells == nil {
 		p.Cells = make(map[MeshCellID]*Cell)
 	}

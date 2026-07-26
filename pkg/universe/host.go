@@ -95,14 +95,24 @@ func (h *Host) CellCount() int {
 // nil if no such cell exists. Used by HostNetwork.routeInboundFrame
 // to dispatch inbound frames.
 func (h *Host) CellByID(cellID MeshCellID) *Cell {
+	// Resolve through the map key rather than scanning on each cell's own
+	// identity. Two reasons, both load-bearing:
+	//
+	//  1. The map key is the authority during a rename. renameCellOnNode
+	//     re-keys Host.Cells and the coordinator's Cells/CellOwner maps under
+	//     their locks BEFORE it swaps the cell's own identity on the game
+	//     loop, so between those two points a scan on the identity returns
+	//     the pre-rename answer while the rest of the system has already
+	//     moved on.
+	//  2. It is O(1) instead of O(cells), on a path the mesh data plane hits
+	//     for every inbound frame.
+	parsed, err := ParseCellID(string(cellID))
+	if err != nil {
+		return nil
+	}
 	h.mu.RLock()
 	defer h.mu.RUnlock()
-	for _, c := range h.Cells {
-		if c.MeshID == cellID {
-			return c
-		}
-	}
-	return nil
+	return h.Cells[parsed]
 }
 
 // CellByCellID returns the cell on this host keyed by its CellID struct

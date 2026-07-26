@@ -378,7 +378,7 @@ func (c *Process) applyRewireDirectives(dirs []rewireDirective) {
 			}
 			return nil
 		}) {
-			c.Log.Log(CatMeshCell, "coordinator: rewire directive for %s dropped (admin queue full)", target.MeshID)
+			c.Log.Log(CatMeshCell, "coordinator: rewire directive for %s dropped (admin queue full)", target.MeshID())
 		}
 	}
 }

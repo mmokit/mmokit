@@ -107,8 +107,8 @@ func collectDungeonChamberRows(cell *mmokit.Cell) []DungeonChamberRow {
 			row := DungeonChamberRow{
 				DungeonNetID: dungeonNetID,
 				DungeonName:  name,
-				CellX:        cell.Cell.X,
-				CellY:        cell.Cell.Y,
+				CellX:        cell.CellID().X,
+				CellY:        cell.CellID().Y,
 				X:            px,
 				Y:            py,
 				ChamberID:    c.ID,

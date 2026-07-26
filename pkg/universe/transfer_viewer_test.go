@@ -29,7 +29,7 @@ import (
 // viewer in EXACTLY ONE cell at a time — no doubled frames.
 func TestSplit_SourceDeactivatesTransferredPlayerViewer(t *testing.T) {
 	coord, host, srcCell := newExecutorTestCoord(t)
-	src := srcCell.Cell
+	src := srcCell.CellID()
 	half := src.Size(coords.CellSize) / 2
 
 	const connID uint32 = 4242
@@ -81,7 +81,7 @@ func TestSplit_SourceDeactivatesTransferredPlayerViewer(t *testing.T) {
 	cmd := cellTransferCommand{
 		RequestID:  req.ID,
 		Kind:       CellTransferSplit,
-		SrcCellID:  srcCell.MeshID,
+		SrcCellID:  srcCell.MeshID(),
 		DestCellID: children[quadrant].MeshID(),
 		SrcHostID:  host.ID,
 		DestHostID: destHost.ID,

@@ -20,15 +20,13 @@ func newTestCell(id string, cell CellID) *Cell {
 	connMgr := net.NewConnManager()
 	eng := engine.New(engine.DefaultConfig(), connMgr, log)
 	base := NewStage(eng, cell, 0, nil)
-	return &Cell{
-		MeshID:    MeshCellID(id),
-		Cell:      cell,
-		Engine:    eng,
-		Stage:     base,
-		Inbox:     make(chan CellMessage, 64),
-		Neighbors: make(map[MeshCellID]*Cell),
-		Log:       log,
-	}
+	c := NewCell(MeshCellID(id), cell)
+	c.Engine = eng
+	c.Stage = base
+	c.Inbox = make(chan CellMessage, 64)
+	c.Neighbors = make(map[MeshCellID]*Cell)
+	c.Log = log
+	return c
 }
 
 func newTestCoordinator(cfg Config) *Process {
@@ -474,10 +472,10 @@ func TestCoordinator_BridgeWired(t *testing.T) {
 
 	for _, node := range c.Cells {
 		if node.Bridge == nil {
-			t.Fatalf("node %s has nil Bridge", node.MeshID)
+			t.Fatalf("node %s has nil Bridge", node.MeshID())
 		}
 		if node.Stage.Bridge() == nil {
-			t.Fatalf("node %s Stage has nil bridge (SetBridge not called on Stage)", node.MeshID)
+			t.Fatalf("node %s Stage has nil bridge (SetBridge not called on Stage)", node.MeshID())
 		}
 	}
 }
@@ -575,13 +573,13 @@ func TestBridge_RequestRespawn(t *testing.T) {
 	c.sessionRoutes.Set(&SessionRoute{
 		Key:    SessionKey{GatewayID: InprocGatewayID, ConnID: 77},
 		HostID: "local",
-		CellID: other.MeshID,
+		CellID: other.MeshID(),
 		Epoch:  4,
 	})
 	c.gateway = &Gateway{
 		log: c.Log,
 		sessions: map[uint32]*localSession{
-			77: {connID: 77, username: "charlie", hostID: "local", cellID: other.MeshID, epoch: 4},
+			77: {connID: 77, username: "charlie", hostID: "local", cellID: other.MeshID(), epoch: 4},
 		},
 	}
 
@@ -612,12 +610,12 @@ func TestBridge_RequestRespawn(t *testing.T) {
 	if !ok {
 		t.Fatal("respawn route missing")
 	}
-	if route.CellID != target.MeshID || route.Epoch != 5 {
-		t.Fatalf("respawn route = cell %s epoch %d, want cell %s epoch 5", route.CellID, route.Epoch, target.MeshID)
+	if route.CellID != target.MeshID() || route.Epoch != 5 {
+		t.Fatalf("respawn route = cell %s epoch %d, want cell %s epoch 5", route.CellID, route.Epoch, target.MeshID())
 	}
 	gatewaySession := c.gateway.lookupSession(77)
-	if gatewaySession == nil || gatewaySession.cellID != target.MeshID || gatewaySession.epoch != 5 {
-		t.Fatalf("gateway route after respawn = %+v, want cell %s epoch 5", gatewaySession, target.MeshID)
+	if gatewaySession == nil || gatewaySession.cellID != target.MeshID() || gatewaySession.epoch != 5 {
+		t.Fatalf("gateway route after respawn = %+v, want cell %s epoch 5", gatewaySession, target.MeshID())
 	}
 }
 
@@ -631,11 +629,11 @@ func TestBridgeOnPlayerTransferAdvancesDirectRouteEpoch(t *testing.T) {
 	sourceSession := src.Engine.Players.ByConnID(connID)
 	sourceSession.StreamGeneration = 27
 	key := SessionKey{GatewayID: InprocGatewayID, ConnID: connID}
-	c.sessionRoutes.Set(&SessionRoute{Key: key, HostID: "local", CellID: src.MeshID, Epoch: 6})
+	c.sessionRoutes.Set(&SessionRoute{Key: key, HostID: "local", CellID: src.MeshID(), Epoch: 6})
 	c.gateway = &Gateway{
 		log: c.Log,
 		sessions: map[uint32]*localSession{
-			connID: {connID: connID, username: "direct-player", hostID: "local", cellID: src.MeshID, epoch: 6},
+			connID: {connID: connID, username: "direct-player", hostID: "local", cellID: src.MeshID(), epoch: 6},
 		},
 	}
 
@@ -660,19 +658,19 @@ func TestBridgeOnPlayerTransferKeepsVCMAndCompositeRouteFenced(t *testing.T) {
 	dstID := CellID{X: 1, Y: 0}.MeshID()
 	c.vcm = NewVirtualConnManager(nil, c.Log)
 	key := SessionKey{GatewayID: "embedded-gateway", ConnID: 321}
-	localConnID := c.vcm.RegisterSession(key, "proxied-player", 9, src.MeshID)
+	localConnID := c.vcm.RegisterSession(key, "proxied-player", 9, src.MeshID())
 
 	src.Engine.Players.RegisterSessionTransfer(localConnID, "proxied-player", "active", nil)
 	sourceSession := src.Engine.Players.ByConnID(localConnID)
 	sourceSession.StreamGeneration = 41
 	// Deliberately leave the coordinator route behind the VCM to prove the
 	// same-host advance fences from the newest transport epoch.
-	c.sessionRoutes.Set(&SessionRoute{Key: key, HostID: "local", CellID: src.MeshID, Epoch: 7})
+	c.sessionRoutes.Set(&SessionRoute{Key: key, HostID: "local", CellID: src.MeshID(), Epoch: 7})
 	c.gateway = &Gateway{
 		id:  key.GatewayID,
 		log: c.Log,
 		sessions: map[uint32]*localSession{
-			key.ConnID: {connID: key.ConnID, username: "proxied-player", hostID: "local", cellID: src.MeshID, epoch: 9},
+			key.ConnID: {connID: key.ConnID, username: "proxied-player", hostID: "local", cellID: src.MeshID(), epoch: 9},
 		},
 	}
 

@@ -11,7 +11,7 @@ func TestHost_AddRemoveCell(t *testing.T) {
 		t.Fatal("new host should have zero cells")
 	}
 
-	cell := &Cell{MeshID: "cell_0_0"}
+	cell := NewCell("cell_0_0", CellID{X: 0, Y: 0})
 	h.AddCell(CellID{X: 0, Y: 0}, cell)
 	if len(h.Cells) != 1 {
 		t.Fatalf("after AddCell: len = %d, want 1", len(h.Cells))

@@ -59,7 +59,7 @@ func registerNPCSpawn(reg *cmdsys.Registry, coord *mmokit.Process) error {
 			}
 
 			// Convert world coords to cell-local coords for SpawnNPC.
-			minX, minY, _, _ := cell.Cell.WorldBounds(mmokit.CellSize())
+			minX, minY, _, _ := cell.CellID().WorldBounds(mmokit.CellSize())
 			localX := args.X - minX
 			localY := args.Y - minY
 

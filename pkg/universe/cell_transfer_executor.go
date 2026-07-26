@@ -275,12 +275,12 @@ func (e *cellTransferExecutor) Execute(cmd cellTransferCommand) error {
 	if e.transferSrcCells[cmd.RequestID] == nil {
 		e.transferSrcCells[cmd.RequestID] = make(map[MeshCellID]*Cell)
 	}
-	e.transferSrcCells[cmd.RequestID][srcCell.MeshID] = srcCell
+	e.transferSrcCells[cmd.RequestID][srcCell.MeshID()] = srcCell
 	if cmd.Kind == CellTransferMerge {
 		if e.mergeSources[cmd.RequestID] == nil {
 			e.mergeSources[cmd.RequestID] = make(map[MeshCellID]*Cell)
 		}
-		e.mergeSources[cmd.RequestID][srcCell.MeshID] = srcCell
+		e.mergeSources[cmd.RequestID][srcCell.MeshID()] = srcCell
 	}
 	e.mu.Unlock()
 	if err := e.shipToDestination(cmd.DestHostID, string(cmd.DestCellID), proto); err != nil {
@@ -292,13 +292,13 @@ func (e *cellTransferExecutor) Execute(cmd cellTransferCommand) error {
 		}
 		e.mu.Lock()
 		if sources := e.mergeSources[cmd.RequestID]; sources != nil {
-			delete(sources, srcCell.MeshID)
+			delete(sources, srcCell.MeshID())
 			if len(sources) == 0 {
 				delete(e.mergeSources, cmd.RequestID)
 			}
 		}
 		if sources := e.transferSrcCells[cmd.RequestID]; sources != nil {
-			delete(sources, srcCell.MeshID)
+			delete(sources, srcCell.MeshID())
 			if len(sources) == 0 {
 				delete(e.transferSrcCells, cmd.RequestID)
 			}
@@ -333,12 +333,12 @@ func (e *cellTransferExecutor) reactivateSourceViewers(cell *Cell) {
 			var gatewayConnID uint32
 			if e.coord.vcm != nil {
 				if key, epoch, ok := e.coord.vcm.LookupRouteByLocal(session.ConnID); ok {
-					e.coord.vcm.RegisterSession(key, session.Username, epoch, cell.MeshID)
+					e.coord.vcm.RegisterSession(key, session.Username, epoch, cell.MeshID())
 					gatewayID = key.GatewayID
 					gatewayConnID = key.ConnID
 				}
 			}
-			e.coord.touchActiveUser(session.UserID, session.Username, gatewayID, gatewayConnID, e.host.ID, cell.MeshID)
+			e.coord.touchActiveUser(session.UserID, session.Username, gatewayID, gatewayConnID, e.host.ID, cell.MeshID())
 		}
 		cell.Stage.ReactivateTransferViewers()
 		return nil
@@ -697,7 +697,7 @@ func destinationConnIDForSessionTransfer(cell *Cell, st SessionTransfer) (uint32
 		return 0, fmt.Errorf("session %s:%d requires a destination VCM", st.GatewayID, st.GatewayConnID)
 	}
 	key := SessionKey{GatewayID: st.GatewayID, ConnID: st.GatewayConnID}
-	return cell.Stage.coord.vcm.RegisterSession(key, st.Username, st.SessionEpoch, cell.MeshID), nil
+	return cell.Stage.coord.vcm.RegisterSession(key, st.Username, st.SessionEpoch, cell.MeshID()), nil
 }
 
 // populateCell unpacks entities + sessions from the proto and materializes
@@ -787,7 +787,7 @@ func (e *cellTransferExecutor) populateCell(cell *Cell, proto *meshpb.CellTransf
 				!nativeSurvivor && priorDonor && mergeTransferFrameIsNewer(cell, existingEnt, frame)
 			if replaceDonor {
 				cell.Stage.Engine().Log.Log(CatMeshCell,
-					"[%s] populate dedup: replacing older donor netID=%d", cell.MeshID, frame.NetworkID)
+					"[%s] populate dedup: replacing older donor netID=%d", cell.MeshID(), frame.NetworkID)
 				if err := removeMergeDonorLive(cell, existingEnt); err != nil {
 					return nil, fmt.Errorf("replace donor entity %d: %w", i, err)
 				}
@@ -798,7 +798,7 @@ func (e *cellTransferExecutor) populateCell(cell *Cell, proto *meshpb.CellTransf
 					retained = "native survivor"
 				}
 				cell.Stage.Engine().Log.Log(CatMeshCell,
-					"[%s] populate dedup: retaining %s netID=%d", cell.MeshID,
+					"[%s] populate dedup: retaining %s netID=%d", cell.MeshID(),
 					retained, frame.NetworkID)
 				// A player whose entity is already present on the survivor
 				// (e.g. it crossed via boundary handoff before the merge
@@ -819,7 +819,7 @@ func (e *cellTransferExecutor) populateCell(cell *Cell, proto *meshpb.CellTransf
 						localID := frame.ConnID
 						if frame.GatewayConnID != 0 && cell.Stage.coord != nil && cell.Stage.coord.vcm != nil {
 							key := SessionKey{GatewayID: frame.GatewayID, ConnID: frame.GatewayConnID}
-							localID = cell.Stage.coord.vcm.RegisterSession(key, frame.Username, 1, cell.MeshID)
+							localID = cell.Stage.coord.vcm.RegisterSession(key, frame.Username, 1, cell.MeshID())
 						}
 						cell.Engine.Players.RegisterSessionTransfer(localID, frame.Username, "active", nil)
 						if sess := cell.Engine.Players.ByConnID(localID); sess != nil {
@@ -832,7 +832,7 @@ func (e *cellTransferExecutor) populateCell(cell *Cell, proto *meshpb.CellTransf
 							sess.UserID = frame.UserID
 						}
 						if cell.Stage != nil && cell.Stage.coord != nil {
-							cell.Stage.coord.touchActiveUser(frame.UserID, frame.Username, frame.GatewayID, frame.GatewayConnID, cell.Stage.coord.HostForCellID(cell.MeshID), cell.MeshID)
+							cell.Stage.coord.touchActiveUser(frame.UserID, frame.Username, frame.GatewayID, frame.GatewayConnID, cell.Stage.coord.HostForCellID(cell.MeshID()), cell.MeshID())
 						}
 						adoptedUsers = append(adoptedUsers, frame.Username)
 					}
@@ -886,7 +886,7 @@ func (e *cellTransferExecutor) populateCell(cell *Cell, proto *meshpb.CellTransf
 			}
 		}
 		if cell.Stage != nil && cell.Stage.coord != nil {
-			cell.Stage.coord.touchActiveUser(spawnedFrame.UserID, spawnedFrame.Username, spawnedFrame.GatewayID, spawnedFrame.GatewayConnID, cell.Stage.coord.HostForCellID(cell.MeshID), cell.MeshID)
+			cell.Stage.coord.touchActiveUser(spawnedFrame.UserID, spawnedFrame.Username, spawnedFrame.GatewayID, spawnedFrame.GatewayConnID, cell.Stage.coord.HostForCellID(cell.MeshID()), cell.MeshID())
 		}
 		adoptedUsers = append(adoptedUsers, spawnedFrame.Username)
 
@@ -924,7 +924,7 @@ func (e *cellTransferExecutor) populateCell(cell *Cell, proto *meshpb.CellTransf
 			}
 		}
 		if cell.Stage != nil && cell.Stage.coord != nil {
-			cell.Stage.coord.touchActiveUser(st.UserID, st.Username, st.GatewayID, st.GatewayConnID, destHostID, cell.MeshID)
+			cell.Stage.coord.touchActiveUser(st.UserID, st.Username, st.GatewayID, st.GatewayConnID, destHostID, cell.MeshID())
 		}
 		if st.Username != "" {
 			adoptedUsers = append(adoptedUsers, st.Username)
@@ -943,7 +943,7 @@ func (e *cellTransferExecutor) populateCell(cell *Cell, proto *meshpb.CellTransf
 		frame, err := UnmarshalTransferFrame(ctxEntry.Entity)
 		if err != nil {
 			cell.Stage.Engine().Log.Log(CatMeshCell,
-				"[%s] populate context: unmarshal entry %d failed: %v", cell.MeshID, i, err)
+				"[%s] populate context: unmarshal entry %d failed: %v", cell.MeshID(), i, err)
 			continue
 		}
 		// Never let a context replica shadow an entity that is authoritative
@@ -1029,7 +1029,7 @@ func (e *cellTransferExecutor) Abort(proto *meshpb.CellTransferAbort) {
 			}
 			src.Stage.SetDrainingForMerge(false)
 			e.log.Log(CatMeshCell, "executor[%s]: abort req=%d cleared merge drain flag on donor %s",
-				e.host.ID, proto.RequestId, src.MeshID)
+				e.host.ID, proto.RequestId, src.MeshID())
 		}
 	}
 	if hadSurv && surv != nil && surv.Stage != nil {
@@ -1046,7 +1046,7 @@ func (e *cellTransferExecutor) Abort(proto *meshpb.CellTransferAbort) {
 			}
 			e.reactivateSourceViewers(src)
 			e.log.Log(CatMeshCell, "executor[%s]: abort req=%d reactivated source viewers on %s",
-				e.host.ID, proto.RequestId, src.MeshID)
+				e.host.ID, proto.RequestId, src.MeshID())
 		}
 	}
 	e.teardownPending(proto.RequestId)
@@ -1091,12 +1091,12 @@ func (e *cellTransferExecutor) rollbackMergeImports(
 	})
 	if err != nil {
 		e.log.Log(CatMeshCell, "executor[%s]: abort req=%d survivor %s import cleanup failed: %v",
-			e.host.ID, requestID, survivor.MeshID, err)
+			e.host.ID, requestID, survivor.MeshID(), err)
 		return
 	}
 	e.log.Log(CatMeshCell,
 		"executor[%s]: abort req=%d removed %d merge imports and cleared survivor %s drain flag",
-		e.host.ID, requestID, len(importedLive), survivor.MeshID)
+		e.host.ID, requestID, len(importedLive), survivor.MeshID())
 }
 
 // Commit releases rollback bookkeeping without touching the live cells or
@@ -1298,7 +1298,7 @@ func serializeQuadrantEntities(src *Cell, quadrant int) ([][]byte, error) {
 	if quadrant < 0 || quadrant > 3 {
 		return nil, fmt.Errorf("invalid quadrant %d", quadrant)
 	}
-	half := src.Cell.Size(coords.CellSize) / 2
+	half := src.CellID().Size(coords.CellSize) / 2
 	wantXi := int32(quadrant & 1)
 	wantYi := int32((quadrant >> 1) & 1)
 
@@ -1366,7 +1366,7 @@ func collectTransferContext(e *cellTransferExecutor, src *Cell, cmd cellTransfer
 	var shouldInclude func(en ecs.Entity, px, py float32, isRep bool, repSrc string) (bool, string)
 	switch cmd.Kind {
 	case CellTransferSplit:
-		half := src.Cell.Size(coords.CellSize) / 2
+		half := src.CellID().Size(coords.CellSize) / 2
 		q := int(cmd.Quadrant)
 		qx := float32(q & 1)
 		qy := float32((q >> 1) & 1)
@@ -1387,7 +1387,7 @@ func collectTransferContext(e *cellTransferExecutor, src *Cell, cmd cellTransfer
 		rectMaxX := rectMinX + half
 		rectMinY := qy * half
 		rectMaxY := rectMinY + half
-		children := src.Cell.Children() // [4]CellID ordered by quadrant index
+		children := src.CellID().Children() // [4]CellID ordered by quadrant index
 		shouldInclude = func(en ecs.Entity, px, py float32, isRep bool, repSrc string) (bool, string) {
 			if pointRectDist(px, py, rectMinX, rectMinY, rectMaxX, rectMaxY) > aoiR {
 				return false, ""
@@ -1523,9 +1523,9 @@ func (c *Process) drainDonorResidualsToSurvivor(donors []*Cell, survivor *Cell) 
 		srcCancel()
 		if serr != nil {
 			if errors.Is(serr, context.DeadlineExceeded) {
-				c.Log.Log(CatMeshCell, "merge drain: serialize timeout on %s", d.MeshID)
+				c.Log.Log(CatMeshCell, "merge drain: serialize timeout on %s", d.MeshID())
 			} else {
-				c.Log.Log(CatMeshCell, "merge drain: serialize %s: %v", d.MeshID, serr)
+				c.Log.Log(CatMeshCell, "merge drain: serialize %s: %v", d.MeshID(), serr)
 			}
 			continue
 		}
@@ -1575,15 +1575,15 @@ func (c *Process) drainDonorResidualsToSurvivor(donors []*Cell, survivor *Cell) 
 		destCancel()
 		if perr != nil {
 			if errors.Is(perr, context.DeadlineExceeded) {
-				c.Log.Log(CatMeshCell, "merge drain: populate timeout for %d residuals from %s", len(data), d.MeshID)
+				c.Log.Log(CatMeshCell, "merge drain: populate timeout for %d residuals from %s", len(data), d.MeshID())
 			} else {
-				c.Log.Log(CatMeshCell, "merge drain: populate residuals from %s: %v", d.MeshID, perr)
+				c.Log.Log(CatMeshCell, "merge drain: populate residuals from %s: %v", d.MeshID(), perr)
 			}
 			continue
 		}
 		if rescued > 0 {
 			c.Log.Log(CatMeshCell, "merge drain: rescued %d true residuals from %s (skipped %d already on survivor)",
-				rescued, d.MeshID, len(data)-rescued)
+				rescued, d.MeshID(), len(data)-rescued)
 		}
 	}
 }

@@ -56,12 +56,11 @@ func newVerbCell(t *testing.T, id string) *universe.Cell {
 		<-done
 	})
 
-	return &universe.Cell{
-		MeshID: universe.MeshCellID(id),
-		Engine: eng,
-		Stage:  stage,
-		Loop:   gl,
-	}
+	c := universe.NewCell(universe.MeshCellID(id), universe.CellID{})
+	c.Engine = eng
+	c.Stage = stage
+	c.Loop = gl
+	return c
 }
 
 // TestWasmVerbs_LoadListUnload exercises the runtime verbs end-to-end on a

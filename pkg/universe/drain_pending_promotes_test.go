@@ -16,13 +16,10 @@ import (
 func newMinimalCell(t *testing.T, cell CellID) *Cell {
 	t.Helper()
 	base := newTestWorldBase(t, cell)
-	c := &Cell{
-		MeshID: cell.MeshID(),
-		Cell:   cell,
-		Stage:  base,
-		Engine: base.eng,
-		Log:    logger.New(),
-	}
+	c := NewCell(cell.MeshID(), cell)
+	c.Stage = base
+	c.Engine = base.eng
+	c.Log = logger.New()
 	return c
 }
 

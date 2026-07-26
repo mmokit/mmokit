@@ -231,7 +231,7 @@ func registerWasmVerbs(proc *universe.Process) error {
 					return nil, err
 				}
 				row, err := CmdOnLoop(ctx, cell.Engine, func() (wasmOpRow, error) {
-					key := string(cell.MeshID)
+					key := string(cell.MeshID())
 					if _, present := cell.Loop.SystemByName(args.Name); present {
 						closeIfCloser(newSys)
 						return wasmOpRow{Cell: key, Name: args.Name, Status: "already-loaded"}, nil
@@ -266,7 +266,7 @@ func registerWasmVerbs(proc *universe.Process) error {
 			var rows []wasmOpRow
 			for _, cell := range cellsMatching(proc, args.Node, args.Cell) {
 				row, err := CmdOnLoop(ctx, cell.Engine, func() (wasmOpRow, error) {
-					key := string(cell.MeshID)
+					key := string(cell.MeshID())
 					old, ok := cell.Loop.SystemByName(args.Name)
 					if !ok {
 						return wasmOpRow{Cell: key, Name: args.Name, Status: "not-loaded"}, nil
@@ -306,7 +306,7 @@ func registerWasmVerbs(proc *universe.Process) error {
 					return nil, err
 				}
 				row, err := CmdOnLoop(ctx, cell.Engine, func() (wasmOpRow, error) {
-					key := string(cell.MeshID)
+					key := string(cell.MeshID())
 					old, ok := cell.Loop.SystemByName(args.Name)
 					if !ok {
 						WireSystem(newSys, cell.Stage.ECSWorld(), cell.Engine, cell.Stage)
@@ -353,7 +353,7 @@ func registerWasmVerbs(proc *universe.Process) error {
 			for _, cell := range cellsMatching(proc, args.Node, args.Cell) {
 				for _, name := range names {
 					row, _ := CmdOnLoop(ctx, cell.Engine, func() (wasmOpRow, error) {
-						key := string(cell.MeshID)
+						key := string(cell.MeshID())
 						sys, ok := cell.Loop.SystemByName(name)
 						if !ok {
 							return wasmOpRow{Cell: key, Name: name, Status: "unloaded"}, nil

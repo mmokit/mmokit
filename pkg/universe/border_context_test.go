@@ -186,8 +186,8 @@ func TestPopulateCell_MaterializesContextEntries(t *testing.T) {
 			PosX:       x,
 			PosY:       y,
 			Collider:   component.Collider{Radius: 4},
-			CellX:      cell.Cell.X,
-			CellY:      cell.Cell.Y,
+			CellX:      cell.CellID().X,
+			CellY:      cell.CellID().Y,
 		})
 		if err != nil {
 			t.Fatalf("marshal transfer frame: %v", err)

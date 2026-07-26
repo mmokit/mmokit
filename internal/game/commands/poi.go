@@ -245,14 +245,14 @@ func registerPOISpawn(reg *cmdsys.Registry, coord *mmokit.Process) error {
 
 			// Convert world coords to cell-local — gw.SpawnPOI takes
 			// local coords (matches the procgen path in spawnPOIs).
-			minX, minY, _, _ := cell.Cell.WorldBounds(mmokit.CellSize())
+			minX, minY, _, _ := cell.CellID().WorldBounds(mmokit.CellSize())
 			localX := args.X - minX
 			localY := args.Y - minY
 
 			// Derive tier from world distance so operator-spawned POIs
 			// match the gradient at their position — same rule the procgen
 			// path uses (per-POI tier, not cell-tier).
-			cellCoord := mmokit.CellCoord{CellX: int32(cell.Cell.X), CellY: int32(cell.Cell.Y)}
+			cellCoord := mmokit.CellCoord{CellX: int32(cell.CellID().X), CellY: int32(cell.CellID().Y)}
 			stationCell := gw.Config.StationCell
 			tier := game.TierForDist(game.DistFromStation(cellCoord, localX, localY, stationCell))
 

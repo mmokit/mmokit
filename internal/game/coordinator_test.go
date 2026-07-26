@@ -48,7 +48,7 @@ func TestNewCoordinator_NetIDBaseNonOverlapping(t *testing.T) {
 		base := id - 1
 		bucket := base / 10_000_000
 		if seen[bucket] {
-			t.Fatalf("overlapping netIDBase bucket %d for node %s", bucket, node.MeshID)
+			t.Fatalf("overlapping netIDBase bucket %d for node %s", bucket, node.MeshID())
 		}
 		seen[bucket] = true
 	}
@@ -79,12 +79,12 @@ func TestNewCoordinator_BridgeWired(t *testing.T) {
 	for _, node := range c.Cells {
 		bridge := node.Bridge
 		if bridge == nil {
-			t.Fatalf("node %s has nil Bridge", node.MeshID)
+			t.Fatalf("node %s has nil Bridge", node.MeshID())
 		}
 
 		// Should NOT be the NoopBridge
 		if _, ok := bridge.(pkguniverse.NoopBridge); ok {
-			t.Fatalf("node %s has NoopBridge, expected real bridge", node.MeshID)
+			t.Fatalf("node %s has NoopBridge, expected real bridge", node.MeshID())
 		}
 	}
 }

@@ -102,7 +102,7 @@ func buildPerfCellSnapshotFromStats(cell *Cell, hostID string, stats engine.Perf
 	}
 	out := PerfCellSnapshot{
 		HostID:   hostID,
-		CellID:   string(cell.MeshID),
+		CellID:   string(cell.MeshID()),
 		TickHz:   eng.Config.TickRate,
 		BudgetMS: budgetMS,
 		Tick: TickTimingStats{

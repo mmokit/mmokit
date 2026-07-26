@@ -80,14 +80,14 @@ var invCoordMapsConsistent = Invariant{
 			if cell == nil {
 				return fmt.Errorf("c.Cells[%q] is nil", key)
 			}
-			gotKey, ok := c.CellOwner[cell.Cell]
+			gotKey, ok := c.CellOwner[cell.CellID()]
 			if !ok {
 				return fmt.Errorf("c.Cells[%q] references CellID %v but c.CellOwner[%v] is missing",
-					key, cell.Cell, cell.Cell)
+					key, cell.CellID(), cell.CellID())
 			}
 			if gotKey != key {
 				return fmt.Errorf("c.Cells[%q].Cell=%v but c.CellOwner[%v]=%q (mismatch)",
-					key, cell.Cell, cell.Cell, gotKey)
+					key, cell.CellID(), cell.CellID(), gotKey)
 			}
 		}
 		for cellID, key := range c.CellOwner {
@@ -96,9 +96,9 @@ var invCoordMapsConsistent = Invariant{
 				return fmt.Errorf("c.CellOwner[%v]=%q but c.Cells[%q] is missing",
 					cellID, key, key)
 			}
-			if cell.Cell != cellID {
+			if cell.CellID() != cellID {
 				return fmt.Errorf("c.CellOwner[%v]=%q but c.Cells[%q].Cell=%v (mismatch)",
-					cellID, key, key, cell.Cell)
+					cellID, key, key, cell.CellID())
 			}
 		}
 		return nil
@@ -125,9 +125,9 @@ var invHostOwnershipMatchesCoord = Invariant{
 				return fmt.Errorf("cellToHostMap[%q]=%q but c.Cells[%q] is missing",
 					cellKey, hostID, cellKey)
 			}
-			if _, ok := host.Cells[cell.Cell]; !ok {
+			if _, ok := host.Cells[cell.CellID()]; !ok {
 				return fmt.Errorf("cellToHostMap[%q]=%q but host %q has no Cells entry for %v",
-					cellKey, hostID, hostID, cell.Cell)
+					cellKey, hostID, hostID, cell.CellID())
 			}
 		}
 		return nil

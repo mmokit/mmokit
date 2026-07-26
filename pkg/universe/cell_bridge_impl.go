@@ -110,8 +110,8 @@ func (b *cellBridge) ensureBorderDispatcher() *BorderDispatcher {
 		if destCell == nil {
 			continue
 		}
-		dx, dy := CellDirection(b.cell.Cell, destCell.Cell, baseCellSize)
-		bx, by := neighborBoundaryMidpoint(b.cell.Cell, dx, dy)
+		dx, dy := CellDirection(b.cell.CellID(), destCell.CellID(), baseCellSize)
+		bx, by := neighborBoundaryMidpoint(b.cell.CellID(), dx, dy)
 		nv := NewCellViewer(MeshCellID(destStr), CellViewerID(destStr), bx, by, nil, b.cell, destCell)
 		nv.SetDirection(dx, dy)
 		viewers[destStr] = nv
@@ -210,7 +210,7 @@ func (b *cellBridge) OnPlayerTransfer(connID uint32, destCellID MeshCellID) {
 			b.coord.gateway.OnUpstreamSwitch(gatewayConnID, sess.hostID, destCellID, newRouteEpoch)
 		}
 	}
-	b.cell.Log.Log(CatMeshTransfer, "[%s] player transfer: conn=%d -> %s", b.cell.MeshID, connID, destCellID)
+	b.cell.Log.Log(CatMeshTransfer, "[%s] player transfer: conn=%d -> %s", b.cell.MeshID(), connID, destCellID)
 }
 
 // advancePlayerRoute advances the coordinator's transport-fencing route for a
@@ -235,7 +235,7 @@ func (b *cellBridge) advancePlayerRoute(connID uint32, destCellID MeshCellID) (g
 }
 
 func (b *cellBridge) RequestRespawn(connID uint32, username string) {
-	b.cell.Log.Log(CatMeshMsg, "[%s] requesting respawn: conn=%d user=%s", b.cell.MeshID, connID, username)
+	b.cell.Log.Log(CatMeshMsg, "[%s] requesting respawn: conn=%d user=%s", b.cell.MeshID(), connID, username)
 	b.coord.mu.RLock()
 	resolver := b.coord.spawnResolver
 	b.coord.mu.RUnlock()
@@ -265,18 +265,18 @@ func (b *cellBridge) RequestRespawn(connID uint32, username string) {
 	if targetCellID == "" {
 		b.cell.Log.Log(CatMeshMsg,
 			"[%s] respawn rejected: location (%f,%f) outside world bounds (user=%s)",
-			b.cell.MeshID, loc.X, loc.Y, username)
+			b.cell.MeshID(), loc.X, loc.Y, username)
 		return
 	}
 	dest, ok := b.coord.Cells[MeshCellID(targetCellID)]
 	if !ok {
 		b.cell.Log.Log(CatMeshMsg,
 			"[%s] respawn rejected: cell %s no longer owned (user=%s)",
-			b.cell.MeshID, targetCellID, username)
+			b.cell.MeshID(), targetCellID, username)
 		return
 	}
 	targetMeshID := MeshCellID(targetCellID)
-	if targetMeshID != b.cell.MeshID {
+	if targetMeshID != b.cell.MeshID() {
 		streamGeneration++
 		gatewayConnID, newRouteEpoch := b.advancePlayerRoute(connID, targetMeshID)
 		if b.coord.gateway != nil {
@@ -302,7 +302,7 @@ func (b *cellBridge) RequestRespawn(connID uint32, username string) {
 	}
 	dest.Inbox <- CellMessage{
 		Type:       MsgSpawnTransfer,
-		FromCellID: b.cell.MeshID,
+		FromCellID: b.cell.MeshID(),
 		Spawn: &SpawnTransfer{
 			ConnID:           connID,
 			Username:         username,
@@ -313,11 +313,11 @@ func (b *cellBridge) RequestRespawn(connID uint32, username string) {
 }
 
 func (b *cellBridge) SendAction(targetCellID MeshCellID, action *CrossCellAction) {
-	b.cell.Log.Log(CatMeshAction, "[%s] sending action type=%d targetNetID=%d -> %s", b.cell.MeshID, action.Type, action.TargetNetID, targetCellID)
+	b.cell.Log.Log(CatMeshAction, "[%s] sending action type=%d targetNetID=%d -> %s", b.cell.MeshID(), action.Type, action.TargetNetID, targetCellID)
 	if dest, ok := b.coord.Cells[targetCellID]; ok {
 		dest.Inbox <- CellMessage{
 			Type:       MsgCrossCellAction,
-			FromCellID: b.cell.MeshID,
+			FromCellID: b.cell.MeshID(),
 			Action:     action,
 		}
 	}
@@ -349,18 +349,18 @@ func (b *cellBridge) SendBorderFrame(destCellID, fromCellID MeshCellID, encoded 
 }
 
 func (b *cellBridge) SendHandoff(destCellID MeshCellID, payload *HandoffPayload) bool {
-	b.cell.Log.Log(CatMeshTransfer, "[%s] sending handoff: netID=%d -> %s epoch=%d commitTick=%d", b.cell.MeshID, payload.NetID, destCellID, payload.Epoch, payload.CommitTick)
+	b.cell.Log.Log(CatMeshTransfer, "[%s] sending handoff: netID=%d -> %s epoch=%d commitTick=%d", b.cell.MeshID(), payload.NetID, destCellID, payload.Epoch, payload.CommitTick)
 	b.coord.mu.RLock()
 	dest, ok := b.coord.Cells[destCellID]
 	b.coord.mu.RUnlock()
 	if !ok {
 		b.cell.Log.Log(CatMeshTransfer, "[%s] handoff dest gone: netID=%d -> %s (cell deleted from coord.Cells, source will retry next tick)",
-			b.cell.MeshID, payload.NetID, destCellID)
+			b.cell.MeshID(), payload.NetID, destCellID)
 		return false
 	}
 	dest.Inbox <- CellMessage{
 		Type:       MsgHandoff,
-		FromCellID: b.cell.MeshID,
+		FromCellID: b.cell.MeshID(),
 		Handoff:    payload,
 	}
 	return true
@@ -382,19 +382,19 @@ func (b *cellBridge) SendHandoffAccepted(destCellID MeshCellID, ack *HandoffAckP
 	b.coord.mu.RUnlock()
 	if !ok || dest == nil {
 		b.cell.Log.Log(CatMeshTransfer, "[%s] handoff-ack dest gone: netID=%d -> %s (source cell deleted)",
-			b.cell.MeshID, ack.NetID, destCellID)
+			b.cell.MeshID(), ack.NetID, destCellID)
 		return false
 	}
 	select {
 	case dest.Inbox <- CellMessage{
 		Type:       MsgHandoffAccepted,
-		FromCellID: b.cell.MeshID,
+		FromCellID: b.cell.MeshID(),
 		HandoffAck: ack,
 	}:
 		return true
 	default:
 		b.cell.Log.Log(CatMeshTransfer, "[%s] handoff-ack inbox full: netID=%d -> %s (source will retry the handoff)",
-			b.cell.MeshID, ack.NetID, destCellID)
+			b.cell.MeshID(), ack.NetID, destCellID)
 		return false
 	}
 }
@@ -408,7 +408,7 @@ func (b *cellBridge) SendForwardInput(destCellID MeshCellID, payload *ForwardInp
 	}
 	dest.Inbox <- CellMessage{
 		Type:         MsgForwardInput,
-		FromCellID:   b.cell.MeshID,
+		FromCellID:   b.cell.MeshID(),
 		ForwardInput: payload,
 	}
 	return true

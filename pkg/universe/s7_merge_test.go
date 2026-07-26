@@ -123,11 +123,11 @@ func TestS7MergeAcrossHosts(t *testing.T) {
 	if parentCell == nil {
 		t.Errorf("post-merge: no live cell found for parent %s", parentKey)
 	} else {
-		if parentCell.Cell != parentCellID {
-			t.Errorf("post-merge: survivor cell has CellID %v, want %v", parentCell.Cell, parentCellID)
+		if parentCell.CellID() != parentCellID {
+			t.Errorf("post-merge: survivor cell has CellID %v, want %v", parentCell.CellID(), parentCellID)
 		}
-		if parentCell.MeshID != parentKey {
-			t.Errorf("post-merge: survivor cell has string ID %q, want %q", parentCell.MeshID, parentKey)
+		if parentCell.MeshID() != parentKey {
+			t.Errorf("post-merge: survivor cell has string ID %q, want %q", parentCell.MeshID(), parentKey)
 		}
 	}
 

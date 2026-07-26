@@ -3,6 +3,7 @@ package universe
 import (
 	"context"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/zenion/mmoserver/pkg/engine"
@@ -28,13 +29,79 @@ type pendingPromote struct {
 	fromCellID   MeshCellID
 }
 
+// cellIdentity is a Cell's wire and coordinate identity, held as one
+// immutable value so the two can never be observed out of step.
+//
+// A rename (merge commit, migrate) swaps the whole record atomically rather
+// than writing the fields in place. That is the point: the previous shape
+// wrote MeshID and Cell separately, off any shared lock, while
+// Host.CellByID read MeshID from a gRPC goroutine — a real data race, and
+// one where even a correctly-locked reader could have seen the new mesh ID
+// paired with the old coordinate.
+type cellIdentity struct {
+	meshID MeshCellID
+	cell   CellID
+}
+
+// newCellIdentity builds the initial identity for a Cell being constructed.
+// Every Cell must have one installed before it is published anywhere another
+// goroutine can reach it.
+func newCellIdentity(mesh MeshCellID, id CellID) *cellIdentity {
+	return &cellIdentity{meshID: mesh, cell: id}
+}
+
+// MeshID returns the wire-format ID for this cell (e.g. "cell_0_0"). Used as
+// the key in Process.Cells, Host.OwnedCells, and on the MeshControl wire. For
+// display use CellID().String() instead.
+//
+// Safe from any goroutine. Returns the zero value for a Cell whose identity
+// was never installed, which only happens in a malformed test fixture.
+func (c *Cell) MeshID() MeshCellID {
+	id := c.identity.Load()
+	if id == nil {
+		return ""
+	}
+	return id.meshID
+}
+
+// CellID returns this cell's coordinate identity. Safe from any goroutine,
+// and guaranteed to correspond to the same identity generation as a MeshID()
+// read that observed the same swap.
+func (c *Cell) CellID() CellID {
+	id := c.identity.Load()
+	if id == nil {
+		return CellID{}
+	}
+	return id.cell
+}
+
+// Identity returns both halves from a SINGLE atomic load, so callers that
+// need them together cannot straddle a rename.
+func (c *Cell) Identity() (MeshCellID, CellID) {
+	id := c.identity.Load()
+	if id == nil {
+		return "", CellID{}
+	}
+	return id.meshID, id.cell
+}
+
+// setIdentity atomically replaces this cell's identity. The only caller is
+// the rename path; it deliberately publishes a fresh record rather than
+// mutating the current one, so a concurrent reader sees either the whole old
+// identity or the whole new one.
+func (c *Cell) setIdentity(mesh MeshCellID, id CellID) {
+	c.identity.Store(newCellIdentity(mesh, id))
+}
+
 // Cell is a self-contained game simulation owning one cell.
 type Cell struct {
-	// MeshID is the wire-format ID for this cell (e.g. "cell_0_0"). Used
-	// as the key in Process.Cells, Host.OwnedCells, and on the MeshControl
-	// wire. For display use cell.Cell.String() instead.
-	MeshID  MeshCellID
-	Cell    CellID
+	// identity is this cell's (MeshID, CellID) pair. Read it through
+	// MeshID() / CellID(); replace it only through setIdentity. Never add a
+	// mutable identity field back — off-loop readers (the mesh data plane,
+	// admin views, the transfer executor) hold no lock that a rename
+	// respects.
+	identity atomic.Pointer[cellIdentity]
+
 	Engine  *engine.Engine
 	Stage   *Stage // direct access for infrastructure methods
 	Loop    *engine.GameLoop
@@ -73,6 +140,19 @@ type Cell struct {
 	runDone   chan struct{}      // closed when Run returns
 }
 
+// NewCell constructs a Cell with its immutable identity installed. Callers
+// populate the remaining fields (Engine, Stage, Inbox, ...) before the cell is
+// published anywhere another goroutine can reach it.
+//
+// This exists because identity is deliberately not a settable field: a Cell
+// with no identity, or one whose mesh ID and coordinate disagree, is a bug
+// that used to be expressible in a struct literal.
+func NewCell(mesh MeshCellID, id CellID) *Cell {
+	c := &Cell{}
+	c.setIdentity(mesh, id)
+	return c
+}
+
 // Run starts the cell's game loop. Blocks until context is cancelled OR
 // Shutdown() is called on this cell. The ctx argument is wrapped in a
 // derived context whose cancel is owned by the cell, so Shutdown() can
@@ -92,7 +172,7 @@ func (c *Cell) Run(ctx context.Context) {
 		close(done)
 	}()
 
-	c.Log.Log(CatMeshCell, "[%s] cell started for cell %s", c.MeshID, c.Cell)
+	c.Log.Log(CatMeshCell, "[%s] cell started for cell %s", c.MeshID(), c.CellID())
 	c.Loop.Run(ctx)
 }
 
@@ -112,7 +192,7 @@ func (c *Cell) Shutdown() {
 		<-done
 	}
 	c.Stage.Shutdown()
-	c.Log.Log(CatMeshCell, "[%s] cell shutdown complete", c.MeshID)
+	c.Log.Log(CatMeshCell, "[%s] cell shutdown complete", c.MeshID())
 }
 
 // DrainInbox processes all pending inter-cell messages.
@@ -179,7 +259,7 @@ func (c *Cell) drainPendingPromotes(currentClusterTick uint64) {
 			if len(p.transferBlob) == 0 {
 				c.Log.Log(CatMeshTransfer,
 					"[%s] commit-tick spawn skipped: netID=%d empty transfer blob",
-					c.MeshID, p.netID)
+					c.MeshID(), p.netID)
 				continue
 			}
 			var (
@@ -263,7 +343,7 @@ func (c *Cell) drainPendingPromotes(currentClusterTick uint64) {
 			if err != nil {
 				c.Log.Log(CatMeshTransfer,
 					"[%s] commit-tick spawn-from-transfer failed: netID=%d err=%v",
-					c.MeshID, p.netID, err)
+					c.MeshID(), p.netID, err)
 				continue
 			}
 			// Overwrite the blob's stale motion state with the Replica's
@@ -338,7 +418,7 @@ func (c *Cell) drainPendingPromotes(currentClusterTick uint64) {
 			}
 			c.Log.Log(CatMeshTransfer,
 				"[%s] handoff committed: netID=%d commitTick=%d from=%s",
-				c.MeshID, p.netID, commitTick, p.fromCellID)
+				c.MeshID(), p.netID, commitTick, p.fromCellID)
 		}
 		delete(c.pendingPromotes, commitTick)
 	}
@@ -373,7 +453,7 @@ func (c *Cell) processMessage(msg CellMessage) {
 		if msg.Spawn == nil {
 			return
 		}
-		c.Log.Log(CatMeshMsg, "[%s] msg MsgSpawnTransfer from=%s conn=%d user=%s", c.MeshID, msg.FromCellID, msg.Spawn.ConnID, msg.Spawn.Username)
+		c.Log.Log(CatMeshMsg, "[%s] msg MsgSpawnTransfer from=%s conn=%d user=%s", c.MeshID(), msg.FromCellID, msg.Spawn.ConnID, msg.Spawn.Username)
 		c.Engine.Players.RegisterPlayer(msg.Spawn.ConnID, msg.Spawn.Username)
 		if s := c.Engine.Players.ByConnID(msg.Spawn.ConnID); s != nil {
 			s.StreamGeneration = msg.Spawn.StreamGeneration
@@ -385,7 +465,7 @@ func (c *Cell) processMessage(msg CellMessage) {
 			return
 		}
 		c.Log.Log(CatMeshMsg, "[%s] msg MsgPlayerAssignment conn=%d user=%s reconnect=%v",
-			c.MeshID, msg.Assignment.ConnID, msg.Assignment.Username, msg.Assignment.IsReconnect)
+			c.MeshID(), msg.Assignment.ConnID, msg.Assignment.Username, msg.Assignment.IsReconnect)
 		if msg.Assignment.IsReconnect {
 			existing := c.Engine.Players.ByUsername(msg.Assignment.Username)
 			if existing != nil && existing.State == engine.StateDisconnected {
@@ -430,18 +510,18 @@ func (c *Cell) processMessage(msg CellMessage) {
 		if msg.Action == nil {
 			return
 		}
-		c.Log.Log(CatMeshAction, "[%s] cross-cell action from=%s type=%d targetNetID=%d", c.MeshID, msg.FromCellID, msg.Action.Type, msg.Action.TargetNetID)
+		c.Log.Log(CatMeshAction, "[%s] cross-cell action from=%s type=%d targetNetID=%d", c.MeshID(), msg.FromCellID, msg.Action.Type, msg.Action.TargetNetID)
 		if !c.Stage.HandleEngineAction(msg.Action) {
-			c.Log.Log(CatMeshAction, "[%s] cross-cell action: unhandled type=%d from=%s (no engine handler)", c.MeshID, msg.Action.Type, msg.FromCellID)
+			c.Log.Log(CatMeshAction, "[%s] cross-cell action: unhandled type=%d from=%s (no engine handler)", c.MeshID(), msg.Action.Type, msg.FromCellID)
 		}
 
 	case MsgSessionTransfer:
 		for _, st := range msg.Sessions {
 			c.Log.Log(CatMeshMsg, "[%s] msg MsgSessionTransfer conn=%d user=%s state=%s",
-				c.MeshID, st.ConnID, st.Username, st.StateTag)
+				c.MeshID(), st.ConnID, st.Username, st.StateTag)
 			localID, err := destinationConnIDForSessionTransfer(c, st)
 			if err != nil {
-				c.Log.Log(CatMeshMsg, "[%s] MsgSessionTransfer remap failed: %v", c.MeshID, err)
+				c.Log.Log(CatMeshMsg, "[%s] MsgSessionTransfer remap failed: %v", c.MeshID(), err)
 				continue
 			}
 			c.Engine.Players.RegisterSessionTransfer(localID, st.Username, st.StateTag, st.Data)
@@ -451,7 +531,7 @@ func (c *Cell) processMessage(msg CellMessage) {
 			}
 			if c.Stage != nil && c.Stage.coord != nil {
 				c.Stage.coord.touchActiveUser(st.UserID, st.Username, st.GatewayID, st.GatewayConnID,
-					c.Stage.coord.HostForCellID(c.MeshID), c.MeshID)
+					c.Stage.coord.HostForCellID(c.MeshID()), c.MeshID())
 			}
 		}
 
@@ -462,7 +542,7 @@ func (c *Cell) processMessage(msg CellMessage) {
 		byteCount := len(msg.BorderFrame)
 		frame, err := replication.DecodeFrame(msg.BorderFrame)
 		if err != nil {
-			c.Log.Log(CatMeshMsg, "[%s] MsgBorderFrame decode error from=%s: %v", c.MeshID, msg.FromCellID, err)
+			c.Log.Log(CatMeshMsg, "[%s] MsgBorderFrame decode error from=%s: %v", c.MeshID(), msg.FromCellID, err)
 			return
 		}
 		if c.Metrics != nil {
@@ -475,7 +555,7 @@ func (c *Cell) processMessage(msg CellMessage) {
 			return
 		}
 		c.Log.Log(CatMeshMsg, "[%s] msg MsgHandoff from=%s netID=%d epoch=%d commitTick=%d",
-			c.MeshID, msg.FromCellID, msg.Handoff.NetID, msg.Handoff.Epoch, msg.Handoff.CommitTick)
+			c.MeshID(), msg.FromCellID, msg.Handoff.NetID, msg.Handoff.Epoch, msg.Handoff.CommitTick)
 
 		ack := &HandoffAckPayload{
 			NetID:      msg.Handoff.NetID,
@@ -488,7 +568,7 @@ func (c *Cell) processMessage(msg CellMessage) {
 		if c.Bridge == nil {
 			c.Log.Log(CatMeshTransfer,
 				"[%s] handoff dropped (no bridge to ack through): netID=%d epoch=%d from=%s",
-				c.MeshID, msg.Handoff.NetID, msg.Handoff.Epoch, msg.FromCellID)
+				c.MeshID(), msg.Handoff.NetID, msg.Handoff.Epoch, msg.FromCellID)
 			return
 		}
 
@@ -502,7 +582,7 @@ func (c *Cell) processMessage(msg CellMessage) {
 			c.Bridge.SendHandoffAccepted(msg.FromCellID, ack)
 			c.Log.Log(CatMeshTransfer,
 				"[%s] duplicate handoff re-acked: netID=%d epoch=%d from=%s",
-				c.MeshID, msg.Handoff.NetID, msg.Handoff.Epoch, msg.FromCellID)
+				c.MeshID(), msg.Handoff.NetID, msg.Handoff.Epoch, msg.FromCellID)
 			return
 		}
 
@@ -514,7 +594,7 @@ func (c *Cell) processMessage(msg CellMessage) {
 		if !c.Bridge.SendHandoffAccepted(msg.FromCellID, ack) {
 			c.Log.Log(CatMeshTransfer,
 				"[%s] handoff ack undeliverable — dropping, source will retry: netID=%d epoch=%d from=%s",
-				c.MeshID, msg.Handoff.NetID, msg.Handoff.Epoch, msg.FromCellID)
+				c.MeshID(), msg.Handoff.NetID, msg.Handoff.Epoch, msg.FromCellID)
 			return
 		}
 		if c.Stage != nil {
@@ -547,7 +627,7 @@ func (c *Cell) processMessage(msg CellMessage) {
 				// authority change. Session epoch is owned by sessionRoutes
 				// (bumped by Migrate + SessionRegister dispatch). VCM's
 				// "never downgrade" logic preserves the real session epoch.
-				localID = c.Stage.coord.vcm.RegisterSession(key, username, 0, c.MeshID)
+				localID = c.Stage.coord.vcm.RegisterSession(key, username, 0, c.MeshID())
 			}
 			c.Engine.Players.RegisterTransferSession(localID, username)
 			// Stamp the auth identity on the just-registered session.
@@ -563,7 +643,7 @@ func (c *Cell) processMessage(msg CellMessage) {
 			// instead of fresh-login spawn (which would duplicate the
 			// player entity for the 30-second grace window).
 			if c.Stage != nil && c.Stage.coord != nil {
-				c.Stage.coord.touchActiveUser(userID, username, gwID, gwConnID, c.Stage.coord.HostForCellID(c.MeshID), c.MeshID)
+				c.Stage.coord.touchActiveUser(userID, username, gwID, gwConnID, c.Stage.coord.HostForCellID(c.MeshID()), c.MeshID())
 			}
 		}
 
@@ -587,7 +667,7 @@ func (c *Cell) processMessage(msg CellMessage) {
 		)
 		c.Log.Log(CatMeshTransfer,
 			"[%s] handoff queued: netID=%d epoch=%d commitTick=%d from=%s",
-			c.MeshID, msg.Handoff.NetID, msg.Handoff.Epoch, msg.Handoff.CommitTick, msg.FromCellID)
+			c.MeshID(), msg.Handoff.NetID, msg.Handoff.Epoch, msg.Handoff.CommitTick, msg.FromCellID)
 
 	case MsgHandoffAccepted:
 		if msg.HandoffAck == nil {
@@ -600,7 +680,7 @@ func (c *Cell) processMessage(msg CellMessage) {
 		if hd == nil {
 			c.Log.Log(CatMeshTransfer,
 				"[%s] handoff-ack dropped (no handoff driver): netID=%d epoch=%d from=%s",
-				c.MeshID, msg.HandoffAck.NetID, msg.HandoffAck.Epoch, msg.FromCellID)
+				c.MeshID(), msg.HandoffAck.NetID, msg.HandoffAck.Epoch, msg.FromCellID)
 			return
 		}
 		hd.OnHandoffAccepted(msg.HandoffAck.NetID, msg.HandoffAck.Epoch, msg.HandoffAck.CommitTick, msg.FromCellID)
@@ -613,7 +693,7 @@ func (c *Cell) processMessage(msg CellMessage) {
 		if msg.ForwardInput.GatewayID != "" {
 			if c.Stage == nil || c.Stage.coord == nil || c.Stage.coord.vcm == nil {
 				c.Log.Log(CatMeshMsg, "[%s] MsgForwardInput has gateway session but no VCM: gw=%s conn=%d",
-					c.MeshID, msg.ForwardInput.GatewayID, msg.ForwardInput.ConnID)
+					c.MeshID(), msg.ForwardInput.GatewayID, msg.ForwardInput.ConnID)
 				return
 			}
 			var ok bool
@@ -623,12 +703,12 @@ func (c *Cell) processMessage(msg CellMessage) {
 			})
 			if !ok {
 				c.Log.Log(CatMeshMsg, "[%s] MsgForwardInput for unknown destination session: gw=%s conn=%d",
-					c.MeshID, msg.ForwardInput.GatewayID, msg.ForwardInput.ConnID)
+					c.MeshID(), msg.ForwardInput.GatewayID, msg.ForwardInput.ConnID)
 				return
 			}
 		}
 		c.Log.Log(CatMeshMsg, "[%s] msg MsgForwardInput from=%s conn=%d bytes=%d",
-			c.MeshID, msg.FromCellID, localConnID, len(msg.ForwardInput.InputBlob))
+			c.MeshID(), msg.FromCellID, localConnID, len(msg.ForwardInput.InputBlob))
 		// Cross-host forwards use the same session-epoch gate as ordinary
 		// gateway traffic. Same-host/in-process frames have no GatewayID and
 		// already carry a destination-local connID.
@@ -648,7 +728,7 @@ func (c *Cell) processMessage(msg CellMessage) {
 			return
 		}
 		c.Log.Log(CatMeshMsg, "[%s] msg MsgPlayerDisconnected conn=%d reason=%s",
-			c.MeshID, msg.Disconnect.ConnID, msg.Disconnect.Reason)
+			c.MeshID(), msg.Disconnect.ConnID, msg.Disconnect.Reason)
 		// Push a synthetic disconnect event to the cell's Events channel — same
 		// path as in-process WebSocket disconnects so the engine's grace-period
 		// state machine fires unchanged.
@@ -656,7 +736,7 @@ func (c *Cell) processMessage(msg CellMessage) {
 		case c.Events <- net.PlayerEvent{ConnID: msg.Disconnect.ConnID, Disconnect: true}:
 		default:
 			c.Log.Log(CatMeshMsg, "[%s] events channel full, dropping MsgPlayerDisconnected conn=%d",
-				c.MeshID, msg.Disconnect.ConnID)
+				c.MeshID(), msg.Disconnect.ConnID)
 		}
 	}
 }

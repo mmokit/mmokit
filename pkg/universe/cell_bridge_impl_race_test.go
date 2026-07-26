@@ -39,9 +39,9 @@ func TestCellBridgeDispatcherInvalidationConcurrentWithNeighborReconcile(t *test
 		for i := range iterations {
 			coord.mu.Lock()
 			if i%2 == 0 {
-				left.Neighbors[right.MeshID] = right
+				left.Neighbors[right.MeshID()] = right
 			} else {
-				delete(left.Neighbors, right.MeshID)
+				delete(left.Neighbors, right.MeshID())
 			}
 			bridge.invalidateBorderDispatcher()
 			coord.mu.Unlock()

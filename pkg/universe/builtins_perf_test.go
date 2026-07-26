@@ -21,7 +21,8 @@ func newTestCoordWithCell(t *testing.T, cellID, hostID string) *Process {
 	eng := engine.New(engine.Config{TickRate: 20}, nil, nil)
 	eng.Perf = engine.NewTickProfile([]string{"S1"})
 	eng.Perf.Record([]time.Duration{3 * time.Millisecond}, 7*time.Millisecond)
-	cell := &Cell{MeshID: MeshCellID(cellID), Engine: eng}
+	cell := NewCell(MeshCellID(cellID), parsed)
+	cell.Engine = eng
 
 	host := &Host{
 		ID:    hostID,
@@ -76,7 +77,8 @@ func TestPerfSnapshotHandlerFiltersCellID(t *testing.T) {
 	eng := engine.New(engine.Config{TickRate: 20}, nil, nil)
 	eng.Perf = engine.NewTickProfile([]string{"S1"})
 	eng.Perf.Record([]time.Duration{2 * time.Millisecond}, 5*time.Millisecond)
-	cell := &Cell{MeshID: MeshCellID("0_1"), Engine: eng}
+	cell := NewCell(MeshCellID("0_1"), parsed)
+	cell.Engine = eng
 	coord.Cells["0_1"] = cell
 	coord.Hosts["host-a"].Cells[parsed] = cell
 
@@ -149,7 +151,8 @@ func TestPerfResetHandlerFiltersCellID(t *testing.T) {
 		Perf:   engine.NewTickProfile([]string{"S1"}),
 	}
 	eng.Perf.Record([]time.Duration{2 * time.Millisecond}, 5*time.Millisecond)
-	cell := &Cell{MeshID: MeshCellID("0_1"), Engine: eng}
+	cell := NewCell(MeshCellID("0_1"), parsed)
+	cell.Engine = eng
 	coord.Cells["0_1"] = cell
 	coord.Hosts["host-a"].Cells[parsed] = cell
 
@@ -190,7 +193,8 @@ func addCellToCoord(t *testing.T, coord *Process, cellID, hostID string) {
 		Perf:   engine.NewTickProfile([]string{"S1"}),
 	}
 	eng.Perf.Record([]time.Duration{2 * time.Millisecond}, 5*time.Millisecond)
-	cell := &Cell{MeshID: MeshCellID(cellID), Engine: eng}
+	cell := NewCell(MeshCellID(cellID), parsed)
+	cell.Engine = eng
 	coord.Cells[MeshCellID(cellID)] = cell
 
 	host, ok := coord.Hosts[hostID]
@@ -327,7 +331,7 @@ func TestPerfFrontendResetSub(t *testing.T) {
 	}
 	for _, cell := range coord.Cells {
 		if cell.Engine.Perf.Stats().SampleCount != 0 {
-			t.Errorf("profile not reset for cell %s", cell.MeshID)
+			t.Errorf("profile not reset for cell %s", cell.MeshID())
 		}
 	}
 }

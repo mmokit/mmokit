@@ -177,7 +177,7 @@ Use TLS certificate flags or a TLS-terminating proxy in production. Self-signed 
 | Area | Responsibility |
 | --- | --- |
 | `pkg/mmokit` | Public game-facing facade and high-level registration helpers |
-| `pkg/universe` | Process roles, cells/stages, topology, handoff, mesh, services, integrity checks |
+| `pkg/universe` | Process roles, cells/stages, topology, handoff, mesh, services, integrity checks. A cell's `(MeshID, CellID)` identity is immutable behind an atomic swap — read it via `Cell.MeshID()` / `Cell.CellID()`, or `Cell.Identity()` when both halves must agree |
 | `pkg/engine` | ECS loop, systems, players, loop jobs, console foundations |
 | `pkg/system` | Reusable physics, lifetime, spatial, replication, and debug systems |
 | `pkg/net`, `pkg/ops` | Client transports, connection management, and operation routing |

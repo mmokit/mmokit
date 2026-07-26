@@ -14,8 +14,8 @@ import (
 // CellViewers at build time and feeds them into BorderDispatcher.Walk
 // every tick.
 type CellViewer struct {
-	cellID       MeshCellID // immutable snapshot of destCell.MeshID at construction time
-	sourceCellID MeshCellID // immutable snapshot of sourceCell.MeshID at construction time
+	cellID       MeshCellID // immutable snapshot of destCell.MeshID() at construction time
+	sourceCellID MeshCellID // immutable snapshot of sourceCell.MeshID() at construction time
 	id           uint64
 	x, y         float32
 	tiers        map[uint16]replication.ReplicationTier
@@ -58,7 +58,7 @@ func NewCellViewer(
 	sourceCell *Cell,
 	destCell *Cell,
 ) *CellViewer {
-	// Capture sourceCell.MeshID at construction time. The underlying cell's
+	// Capture sourceCell.MeshID() at construction time. The underlying cell's
 	// MeshID field is rewritten on merge/rename from its own game loop;
 	// reading it from another goroutine (this viewer lives on a NEIGHBOR
 	// cell's loop, not the source) races. Cells are always rebuilt via a
@@ -67,7 +67,7 @@ func NewCellViewer(
 	// already carrying the new key — acceptable.
 	var sourceCellID MeshCellID
 	if sourceCell != nil {
-		sourceCellID = sourceCell.MeshID
+		sourceCellID = sourceCell.MeshID()
 	}
 	return &CellViewer{
 		cellID:       cellID,

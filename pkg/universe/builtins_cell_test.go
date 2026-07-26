@@ -6,7 +6,7 @@ import "testing"
 // contract: cell.snapshot emits cellSnapshotRow.Cell as the user-facing
 // display form (cell.Cell.String()) so cell.list's lookup table — keyed
 // by cell.String() — actually finds the rows. The bug fixed in commit
-// 4f8be58 was emitting cell.MeshID (mesh form) into the same field,
+// 4f8be58 was emitting cell.MeshID() (mesh form) into the same field,
 // causing every merge lookup to miss.
 //
 // Strong typing via MeshCellID alone doesn't catch this because both

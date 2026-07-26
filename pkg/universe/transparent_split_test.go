@@ -55,7 +55,7 @@ func TestSplit_ChildCellSeededWithBorderContext(t *testing.T) {
 	// context ships. AoIRadius defaults to 500, far larger than the ~85u
 	// cluster radius below, so every entity is within AoI of every quadrant.
 	coord, srcHost, srcCell := newExecutorTestCoord(t)
-	parent := srcCell.Cell
+	parent := srcCell.CellID()
 
 	// newExecutorTestCoord forces CellSize 1024 → parent center is (512,512);
 	// each depth-1 child is 512 wide. Cluster four entities tightly around the
@@ -115,7 +115,7 @@ func TestSplit_ChildCellSeededWithBorderContext(t *testing.T) {
 		cmd := cellTransferCommand{
 			RequestID:  req.ID,
 			Kind:       CellTransferSplit,
-			SrcCellID:  srcCell.MeshID,
+			SrcCellID:  srcCell.MeshID(),
 			DestCellID: children[q].MeshID(),
 			SrcHostID:  srcHost.ID,
 			DestHostID: destHost.ID,

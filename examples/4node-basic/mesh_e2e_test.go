@@ -60,7 +60,7 @@ func (tc *testCluster) allCells() []*mmokit.Cell {
 		all = append(all, mmokit.HarnessLocalHostCells(host)...)
 	}
 	// Sort by cell ID string.
-	sort.Slice(all, func(i, j int) bool { return all[i].MeshID < all[j].MeshID })
+	sort.Slice(all, func(i, j int) bool { return all[i].MeshID() < all[j].MeshID() })
 	return all
 }
 
@@ -75,7 +75,7 @@ func (tc *testCluster) resolveClusterCell(cellKey string) *mmokit.Cell {
 		return cells[0]
 	}
 	for _, c := range cells {
-		if string(c.MeshID) == cellKey {
+		if string(c.MeshID()) == cellKey {
 			return c
 		}
 	}
@@ -444,7 +444,7 @@ func botLocations(t *testing.T, cluster *testCluster) map[uint32]string {
 	t.Helper()
 	out := map[uint32]string{}
 	for _, cell := range cluster.allCells() {
-		cellKey := string(cell.MeshID)
+		cellKey := string(cell.MeshID())
 		execOnTestLoop(t, cell, func() {
 			w := cell.Stage
 			if w == nil {
@@ -482,7 +482,7 @@ func assertNoStrandedReplicas(t *testing.T, cluster *testCluster, phase string) 
 		realNetIDs := map[uint32]struct{}{}
 
 		for _, cell := range cluster.allCells() {
-			cellKey := string(cell.MeshID)
+			cellKey := string(cell.MeshID())
 			execOnTestLoop(t, cell, func() {
 				w := cell.Stage
 				if w == nil {
@@ -555,7 +555,7 @@ func execOnTestLoop(t *testing.T, cell *mmokit.Cell, fn func()) {
 		return nil
 	})
 	if err != nil {
-		t.Fatalf("execOnTestLoop: %v on %s", err, cell.MeshID)
+		t.Fatalf("execOnTestLoop: %v on %s", err, cell.MeshID())
 	}
 }
 

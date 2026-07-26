@@ -11,7 +11,7 @@ func TestInvariant_CoordMapsConsistent_OK(t *testing.T) {
 		CellOwner: make(map[CellID]MeshCellID),
 	}
 	cell := CellID{X: 0, Y: 0}
-	c.Cells["cell_0_0"] = &Cell{Cell: cell, MeshID: "cell_0_0"}
+	c.Cells["cell_0_0"] = NewCell("cell_0_0", cell)
 	c.CellOwner[cell] = "cell_0_0"
 
 	if err := invCoordMapsConsistent.Check(c); err != nil {
@@ -25,7 +25,7 @@ func TestInvariant_CoordMapsConsistent_MissingCellOwner(t *testing.T) {
 		CellOwner: make(map[CellID]MeshCellID),
 	}
 	cell := CellID{X: 0, Y: 0}
-	c.Cells["cell_0_0"] = &Cell{Cell: cell, MeshID: "cell_0_0"}
+	c.Cells["cell_0_0"] = NewCell("cell_0_0", cell)
 	// Deliberately leave CellOwner empty.
 
 	err := invCoordMapsConsistent.Check(c)
@@ -40,7 +40,7 @@ func TestInvariant_CoordMapsConsistent_MissingCellOwner(t *testing.T) {
 func TestInvariant_HostOwnershipMatchesCoord_OK(t *testing.T) {
 	host := &Host{ID: "host-a", Cells: make(map[CellID]*Cell)}
 	cell := CellID{X: 0, Y: 0}
-	host.Cells[cell] = &Cell{Cell: cell, MeshID: "cell_0_0"}
+	host.Cells[cell] = NewCell("cell_0_0", cell)
 	c := &Process{
 		Cells:     map[MeshCellID]*Cell{"cell_0_0": host.Cells[cell]},
 		CellOwner: map[CellID]MeshCellID{cell: "cell_0_0"},
@@ -58,7 +58,7 @@ func TestInvariant_HostOwnershipMatchesCoord_HostMissingCell(t *testing.T) {
 	// Deliberately don't register the cell on the host.
 	cell := CellID{X: 0, Y: 0}
 	c := &Process{
-		Cells:     map[MeshCellID]*Cell{"cell_0_0": {Cell: cell, MeshID: "cell_0_0"}},
+		Cells:     map[MeshCellID]*Cell{"cell_0_0": NewCell("cell_0_0", cell)},
 		CellOwner: map[CellID]MeshCellID{cell: "cell_0_0"},
 		Hosts:     map[string]*Host{"host-a": host},
 	}

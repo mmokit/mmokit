@@ -95,7 +95,7 @@ func spawnTestEntity(cell *Cell, netID uint32, x, y float32) ecs.Entity {
 	ecs.NewMap1[component.EntityKind](w).Add(e, &component.EntityKind{Type: 1})
 	ecs.NewMap1[component.Collider](w).Add(e, &component.Collider{Radius: 4})
 	ecs.NewMap1[component.Rotation](w).Add(e, &component.Rotation{Angle: 0})
-	ecs.NewMap1[component.CellCoord](w).Add(e, &component.CellCoord{CellX: cell.Cell.X, CellY: cell.Cell.Y})
+	ecs.NewMap1[component.CellCoord](w).Add(e, &component.CellCoord{CellX: cell.CellID().X, CellY: cell.CellID().Y})
 	cell.Stage.netIDIdx.Enter(netID, e, PresenceLive)
 	return e
 }
@@ -203,7 +203,7 @@ func TestEntitylessSessionTransferRemapsCrossHostIdentityAndCommitRoute(t *testi
 	key := SessionKey{GatewayID: "gateway-a", ConnID: 9001}
 	const sourceEpoch = uint64(41)
 	sourceVCM := NewVirtualConnManager(nil, source.Log)
-	sourceLocalID := sourceVCM.RegisterSession(key, "docked-pilot", sourceEpoch, source.MeshID)
+	sourceLocalID := sourceVCM.RegisterSession(key, "docked-pilot", sourceEpoch, source.MeshID())
 	coord.vcm = sourceVCM
 
 	userID := uuid.MustParse("dc59b284-9701-40cf-a840-d8e98fcb8cdc")
@@ -247,8 +247,8 @@ func TestEntitylessSessionTransferRemapsCrossHostIdentityAndCommitRoute(t *testi
 	adoptedUsers, err := executor.populateCell(destination, &meshpb.CellTransfer{
 		RequestId:  77,
 		Kind:       meshpb.CellTransferKind_CELL_TRANSFER_SPLIT,
-		SrcCellId:  string(source.MeshID),
-		DestCellId: string(destination.MeshID),
+		SrcCellId:  string(source.MeshID()),
+		DestCellId: string(destination.MeshID()),
 		DestHostId: destinationHost.ID,
 		Sessions:   packRecords(records),
 	})
@@ -282,16 +282,16 @@ func TestEntitylessSessionTransferRemapsCrossHostIdentityAndCommitRoute(t *testi
 	// session or an unrelated split fallback child).
 	fallbackCell := MeshCellID("cell_d1_1_0")
 	coord.sessionRoutes.Set(&SessionRoute{
-		Key: key, Username: "docked-pilot", HostID: "host-a", CellID: source.MeshID, Epoch: sourceEpoch,
+		Key: key, Username: "docked-pilot", HostID: "host-a", CellID: source.MeshID(), Epoch: sourceEpoch,
 	})
 	req := &CellTransferRequest{
-		adoptedUsers: map[string]MeshCellID{"docked-pilot": destination.MeshID},
+		adoptedUsers: map[string]MeshCellID{"docked-pilot": destination.MeshID()},
 		mutation: topologyMutation{add: map[MeshCellID]string{
-			destination.MeshID: destinationHost.ID,
-			fallbackCell:       "host-c",
+			destination.MeshID(): destinationHost.ID,
+			fallbackCell:         "host-c",
 		}},
 	}
-	ctx := &CommitContext{Req: req, ParentKey: source.MeshID, FallbackChildKey: fallbackCell}
+	ctx := &CommitContext{Req: req, ParentKey: source.MeshID(), FallbackChildKey: fallbackCell}
 	if err := stepSplitRemapSessions(coord, ctx); err != nil {
 		t.Fatalf("stepSplitRemapSessions: %v", err)
 	}
@@ -299,10 +299,10 @@ func TestEntitylessSessionTransferRemapsCrossHostIdentityAndCommitRoute(t *testi
 	if !ok {
 		t.Fatal("committed session route vanished")
 	}
-	if route.HostID != destinationHost.ID || route.CellID != destination.MeshID || route.Epoch != sourceEpoch+1 {
+	if route.HostID != destinationHost.ID || route.CellID != destination.MeshID() || route.Epoch != sourceEpoch+1 {
 		t.Fatalf("committed route = host:%s cell:%s epoch:%d, want host:%s cell:%s epoch:%d",
 			route.HostID, route.CellID, route.Epoch,
-			destinationHost.ID, destination.MeshID, sourceEpoch+1)
+			destinationHost.ID, destination.MeshID(), sourceEpoch+1)
 	}
 	routedKey, routedEpoch, ok := destinationVCM.LookupRouteByLocal(destinationLocalID)
 	if !ok || routedKey != key || routedEpoch != sourceEpoch+1 {
@@ -312,8 +312,8 @@ func TestEntitylessSessionTransferRemapsCrossHostIdentityAndCommitRoute(t *testi
 	destinationVCM.mu.RLock()
 	virtual := destinationVCM.byLocal[destinationLocalID]
 	destinationVCM.mu.RUnlock()
-	if virtual == nil || virtual.cellID != destination.MeshID || virtual.username != "docked-pilot" {
-		t.Fatalf("destination VCM session = %+v, want cell=%s username=docked-pilot", virtual, destination.MeshID)
+	if virtual == nil || virtual.cellID != destination.MeshID() || virtual.username != "docked-pilot" {
+		t.Fatalf("destination VCM session = %+v, want cell=%s username=docked-pilot", virtual, destination.MeshID())
 	}
 }
 
@@ -324,7 +324,7 @@ func TestEntitylessSessionTransferRemapsCrossHostIdentityAndCommitRoute(t *testi
 
 func TestExecutorSerializeSplitPerQuadrant(t *testing.T) {
 	coord, host, srcCell := newExecutorTestCoord(t)
-	src := srcCell.Cell
+	src := srcCell.CellID()
 	cellSize := src.Size(coords.CellSize)
 	half := cellSize / 2
 
@@ -384,7 +384,7 @@ func TestExecutorSerializeSplitPerQuadrant(t *testing.T) {
 		cmd := cellTransferCommand{
 			RequestID:  req.ID,
 			Kind:       CellTransferSplit,
-			SrcCellID:  srcCell.MeshID,
+			SrcCellID:  srcCell.MeshID(),
 			DestCellID: children[quadrant].MeshID(),
 			SrcHostID:  host.ID,
 			DestHostID: destHost.ID,
@@ -483,14 +483,14 @@ func TestExecutorMergeSerializesAllEntities(t *testing.T) {
 	cmd := cellTransferCommand{
 		RequestID:  reqID,
 		Kind:       CellTransferMerge,
-		SrcCellID:  donorCell.MeshID,
+		SrcCellID:  donorCell.MeshID(),
 		DestCellID: survivorCellID.MeshID(),
 		SrcHostID:  host.ID,
 		DestHostID: destHost.ID,
 	}
 	coord.orchestrator.mu.Lock()
 	coord.orchestrator.inflight[reqID] = &CellTransferRequest{
-		ID: reqID, Kind: CellTransferMerge, SrcCell: donorCell.Cell,
+		ID: reqID, Kind: CellTransferMerge, SrcCell: donorCell.CellID(),
 		ExpectedReady: 1, receivedOK: make(map[string]struct{}),
 		ackedCmd: make([]bool, 1),
 		commands: []cellTransferCommand{cmd},
@@ -573,7 +573,7 @@ func TestExecutorMergeDedupKeepsNativeAndReplacesStaleDonor(t *testing.T) {
 			RequestId:  requestID,
 			Kind:       meshpb.CellTransferKind_CELL_TRANSFER_MERGE,
 			SrcCellId:  source,
-			DestCellId: string(survivor.MeshID),
+			DestCellId: string(survivor.MeshID()),
 			DestHostId: host.ID,
 			Entities:   packRecords(records),
 		}); err != nil {
@@ -694,7 +694,7 @@ func TestExecutorAbortRemovesPartialMergeImports(t *testing.T) {
 		RequestId:  requestID,
 		Kind:       meshpb.CellTransferKind_CELL_TRANSFER_MERGE,
 		SrcCellId:  "cell_20_0",
-		DestCellId: string(survivor.MeshID),
+		DestCellId: string(survivor.MeshID()),
 		DestHostId: host.ID,
 		Entities:   packRecords(entityRecords),
 		Sessions:   packRecords([][]byte{entityless}),
@@ -788,13 +788,13 @@ func TestExecutorMigrateRoundTrip(t *testing.T) {
 	reqID := uint64(900)
 	coord.orchestrator.mu.Lock()
 	coord.orchestrator.inflight[reqID] = &CellTransferRequest{
-		ID: reqID, Kind: CellTransferMigrate, SrcCell: srcCell.Cell,
+		ID: reqID, Kind: CellTransferMigrate, SrcCell: srcCell.CellID(),
 		ExpectedReady: 1, receivedOK: make(map[string]struct{}),
 		ackedCmd: make([]bool, 1),
 		commands: []cellTransferCommand{{
 			RequestID:  reqID,
 			Kind:       CellTransferMigrate,
-			SrcCellID:  srcCell.MeshID,
+			SrcCellID:  srcCell.MeshID(),
 			DestCellID: destCellID.MeshID(),
 			SrcHostID:  host.ID,
 			DestHostID: destHost.ID,
@@ -808,7 +808,7 @@ func TestExecutorMigrateRoundTrip(t *testing.T) {
 	cmd := cellTransferCommand{
 		RequestID:  reqID,
 		Kind:       CellTransferMigrate,
-		SrcCellID:  srcCell.MeshID,
+		SrcCellID:  srcCell.MeshID(),
 		DestCellID: destCellID.MeshID(),
 		SrcHostID:  host.ID,
 		DestHostID: destHost.ID,
@@ -944,7 +944,7 @@ func TestExecutorReceiveRetainsRollbackStateUntilCommit(t *testing.T) {
 	err := exec.Receive(&meshpb.CellTransfer{
 		RequestId:  requestID,
 		Kind:       meshpb.CellTransferKind_CELL_TRANSFER_SPLIT,
-		SrcCellId:  string(srcCell.MeshID),
+		SrcCellId:  string(srcCell.MeshID()),
 		DestCellId: string(destKey),
 		DestHostId: host.ID,
 	})
@@ -1019,7 +1019,7 @@ func TestExecutorAbortReactivatesEveryViewerOnForwardGeneration(t *testing.T) {
 
 	exec := coord.hostExecutors[host.ID]
 	exec.mu.Lock()
-	exec.transferSrcCells[requestID] = map[MeshCellID]*Cell{srcCell.MeshID: srcCell}
+	exec.transferSrcCells[requestID] = map[MeshCellID]*Cell{srcCell.MeshID(): srcCell}
 	exec.mu.Unlock()
 	exec.Abort(&meshpb.CellTransferAbort{RequestId: requestID})
 
@@ -1054,7 +1054,7 @@ func TestExecutorAbortRestoresSameHostVCMAndReconnectRoute(t *testing.T) {
 	exec := coord.hostExecutors[host.ID]
 	coord.vcm = NewVirtualConnManager(nil, coord.Log)
 	key := SessionKey{GatewayID: "gateway-shared", ConnID: 4200}
-	localID := coord.vcm.RegisterSession(key, "same-host-abort", 17, srcCell.MeshID)
+	localID := coord.vcm.RegisterSession(key, "same-host-abort", 17, srcCell.MeshID())
 	userID := uuid.MustParse("de52bd12-7605-441c-900f-8d55de93f4cb")
 	const requestID = uint64(0x5A4E)
 
@@ -1063,7 +1063,7 @@ func TestExecutorAbortRestoresSameHostVCMAndReconnectRoute(t *testing.T) {
 		session := srcCell.Engine.Players.ByConnID(localID)
 		session.UserID = userID
 		session.Entity = entity
-		coord.touchActiveUser(userID, session.Username, key.GatewayID, key.ConnID, host.ID, srcCell.MeshID)
+		coord.touchActiveUser(userID, session.Username, key.GatewayID, key.ConnID, host.ID, srcCell.MeshID())
 		srcCell.Stage.DeactivateTransferViewers()
 	})
 
@@ -1073,7 +1073,7 @@ func TestExecutorAbortRestoresSameHostVCMAndReconnectRoute(t *testing.T) {
 	}
 	coord.touchActiveUser(userID, "same-host-abort", key.GatewayID, key.ConnID, host.ID, speculativeDest)
 	exec.mu.Lock()
-	exec.transferSrcCells[requestID] = map[MeshCellID]*Cell{srcCell.MeshID: srcCell}
+	exec.transferSrcCells[requestID] = map[MeshCellID]*Cell{srcCell.MeshID(): srcCell}
 	exec.mu.Unlock()
 
 	exec.Abort(&meshpb.CellTransferAbort{RequestId: requestID})
@@ -1095,14 +1095,14 @@ func TestExecutorAbortRestoresSameHostVCMAndReconnectRoute(t *testing.T) {
 	coord.vcm.mu.RLock()
 	vcmCell := coord.vcm.byLocal[localID].cellID
 	coord.vcm.mu.RUnlock()
-	if vcmCell != srcCell.MeshID {
-		t.Fatalf("VCM cell after abort = %s, want source %s", vcmCell, srcCell.MeshID)
+	if vcmCell != srcCell.MeshID() {
+		t.Fatalf("VCM cell after abort = %s, want source %s", vcmCell, srcCell.MeshID())
 	}
 	coord.mu.RLock()
 	active := coord.activeUsers[userID]
 	coord.mu.RUnlock()
-	if active == nil || active.HostID != host.ID || active.CellID != srcCell.MeshID {
-		t.Fatalf("active user route after abort = %+v, want host=%s cell=%s", active, host.ID, srcCell.MeshID)
+	if active == nil || active.HostID != host.ID || active.CellID != srcCell.MeshID() {
+		t.Fatalf("active user route after abort = %+v, want host=%s cell=%s", active, host.ID, srcCell.MeshID())
 	}
 }
 

@@ -185,10 +185,10 @@ func registerCellBuiltins(reg *cmdsys.Registry, coord *Process) error {
 				c.mu.RUnlock()
 				// Use the user-facing CellID string ("0_0") so the cell.list
 				// merger — which looks up by cell.String() — actually finds
-				// these rows. cell.MeshID is the MeshCellID form ("cell_0_0")
+				// these rows. cell.MeshID() is the MeshCellID form ("cell_0_0")
 				// used internally by Process.Cells / wire protocol.
 				rows = append(rows, cellSnapshotRow{
-					Cell:     cell.Cell.String(),
+					Cell:     cell.CellID().String(),
 					Host:     hostID,
 					Entities: int(snap.Entities.Real),
 					Players:  int(snap.Entities.Connected),

@@ -1863,9 +1863,9 @@ func (c *Process) Build() {
 				cells = append(cells, cell)
 				targetHost := hosts[hostIdx%len(hosts)]
 				cell2, systems := c.createNode(cell, spatialCellSize, targetHost)
-				targetHost.AddCell(cell2.Cell, cell2)
+				targetHost.AddCell(cell2.CellID(), cell2)
 				c.Control.mu.Lock()
-				c.Control.cellToHostMap[cell2.MeshID] = targetHost.ID
+				c.Control.cellToHostMap[cell2.MeshID()] = targetHost.ID
 				c.Control.mu.Unlock()
 				hostIdx++
 				setups = append(setups, nodeSetup{cell2, systems})
@@ -1904,7 +1904,7 @@ func (c *Process) Build() {
 			for _, h := range hosts {
 				var ownedCells []MeshCellID
 				for _, cell := range h.Cells {
-					ownedCells = append(ownedCells, cell.MeshID)
+					ownedCells = append(ownedCells, cell.MeshID())
 				}
 				grpcAddr := ""
 				if h.Network != nil {
@@ -2419,16 +2419,13 @@ func (c *Process) createNode(cell CellID, spatialBucketSize float32, owningHost 
 		systemNames = append(systemNames, "CellBoundary")
 	}
 
-	node := &Cell{
-		MeshID:    cell.MeshID(),
-		Cell:      cell,
-		Engine:    eng,
-		Stage:     base,
-		Inbox:     make(chan CellMessage, 256),
-		Events:    events,
-		Neighbors: make(map[MeshCellID]*Cell),
-		Log:       cfg.Logger,
-	}
+	node := NewCell(cell.MeshID(), cell)
+	node.Engine = eng
+	node.Stage = base
+	node.Inbox = make(chan CellMessage, 256)
+	node.Events = events
+	node.Neighbors = make(map[MeshCellID]*Cell)
+	node.Log = cfg.Logger
 
 	// Wire session callbacks. notifySessionActive/Disconnected take both the
 	// host ID (for cross-host coordination) and the cell ID (for the
@@ -2438,9 +2435,9 @@ func (c *Process) createNode(cell CellID, spatialBucketSize float32, owningHost 
 	// resolve at call time so merge renames + post-create migrations are
 	// reflected.
 	eng.Players.SetSessionCallbacks(
-		func(username string) { c.notifySessionActive(username, c.HostForCellID(node.MeshID), node.MeshID) },
+		func(username string) { c.notifySessionActive(username, c.HostForCellID(node.MeshID()), node.MeshID()) },
 		func(username string) {
-			c.notifySessionDisconnected(username, c.HostForCellID(node.MeshID), node.MeshID)
+			c.notifySessionDisconnected(username, c.HostForCellID(node.MeshID()), node.MeshID())
 		},
 		func(username string) { c.notifySessionRemoved(username) },
 	)
@@ -2515,8 +2512,8 @@ func (c *Process) createNode(cell CellID, spatialBucketSize float32, owningHost 
 
 	// Callers during Build() don't need locking (single-threaded).
 	// Callers during runtime (SplitCell) must hold c.mu write lock.
-	c.Cells[node.MeshID] = node
-	c.CellOwner[cell] = node.MeshID
+	c.Cells[node.MeshID()] = node
+	c.CellOwner[cell] = node.MeshID()
 
 	return node, gameSystems
 }
@@ -2868,8 +2865,8 @@ func (c *Process) releaseCellOnNode(cellID MeshCellID) {
 		return
 	}
 	delete(c.Cells, cellID)
-	delete(c.CellOwner, node.Cell)
-	host.RemoveCell(node.Cell)
+	delete(c.CellOwner, node.CellID())
+	host.RemoveCell(node.CellID())
 	c.mu.Unlock()
 
 	// Shutdown runs on this goroutine. node.Shutdown() stops the
@@ -2913,12 +2910,12 @@ func (c *Process) renameCellOnNode(from, to MeshCellID) error {
 		c.mu.Unlock()
 		return fmt.Errorf("host: renameCellOnNode: parse %q: %w", to, err)
 	}
-	host.RemoveCell(cell.Cell)
+	host.RemoveCell(cell.CellID())
 	host.AddCell(toCellID, cell)
 	// Update coord's Cells / CellOwner maps (local-host copies — in
 	// remote-host mode c.Cells is only the cells this process owns).
 	delete(c.Cells, from)
-	delete(c.CellOwner, cell.Cell)
+	delete(c.CellOwner, cell.CellID())
 	c.Cells[to] = cell
 	c.CellOwner[toCellID] = to
 	c.mu.Unlock()
@@ -2928,8 +2925,11 @@ func (c *Process) renameCellOnNode(from, to MeshCellID) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	runErr := cell.Engine.RunOnLoop(ctx, func() error {
-		cell.MeshID = to
-		cell.Cell = toCellID
+		// One atomic swap, not two field writes: a concurrent reader
+		// (Host.CellByID from a gRPC goroutine, admin views) sees either the
+		// whole old identity or the whole new one, never a mesh ID paired
+		// with the wrong coordinate.
+		cell.setIdentity(to, toCellID)
 		if cell.Stage != nil {
 			cell.Stage.UpdateCellBounds(toCellID, coords.CellSize)
 		}
@@ -3549,14 +3549,14 @@ func (c *Process) reconcileCellNeighbors(newCell *Cell) {
 	seen := make(map[string]bool)
 	var candidates []candidate
 	for id, cc := range c.Cells {
-		if id == newCell.MeshID {
+		if id == newCell.MeshID() {
 			continue
 		}
 		seen[string(id)] = true
-		candidates = append(candidates, candidate{id: string(id), cid: cc.Cell, cell: cc})
+		candidates = append(candidates, candidate{id: string(id), cid: cc.CellID(), cell: cc})
 	}
 	for _, id := range remoteIDs {
-		if MeshCellID(id) == newCell.MeshID || seen[id] {
+		if MeshCellID(id) == newCell.MeshID() || seen[id] {
 			continue
 		}
 		cid, err := ParseCellID(id)
@@ -3572,14 +3572,14 @@ func (c *Process) reconcileCellNeighbors(newCell *Cell) {
 		delete(newCell.Neighbors, k)
 	}
 	for _, cand := range candidates {
-		if !AreAdjacent(newCell.Cell, cand.cid, baseSize) {
+		if !AreAdjacent(newCell.CellID(), cand.cid, baseSize) {
 			continue
 		}
 		if cand.cell != nil {
 			// Local neighbor — wire both directions and invalidate the
 			// existing neighbor's dispatcher so it picks us up too.
 			newCell.Neighbors[MeshCellID(cand.id)] = cand.cell
-			cand.cell.Neighbors[newCell.MeshID] = newCell
+			cand.cell.Neighbors[newCell.MeshID()] = newCell
 			if eb := unwrapCellBridge(cand.cell.Bridge); eb != nil {
 				eb.invalidateBorderDispatcher()
 			}
@@ -3587,10 +3587,8 @@ func (c *Process) reconcileCellNeighbors(newCell *Cell) {
 		}
 		// Remote neighbor — stub entry. The remote host handles its own
 		// reverse-side wiring when it applies the same PeerList.
-		newCell.Neighbors[MeshCellID(cand.id)] = &Cell{
-			MeshID: MeshCellID(cand.id),
-			Cell:   cand.cid,
-		}
+		// Remote stub: identity only, never runs a loop here.
+		newCell.Neighbors[MeshCellID(cand.id)] = NewCell(MeshCellID(cand.id), cand.cid)
 	}
 	if nb := unwrapCellBridge(newCell.Bridge); nb != nil {
 		nb.invalidateBorderDispatcher()

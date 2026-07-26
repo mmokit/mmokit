@@ -111,10 +111,8 @@ func TestHostNetworkTwoPeersRoundTrip(t *testing.T) {
 	})
 
 	// Register a destination cell on host B.
-	cellB := &Cell{
-		MeshID: "cell_0_0",
-		Inbox:  make(chan CellMessage, 16),
-	}
+	cellB := NewCell("cell_0_0", CellID{X: 0, Y: 0})
+	cellB.Inbox = make(chan CellMessage, 16)
 	hostB.AddCell(CellID{X: 0, Y: 0}, cellB)
 
 	// Cross-connect.
@@ -213,20 +211,21 @@ func TestRouteInboundClientFrame_BackpressureClosesConnection(t *testing.T) {
 
 func TestRouteInboundPlayerAssignmentPreservesStreamGenerationAcrossVCMRewrite(t *testing.T) {
 	host := NewHost("host-a")
-	cell := &Cell{MeshID: "cell_0_0", Inbox: make(chan CellMessage, 1)}
+	cell := NewCell("cell_0_0", CellID{X: 0, Y: 0})
+	cell.Inbox = make(chan CellMessage, 1)
 	host.AddCell(CellID{X: 0, Y: 0}, cell)
 
 	n := newManualHostNetwork(t)
 	n.host = host
 	n.vcm = NewVirtualConnManager(n, n.log)
 	frame := &meshpb.MeshFrame{
-		DestCellId: string(cell.MeshID),
+		DestCellId: string(cell.MeshID()),
 		Msg: &meshpb.MeshFrame_PlayerAssignment{
 			PlayerAssignment: &meshpb.PlayerAssignment{
 				ConnId:           71,
 				GatewayId:        "gateway-a",
 				Username:         "generation-rewrite",
-				ToCellId:         string(cell.MeshID),
+				ToCellId:         string(cell.MeshID()),
 				Epoch:            41,
 				StreamGeneration: 17,
 			},

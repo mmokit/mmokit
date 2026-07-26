@@ -42,7 +42,7 @@ func (l *localHostOps) ReleaseCell(ctx context.Context, cellKey MeshCellID) erro
 	if cell == nil {
 		return fmt.Errorf("host %s: ReleaseCell: unknown cell %s", l.host.ID, cellKey)
 	}
-	l.host.RemoveCell(cell.Cell)
+	l.host.RemoveCell(cell.CellID())
 	cell.Shutdown()
 	// Caller is responsible for releasing the NetID range (belongs to
 	// the coord's netIDAlloc, not the host).

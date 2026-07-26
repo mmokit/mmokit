@@ -414,7 +414,7 @@ func assertCellGoroutineExited(t *testing.T, cell *Cell, timeout time.Duration) 
 	case <-done:
 		return
 	case <-time.After(timeout):
-		t.Fatalf("cell %s game loop still running %v after commit (zombie cell)", cell.MeshID, timeout)
+		t.Fatalf("cell %s game loop still running %v after commit (zombie cell)", cell.MeshID(), timeout)
 	}
 }
 

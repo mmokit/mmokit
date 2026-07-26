@@ -79,16 +79,16 @@ func (b *grpcBridge) resolveDest(destCellID MeshCellID) (useLocal bool, destHost
 // mesh:replica or mesh:transfer noise.
 func (b *grpcBridge) sendViaGrpc(destHostID string, destCellID MeshCellID, msg CellMessage, reliable bool) bool {
 	if destHostID == "" {
-		b.cell.Log.Log(CatMeshGrpc, "[%s] grpc send: no host for cell %s", b.cell.MeshID, destCellID)
+		b.cell.Log.Log(CatMeshGrpc, "[%s] grpc send: no host for cell %s", b.cell.MeshID(), destCellID)
 		return false
 	}
 	if b.host.Network == nil {
-		b.cell.Log.Log(CatMeshGrpc, "[%s] grpc send: local host has no Network", b.cell.MeshID)
+		b.cell.Log.Log(CatMeshGrpc, "[%s] grpc send: local host has no Network", b.cell.MeshID())
 		return false
 	}
 	frame, err := encodeCellMessage(msg, destCellID)
 	if err != nil {
-		b.cell.Log.Log(CatMeshGrpc, "[%s] grpc encode %v failed: %v", b.cell.MeshID, msg.Type, err)
+		b.cell.Log.Log(CatMeshGrpc, "[%s] grpc encode %v failed: %v", b.cell.MeshID(), msg.Type, err)
 		return false
 	}
 	// Self-route shortcut: when gatewayMode=always-proxy routes a same-host
@@ -100,25 +100,25 @@ func (b *grpcBridge) sendViaGrpc(destHostID string, destCellID MeshCellID, msg C
 	// round-trip through loopback TCP.
 	if destHostID == b.host.ID {
 		if err := b.host.Network.routeInboundFrame(frame); err != nil {
-			b.cell.Log.Log(CatMeshGrpc, "[%s] grpc self-route to %s failed: %v", b.cell.MeshID, destCellID, err)
+			b.cell.Log.Log(CatMeshGrpc, "[%s] grpc self-route to %s failed: %v", b.cell.MeshID(), destCellID, err)
 			return false
 		}
-		b.cell.Log.Log(CatMeshGrpc, "[%s] grpc self-route -> cell=%s type=%v", b.cell.MeshID, destCellID, msg.Type)
+		b.cell.Log.Log(CatMeshGrpc, "[%s] grpc self-route -> cell=%s type=%v", b.cell.MeshID(), destCellID, msg.Type)
 		return true
 	}
 	if reliable {
 		if err := b.host.SendReliable(destHostID, frame); err != nil {
-			b.cell.Log.Log(CatMeshGrpc, "[%s] grpc reliable send to %s failed: %v", b.cell.MeshID, destHostID, err)
+			b.cell.Log.Log(CatMeshGrpc, "[%s] grpc reliable send to %s failed: %v", b.cell.MeshID(), destHostID, err)
 			return false
 		}
-		b.cell.Log.Log(CatMeshGrpc, "[%s] grpc reliable -> host=%s cell=%s type=%v", b.cell.MeshID, destHostID, destCellID, msg.Type)
+		b.cell.Log.Log(CatMeshGrpc, "[%s] grpc reliable -> host=%s cell=%s type=%v", b.cell.MeshID(), destHostID, destCellID, msg.Type)
 		return true
 	}
 	if ok := b.host.SendLossy(destHostID, frame); !ok {
-		b.cell.Log.Log(CatMeshGrpc, "[%s] grpc lossy drop to %s (%v)", b.cell.MeshID, destHostID, msg.Type)
+		b.cell.Log.Log(CatMeshGrpc, "[%s] grpc lossy drop to %s (%v)", b.cell.MeshID(), destHostID, msg.Type)
 		return false
 	}
-	b.cell.Log.Log(CatMeshGrpc, "[%s] grpc lossy -> host=%s cell=%s type=%v", b.cell.MeshID, destHostID, destCellID, msg.Type)
+	b.cell.Log.Log(CatMeshGrpc, "[%s] grpc lossy -> host=%s cell=%s type=%v", b.cell.MeshID(), destHostID, destCellID, msg.Type)
 	return true
 }
 
@@ -198,14 +198,14 @@ func (b *grpcBridge) OnPlayerTransfer(connID uint32, destCellID MeshCellID) {
 	// torn-down source cell and the player loses connectivity.
 	vcm := b.coord.vcm
 	if vcm == nil {
-		b.cell.Log.Log(CatMeshMsg, "[%s] grpcBridge: remote-host mode but coord.vcm is nil, skipping PlayerMigrated for conn=%d", b.cell.MeshID, connID)
+		b.cell.Log.Log(CatMeshMsg, "[%s] grpcBridge: remote-host mode but coord.vcm is nil, skipping PlayerMigrated for conn=%d", b.cell.MeshID(), connID)
 		return
 	}
 	// Resolve the real {gatewayID, connID} from the VirtualConnManager so
 	// the coordinator can route UpstreamSwitch to the correct gateway.
 	key, ok := vcm.LookupByLocal(connID)
 	if !ok {
-		b.cell.Log.Log(CatMeshMsg, "[%s] grpcBridge: no VCM session for localID=%d, skipping PlayerMigrated", b.cell.MeshID, connID)
+		b.cell.Log.Log(CatMeshMsg, "[%s] grpcBridge: no VCM session for localID=%d, skipping PlayerMigrated", b.cell.MeshID(), connID)
 		return
 	}
 	if err := b.coord.controlClient.send(&meshpb.HostMessage{
@@ -221,7 +221,7 @@ func (b *grpcBridge) OnPlayerTransfer(connID uint32, destCellID MeshCellID) {
 	}); err != nil {
 		b.cell.Log.Log(CatMeshMsg,
 			"[%s] PlayerMigrated send failed for conn=%d dest=%s: %v",
-			b.cell.MeshID, connID, destCellID, err)
+			b.cell.MeshID(), connID, destCellID, err)
 	}
 }
 
@@ -247,7 +247,7 @@ func (b *grpcBridge) SendAction(targetCellID MeshCellID, action *CrossCellAction
 	b.dispatchOrLocal(targetCellID, true,
 		func() { b.local.SendAction(targetCellID, action) },
 		func() CellMessage {
-			return CellMessage{Type: MsgCrossCellAction, FromCellID: b.cell.MeshID, Action: action}
+			return CellMessage{Type: MsgCrossCellAction, FromCellID: b.cell.MeshID(), Action: action}
 		})
 }
 
@@ -261,7 +261,7 @@ func (b *grpcBridge) SendHandoff(destCellID MeshCellID, payload *HandoffPayload)
 	return b.dispatchOrLocalBool(destCellID, true,
 		func() bool { return b.local.SendHandoff(destCellID, payload) },
 		func() CellMessage {
-			return CellMessage{Type: MsgHandoff, FromCellID: b.cell.MeshID, Handoff: payload}
+			return CellMessage{Type: MsgHandoff, FromCellID: b.cell.MeshID(), Handoff: payload}
 		})
 }
 
@@ -272,7 +272,7 @@ func (b *grpcBridge) SendHandoffAccepted(destCellID MeshCellID, ack *HandoffAckP
 	return b.dispatchOrLocalBool(destCellID, true,
 		func() bool { return b.local.SendHandoffAccepted(destCellID, ack) },
 		func() CellMessage {
-			return CellMessage{Type: MsgHandoffAccepted, FromCellID: b.cell.MeshID, HandoffAck: ack}
+			return CellMessage{Type: MsgHandoffAccepted, FromCellID: b.cell.MeshID(), HandoffAck: ack}
 		})
 }
 
@@ -288,13 +288,13 @@ func (b *grpcBridge) SendForwardInput(destCellID MeshCellID, payload *ForwardInp
 	// own local connID before injecting the frame.
 	if b.coord == nil || b.coord.vcm == nil {
 		b.cell.Log.Log(CatMeshMsg, "[%s] cannot forward input cross-host without VCM: conn=%d dest=%s",
-			b.cell.MeshID, payload.ConnID, destCellID)
+			b.cell.MeshID(), payload.ConnID, destCellID)
 		return false
 	}
 	key, sessionEpoch, ok := b.coord.vcm.LookupRouteByLocal(payload.ConnID)
 	if !ok {
 		b.cell.Log.Log(CatMeshMsg, "[%s] cannot resolve forwarded input session: localConn=%d dest=%s",
-			b.cell.MeshID, payload.ConnID, destCellID)
+			b.cell.MeshID(), payload.ConnID, destCellID)
 		return false
 	}
 	wirePayload := *payload
@@ -303,7 +303,7 @@ func (b *grpcBridge) SendForwardInput(destCellID MeshCellID, payload *ForwardInp
 	wirePayload.SessionEpoch = sessionEpoch
 	return b.sendViaGrpc(destHostID, destCellID, CellMessage{
 		Type:         MsgForwardInput,
-		FromCellID:   b.cell.MeshID,
+		FromCellID:   b.cell.MeshID(),
 		ForwardInput: &wirePayload,
 	}, true)
 }

@@ -220,8 +220,8 @@ func findCellOwningPos(coord *Process, worldX, worldY float32) (*Cell, string, b
 			return dest, ownerID, true
 		}
 		// Bridge returned an ID that matches this cell's own ID.
-		if ownerID == cellIDs[i] || ownerID == string(c.MeshID) {
-			return c, string(c.MeshID), true
+		if ownerID == cellIDs[i] || ownerID == string(c.MeshID()) {
+			return c, string(c.MeshID()), true
 		}
 	}
 	return nil, "", false

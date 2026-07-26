@@ -51,7 +51,7 @@ func registerBotCommands(coord *mmokit.Process, reg *mmokit.CommandRegistry) err
 				return nil, err
 			}
 			return botSpawnResult{
-				CellID:  string(cell.MeshID),
+				CellID:  string(cell.MeshID()),
 				Spawned: spawned,
 				Elapsed: time.Since(start).Truncate(time.Millisecond).String(),
 			}, nil
@@ -128,7 +128,7 @@ func registerBotCommands(coord *mmokit.Process, reg *mmokit.CommandRegistry) err
 					return nil, err
 				}
 				rows = append(rows, botCellRow{
-					Cell:    string(cell.MeshID),
+					Cell:    string(cell.MeshID()),
 					Real:    counts.Real,
 					Replica: counts.Replica,
 					Ghost:   counts.Ghost,
@@ -193,13 +193,13 @@ func resolveCell(coord *mmokit.Process, cellKey string) *mmokit.Cell {
 		return cells[0]
 	}
 	// Accept both "0_0" and "cell_0_0" by canonicalizing through
-	// ParseCellID + CellID.MeshID — matches cell.split / cell.merge / cell.migrate.
+	// ParseCellID + CellID.MeshID() — matches cell.split / cell.merge / cell.migrate.
 	canonical := cellKey
 	if parsed, err := mmokit.ParseCellID(cellKey); err == nil {
 		canonical = string(parsed.MeshID())
 	}
 	for _, cell := range cells {
-		if string(cell.MeshID) == canonical {
+		if string(cell.MeshID()) == canonical {
 			return cell
 		}
 	}
@@ -212,7 +212,7 @@ func snapshotCells(coord *mmokit.Process) []*mmokit.Cell {
 	for _, c := range coord.Cells {
 		all = append(all, c)
 	}
-	sort.Slice(all, func(i, j int) bool { return all[i].MeshID < all[j].MeshID })
+	sort.Slice(all, func(i, j int) bool { return all[i].MeshID() < all[j].MeshID() })
 	return all
 }
 
@@ -224,7 +224,7 @@ func snapshotCells(coord *mmokit.Process) []*mmokit.Cell {
 func spawnBotsOnLoop(cell *mmokit.Cell, count int) int {
 	stage := cell.Stage
 	cellSize := mmokit.CellSize()
-	minX, minY, maxX, maxY := cell.Cell.WorldBounds(cellSize)
+	minX, minY, maxX, maxY := cell.CellID().WorldBounds(cellSize)
 	sizeX := maxX - minX
 	sizeY := maxY - minY
 	padX := sizeX * 0.1
@@ -239,7 +239,7 @@ func spawnBotsOnLoop(cell *mmokit.Cell, count int) int {
 		tx := minX + padX + rng.Float32()*(sizeX-2*padX)
 		ty := minY + padY + rng.Float32()*(sizeY-2*padY)
 		retarget := uint16(rng.Intn(100))
-		botName := fmt.Sprintf("bot_%s_%06d", cell.MeshID, base+i)
+		botName := fmt.Sprintf("bot_%s_%06d", cell.MeshID(), base+i)
 		mt := mmokit.MoveTarget{}
 		mt.SetTarget(tx, ty)
 		stage.Spawn(
