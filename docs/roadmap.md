@@ -263,7 +263,12 @@ Each work item should add the smallest regression test that fails before the fix
 - [ ] Generated-schema diff checks and cross-language Go/TypeScript/C# golden vectors *(blocked on CI)*
 - [ ] Load tests asserting bounded memory, queue depth, tick work, and recovery after backpressure
 
-There is also a known flaky race between `ensureBorderDispatcher` and `applyPeerList` in the cell bridge that makes distributed fixtures unreliable under `-race`. Fixing or quarantining it makes every other failure attributable, and is the highest-leverage schedule intervention available.
+Two known pre-existing races make distributed fixtures unreliable under `-race`. Fixing or quarantining them makes every other failure attributable, and is the highest-leverage schedule intervention available.
+
+1. **`ensureBorderDispatcher` vs `applyPeerList`** in the cell bridge.
+2. **`Cell.MeshID` during a rename.** `Process.renameCellOnNode` ([`pkg/universe/coordinator.go:2931`](../pkg/universe/coordinator.go)) writes `cell.MeshID` and `cell.Cell` inside `RunOnLoop`, which serializes against that cell's game loop but against nothing else. `Host.CellByID` ([`pkg/universe/host.go:101`](../pkg/universe/host.go)) reads `c.MeshID` from a gRPC handler goroutine holding only `h.mu`, which protects the cell *slice* and not the cell *contents*. Reproduced on `e799e80` at roughly 1 run in 8 of `go test ./pkg/universe/ -run 'Handoff|TwoHost|Merge|Split|Migrate|Distributed' -race -count=2`, so it is genuinely pre-existing and not a regression from the CE-003/CE-004 work. The fix is to give the identity fields their own mutex or move the lookup behind an atomic snapshot; the rename path is rare enough that either is cheap.
+
+Also note: `pkg/universe` intermittently reports `executor: serialize timeout on cell_0_0` ([`cell_transfer_executor.go:239`](../pkg/universe/cell_transfer_executor.go)) under PARALLEL package execution. That one is CPU contention on a `RunOnLoop` deadline, not a logic race — it reproduces roughly 1 run in 4 with default `-p` and 0 in 4 when the package runs alone. Always use `-p 1` for any run that includes `pkg/universe`, or the flake gets misattributed.
 
 ---
 
