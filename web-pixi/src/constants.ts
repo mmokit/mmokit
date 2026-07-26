@@ -63,7 +63,7 @@ export const RESOURCE_NAMES: Record<number, string> = {
  * the steady 50ms). Dropping to 3 visibly snaps by ~25ms at handoff;
  * 4 keeps a full tick of margin behind renderTime.
  */
-export const RING_SIZE = 4;
+export const RING_SIZE = 8;
 
 /**
  * How far behind the latest server snapshot the client renders, in
@@ -73,10 +73,12 @@ export const RING_SIZE = 4;
  */
 export const RENDER_DELAY = 100;
 
+/** Upper bound used by the adaptive playback controller under burst loss. */
+export const MAX_RENDER_DELAY = 300;
+
 /**
  * Maximum forward velocity extrapolation when render time runs past the
  * newest sample (sustained packet loss). Capped at one tick's worth so
  * extrapolation stays bounded and visibly pauses rather than diverging.
  */
 export const MAX_EXTRAPOLATE_MS = 50;
-

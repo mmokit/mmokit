@@ -2,6 +2,7 @@ package engine
 
 import (
 	"sort"
+	"sync"
 	"sync/atomic"
 	"time"
 )
@@ -40,25 +41,34 @@ type PerfStats struct {
 	SampleCount int
 }
 
+type cachedPerfStats struct {
+	stats PerfStats
+	at    time.Time
+}
+
 // TickProfile collects per-tick timing samples in a ring buffer.
 type TickProfile struct {
+	// mu protects the mutable ring metadata and sample storage. Record holds
+	// it only for the copies below; Stats copies a point-in-time view and
+	// releases it before doing the comparatively expensive percentile sorts.
+	mu          sync.RWMutex
 	systemNames []string
 	samples     [perfBufferSize]TickSample
 	head        int // next write index
 	count       int // number of valid samples (up to perfBufferSize)
+	resetGen    uint64
 
 	// cachedStats holds the last Stats() result so off-loop callers (the
 	// admin dashboard) can poll without paying the sort cost on every read.
-	// Loaded lock-free; stored only by Stats() itself, which is called on
-	// the loop goroutine.
-	cachedStats   atomic.Pointer[PerfStats]
-	cachedStatsAt atomic.Int64 // unix nano, paired with cachedStats
+	// The result and timestamp are published together so readers cannot pair
+	// a new result with an old timestamp (or vice versa).
+	cachedStats atomic.Pointer[cachedPerfStats]
 }
 
 // NewTickProfile creates a new profiler for the given system names.
 func NewTickProfile(systemNames []string) *TickProfile {
 	tp := &TickProfile{
-		systemNames: systemNames,
+		systemNames: append([]string(nil), systemNames...),
 	}
 	// Pre-allocate system slices in each sample slot
 	for i := range tp.samples {
@@ -69,6 +79,9 @@ func NewTickProfile(systemNames []string) *TickProfile {
 
 // Record stores a tick's timing data.
 func (tp *TickProfile) Record(systemTimings []time.Duration, total time.Duration) {
+	tp.mu.Lock()
+	defer tp.mu.Unlock()
+
 	s := &tp.samples[tp.head]
 	copy(s.Systems, systemTimings)
 	s.Total = total
@@ -80,39 +93,48 @@ func (tp *TickProfile) Record(systemTimings []time.Duration, total time.Duration
 
 // Reset clears all collected samples.
 func (tp *TickProfile) Reset() {
+	tp.mu.Lock()
+	defer tp.mu.Unlock()
+
 	tp.head = 0
 	tp.count = 0
+	tp.resetGen++
 	tp.cachedStats.Store(nil)
-	tp.cachedStatsAt.Store(0)
 }
 
 // CachedStats returns the most recent Stats() result if it is still within
 // statsCacheTTL; otherwise nil. Safe to call from any goroutine — the cache
-// is loaded lock-free. The on-loop Stats() path is the only writer.
+// is loaded lock-free and concurrent Stats calls may publish newer snapshots.
 func (tp *TickProfile) CachedStats() *PerfStats {
-	p := tp.cachedStats.Load()
-	if p == nil {
+	cached := tp.cachedStats.Load()
+	if cached == nil {
 		return nil
 	}
-	if time.Since(time.Unix(0, tp.cachedStatsAt.Load())) > statsCacheTTL {
+	if time.Since(cached.at) > statsCacheTTL {
 		return nil
 	}
-	return p
+	// Cached snapshots are immutable after publication. Callers must treat
+	// the returned value and its slices as read-only.
+	return &cached.stats
 }
 
 // Stats computes percentile statistics from collected samples.
 func (tp *TickProfile) Stats() PerfStats {
+	tp.mu.RLock()
 	n := tp.count
 	if n == 0 {
-		return PerfStats{SystemNames: tp.systemNames}
+		names := append([]string(nil), tp.systemNames...)
+		tp.mu.RUnlock()
+		return PerfStats{SystemNames: names}
 	}
 
 	numSys := len(tp.systemNames)
 	stats := PerfStats{
-		SystemNames: tp.systemNames,
+		SystemNames: append([]string(nil), tp.systemNames...),
 		Systems:     make([]TimingStats, numSys),
 		SampleCount: n,
 	}
+	resetGen := tp.resetGen
 
 	// Collect all total durations and per-system durations
 	totals := make([]time.Duration, n)
@@ -131,18 +153,33 @@ func (tp *TickProfile) Stats() PerfStats {
 			sysBuffers[s][i] = tp.samples[idx].Systems[s]
 		}
 	}
+	latestTotal := tp.samples[latestIdx].Total
+	latestSystems := append([]time.Duration(nil), tp.samples[latestIdx].Systems...)
+	tp.mu.RUnlock()
 
-	stats.Total = computeStats(totals, tp.samples[latestIdx].Total)
+	stats.Total = computeStats(totals, latestTotal)
 	for s := 0; s < numSys; s++ {
-		stats.Systems[s] = computeStats(sysBuffers[s], tp.samples[latestIdx].Systems[s])
+		stats.Systems[s] = computeStats(sysBuffers[s], latestSystems[s])
 	}
 
 	// Cache so subsequent CachedStats() calls within statsCacheTTL skip the
-	// sort. Caller is expected to be the loop goroutine, so the store sees
-	// no concurrent writes from Record.
-	cached := stats
-	tp.cachedStats.Store(&cached)
-	tp.cachedStatsAt.Store(time.Now().UnixNano())
+	// sort. A reset that occurred while the sort ran invalidates this result;
+	// take the read lock again so Reset cannot clear the cache between the
+	// generation check and publication.
+	tp.mu.RLock()
+	if tp.resetGen == resetGen {
+		tp.cachedStats.Store(&cachedPerfStats{
+			stats: clonePerfStats(stats),
+			at:    time.Now(),
+		})
+	}
+	tp.mu.RUnlock()
+	return stats
+}
+
+func clonePerfStats(stats PerfStats) PerfStats {
+	stats.SystemNames = append([]string(nil), stats.SystemNames...)
+	stats.Systems = append([]TimingStats(nil), stats.Systems...)
 	return stats
 }
 

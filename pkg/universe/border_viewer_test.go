@@ -29,6 +29,20 @@ func TestCellViewer_DefaultTier(t *testing.T) {
 	}
 }
 
+func TestCellViewer_CustomTierForcesFullRateMembership(t *testing.T) {
+	v := NewCellViewer("cell_1_0", 123, 0, 0, map[uint16]replication.ReplicationTier{
+		7: {Radius: 250, UpdateDivisor: 5, BaseWeight: 3},
+	}, nil, nil)
+
+	tier := v.Tier(7)
+	if tier.UpdateDivisor != 1 {
+		t.Fatalf("border UpdateDivisor = %d, want 1", tier.UpdateDivisor)
+	}
+	if tier.Radius != 250 || tier.BaseWeight != 3 {
+		t.Fatalf("custom tier fields changed: %+v", tier)
+	}
+}
+
 func TestCellViewer_BaselinesAllocated(t *testing.T) {
 	v := NewCellViewer("cell_1_0", 123, 0, 0, nil, nil, nil)
 	if v.Baselines() == nil {

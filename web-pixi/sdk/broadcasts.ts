@@ -329,6 +329,7 @@ export class PlayerOwnState {
   maxCargoMass: number = 0;
   beingLockedByID: number = 0;
   beingLockedByProgress: number = 0;
+  movement: { valid: boolean; predictionTicks: number; tick: number; producedAtMs: number; entityNetID: number; streamEpoch: number; processedSequence: number; tickIntervalMs: number; worldX: number; worldY: number; velocityX: number; velocityY: number; angle: number; angularVelocity: number; targetActive: boolean; targetX: number; targetY: number; thrust: number; turnRate: number; turnAccel: number; maxSpeed: number; speedMultiplier: number; dragCoefficient: number; arrivalDistance: number; decelerationDist: number } = { valid: false, predictionTicks: 0, tick: 0, producedAtMs: 0, entityNetID: 0, streamEpoch: 0, processedSequence: 0, tickIntervalMs: 0, worldX: 0, worldY: 0, velocityX: 0, velocityY: 0, angle: 0, angularVelocity: 0, targetActive: false, targetX: 0, targetY: 0, thrust: 0, turnRate: 0, turnAccel: 0, maxSpeed: 0, speedMultiplier: 0, dragCoefficient: 0, arrivalDistance: 0, decelerationDist: 0 };
 
   static decode(buf: Uint8Array): PlayerOwnState {
     const dv = new DataView(buf.buffer, buf.byteOffset, buf.byteLength);
@@ -361,6 +362,31 @@ export class PlayerOwnState {
     m.maxCargoMass = dv.getFloat32(off, true); off += 4;
     m.beingLockedByID = dv.getUint32(off, true); off += 4;
     m.beingLockedByProgress = dv.getFloat32(off, true); off += 4;
+    m.movement.valid = dv.getUint8(off) !== 0; off += 1;
+    m.movement.predictionTicks = dv.getUint8(off); off += 1;
+    m.movement.tick = dv.getUint32(off, true); off += 4;
+    m.movement.producedAtMs = Number(dv.getBigUint64(off, true)); off += 8;
+    m.movement.entityNetID = dv.getUint32(off, true); off += 4;
+    m.movement.streamEpoch = dv.getUint32(off, true); off += 4;
+    m.movement.processedSequence = dv.getUint32(off, true); off += 4;
+    m.movement.tickIntervalMs = dv.getUint32(off, true); off += 4;
+    m.movement.worldX = dv.getFloat32(off, true); off += 4;
+    m.movement.worldY = dv.getFloat32(off, true); off += 4;
+    m.movement.velocityX = dv.getFloat32(off, true); off += 4;
+    m.movement.velocityY = dv.getFloat32(off, true); off += 4;
+    m.movement.angle = dv.getFloat32(off, true); off += 4;
+    m.movement.angularVelocity = dv.getFloat32(off, true); off += 4;
+    m.movement.targetActive = dv.getUint8(off) !== 0; off += 1;
+    m.movement.targetX = dv.getFloat32(off, true); off += 4;
+    m.movement.targetY = dv.getFloat32(off, true); off += 4;
+    m.movement.thrust = dv.getFloat32(off, true); off += 4;
+    m.movement.turnRate = dv.getFloat32(off, true); off += 4;
+    m.movement.turnAccel = dv.getFloat32(off, true); off += 4;
+    m.movement.maxSpeed = dv.getFloat32(off, true); off += 4;
+    m.movement.speedMultiplier = dv.getFloat32(off, true); off += 4;
+    m.movement.dragCoefficient = dv.getFloat32(off, true); off += 4;
+    m.movement.arrivalDistance = dv.getFloat32(off, true); off += 4;
+    m.movement.decelerationDist = dv.getFloat32(off, true); off += 4;
     return m;
   }
 }
@@ -577,6 +603,7 @@ export class ServerConfig {
 export class WorldDelta {
   static readonly typeID = 0x65b16f4;
   body: Uint8Array = new Uint8Array(0);
+  streamEpoch: number = 0;
 
   static decode(buf: Uint8Array): WorldDelta {
     const dv = new DataView(buf.buffer, buf.byteOffset, buf.byteLength);
@@ -586,6 +613,7 @@ export class WorldDelta {
       const bl = dv.getUint32(off, true); off += 4;
       m.body = buf.slice(off, off + bl); off += bl;
     }
+    m.streamEpoch = dv.getUint32(off, true); off += 4;
     return m;
   }
 }

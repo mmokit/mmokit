@@ -296,3 +296,62 @@ func TestBaselineStore_DropBaselineClearsPriority(t *testing.T) {
 		t.Fatalf("fresh priority has non-zero accumulator: %v", p2.Accumulator)
 	}
 }
+
+func TestEntityBaseline_AdvanceToHandlesSequenceWrap(t *testing.T) {
+	baseline := EntityBaseline{Ring: make([]SentSnapshot, 4)}
+	baseline.PushSent(^uint32(0)-1, []byte{1})
+	baseline.PushSent(^uint32(0), []byte{2})
+	baseline.PushSent(0, []byte{3})
+	baseline.PushSent(1, []byte{4})
+
+	baseline.AdvanceTo(0)
+	if len(baseline.Acked) != 1 || baseline.Acked[0] != 3 {
+		t.Fatalf("wrapped ACK promoted %v, want [3]", baseline.Acked)
+	}
+	if baseline.RingLen != 1 {
+		t.Fatalf("wrapped ACK retained %d entries, want 1", baseline.RingLen)
+	}
+}
+
+func TestEntityBaseline_PruneSentThroughDoesNotAllocate(t *testing.T) {
+	baseline := EntityBaseline{Ring: make([]SentSnapshot, 8)}
+	data := [4][]byte{{1}, {2}, {3}, {4}}
+
+	allocs := testing.AllocsPerRun(100, func() {
+		// Restore logical ring metadata over already allocated entries. The
+		// prune itself must compact in place rather than allocate temporary
+		// storage for every entity on every explicit ACK.
+		baseline.Ring[0] = SentSnapshot{Seq: 1, Data: data[0]}
+		baseline.Ring[1] = SentSnapshot{Seq: 2, Data: data[1]}
+		baseline.Ring[2] = SentSnapshot{Seq: 3, Data: data[2]}
+		baseline.Ring[3] = SentSnapshot{Seq: 4, Data: data[3]}
+		baseline.RingHead = 4
+		baseline.RingLen = 4
+		baseline.PruneSentThrough(2)
+	})
+	if allocs != 0 {
+		t.Fatalf("PruneSentThrough allocations = %.1f, want 0", allocs)
+	}
+	if baseline.RingLen != 2 || baseline.Ring[2].Seq != 3 || baseline.Ring[3].Seq != 4 {
+		t.Fatalf("pruned ring = %+v len=%d, want retained seqs [3 4]", baseline.Ring, baseline.RingLen)
+	}
+}
+
+func TestEntityBaseline_PruneSentThroughPreservesWrappedSuffix(t *testing.T) {
+	baseline := EntityBaseline{Ring: make([]SentSnapshot, 4)}
+	for seq := uint32(1); seq <= 5; seq++ {
+		baseline.PushSent(seq, []byte{byte(seq)})
+	}
+	// Chronological ring is [2,3,4,5] across physical slots [1,2,3,0].
+	baseline.PruneSentThrough(2)
+	if baseline.RingLen != 3 || baseline.RingHead != 1 {
+		t.Fatalf("wrapped prune metadata head=%d len=%d, want head=1 len=3", baseline.RingHead, baseline.RingLen)
+	}
+	start := (baseline.RingHead - baseline.RingLen + len(baseline.Ring)) % len(baseline.Ring)
+	want := []uint32{3, 4, 5}
+	for i, seq := range want {
+		if got := baseline.Ring[(start+i)%len(baseline.Ring)].Seq; got != seq {
+			t.Fatalf("wrapped retained seq[%d]=%d, want %d (ring=%+v)", i, got, seq, baseline.Ring)
+		}
+	}
+}

@@ -14,6 +14,12 @@ const (
 	outboundBufferSize = 64
 	inputBufferSize    = 32
 
+	// DefaultWebSocketWriteTimeout bounds how long a single WebSocket write may
+	// hold the connection's write pump. A client that stops reading is closed
+	// instead of pinning the writer indefinitely and keeping its outbound queue
+	// permanently saturated.
+	DefaultWebSocketWriteTimeout = 5 * time.Second
+
 	// SlowWriteThreshold is the ws.Write duration above which we log a
 	// warning. Above this, the write is almost certainly blocking on
 	// TCP back-pressure (client too slow draining) or kernel send-buffer
@@ -43,15 +49,30 @@ type outboundEntry struct {
 	queuedAt time.Time
 }
 
+// websocketConn is the subset of websocket.Conn used by Conn. Keeping this
+// boundary small also lets the write deadline be tested without relying on
+// kernel socket-buffer timing.
+type websocketConn interface {
+	Read(context.Context) (websocket.MessageType, []byte, error)
+	Write(context.Context, websocket.MessageType, []byte) error
+	CloseNow() error
+}
+
 // Conn wraps a WebSocket connection with read/write pumps.
 type Conn struct {
 	id       uint32
-	ws       *websocket.Conn
+	ws       websocketConn
 	outbound chan outboundEntry
-	mu       sync.Mutex
-	input    [][]byte // channel 0x00 frames
-	opInput  [][]byte // channel 0x01 frames
-	closed   bool
+	done     chan struct{}
+	// writeTimeout is immutable after construction. A non-positive value uses
+	// DefaultWebSocketWriteTimeout, which keeps directly-constructed test
+	// connections and future call sites safe by default.
+	writeTimeout time.Duration
+	sendMu       sync.Mutex // serializes outbound admission with Close
+	mu           sync.Mutex // guards inbound queues
+	input        [][]byte   // channel 0x00 frames
+	opInput      [][]byte   // channel 0x01 frames
+	closed       bool       // guarded by sendMu
 
 	bytesSent atomic.Uint64
 	bytesRecv atomic.Uint64
@@ -69,24 +90,36 @@ type Conn struct {
 
 func newConn(id uint32, ws *websocket.Conn) *Conn {
 	c := &Conn{
-		id:       id,
-		ws:       ws,
-		outbound: make(chan outboundEntry, outboundBufferSize),
-		input:    make([][]byte, 0, inputBufferSize),
-		opInput:  make([][]byte, 0, 8),
+		id:           id,
+		ws:           ws,
+		outbound:     make(chan outboundEntry, outboundBufferSize),
+		done:         make(chan struct{}),
+		input:        make([][]byte, 0, inputBufferSize),
+		opInput:      make([][]byte, 0, 8),
+		writeTimeout: DefaultWebSocketWriteTimeout,
 	}
 	// Start write pump in background
 	go c.writePump()
 	return c
 }
 
-// Send queues a message for sending. Non-blocking; drops if buffer full.
-func (c *Conn) Send(data []byte) {
+// Send queues a message for sending. It is non-blocking and reports queue
+// pressure to the caller. Send and Close serialize through sendMu so admission
+// cannot race shutdown; outbound itself intentionally remains open and done
+// terminates the writer.
+func (c *Conn) Send(data []byte) SendResult {
 	entry := outboundEntry{data: data, queuedAt: time.Now()}
+	c.sendMu.Lock()
+	defer c.sendMu.Unlock()
+	if c.closed {
+		return SendResult{Disposition: SendClosed}
+	}
 	select {
 	case c.outbound <- entry:
+		return queuedSend(DeliveryReliableOrdered)
 	default:
 		log.Printf("conn %d: outbound buffer full, dropping message", c.id)
+		return SendResult{Disposition: SendBackpressure}
 	}
 }
 
@@ -129,15 +162,17 @@ func (c *Conn) InjectInput(data []byte) {
 
 // Close closes the connection.
 func (c *Conn) Close() {
-	c.mu.Lock()
+	c.sendMu.Lock()
 	if c.closed {
-		c.mu.Unlock()
+		c.sendMu.Unlock()
 		return
 	}
 	c.closed = true
-	c.mu.Unlock()
-	close(c.outbound)
-	c.ws.CloseNow()
+	close(c.done)
+	c.sendMu.Unlock()
+	if c.ws != nil {
+		c.ws.CloseNow()
+	}
 }
 
 // readPump reads messages from the WebSocket and routes by channel byte.
@@ -185,10 +220,23 @@ func (c *Conn) readPump(ctx context.Context) {
 // Either kind crossing its threshold gets warn-logged and bumps a
 // counter exposed via ConnStats().
 func (c *Conn) writePump() {
-	for entry := range c.outbound {
+	writeTimeout := c.writeTimeout
+	if writeTimeout <= 0 {
+		writeTimeout = DefaultWebSocketWriteTimeout
+	}
+
+	for {
+		var entry outboundEntry
+		select {
+		case <-c.done:
+			return
+		case entry = <-c.outbound:
+		}
 		queueDur := time.Since(entry.queuedAt)
 		writeStart := time.Now()
-		err := c.ws.Write(context.Background(), websocket.MessageBinary, entry.data)
+		writeCtx, cancelWrite := context.WithTimeout(context.Background(), writeTimeout)
+		err := c.ws.Write(writeCtx, websocket.MessageBinary, entry.data)
+		cancelWrite()
 		writeDur := time.Since(writeStart)
 
 		c.totalWrites.Add(1)
@@ -209,6 +257,7 @@ func (c *Conn) writePump() {
 		}
 
 		if err != nil {
+			c.Close()
 			return
 		}
 		c.bytesSent.Add(uint64(len(entry.data)))

@@ -42,6 +42,7 @@ import { CellMap } from "./ui/cell-map";
 import { SelectionPanel } from "./ui/selection-panel";
 import { DungeonOverlay } from "./dungeon-overlay";
 import { devOverlay } from "./ui/dev-overlay";
+import { applyLocalMovementPrediction } from "./movement-reconciliation";
 
 async function main() {
   await loadRuntimeConfig();
@@ -356,7 +357,10 @@ async function main() {
     }
 
     // Interpolation
-    interpolateEntities(state.entities, state.clockSync, now);
+    interpolateEntities(state.entities, state.playback, now);
+    // Remote entities stay on the delayed adaptive playback cursor. The local
+    // ship is then projected to estimated server-now from its owner-only seed.
+    applyLocalMovementPrediction(state, now);
 
     // Dev overlay records continuously; renders only when toggled visible
     // (Backquote key). Kept after interpolation so player-ring stats

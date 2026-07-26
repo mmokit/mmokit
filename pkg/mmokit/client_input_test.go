@@ -110,12 +110,16 @@ type fakeInputTransport struct {
 	input [][]byte
 }
 
-func (t *fakeInputTransport) SendReliable(data []byte)   {}
-func (t *fakeInputTransport) SendUnreliable(data []byte) {}
-func (t *fakeInputTransport) DrainInput() [][]byte       { r := t.input; t.input = nil; return r }
-func (t *fakeInputTransport) DrainOpInput() [][]byte     { return nil }
-func (t *fakeInputTransport) InjectInput(data []byte)    {}
-func (t *fakeInputTransport) Close()                     {}
+func (t *fakeInputTransport) SendReliable(data []byte) net.SendResult {
+	return net.SendResult{Disposition: net.SendQueued, Delivery: net.DeliveryReliableOrdered}
+}
+func (t *fakeInputTransport) SendUnreliable(data []byte) net.SendResult {
+	return net.SendResult{Disposition: net.SendQueued, Delivery: net.DeliveryReliableOrdered}
+}
+func (t *fakeInputTransport) DrainInput() [][]byte    { r := t.input; t.input = nil; return r }
+func (t *fakeInputTransport) DrainOpInput() [][]byte  { return nil }
+func (t *fakeInputTransport) InjectInput(data []byte) {}
+func (t *fakeInputTransport) Close()                  {}
 
 // TestDispatchClientInput_FiresHandler exercises the end-to-end gateway
 // dispatch path: build a typed-input wire frame on channel 0x00 (the

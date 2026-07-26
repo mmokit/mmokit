@@ -52,7 +52,7 @@ function renderLoop(now: number): void {
   if (!state.playerNetID) return;
 
   // Advance snapshot interpolation once per render frame. Sets renderX/Y/Rot on all entities.
-  interpolateEntities(state.entities, state.clockSync, now);
+  interpolateEntities(state.entities, state.playback, now);
 
   const player = state.entities.get(state.playerNetID);
   // No player entity yet (transient between spawn and first world update) —

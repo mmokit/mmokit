@@ -82,13 +82,70 @@ type WorldState struct {
 	Entities     map[uint32]*EntitySnapshot
 	DestroyedIDs []uint32
 	ExitedIDs    []uint32
+	Discarded    bool // valid frame rejected by stream/order fencing
 }
 
 // baselineEntry stores per-entity state for delta decoding.
 type baselineEntry struct {
-	snapshot   []byte
-	entityType uint8
-	pilotName  string // from initialData, doesn't change
+	snapshot       []byte
+	authorityEpoch uint32
+	entityType     uint8
+	pilotName      string // from initialData, doesn't change within an authority epoch/type
+}
+
+// deltaDecoderState keeps payload baselines separate from the lifetime
+// authority fence. FreshSnapshot invalidates delta payloads, but it must not
+// erase the highest epoch already observed for a netID: an older full frame
+// can still arrive after the fresh frame during an authority handoff.
+type deltaDecoderState struct {
+	baselines       map[uint32]*baselineEntry
+	authorityEpochs map[uint32]uint32
+	streamEpoch     uint32
+	hasStreamEpoch  bool
+	lastFrameSeq    uint32
+	hasLastFrameSeq bool
+}
+
+func newDeltaDecoderState() *deltaDecoderState {
+	return &deltaDecoderState{
+		baselines:       make(map[uint32]*baselineEntry),
+		authorityEpochs: make(map[uint32]uint32),
+	}
+}
+
+// acceptFrame fences the decoder to one ordered replication stream. Frame
+// sequences restart when the viewer's authority epoch changes, so the stream
+// epoch is compared first. Within one stream, duplicate, reordered, and
+// exactly-half-range sequences are rejected using uint32 serial arithmetic.
+// A newer stream invalidates payload baselines but deliberately preserves the
+// per-entity authority fence: delayed entries from the old authority must not
+// be able to resurrect a superseded lifecycle.
+func (s *deltaDecoderState) acceptFrame(streamEpoch, sequence uint32) bool {
+	if !s.hasStreamEpoch {
+		s.streamEpoch = streamEpoch
+		s.hasStreamEpoch = true
+		s.lastFrameSeq = sequence
+		s.hasLastFrameSeq = true
+		return true
+	}
+
+	if streamEpoch != s.streamEpoch {
+		if !isNewerUint32Serial(streamEpoch, s.streamEpoch) {
+			return false
+		}
+		s.streamEpoch = streamEpoch
+		s.lastFrameSeq = sequence
+		s.hasLastFrameSeq = true
+		clear(s.baselines)
+		return true
+	}
+
+	if s.hasLastFrameSeq && !isNewerUint32Serial(sequence, s.lastFrameSeq) {
+		return false
+	}
+	s.lastFrameSeq = sequence
+	s.hasLastFrameSeq = true
+	return true
 }
 
 // deltaDecoders holds pre-built DeltaEncoders per entity type.
@@ -128,8 +185,8 @@ func (d *deltaDecoders) forType(entityType uint8) *quantize.DeltaEncoder {
 }
 
 // decodeBinaryFrame decodes a SE_DELTA_WORLD_UPDATE binary frame into a WorldState.
-// It updates baselines in place for delta decoding across ticks.
-func decodeBinaryFrame(data []byte, baselines map[uint32]*baselineEntry, decoders *deltaDecoders) (ws WorldState, ok bool) {
+// It updates decoder state in place across ticks.
+func decodeBinaryFrame(data []byte, streamEpoch uint32, state *deltaDecoderState, decoders *deltaDecoders) (ws WorldState, ok bool) {
 	// Guard against truncated/malformed UDP packets.
 	defer func() {
 		if r := recover(); r != nil {
@@ -137,11 +194,24 @@ func decodeBinaryFrame(data []byte, baselines map[uint32]*baselineEntry, decoder
 		}
 	}()
 
-	if len(data) < 24 {
+	if len(data) < 20 {
 		return WorldState{Entities: make(map[uint32]*EntitySnapshot)}, false
 	}
 	dec := quantize.NewFrameDecoder(data)
 	hdr := dec.Header()
+	// Reject stale stream/frame data before FreshSnapshot can clear baselines or
+	// any entry/removal can mutate decoder state.
+	if !state.acceptFrame(streamEpoch, hdr.Seq) {
+		return WorldState{Entities: make(map[uint32]*EntitySnapshot), Discarded: true}, true
+	}
+	freshSnapshot := hdr.Flags&quantize.FrameFlagFreshSnapshot != 0
+	if freshSnapshot {
+		clear(state.baselines)
+	}
+	var freshAuthorityIDs map[uint32]struct{}
+	if freshSnapshot {
+		freshAuthorityIDs = make(map[uint32]struct{}, int(hdr.FullCount))
+	}
 
 	ws = WorldState{
 		Tick:     hdr.Tick,
@@ -151,18 +221,33 @@ func decodeBinaryFrame(data []byte, baselines map[uint32]*baselineEntry, decoder
 	// Full entities — store baseline and decode.
 	for i := 0; i < int(hdr.FullCount); i++ {
 		full := dec.NextFull()
+		if freshAuthorityIDs != nil {
+			freshAuthorityIDs[full.NetID] = struct{}{}
+		}
+		highestEpoch, hasHighestEpoch := state.authorityEpochs[full.NetID]
+		if hasHighestEpoch && full.Epoch != highestEpoch && !isNewerUint32Serial(full.Epoch, highestEpoch) {
+			continue
+		}
+		if !hasHighestEpoch || isNewerUint32Serial(full.Epoch, highestEpoch) {
+			state.authorityEpochs[full.NetID] = full.Epoch
+		}
+		previous, hadPrevious := state.baselines[full.NetID]
+
 		snap := make([]byte, len(full.Snapshot))
 		copy(snap, full.Snapshot)
 
 		var pilotName string
 		if full.InitialData != nil {
 			pilotName = decodeLengthPrefixedString(full.InitialData)
+		} else if hadPrevious && previous.authorityEpoch == full.Epoch && previous.entityType == full.EntityType {
+			pilotName = previous.pilotName
 		}
 
-		baselines[full.NetID] = &baselineEntry{
-			snapshot:   snap,
-			entityType: full.EntityType,
-			pilotName:  pilotName,
+		state.baselines[full.NetID] = &baselineEntry{
+			snapshot:       snap,
+			authorityEpoch: full.Epoch,
+			entityType:     full.EntityType,
+			pilotName:      pilotName,
 		}
 
 		es := decodeSnapshot(full.NetID, full.EntityType, snap)
@@ -173,9 +258,9 @@ func decodeBinaryFrame(data []byte, baselines map[uint32]*baselineEntry, decoder
 	// Delta entities — apply delta to baseline and decode.
 	for i := 0; i < int(hdr.DeltaCount); i++ {
 		delta := dec.NextDelta()
-		bl, exists := baselines[delta.NetID]
-		if !exists {
-			continue // no baseline, skip
+		bl, exists := state.baselines[delta.NetID]
+		if !exists || bl.authorityEpoch != delta.Epoch || bl.entityType != delta.EntityType {
+			continue // no baseline for this authority epoch and entity type
 		}
 		encoder := decoders.forType(delta.EntityType)
 		if encoder == nil {
@@ -192,17 +277,34 @@ func decodeBinaryFrame(data []byte, baselines map[uint32]*baselineEntry, decoder
 	for i := 0; i < int(hdr.RemovedCount); i++ {
 		id := dec.NextUint32()
 		ws.DestroyedIDs = append(ws.DestroyedIDs, id)
-		delete(baselines, id)
+		delete(state.baselines, id)
+		delete(state.authorityEpochs, id)
 	}
 
 	// Exited IDs (left AoI, treat same as destroyed for bot purposes).
 	for i := 0; i < int(hdr.ExitedCount); i++ {
 		id := dec.NextUint32()
 		ws.ExitedIDs = append(ws.ExitedIDs, id)
-		delete(baselines, id)
+		delete(state.baselines, id)
+		delete(state.authorityEpochs, id)
+	}
+
+	if freshAuthorityIDs != nil {
+		for id := range state.authorityEpochs {
+			if _, visible := freshAuthorityIDs[id]; !visible {
+				delete(state.authorityEpochs, id)
+			}
+		}
 	}
 
 	return ws, true
+}
+
+// isNewerUint32Serial compares uint32 counters using RFC 1982-style serial
+// arithmetic. An exact half-range jump is deliberately unordered.
+func isNewerUint32Serial(candidate, current uint32) bool {
+	distance := candidate - current
+	return distance != 0 && distance < 0x80000000
 }
 
 // decodeSnapshot converts raw snapshot bytes into an EntitySnapshot.

@@ -24,34 +24,39 @@ import (
 type TransferFrame struct {
 	NetworkID uint32
 	// Epoch travels with the entity through cell_transfer (split/merge/
-	// migrate). Without it, populate-side spawns reset the entity's
-	// epoch to 0 and the next border frame from the destination cell
-	// gets rejected as stale by every neighbor whose highestSeenEpoch
-	// for this netID is non-zero — replicas silently disappear from
-	// neighbors that had previously observed the entity at a higher
-	// epoch (e.g. crossings between sibling sub-cells during a split).
+	// migrate). The destination cell-transfer executor advances it once
+	// when it materializes a new Live authority. Carrying the source value
+	// is still required: without it, populate-side spawns would restart at
+	// epoch 0 and the next border frame from the destination cell would be
+	// rejected as stale by every neighbor whose highestSeenEpoch for this
+	// netID is non-zero.
 	// On the handoff path, SpawnLiveFromTransfer / PromoteReplicaToLive
 	// override this with the authoritative HandoffPayload.Epoch, so the
 	// frame value is just a baseline for non-handoff transfer paths.
-	Epoch         uint32
-	EntityType    uint8
-	ConnID        uint32 // source node-local; destination remaps via VCM lookup
-	GatewayID     string // composite session key: which gateway terminates the client WS
-	GatewayConnID uint32 // composite session key: connID on the gateway side (client-facing)
-	Username      string // player username (empty for non-player entities)
+	Epoch uint32
+	// StreamGeneration scopes client replication-frame ordering for a player.
+	// It is zero for non-player entities. Transfer paths that materialize a
+	// fresh authority advance the transferred copy while leaving the source
+	// session pinned to its current generation until commit.
+	StreamGeneration uint32
+	EntityType       uint8
+	ConnID           uint32 // source node-local; destination remaps via VCM lookup
+	GatewayID        string // composite session key: which gateway terminates the client WS
+	GatewayConnID    uint32 // composite session key: connID on the gateway side (client-facing)
+	Username         string // player username (empty for non-player entities)
 	// UserID is the canonical auth identity (uuid.UUID, 16 raw bytes on the
 	// wire). Set by SerializeEntityCore from the source session; the
 	// destination cell.go MsgHandoff handler writes it onto the just-
 	// registered session so subsequent cell-cross handoffs out of this cell
 	// don't panic in PlayerRepo.Bind on a zero UserID. Zero for non-player
 	// entities.
-	UserID        uuid.UUID
-	PosX, PosY    float32
-	VelX, VelY    float32
-	Rotation      float32
-	Collider      component.Collider
-	CellX         int32
-	CellY         int32
+	UserID     uuid.UUID
+	PosX, PosY float32
+	VelX, VelY float32
+	Rotation   float32
+	Collider   component.Collider
+	CellX      int32
+	CellY      int32
 	// DebugFlags is the bitmask of debug capabilities for the
 	// session this entity belongs to. Carried in the wire format so
 	// per-player debug grants survive cross-cell and cross-host
@@ -67,6 +72,7 @@ type TransferFrame struct {
 //
 //	[4] NetworkID
 //	[4] Epoch
+//	[4] StreamGeneration
 //	[1] EntityType
 //	[4] ConnID              // source node-local; destination remaps via VCM
 //	[1] GatewayID length
@@ -90,9 +96,24 @@ type TransferFrame struct {
 //	  [2] data length
 //	  [N] data bytes
 func MarshalTransferFrame(f *TransferFrame) ([]byte, error) {
+	if len(f.GatewayID) > 255 {
+		return nil, fmt.Errorf("transfer frame: gateway id is %d bytes, maximum is 255", len(f.GatewayID))
+	}
+	if len(f.Username) > 255 {
+		return nil, fmt.Errorf("transfer frame: username is %d bytes, maximum is 255", len(f.Username))
+	}
+	if len(f.Components) > 65535 {
+		return nil, fmt.Errorf("transfer frame: component count is %d, maximum is 65535", len(f.Components))
+	}
+	for i, c := range f.Components {
+		if len(c.Data) > 65535 {
+			return nil, fmt.Errorf("transfer frame: component %d data is %d bytes, maximum is 65535", i, len(c.Data))
+		}
+	}
+
 	// headerSize is the fixed portion — the variable lengths (Username,
 	// GatewayID, component tails) are added on top.
-	const headerSize = 4 + 4 + 1 + 4 + 1 + 4 + 1 + 16 + 4 + 4 + 4 + 4 + 4 + 14 + 4 + 4 + 4 + 2 // 83
+	const headerSize = 4 + 4 + 4 + 1 + 4 + 1 + 4 + 1 + 16 + 4 + 4 + 4 + 4 + 4 + 14 + 4 + 4 + 4 + 2 // 87
 
 	size := headerSize + len(f.Username) + len(f.GatewayID)
 	for _, c := range f.Components {
@@ -105,6 +126,8 @@ func MarshalTransferFrame(f *TransferFrame) ([]byte, error) {
 	binary.LittleEndian.PutUint32(buf[off:], f.NetworkID)
 	off += 4
 	binary.LittleEndian.PutUint32(buf[off:], f.Epoch)
+	off += 4
+	binary.LittleEndian.PutUint32(buf[off:], f.StreamGeneration)
 	off += 4
 	buf[off] = f.EntityType
 	off++
@@ -170,7 +193,7 @@ func MarshalTransferFrame(f *TransferFrame) ([]byte, error) {
 
 // UnmarshalTransferFrame decodes a TransferFrame from binary data.
 func UnmarshalTransferFrame(data []byte) (*TransferFrame, error) {
-	const headerSize = 4 + 4 + 1 + 4 + 1 + 4 + 1 + 16 + 4 + 4 + 4 + 4 + 4 + 14 + 4 + 4 + 4 + 2 // 83
+	const headerSize = 4 + 4 + 4 + 1 + 4 + 1 + 4 + 1 + 16 + 4 + 4 + 4 + 4 + 4 + 14 + 4 + 4 + 4 + 2 // 87
 	if len(data) < headerSize {
 		return nil, fmt.Errorf("transfer frame: need at least %d bytes, got %d", headerSize, len(data))
 	}
@@ -182,13 +205,18 @@ func UnmarshalTransferFrame(data []byte) (*TransferFrame, error) {
 	off += 4
 	f.Epoch = binary.LittleEndian.Uint32(data[off:])
 	off += 4
+	f.StreamGeneration = binary.LittleEndian.Uint32(data[off:])
+	off += 4
 	f.EntityType = data[off]
 	off++
 	f.ConnID = binary.LittleEndian.Uint32(data[off:])
 	off += 4
 	gwIDLen := int(data[off])
 	off++
-	if off+gwIDLen > len(data) {
+	// The initial header check covers only the fixed-size bytes. Variable
+	// strings shift every subsequent field, so each length must reserve the
+	// fixed tail that follows it before any binary read or slice operation.
+	if off+gwIDLen+4+1 > len(data) {
 		return nil, fmt.Errorf("transfer frame: truncated gateway id (need %d bytes)", gwIDLen)
 	}
 	f.GatewayID = string(data[off : off+gwIDLen])
@@ -197,7 +225,8 @@ func UnmarshalTransferFrame(data []byte) (*TransferFrame, error) {
 	off += 4
 	nameLen := int(data[off])
 	off++
-	if off+nameLen > len(data) {
+	const postUsernameSize = 16 + 4 + 4 + 4 + 4 + 4 + 14 + 4 + 4 + 4 + 2
+	if off+nameLen+postUsernameSize > len(data) {
 		return nil, fmt.Errorf("transfer frame: truncated username (need %d bytes)", nameLen)
 	}
 	f.Username = string(data[off : off+nameLen])
@@ -237,6 +266,11 @@ func UnmarshalTransferFrame(data []byte) (*TransferFrame, error) {
 
 	count := int(binary.LittleEndian.Uint16(data[off:]))
 	off += 2
+	// Every component needs at least its four-byte ID/length header. Reject
+	// impossible counts before allocating attacker-controlled capacity.
+	if count > (len(data)-off)/4 {
+		return nil, fmt.Errorf("transfer frame: component count %d exceeds remaining payload", count)
+	}
 
 	f.Components = make([]ComponentSlice, 0, count)
 	for i := 0; i < count; i++ {
@@ -260,31 +294,34 @@ func UnmarshalTransferFrame(data []byte) (*TransferFrame, error) {
 	return f, nil
 }
 
-// PeekTransferPlayer extracts the source's ConnID, the SessionKey fields
-// (GatewayID, GatewayConnID), Username, and UserID from raw transfer bytes
-// without performing a full deserialization. Returns zero values if the data
-// is too short or the entity is not a player (source ConnID == 0).
+// PeekTransferPlayer extracts the source's ConnID, replication stream
+// generation, SessionKey fields (GatewayID, GatewayConnID), Username, and
+// UserID from raw transfer bytes without performing a full deserialization.
+// Returns zero values if the data is too short or the entity is not a player
+// (source ConnID == 0).
 //
 // The destination node uses the returned SessionKey to register a VCM entry
 // before SpawnLiveFromTransfer / PromoteReplicaToLive runs, so subsequent
 // ClientInput frames from the gateway route to the freshly transferred
 // player on the destination side. UserID is propagated onto the destination
 // session so the next cell-cross handoff doesn't panic in PlayerRepo.Bind.
-func PeekTransferPlayer(data []byte) (srcConnID uint32, gatewayID string, gatewayConnID uint32, username string, userID uuid.UUID) {
-	const connIDOffset = 4 + 4 + 1 // after NetworkID + Epoch + EntityType
+func PeekTransferPlayer(data []byte) (srcConnID uint32, streamGeneration uint32, gatewayID string, gatewayConnID uint32, username string, userID uuid.UUID) {
+	const streamGenerationOffset = 4 + 4 // after NetworkID + Epoch
+	const connIDOffset = streamGenerationOffset + 4 + 1
 	// Minimum fixed layout up through Username length byte.
 	if len(data) < connIDOffset+4+1+4+1 {
-		return 0, "", 0, "", uuid.Nil
+		return 0, 0, "", 0, "", uuid.Nil
 	}
+	streamGeneration = binary.LittleEndian.Uint32(data[streamGenerationOffset:])
 	srcConnID = binary.LittleEndian.Uint32(data[connIDOffset:])
 	if srcConnID == 0 {
-		return 0, "", 0, "", uuid.Nil
+		return 0, 0, "", 0, "", uuid.Nil
 	}
-	off := connIDOffset + 4 // past NetworkID + Epoch + EntityType + ConnID
+	off := connIDOffset + 4
 	gwIDLen := int(data[off])
 	off++
 	if off+gwIDLen+4+1 > len(data) {
-		return srcConnID, "", 0, "", uuid.Nil
+		return srcConnID, streamGeneration, "", 0, "", uuid.Nil
 	}
 	gatewayID = string(data[off : off+gwIDLen])
 	off += gwIDLen
@@ -293,10 +330,10 @@ func PeekTransferPlayer(data []byte) (srcConnID uint32, gatewayID string, gatewa
 	nameLen := int(data[off])
 	off++
 	if off+nameLen+16 > len(data) {
-		return srcConnID, gatewayID, gatewayConnID, "", uuid.Nil
+		return srcConnID, streamGeneration, gatewayID, gatewayConnID, "", uuid.Nil
 	}
 	username = string(data[off : off+nameLen])
 	off += nameLen
 	copy(userID[:], data[off:off+16])
-	return srcConnID, gatewayID, gatewayConnID, username, userID
+	return srcConnID, streamGeneration, gatewayID, gatewayConnID, username, userID
 }

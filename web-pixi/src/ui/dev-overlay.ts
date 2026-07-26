@@ -1,5 +1,3 @@
-import { RENDER_DELAY } from "../constants";
-import { estimatedServerNow } from "../../sdk/_core/clock-sync.js";
 import type { GameState } from "../state";
 
 // Console-log threshold: an observation whose |instant - currentOffset|
@@ -338,6 +336,12 @@ class DevOverlay {
     if (interval > 0) pushRing(this.serverFrameIntervals, interval);
     this.lastServerFrameTime = nowMs;
     this.serverFrameCount++;
+
+    // Empty frames are still useful for arrival/loss accounting, but they
+    // have no producer timestamp. Treating zero as a timestamp would create
+    // a huge, bogus clock-drift sample on every quiet frame.
+    if (!Number.isFinite(maxProducedAtMs) || maxProducedAtMs <= 0) return;
+
     if (maxProducedAtMs > this.lastProducedAtMs) {
       this.lastProducedAtMs = maxProducedAtMs;
     }
@@ -403,15 +407,14 @@ class DevOverlay {
     const segEffects = statsOf(this.segmentRings.effects);
     const segRender = statsOf(this.segmentRings.render);
     const longTasks = statsOf(this.longTasks);
+    const playback = state.playback.metrics;
 
     // Player ring health: how many samples, age range, render-cursor gap.
     let ringText = "  (no player entity)";
     const me = state.entities.get(state.myEntityId);
     if (me) {
       const samples = me.buffer.samples;
-      const renderTime = state.clockSync.initialized
-        ? estimatedServerNow(state.clockSync, now) - RENDER_DELAY
-        : 0;
+      const renderTime = playback.renderTimeMs ?? 0;
       if (samples.length === 0) {
         ringText = "  (player ring empty)";
       } else {
@@ -491,12 +494,23 @@ class DevOverlay {
       `  mean:    ${fmt(offset.mean, 2)} ms   stddev: ${fmt(offset.stddev, 3)} ms`,
       `  range:   ${fmt(offset.max - offset.min, 2)} ms (max-min)`,
       ``,
+      `adaptive playback`,
+      `  delay:   ${fmt(playback.currentDelayMs, 1)} ms current / ${fmt(playback.targetDelayMs, 1)} ms target`,
+      `  jitter:  ${fmt(playback.jitterMs, 1)} ms   excess transit: ${fmt(playback.excessDelayMs, 1)} ms`,
+      `  rate:    ${fmt(playback.playbackRate, 3)}x`,
+      `  frames:  ${playback.receivedFrames} recv / ${playback.lostFrames} lost (${fmt(playback.lossRate * 100, 2)}%)`,
+      `  unusual: ${playback.duplicateFrames} duplicate / ${playback.outOfOrderFrames} out-of-order`,
+      ``,
       `clock-drift outliers (per-frame |instant - offset|)`,
       `   50-200ms: ${this.driftBucket50}   200-500ms: ${this.driftBucket200}   500ms+: ${this.driftBucket500}`,
       `  (entries also printed to console as [clock-drift])`,
       ``,
       `player ring`,
       ringText,
+      ``,
+      `movement prediction contract`,
+      `  pending: ${state.movementPrediction.pendingCount}   overflow evictions: ${state.movementPrediction.overflowCount}`,
+      `  processed ACK: ${state.processedMovementSeq ?? "none"}`,
       ``,
       `last producedAtMs: ${this.lastProducedAtMs}`,
       ``,

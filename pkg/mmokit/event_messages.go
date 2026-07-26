@@ -60,13 +60,16 @@ type DebugInfo struct {
 
 // WorldDelta — per-tick entity-state delta. Body is the custom binary
 // frame produced by pkg/quantize.FrameEncoder (20-byte header + per-entity
-// FullEntry / DeltaEntry / Removed / Exited bytes). Body bytes are opaque
-// to the reflection codec — the schema generator and reflect codec
+// FullEntry / DeltaEntry / Removed / Exited bytes + optional processed-input
+// acknowledgement trailer). StreamEpoch is encoded after Body and scopes the
+// body's frame sequence across replication-source restarts. Body bytes are
+// opaque to the reflection codec — the schema generator and reflect codec
 // fast-path []byte to a `bytes` encoding (`[u32 len][bytes]`) so the
 // payload survives the round-trip without per-byte iteration on the
 // client side.
 type WorldDelta struct {
-	Body []byte
+	Body        []byte
+	StreamEpoch uint32 // session replication generation; scopes frame sequence across restarts
 }
 
 // PlayerEntityAssigned — sent once per session right after the player's

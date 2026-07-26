@@ -23,8 +23,8 @@ Every registered connection implements:
 
 ```go
 type Transport interface {
-    SendReliable(data []byte)
-    SendUnreliable(data []byte)
+    SendReliable(data []byte) SendResult
+    SendUnreliable(data []byte) SendResult
     DrainInput() [][]byte
     DrainOpInput() [][]byte
     InjectInput(data []byte)
@@ -39,6 +39,21 @@ diagnostic interfaces.
 Engine hot paths depend on the narrower `ConnSender` interface rather than a
 concrete manager. Both `*ConnManager` and the universe's mesh-backed virtual
 manager satisfy that shape.
+
+Every send returns a `SendResult`. `SendQueued` means the transport accepted
+ownership of the frame; it is not a remote acknowledgement. The result also
+reports the accepted path's delivery class (`DeliveryBestEffort`,
+`DeliveryOrdered`, or `DeliveryReliableOrdered`). Callers that advance delta
+baselines must require `result.Supports(DeliveryReliableOrdered)`. Other
+dispositions distinguish backpressure, a closed connection, a missing route,
+definite failure, and an indeterminate downstream result where retrying may
+duplicate the frame.
+
+Distributed replication can opt into `TrackedReplicationSender` and
+`ReplicationReceiptSource`. Its initial ordered mesh admission does not advance
+a delta baseline; a writer-scoped receipt confirms the gateway's final client
+transport enqueue. Generic events and operations still use the ordinary
+`ConnSender` result and do not receive this end-to-end acknowledgement.
 
 ## Connection manager
 
@@ -90,11 +105,13 @@ handlers alongside metrics, commands, authentication, and game routes.
 `WSTransport` wraps the internal `Conn`. Because WebSocket runs over TCP,
 `SendReliable` and `SendUnreliable` both enqueue into the same 64-entry
 outbound channel. Enqueue is non-blocking; a full channel logs and drops the
-frame.
+frame and returns `SendBackpressure`.
 
 The read pump routes binary messages into mutex-protected event or operation
 queues. The write pump records queue delay, write duration, slow-write counts,
-and cumulative byte counters exposed by `/debug/conn-stats`.
+and cumulative byte counters exposed by `/debug/conn-stats`. Each write has a
+five-second deadline; a client that stops reading is closed instead of pinning
+the writer and its queue indefinitely.
 
 ## UDP
 
@@ -126,9 +143,13 @@ That token is not encryption or application authentication.
 
 The reliable path uses 16-bit sequence numbers, a 256-slot send ring, and an
 ACK containing the highest sequence plus a 32-bit history. Unacknowledged
-packets are retried on the 100 ms transport tick. The API does not report
-remote delivery, and reliable receive does not provide an application-level
-in-order buffer.
+packets are retried on the 100 ms transport tick and expire five seconds after
+their initial send; retransmission does not extend that lifetime. Exact
+sequence identity prevents stale ACKs from clearing a wrapped ring slot, and a
+full ring reports backpressure rather than overwriting live data. The receive
+window suppresses duplicate retransmissions and accepts an unseen out-of-order
+packet once. It does not provide an application-level in-order buffer, and the
+send API does not report remote delivery.
 
 An idle transport sends a keepalive after 1 second and times out after 10
 seconds without receiving a packet. `UDPTransport` runs those checks on a
@@ -152,6 +173,9 @@ message, err := client.Recv()
 ```
 
 Browser clients use WebSocket; browsers cannot open raw UDP sockets.
+The Go client mirrors the server's sequence-wrap, stale-ACK, receive-dedup,
+five-second lifetime, and concurrency rules. `SendReliable` returns
+`udpclient.ErrReliableWindowFull` when its 256-slot window cannot advance.
 
 ## Ownership and copying
 

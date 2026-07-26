@@ -3,9 +3,109 @@ package universe
 import (
 	"testing"
 
+	"github.com/google/uuid"
+
 	meshpb "github.com/zenion/mmoserver/gen/go/meshpb"
 	"github.com/zenion/mmoserver/pkg/coords"
 )
+
+func TestGatewayDispatchPlayerAssignmentCarriesInitialStreamGeneration(t *testing.T) {
+	coord := newTestCoordinator(Config{CellsX: 1, CellsY: 1})
+	cellID := CellID{X: 0, Y: 0}.MeshID()
+	cell := coord.Cells[cellID]
+	g := &Gateway{
+		id:       InprocGatewayID,
+		coord:    coord,
+		log:      coord.Log,
+		sessions: make(map[uint32]*localSession),
+	}
+	sess := &localSession{
+		connID:   71,
+		userID:   uuid.New(),
+		username: "assignment-generation",
+		hostID:   "local",
+		cellID:   cellID,
+		epoch:    13,
+	}
+
+	if err := g.dispatchPlayerAssignment(sess); err != nil {
+		t.Fatalf("dispatchPlayerAssignment: %v", err)
+	}
+	select {
+	case msg := <-cell.Inbox:
+		if msg.Assignment == nil {
+			t.Fatal("PlayerAssignment payload is nil")
+		}
+		if msg.Assignment.StreamGeneration != 13 {
+			t.Fatalf("StreamGeneration = %d, want gateway epoch 13", msg.Assignment.StreamGeneration)
+		}
+	default:
+		t.Fatal("target cell received no PlayerAssignment")
+	}
+}
+
+func TestGatewayRemotePlayerAssignmentCarriesRouteAndStreamGenerations(t *testing.T) {
+	hn := newManualHostNetwork(t)
+	peer := &hostPeer{outQ: make(chan outboundFrame, 1)}
+	hn.peers["host-a"] = peer
+
+	captured := make(chan *meshpb.MeshFrame, 1)
+	go func() {
+		outbound := <-peer.outQ
+		captured <- outbound.frame
+		outbound.result <- nil
+	}()
+
+	g := &Gateway{
+		id:          "gateway-a",
+		hostNetwork: hn,
+		log:         hn.log,
+		sessions:    make(map[uint32]*localSession),
+	}
+	sess := &localSession{
+		connID:   71,
+		userID:   uuid.New(),
+		username: "remote-assignment-generation",
+		hostID:   "host-a",
+		cellID:   "cell_0_0",
+		epoch:    13,
+	}
+
+	if err := g.dispatchPlayerAssignmentRemote(sess); err != nil {
+		t.Fatalf("dispatchPlayerAssignmentRemote: %v", err)
+	}
+	assignment := (<-captured).GetPlayerAssignment()
+	if assignment == nil {
+		t.Fatal("remote PlayerAssignment payload is nil")
+	}
+	if assignment.Epoch != 13 {
+		t.Fatalf("route Epoch = %d, want 13", assignment.Epoch)
+	}
+	if assignment.StreamGeneration != 13 {
+		t.Fatalf("StreamGeneration = %d, want initial generation 13", assignment.StreamGeneration)
+	}
+}
+
+func TestGatewayLookupSessionReturnsRouteSnapshot(t *testing.T) {
+	g := &Gateway{sessions: map[uint32]*localSession{
+		7: {connID: 7, hostID: "host-a", cellID: "cell_0_0", epoch: 11},
+	}}
+
+	snapshot := g.lookupSession(7)
+	if snapshot == nil {
+		t.Fatal("lookupSession returned nil")
+	}
+	snapshot.hostID = "host-b"
+	snapshot.cellID = "cell_1_0"
+	snapshot.epoch = 12
+
+	g.mu.RLock()
+	stored := g.sessions[7]
+	if stored.hostID != "host-a" || stored.cellID != "cell_0_0" || stored.epoch != 11 {
+		t.Fatalf("mutating route snapshot changed stored session: %+v", stored)
+	}
+	g.mu.RUnlock()
+}
 
 // TestCellAtPosition_RoutesFreshLoginToOwningCell pins the fix for the
 // pre-Location anyCellID bug. With CellSize=2000 and a 2×2 grid, a spawn

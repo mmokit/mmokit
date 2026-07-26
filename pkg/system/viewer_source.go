@@ -19,6 +19,8 @@ type PlayerViewerSource struct {
 	buf      []ViewerInfo
 }
 
+var _ ViewerLiveness = (*PlayerViewerSource)(nil)
+
 // NewPlayerViewerSource creates a ViewerSource that returns players in the given
 // states as viewers. Typically includes at least engine.StateActive; additional
 // states (e.g. a custom "docking" state) keep those players receiving updates.
@@ -36,6 +38,9 @@ func (s *PlayerViewerSource) ActiveViewers() []ViewerInfo {
 	s.buf = s.buf[:0]
 	for _, state := range s.states {
 		s.players.ForEach(state, func(sess *engine.PlayerSession) {
+			if sess.ReplicationSuspended {
+				return
+			}
 			entity := sess.Entity
 			if !s.world.Alive(entity) {
 				return
@@ -56,4 +61,13 @@ func (s *PlayerViewerSource) ActiveViewers() []ViewerInfo {
 		})
 	}
 	return s.buf
+}
+
+// ViewerExists reports whether connID still belongs to a session in this
+// PlayerManager. A session can temporarily be absent from ActiveViewers while
+// it occupies a game-specific lifecycle state; replication uses this signal to
+// retain its frame sequence and force a fresh snapshot when it becomes active
+// again.
+func (s *PlayerViewerSource) ViewerExists(connID uint32) bool {
+	return s.players.ByConnID(connID) != nil
 }

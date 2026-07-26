@@ -27,6 +27,8 @@ func (b csharpBackend) CoreFiles() []CoreFile {
 		"InterpolationCore.cs",
 		"ClockSync.cs",
 		"InterpolationBuffer.cs",
+		"AdaptivePlaybackController.cs",
+		"PredictionBuffer.cs",
 		"ReflectCodec.cs",
 		"UdpProto.cs",
 		"UdpTransport.cs",
@@ -92,11 +94,12 @@ func (b csharpBackend) genEntities(schema ProtocolSchema) string {
 	sb.WriteString("using System.Collections.Generic;\n\n")
 	fmt.Fprintf(&sb, "namespace %s\n{\n", b.namespace)
 
-	// Common base: every decoded entity carries these three.
+	// Common base: every decoded entity carries this wire metadata.
 	sb.WriteString("    /// Fields every decoded entity carries. ProducedAtMs is the producer\n")
 	sb.WriteString("    /// cluster-clock stamp (Unix ms) used as the interpolation time-base.\n")
 	sb.WriteString("    public abstract class EntityBase\n    {\n")
 	sb.WriteString("        public uint NetID;\n")
+	sb.WriteString("        public uint AuthorityEpoch;\n")
 	sb.WriteString("        public byte EntityKind;\n")
 	sb.WriteString("        public ulong ProducedAtMs;\n")
 	sb.WriteString("    }\n\n")
@@ -145,6 +148,8 @@ func (b csharpBackend) genEntities(schema ProtocolSchema) string {
 	sb.WriteString("        public uint Tick;\n")
 	sb.WriteString("        public uint Seq;\n")
 	sb.WriteString("        public bool FreshSnapshot;\n")
+	sb.WriteString("        public bool StreamChanged;\n")
+	sb.WriteString("        public uint? ProcessedInputSeq;\n")
 	sb.WriteString("        public List<EntityBase> Entered = new();\n")
 	sb.WriteString("        public List<EntityBase> Updated = new();\n")
 	sb.WriteString("        public List<uint> Removed = new();\n")

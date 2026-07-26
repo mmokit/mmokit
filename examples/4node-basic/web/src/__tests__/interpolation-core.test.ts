@@ -70,7 +70,13 @@ describe("interpolateRing", () => {
   test("single sample returns static position", () => {
     const r = ring(s(10, 5, 5, 0, 0, 0.5));
     const out = interpolateRing(r, 9999, EXT, RD);
-    expect(out).toEqual({ renderX: 5, renderY: 5, renderRot: 0.5 });
+    expect(out).toEqual({
+      renderX: 5,
+      renderY: 5,
+      renderRot: 0.5,
+      mode: "hold",
+      extrapolatedMs: 0,
+    });
   });
 
   test("renderTime between two samples lerps linearly", () => {

@@ -18,11 +18,13 @@ type sendEventCaptureConn struct {
 	sent map[uint32][]byte
 }
 
-func (c *sendEventCaptureConn) Send(connID uint32, data []byte) {
+func (c *sendEventCaptureConn) Send(connID uint32, data []byte) pkgnet.SendResult {
 	c.sent[connID] = append([]byte(nil), data...)
+	return pkgnet.SendResult{Disposition: pkgnet.SendQueued, Delivery: pkgnet.DeliveryReliableOrdered}
 }
-func (c *sendEventCaptureConn) SendReliable(connID uint32, data []byte) {
+func (c *sendEventCaptureConn) SendReliable(connID uint32, data []byte) pkgnet.SendResult {
 	c.sent[connID] = append([]byte(nil), data...)
+	return pkgnet.SendResult{Disposition: pkgnet.SendQueued, Delivery: pkgnet.DeliveryReliableOrdered}
 }
 func (c *sendEventCaptureConn) InjectInput(connID uint32, data []byte) {}
 func (c *sendEventCaptureConn) DrainInput(connID uint32) [][]byte      { return nil }

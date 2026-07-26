@@ -112,6 +112,166 @@ func TestFlushRemovals_SkipsDeadEntities(t *testing.T) {
 	}
 }
 
+func TestRemoveEntityNow_RecordsAndCleansUpExactlyOnce(t *testing.T) {
+	eng := newTestEngine()
+	mapper := ecs.NewMap1[testComp](eng.ECS)
+	entity := mapper.NewEntity(&testComp{ID: 77})
+
+	eng.GetNetID = func(e ecs.Entity) (uint32, bool) {
+		return mapper.Get(e).ID, true
+	}
+	cleanupCalls := 0
+	eng.OnEntityRemoved = func(e ecs.Entity) {
+		cleanupCalls++
+		if !eng.ECS.Alive(e) {
+			t.Error("cleanup hook ran after ECS removal")
+		}
+	}
+
+	if removed := eng.RemoveEntityNow(entity); !removed {
+		t.Fatal("first RemoveEntityNow returned false")
+	}
+	if removed := eng.RemoveEntityNow(entity); removed {
+		t.Fatal("second RemoveEntityNow returned true for a dead entity")
+	}
+
+	if cleanupCalls != 1 {
+		t.Fatalf("cleanup hook calls = %d, want 1", cleanupCalls)
+	}
+	if len(eng.RemovedNetIDs) != 1 || eng.RemovedNetIDs[0] != 77 {
+		t.Fatalf("RemovedNetIDs = %v, want [77]", eng.RemovedNetIDs)
+	}
+	if eng.ECS.Alive(entity) {
+		t.Fatal("entity should be removed from ECS world")
+	}
+}
+
+func TestRemovalPublication_LateRemovalRollsToNextTick(t *testing.T) {
+	eng := newTestEngine()
+	mapper := ecs.NewMap1[testComp](eng.ECS)
+	early := mapper.NewEntity(&testComp{ID: 10})
+	late := mapper.NewEntity(&testComp{ID: 20})
+	eng.GetNetID = func(e ecs.Entity) (uint32, bool) {
+		return mapper.Get(e).ID, true
+	}
+
+	eng.BeginRemovalTick()
+	eng.RemoveEntityNow(early)
+	first := eng.SampleRemovedNetIDs()
+	if len(first) != 1 || first[0] != 10 {
+		t.Fatalf("first sample = %v, want [10]", first)
+	}
+
+	// Once sampled, the current batch is immutable and a later-system
+	// despawn must survive into the next publication phase.
+	eng.RemoveEntityNow(late)
+	if got := eng.SampleRemovedNetIDs(); len(got) != 1 || got[0] != 10 {
+		t.Fatalf("repeated sample = %v, want stable [10]", got)
+	}
+
+	eng.BeginRemovalTick()
+	second := eng.SampleRemovedNetIDs()
+	if len(second) != 1 || second[0] != 20 {
+		t.Fatalf("second sample = %v, want [20]", second)
+	}
+
+	eng.BeginRemovalTick()
+	if got := eng.SampleRemovedNetIDs(); len(got) != 0 {
+		t.Fatalf("third sample = %v, want empty", got)
+	}
+}
+
+func TestRemovalPublication_UnsampledBatchIsRetained(t *testing.T) {
+	eng := newTestEngine()
+	mapper := ecs.NewMap1[testComp](eng.ECS)
+	entity := mapper.NewEntity(&testComp{ID: 31})
+	eng.GetNetID = func(e ecs.Entity) (uint32, bool) {
+		return mapper.Get(e).ID, true
+	}
+
+	eng.BeginRemovalTick()
+	eng.RemoveEntityNow(entity)
+	// Simulate a tick where no replication consumer runs.
+	eng.BeginRemovalTick()
+	if got := eng.SampleRemovedNetIDs(); len(got) != 1 || got[0] != 31 {
+		t.Fatalf("sample after skipped consumer = %v, want [31]", got)
+	}
+}
+
+func TestRemoveEntityNow_LocalOnlyCleansWithoutPublishing(t *testing.T) {
+	eng := newTestEngine()
+	mapper := ecs.NewMap1[testComp](eng.ECS)
+	entity := mapper.NewEntity(&testComp{ID: 44})
+	eng.GetNetID = func(e ecs.Entity) (uint32, bool) {
+		return mapper.Get(e).ID, true
+	}
+
+	mandatoryCalls := 0
+	observerCalls := 0
+	eng.SetEntityRemovalCleanup(func(e ecs.Entity) {
+		mandatoryCalls++
+		if !eng.ECS.Alive(e) {
+			t.Error("mandatory cleanup ran after ECS removal")
+		}
+	})
+	eng.OnEntityRemoved = func(e ecs.Entity) {
+		observerCalls++
+		if !eng.ECS.Alive(e) {
+			t.Error("observer ran after ECS removal")
+		}
+	}
+
+	eng.BeginRemovalTick()
+	if !eng.RemoveEntityNowWithPolicy(entity, RemovalLocalOnly) {
+		t.Fatal("local-only removal returned false")
+	}
+	if eng.RemoveEntityNowWithPolicy(entity, RemovalLocalOnly) {
+		t.Fatal("repeated local-only removal returned true")
+	}
+	if mandatoryCalls != 1 || observerCalls != 1 {
+		t.Fatalf("cleanup calls = (%d mandatory, %d observer), want (1, 1)", mandatoryCalls, observerCalls)
+	}
+	if got := eng.SampleRemovedNetIDs(); len(got) != 0 {
+		t.Fatalf("local-only removal published tombstones: %v", got)
+	}
+}
+
+func TestMarkForRemoval_AuthoritativePolicyWinsMixedDuplicates(t *testing.T) {
+	orders := []struct {
+		name     string
+		policies []RemovalPolicy
+	}{
+		{name: "local_then_authoritative", policies: []RemovalPolicy{RemovalLocalOnly, RemovalAuthoritative}},
+		{name: "authoritative_then_local", policies: []RemovalPolicy{RemovalAuthoritative, RemovalLocalOnly}},
+	}
+
+	for _, order := range orders {
+		t.Run(order.name, func(t *testing.T) {
+			eng := newTestEngine()
+			mapper := ecs.NewMap1[testComp](eng.ECS)
+			entity := mapper.NewEntity(&testComp{ID: 55})
+			eng.GetNetID = func(e ecs.Entity) (uint32, bool) {
+				return mapper.Get(e).ID, true
+			}
+			cleanupCalls := 0
+			eng.SetEntityRemovalCleanup(func(ecs.Entity) { cleanupCalls++ })
+
+			eng.BeginRemovalTick()
+			for _, policy := range order.policies {
+				eng.MarkForRemovalWithPolicy(entity, policy)
+			}
+			eng.FlushRemovals()
+
+			if cleanupCalls != 1 {
+				t.Fatalf("cleanup calls = %d, want 1", cleanupCalls)
+			}
+			if got := eng.SampleRemovedNetIDs(); len(got) != 1 || got[0] != 55 {
+				t.Fatalf("published tombstones = %v, want [55]", got)
+			}
+		})
+	}
+}
+
 // --- TickProfile tests ---
 
 func TestTickProfile_EmptyStats(t *testing.T) {

@@ -45,7 +45,8 @@ client.OnPlayerEntityAssigned(p =>
 });
 client.OnWorldDelta(m =>
 {
-    var u = client.Decoder.Decode(m.body);
+    var u = client.Decoder.Decode(m.body, m.streamEpoch);
+    if (u is null) return;
     deltas++;
     totalEntered += u.Entered.Count;
     totalUpdated += u.Updated.Count;

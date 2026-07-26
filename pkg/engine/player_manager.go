@@ -219,9 +219,10 @@ func (pm *PlayerManager) Transition(s *PlayerSession, to PlayerState) error {
 func (pm *PlayerManager) createSession(connID uint32) *PlayerSession {
 	pm.nextSessionID++
 	s := &PlayerSession{
-		ID:     pm.nextSessionID,
-		ConnID: connID,
-		State:  StatePending,
+		ID:               pm.nextSessionID,
+		ConnID:           connID,
+		StreamGeneration: 1,
+		State:            StatePending,
 	}
 	pm.sessions[s.ID] = s
 	if connID != 0 {
@@ -321,7 +322,6 @@ func (pm *PlayerManager) RegisterSessionTransfer(connID uint32, username string,
 func (pm *PlayerManager) SetGracePeriod(d time.Duration) {
 	pm.gracePeriod = d
 }
-
 
 // SetSessionCallbacks sets coordinator-level session tracking callbacks.
 // These are called during state transitions and session removal.

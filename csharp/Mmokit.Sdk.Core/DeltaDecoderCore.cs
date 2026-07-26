@@ -58,6 +58,7 @@ namespace Mmokit.Sdk.Core
     {
         public const int FrameHeaderSize = 20;
         public const uint FrameFlagFreshSnapshot = 1u << 0;
+        public const uint FrameFlagInputAck = 1u << 1;
 
         // --- big-endian primitive reads ---
         public static short ReadInt16(byte[] data, int offset)
@@ -137,6 +138,15 @@ namespace Mmokit.Sdk.Core
             var ids = new uint[count];
             for (int i = 0; i < count; i++) { ids[i] = ReadUint32(data, pos); pos += 4; }
             return (ids, pos);
+        }
+
+        /// Decode the optional uint32 processed-input acknowledgement trailer.
+        /// pos must point just after the frame's exited-ID list.
+        public static (uint? Sequence, int Offset) DecodeInputAck(byte[] data, int pos, uint flags)
+        {
+            if ((flags & FrameFlagInputAck) == 0) return (null, pos);
+            if (pos + 4 > data.Length) throw new ArgumentException("delta frame: truncated input acknowledgement trailer", nameof(data));
+            return (ReadUint32(data, pos), pos + 4);
         }
 
         // --- generic delta application (mirrors applyDelta in the TS) ---

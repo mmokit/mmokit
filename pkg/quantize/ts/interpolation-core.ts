@@ -23,11 +23,19 @@ export interface Sample {
   velY: number;
   rotation: number;
   producedAtMs: number;
+  /**
+   * Optional authority generation for this entity. When present, newer
+   * generations supersede older in-flight samples even if those samples
+   * arrive later. Older clients and games may omit it.
+   */
+  authorityEpoch?: number;
 }
 
 /** A ring of samples ordered ascending by producedAtMs. */
 export interface SampleRing {
   samples: Sample[];
+  /** Newest explicit authority epoch accepted by this ring. */
+  authorityEpoch?: number;
 }
 
 /** Interpolated render position computed by interpolateRing. */
@@ -35,6 +43,30 @@ export interface InterpolationResult {
   renderX: number;
   renderY: number;
   renderRot: number;
+  /** How the returned pose was produced. */
+  mode: "interpolate" | "extrapolate" | "hold";
+  /** Velocity-projection time used by the returned pose. */
+  extrapolatedMs: number;
+}
+
+export interface PushSampleResult {
+  accepted: boolean;
+  /** True when a newer authority epoch forced a backwards timeline reset. */
+  reset: boolean;
+  reason?: "stale-time" | "older-epoch";
+}
+
+const UINT32_HALF_RANGE = 0x80000000;
+
+function authorityEpochRelation(
+  current: number,
+  incoming: number,
+): "same" | "newer" | "older" {
+  const distance = ((incoming >>> 0) - (current >>> 0)) >>> 0;
+  if (distance === 0) return "same";
+  // RFC 1982 serial-number ordering. The exact half-range is deliberately
+  // treated as ambiguous/old rather than allowing both sides to be newer.
+  return distance < UINT32_HALF_RANGE ? "newer" : "older";
 }
 
 /** Linear interpolation between a and b at fraction t in [0, 1]. */
@@ -66,16 +98,43 @@ export function lerpAngle(a: number, b: number, t: number): number {
  *
  * Evicts the oldest sample when the ring would exceed ringSize.
  */
-export function pushSample(ring: SampleRing, s: Sample, ringSize: number): void {
+export function pushSample(ring: SampleRing, s: Sample, ringSize: number): PushSampleResult {
   const samples = ring.samples;
-  const tip = samples.length > 0 ? samples[samples.length - 1] : null;
+  let tip = samples.length > 0 ? samples[samples.length - 1] : null;
+
+  // Authority epochs are uint32 serial numbers and can wrap. An omitted epoch
+  // preserves the legacy timestamp-only behavior.
+  if (s.authorityEpoch !== undefined) {
+    const incomingEpoch = s.authorityEpoch >>> 0;
+    const relation = ring.authorityEpoch === undefined
+      ? "newer"
+      : authorityEpochRelation(ring.authorityEpoch, incomingEpoch);
+    if (relation === "older") {
+      return { accepted: false, reset: false, reason: "older-epoch" };
+    }
+    if (relation === "newer") {
+      ring.authorityEpoch = incomingEpoch;
+      // A handoff can move to a host whose clock estimate stamps its first
+      // sample behind the old tip. Start a new monotonic timeline in that
+      // case. Keep the old samples when timestamps remain seamless so a
+      // normal handoff does not introduce an avoidable interpolation hitch.
+      if (tip && s.producedAtMs < tip.producedAtMs) {
+        samples.length = 0;
+        tip = null;
+        samples.push(s);
+        return { accepted: true, reset: true };
+      }
+    }
+  }
+
   if (tip && s.producedAtMs < tip.producedAtMs) {
-    return;
+    return { accepted: false, reset: false, reason: "stale-time" };
   }
   samples.push(s);
   if (samples.length > ringSize) {
     samples.shift();
   }
+  return { accepted: true, reset: false };
 }
 
 /**
@@ -92,7 +151,21 @@ export function pushSample(ring: SampleRing, s: Sample, ringSize: number): void 
  * fields backward for a frame — a visible flicker — even though the position
  * ring correctly ignores it.
  */
-export function isStaleSample(ring: SampleRing, producedAtMs: number): boolean {
+export function isStaleSample(
+  ring: SampleRing,
+  producedAtMs: number,
+  authorityEpoch?: number,
+): boolean {
+  if (
+    authorityEpoch !== undefined &&
+    ring.authorityEpoch !== undefined
+  ) {
+    const relation = authorityEpochRelation(ring.authorityEpoch, authorityEpoch);
+    if (relation === "older") return true;
+    // A newer epoch is accepted even with a backwards stamp: pushSample will
+    // reset the old timeline safely.
+    if (relation === "newer") return false;
+  }
   const samples = ring.samples;
   const tip = samples.length > 0 ? samples[samples.length - 1] : null;
   return tip !== null && producedAtMs < tip.producedAtMs;
@@ -125,7 +198,13 @@ export function interpolateRing(
   if (n === 0) return null;
   if (n === 1) {
     const s = samples[0];
-    return { renderX: s.worldX, renderY: s.worldY, renderRot: s.rotation };
+    return {
+      renderX: s.worldX,
+      renderY: s.worldY,
+      renderRot: s.rotation,
+      mode: "hold",
+      extrapolatedMs: 0,
+    };
   }
 
   let s0 = samples[0];
@@ -140,15 +219,24 @@ export function interpolateRing(
   const effS0Stamp = Math.max(s0.producedAtMs, s1.producedAtMs - renderDelayMs);
 
   if (renderTimeMs <= effS0Stamp) {
-    return { renderX: s0.worldX, renderY: s0.worldY, renderRot: s0.rotation };
+    return {
+      renderX: s0.worldX,
+      renderY: s0.worldY,
+      renderRot: s0.rotation,
+      mode: "hold",
+      extrapolatedMs: 0,
+    };
   }
   if (renderTimeMs >= s1.producedAtMs) {
-    const extMs = Math.min(renderTimeMs - s1.producedAtMs, maxExtrapolateMs);
+    const requestedMs = Math.max(0, renderTimeMs - s1.producedAtMs);
+    const extMs = Math.min(requestedMs, Math.max(0, maxExtrapolateMs));
     const extS = extMs / 1000;
     return {
       renderX: s1.worldX + s1.velX * extS,
       renderY: s1.worldY + s1.velY * extS,
       renderRot: s1.rotation,
+      mode: extMs > 0 && requestedMs <= maxExtrapolateMs ? "extrapolate" : "hold",
+      extrapolatedMs: extMs,
     };
   }
   const t = (renderTimeMs - effS0Stamp) / (s1.producedAtMs - effS0Stamp);
@@ -156,5 +244,7 @@ export function interpolateRing(
     renderX: lerp(s0.worldX, s1.worldX, t),
     renderY: lerp(s0.worldY, s1.worldY, t),
     renderRot: lerpAngle(s0.rotation, s1.rotation, t),
+    mode: "interpolate",
+    extrapolatedMs: 0,
   };
 }

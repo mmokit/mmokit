@@ -1,10 +1,65 @@
 package game
 
 import (
+	"math"
+
 	gamecomp "github.com/zenion/mmoserver/internal/component"
 	"github.com/zenion/mmoserver/internal/item"
+	"github.com/zenion/mmoserver/pkg/coords"
 	"github.com/zenion/mmoserver/pkg/mmokit"
 )
+
+// inputSequenceAfter compares uint32 sequence numbers in serial-number space.
+// Zero is reserved for legacy/unsequenced clients and is handled by callers.
+func inputSequenceAfter(candidate, current uint32) bool {
+	return candidate != current && int32(candidate-current) > 0
+}
+
+// consumeMoveTargetInput applies the latest idempotent movement command. A
+// non-zero sequence is marked processed even when semantic validation rejects
+// the target, allowing prediction clients to retire poison/bad commands and
+// reconcile to authoritative state instead of retrying forever.
+func consumeMoveTargetInput(mt *mmokit.MoveTarget, msg *SetMoveTarget, canMove bool, maxWorldX, maxWorldY float32) bool {
+	if msg.Sequence != 0 {
+		if mt.Sequence != 0 && !inputSequenceAfter(msg.Sequence, mt.Sequence) {
+			return false
+		}
+		mt.Sequence = msg.Sequence
+	}
+	if !canMove {
+		return true
+	}
+	if !msg.Active {
+		mt.Active = false
+		return true
+	}
+	if math.IsNaN(float64(msg.X)) || math.IsNaN(float64(msg.Y)) ||
+		math.IsInf(float64(msg.X), 0) || math.IsInf(float64(msg.Y), 0) {
+		return true
+	}
+	if maxWorldX > 0 && (msg.X < 0 || msg.X >= maxWorldX) {
+		return true
+	}
+	if maxWorldY > 0 && (msg.Y < 0 || msg.Y >= maxWorldY) {
+		return true
+	}
+	mt.SetTarget(msg.X, msg.Y)
+	return true
+}
+
+// movementInputPolicy keeps the input-ack contract aligned with the viewer
+// states configured by NetworkSystem. Connected viewers consume a sequenced
+// command even when their lifecycle forbids applying movement.
+func movementInputPolicy(state mmokit.PlayerState) (consume, canMove bool) {
+	switch state {
+	case mmokit.StateActive:
+		return true, true
+	case StateDead, StateDocking, StateDocked:
+		return true, false
+	default:
+		return false, false
+	}
+}
 
 // RegisterInputs installs every space-game input handler on the process via
 // the typed-message HandleClient[T] surface. Called from GameSetup(coord).
@@ -22,27 +77,30 @@ func RegisterInputs(mmo *mmokit.Process) {
 	// Active=false clears the target (player stops at current position).
 	mmokit.HandleClient(mmo, func(player mmokit.Entity, msg *SetMoveTarget) {
 		state := mmokit.PlayerStateOf(player)
-		// StateDocking still acks the sequence but ignores the target —
-		// players can't issue movement while the dock animation runs.
-		if state != mmokit.StateActive && state != StateDocking {
-			return
-		}
-		input := mmokit.Get[gamecomp.PlayerInput](player)
-		if input == nil {
-			return
-		}
-		input.Sequence = msg.Sequence
-		if state == StateDocking {
+		// Every connected state that remains a replication viewer consumes the
+		// sequence even when movement is disabled. A command can race a death or
+		// docking transition; leaving its sequence unacknowledged would make a
+		// prediction client replay that permanently rejected command after the
+		// player becomes active again.
+		consume, canMove := movementInputPolicy(state)
+		if !consume {
 			return
 		}
 		mt := mmokit.Get[mmokit.MoveTarget](player)
 		if mt == nil {
 			return
 		}
-		if msg.Active {
-			mt.SetTarget(msg.X, msg.Y)
-		} else {
-			mt.Active = false
+		gw := gameWorldOfEntity(player)
+		if gw == nil {
+			return
+		}
+		maxWorldX := float32(gw.Config.MeshCellsX) * coords.CellSize
+		maxWorldY := float32(gw.Config.MeshCellsY) * coords.CellSize
+		if !consumeMoveTargetInput(mt, msg, canMove, maxWorldX, maxWorldY) {
+			return
+		}
+		if input := mmokit.Get[gamecomp.PlayerInput](player); input != nil {
+			input.Sequence = msg.Sequence
 		}
 	})
 
@@ -342,4 +400,3 @@ func RegisterInputs(mmo *mmokit.Process) {
 		}
 	})
 }
-

@@ -77,19 +77,19 @@ func (b *grpcBridge) resolveDest(destCellID MeshCellID) (useLocal bool, destHost
 // All routing-decision log lines land in CatMeshGrpc so operators can
 // tail "mesh:grpc" to see every bridge dispatch without drowning in
 // mesh:replica or mesh:transfer noise.
-func (b *grpcBridge) sendViaGrpc(destHostID string, destCellID MeshCellID, msg CellMessage, reliable bool) {
+func (b *grpcBridge) sendViaGrpc(destHostID string, destCellID MeshCellID, msg CellMessage, reliable bool) bool {
 	if destHostID == "" {
 		b.cell.Log.Log(CatMeshGrpc, "[%s] grpc send: no host for cell %s", b.cell.MeshID, destCellID)
-		return
+		return false
 	}
 	if b.host.Network == nil {
 		b.cell.Log.Log(CatMeshGrpc, "[%s] grpc send: local host has no Network", b.cell.MeshID)
-		return
+		return false
 	}
 	frame, err := encodeCellMessage(msg, destCellID)
 	if err != nil {
 		b.cell.Log.Log(CatMeshGrpc, "[%s] grpc encode %v failed: %v", b.cell.MeshID, msg.Type, err)
-		return
+		return false
 	}
 	// Self-route shortcut: when gatewayMode=always-proxy routes a same-host
 	// destination through sendViaGrpc, the peer map has no self entry
@@ -101,24 +101,25 @@ func (b *grpcBridge) sendViaGrpc(destHostID string, destCellID MeshCellID, msg C
 	if destHostID == b.host.ID {
 		if err := b.host.Network.routeInboundFrame(frame); err != nil {
 			b.cell.Log.Log(CatMeshGrpc, "[%s] grpc self-route to %s failed: %v", b.cell.MeshID, destCellID, err)
-			return
+			return false
 		}
 		b.cell.Log.Log(CatMeshGrpc, "[%s] grpc self-route -> cell=%s type=%v", b.cell.MeshID, destCellID, msg.Type)
-		return
+		return true
 	}
 	if reliable {
 		if err := b.host.SendReliable(destHostID, frame); err != nil {
 			b.cell.Log.Log(CatMeshGrpc, "[%s] grpc reliable send to %s failed: %v", b.cell.MeshID, destHostID, err)
-			return
+			return false
 		}
 		b.cell.Log.Log(CatMeshGrpc, "[%s] grpc reliable -> host=%s cell=%s type=%v", b.cell.MeshID, destHostID, destCellID, msg.Type)
-		return
+		return true
 	}
 	if ok := b.host.SendLossy(destHostID, frame); !ok {
 		b.cell.Log.Log(CatMeshGrpc, "[%s] grpc lossy drop to %s (%v)", b.cell.MeshID, destHostID, msg.Type)
-		return
+		return false
 	}
 	b.cell.Log.Log(CatMeshGrpc, "[%s] grpc lossy -> host=%s cell=%s type=%v", b.cell.MeshID, destHostID, destCellID, msg.Type)
+	return true
 }
 
 // dispatchOrLocal resolves the destination and either delegates to the
@@ -133,16 +134,14 @@ func (b *grpcBridge) dispatchOrLocal(destCellID MeshCellID, reliable bool, local
 	b.sendViaGrpc(destHostID, destCellID, msgFn(), reliable)
 }
 
-// dispatchOrLocalBool is the bool-returning variant for methods like
-// SendHandoff where the local path may fail (returning false) but the
-// remote path is fire-and-forget (always true).
+// dispatchOrLocalBool is the bool-returning variant for critical messages
+// whose local or remote enqueue failure must be visible to the caller.
 func (b *grpcBridge) dispatchOrLocalBool(destCellID MeshCellID, reliable bool, localFn func() bool, msgFn func() CellMessage) bool {
 	useLocal, destHostID := b.resolveDest(destCellID)
 	if useLocal {
 		return localFn()
 	}
-	b.sendViaGrpc(destHostID, destCellID, msgFn(), reliable)
-	return true
+	return b.sendViaGrpc(destHostID, destCellID, msgFn(), reliable)
 }
 
 // HandoffDriver returns the lazily-constructed HandoffDriver from the
@@ -166,18 +165,16 @@ func (b *grpcBridge) CellOwnerAtPos(worldX, worldY float32) string {
 }
 
 // OnPlayerTransfer handles a player session transfer to destCellID.
-// For same-host destinations, delegates to the local cellBridge which updates
+// For same-host destinations, delegates to the local cellBridge which advances
 // sessionRoutes via setPlayerNode. For cross-host destinations, skips the
-// local cellBridge entirely — calling it would reset the sessionRoute's Epoch
-// to 1 and clear HostID, creating a race window before notifyPlayerMigrated's
-// atomic Migrate call re-populates both fields. The cross-host branch hands
-// off sessionRoutes ownership entirely to notifyPlayerMigrated.
+// local cellBridge entirely and hands sessionRoutes ownership to
+// notifyPlayerMigrated's atomic Migrate path.
 func (b *grpcBridge) OnPlayerTransfer(connID uint32, destCellID MeshCellID) {
 	useLocal, destHost := b.resolveDest(destCellID)
 	srcHost := b.host.ID
 
 	// Single-process all-mode: b.coord IS the real coordinator. Same-host
-	// transfers can use the local setPlayerNode (no epoch bump); cross-host
+	// transfers can use the local setPlayerNode epoch bump; cross-host
 	// transfers go through the full Migrate path.
 	if b.coord.controlClient == nil {
 		if useLocal {
@@ -211,7 +208,7 @@ func (b *grpcBridge) OnPlayerTransfer(connID uint32, destCellID MeshCellID) {
 		b.cell.Log.Log(CatMeshMsg, "[%s] grpcBridge: no VCM session for localID=%d, skipping PlayerMigrated", b.cell.MeshID, connID)
 		return
 	}
-	_ = b.coord.controlClient.send(&meshpb.HostMessage{
+	if err := b.coord.controlClient.send(&meshpb.HostMessage{
 		Msg: &meshpb.HostMessage_PlayerMigrated{
 			PlayerMigrated: &meshpb.PlayerMigrated{
 				GatewayId:  key.GatewayID,
@@ -221,7 +218,11 @@ func (b *grpcBridge) OnPlayerTransfer(connID uint32, destCellID MeshCellID) {
 				ToCellId:   string(destCellID),
 			},
 		},
-	})
+	}); err != nil {
+		b.cell.Log.Log(CatMeshMsg,
+			"[%s] PlayerMigrated send failed for conn=%d dest=%s: %v",
+			b.cell.MeshID, connID, destCellID, err)
+	}
 }
 
 // RequestRespawn delegates to the local cellBridge. S3 coordinator
@@ -252,8 +253,9 @@ func (b *grpcBridge) SendAction(targetCellID MeshCellID, action *CrossCellAction
 
 // SendHandoff sends a hard-cut authority-transfer payload. See Bridge
 // interface for the false-return semantics — a false return must NOT
-// demote the source entity. Cross-host path is best-effort (always
-// returns true) since remote-cell existence is not verified upfront.
+// demote the source entity. The cross-host path reports local routing,
+// encoding, and stream-enqueue failures; destination acceptance still needs
+// the handoff-accepted protocol tracked separately by the engine roadmap.
 func (b *grpcBridge) SendHandoff(destCellID MeshCellID, payload *HandoffPayload) bool {
 	return b.dispatchOrLocalBool(destCellID, true,
 		func() bool { return b.local.SendHandoff(destCellID, payload) },
@@ -263,12 +265,43 @@ func (b *grpcBridge) SendHandoff(destCellID MeshCellID, payload *HandoffPayload)
 }
 
 // SendForwardInput forwards a player input frame to the new owner cell.
-func (b *grpcBridge) SendForwardInput(destCellID MeshCellID, payload *ForwardInputPayload) {
-	b.dispatchOrLocal(destCellID, true,
-		func() { b.local.SendForwardInput(destCellID, payload) },
-		func() CellMessage {
-			return CellMessage{Type: MsgForwardInput, FromCellID: b.cell.MeshID, ForwardInput: payload}
-		})
+func (b *grpcBridge) SendForwardInput(destCellID MeshCellID, payload *ForwardInputPayload) bool {
+	useLocal, destHostID := b.resolveDest(destCellID)
+	if useLocal {
+		return b.local.SendForwardInput(destCellID, payload)
+	}
+
+	// A node-local connID has no meaning on another host. Resolve it back to
+	// the stable gateway session key; the destination VCM maps that key to its
+	// own local connID before injecting the frame.
+	if b.coord == nil || b.coord.vcm == nil {
+		b.cell.Log.Log(CatMeshMsg, "[%s] cannot forward input cross-host without VCM: conn=%d dest=%s",
+			b.cell.MeshID, payload.ConnID, destCellID)
+		return false
+	}
+	key, sessionEpoch, ok := b.coord.vcm.LookupRouteByLocal(payload.ConnID)
+	if !ok {
+		b.cell.Log.Log(CatMeshMsg, "[%s] cannot resolve forwarded input session: localConn=%d dest=%s",
+			b.cell.MeshID, payload.ConnID, destCellID)
+		return false
+	}
+	wirePayload := *payload
+	wirePayload.GatewayID = key.GatewayID
+	wirePayload.ConnID = key.ConnID
+	wirePayload.SessionEpoch = sessionEpoch
+	return b.sendViaGrpc(destHostID, destCellID, CellMessage{
+		Type:         MsgForwardInput,
+		FromCellID:   b.cell.MeshID,
+		ForwardInput: &wirePayload,
+	}, true)
+}
+
+// RequiresInputForwarding reports whether source-side grace forwarding is
+// needed. Colocated cells share one ConnSender, so the destination drains the
+// existing queue directly; only a real cross-host VCM boundary needs replay.
+func (b *grpcBridge) RequiresInputForwarding(destCellID MeshCellID) bool {
+	useLocal, _ := b.resolveDest(destCellID)
+	return !useLocal && b.coord != nil && b.coord.vcm != nil
 }
 
 // newBridgeForCell creates the right Bridge for a cell: a plain cellBridge

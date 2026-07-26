@@ -19,11 +19,20 @@ type Commands struct {
 	ops   []func()
 }
 
-// Despawn queues immediate destruction of the entity at next flush.
-// Subsequent ops on this handle within the same batch become no-ops
-// (via the world.Alive check inside each op).
+// Despawn queues authoritative destruction of the entity at next flush.
+// The engine records its network ID and runs spatial/index cleanup before
+// removing it, while preserving the command buffer's system-N to system-N+1
+// visibility contract. Subsequent ops on this handle within the same batch
+// become no-ops.
 func (c *Commands) Despawn(h ecs.Entity) {
 	c.ops = append(c.ops, func() {
+		if c.stage != nil && c.stage.eng != nil {
+			c.stage.eng.RemoveEntityNow(h)
+			return
+		}
+		// Stand-alone Commands values are useful in focused buffer tests. A
+		// production Commands buffer is always stage-backed and therefore
+		// takes the authoritative engine path above.
 		if c.world != nil && c.world.Alive(h) {
 			c.world.RemoveEntity(h)
 		}

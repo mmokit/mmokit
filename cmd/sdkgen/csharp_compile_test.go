@@ -24,7 +24,7 @@ func TestCsharpSdk_Compiles(t *testing.T) {
 
 	b := csharpBackend{namespace: "Mmokit.Sdk", coreDir: "../../csharp/Mmokit.Sdk.Core"}
 
-	// Copy the five _core files.
+	// Copy the shared _core runtime files.
 	for _, cf := range b.CoreFiles() {
 		data, err := os.ReadFile(cf.Src)
 		if err != nil {

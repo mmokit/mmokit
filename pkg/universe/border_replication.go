@@ -23,6 +23,13 @@ import (
 // the encoding.
 const borderTailUnchanged uint16 = 0xFFFF
 
+// borderLifecycleFullTailFrames is the number of consecutive full component
+// tails emitted for a new, re-entered, or authority-epoch-reset entity. Border
+// delivery is intentionally lossy, so a single attempted full tail cannot be
+// treated as proof the receiver owns a baseline. Three ticks bounds the extra
+// bandwidth to 150ms at 20Hz while tolerating two consecutive dropped frames.
+const borderLifecycleFullTailFrames uint8 = 3
+
 // borderFullResyncInterval is the number of ticks after which the
 // sender forces a full component tail even if the content is unchanged.
 // This gives the receiver a recovery window if a frame was dropped at
@@ -118,12 +125,6 @@ func (bd *BorderDispatcher) candidatesFor(nv *CellViewer, currentTick uint64) it
 		velMap := ecs.NewMap1[component.Velocity](world)
 		rotMap := ecs.NewMap1[component.Rotation](world)
 
-		// Per-tick scratch for holding the freshly-computed component tail
-		// before deciding whether to emit it or the sentinel. Reused across
-		// entities within a single iterator pass to avoid per-entity
-		// allocations. The Walk loop invokes Build serially for each
-		// yielded ref, so a single shared buffer is safe.
-		tailScratch := make([]byte, 0, 256)
 		baselines := nv.Baselines()
 
 		query := filter.Query()
@@ -149,11 +150,6 @@ func (bd *BorderDispatcher) candidatesFor(nv *CellViewer, currentTick uint64) it
 			if !bd.entityNearNeighborEdge(pos, nv, lMinX, lMinY, lMaxX, lMaxY, m) {
 				continue
 			}
-			// Record membership in this tick's push set. Used both for
-			// next-tick hysteresis and as the authoritative interest-set
-			// snapshot the receiver will diff against.
-			nv.MarkInSet(netID.ID)
-
 			// Snapshot values by value so the closure captures stable copies.
 			px, py := pos.X, pos.Y
 			radius := collider.Radius
@@ -184,6 +180,11 @@ func (bd *BorderDispatcher) candidatesFor(nv *CellViewer, currentTick uint64) it
 				X:     px,
 				Y:     py,
 				Build: func(dst []byte) []byte {
+					// Build runs only after the shared Dispatcher accepts both
+					// tier radius and update-rate gates. Record the exact wire
+					// membership, rather than the larger pre-dispatch candidate
+					// set, so omitted entries cannot retain stale baselines.
+					nv.MarkInSet(nid.ID)
 					worldX := cellOriginX + px
 					worldY := cellOriginY + py
 					dst = binary.LittleEndian.AppendUint32(dst, math.Float32bits(worldX))
@@ -211,13 +212,27 @@ func (bd *BorderDispatcher) candidatesFor(nv *CellViewer, currentTick uint64) it
 					// neighbor. If they match AND we haven't hit a forced
 					// resync tick, emit the unchanged sentinel (2 bytes)
 					// instead of the whole tail.
-					tailScratch = tailScratch[:0]
-					tailScratch = bd.base.scanEntityComponents(ent, tailScratch)
+					nv.tailScratch = nv.tailScratch[:0]
+					nv.tailScratch = bd.base.scanEntityComponents(ent, nv.tailScratch)
 
-					bl := baselines.GetOrCreateBaseline(nid.ID, 0)
+					bl := baselines.Baseline(nid.ID)
+					if bl == nil || !bl.HasAuthorityEpoch || bl.AuthorityEpoch != nid.Epoch {
+						// Baselines are scoped to (netID, authority epoch). A
+						// handoff can preserve byte-identical component state, but
+						// the receiver may be materializing a new entity lifecycle
+						// and therefore cannot consume an unchanged sentinel.
+						if bl != nil {
+							baselines.DropBaseline(nid.ID)
+						}
+						bl = baselines.GetOrCreateBaseline(nid.ID, 0)
+						bl.AuthorityEpoch = nid.Epoch
+						bl.HasAuthorityEpoch = true
+						bl.FullTailFramesRemaining = borderLifecycleFullTailFrames
+					}
 					forceResync := bl.Acked == nil ||
+						bl.FullTailFramesRemaining > 0 ||
 						uint32(currentTick)%borderFullResyncInterval == 0
-					if !forceResync && bytes.Equal(bl.Acked, tailScratch) {
+					if !forceResync && bytes.Equal(bl.Acked, nv.tailScratch) {
 						dst = binary.LittleEndian.AppendUint16(dst, borderTailUnchanged)
 						return dst
 					}
@@ -225,10 +240,11 @@ func (bd *BorderDispatcher) candidatesFor(nv *CellViewer, currentTick uint64) it
 					// Tail changed (or we're forcing a resync) — emit the
 					// full tail and update the per-viewer baseline so the
 					// next tick's comparison is against what we just sent.
-					dst = append(dst, tailScratch...)
-					cp := make([]byte, len(tailScratch))
-					copy(cp, tailScratch)
-					bl.Acked = cp
+					dst = append(dst, nv.tailScratch...)
+					bl.Acked = append(bl.Acked[:0], nv.tailScratch...)
+					if bl.FullTailFramesRemaining > 0 {
+						bl.FullTailFramesRemaining--
+					}
 					return dst
 				},
 			}

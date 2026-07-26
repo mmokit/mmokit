@@ -3,8 +3,7 @@ import { DebugInfo, PlayerEntityAssigned, WorldDelta } from "../sdk/broadcasts.j
 import { type DeltaWorldUpdate } from "../sdk/entities.js";
 import { BasicDeltaDecoder } from "../sdk/delta-decoder.js";
 import { MoveTargetMsg } from "../sdk/inputs.js";
-import { state, setTickRate, type ClientEntity, type CellInfo } from "./state.js";
-import { observeFrameStamps } from "../sdk/_core/clock-sync.js";
+import { state, setTickRate, resetNetworkTiming, type ClientEntity, type CellInfo } from "./state.js";
 import { updateEntityFromServer } from "./interpolation.js";
 import { pruneStaleOnFreshSnapshot } from "./reconcile.js";
 import { recordDeletion } from "./replicationAudit.js";
@@ -24,6 +23,7 @@ function setStatus(msg: string): void {
 }
 
 export function connect(name: string): void {
+  resetNetworkTiming();
   const client = new BasicClient({
     url: backendWsUrl(),
     onOpen: () => setStatus(`connected as ${name} — waiting for spawn...`),
@@ -78,7 +78,8 @@ export function connect(name: string): void {
   // state for the local connection.
   const deltaDecoder = new BasicDeltaDecoder();
   client.onWorldDelta((msg: WorldDelta) => {
-    applyWorldUpdate(deltaDecoder.decode(msg.body));
+    const update = deltaDecoder.decode(msg.body, msg.streamEpoch);
+    if (update) applyWorldUpdate(update);
   });
 
   client.connect();
@@ -102,7 +103,17 @@ function applyWorldUpdate(update: DeltaWorldUpdate): void {
   // in the frame.
   const fresh = [...update.entered, ...update.updated];
   const arriveMs = performance.now();
-  observeFrameStamps(state.clockSync, fresh, arriveMs);
+  let maxStamp = 0;
+  for (const entity of fresh) {
+    if (entity.producedAtMs > maxStamp) maxStamp = entity.producedAtMs;
+  }
+  state.playback.observeFrame({
+    seq: update.seq,
+    freshSnapshot: update.freshSnapshot,
+    streamChanged: update.streamChanged,
+    arrivalTimeMs: arriveMs,
+    producedAtMs: maxStamp > 0 ? maxStamp : undefined,
+  });
 
   if (update.freshSnapshot) {
     pruneStaleOnFreshSnapshot(state.entities, fresh, state.playerNetID, state.replicationAudit, arriveMs);
@@ -117,7 +128,17 @@ function applyWorldUpdate(update: DeltaWorldUpdate): void {
   // Merge entered + updated: both flow through updateEntityFromServer which
   // creates a ClientEntity on first sight or appends a sample to the ring.
   for (const raw of fresh) {
-    updateEntityFromServer(state.entities, raw, raw.producedAtMs, state.replicationAudit, arriveMs);
+    const accepted = updateEntityFromServer(
+      state.entities,
+      raw,
+      raw.producedAtMs,
+      state.replicationAudit,
+      arriveMs,
+      update.streamChanged,
+    );
+    // A late ex-authority sample must not influence derived presence or any
+    // other non-buffered state after the interpolation gate rejected it.
+    if (!accepted) continue;
     const ent = state.entities.get(raw.netID)!;
     // Derive presence client-side from topology + viewer cell. LOCAL
     // when the entity sits in our cell; REPLICA when it's mirrored

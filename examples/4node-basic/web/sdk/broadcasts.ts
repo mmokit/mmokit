@@ -503,6 +503,7 @@ export class ServerConfig {
 export class WorldDelta {
   static readonly typeID = 0x65b16f4;
   body: Uint8Array = new Uint8Array(0);
+  streamEpoch: number = 0;
 
   static decode(buf: Uint8Array): WorldDelta {
     const dv = new DataView(buf.buffer, buf.byteOffset, buf.byteLength);
@@ -512,6 +513,7 @@ export class WorldDelta {
       const bl = dv.getUint32(off, true); off += 4;
       m.body = buf.slice(off, off + bl); off += bl;
     }
+    m.streamEpoch = dv.getUint32(off, true); off += 4;
     return m;
   }
 }

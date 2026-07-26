@@ -269,23 +269,25 @@ func TestCell_MsgHandoff_PreservesDebugFlagsOnSession(t *testing.T) {
 	const connID uint32 = 99
 	const netID uint32 = 4242
 	const wantFlags = engine.DebugTopology
+	const wantGeneration uint32 = 12
 
 	// Build a TransferFrame directly — exercise the wire-format path.
 	frame := &TransferFrame{
-		NetworkID:  netID,
-		Epoch:      1,
-		EntityType: 1,
-		ConnID:     connID,
-		Username:   "alice",
-		PosX:       50,
-		PosY:       60,
-		VelX:       0,
-		VelY:       0,
-		Rotation:   0,
-		Collider:   component.Collider{Radius: 5},
-		CellX:      1,
-		CellY:      0,
-		DebugFlags: uint32(wantFlags),
+		NetworkID:        netID,
+		Epoch:            1,
+		StreamGeneration: wantGeneration,
+		EntityType:       1,
+		ConnID:           connID,
+		Username:         "alice",
+		PosX:             50,
+		PosY:             60,
+		VelX:             0,
+		VelY:             0,
+		Rotation:         0,
+		Collider:         component.Collider{Radius: 5},
+		CellX:            1,
+		CellY:            0,
+		DebugFlags:       uint32(wantFlags),
 	}
 	blob, err := MarshalTransferFrame(frame)
 	if err != nil {
@@ -313,6 +315,8 @@ func TestCell_MsgHandoff_PreservesDebugFlagsOnSession(t *testing.T) {
 	} else if s.DebugFlags != 0 {
 		t.Fatalf("pre-spawn DebugFlags = 0b%b, want 0 (set by RegisterTransferSession, no flags carried)",
 			s.DebugFlags)
+	} else if s.StreamGeneration != wantGeneration {
+		t.Fatalf("pre-spawn StreamGeneration = %d, want %d", s.StreamGeneration, wantGeneration)
 	}
 
 	// Commit-tick spawn fires SpawnLiveFromTransfer → SpawnFromTransferCore →
@@ -328,6 +332,9 @@ func TestCell_MsgHandoff_PreservesDebugFlagsOnSession(t *testing.T) {
 		t.Errorf("post-spawn DebugFlags = 0b%b, want 0b%b — boundary handoff dropped DebugFlags",
 			s.DebugFlags, wantFlags)
 	}
+	if s.StreamGeneration != wantGeneration {
+		t.Errorf("post-spawn StreamGeneration = %d, want %d", s.StreamGeneration, wantGeneration)
+	}
 }
 
 func TestCell_DrainInbox_SpawnTransfer(t *testing.T) {
@@ -337,7 +344,7 @@ func TestCell_DrainInbox_SpawnTransfer(t *testing.T) {
 	node.Inbox <- CellMessage{
 		Type:       MsgSpawnTransfer,
 		FromCellID: "other",
-		Spawn:      &SpawnTransfer{ConnID: 99, Username: "bob"},
+		Spawn:      &SpawnTransfer{ConnID: 99, Username: "bob", StreamGeneration: 23},
 	}
 
 	node.DrainInbox()
@@ -348,6 +355,31 @@ func TestCell_DrainInbox_SpawnTransfer(t *testing.T) {
 	}
 	if s.ConnID != 99 {
 		t.Fatalf("expected ConnID 99, got %d", s.ConnID)
+	}
+	if s.StreamGeneration != 23 {
+		t.Fatalf("expected StreamGeneration 23, got %d", s.StreamGeneration)
+	}
+}
+
+func TestCell_DrainInbox_PlayerAssignmentSeedsStreamGeneration(t *testing.T) {
+	node := newTestCell("default", CellID{X: 0, Y: 0})
+	node.Bridge = &recordingBridge{}
+	node.Inbox <- CellMessage{
+		Type: MsgPlayerAssignment,
+		Assignment: &PlayerAssignment{
+			ConnID:           101,
+			Username:         "alice",
+			StreamGeneration: 0,
+		},
+	}
+
+	node.DrainInbox()
+	s := node.Engine.Players.ByConnID(101)
+	if s == nil {
+		t.Fatal("PlayerAssignment did not register a session")
+	}
+	if s.StreamGeneration != 0 {
+		t.Fatalf("StreamGeneration = %d, want wrapped generation 0", s.StreamGeneration)
 	}
 }
 
@@ -537,6 +569,21 @@ func TestBridge_RequestRespawn(t *testing.T) {
 	otherID := string(CellID{X: 1, Y: 0}.MeshID())
 	other := c.Cells[MeshCellID(otherID)]
 	target := c.Cells[MeshCellID(targetID)]
+	other.Engine.Players.RegisterSessionTransfer(77, "charlie", "active", nil)
+	sourceSession := other.Engine.Players.ByConnID(77)
+	sourceSession.StreamGeneration = 9
+	c.sessionRoutes.Set(&SessionRoute{
+		Key:    SessionKey{GatewayID: InprocGatewayID, ConnID: 77},
+		HostID: "local",
+		CellID: other.MeshID,
+		Epoch:  4,
+	})
+	c.gateway = &Gateway{
+		log: c.Log,
+		sessions: map[uint32]*localSession{
+			77: {connID: 77, username: "charlie", hostID: "local", cellID: other.MeshID, epoch: 4},
+		},
+	}
 
 	other.Bridge.RequestRespawn(77, "charlie")
 
@@ -552,8 +599,102 @@ func TestBridge_RequestRespawn(t *testing.T) {
 			t.Fatalf("SpawnLocation = %+v, want %+v",
 				msg.Spawn.SpawnLocation, want)
 		}
+		if msg.Spawn.StreamGeneration != 10 {
+			t.Fatalf("StreamGeneration = %d, want source N+1 = 10", msg.Spawn.StreamGeneration)
+		}
 	default:
 		t.Fatal("no message in target node inbox")
+	}
+	if sourceSession.StreamGeneration != 9 {
+		t.Fatalf("source StreamGeneration changed before respawn commit: got %d, want 9", sourceSession.StreamGeneration)
+	}
+	route, ok := c.sessionRoutes.Get(SessionKey{GatewayID: InprocGatewayID, ConnID: 77})
+	if !ok {
+		t.Fatal("respawn route missing")
+	}
+	if route.CellID != target.MeshID || route.Epoch != 5 {
+		t.Fatalf("respawn route = cell %s epoch %d, want cell %s epoch 5", route.CellID, route.Epoch, target.MeshID)
+	}
+	gatewaySession := c.gateway.lookupSession(77)
+	if gatewaySession == nil || gatewaySession.cellID != target.MeshID || gatewaySession.epoch != 5 {
+		t.Fatalf("gateway route after respawn = %+v, want cell %s epoch 5", gatewaySession, target.MeshID)
+	}
+}
+
+func TestBridgeOnPlayerTransferAdvancesDirectRouteEpoch(t *testing.T) {
+	c := newTestCoordinator(Config{CellsX: 2, CellsY: 1})
+	src := c.Cells[CellID{X: 0, Y: 0}.MeshID()]
+	dstID := CellID{X: 1, Y: 0}.MeshID()
+	const connID = uint32(88)
+
+	src.Engine.Players.RegisterSessionTransfer(connID, "direct-player", "active", nil)
+	sourceSession := src.Engine.Players.ByConnID(connID)
+	sourceSession.StreamGeneration = 27
+	key := SessionKey{GatewayID: InprocGatewayID, ConnID: connID}
+	c.sessionRoutes.Set(&SessionRoute{Key: key, HostID: "local", CellID: src.MeshID, Epoch: 6})
+	c.gateway = &Gateway{
+		log: c.Log,
+		sessions: map[uint32]*localSession{
+			connID: {connID: connID, username: "direct-player", hostID: "local", cellID: src.MeshID, epoch: 6},
+		},
+	}
+
+	src.Bridge.OnPlayerTransfer(connID, dstID)
+
+	route, ok := c.sessionRoutes.Get(key)
+	if !ok || route.CellID != dstID || route.Epoch != 7 {
+		t.Fatalf("direct route = %+v ok=%v, want cell %s epoch 7", route, ok, dstID)
+	}
+	gatewaySession := c.gateway.lookupSession(connID)
+	if gatewaySession == nil || gatewaySession.cellID != dstID || gatewaySession.epoch != 7 {
+		t.Fatalf("direct gateway route = %+v, want cell %s epoch 7", gatewaySession, dstID)
+	}
+	if sourceSession.StreamGeneration != 27 {
+		t.Fatalf("route fencing changed replication StreamGeneration: got %d, want 27", sourceSession.StreamGeneration)
+	}
+}
+
+func TestBridgeOnPlayerTransferKeepsVCMAndCompositeRouteFenced(t *testing.T) {
+	c := newTestCoordinator(Config{CellsX: 2, CellsY: 1})
+	src := c.Cells[CellID{X: 0, Y: 0}.MeshID()]
+	dstID := CellID{X: 1, Y: 0}.MeshID()
+	c.vcm = NewVirtualConnManager(nil, c.Log)
+	key := SessionKey{GatewayID: "embedded-gateway", ConnID: 321}
+	localConnID := c.vcm.RegisterSession(key, "proxied-player", 9, src.MeshID)
+
+	src.Engine.Players.RegisterSessionTransfer(localConnID, "proxied-player", "active", nil)
+	sourceSession := src.Engine.Players.ByConnID(localConnID)
+	sourceSession.StreamGeneration = 41
+	// Deliberately leave the coordinator route behind the VCM to prove the
+	// same-host advance fences from the newest transport epoch.
+	c.sessionRoutes.Set(&SessionRoute{Key: key, HostID: "local", CellID: src.MeshID, Epoch: 7})
+	c.gateway = &Gateway{
+		id:  key.GatewayID,
+		log: c.Log,
+		sessions: map[uint32]*localSession{
+			key.ConnID: {connID: key.ConnID, username: "proxied-player", hostID: "local", cellID: src.MeshID, epoch: 9},
+		},
+	}
+
+	src.Bridge.OnPlayerTransfer(localConnID, dstID)
+
+	route, ok := c.sessionRoutes.Get(key)
+	if !ok || route.CellID != dstID || route.Epoch != 10 {
+		t.Fatalf("composite route = %+v ok=%v, want cell %s epoch 10", route, ok, dstID)
+	}
+	gotKey, vcmEpoch, ok := c.vcm.LookupRouteByLocal(localConnID)
+	if !ok || gotKey != key || vcmEpoch != 10 {
+		t.Fatalf("VCM route = (%+v,%d,%v), want (%+v,10,true)", gotKey, vcmEpoch, ok, key)
+	}
+	gatewaySession := c.gateway.lookupSession(key.ConnID)
+	if gatewaySession == nil || gatewaySession.cellID != dstID || gatewaySession.epoch != 10 {
+		t.Fatalf("proxied gateway route = %+v, want cell %s epoch 10", gatewaySession, dstID)
+	}
+	if _, exists := c.sessionRoutes.Get(SessionKey{GatewayID: InprocGatewayID, ConnID: localConnID}); exists {
+		t.Fatal("node-local connID created a second inproc session route")
+	}
+	if sourceSession.StreamGeneration != 41 {
+		t.Fatalf("VCM fencing changed replication StreamGeneration: got %d, want 41", sourceSession.StreamGeneration)
 	}
 }
 

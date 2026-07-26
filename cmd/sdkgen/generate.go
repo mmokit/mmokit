@@ -125,6 +125,8 @@ func (g *Generator) genEntities() string {
 		fmt.Fprintf(&b, "/** Entity kind %d. */\n", ent.Kind)
 		fmt.Fprintf(&b, "export interface %s {\n", name)
 		b.WriteString("  netID: number;\n")
+		b.WriteString("  /** Authority generation for this netID (uint32 serial). */\n")
+		b.WriteString("  authorityEpoch: number;\n")
 		fmt.Fprintf(&b, "  entityType: %d;\n", ent.Kind)
 		b.WriteString("  /**\n")
 		b.WriteString("   * Cluster-clock stamp (Unix ms) from the authoritative producer at\n")
@@ -195,6 +197,10 @@ func (g *Generator) genEntities() string {
 	b.WriteString("   * never learn about cells, authority transfers, or server boundaries.\n")
 	b.WriteString("   */\n")
 	b.WriteString("  freshSnapshot: boolean;\n")
+	b.WriteString("  /** True when the decoder adopted a new explicit stream generation. */\n")
+	b.WriteString("  streamChanged: boolean;\n")
+	b.WriteString("  /** Input sequence causally reflected by this frame; null on legacy/unsequenced streams. */\n")
+	b.WriteString("  processedInputSeq: number | null;\n")
 	b.WriteString("  entered: AnyEntity[];\n")
 	b.WriteString("  updated: AnyEntity[];\n")
 	b.WriteString("  removed: number[];\n")
@@ -245,7 +251,7 @@ func (g *Generator) genDeltaDecoder() string {
 	b.WriteString("import {\n")
 	b.WriteString("  readFloat32, readInt16, readUint16, readUint32,\n")
 	b.WriteString("  unAngle, unNorm, unVel,\n")
-	b.WriteString("  decodeFrameHeader, decodeFullEntry, decodeDeltaEntry, decodeRemovedIDs,\n")
+	b.WriteString("  decodeFrameHeader, decodeFullEntry, decodeDeltaEntry, decodeRemovedIDs, decodeInputAck,\n")
 	b.WriteString("  FRAME_FLAG_FRESH_SNAPSHOT,\n")
 	b.WriteString("  applyDelta, BaselineStore,\n")
 	b.WriteString("  decodeLengthPrefixedStringU8,\n")
@@ -337,10 +343,9 @@ func (g *Generator) genDeltaDecoder() string {
 			b.WriteString("  void initialOff;\n")
 		}
 
-		// Return object. `producedAtMs` is overwritten by the caller from
-		// the wire entry's stamp; initializing to 0 keeps the interface
-		// satisfied even if a future path forgets to set it.
-		fmt.Fprintf(&b, "  return { netID: 0, producedAtMs: 0, entityType: %d", ent.Kind)
+		// Return object. Wire metadata is overwritten by the caller; initializing
+		// it keeps the interface satisfied even if a future path forgets to set it.
+		fmt.Fprintf(&b, "  return { netID: 0, authorityEpoch: 0, producedAtMs: 0, entityType: %d", ent.Kind)
 		for _, binding := range ent.Bindings {
 			for _, field := range binding.Fields {
 				fmt.Fprintf(&b, ", %s", field.Name)
@@ -353,6 +358,18 @@ func (g *Generator) genDeltaDecoder() string {
 		b.WriteString("}\n\n")
 	}
 
+	// Authority epochs are uint32 serials. Comparing them as ordinary numbers
+	// fails across wraparound (0 is newer than 0xffffffff), so use RFC 1982-style
+	// half-range arithmetic. An exact half-range jump is deliberately not newer.
+	b.WriteString("function isNewerAuthorityEpoch(candidate: number, current: number): boolean {\n")
+	b.WriteString("  const distance = (candidate - current) >>> 0;\n")
+	b.WriteString("  return distance !== 0 && distance < 0x80000000;\n")
+	b.WriteString("}\n\n")
+	b.WriteString("function isNewerFrameSequence(candidate: number, current: number): boolean {\n")
+	b.WriteString("  const distance = (candidate - current) >>> 0;\n")
+	b.WriteString("  return distance !== 0 && distance < 0x80000000;\n")
+	b.WriteString("}\n\n")
+
 	// Decoder class.
 	gameName := titleCase(g.schema.Game)
 	fmt.Fprintf(&b, "export class %sDeltaDecoder {\n", gameName)
@@ -360,12 +377,55 @@ func (g *Generator) genDeltaDecoder() string {
 	// restore initial-only fields (e.g. string names that are only transmitted
 	// in the initial data block of a full snapshot). Without this, delta
 	// decoding would reset those fields to empty strings every tick.
-	b.WriteString("  private baselines = new BaselineStore<{ type: number; lastEntity?: AnyEntity }>();\n\n")
+	b.WriteString("  private baselines = new BaselineStore<{ epoch: number; type: number; lastEntity?: AnyEntity }>();\n\n")
+	// FreshSnapshot resets delta baselines, but it does not normally reset the
+	// highest authority generation observed for a netID. Frames from the same
+	// stream can overlap at handoff; retaining this fence prevents a delayed old
+	// fresh frame from resurrecting a superseded lifecycle. A *new enclosing
+	// stream generation* is different: it supersedes all history from the old
+	// stream (including a destination stream that was later rolled back), so
+	// acceptFrame clears this map when it advances the stream generation.
+	b.WriteString("  private authorityEpochs = new Map<number, number>();\n\n")
+	// The viewer's authority epoch scopes the frame sequence. Gate the entire
+	// frame before FreshSnapshot can clear baselines or removals can mutate the
+	// visible set: delayed frames from the previous host are otherwise able to
+	// roll back a decoder that has already accepted the destination stream.
+	b.WriteString("  private streamEpoch: number | null = null;\n")
+	b.WriteString("  private lastFrameSequence: number | null = null;\n\n")
 
-	b.WriteString("  clear(): void { this.baselines.clear(); }\n\n")
+	b.WriteString("  clear(): void {\n")
+	b.WriteString("    this.baselines.clear();\n")
+	b.WriteString("    this.authorityEpochs.clear();\n")
+	b.WriteString("    this.streamEpoch = null;\n")
+	b.WriteString("    this.lastFrameSequence = null;\n")
+	b.WriteString("  }\n\n")
 
-	b.WriteString("  decode(data: Uint8Array): DeltaWorldUpdate {\n")
+	b.WriteString("  private acceptFrame(streamEpoch: number | undefined, sequence: number): { accepted: boolean; streamChanged: boolean } {\n")
+	b.WriteString("    if (streamEpoch === undefined) return { accepted: true, streamChanged: false };\n")
+	b.WriteString("    const epoch = streamEpoch >>> 0;\n")
+	b.WriteString("    const seq = sequence >>> 0;\n")
+	b.WriteString("    if (this.streamEpoch === null) {\n")
+	b.WriteString("      this.streamEpoch = epoch;\n")
+	b.WriteString("      this.lastFrameSequence = seq;\n")
+	b.WriteString("      return { accepted: true, streamChanged: true };\n")
+	b.WriteString("    }\n")
+	b.WriteString("    if (epoch !== this.streamEpoch) {\n")
+	b.WriteString("      if (!isNewerAuthorityEpoch(epoch, this.streamEpoch)) return { accepted: false, streamChanged: false };\n")
+	b.WriteString("      this.streamEpoch = epoch;\n")
+	b.WriteString("      this.lastFrameSequence = seq;\n")
+	b.WriteString("      this.baselines.clear();\n")
+	b.WriteString("      this.authorityEpochs.clear();\n")
+	b.WriteString("      return { accepted: true, streamChanged: true };\n")
+	b.WriteString("    }\n")
+	b.WriteString("    if (this.lastFrameSequence !== null && !isNewerFrameSequence(seq, this.lastFrameSequence)) return { accepted: false, streamChanged: false };\n")
+	b.WriteString("    this.lastFrameSequence = seq;\n")
+	b.WriteString("    return { accepted: true, streamChanged: false };\n")
+	b.WriteString("  }\n\n")
+
+	b.WriteString("  decode(data: Uint8Array, streamEpoch?: number): DeltaWorldUpdate | null {\n")
 	b.WriteString("    const { header, offset: pos0 } = decodeFrameHeader(data, 0);\n")
+	b.WriteString("    const frameOrder = this.acceptFrame(streamEpoch, header.seq);\n")
+	b.WriteString("    if (!frameOrder.accepted) return null;\n")
 	b.WriteString("    let pos = pos0;\n\n")
 
 	// If the server flagged this frame as fresh (first frame for this
@@ -379,6 +439,7 @@ func (g *Generator) genDeltaDecoder() string {
 	b.WriteString("    if (freshSnapshot) {\n")
 	b.WriteString("      this.baselines.clear();\n")
 	b.WriteString("    }\n\n")
+	b.WriteString("    const freshAuthorityIDs = freshSnapshot && this.streamEpoch !== null ? new Set<number>() : null;\n\n")
 
 	b.WriteString("    const entered: AnyEntity[] = [];\n")
 	b.WriteString("    const updated: AnyEntity[] = [];\n\n")
@@ -396,9 +457,15 @@ func (g *Generator) genDeltaDecoder() string {
 	b.WriteString("    for (let i = 0; i < header.fullCount; i++) {\n")
 	b.WriteString("      const { entry, offset: next } = decodeFullEntry(data, pos);\n")
 	b.WriteString("      pos = next;\n")
+	b.WriteString("      freshAuthorityIDs?.add(entry.netID);\n")
+	b.WriteString("      const highestEpoch = this.authorityEpochs.get(entry.netID);\n")
+	b.WriteString("      if (highestEpoch !== undefined && entry.epoch !== highestEpoch && !isNewerAuthorityEpoch(entry.epoch, highestEpoch)) continue;\n")
+	b.WriteString("      if (highestEpoch === undefined || isNewerAuthorityEpoch(entry.epoch, highestEpoch)) this.authorityEpochs.set(entry.netID, entry.epoch);\n")
 	b.WriteString("      const prevBl = this.baselines.get(entry.netID);\n")
-	b.WriteString("      const entity = this.decodeEntity(entry.entityType, entry.snapshot, entry.initialData, entry.netID, entry.producedAtMs, prevBl?.meta?.lastEntity);\n")
-	b.WriteString("      this.baselines.set(entry.netID, entry.snapshot, { type: entry.entityType, lastEntity: entity ?? undefined });\n")
+	b.WriteString("      const prevMeta = prevBl?.meta;\n")
+	b.WriteString("      const previousEntity = prevMeta?.epoch === entry.epoch && prevMeta.type === entry.entityType ? prevMeta.lastEntity : undefined;\n")
+	b.WriteString("      const entity = this.decodeEntity(entry.entityType, entry.snapshot, entry.initialData, entry.netID, entry.epoch, entry.producedAtMs, previousEntity);\n")
+	b.WriteString("      this.baselines.set(entry.netID, entry.snapshot, { epoch: entry.epoch, type: entry.entityType, lastEntity: entity ?? undefined });\n")
 	b.WriteString("      if (entity) entered.push(entity);\n")
 	b.WriteString("    }\n\n")
 
@@ -407,25 +474,38 @@ func (g *Generator) genDeltaDecoder() string {
 	b.WriteString("      const { entry, offset: next } = decodeDeltaEntry(data, pos);\n")
 	b.WriteString("      pos = next;\n")
 	b.WriteString("      const bl = this.baselines.get(entry.netID);\n")
-	b.WriteString("      if (!bl) continue;\n")
+	b.WriteString("      if (!bl?.meta || bl.meta.epoch !== entry.epoch || bl.meta.type !== entry.entityType) continue;\n")
 	b.WriteString("      const fieldSizes = this.fieldSizesFor(entry.entityType);\n")
 	b.WriteString("      const hasVarTail = this.hasVarTailFor(entry.entityType);\n")
 	b.WriteString("      const newSnap = applyDelta(fieldSizes, hasVarTail, bl.snapshot, entry.deltaData);\n")
-	b.WriteString("      const entity = this.decodeEntity(entry.entityType, newSnap, null, entry.netID, entry.producedAtMs, bl.meta?.lastEntity);\n")
-	b.WriteString("      this.baselines.set(entry.netID, newSnap, { type: bl.meta?.type ?? entry.entityType, lastEntity: entity ?? undefined });\n")
+	b.WriteString("      const entity = this.decodeEntity(entry.entityType, newSnap, null, entry.netID, entry.epoch, entry.producedAtMs, bl.meta.lastEntity);\n")
+	b.WriteString("      this.baselines.set(entry.netID, newSnap, { epoch: entry.epoch, type: entry.entityType, lastEntity: entity ?? undefined });\n")
 	b.WriteString("      if (entity) updated.push(entity);\n")
 	b.WriteString("    }\n\n")
 
 	// Removed and exited.
 	b.WriteString("    const { ids: removed, offset: pos2 } = decodeRemovedIDs(data, pos, header.removedCount);\n")
-	b.WriteString("    const { ids: exited } = decodeRemovedIDs(data, pos2, header.exitedCount);\n\n")
+	b.WriteString("    const { ids: exited, offset: pos3 } = decodeRemovedIDs(data, pos2, header.exitedCount);\n")
+	b.WriteString("    const { sequence: processedInputSeq } = decodeInputAck(data, pos3, header.flags);\n\n")
 
 	// Clean up baselines.
 	b.WriteString("    for (const id of removed) this.baselines.delete(id);\n")
 	b.WriteString("    for (const id of exited) this.baselines.delete(id);\n\n")
+	// Once the enclosing stream generation is known, frame ordering protects
+	// against delayed resurrection. Retaining tombstones for entities that are
+	// no longer visible would otherwise grow this map for the life of a client.
+	b.WriteString("    if (this.streamEpoch !== null) {\n")
+	b.WriteString("      for (const id of removed) this.authorityEpochs.delete(id);\n")
+	b.WriteString("      for (const id of exited) this.authorityEpochs.delete(id);\n")
+	b.WriteString("    }\n\n")
+	b.WriteString("    if (freshAuthorityIDs) {\n")
+	b.WriteString("      for (const id of this.authorityEpochs.keys()) {\n")
+	b.WriteString("        if (!freshAuthorityIDs.has(id)) this.authorityEpochs.delete(id);\n")
+	b.WriteString("      }\n")
+	b.WriteString("    }\n\n")
 
 	b.WriteString("    return {\n")
-	b.WriteString("      tick: header.tick, seq: header.seq, freshSnapshot,\n")
+	b.WriteString("      tick: header.tick, seq: header.seq, freshSnapshot, streamChanged: frameOrder.streamChanged, processedInputSeq,\n")
 	b.WriteString("      entered, updated, removed, exited,\n")
 	b.WriteString("    };\n")
 	b.WriteString("  }\n\n")
@@ -436,12 +516,12 @@ func (g *Generator) genDeltaDecoder() string {
 	// threaded through from baseline meta so per-entity decoders can restore
 	// initial-only fields (e.g. strings carried only in full-snapshot initial
 	// data). Each case narrows the type before passing it through.
-	b.WriteString("  private decodeEntity(type_: number, snap: Uint8Array, initial: Uint8Array | null, netID: number, producedAtMs: number, existing?: AnyEntity): AnyEntity | null {\n")
+	b.WriteString("  private decodeEntity(type_: number, snap: Uint8Array, initial: Uint8Array | null, netID: number, authorityEpoch: number, producedAtMs: number, existing?: AnyEntity): AnyEntity | null {\n")
 	b.WriteString("    switch (type_) {\n")
 	for _, ent := range g.schema.Entities {
 		name := g.entityName(ent)
 		fmt.Fprintf(&b,
-			"      case %d: { const prev = existing && existing.entityType === %d ? existing : undefined; const e = decode%sSnapshot(snap, initial, prev); e.netID = netID; e.producedAtMs = producedAtMs; return e; }\n",
+			"      case %d: { const prev = existing && existing.entityType === %d ? existing : undefined; const e = decode%sSnapshot(snap, initial, prev); e.netID = netID; e.authorityEpoch = authorityEpoch; e.producedAtMs = producedAtMs; return e; }\n",
 			ent.Kind, ent.Kind, name)
 	}
 	b.WriteString("      default: return null;\n")
@@ -572,14 +652,15 @@ func writeFieldDecoder(b *strings.Builder, field BindingSchemaField) {
 // each read so subsequent fields find the right bytes.
 //
 // Supported encodings:
-//   string — 1-byte length prefix + UTF-8 bytes
-//   u8     — 1 byte
-//   i8     — 1 byte signed
-//   u16    — 2 bytes big-endian unsigned
-//   i16    — 2 bytes big-endian signed
-//   u32    — 4 bytes big-endian unsigned
-//   f32    — 4 bytes IEEE-754 big-endian
-//   bool   — 1 byte (0/1)
+//
+//	string — 1-byte length prefix + UTF-8 bytes
+//	u8     — 1 byte
+//	i8     — 1 byte signed
+//	u16    — 2 bytes big-endian unsigned
+//	i16    — 2 bytes big-endian signed
+//	u32    — 4 bytes big-endian unsigned
+//	f32    — 4 bytes IEEE-754 big-endian
+//	bool   — 1 byte (0/1)
 //
 // Unknown encodings fall back to the previous existing-or-zero default
 // so a new wire type doesn't silently corrupt other fields' offsets.

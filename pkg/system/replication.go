@@ -8,6 +8,7 @@ import (
 	"github.com/mlange-42/ark/ecs"
 
 	"github.com/zenion/mmoserver/pkg/component"
+	"github.com/zenion/mmoserver/pkg/net"
 	"github.com/zenion/mmoserver/pkg/quantize"
 	"github.com/zenion/mmoserver/pkg/replication"
 	"github.com/zenion/mmoserver/pkg/spatial"
@@ -36,9 +37,10 @@ type ClusterClock interface {
 
 // ViewerInfo describes a connection that receives replicated entity state.
 type ViewerInfo struct {
-	ConnID uint32
-	Entity ecs.Entity
-	X, Y   float32
+	ConnID      uint32
+	Entity      ecs.Entity
+	X, Y        float32
+	StreamEpoch uint32 // generation that scopes this viewer's whole frame stream
 }
 
 // FullPayload is a full entity snapshot for new or keyframe entities.
@@ -62,15 +64,18 @@ type DeltaPayload struct {
 
 // ReplicationFrame is the per-viewer per-tick replication data passed to the FrameWriter.
 type ReplicationFrame struct {
-	Tick    uint32
-	Seq     uint32 // frame sequence number for client ack tracking
-	Flags   uint32 // wire-format header flags (quantize.FrameFlag*)
-	Viewer  *ViewerInfo
-	Full    []FullPayload
-	Deltas  []DeltaPayload
-	Entered []uint32 // netIDs newly visible to this viewer
-	Exited  []uint32 // netIDs that left AoI (entity still alive)
-	Removed []uint32 // netIDs destroyed/despawned this tick
+	Tick              uint32
+	Seq               uint32 // frame sequence number for client ack tracking
+	StreamEpoch       uint32 // session replication generation; scopes Seq across restarts
+	Flags             uint32 // wire-format header flags (quantize.FrameFlag*)
+	HasInputAck       bool
+	ProcessedInputSeq uint32 // game-defined input stream reflected by this frame
+	Viewer            *ViewerInfo
+	Full              []FullPayload
+	Deltas            []DeltaPayload
+	Entered           []uint32 // netIDs newly visible to this viewer
+	Exited            []uint32 // netIDs that left AoI (entity still alive)
+	Removed           []uint32 // netIDs destroyed/despawned this tick
 }
 
 // ---------------------------------------------------------------------------
@@ -80,6 +85,14 @@ type ReplicationFrame struct {
 // ViewerSource provides the set of active viewers each tick.
 type ViewerSource interface {
 	ActiveViewers() []ViewerInfo
+}
+
+// ViewerLiveness is an optional capability on ViewerSource. It distinguishes
+// a viewer that is temporarily omitted from ActiveViewers from one whose
+// session is truly gone. Temporarily omitted viewers retain their frame
+// sequence and committed replication state, but resume with a fresh snapshot.
+type ViewerLiveness interface {
+	ViewerExists(connID uint32) bool
 }
 
 // EntityReplicator defines how one entity type participates in replication.
@@ -139,10 +152,11 @@ type TierProvider interface {
 	ReplicationTier() ReplicationTier
 }
 
-// FrameWriter assembles a ReplicationFrame into wire-format bytes and sends
-// it to the viewer.
+// FrameWriter assembles a ReplicationFrame into wire-format bytes and submits
+// it to the viewer's transport. Replication state advances only when the
+// result reports reliable ordered acceptance.
 type FrameWriter interface {
-	WriteFrame(frame *ReplicationFrame)
+	WriteFrame(frame *ReplicationFrame) net.SendResult
 }
 
 // ---------------------------------------------------------------------------
@@ -230,6 +244,16 @@ type ReplicationConfig struct {
 	// Default 32 (~1.6s at 20Hz). Ignored for AckReliable.
 	SentHistoryDepth int
 
+	// PendingReceiptTimeoutTicks bounds how long an AckReliable connection
+	// waits for an asynchronous final-enqueue receipt before abandoning the
+	// attempt and forcing a fresh full snapshot. Default 3 ticks.
+	PendingReceiptTimeoutTicks uint32
+
+	// PendingAckTimeoutTicks bounds how long AckExplicit waits for the
+	// matching application ACK before abandoning the attempt and forcing a
+	// fresh full snapshot. Default 10 ticks (~500ms at 20Hz).
+	PendingAckTimeoutTicks uint32
+
 	// GetTick returns the current game tick number.
 	GetTick func() uint32
 
@@ -245,6 +269,18 @@ type ReplicationConfig struct {
 	OnAfterTick  func(tick uint32)
 	OnBeforeSend func(viewer *ViewerInfo, visible map[uint32]bool)
 	OnAfterSend  func(viewer *ViewerInfo, visible map[uint32]bool)
+
+	// ProcessedInputSeq optionally returns the newest sequence from one
+	// game-defined, idempotent prediction stream whose effects are included in
+	// this viewer's frame. It is encoded atomically with the world update so a
+	// client never reconciles an acknowledgement against the wrong snapshot.
+	ProcessedInputSeq func(viewer *ViewerInfo) (uint32, bool)
+
+	// StreamGeneration optionally returns the session-scoped generation that
+	// fences the viewer's entire replication frame stream. A wrap-safe forward
+	// change starts a new seq=1 fresh-snapshot stream. Returning false (or
+	// leaving this nil) preserves the legacy NetworkID epoch fallback.
+	StreamGeneration func(viewer *ViewerInfo) (uint32, bool)
 
 	// BlinkDetectorTicks is the recent-removals window size. 0 disables
 	// the detector entirely. Typical value: 30 (1.5s at 20Hz).
@@ -264,9 +300,29 @@ type ReplicationConfig struct {
 // connState holds system-specific per-connection fields alongside a
 // BaselineStore that manages baselines, hashes, and priorities.
 type connState struct {
-	store    *replication.BaselineStore
-	ackedSeq uint32
-	nextSeq  uint32
+	store *replication.BaselineStore
+	txn   replicationStateTxn
+	// pendingScratch owns the transaction and slice storage for the sole
+	// in-flight attempt. On submission its transaction is swapped with txn,
+	// giving the attempt exclusive ownership without copying every staged
+	// entity. The two transactions alternate as receipts are resolved.
+	pendingScratch pendingReplicationAttempt
+	pending        *pendingReplicationAttempt
+	ackedSeq       uint32
+	nextSeq        uint32
+	// streamEpoch scopes frame ordering. Prefer the explicit, session-scoped
+	// StreamGeneration callback; NetworkID epoch capture remains as a legacy
+	// fallback when that callback is unavailable.
+	streamEpoch    uint32
+	hasStreamEpoch bool
+	// hasExplicitGeneration distinguishes the session generation domain from
+	// the legacy NetworkID epoch fallback. The first explicit value adopts that
+	// domain; only wrap-safe forward values may replace it thereafter.
+	hasExplicitGeneration bool
+	// forceFresh makes the next submitted frame a complete authoritative
+	// reset. It is set when an attempt with uncertain delivery is abandoned,
+	// so a late copy cannot make the next delta depend on ambiguous state.
+	forceFresh bool
 	// selfNetID is the NetworkID of the viewer's own player entity as
 	// seen on the most recent active tick. Cached here so the farewell
 	// loop (which runs after the session is gone from ActiveViewers)
@@ -285,13 +341,320 @@ type connState struct {
 	// it's a client-visible blink. GC'd in-band each tick (entries
 	// older than the window are dropped).
 	recentRemovals map[uint32]uint64
+
+	// pendingRemoved retains destroyed netIDs whose removal frame was not
+	// accepted by a reliable ordered transport. RemovedIDs is a per-tick feed,
+	// so without this outbox a rejected removal would degrade into an AoI exit
+	// on the next tick and the client would never receive the tombstone.
+	pendingRemoved map[uint32]bool
 }
 
 func newConnState(mode replication.AckMode) *connState {
+	store := replication.NewBaselineStore(mode)
 	return &connState{
-		store:          replication.NewBaselineStore(mode),
+		store: store,
+		txn:   newReplicationStateTxn(store),
+		pendingScratch: pendingReplicationAttempt{
+			txn: newReplicationStateTxn(store),
+		},
 		recentRemovals: make(map[uint32]uint64),
+		pendingRemoved: make(map[uint32]bool),
 	}
+}
+
+// stagedEntityReplicationState is a copy-on-write overlay for one entity's
+// per-viewer replication state. Frame construction mutates only this overlay;
+// the committed BaselineStore is updated after the frame has been accepted by
+// a reliable ordered transport.
+type stagedEntityReplicationState struct {
+	netID uint32
+
+	baseline      replication.EntityBaseline
+	baselineReady bool
+	baselineDirty bool
+
+	priority      replication.EntityPriorityState
+	priorityReady bool
+	priorityDirty bool
+
+	lastHash      uint64
+	lastHashDirty bool
+
+	// promoteSnapshot is the exact snapshot carried by this frame. Explicit
+	// ACK mode retains it as attempted state, but does not install it as Acked
+	// until the matching frame sequence is acknowledged.
+	promoteSnapshot []byte
+	promoteReady    bool
+
+	drop bool
+}
+
+// replicationStateTxn stages hot-path baseline, hash, and priority mutations
+// without cloning the entire connection store. Scratch is owned by connState
+// and reused across ticks. Entity state lives inline in a slice, with the map
+// storing slice indices, so steady-state staging does not allocate one heap
+// object per visible entity. Sent-snapshot rings are cloned lazily only when
+// PushSent is actually required.
+type replicationStateTxn struct {
+	store     *replication.BaselineStore
+	ringDepth int
+	indices   map[uint32]int
+	entities  []stagedEntityReplicationState
+}
+
+func newReplicationStateTxn(store *replication.BaselineStore) replicationStateTxn {
+	return replicationStateTxn{
+		store:   store,
+		indices: make(map[uint32]int),
+	}
+}
+
+// begin resets the transaction while retaining its map buckets and entity
+// storage. Clearing the prior states releases any rejected-frame snapshots
+// that were not also retained by the committed BaselineStore.
+func (tx *replicationStateTxn) begin(ringDepth int) *replicationStateTxn {
+	clear(tx.indices)
+	clear(tx.entities)
+	tx.entities = tx.entities[:0]
+	tx.ringDepth = ringDepth
+	return tx
+}
+
+func (tx *replicationStateTxn) entity(netID uint32) *stagedEntityReplicationState {
+	if idx, ok := tx.indices[netID]; ok {
+		return &tx.entities[idx]
+	}
+	tx.entities = append(tx.entities, stagedEntityReplicationState{netID: netID})
+	idx := len(tx.entities) - 1
+	tx.indices[netID] = idx
+	return &tx.entities[idx]
+}
+
+func (tx *replicationStateTxn) existingEntity(netID uint32) *stagedEntityReplicationState {
+	if idx, ok := tx.indices[netID]; ok {
+		return &tx.entities[idx]
+	}
+	return nil
+}
+
+func (tx *replicationStateTxn) baseline(netID uint32) *replication.EntityBaseline {
+	state := tx.entity(netID)
+	if !state.baselineReady {
+		if current := tx.store.Baseline(netID); current != nil {
+			state.baseline = *current
+		}
+		state.baselineReady = true
+	}
+	state.baselineDirty = true
+	return &state.baseline
+}
+
+func (tx *replicationStateTxn) pushSent(netID uint32, snapshot []byte) {
+	// The acknowledged metadata belongs to the frozen transaction, but the
+	// attempted-snapshot ring is retained directly in the committed store only
+	// after transport admission. Copying that ring into every transaction would
+	// allocate O(visible entities) and is unnecessary: commitExplicit preserves
+	// the live ring while promoting this exact snapshot.
+	tx.baseline(netID)
+	state := tx.entity(netID)
+	state.promoteSnapshot = snapshot
+	state.promoteReady = true
+}
+
+// retainSent records only the snapshots that were actually queued. It leaves
+// Acked, hashes, priorities, initial metadata, and visibility untouched.
+func (tx *replicationStateTxn) retainSent(seq uint32) {
+	for i := range tx.entities {
+		state := &tx.entities[i]
+		if !state.promoteReady || state.drop {
+			continue
+		}
+		tx.store.GetOrCreateBaseline(state.netID, tx.ringDepth).PushSent(seq, state.promoteSnapshot)
+	}
+}
+
+func (tx *replicationStateTxn) priority(netID uint32) *replication.EntityPriorityState {
+	state := tx.entity(netID)
+	if !state.priorityReady {
+		if current := tx.store.ExistingPriority(netID); current != nil {
+			state.priority = *current
+		}
+		state.priorityReady = true
+	}
+	state.priorityDirty = true
+	return &state.priority
+}
+
+func (tx *replicationStateTxn) hasLastHash(netID uint32) bool {
+	if state := tx.existingEntity(netID); state != nil && state.lastHashDirty {
+		return true
+	}
+	return tx.store.HasLastHash(netID)
+}
+
+func (tx *replicationStateTxn) lastHash(netID uint32) uint64 {
+	if state := tx.existingEntity(netID); state != nil && state.lastHashDirty {
+		return state.lastHash
+	}
+	return tx.store.LastHash(netID)
+}
+
+func (tx *replicationStateTxn) setLastHash(netID uint32, hash uint64) {
+	state := tx.entity(netID)
+	state.lastHash = hash
+	state.lastHashDirty = true
+}
+
+func (tx *replicationStateTxn) drop(netID uint32) {
+	tx.entity(netID).drop = true
+}
+
+func (tx *replicationStateTxn) commit() {
+	for i := range tx.entities {
+		state := &tx.entities[i]
+		netID := state.netID
+		if state.drop {
+			tx.store.DropBaseline(netID)
+			continue
+		}
+		if state.baselineDirty {
+			// Preserve the identity of an established baseline. Other engine
+			// paths (notably explicit ACK advancement) may hold this pointer,
+			// and replacing it every tick creates O(viewer*entity) garbage.
+			committed := tx.store.Baseline(netID)
+			if committed == nil {
+				committed = tx.store.GetOrCreateBaseline(netID, 0)
+			}
+			*committed = state.baseline
+		}
+		if state.lastHashDirty {
+			tx.store.SetLastHash(netID, state.lastHash)
+		}
+		if state.priorityDirty {
+			*tx.store.Priority(netID) = state.priority
+		}
+	}
+}
+
+// commitExplicit promotes exactly the state carried by one acknowledged
+// frame. Sent rings may contain the same attempt, but are bookkeeping only;
+// they never choose the promoted baseline implicitly.
+func (tx *replicationStateTxn) commitExplicit(seq uint32) {
+	for i := range tx.entities {
+		state := &tx.entities[i]
+		netID := state.netID
+		if state.drop {
+			tx.store.DropBaseline(netID)
+			continue
+		}
+		if state.baselineDirty {
+			committed := tx.store.Baseline(netID)
+			if committed == nil {
+				committed = tx.store.GetOrCreateBaseline(netID, tx.ringDepth)
+			}
+
+			// Attempt rings are updated when frames queue and can therefore be
+			// newer than this frozen transaction. Preserve the live ring while
+			// installing only the acknowledged metadata and snapshot.
+			ring := committed.Ring
+			ringHead := committed.RingHead
+			ringLen := committed.RingLen
+			acked := committed.Acked
+			*committed = state.baseline
+			committed.Ring = ring
+			committed.RingHead = ringHead
+			committed.RingLen = ringLen
+			committed.Acked = acked
+			if state.promoteReady {
+				committed.Acked = state.promoteSnapshot
+			}
+		}
+		if state.lastHashDirty {
+			tx.store.SetLastHash(netID, state.lastHash)
+		}
+		if state.priorityDirty {
+			*tx.store.Priority(netID) = state.priority
+		}
+	}
+
+	tx.store.ForEachBaseline(func(_ uint32, baseline *replication.EntityBaseline) {
+		baseline.PruneSentThrough(seq)
+	})
+}
+
+// pendingReplicationAttempt is the sole causal frame awaiting either a
+// transport receipt (AckReliable) or an application ACK (AckExplicit).
+// Keeping at most one prevents later deltas from being encoded against state
+// that may or may not have reached the client.
+type pendingReplicationAttempt struct {
+	streamEpoch uint32
+	seq         uint32
+	sentTick    uint32
+	txn         replicationStateTxn
+
+	visible        map[uint32]bool
+	selfNetID      uint32
+	recentRemovals map[uint32]uint64
+	blinks         []stagedBlinkDetection
+	removed        []uint32
+	exited         []uint32
+	// clearPendingRemoved is captured at submission time. Removals observed
+	// while this attempt is in flight must survive its later commit.
+	clearPendingRemoved []uint32
+
+	awaitReceipt bool
+}
+
+type stagedBlinkDetection struct {
+	netID            uint32
+	ticksSinceRemove uint64
+}
+
+// stagePendingAttempt moves the just-built transaction into the reusable
+// pending slot. Swapping transaction scratch buffers avoids an O(entities)
+// freeze copy while preserving exclusive ownership: no new frame is built for
+// a connection until this attempt commits, is rejected, or times out.
+func (conn *connState) stagePendingAttempt(
+	streamEpoch, seq, sentTick uint32,
+	visible map[uint32]bool,
+	selfNetID uint32,
+	recentRemovals map[uint32]uint64,
+	blinks []stagedBlinkDetection,
+	exited []uint32,
+	removed []uint32,
+	awaitReceipt bool,
+) {
+	pending := &conn.pendingScratch
+	pending.streamEpoch = streamEpoch
+	pending.seq = seq
+	pending.sentTick = sentTick
+	pending.visible = visible
+	pending.selfNetID = selfNetID
+	pending.recentRemovals = recentRemovals
+	pending.blinks = append(pending.blinks[:0], blinks...)
+	pending.exited = append(pending.exited[:0], exited...)
+	pending.removed = append(pending.removed[:0], removed...)
+	pending.clearPendingRemoved = pending.clearPendingRemoved[:0]
+	for netID := range visible {
+		if conn.pendingRemoved[netID] {
+			pending.clearPendingRemoved = append(pending.clearPendingRemoved, netID)
+		}
+	}
+	pending.clearPendingRemoved = append(pending.clearPendingRemoved, removed...)
+	pending.awaitReceipt = awaitReceipt
+
+	// conn.txn is the transaction used to build this attempt. Give it to the
+	// pending slot and retain the slot's previous scratch for the next frame.
+	pending.txn, conn.txn = conn.txn, pending.txn
+	conn.pending = pending
+}
+
+func cloneRecentRemovals(src map[uint32]uint64) map[uint32]uint64 {
+	dst := make(map[uint32]uint64, len(src))
+	for netID, tick := range src {
+		dst[netID] = tick
+	}
+	return dst
 }
 
 // ---------------------------------------------------------------------------
@@ -337,6 +700,12 @@ type ReplicationSystem struct {
 func NewReplicationSystem(cfg ReplicationConfig) *ReplicationSystem {
 	if cfg.SentHistoryDepth == 0 {
 		cfg.SentHistoryDepth = 32
+	}
+	if cfg.PendingReceiptTimeoutTicks == 0 {
+		cfg.PendingReceiptTimeoutTicks = 3
+	}
+	if cfg.PendingAckTimeoutTicks == 0 {
+		cfg.PendingAckTimeoutTicks = 10
 	}
 	snapBufSize := cfg.SnapshotBufSize
 	if snapBufSize == 0 {
@@ -451,21 +820,129 @@ func (s *ReplicationSystem) IsVisible(connID uint32, netID uint32) bool {
 	return false
 }
 
-// AckSequence advances the acked baseline for a connection to the given sequence.
-// For AckExplicit mode (UDP): called when the server receives a client ack.
-// For AckReliable mode (TCP): this is a no-op (baselines auto-advance on send).
+// AckSequence promotes the exact pending frame for a legacy connection that
+// does not use an explicit session StreamGeneration. New generation-aware
+// UDP integrations must call AckFrame so a delayed same-sequence ACK from a
+// previous stream cannot commit the current transaction.
 func (s *ReplicationSystem) AckSequence(connID, seq uint32) {
 	if s.cfg.AckMode != replication.AckExplicit {
 		return
 	}
 	conn, ok := s.connections[connID]
+	if !ok || conn.hasExplicitGeneration || conn.pending == nil || conn.pending.awaitReceipt || conn.pending.seq != seq {
+		return
+	}
+	s.commitPendingAttempt(connID, conn, true)
+}
+
+// AckFrame promotes one explicitly scoped UDP replication attempt. Stream
+// generation zero is valid and is compared exactly rather than treated as an
+// absent value.
+func (s *ReplicationSystem) AckFrame(connID, streamEpoch, seq uint32) {
+	if s.cfg.AckMode != replication.AckExplicit {
+		return
+	}
+	conn, ok := s.connections[connID]
+	if !ok || conn.pending == nil || conn.pending.awaitReceipt ||
+		conn.pending.streamEpoch != streamEpoch || conn.pending.seq != seq {
+		return
+	}
+	s.commitPendingAttempt(connID, conn, true)
+}
+
+func (s *ReplicationSystem) commitPendingAttempt(connID uint32, conn *connState, explicit bool) {
+	pending := conn.pending
+	if pending == nil {
+		return
+	}
+	if explicit {
+		pending.txn.commitExplicit(pending.seq)
+		conn.ackedSeq = pending.seq
+	} else {
+		pending.txn.commit()
+	}
+
+	s.lastVisible[connID] = pending.visible
+	conn.selfNetID = pending.selfNetID
+	if s.cfg.BlinkDetectorTicks > 0 {
+		conn.recentRemovals = pending.recentRemovals
+	}
+	for _, netID := range pending.clearPendingRemoved {
+		delete(conn.pendingRemoved, netID)
+	}
+	// A destruction can race an in-flight AoI exit. Once that exact exit
+	// commits, the client has already discarded the entity, so a tombstone
+	// observed later in the wait window is neither necessary nor reachable
+	// from the newly-committed visibility set. Retire it here instead of
+	// leaking pendingRemoved forever.
+	for _, netID := range pending.exited {
+		delete(conn.pendingRemoved, netID)
+	}
+	for _, blink := range pending.blinks {
+		s.cfg.OnBlinkDetected(connID, blink.netID, blink.ticksSinceRemove)
+	}
+	conn.pending = nil
+	conn.forceFresh = false
+}
+
+func (s *ReplicationSystem) discardPendingAttempt(conn *connState) {
+	if conn.pending == nil {
+		return
+	}
+	for _, netID := range conn.pending.removed {
+		conn.pendingRemoved[netID] = true
+	}
+	conn.store.ForEachBaseline(func(_ uint32, baseline *replication.EntityBaseline) {
+		baseline.ClearSent()
+	})
+	conn.pending = nil
+	conn.forceFresh = true
+}
+
+func (s *ReplicationSystem) drainFrameReceipts(connID uint32, conn *connState) {
+	source, ok := s.cfg.Frame.(FrameReceiptSource)
 	if !ok {
 		return
 	}
-	conn.ackedSeq = seq
-	conn.store.ForEachBaseline(func(_ uint32, bl *replication.EntityBaseline) {
-		bl.AdvanceTo(seq)
-	})
+	for _, receipt := range source.DrainFrameReceipts(connID) {
+		pending := conn.pending
+		if pending == nil || receipt.StreamEpoch != pending.streamEpoch || receipt.Seq != pending.seq {
+			continue
+		}
+		if !pending.awaitReceipt {
+			// Explicit mode still needs the client's application ACK after a
+			// successful enqueue, but a definite downstream rejection can end
+			// the wait early and force a self-contained retry.
+			if !receipt.Result.Queued() {
+				s.discardPendingAttempt(conn)
+			}
+			continue
+		}
+		if receipt.Result.Supports(net.DeliveryReliableOrdered) {
+			s.commitPendingAttempt(connID, conn, false)
+		} else {
+			s.discardPendingAttempt(conn)
+		}
+	}
+}
+
+func (s *ReplicationSystem) frameWriterTracksReceipts() bool {
+	_, ok := s.cfg.Frame.(FrameReceiptSource)
+	return ok
+}
+
+func (s *ReplicationSystem) pendingTimedOut(conn *connState, tick uint32) bool {
+	if conn.pending == nil {
+		return false
+	}
+	timeout := s.cfg.PendingAckTimeoutTicks
+	if conn.pending.awaitReceipt {
+		timeout = s.cfg.PendingReceiptTimeoutTicks
+	}
+	if timeout == 0 {
+		timeout = 1
+	}
+	return tick-conn.pending.sentTick >= timeout
 }
 
 // ringDepth returns the appropriate ring buffer depth based on ack mode.
@@ -486,12 +963,72 @@ func (s *ReplicationSystem) getConn(connID uint32) *connState {
 	return conn
 }
 
+// streamGenerationAfter applies RFC 1982-style serial arithmetic to uint32
+// generations. This accepts wrap from MaxUint32 to zero while rejecting stale
+// values from the previous half of the sequence space.
+func streamGenerationAfter(candidate, current uint32) bool {
+	return candidate != current && candidate-current < 1<<31
+}
+
+// resolveStreamGeneration adopts an explicit session generation when the
+// configured callback provides one. A forward generation replaces the whole
+// per-connection replication stream: sequences restart at one, all baselines
+// are rebuilt, and the first frame carries FreshSnapshot. The returned bool is
+// true whenever an explicit value was available this tick, including when that
+// value was stale and therefore ignored.
+func (s *ReplicationSystem) resolveStreamGeneration(viewer *ViewerInfo, conn *connState) (*connState, bool) {
+	if s.cfg.StreamGeneration == nil {
+		return conn, false
+	}
+	generation, ok := s.cfg.StreamGeneration(viewer)
+	if !ok {
+		return conn, false
+	}
+
+	if !conn.hasExplicitGeneration {
+		// A callback may become available after legacy epoch-zero or NetworkID-
+		// scoped frames have already been sent. A different value changes the
+		// client's ordering domain, so make that adoption a complete reset.
+		if conn.nextSeq != 0 && conn.streamEpoch != generation {
+			conn = newConnState(s.cfg.AckMode)
+			s.connections[viewer.ConnID] = conn
+			delete(s.lastVisible, viewer.ConnID)
+		}
+		conn.streamEpoch = generation
+		conn.hasStreamEpoch = true
+		conn.hasExplicitGeneration = true
+		return conn, true
+	}
+
+	if generation == conn.streamEpoch {
+		return conn, true
+	}
+	if !streamGenerationAfter(generation, conn.streamEpoch) {
+		return conn, true
+	}
+
+	conn = newConnState(s.cfg.AckMode)
+	conn.streamEpoch = generation
+	conn.hasStreamEpoch = true
+	conn.hasExplicitGeneration = true
+	s.connections[viewer.ConnID] = conn
+	delete(s.lastVisible, viewer.ConnID)
+	return conn, true
+}
+
 // Update runs the replication loop for one tick.
 func (s *ReplicationSystem) Update(dt float32) {
 	tick := s.cfg.GetTick()
 
 	if s.cfg.OnBeforeTick != nil {
 		s.cfg.OnBeforeTick(tick)
+	}
+
+	// Final gateway enqueue is asynchronous for tracked distributed writers.
+	// Drain it before building this tick so an accepted attempt becomes the
+	// baseline for the next frame immediately.
+	for connID, conn := range s.connections {
+		s.drainFrameReceipts(connID, conn)
 	}
 
 	isKeyframe := s.cfg.FullRefreshInterval > 0 &&
@@ -509,45 +1046,27 @@ func (s *ReplicationSystem) Update(dt float32) {
 		}
 	}
 
-	// Clean up state for disconnected viewers.
-	//
-	// A viewer disappearing from ActiveViewers can mean either "WebSocket
-	// closed" (real disconnect) or "session handed off to another cell"
-	// (cross-cell handoff). In both cases the server must tell the
-	// client to forget every entity it had visible from THIS cell's
-	// perspective — otherwise the client UI retains ghost copies that
-	// never despawn. This is the per-client analog of the border-frame
-	// interest-set diff that runs for cross-cell replicas: when a
-	// session stops being served by this cell, its visibility set is
-	// conceptually "dropped from this sender" and the client needs the
-	// explicit Removed notification. Without this, stale entities pile
-	// up on the client whenever a player crosses a cell boundary.
-	//
-	// The farewell is sent through the normal FrameWriter so it flows
-	// over whichever transport the client is attached to (WebSocket via
-	// ConnMgr, or VCM in node mode). If the connection is genuinely
-	// gone the send is a silent no-op — harmless.
-	// When a conn leaves this cell's ActiveViewers (handoff or disconnect),
-	// CLEAN UP local tracking state but do NOT send a farewell frame. Earlier
-	// designs sent Removed:[all visible] to the departing conn, which was
-	// meant to make the client drop stale entities. In practice the
-	// farewell raced with the destination cell's FreshSnapshot frame: if
-	// the farewell arrived on the client AFTER the fresh frame, it would
-	// delete the client's per-entity baselines for entities that are still
-	// visible from the destination's perspective, causing the server's
-	// subsequent deltas to be undecodable and the entities to stay
-	// invisible for up to ~1.5s until a TTL-driven resync. The
-	// FreshSnapshot flag on the destination's first frame is the
-	// authoritative state-reset signal; this cell's visibility is
-	// implicitly dropped when the conn moves. Topology-transparent: the
-	// client never sees per-cell farewell frames.
+	// Reconcile viewers omitted this tick. A liveness-aware source can identify
+	// sessions in a temporary non-viewing state: retain their committed state
+	// and sequence, abandon any ambiguous in-flight attempt, and force a fresh
+	// snapshot on reactivation. Sources without that capability retain the
+	// legacy behavior of treating omission as permanent removal. No farewell
+	// frame is sent; FreshSnapshot is the topology-transparent reset signal.
 	viewers := s.cfg.Viewers.ActiveViewers()
 	activeConns := make(map[uint32]bool, len(viewers))
 	for i := range viewers {
 		activeConns[viewers[i].ConnID] = true
 	}
-	for connID := range s.lastVisible {
+	for connID := range s.connections {
 		if activeConns[connID] {
+			continue
+		}
+		if liveness, ok := s.cfg.Viewers.(ViewerLiveness); ok && liveness.ViewerExists(connID) {
+			conn := s.connections[connID]
+			if conn.pending != nil {
+				s.discardPendingAttempt(conn)
+			}
+			conn.forceFresh = true
 			continue
 		}
 		delete(s.lastVisible, connID)
@@ -560,26 +1079,81 @@ func (s *ReplicationSystem) Update(dt float32) {
 	for i := range viewers {
 		viewer := &viewers[i]
 		conn := s.getConn(viewer.ConnID)
+		var explicitGeneration bool
+		conn, explicitGeneration = s.resolveStreamGeneration(viewer, conn)
+		viewer.StreamEpoch = conn.streamEpoch
 
-		// "Fresh" = this ReplicationSystem has never sent a frame to this
-		// conn before, which is the canonical signal the client needs to
-		// reset its per-entity decoder baselines. Happens on initial login
-		// and on every cross-cell handoff — the destination cell's
-		// ReplicationSystem starts with empty lastVisible for the
-		// newly-arrived conn. Matches the Valve Source cl_fullupdate /
-		// Gaffer "encoded relative to initial state" pattern: no topology
-		// concept leaks to the client, just a normal delta frame that
-		// happens to carry a "reset your decoder" bit.
+		// A connection may have only one causal attempt in flight. Preserve
+		// tick-scoped removals while waiting, keep lifecycle callbacks alive
+		// with the last committed visibility, and resume only after receipt,
+		// explicit ACK, or a bounded fresh-reset timeout.
+		if conn.pending != nil {
+			for netID := range removedSet {
+				if s.lastVisible[viewer.ConnID][netID] || conn.pending.visible[netID] {
+					conn.pendingRemoved[netID] = true
+				}
+			}
+			if s.pendingTimedOut(conn, tick) {
+				s.discardPendingAttempt(conn)
+			} else {
+				committedVisible := s.lastVisible[viewer.ConnID]
+				if committedVisible == nil {
+					committedVisible = map[uint32]bool{}
+				}
+				if s.cfg.OnBeforeSend != nil {
+					s.cfg.OnBeforeSend(viewer, committedVisible)
+				}
+				if s.cfg.OnAfterSend != nil {
+					s.cfg.OnAfterSend(viewer, committedVisible)
+				}
+				continue
+			}
+		}
+		tx := conn.txn.begin(ringDepth)
+
+		stagedRecentRemovals := conn.recentRemovals
+		if s.cfg.BlinkDetectorTicks > 0 {
+			stagedRecentRemovals = cloneRecentRemovals(conn.recentRemovals)
+		}
+		var stagedBlinks []stagedBlinkDetection
+
+		// "Fresh" means this frame starts (or repairs) a self-contained
+		// replication stream. Initial login, session-generation advances, and
+		// reactivation after temporary omission all reach this path. The client
+		// can reset decoder baselines without learning why the stream changed.
 		_, hadPriorState := s.lastVisible[viewer.ConnID]
+		forceFresh := conn.forceFresh
+		if forceFresh {
+			hadPriorState = false
+		}
 
 		// Cache the viewer's own player netID for the farewell path. If
 		// the entity lacks a NetworkID (e.g. spectator with no body)
 		// leave selfNetID at zero — nothing to exclude.
+		stagedSelfNetID := conn.selfNetID
+		streamEpoch := conn.streamEpoch
 		if s.netIDMap.HasAll(viewer.Entity) {
-			conn.selfNetID = s.netIDMap.Get(viewer.Entity).ID
+			viewerNetID := s.netIDMap.Get(viewer.Entity)
+			stagedSelfNetID = viewerNetID.ID
+			if !explicitGeneration && !conn.hasStreamEpoch {
+				// A spectator-like viewer may have emitted epoch-zero frames before
+				// acquiring an entity. Changing the stream scope invalidates those
+				// baselines, so make this exact frame a complete reset as well.
+				if hadPriorState {
+					forceFresh = true
+					hadPriorState = false
+				}
+				conn.streamEpoch = viewerNetID.Epoch
+				conn.hasStreamEpoch = true
+				streamEpoch = viewerNetID.Epoch
+			}
 		}
+		viewer.StreamEpoch = streamEpoch
 
-		// Assign frame sequence.
+		// Assign a unique sequence to every write attempt. A queued frame with
+		// an insufficient delivery class is not safe for baseline commit, but
+		// it may still reach the client; reusing its sequence for the retry
+		// would make two different frames indistinguishable to ack tracking.
 		conn.nextSeq++
 		frameSeq := conn.nextSeq
 
@@ -659,26 +1233,44 @@ func (s *ReplicationSystem) Update(dt float32) {
 
 			currentVisible[netID] = true
 
-			// Is this entity new to this viewer?
-			isNew := true
-			if prev, ok := s.lastVisible[viewer.ConnID]; ok && prev[netID] {
-				isNew = false
+			// Semantic entry is based only on committed visibility. A forced
+			// fresh reset still needs a full payload for every visible entity,
+			// but must not masquerade as an AoI re-entry to blink detection.
+			wasVisible := false
+			if prev, ok := s.lastVisible[viewer.ConnID]; ok {
+				wasVisible = prev[netID]
 			}
+			isNew := !wasVisible
+			// A retained tombstone means this netID was destroyed while another
+			// causal frame was in flight. If it is visible again before that
+			// tombstone commits, treat the representation as a new lifecycle and
+			// never delta against its pre-destruction baseline. This is a wire
+			// full-refresh only; semantic entry/blink detection remains based on
+			// committed visibility above.
+			needsFull := forceFresh || isNew || conn.pendingRemoved[netID]
+			committedBaseline := conn.store.Baseline(netID)
+			// A baseline is valid only for the authority lifecycle that produced
+			// it. Handoffs can keep an entity continuously visible while advancing
+			// NetworkID.Epoch; force a full entry (including initial-only fields)
+			// so epoch-fencing clients can establish the new decoder baseline.
+			epochChanged := committedBaseline != nil &&
+				(!committedBaseline.HasAuthorityEpoch || committedBaseline.AuthorityEpoch != epoch)
+			needsFull = needsFull || epochChanged
 			if isNew {
 				entered = append(entered, netID)
-				if s.cfg.BlinkDetectorTicks > 0 && s.cfg.OnBlinkDetected != nil {
-					if removedTick, ok := conn.recentRemovals[netID]; ok {
+				if s.cfg.BlinkDetectorTicks > 0 {
+					if removedTick, ok := stagedRecentRemovals[netID]; ok {
 						delta := uint64(tick) - removedTick
-						if delta <= s.cfg.BlinkDetectorTicks {
-							s.cfg.OnBlinkDetected(viewer.ConnID, netID, delta)
+						if delta <= s.cfg.BlinkDetectorTicks && s.cfg.OnBlinkDetected != nil {
+							stagedBlinks = append(stagedBlinks, stagedBlinkDetection{
+								netID:            netID,
+								ticksSinceRemove: delta,
+							})
 						}
-						delete(conn.recentRemovals, netID)
+						delete(stagedRecentRemovals, netID)
 					}
 				}
 			}
-
-			ps := conn.store.Priority(netID)
-			bl := conn.store.GetOrCreateBaseline(netID, ringDepth)
 
 			// Detect a change in initial-only fields (name, etc.) so it can be
 			// re-sent to already-visible viewers. Cheap: only the initial
@@ -690,14 +1282,20 @@ func (s *ReplicationSystem) Update(dt float32) {
 				rep.InitialHash(&s.initHasher, viewer, entry)
 				curInitHash = s.initHasher.Sum()
 			}
-			initialChanged := hasInit && (!bl.HasInitialHash || bl.InitialHash != curInitHash)
+			initialChanged := hasInit && (committedBaseline == nil ||
+				!committedBaseline.HasInitialHash || committedBaseline.InitialHash != curInitHash)
 
 			// Dormancy: skip all replication work for entities unchanged for N
 			// ticks — unless an initial field changed (static entities like
-			// stations are dormant exactly when they get renamed).
-			if !isNew && !initialChanged && s.cfg.DormancyThreshold > 0 && ps.UnchangedTicks >= s.cfg.DormancyThreshold {
-				currentVisible[netID] = true
-				continue
+			// stations are dormant exactly when they get renamed). Consult the
+			// committed priority read-only so a dormant entity does not enter the
+			// transaction at all.
+			if !needsFull && !initialChanged && s.cfg.DormancyThreshold > 0 {
+				if committedPriority := conn.store.ExistingPriority(netID); committedPriority != nil &&
+					committedPriority.UnchangedTicks >= s.cfg.DormancyThreshold {
+					currentVisible[netID] = true
+					continue
+				}
 			}
 
 			// Fast hash pre-check.
@@ -705,18 +1303,19 @@ func (s *ReplicationSystem) Update(dt float32) {
 			rep.Hash(&s.hasher, viewer, entry)
 			hash := s.hasher.Sum()
 
-			if !isNew && !isKeyframe && !initialChanged && conn.store.HasLastHash(netID) {
+			if !needsFull && !isKeyframe && !initialChanged && conn.store.HasLastHash(netID) {
 				if conn.store.LastHash(netID) == hash {
+					ps := tx.priority(netID)
 					ps.UnchangedTicks++
 					currentVisible[netID] = true
 					continue // unchanged — skip snapshot
 				}
 			}
+			ps := tx.priority(netID)
 			ps.UnchangedTicks = 0
-			conn.store.SetLastHash(netID, hash)
 
 			// Update divisor gate: skip snapshot on non-divisor ticks.
-			if !isNew && !initialChanged && tier.UpdateDivisor > 1 && tick%tier.UpdateDivisor != 0 {
+			if !needsFull && !initialChanged && tier.UpdateDivisor > 1 && tick%tier.UpdateDivisor != 0 {
 				currentVisible[netID] = true
 				dist := float32(math.Sqrt(float64(dist2)))
 				distFactor := float32(1.0) - (dist / tierRadius)
@@ -730,6 +1329,11 @@ func (s *ReplicationSystem) Update(dt float32) {
 				ps.Accumulator += basePriority
 				continue
 			}
+			// LastHash is the last state admitted to snapshot/delta work, not
+			// merely the last state observed. Recording it before the divisor
+			// gate would permanently lose a one-time change that happened on a
+			// skipped tick.
+			tx.setLastHash(netID, hash)
 			ps.LastSentTick = tick
 			ps.Accumulator = 0
 
@@ -740,9 +1344,12 @@ func (s *ReplicationSystem) Update(dt float32) {
 
 			enc := s.deltaEncoders[entityType]
 
-			if isNew || bl.Acked == nil || initialChanged {
+			if needsFull || committedBaseline == nil || committedBaseline.Acked == nil || initialChanged {
 				// Full snapshot with initial data. Reached on first visibility,
 				// missing baseline, OR when an initial-only field changed.
+				bl := tx.baseline(netID)
+				bl.AuthorityEpoch = epoch
+				bl.HasAuthorityEpoch = true
 				snap := make([]byte, len(curr))
 				copy(snap, curr)
 
@@ -767,11 +1374,13 @@ func (s *ReplicationSystem) Update(dt float32) {
 				if s.cfg.AckMode == replication.AckReliable {
 					bl.Acked = snap
 				} else {
-					bl.Acked = snap
-					bl.PushSent(frameSeq, snap)
+					tx.pushSent(netID, snap)
 				}
 			} else if isKeyframe {
 				// Keyframe: full snapshot, no initial data.
+				bl := tx.baseline(netID)
+				bl.AuthorityEpoch = epoch
+				bl.HasAuthorityEpoch = true
 				snap := make([]byte, len(curr))
 				copy(snap, curr)
 
@@ -786,12 +1395,12 @@ func (s *ReplicationSystem) Update(dt float32) {
 				if s.cfg.AckMode == replication.AckReliable {
 					bl.Acked = snap
 				} else {
-					bl.PushSent(frameSeq, snap)
+					tx.pushSent(netID, snap)
 				}
 			} else if enc != nil {
 				// Delta encode against acked baseline.
 				s.deltaTmp = s.deltaTmp[:0]
-				delta := enc.Encode(bl.Acked, curr, s.deltaTmp)
+				delta := enc.Encode(committedBaseline.Acked, curr, s.deltaTmp)
 				if delta == nil {
 					// Identical after quantization despite hash change.
 					continue
@@ -809,12 +1418,15 @@ func (s *ReplicationSystem) Update(dt float32) {
 				})
 
 				// Store for baseline advancement.
+				bl := tx.baseline(netID)
+				bl.AuthorityEpoch = epoch
+				bl.HasAuthorityEpoch = true
 				snap := make([]byte, len(curr))
 				copy(snap, curr)
 				if s.cfg.AckMode == replication.AckReliable {
 					bl.Acked = snap
 				} else {
-					bl.PushSent(frameSeq, snap)
+					tx.pushSent(netID, snap)
 				}
 			}
 		}
@@ -840,31 +1452,44 @@ func (s *ReplicationSystem) Update(dt float32) {
 				if currentVisible[netID] {
 					continue
 				}
-				if removedSet[netID] {
+				if removedSet[netID] || conn.pendingRemoved[netID] {
 					removed = append(removed, netID)
-				} else if netID != conn.selfNetID {
+				} else if netID != stagedSelfNetID {
 					exited = append(exited, netID)
 				}
 			}
 		}
 
-		// Clean up baselines for entities leaving AoI.
+		// Stage baseline cleanup for entities leaving AoI. A rejected frame
+		// must retain these baselines so the exact exit/removal can be retried.
 		for _, netID := range exited {
-			conn.store.DropBaseline(netID)
+			tx.drop(netID)
 		}
 		for _, netID := range removed {
-			conn.store.DropBaseline(netID)
+			tx.drop(netID)
 		}
 
-		// Record removals for blink detection.
+		// Stage removals for blink detection. The removal only becomes
+		// client-visible after a reliable ordered acceptance.
 		if s.cfg.BlinkDetectorTicks > 0 {
 			for _, netID := range removed {
-				conn.recentRemovals[netID] = uint64(tick)
+				stagedRecentRemovals[netID] = uint64(tick)
 			}
 		}
 
-		// Save current visible set.
-		s.lastVisible[viewer.ConnID] = currentVisible
+		// GC stale blink-detector entries in the staged map. Rejection leaves
+		// the committed map untouched.
+		if s.cfg.BlinkDetectorTicks > 0 && len(stagedRecentRemovals) > 0 {
+			t64 := uint64(tick)
+			if t64 >= s.cfg.BlinkDetectorTicks {
+				windowStart := t64 - s.cfg.BlinkDetectorTicks
+				for id, removedTick := range stagedRecentRemovals {
+					if removedTick < windowStart {
+						delete(stagedRecentRemovals, id)
+					}
+				}
+			}
+		}
 
 		// Pre-send callback.
 		if s.cfg.OnBeforeSend != nil {
@@ -878,32 +1503,91 @@ func (s *ReplicationSystem) Update(dt float32) {
 		if !hadPriorState {
 			frameFlags |= quantize.FrameFlagFreshSnapshot
 		}
-		s.cfg.Frame.WriteFrame(&ReplicationFrame{
-			Tick:    tick,
-			Seq:     frameSeq,
-			Flags:   frameFlags,
-			Viewer:  viewer,
-			Full:    s.fullBuf,
-			Deltas:  s.deltaBuf,
-			Entered: entered,
-			Exited:  exited,
-			Removed: removed,
+		processedInputSeq, hasInputAck := uint32(0), false
+		if s.cfg.ProcessedInputSeq != nil {
+			processedInputSeq, hasInputAck = s.cfg.ProcessedInputSeq(viewer)
+		}
+		result := s.cfg.Frame.WriteFrame(&ReplicationFrame{
+			Tick:              tick,
+			Seq:               frameSeq,
+			StreamEpoch:       streamEpoch,
+			Flags:             frameFlags,
+			HasInputAck:       hasInputAck,
+			ProcessedInputSeq: processedInputSeq,
+			Viewer:            viewer,
+			Full:              s.fullBuf,
+			Deltas:            s.deltaBuf,
+			Entered:           entered,
+			Exited:            exited,
+			Removed:           removed,
 		})
 
-		// GC stale blink-detector entries.
-		if s.cfg.BlinkDetectorTicks > 0 && len(conn.recentRemovals) > 0 {
-			t64 := uint64(tick)
-			if t64 >= s.cfg.BlinkDetectorTicks {
-				windowStart := t64 - s.cfg.BlinkDetectorTicks
-				for id, t := range conn.recentRemovals {
-					if t < windowStart {
-						delete(conn.recentRemovals, id)
-					}
-				}
+		if s.cfg.AckMode == replication.AckReliable && result.Supports(net.DeliveryReliableOrdered) {
+			tx.commit()
+			s.lastVisible[viewer.ConnID] = currentVisible
+			conn.selfNetID = stagedSelfNetID
+			conn.forceFresh = false
+			if s.cfg.BlinkDetectorTicks > 0 {
+				conn.recentRemovals = stagedRecentRemovals
+			}
+
+			// Accepted current state supersedes an undelivered tombstone for a
+			// netID that became visible again. Accepted removals leave the
+			// outbox only after their tombstone is on the reliable stream.
+			for netID := range currentVisible {
+				delete(conn.pendingRemoved, netID)
+			}
+			for _, netID := range removed {
+				delete(conn.pendingRemoved, netID)
+			}
+
+			for _, blink := range stagedBlinks {
+				s.cfg.OnBlinkDetected(viewer.ConnID, blink.netID, blink.ticksSinceRemove)
+			}
+
+		} else if result.Queued() && (s.cfg.AckMode == replication.AckExplicit ||
+			(result.Supports(net.DeliveryOrdered) && s.frameWriterTracksReceipts())) {
+			// AckExplicit retains only attempted snapshot history before the
+			// application ACK. AckReliable's ordered distributed path retains
+			// the whole transaction until its final gateway receipt arrives.
+			if s.cfg.AckMode == replication.AckExplicit {
+				tx.retainSent(frameSeq)
+			}
+			for _, netID := range removed {
+				conn.pendingRemoved[netID] = true
+			}
+			conn.stagePendingAttempt(
+				streamEpoch,
+				frameSeq,
+				tick,
+				currentVisible,
+				stagedSelfNetID,
+				stagedRecentRemovals,
+				stagedBlinks,
+				exited,
+				removed,
+				s.cfg.AckMode == replication.AckReliable,
+			)
+		} else {
+			// RemovedIDs is tick-scoped. Preserve rejected removals in a
+			// per-connection outbox so the next attempt remains a tombstone
+			// instead of silently degrading into an AoI exit.
+			for _, netID := range removed {
+				conn.pendingRemoved[netID] = true
+			}
+			// A queued path with insufficient guarantees, or an indeterminate
+			// handoff to an intermediate queue, may still reach the client.
+			// Make the retry self-contained instead of building a delta on that
+			// ambiguous outcome.
+			if result.Queued() || result.Disposition == net.SendIndeterminate {
+				conn.forceFresh = true
 			}
 		}
 
-		// Post-send callback.
+		// Preserve callback semantics for queued best-effort/ordered paths
+		// (notably distributed auto-broadcast delivery). Transactional state
+		// advancement has the stricter reliable-ordered requirement above,
+		// but OnAfterSend remains an after-attempt lifecycle hook.
 		if s.cfg.OnAfterSend != nil {
 			s.cfg.OnAfterSend(viewer, currentVisible)
 		}

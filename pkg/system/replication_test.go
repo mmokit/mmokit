@@ -1,12 +1,15 @@
 package system
 
 import (
+	"bytes"
 	"testing"
 
 	"github.com/mlange-42/ark/ecs"
 
 	"github.com/zenion/mmoserver/pkg/component"
+	"github.com/zenion/mmoserver/pkg/net"
 	"github.com/zenion/mmoserver/pkg/quantize"
+	"github.com/zenion/mmoserver/pkg/replication"
 	"github.com/zenion/mmoserver/pkg/spatial"
 )
 
@@ -25,9 +28,9 @@ func (r *testReplicator) Snapshot(w *quantize.SnapshotWriter, viewer *ViewerInfo
 	w.Float32(entry.X)
 	w.Float32(entry.Y)
 }
-func (r *testReplicator) SnapshotLayout() []int { return []int{4, 4} }
-func (r *testReplicator) InitialData(viewer *ViewerInfo, entry spatial.Entry) []byte { return nil }
-func (r *testReplicator) HasInitial() bool                                           { return false }
+func (r *testReplicator) SnapshotLayout() []int                                          { return []int{4, 4} }
+func (r *testReplicator) InitialData(viewer *ViewerInfo, entry spatial.Entry) []byte     { return nil }
+func (r *testReplicator) HasInitial() bool                                               { return false }
 func (r *testReplicator) InitialHash(h *Hasher, viewer *ViewerInfo, entry spatial.Entry) {}
 
 type tieredReplicator struct {
@@ -43,8 +46,32 @@ func (s *stubViewerSource) ActiveViewers() []ViewerInfo { return nil }
 
 type stubFrameWriter struct{ frames []ReplicationFrame }
 
-func (s *stubFrameWriter) WriteFrame(frame *ReplicationFrame) {
+func (s *stubFrameWriter) WriteFrame(frame *ReplicationFrame) net.SendResult {
 	s.frames = append(s.frames, *frame)
+	return net.SendResult{Disposition: net.SendQueued, Delivery: net.DeliveryReliableOrdered}
+}
+
+type scriptedFrameWriter struct {
+	frames  []ReplicationFrame
+	results []net.SendResult
+	calls   int
+}
+
+func (w *scriptedFrameWriter) WriteFrame(frame *ReplicationFrame) net.SendResult {
+	cloned := *frame
+	cloned.Full = append([]FullPayload(nil), frame.Full...)
+	cloned.Deltas = append([]DeltaPayload(nil), frame.Deltas...)
+	cloned.Entered = append([]uint32(nil), frame.Entered...)
+	cloned.Exited = append([]uint32(nil), frame.Exited...)
+	cloned.Removed = append([]uint32(nil), frame.Removed...)
+	w.frames = append(w.frames, cloned)
+
+	result := net.SendResult{Disposition: net.SendQueued, Delivery: net.DeliveryReliableOrdered}
+	if w.calls < len(w.results) {
+		result = w.results[w.calls]
+	}
+	w.calls++
+	return result
 }
 
 type fixedViewerSource struct{ viewers []ViewerInfo }
@@ -91,7 +118,7 @@ func TestNewReplicationSystem_TierCaching(t *testing.T) {
 	tick := uint32(0)
 	sys := NewReplicationSystem(ReplicationConfig{
 		World:       world,
-		SpatialGrid:        grid,
+		SpatialGrid: grid,
 		Viewers:     &stubViewerSource{},
 		Frame:       &stubFrameWriter{},
 		Replicators: reg,
@@ -134,7 +161,7 @@ func TestNewReplicationSystem_NoTiers_MaxRadiusEqualsAoI(t *testing.T) {
 	tick := uint32(0)
 	sys := NewReplicationSystem(ReplicationConfig{
 		World:       world,
-		SpatialGrid:        grid,
+		SpatialGrid: grid,
 		Viewers:     &stubViewerSource{},
 		Frame:       &stubFrameWriter{},
 		Replicators: reg,
@@ -144,6 +171,99 @@ func TestNewReplicationSystem_NoTiers_MaxRadiusEqualsAoI(t *testing.T) {
 
 	if sys.queryRadius() != 3000 {
 		t.Errorf("queryRadius = %v, want 3000 (AoIRadius)", sys.queryRadius())
+	}
+}
+
+func TestReplicationSystem_AttachesProcessedInputSequenceToSameFrame(t *testing.T) {
+	world := ecs.NewWorld()
+	grid := spatial.NewHashGrid(100)
+	em := newTestEntityMapper(world)
+	fw := &stubFrameWriter{}
+	reg := NewReplicatorRegistry()
+	reg.Register(&testReplicator{entityType: 0})
+	viewerEntity := em.spawn(0, 0, 100, 0)
+	grid.Register(spatial.Entry{Entity: viewerEntity, X: 0, Y: 0})
+
+	const want = uint32(1234)
+	sys := NewReplicationSystem(ReplicationConfig{
+		World:       world,
+		SpatialGrid: grid,
+		Viewers: &fixedViewerSource{viewers: []ViewerInfo{{
+			ConnID: 1, Entity: viewerEntity, X: 0, Y: 0,
+		}}},
+		Frame:       fw,
+		Replicators: reg,
+		AoIRadius:   1000,
+		GetTick:     func() uint32 { return 1 },
+		ProcessedInputSeq: func(viewer *ViewerInfo) (uint32, bool) {
+			if viewer.Entity != viewerEntity {
+				t.Fatalf("callback viewer entity = %v, want %v", viewer.Entity, viewerEntity)
+			}
+			return want, true
+		},
+	})
+	sys.Update(0.05)
+
+	if len(fw.frames) != 1 {
+		t.Fatalf("frames = %d, want 1", len(fw.frames))
+	}
+	if !fw.frames[0].HasInputAck || fw.frames[0].ProcessedInputSeq != want {
+		t.Fatalf("input ack = (%d, %v), want (%d, true)", fw.frames[0].ProcessedInputSeq, fw.frames[0].HasInputAck, want)
+	}
+}
+
+func TestReplicationSystem_PinsStreamEpochAtViewerActivation(t *testing.T) {
+	world := ecs.NewWorld()
+	grid := spatial.NewHashGrid(100)
+	em := newTestEntityMapper(world)
+	fw := &stubFrameWriter{}
+	reg := NewReplicatorRegistry()
+	reg.Register(&testReplicator{entityType: 0})
+	viewerEntity := em.spawn(0, 0, 100, 0)
+	_, networkID, _ := em.mapper.Get(viewerEntity)
+	const wantEpoch = uint32(17)
+	networkID.Epoch = wantEpoch
+	var callbackEpochs []uint32
+
+	sys := NewReplicationSystem(ReplicationConfig{
+		World:       world,
+		SpatialGrid: grid,
+		Viewers: &fixedViewerSource{viewers: []ViewerInfo{{
+			ConnID: 1, Entity: viewerEntity, X: 0, Y: 0,
+		}}},
+		Frame:       fw,
+		Replicators: reg,
+		AoIRadius:   1000,
+		GetTick:     func() uint32 { return 1 },
+		OnBeforeSend: func(viewer *ViewerInfo, _ map[uint32]bool) {
+			callbackEpochs = append(callbackEpochs, viewer.StreamEpoch)
+		},
+	})
+	sys.Update(0.05)
+
+	if len(fw.frames) != 1 {
+		t.Fatalf("frames = %d, want 1", len(fw.frames))
+	}
+	if got := fw.frames[0].StreamEpoch; got != wantEpoch {
+		t.Fatalf("stream epoch = %d, want viewer authority epoch %d", got, wantEpoch)
+	}
+	if len(callbackEpochs) != 1 || callbackEpochs[0] != wantEpoch {
+		t.Fatalf("first callback stream epochs = %v, want [%d]", callbackEpochs, wantEpoch)
+	}
+
+	// Handoff preparation advances the entity authority epoch while this source
+	// cell can still emit a short tail. Its frame stream must retain the epoch it
+	// started with; the destination cell's new ReplicationSystem will capture 18.
+	networkID.Epoch = wantEpoch + 1
+	sys.Update(0.05)
+	if len(fw.frames) != 2 {
+		t.Fatalf("frames = %d, want 2", len(fw.frames))
+	}
+	if got := fw.frames[1].StreamEpoch; got != wantEpoch {
+		t.Fatalf("source stream epoch advanced to %d during handoff, want pinned %d", got, wantEpoch)
+	}
+	if len(callbackEpochs) != 2 || callbackEpochs[1] != wantEpoch {
+		t.Fatalf("handoff callback stream epochs = %v, want pinned tail %d", callbackEpochs, wantEpoch)
 	}
 }
 
@@ -188,7 +308,7 @@ func TestReplicationSystem_TierRadiusCutoff(t *testing.T) {
 
 	sys := NewReplicationSystem(ReplicationConfig{
 		World:       world,
-		SpatialGrid:        grid,
+		SpatialGrid: grid,
 		Viewers:     viewers,
 		Frame:       fw,
 		Replicators: reg,
@@ -241,7 +361,7 @@ func TestReplicationSystem_HashUnchanged_StaysVisible(t *testing.T) {
 
 	sys := NewReplicationSystem(ReplicationConfig{
 		World:       world,
-		SpatialGrid:        grid,
+		SpatialGrid: grid,
 		Viewers:     viewers,
 		Frame:       fw,
 		Replicators: reg,
@@ -276,6 +396,345 @@ func TestReplicationSystem_HashUnchanged_StaysVisible(t *testing.T) {
 	// Verify entity is still in the visible set.
 	if !sys.IsVisible(1, 1) {
 		t.Error("tick 2: entity netID=1 should still be visible to connID=1")
+	}
+}
+
+func TestReplicationSystem_FirstSightingCommitsOnlyReliableOrdered(t *testing.T) {
+	tests := []struct {
+		name   string
+		result net.SendResult
+	}{
+		{
+			name:   "backpressure",
+			result: net.SendResult{Disposition: net.SendBackpressure},
+		},
+		{
+			name: "best effort enqueue",
+			result: net.SendResult{
+				Disposition: net.SendQueued,
+				Delivery:    net.DeliveryBestEffort,
+			},
+		},
+		{
+			name: "ordered enqueue",
+			result: net.SendResult{
+				Disposition: net.SendQueued,
+				Delivery:    net.DeliveryOrdered,
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			world := ecs.NewWorld()
+			grid := spatial.NewHashGrid(100)
+			em := newTestEntityMapper(world)
+			fw := &scriptedFrameWriter{results: []net.SendResult{tt.result}}
+
+			rep := &initialReplicator{
+				testReplicator: testReplicator{entityType: 0},
+				name:           "alpha",
+			}
+			reg := NewReplicatorRegistry()
+			reg.Register(rep)
+
+			viewerEntity := em.spawn(0, 0, 100, 0)
+			entity := em.spawn(100, 0, 1, 0)
+			grid.Register(spatial.Entry{Entity: entity, X: 100, Y: 0})
+
+			tick := uint32(1)
+			afterSendCalls := 0
+			sys := NewReplicationSystem(ReplicationConfig{
+				World:       world,
+				SpatialGrid: grid,
+				Viewers: &fixedViewerSource{viewers: []ViewerInfo{
+					{ConnID: 1, Entity: viewerEntity, X: 0, Y: 0},
+				}},
+				Frame:       fw,
+				Replicators: reg,
+				AoIRadius:   1000,
+				AckMode:     replication.AckReliable,
+				GetTick:     func() uint32 { return tick },
+				OnAfterSend: func(*ViewerInfo, map[uint32]bool) { afterSendCalls++ },
+			})
+
+			sys.Update(0.05)
+			if len(fw.frames) != 1 || len(fw.frames[0].Full) != 1 || len(fw.frames[0].Entered) != 1 {
+				t.Fatalf("rejected first frame = %+v, want one full entered entity", fw.frames)
+			}
+			if fw.frames[0].Flags&quantize.FrameFlagFreshSnapshot == 0 {
+				t.Fatal("rejected first frame must carry FreshSnapshot")
+			}
+
+			conn := sys.connections[1]
+			if conn.store.Baseline(1) != nil {
+				t.Fatal("rejected first sighting committed a baseline")
+			}
+			if conn.store.HasLastHash(1) {
+				t.Fatal("rejected first sighting committed LastHash")
+			}
+			if conn.store.ExistingPriority(1) != nil {
+				t.Fatal("rejected first sighting committed priority state")
+			}
+			if sys.IsVisible(1, 1) {
+				t.Fatal("rejected first sighting committed visibility")
+			}
+			if afterSendCalls != 1 {
+				t.Fatalf("rejected send OnAfterSend calls = %d, want 1", afterSendCalls)
+			}
+
+			tick = 2
+			sys.Update(0.05)
+			if len(fw.frames) != 2 || len(fw.frames[1].Full) != 1 || len(fw.frames[1].Entered) != 1 {
+				t.Fatalf("retry frame = %+v, want one full entered entity", fw.frames)
+			}
+			if fw.frames[1].Flags&quantize.FrameFlagFreshSnapshot == 0 {
+				t.Fatal("retry after an uncommitted first sighting must remain fresh")
+			}
+
+			baseline := conn.store.Baseline(1)
+			if baseline == nil || baseline.Acked == nil {
+				t.Fatal("reliable ordered retry did not commit its baseline")
+			}
+			if !baseline.HasInitialHash {
+				t.Fatal("reliable ordered retry did not commit InitialHash")
+			}
+			if !conn.store.HasLastHash(1) || conn.store.ExistingPriority(1) == nil {
+				t.Fatal("reliable ordered retry did not commit hash/priority state")
+			}
+			if !sys.IsVisible(1, 1) {
+				t.Fatal("reliable ordered retry did not commit visibility")
+			}
+			if afterSendCalls != 2 {
+				t.Fatalf("retry OnAfterSend calls = %d, want 2", afterSendCalls)
+			}
+		})
+	}
+}
+
+func TestReplicationSystem_RejectedDeltaRetriesFromCommittedBaseline(t *testing.T) {
+	world := ecs.NewWorld()
+	grid := spatial.NewHashGrid(100)
+	em := newTestEntityMapper(world)
+	fw := &scriptedFrameWriter{results: []net.SendResult{
+		{Disposition: net.SendQueued, Delivery: net.DeliveryReliableOrdered},
+		{Disposition: net.SendBackpressure},
+	}}
+
+	reg := NewReplicatorRegistry()
+	reg.Register(&testReplicator{entityType: 0})
+	viewerEntity := em.spawn(0, 0, 100, 0)
+	entity := em.spawn(100, 0, 1, 0)
+	grid.Register(spatial.Entry{Entity: entity, X: 100, Y: 0})
+
+	tick := uint32(1)
+	sys := NewReplicationSystem(ReplicationConfig{
+		World:       world,
+		SpatialGrid: grid,
+		Viewers: &fixedViewerSource{viewers: []ViewerInfo{
+			{ConnID: 1, Entity: viewerEntity, X: 0, Y: 0},
+		}},
+		Frame:       fw,
+		Replicators: reg,
+		AoIRadius:   1000,
+		AckMode:     replication.AckReliable,
+		GetTick:     func() uint32 { return tick },
+	})
+
+	sys.Update(0.05)
+	conn := sys.connections[1]
+	committedSnapshot := append([]byte(nil), conn.store.Baseline(1).Acked...)
+	committedHash := conn.store.LastHash(1)
+	committedPriority := *conn.store.ExistingPriority(1)
+
+	position, _, _ := em.mapper.Get(entity)
+	position.X = 150
+	grid.Update(spatial.Entry{Entity: entity, X: 150, Y: 0})
+	tick = 2
+	sys.Update(0.05)
+	if len(fw.frames[1].Deltas) != 1 {
+		t.Fatalf("rejected change produced %d deltas, want 1", len(fw.frames[1].Deltas))
+	}
+	rejectedDelta := append([]byte(nil), fw.frames[1].Deltas[0].Data...)
+	if got := conn.store.Baseline(1).Acked; !bytes.Equal(got, committedSnapshot) {
+		t.Fatalf("rejected delta advanced baseline: got %v want %v", got, committedSnapshot)
+	}
+	if got := conn.store.LastHash(1); got != committedHash {
+		t.Fatalf("rejected delta advanced LastHash: got %d want %d", got, committedHash)
+	}
+	if got := *conn.store.ExistingPriority(1); got != committedPriority {
+		t.Fatalf("rejected delta advanced priority: got %+v want %+v", got, committedPriority)
+	}
+
+	tick = 3
+	sys.Update(0.05)
+	if len(fw.frames[2].Deltas) != 1 {
+		t.Fatalf("retry produced %d deltas, want 1", len(fw.frames[2].Deltas))
+	}
+	if got := fw.frames[2].Deltas[0].Data; !bytes.Equal(got, rejectedDelta) {
+		t.Fatalf("retry was not encoded from the last committed baseline: got %v want %v", got, rejectedDelta)
+	}
+	if got := conn.store.Baseline(1).Acked; bytes.Equal(got, committedSnapshot) {
+		t.Fatal("accepted retry did not advance baseline")
+	}
+}
+
+func TestReplicationSystem_RejectedRemovalRemainsPending(t *testing.T) {
+	world := ecs.NewWorld()
+	grid := spatial.NewHashGrid(100)
+	em := newTestEntityMapper(world)
+	fw := &scriptedFrameWriter{results: []net.SendResult{
+		{Disposition: net.SendQueued, Delivery: net.DeliveryReliableOrdered},
+		{Disposition: net.SendBackpressure},
+	}}
+
+	reg := NewReplicatorRegistry()
+	reg.Register(&testReplicator{entityType: 0})
+	viewerEntity := em.spawn(0, 0, 100, 0)
+	entity := em.spawn(100, 0, 1, 0)
+	grid.Register(spatial.Entry{Entity: entity, X: 100, Y: 0})
+
+	tick := uint32(1)
+	var removedIDs []uint32
+	sys := NewReplicationSystem(ReplicationConfig{
+		World:       world,
+		SpatialGrid: grid,
+		Viewers: &fixedViewerSource{viewers: []ViewerInfo{
+			{ConnID: 1, Entity: viewerEntity, X: 0, Y: 0},
+		}},
+		Frame:       fw,
+		Replicators: reg,
+		AoIRadius:   1000,
+		AckMode:     replication.AckReliable,
+		GetTick:     func() uint32 { return tick },
+		RemovedIDs: func() []uint32 {
+			ids := removedIDs
+			removedIDs = nil
+			return ids
+		},
+		BlinkDetectorTicks: 10,
+	})
+
+	sys.Update(0.05)
+	conn := sys.connections[1]
+	if conn.store.Baseline(1) == nil {
+		t.Fatal("initial accepted frame did not establish a baseline")
+	}
+
+	grid.Deregister(entity)
+	world.RemoveEntity(entity)
+	removedIDs = []uint32{1}
+	tick = 2
+	sys.Update(0.05)
+	if len(fw.frames[1].Removed) != 1 || fw.frames[1].Removed[0] != 1 {
+		t.Fatalf("rejected removal frame Removed=%v, want [1]", fw.frames[1].Removed)
+	}
+	if len(fw.frames[1].Exited) != 0 {
+		t.Fatalf("rejected removal frame Exited=%v, want none", fw.frames[1].Exited)
+	}
+	if !sys.IsVisible(1, 1) {
+		t.Fatal("rejected removal changed committed visibility")
+	}
+	if conn.store.Baseline(1) == nil {
+		t.Fatal("rejected removal dropped the committed baseline")
+	}
+	if !conn.pendingRemoved[1] {
+		t.Fatal("rejected tick-scoped removal was not retained for retry")
+	}
+	if _, ok := conn.recentRemovals[1]; ok {
+		t.Fatal("rejected removal was recorded as client-visible")
+	}
+
+	tick = 3
+	sys.Update(0.05)
+	if len(fw.frames[2].Removed) != 1 || fw.frames[2].Removed[0] != 1 {
+		t.Fatalf("retry removal frame Removed=%v, want [1]", fw.frames[2].Removed)
+	}
+	if len(fw.frames[2].Exited) != 0 {
+		t.Fatalf("retry removal degraded into Exited=%v", fw.frames[2].Exited)
+	}
+	if sys.IsVisible(1, 1) {
+		t.Fatal("accepted removal did not commit visibility")
+	}
+	if conn.store.Baseline(1) != nil {
+		t.Fatal("accepted removal did not drop baseline state")
+	}
+	if conn.pendingRemoved[1] {
+		t.Fatal("accepted removal remained in the retry outbox")
+	}
+	if got := conn.recentRemovals[1]; got != 3 {
+		t.Fatalf("accepted removal tombstone tick = %d, want 3", got)
+	}
+}
+
+func TestReplicationSystem_ExplicitRingRetainsQueuedUntilExactAck(t *testing.T) {
+	world := ecs.NewWorld()
+	grid := spatial.NewHashGrid(100)
+	em := newTestEntityMapper(world)
+	fw := &scriptedFrameWriter{results: []net.SendResult{
+		{Disposition: net.SendQueued, Delivery: net.DeliveryReliableOrdered},
+		{Disposition: net.SendQueued, Delivery: net.DeliveryBestEffort},
+	}}
+
+	reg := NewReplicatorRegistry()
+	reg.Register(&testReplicator{entityType: 0})
+	viewerEntity := em.spawn(0, 0, 100, 0)
+	entity := em.spawn(100, 0, 1, 0)
+	grid.Register(spatial.Entry{Entity: entity, X: 100, Y: 0})
+
+	tick := uint32(1)
+	sys := NewReplicationSystem(ReplicationConfig{
+		World:       world,
+		SpatialGrid: grid,
+		Viewers: &fixedViewerSource{viewers: []ViewerInfo{
+			{ConnID: 1, Entity: viewerEntity, X: 0, Y: 0},
+		}},
+		Frame:            fw,
+		Replicators:      reg,
+		AoIRadius:        1000,
+		AckMode:          replication.AckExplicit,
+		SentHistoryDepth: 4,
+		GetTick:          func() uint32 { return tick },
+	})
+
+	sys.Update(0.05)
+	sys.AckSequence(1, fw.frames[0].Seq)
+	baseline := sys.connections[1].store.Baseline(1)
+	if baseline.RingLen != 0 {
+		t.Fatalf("acked initial ring length = %d, want 0", baseline.RingLen)
+	}
+
+	position, _, _ := em.mapper.Get(entity)
+	position.X = 150
+	grid.Update(spatial.Entry{Entity: entity, X: 150, Y: 0})
+	acked := append([]byte(nil), baseline.Acked...)
+	tick = 2
+	sys.Update(0.05)
+	if baseline.RingLen != 1 {
+		t.Fatalf("best-effort queued ring length = %d, want 1", baseline.RingLen)
+	}
+	if !bytes.Equal(baseline.Acked, acked) {
+		t.Fatalf("best-effort queue advanced Acked: got %v want %v", baseline.Acked, acked)
+	}
+	entryIndex := (baseline.RingHead - 1 + len(baseline.Ring)) % len(baseline.Ring)
+	if got := baseline.Ring[entryIndex].Seq; got != fw.frames[1].Seq {
+		t.Fatalf("attempted ring seq = %d, want queued seq %d", got, fw.frames[1].Seq)
+	}
+
+	// One causal attempt is allowed in flight; no later frame can be encoded
+	// against ambiguous state while this one awaits its application ACK.
+	tick = 3
+	sys.Update(0.05)
+	if len(fw.frames) != 2 {
+		t.Fatalf("frames while explicit attempt pending = %d, want 2", len(fw.frames))
+	}
+
+	sys.AckSequence(1, fw.frames[1].Seq)
+	if baseline.RingLen != 0 {
+		t.Fatalf("acked ring length = %d, want 0", baseline.RingLen)
+	}
+	if bytes.Equal(baseline.Acked, acked) {
+		t.Fatal("exact ACK did not promote queued snapshot")
 	}
 }
 
@@ -388,6 +847,130 @@ func TestReplicationSystem_InitialFieldChange_ReSends(t *testing.T) {
 	}
 }
 
+func TestReplicationSystem_RejectedInitialChangeRetries(t *testing.T) {
+	world := ecs.NewWorld()
+	grid := spatial.NewHashGrid(100)
+	em := newTestEntityMapper(world)
+	fw := &scriptedFrameWriter{results: []net.SendResult{
+		{Disposition: net.SendQueued, Delivery: net.DeliveryReliableOrdered},
+		{Disposition: net.SendBackpressure},
+	}}
+
+	rep := &initialReplicator{testReplicator: testReplicator{entityType: 0}, name: "alpha"}
+	reg := NewReplicatorRegistry()
+	reg.Register(rep)
+	viewerEntity := em.spawn(0, 0, 100, 0)
+	entity := em.spawn(100, 0, 1, 0)
+	grid.Register(spatial.Entry{Entity: entity, X: 100, Y: 0})
+
+	tick := uint32(1)
+	sys := NewReplicationSystem(ReplicationConfig{
+		World:       world,
+		SpatialGrid: grid,
+		Viewers: &fixedViewerSource{viewers: []ViewerInfo{
+			{ConnID: 1, Entity: viewerEntity, X: 0, Y: 0},
+		}},
+		Frame:       fw,
+		Replicators: reg,
+		AoIRadius:   1000,
+		AckMode:     replication.AckReliable,
+		GetTick:     func() uint32 { return tick },
+	})
+
+	sys.Update(0.05)
+	baseline := sys.connections[1].store.Baseline(1)
+	alphaHash := baseline.InitialHash
+
+	rep.name = "beta"
+	tick = 2
+	sys.Update(0.05)
+	if len(fw.frames[1].Full) != 1 || decodeInitialName(t, fw.frames[1].Full[0].InitialData) != "beta" {
+		t.Fatalf("rejected initial change frame = %+v, want beta full payload", fw.frames[1])
+	}
+	if got := baseline.InitialHash; got != alphaHash {
+		t.Fatalf("rejected initial change committed hash %d, want %d", got, alphaHash)
+	}
+
+	tick = 3
+	sys.Update(0.05)
+	if len(fw.frames[2].Full) != 1 || decodeInitialName(t, fw.frames[2].Full[0].InitialData) != "beta" {
+		t.Fatalf("initial change retry frame = %+v, want beta full payload", fw.frames[2])
+	}
+	baseline = sys.connections[1].store.Baseline(1)
+	if baseline.InitialHash == alphaHash {
+		t.Fatal("accepted initial change retry did not commit InitialHash")
+	}
+}
+
+func TestReplicationSystem_AuthorityEpochChangeForcesFullWithInitialAndRetries(t *testing.T) {
+	world := ecs.NewWorld()
+	grid := spatial.NewHashGrid(100)
+	em := newTestEntityMapper(world)
+	fw := &scriptedFrameWriter{results: []net.SendResult{
+		{Disposition: net.SendQueued, Delivery: net.DeliveryReliableOrdered},
+		{Disposition: net.SendBackpressure},
+		{Disposition: net.SendQueued, Delivery: net.DeliveryReliableOrdered},
+	}}
+
+	rep := &initialReplicator{testReplicator: testReplicator{entityType: 0}, name: "alpha"}
+	reg := NewReplicatorRegistry()
+	reg.Register(rep)
+	viewerEntity := em.spawn(0, 0, 100, 0)
+	entity := em.spawn(100, 0, 1, 0)
+	_, networkID, _ := em.mapper.Get(entity)
+	networkID.Epoch = 7
+	grid.Register(spatial.Entry{Entity: entity, X: 100, Y: 0})
+
+	tick := uint32(1)
+	sys := NewReplicationSystem(ReplicationConfig{
+		World:       world,
+		SpatialGrid: grid,
+		Viewers: &fixedViewerSource{viewers: []ViewerInfo{
+			{ConnID: 1, Entity: viewerEntity, X: 0, Y: 0},
+		}},
+		Frame:       fw,
+		Replicators: reg,
+		AoIRadius:   1000,
+		AckMode:     replication.AckReliable,
+		GetTick:     func() uint32 { return tick },
+	})
+
+	sys.Update(0.05)
+	baseline := sys.connections[1].store.Baseline(1)
+	if baseline == nil || !baseline.HasAuthorityEpoch || baseline.AuthorityEpoch != 7 {
+		t.Fatalf("initial baseline epoch = %+v, want 7", baseline)
+	}
+
+	// The entity stays visible and byte-identical, but its authority lifecycle
+	// advances. The rejected attempt must not advance the committed baseline.
+	networkID.Epoch = 8
+	tick = 2
+	sys.Update(0.05)
+	if len(fw.frames[1].Deltas) != 0 {
+		t.Fatalf("epoch change emitted %d deltas, want a full reset", len(fw.frames[1].Deltas))
+	}
+	full := findFull(t, fw.frames[1:2], 1)
+	if full.Epoch != 8 || decodeInitialName(t, full.InitialData) != "alpha" {
+		t.Fatalf("epoch-change full = %+v, want epoch 8 with initial data", full)
+	}
+	if baseline.AuthorityEpoch != 7 {
+		t.Fatalf("rejected epoch change committed epoch %d, want 7", baseline.AuthorityEpoch)
+	}
+
+	// Retry is independently full and commits the new epoch only after the
+	// reliable ordered writer accepts it.
+	tick = 3
+	sys.Update(0.05)
+	full = findFull(t, fw.frames[2:3], 1)
+	if full.Epoch != 8 || decodeInitialName(t, full.InitialData) != "alpha" {
+		t.Fatalf("epoch-change retry = %+v, want epoch 8 with initial data", full)
+	}
+	baseline = sys.connections[1].store.Baseline(1)
+	if baseline == nil || !baseline.HasAuthorityEpoch || baseline.AuthorityEpoch != 8 {
+		t.Fatalf("committed baseline epoch = %+v, want 8", baseline)
+	}
+}
+
 // ---------------------------------------------------------------------------
 // Task 5: PriorityProvider integration test
 // ---------------------------------------------------------------------------
@@ -428,7 +1011,7 @@ func TestReplicationSystem_PriorityProviderMultiplier(t *testing.T) {
 
 	sys := NewReplicationSystem(ReplicationConfig{
 		World:       world,
-		SpatialGrid:        grid,
+		SpatialGrid: grid,
 		Viewers:     viewers,
 		Frame:       fw,
 		Replicators: reg,
@@ -519,7 +1102,7 @@ func TestReplicationSystem_UpdateDivisor(t *testing.T) {
 
 	sys := NewReplicationSystem(ReplicationConfig{
 		World:       world,
-		SpatialGrid:        grid,
+		SpatialGrid: grid,
 		Viewers:     viewers,
 		Frame:       fw,
 		Replicators: reg,
@@ -569,6 +1152,63 @@ func TestReplicationSystem_UpdateDivisor(t *testing.T) {
 	}
 }
 
+func TestReplicationSystem_UpdateDivisorRetainsOneTimeSkippedChange(t *testing.T) {
+	world := ecs.NewWorld()
+	grid := spatial.NewHashGrid(100)
+	em := newTestEntityMapper(world)
+	fw := &stubFrameWriter{}
+
+	reg := NewReplicatorRegistry()
+	reg.Register(&tieredReplicator{
+		testReplicator: testReplicator{entityType: 1},
+		tier:           ReplicationTier{Radius: 1000, UpdateDivisor: 3, BaseWeight: 1},
+	})
+
+	viewerEntity := em.spawn(0, 0, 100, 1)
+	entity := em.spawn(100, 0, 1, 1)
+	grid.Register(spatial.Entry{Entity: entity, X: 100, Y: 0})
+
+	tick := uint32(1)
+	sys := NewReplicationSystem(ReplicationConfig{
+		World:       world,
+		SpatialGrid: grid,
+		Viewers: &fixedViewerSource{viewers: []ViewerInfo{
+			{ConnID: 1, Entity: viewerEntity, X: 0, Y: 0},
+		}},
+		Frame:       fw,
+		Replicators: reg,
+		AoIRadius:   1000,
+		AckMode:     replication.AckReliable,
+		GetTick:     func() uint32 { return tick },
+	})
+
+	sys.Update(0.05)
+	committedHash := sys.connections[1].store.LastHash(1)
+
+	// Change only on tick 2, which the divisor skips.
+	position, _, _ := em.mapper.Get(entity)
+	position.X = 150
+	grid.Update(spatial.Entry{Entity: entity, X: 150, Y: 0})
+	tick = 2
+	fw.frames = nil
+	sys.Update(0.05)
+	if len(fw.frames) != 1 || len(fw.frames[0].Deltas) != 0 || len(fw.frames[0].Full) != 0 {
+		t.Fatalf("tick 2 should skip payload, got %+v", fw.frames)
+	}
+	if got := sys.connections[1].store.LastHash(1); got != committedHash {
+		t.Fatalf("skipped tick advanced LastHash to %d, want committed %d", got, committedHash)
+	}
+
+	// No further change occurs. The next eligible tick must still send the
+	// tick-2 state instead of treating it as already replicated.
+	tick = 3
+	fw.frames = nil
+	sys.Update(0.05)
+	if len(fw.frames) != 1 || len(fw.frames[0].Deltas) != 1 {
+		t.Fatalf("tick 3 should deliver retained change, got %+v", fw.frames)
+	}
+}
+
 func TestReplicationSystem_Dormancy(t *testing.T) {
 	world := ecs.NewWorld()
 	grid := spatial.NewHashGrid(100)
@@ -589,7 +1229,7 @@ func TestReplicationSystem_Dormancy(t *testing.T) {
 
 	sys := NewReplicationSystem(ReplicationConfig{
 		World:             world,
-		SpatialGrid:              grid,
+		SpatialGrid:       grid,
 		Viewers:           viewers,
 		Frame:             fw,
 		Replicators:       reg,
@@ -751,9 +1391,9 @@ func (r *countingReplicator) Snapshot(w *quantize.SnapshotWriter, viewer *Viewer
 	w.Float32(entry.X)
 	w.Float32(entry.Y)
 }
-func (r *countingReplicator) SnapshotLayout() []int                                  { return []int{4, 4} }
-func (r *countingReplicator) InitialData(viewer *ViewerInfo, entry spatial.Entry) []byte { return nil }
-func (r *countingReplicator) HasInitial() bool                                              { return false }
+func (r *countingReplicator) SnapshotLayout() []int                                          { return []int{4, 4} }
+func (r *countingReplicator) InitialData(viewer *ViewerInfo, entry spatial.Entry) []byte     { return nil }
+func (r *countingReplicator) HasInitial() bool                                               { return false }
 func (r *countingReplicator) InitialHash(h *Hasher, viewer *ViewerInfo, entry spatial.Entry) {}
 
 // TestReplicationSystem_DormantSkippedInAoI verifies the Dormant component

@@ -91,11 +91,13 @@ type cellTransferCommand struct {
 // failure (e.g. host is no longer registered); the orchestrator treats it
 // as an immediate Ready{ok:false} on that command.
 //
-// DispatchAbort tells the target host to discard a previously-dispatched
-// CellTransfer that has not yet committed. Used during rollback.
+// DispatchAbort tells a host to discard a previously-dispatched CellTransfer
+// that has not yet committed. DispatchCommit releases that rollback state
+// after the topology commit becomes authoritative.
 type cellTransferDispatcher interface {
 	Dispatch(cmd cellTransferCommand) error
 	DispatchAbort(requestID uint64, hostID string) error
+	DispatchCommit(requestID uint64, hostID string) error
 }
 
 // topologyMutation is the concrete change the orchestrator will apply to
@@ -744,33 +746,38 @@ func (o *cellTransferOrchestrator) OnReady(requestID uint64, destCellID MeshCell
 // a future T-body teaches the executor to tear it down on the source host.
 func (o *cellTransferOrchestrator) commit(req *CellTransferRequest) {
 	o.coord.applyCellTransferCommit(req)
+	o.mu.Lock()
+	d := o.dispatcher
+	o.mu.Unlock()
+	if d != nil {
+		for hostID := range cellTransferRequestHosts(req, true) {
+			if err := d.DispatchCommit(req.ID, hostID); err != nil {
+				o.log.Log(CatMeshCell, "orchestrator: req=%d commit notice to %s failed: %v",
+					req.ID, hostID, err)
+			}
+		}
+	}
 	o.commitCount.Add(1)
 	req.Result = nil
 	close(req.Done)
 	o.log.Log(CatMeshCell, "orchestrator: req=%d %s committed", req.ID, req.Kind)
 }
 
-// rollback fires CellTransferAbort on every host that has already replied
-// Ready (they hold transfer state that must be discarded), logs the
-// failure, and signals req.Done with an error. No topology change is
-// applied — the pre-Begin state remains authoritative.
-//
-// Hosts that failed Ready or never replied do not need abort (they either
-// already reported failure or were unresponsive); we only target hosts
-// whose receivedOK entry is set.
+// rollback fires CellTransferAbort on every destination host that has already
+// replied Ready and every source host that serialized/deactivated viewers.
+// Destination state must be discarded, while each source must reactivate its
+// sessions on a generation newer than the abandoned destination stream. No
+// topology change is applied — the pre-Begin state remains authoritative.
 func (o *cellTransferOrchestrator) rollback(req *CellTransferRequest, reason string) {
 	o.mu.Lock()
 	d := o.dispatcher
 	// Remove inflight defensively — caller usually did this already, but
 	// timeoutLoop calls rollback directly.
 	delete(o.inflight, req.ID)
-	// receivedOK is keyed directly on hostID now that per-slot
-	// accounting lives in ackedCmd, so the set of hosts that need an
-	// explicit Abort is just its key set.
-	targets := make(map[string]struct{}, len(req.receivedOK))
-	for hostID := range req.receivedOK {
-		targets[hostID] = struct{}{}
-	}
+	// Abort dispatch is idempotent. Union successful destination hosts with
+	// all command sources so a cross-host rollback reaches both halves; the
+	// old receivedOK-only fan-out stranded source sessions in Transferring.
+	targets := cellTransferRequestHosts(req, false)
 	o.mu.Unlock()
 
 	if d != nil {
@@ -784,6 +791,28 @@ func (o *cellTransferOrchestrator) rollback(req *CellTransferRequest, reason str
 	req.Result = errors.New(reason)
 	close(req.Done)
 	o.log.Log(CatMeshCell, "orchestrator: req=%d %s ROLLBACK: %s", req.ID, req.Kind, reason)
+}
+
+// cellTransferRequestHosts returns the deduplicated hosts that hold executor
+// state for req. Rollback targets every command source plus destinations that
+// acknowledged Ready. Commit targets every source and destination because all
+// commands necessarily completed successfully.
+func cellTransferRequestHosts(req *CellTransferRequest, committed bool) map[string]struct{} {
+	targets := make(map[string]struct{}, len(req.receivedOK)+len(req.commands)*2)
+	for hostID := range req.receivedOK {
+		if hostID != "" {
+			targets[hostID] = struct{}{}
+		}
+	}
+	for _, cmd := range req.commands {
+		if cmd.SrcHostID != "" {
+			targets[cmd.SrcHostID] = struct{}{}
+		}
+		if committed && cmd.DestHostID != "" {
+			targets[cmd.DestHostID] = struct{}{}
+		}
+	}
+	return targets
 }
 
 // ───────────────────────────────────────────────────────────────────────────

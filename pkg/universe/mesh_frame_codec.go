@@ -93,9 +93,11 @@ func encodeCellMessage(msg CellMessage, destCellID MeshCellID) (*meshpb.MeshFram
 		p := msg.ForwardInput
 		frame.Msg = &meshpb.MeshFrame_ForwardInput{
 			ForwardInput: &meshpb.ForwardInput{
-				FromCellId: string(msg.FromCellID),
-				ConnId:     p.ConnID,
-				InputBlob:  p.InputBlob,
+				FromCellId:   string(msg.FromCellID),
+				ConnId:       p.ConnID,
+				InputBlob:    p.InputBlob,
+				GatewayId:    p.GatewayID,
+				SessionEpoch: p.SessionEpoch,
 			},
 		}
 
@@ -122,13 +124,14 @@ func encodeCellMessage(msg CellMessage, destCellID MeshCellID) (*meshpb.MeshFram
 		a := msg.Assignment
 		frame.Msg = &meshpb.MeshFrame_PlayerAssignment{
 			PlayerAssignment: &meshpb.PlayerAssignment{
-				FromCellId:    string(msg.FromCellID),
-				ConnId:        a.ConnID,
-				UserId:        a.UserID.String(),
-				Username:      a.Username,
-				SessionToken:  a.SessionToken,
-				IsReconnect:   a.IsReconnect,
-				SpawnLocation: locationToProto(a.SpawnLocation),
+				FromCellId:       string(msg.FromCellID),
+				ConnId:           a.ConnID,
+				UserId:           a.UserID.String(),
+				Username:         a.Username,
+				SessionToken:     a.SessionToken,
+				IsReconnect:      a.IsReconnect,
+				StreamGeneration: a.StreamGeneration,
+				SpawnLocation:    locationToProto(a.SpawnLocation),
 			},
 		}
 
@@ -146,11 +149,16 @@ func encodeCellMessage(msg CellMessage, destCellID MeshCellID) (*meshpb.MeshFram
 		}
 		frame.Msg = &meshpb.MeshFrame_SessionTransfer{
 			SessionTransfer: &meshpb.SessionTransfer{
-				FromCellId: string(msg.FromCellID),
-				ConnId:     s.ConnID,
-				Username:   s.Username,
-				StateTag:   s.StateTag,
-				Data:       dataBytes,
+				FromCellId:       string(msg.FromCellID),
+				ConnId:           s.ConnID,
+				GatewayId:        s.GatewayID,
+				GatewayConnId:    s.GatewayConnID,
+				SessionEpoch:     s.SessionEpoch,
+				Username:         s.Username,
+				StateTag:         s.StateTag,
+				Data:             dataBytes,
+				UserId:           s.UserID.String(),
+				StreamGeneration: s.StreamGeneration,
 			},
 		}
 
@@ -160,10 +168,11 @@ func encodeCellMessage(msg CellMessage, destCellID MeshCellID) (*meshpb.MeshFram
 		}
 		frame.Msg = &meshpb.MeshFrame_SpawnTransfer{
 			SpawnTransfer: &meshpb.SpawnTransfer{
-				FromCellId:    string(msg.FromCellID),
-				ConnId:        msg.Spawn.ConnID,
-				Username:      msg.Spawn.Username,
-				SpawnLocation: locationToProto(msg.Spawn.SpawnLocation),
+				FromCellId:       string(msg.FromCellID),
+				ConnId:           msg.Spawn.ConnID,
+				Username:         msg.Spawn.Username,
+				SpawnLocation:    locationToProto(msg.Spawn.SpawnLocation),
+				StreamGeneration: msg.Spawn.StreamGeneration,
 			},
 		}
 
@@ -228,8 +237,10 @@ func decodeMeshFrame(frame *meshpb.MeshFrame) (CellMessage, error) {
 			Type:       MsgForwardInput,
 			FromCellID: MeshCellID(fi.FromCellId),
 			ForwardInput: &ForwardInputPayload{
-				ConnID:    fi.ConnId,
-				InputBlob: fi.InputBlob,
+				GatewayID:    fi.GatewayId,
+				ConnID:       fi.ConnId,
+				SessionEpoch: fi.SessionEpoch,
+				InputBlob:    fi.InputBlob,
 			},
 		}, nil
 
@@ -265,12 +276,13 @@ func decodeMeshFrame(frame *meshpb.MeshFrame) (CellMessage, error) {
 			Type:       MsgPlayerAssignment,
 			FromCellID: MeshCellID(pa.FromCellId),
 			Assignment: &PlayerAssignment{
-				ConnID:        pa.ConnId,
-				UserID:        userID,
-				Username:      pa.Username,
-				SessionToken:  pa.SessionToken,
-				IsReconnect:   pa.IsReconnect,
-				SpawnLocation: protoToLocation(pa.SpawnLocation),
+				ConnID:           pa.ConnId,
+				UserID:           userID,
+				Username:         pa.Username,
+				SessionToken:     pa.SessionToken,
+				IsReconnect:      pa.IsReconnect,
+				StreamGeneration: pa.StreamGeneration,
+				SpawnLocation:    protoToLocation(pa.SpawnLocation),
 			},
 		}, nil
 
@@ -279,15 +291,26 @@ func decodeMeshFrame(frame *meshpb.MeshFrame) (CellMessage, error) {
 			return CellMessage{}, fmt.Errorf("decodeMeshFrame: SessionTransfer payload is nil")
 		}
 		st := p.SessionTransfer
+		var userID uuid.UUID
+		if st.UserId != "" {
+			if u, err := uuid.Parse(st.UserId); err == nil {
+				userID = u
+			}
+		}
 		return CellMessage{
 			Type:       MsgSessionTransfer,
 			FromCellID: MeshCellID(st.FromCellId),
 			Sessions: []SessionTransfer{
 				{
-					ConnID:   st.ConnId,
-					Username: st.Username,
-					StateTag: st.StateTag,
-					Data:     st.Data, // []byte — caller deserializes
+					ConnID:           st.ConnId,
+					GatewayID:        st.GatewayId,
+					GatewayConnID:    st.GatewayConnId,
+					SessionEpoch:     st.SessionEpoch,
+					UserID:           userID,
+					Username:         st.Username,
+					StreamGeneration: st.StreamGeneration,
+					StateTag:         st.StateTag,
+					Data:             st.Data, // []byte — caller deserializes
 				},
 			},
 		}, nil
@@ -301,9 +324,10 @@ func decodeMeshFrame(frame *meshpb.MeshFrame) (CellMessage, error) {
 			Type:       MsgSpawnTransfer,
 			FromCellID: MeshCellID(sp.FromCellId),
 			Spawn: &SpawnTransfer{
-				ConnID:        sp.ConnId,
-				Username:      sp.Username,
-				SpawnLocation: protoToLocation(sp.SpawnLocation),
+				ConnID:           sp.ConnId,
+				Username:         sp.Username,
+				StreamGeneration: sp.StreamGeneration,
+				SpawnLocation:    protoToLocation(sp.SpawnLocation),
 			},
 		}, nil
 

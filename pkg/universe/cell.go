@@ -44,8 +44,9 @@ type Cell struct {
 	Inbox  chan CellMessage
 	Events chan net.PlayerEvent
 	// Neighbors maps mesh-form neighbor cell IDs to their *Cell pointer.
-	// Populated during topology setup; key form matches Process.Cells keys
-	// so cross-cell ops (replication, handoff) share the same identifiers.
+	// Runtime reads and writes are guarded by Process.mu; initial Build wiring
+	// happens before cell loops start. Key form matches Process.Cells keys so
+	// cross-cell ops (replication, handoff) share the same identifiers.
 	Neighbors map[MeshCellID]*Cell
 	Log       *logger.Logger
 
@@ -363,6 +364,7 @@ func (c *Cell) processMessage(msg CellMessage) {
 		c.Log.Log(CatMeshMsg, "[%s] msg MsgSpawnTransfer from=%s conn=%d user=%s", c.MeshID, msg.FromCellID, msg.Spawn.ConnID, msg.Spawn.Username)
 		c.Engine.Players.RegisterPlayer(msg.Spawn.ConnID, msg.Spawn.Username)
 		if s := c.Engine.Players.ByConnID(msg.Spawn.ConnID); s != nil {
+			s.StreamGeneration = msg.Spawn.StreamGeneration
 			s.SpawnLocation = msg.Spawn.SpawnLocation
 		}
 
@@ -376,6 +378,8 @@ func (c *Cell) processMessage(msg CellMessage) {
 			existing := c.Engine.Players.ByUsername(msg.Assignment.Username)
 			if existing != nil && existing.State == engine.StateDisconnected {
 				existing.ConnID = msg.Assignment.ConnID
+				existing.StreamGeneration = msg.Assignment.StreamGeneration
+				existing.UserID = msg.Assignment.UserID
 				existing.DisconnectTime = time.Time{}
 				existing.SpawnLocation = msg.Assignment.SpawnLocation
 				c.Engine.Players.ReconnectSession(existing)
@@ -396,12 +400,15 @@ func (c *Cell) processMessage(msg CellMessage) {
 				// Lingering session gone — treat as fresh login
 				c.Engine.Players.RegisterPlayer(msg.Assignment.ConnID, msg.Assignment.Username)
 				if s := c.Engine.Players.ByConnID(msg.Assignment.ConnID); s != nil {
+					s.StreamGeneration = msg.Assignment.StreamGeneration
+					s.UserID = msg.Assignment.UserID
 					s.SpawnLocation = msg.Assignment.SpawnLocation
 				}
 			}
 		} else {
 			c.Engine.Players.RegisterPlayer(msg.Assignment.ConnID, msg.Assignment.Username)
 			if s := c.Engine.Players.ByConnID(msg.Assignment.ConnID); s != nil {
+				s.StreamGeneration = msg.Assignment.StreamGeneration
 				s.UserID = msg.Assignment.UserID
 				s.SpawnLocation = msg.Assignment.SpawnLocation
 			}
@@ -420,9 +427,19 @@ func (c *Cell) processMessage(msg CellMessage) {
 		for _, st := range msg.Sessions {
 			c.Log.Log(CatMeshMsg, "[%s] msg MsgSessionTransfer conn=%d user=%s state=%s",
 				c.MeshID, st.ConnID, st.Username, st.StateTag)
-			c.Engine.Players.RegisterSessionTransfer(st.ConnID, st.Username, st.StateTag, st.Data)
-			if sess := c.Engine.Players.ByConnID(st.ConnID); sess != nil {
+			localID, err := destinationConnIDForSessionTransfer(c, st)
+			if err != nil {
+				c.Log.Log(CatMeshMsg, "[%s] MsgSessionTransfer remap failed: %v", c.MeshID, err)
+				continue
+			}
+			c.Engine.Players.RegisterSessionTransfer(localID, st.Username, st.StateTag, st.Data)
+			if sess := c.Engine.Players.ByConnID(localID); sess != nil {
+				sess.StreamGeneration = st.StreamGeneration
 				sess.UserID = st.UserID
+			}
+			if c.Stage != nil && c.Stage.coord != nil {
+				c.Stage.coord.touchActiveUser(st.UserID, st.Username, st.GatewayID, st.GatewayConnID,
+					c.Stage.coord.HostForCellID(c.MeshID), c.MeshID)
 			}
 		}
 
@@ -466,7 +483,7 @@ func (c *Cell) processMessage(msg CellMessage) {
 		// this host. SpawnFromTransferCore performs the matching remap
 		// when it decodes the blob (idempotent RegisterSession returns
 		// the same localID for the same key).
-		if srcConnID, gwID, gwConnID, username, userID := PeekTransferPlayer(msg.Handoff.TransferBlob); srcConnID != 0 {
+		if srcConnID, streamGeneration, gwID, gwConnID, username, userID := PeekTransferPlayer(msg.Handoff.TransferBlob); srcConnID != 0 {
 			localID := srcConnID
 			if gwConnID != 0 && c.Stage != nil && c.Stage.coord != nil && c.Stage.coord.vcm != nil {
 				key := SessionKey{GatewayID: gwID, ConnID: gwConnID}
@@ -482,6 +499,7 @@ func (c *Cell) processMessage(msg CellMessage) {
 			// PlayerRepo.Bind on a zero UserID (the source-cell
 			// removeFromWorld action calls SavePlayerState, which Binds).
 			if s := c.Engine.Players.ByConnID(localID); s != nil {
+				s.StreamGeneration = streamGeneration
 				s.UserID = userID
 			}
 			// Refresh the cluster-wide UUID-keyed activeUsers entry so
@@ -519,13 +537,38 @@ func (c *Cell) processMessage(msg CellMessage) {
 		if msg.ForwardInput == nil {
 			return
 		}
+		localConnID := msg.ForwardInput.ConnID
+		if msg.ForwardInput.GatewayID != "" {
+			if c.Stage == nil || c.Stage.coord == nil || c.Stage.coord.vcm == nil {
+				c.Log.Log(CatMeshMsg, "[%s] MsgForwardInput has gateway session but no VCM: gw=%s conn=%d",
+					c.MeshID, msg.ForwardInput.GatewayID, msg.ForwardInput.ConnID)
+				return
+			}
+			var ok bool
+			localConnID, ok = c.Stage.coord.vcm.LookupByKey(SessionKey{
+				GatewayID: msg.ForwardInput.GatewayID,
+				ConnID:    msg.ForwardInput.ConnID,
+			})
+			if !ok {
+				c.Log.Log(CatMeshMsg, "[%s] MsgForwardInput for unknown destination session: gw=%s conn=%d",
+					c.MeshID, msg.ForwardInput.GatewayID, msg.ForwardInput.ConnID)
+				return
+			}
+		}
 		c.Log.Log(CatMeshMsg, "[%s] msg MsgForwardInput from=%s conn=%d bytes=%d",
-			c.MeshID, msg.FromCellID, msg.ForwardInput.ConnID, len(msg.ForwardInput.InputBlob))
-		// Inject the forwarded input into the local ConnManager's input
-		// buffer so it gets processed by the engine's input router on the
-		// next tick, as if it had arrived from the player's connection.
-		if c.Engine.ConnMgr != nil {
-			c.Engine.ConnMgr.InjectInput(msg.ForwardInput.ConnID, msg.ForwardInput.InputBlob)
+			c.MeshID, msg.FromCellID, localConnID, len(msg.ForwardInput.InputBlob))
+		// Cross-host forwards use the same session-epoch gate as ordinary
+		// gateway traffic. Same-host/in-process frames have no GatewayID and
+		// already carry a destination-local connID.
+		if msg.ForwardInput.GatewayID != "" && c.Stage.coord.vcm != nil {
+			c.Stage.coord.vcm.InjectForwardedInputWithEpoch(
+				localConnID,
+				msg.ForwardInput.InputBlob,
+				msg.ForwardInput.SessionEpoch,
+				net.ChannelEvent,
+			)
+		} else if c.Engine.ConnMgr != nil {
+			c.Engine.ConnMgr.InjectInput(localConnID, msg.ForwardInput.InputBlob)
 		}
 
 	case MsgPlayerDisconnected:

@@ -24,16 +24,28 @@ import {
   Killed,
   BeamToggle,
   BankRequest,
+  ServerConfig,
   WorldDelta,
   EntityType,
 } from "../sdk/index.js";
 import { CELL_SIZE } from "./constants";
 import { backendWsUrl } from "./config";
 import { updateEntityFromServer } from "./interpolation";
-import { observeFrameStamps } from "../sdk/_core/clock-sync.js";
 import { devOverlay } from "./ui/dev-overlay";
 import { spawnExplosion } from "./effects/explosion";
-import { SETTLEMENT_CURRENCY_ID, type GameState, type CellInfo } from "./state";
+import {
+  SETTLEMENT_CURRENCY_ID,
+  resetNetworkPrediction,
+  setPlaybackTickRate,
+  type GameState,
+  type CellInfo,
+} from "./state";
+import {
+  MovementReconciliationGate,
+  acceptMovementSeed,
+  acknowledgeMovementSeed,
+  decodeMovementSeed,
+} from "./movement-reconciliation";
 
 // Move the right-rail cargo-panel into / out of the docked station-panels
 // flex container based on dock state. While docked the layout is
@@ -81,12 +93,18 @@ function applyDeltaUpdate(state: GameState, update: DeltaWorldUpdate): void {
   const fresh: AnyEntity[] = [...update.entered, ...update.updated];
   const arriveMs = performance.now();
   const offsetBefore = state.clockSync.offsetMs;
-  observeFrameStamps(state.clockSync, fresh, arriveMs);
-  const offsetAfter = state.clockSync.offsetMs;
   let maxStamp = 0;
-  for (const e of fresh) {
-    if (e.producedAtMs > maxStamp) maxStamp = e.producedAtMs;
+  for (const entity of fresh) {
+    if (entity.producedAtMs > maxStamp) maxStamp = entity.producedAtMs;
   }
+  state.playback.observeFrame({
+    seq: update.seq,
+    freshSnapshot: update.freshSnapshot,
+    streamChanged: update.streamChanged,
+    arrivalTimeMs: arriveMs,
+    producedAtMs: maxStamp > 0 ? maxStamp : undefined,
+  });
+  const offsetAfter = state.clockSync.offsetMs;
   devOverlay.observeServerFrame(arriveMs, maxStamp, fresh.length, offsetBefore, offsetAfter);
 
   // Fresh-snapshot frames (flag set by the server on the first frame from a
@@ -121,11 +139,11 @@ function applyDeltaUpdate(state: GameState, update: DeltaWorldUpdate): void {
   }
 
   // Push one server-timestamped sample per fresh entity into its ring.
-  // The render loop does the actual interpolation off (estimatedServerNow
-  // − RENDER_DELAY); cross-cell tick-phase mismatches are absorbed by
-  // matching on true server-time deltas rather than client arrival times.
+  // The render loop samples the adaptive connection-level playback cursor;
+  // cross-cell tick-phase mismatches are absorbed by matching on true
+  // server-time deltas rather than client arrival times.
   for (const e of fresh) {
-    updateEntityFromServer(state.entities, e, e.producedAtMs);
+    updateEntityFromServer(state.entities, e, e.producedAtMs, update.streamChanged);
   }
 
   // Removed entities (despawned/killed) — spawn explosion for ships/NPCs.
@@ -164,9 +182,12 @@ function applyDeltaUpdate(state: GameState, update: DeltaWorldUpdate): void {
 }
 
 export function connect(state: GameState, callbacks: NetworkCallbacks): void {
+  resetNetworkPrediction(state);
   const statusEl = document.getElementById("status")!;
 
   let pingInterval: ReturnType<typeof setInterval> | null = null;
+  const movementGate = new MovementReconciliationGate();
+  const deltaDecoder = new SpaceDeltaDecoder();
 
   const client = new SpaceClient({
     url: backendWsUrl(),
@@ -187,6 +208,8 @@ export function connect(state: GameState, callbacks: NetworkCallbacks): void {
         pingInterval = null;
       }
       state.connected = false;
+      movementGate.reset();
+      resetNetworkPrediction(state);
       if (!state.spawnedOnce) {
         callbacks.onLoginRejected(state.loggedIn ? "Connection lost" : "");
         return;
@@ -205,8 +228,20 @@ export function connect(state: GameState, callbacks: NetworkCallbacks): void {
   });
   state.client = client;
 
+  client.onServerConfig((config: ServerConfig) => {
+    setPlaybackTickRate(state, config.tickRate);
+  });
+
   // --- Spawn / life cycle ---
   client.onPlayerSpawned((spawned: PlayerSpawned) => {
+    const respawning = state.isDead;
+    movementGate.reset();
+    state.movementSeed = null;
+    state.movementPredictionTimeMs = null;
+    if (respawning) {
+      state.movementPrediction.reset();
+      state.processedMovementSeq = null;
+    }
     state.myEntityId = spawned.yourEntityID;
     // Reset topology — server will send SE_CELL_TOPOLOGY if debug overlay is active.
     state.cellTopology = null;
@@ -251,6 +286,11 @@ export function connect(state: GameState, callbacks: NetworkCallbacks): void {
   });
 
   client.onPlayerDied((died: PlayerDied) => {
+    movementGate.reset();
+    state.movementPrediction.reset();
+    state.processedMovementSeq = null;
+    state.movementSeed = null;
+    state.movementPredictionTimeMs = null;
     state.isDead = true;
     state.deathTime = performance.now();
     state.killerEntityId = died.killerID;
@@ -294,7 +334,6 @@ export function connect(state: GameState, callbacks: NetworkCallbacks): void {
   // codec hands us the raw delta-frame bytes via WorldDelta.body; decode
   // them with the SDK's SpaceDeltaDecoder, which owns the per-baseline
   // state for the local connection.
-  const deltaDecoder = new SpaceDeltaDecoder();
   client.onWorldDelta((msg: WorldDelta) => {
     // Time the full decode+apply pass so the dev overlay can show
     // per-frame processing duration. If this consistently exceeds the
@@ -303,7 +342,44 @@ export function connect(state: GameState, callbacks: NetworkCallbacks): void {
     // client-side cause of the burst pattern, separate from any
     // network-level batching.
     const t0 = performance.now();
-    applyDeltaUpdate(state, deltaDecoder.decode(msg.body));
+    const update = deltaDecoder.decode(msg.body, msg.streamEpoch);
+    if (update) {
+      const freshStream = movementGate.observeStream(msg.streamEpoch);
+      if (freshStream) {
+        // The successor authority's producer clock may be behind the prior
+        // stream. Never carry the old monotonic prediction cursor across that
+        // boundary; an early successor seed will establish its own cursor.
+        state.movementPredictionTimeMs = null;
+        if (state.movementSeed?.streamEpoch !== (msg.streamEpoch >>> 0)) {
+          state.movementSeed = null;
+        }
+      }
+      const movementFrame = update.processedInputSeq === null
+        ? null
+        : {
+            streamEpoch: msg.streamEpoch,
+            tick: update.tick,
+            processedSequence: update.processedInputSeq,
+          };
+      if (update.freshSnapshot) {
+        movementGate.resetForFreshSnapshot(movementFrame);
+        const currentSeed = state.movementSeed;
+        if (
+          currentSeed &&
+          (currentSeed.streamEpoch !== (msg.streamEpoch >>> 0) ||
+            currentSeed.tick !== (update.tick >>> 0) ||
+            currentSeed.processedSequence !== ((update.processedInputSeq ?? 0) >>> 0))
+        ) {
+          state.movementSeed = null;
+        }
+      }
+      applyDeltaUpdate(state, update);
+      const matchedSeed = movementFrame ? movementGate.stageFrame(movementFrame) : null;
+      if (matchedSeed) {
+        acceptMovementSeed(state, matchedSeed);
+        acknowledgeMovementSeed(state, matchedSeed);
+      }
+    }
     devOverlay.observeApplyDuration(performance.now() - t0);
   });
 
@@ -385,6 +461,21 @@ export function connect(state: GameState, callbacks: NetworkCallbacks): void {
     }
     state.cargoMass = own.cargoMass;
     state.maxCargoMass = own.maxCargoMass;
+
+    const seed = decodeMovementSeed(own.movement);
+    if (
+      seed &&
+      seed.entityNetID === state.myEntityId &&
+      movementGate.acceptsSeedStream(seed.streamEpoch)
+    ) {
+      const matchedSeed = movementGate.stageSeed(seed);
+      if (matchedSeed) {
+        acceptMovementSeed(state, matchedSeed);
+        acknowledgeMovementSeed(state, matchedSeed);
+      } else if (movementGate.canApplySeedImmediately(seed.streamEpoch)) {
+        acceptMovementSeed(state, seed);
+      }
+    }
   });
 
   // --- Debug info (per-player gated overlay payload) ---
@@ -495,10 +586,8 @@ export function connect(state: GameState, callbacks: NetworkCallbacks): void {
         time: performance.now(),
       });
 
-      // Apply the change to local state.equipment so the slot UI refreshes
-      // immediately. PlayerOwnStateMsg (which carries equipment normally)
-      // is gated server-side on StateActive, so docked equip changes don't
-      // come through that channel — apply locally from the result message.
+      // Apply the change to local state.equipment immediately rather than
+      // waiting for the next per-viewer PlayerOwnState tick.
       // EquipSlot enum: 1=Weapon1, 2=Weapon2, 3=Shield, 4=Thruster.
       switch (result.slot) {
         case 1: state.equipment.weapon1 = result.equippedItemID; break;
@@ -522,11 +611,13 @@ export function connect(state: GameState, callbacks: NetworkCallbacks): void {
     state.dockingTotalTime = ds.totalTime;
     state.dockingStationId = ds.stationID;
     if (ds.docking && !wasDocking) {
+      state.movementSeed = null;
       audio.play(SoundId.TractorBeam);
     }
   });
 
   client.onDocked(() => {
+    state.movementSeed = null;
     state.isDocked = true;
     state.isDockingInProgress = false;
     state.dockingProgress = 0;

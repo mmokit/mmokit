@@ -497,6 +497,7 @@ type CoordMessage struct {
 	//	*CoordMessage_SessionRegister
 	//	*CoordMessage_CellRename
 	//	*CoordMessage_CoordTimeSync
+	//	*CoordMessage_CellTransferCommit
 	Msg           isCoordMessage_Msg `protobuf_oneof:"msg"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -699,6 +700,15 @@ func (x *CoordMessage) GetCoordTimeSync() *CoordTimeSync {
 	return nil
 }
 
+func (x *CoordMessage) GetCellTransferCommit() *CellTransferCommit {
+	if x != nil {
+		if x, ok := x.Msg.(*CoordMessage_CellTransferCommit); ok {
+			return x.CellTransferCommit
+		}
+	}
+	return nil
+}
+
 type isCoordMessage_Msg interface {
 	isCoordMessage_Msg()
 }
@@ -771,6 +781,10 @@ type CoordMessage_CoordTimeSync struct {
 	CoordTimeSync *CoordTimeSync `protobuf:"bytes,21,opt,name=coord_time_sync,json=coordTimeSync,proto3,oneof"` // Replication Timeline Redesign: cluster-clock advisory refresh
 }
 
+type CoordMessage_CellTransferCommit struct {
+	CellTransferCommit *CellTransferCommit `protobuf:"bytes,22,opt,name=cell_transfer_commit,json=cellTransferCommit,proto3,oneof"` // topology committed: host may retire rollback state
+}
+
 func (*CoordMessage_RegisterAck) isCoordMessage_Msg() {}
 
 func (*CoordMessage_CellAssign) isCoordMessage_Msg() {}
@@ -804,6 +818,8 @@ func (*CoordMessage_SessionRegister) isCoordMessage_Msg() {}
 func (*CoordMessage_CellRename) isCoordMessage_Msg() {}
 
 func (*CoordMessage_CoordTimeSync) isCoordMessage_Msg() {}
+
+func (*CoordMessage_CellTransferCommit) isCoordMessage_Msg() {}
 
 type RegisterHost struct {
 	state       protoimpl.MessageState `protogen:"open.v1"`
@@ -3755,7 +3771,8 @@ type ForwardInput struct {
 	FromCellId    string                 `protobuf:"bytes,1,opt,name=from_cell_id,json=fromCellId,proto3" json:"from_cell_id,omitempty"`
 	ConnId        uint32                 `protobuf:"varint,2,opt,name=conn_id,json=connId,proto3" json:"conn_id,omitempty"`
 	InputBlob     []byte                 `protobuf:"bytes,3,opt,name=input_blob,json=inputBlob,proto3" json:"input_blob,omitempty"`
-	GatewayId     string                 `protobuf:"bytes,4,opt,name=gateway_id,json=gatewayId,proto3" json:"gateway_id,omitempty"` // gateway_id + conn_id forms the composite session key
+	GatewayId     string                 `protobuf:"bytes,4,opt,name=gateway_id,json=gatewayId,proto3" json:"gateway_id,omitempty"`           // gateway_id + conn_id forms the composite session key
+	SessionEpoch  uint64                 `protobuf:"varint,5,opt,name=session_epoch,json=sessionEpoch,proto3" json:"session_epoch,omitempty"` // source gateway-route generation; destination drops stale forwards
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -3816,6 +3833,13 @@ func (x *ForwardInput) GetGatewayId() string {
 		return x.GatewayId
 	}
 	return ""
+}
+
+func (x *ForwardInput) GetSessionEpoch() uint64 {
+	if x != nil {
+		return x.SessionEpoch
+	}
+	return 0
 }
 
 // CrossCellAction mirrors pkg/universe/action.go CrossCellAction.
@@ -3977,19 +4001,20 @@ func (x *Location) GetTag() string {
 // The auth service stamps user_id (UUID) + session_token at login time;
 // downstream cell wiring keys player records by user_id, not username.
 type PlayerAssignment struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	FromCellId    string                 `protobuf:"bytes,1,opt,name=from_cell_id,json=fromCellId,proto3" json:"from_cell_id,omitempty"`
-	ToCellId      string                 `protobuf:"bytes,2,opt,name=to_cell_id,json=toCellId,proto3" json:"to_cell_id,omitempty"`
-	ConnId        uint32                 `protobuf:"varint,3,opt,name=conn_id,json=connId,proto3" json:"conn_id,omitempty"`
-	GatewayId     string                 `protobuf:"bytes,4,opt,name=gateway_id,json=gatewayId,proto3" json:"gateway_id,omitempty"`
-	UserId        string                 `protobuf:"bytes,5,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"`
-	Username      string                 `protobuf:"bytes,6,opt,name=username,proto3" json:"username,omitempty"`
-	SessionToken  string                 `protobuf:"bytes,7,opt,name=session_token,json=sessionToken,proto3" json:"session_token,omitempty"`
-	IsReconnect   bool                   `protobuf:"varint,8,opt,name=is_reconnect,json=isReconnect,proto3" json:"is_reconnect,omitempty"`
-	Epoch         uint64                 `protobuf:"varint,9,opt,name=epoch,proto3" json:"epoch,omitempty"`
-	SpawnLocation *Location              `protobuf:"bytes,10,opt,name=spawn_location,json=spawnLocation,proto3" json:"spawn_location,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state            protoimpl.MessageState `protogen:"open.v1"`
+	FromCellId       string                 `protobuf:"bytes,1,opt,name=from_cell_id,json=fromCellId,proto3" json:"from_cell_id,omitempty"`
+	ToCellId         string                 `protobuf:"bytes,2,opt,name=to_cell_id,json=toCellId,proto3" json:"to_cell_id,omitempty"`
+	ConnId           uint32                 `protobuf:"varint,3,opt,name=conn_id,json=connId,proto3" json:"conn_id,omitempty"`
+	GatewayId        string                 `protobuf:"bytes,4,opt,name=gateway_id,json=gatewayId,proto3" json:"gateway_id,omitempty"`
+	UserId           string                 `protobuf:"bytes,5,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"`
+	Username         string                 `protobuf:"bytes,6,opt,name=username,proto3" json:"username,omitempty"`
+	SessionToken     string                 `protobuf:"bytes,7,opt,name=session_token,json=sessionToken,proto3" json:"session_token,omitempty"`
+	IsReconnect      bool                   `protobuf:"varint,8,opt,name=is_reconnect,json=isReconnect,proto3" json:"is_reconnect,omitempty"`
+	Epoch            uint64                 `protobuf:"varint,9,opt,name=epoch,proto3" json:"epoch,omitempty"`
+	SpawnLocation    *Location              `protobuf:"bytes,10,opt,name=spawn_location,json=spawnLocation,proto3" json:"spawn_location,omitempty"`
+	StreamGeneration uint32                 `protobuf:"varint,11,opt,name=stream_generation,json=streamGeneration,proto3" json:"stream_generation,omitempty"`
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
 }
 
 func (x *PlayerAssignment) Reset() {
@@ -4092,16 +4117,28 @@ func (x *PlayerAssignment) GetSpawnLocation() *Location {
 	return nil
 }
 
+func (x *PlayerAssignment) GetStreamGeneration() uint32 {
+	if x != nil {
+		return x.StreamGeneration
+	}
+	return 0
+}
+
 // SessionTransfer mirrors pkg/universe/message.go SessionTransfer.
 type SessionTransfer struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	FromCellId    string                 `protobuf:"bytes,1,opt,name=from_cell_id,json=fromCellId,proto3" json:"from_cell_id,omitempty"`
-	ConnId        uint32                 `protobuf:"varint,2,opt,name=conn_id,json=connId,proto3" json:"conn_id,omitempty"`
-	Username      string                 `protobuf:"bytes,3,opt,name=username,proto3" json:"username,omitempty"`
-	StateTag      string                 `protobuf:"bytes,4,opt,name=state_tag,json=stateTag,proto3" json:"state_tag,omitempty"`
-	Data          []byte                 `protobuf:"bytes,5,opt,name=data,proto3" json:"data,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state            protoimpl.MessageState `protogen:"open.v1"`
+	FromCellId       string                 `protobuf:"bytes,1,opt,name=from_cell_id,json=fromCellId,proto3" json:"from_cell_id,omitempty"`
+	ConnId           uint32                 `protobuf:"varint,2,opt,name=conn_id,json=connId,proto3" json:"conn_id,omitempty"`
+	Username         string                 `protobuf:"bytes,3,opt,name=username,proto3" json:"username,omitempty"`
+	StateTag         string                 `protobuf:"bytes,4,opt,name=state_tag,json=stateTag,proto3" json:"state_tag,omitempty"`
+	Data             []byte                 `protobuf:"bytes,5,opt,name=data,proto3" json:"data,omitempty"`
+	UserId           string                 `protobuf:"bytes,6,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"`
+	StreamGeneration uint32                 `protobuf:"varint,7,opt,name=stream_generation,json=streamGeneration,proto3" json:"stream_generation,omitempty"`
+	GatewayId        string                 `protobuf:"bytes,8,opt,name=gateway_id,json=gatewayId,proto3" json:"gateway_id,omitempty"`
+	GatewayConnId    uint32                 `protobuf:"varint,9,opt,name=gateway_conn_id,json=gatewayConnId,proto3" json:"gateway_conn_id,omitempty"`
+	SessionEpoch     uint64                 `protobuf:"varint,10,opt,name=session_epoch,json=sessionEpoch,proto3" json:"session_epoch,omitempty"`
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
 }
 
 func (x *SessionTransfer) Reset() {
@@ -4169,15 +4206,51 @@ func (x *SessionTransfer) GetData() []byte {
 	return nil
 }
 
+func (x *SessionTransfer) GetUserId() string {
+	if x != nil {
+		return x.UserId
+	}
+	return ""
+}
+
+func (x *SessionTransfer) GetStreamGeneration() uint32 {
+	if x != nil {
+		return x.StreamGeneration
+	}
+	return 0
+}
+
+func (x *SessionTransfer) GetGatewayId() string {
+	if x != nil {
+		return x.GatewayId
+	}
+	return ""
+}
+
+func (x *SessionTransfer) GetGatewayConnId() uint32 {
+	if x != nil {
+		return x.GatewayConnId
+	}
+	return 0
+}
+
+func (x *SessionTransfer) GetSessionEpoch() uint64 {
+	if x != nil {
+		return x.SessionEpoch
+	}
+	return 0
+}
+
 // SpawnTransfer mirrors pkg/universe/message.go SpawnTransfer.
 type SpawnTransfer struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	FromCellId    string                 `protobuf:"bytes,1,opt,name=from_cell_id,json=fromCellId,proto3" json:"from_cell_id,omitempty"`
-	ConnId        uint32                 `protobuf:"varint,2,opt,name=conn_id,json=connId,proto3" json:"conn_id,omitempty"`
-	Username      string                 `protobuf:"bytes,3,opt,name=username,proto3" json:"username,omitempty"`
-	SpawnLocation *Location              `protobuf:"bytes,4,opt,name=spawn_location,json=spawnLocation,proto3" json:"spawn_location,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state            protoimpl.MessageState `protogen:"open.v1"`
+	FromCellId       string                 `protobuf:"bytes,1,opt,name=from_cell_id,json=fromCellId,proto3" json:"from_cell_id,omitempty"`
+	ConnId           uint32                 `protobuf:"varint,2,opt,name=conn_id,json=connId,proto3" json:"conn_id,omitempty"`
+	Username         string                 `protobuf:"bytes,3,opt,name=username,proto3" json:"username,omitempty"`
+	SpawnLocation    *Location              `protobuf:"bytes,4,opt,name=spawn_location,json=spawnLocation,proto3" json:"spawn_location,omitempty"`
+	StreamGeneration uint32                 `protobuf:"varint,5,opt,name=stream_generation,json=streamGeneration,proto3" json:"stream_generation,omitempty"`
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
 }
 
 func (x *SpawnTransfer) Reset() {
@@ -4236,6 +4309,13 @@ func (x *SpawnTransfer) GetSpawnLocation() *Location {
 		return x.SpawnLocation
 	}
 	return nil
+}
+
+func (x *SpawnTransfer) GetStreamGeneration() uint32 {
+	if x != nil {
+		return x.StreamGeneration
+	}
+	return 0
 }
 
 // BorderContextEntry carries a serialized entity that the destination
@@ -4971,6 +5051,53 @@ func (x *CellTransferAbort) GetRequestId() uint64 {
 	return 0
 }
 
+// S7: orchestrator confirms that every destination is ready and the topology
+// mutation committed. Hosts can now discard rollback bookkeeping retained for
+// this transfer request.
+type CellTransferCommit struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	RequestId     uint64                 `protobuf:"varint,1,opt,name=request_id,json=requestId,proto3" json:"request_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *CellTransferCommit) Reset() {
+	*x = CellTransferCommit{}
+	mi := &file_meshpb_mesh_proto_msgTypes[60]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CellTransferCommit) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CellTransferCommit) ProtoMessage() {}
+
+func (x *CellTransferCommit) ProtoReflect() protoreflect.Message {
+	mi := &file_meshpb_mesh_proto_msgTypes[60]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CellTransferCommit.ProtoReflect.Descriptor instead.
+func (*CellTransferCommit) Descriptor() ([]byte, []int) {
+	return file_meshpb_mesh_proto_rawDescGZIP(), []int{60}
+}
+
+func (x *CellTransferCommit) GetRequestId() uint64 {
+	if x != nil {
+		return x.RequestId
+	}
+	return 0
+}
+
 // S6: raw client input bytes forwarded from gateway to host.
 //
 // channel identifies which wire channel the bytes came in on (0x00 events,
@@ -4991,7 +5118,7 @@ type ClientInput struct {
 
 func (x *ClientInput) Reset() {
 	*x = ClientInput{}
-	mi := &file_meshpb_mesh_proto_msgTypes[60]
+	mi := &file_meshpb_mesh_proto_msgTypes[61]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5003,7 +5130,7 @@ func (x *ClientInput) String() string {
 func (*ClientInput) ProtoMessage() {}
 
 func (x *ClientInput) ProtoReflect() protoreflect.Message {
-	mi := &file_meshpb_mesh_proto_msgTypes[60]
+	mi := &file_meshpb_mesh_proto_msgTypes[61]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5016,7 +5143,7 @@ func (x *ClientInput) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ClientInput.ProtoReflect.Descriptor instead.
 func (*ClientInput) Descriptor() ([]byte, []int) {
-	return file_meshpb_mesh_proto_rawDescGZIP(), []int{60}
+	return file_meshpb_mesh_proto_rawDescGZIP(), []int{61}
 }
 
 func (x *ClientInput) GetConnId() uint32 {
@@ -5067,7 +5194,7 @@ type ClientFrame struct {
 
 func (x *ClientFrame) Reset() {
 	*x = ClientFrame{}
-	mi := &file_meshpb_mesh_proto_msgTypes[61]
+	mi := &file_meshpb_mesh_proto_msgTypes[62]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5079,7 +5206,7 @@ func (x *ClientFrame) String() string {
 func (*ClientFrame) ProtoMessage() {}
 
 func (x *ClientFrame) ProtoReflect() protoreflect.Message {
-	mi := &file_meshpb_mesh_proto_msgTypes[61]
+	mi := &file_meshpb_mesh_proto_msgTypes[62]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5092,7 +5219,7 @@ func (x *ClientFrame) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ClientFrame.ProtoReflect.Descriptor instead.
 func (*ClientFrame) Descriptor() ([]byte, []int) {
-	return file_meshpb_mesh_proto_rawDescGZIP(), []int{61}
+	return file_meshpb_mesh_proto_rawDescGZIP(), []int{62}
 }
 
 func (x *ClientFrame) GetConnId() uint32 {
@@ -5135,7 +5262,7 @@ type ClientDisconnect struct {
 
 func (x *ClientDisconnect) Reset() {
 	*x = ClientDisconnect{}
-	mi := &file_meshpb_mesh_proto_msgTypes[62]
+	mi := &file_meshpb_mesh_proto_msgTypes[63]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5147,7 +5274,7 @@ func (x *ClientDisconnect) String() string {
 func (*ClientDisconnect) ProtoMessage() {}
 
 func (x *ClientDisconnect) ProtoReflect() protoreflect.Message {
-	mi := &file_meshpb_mesh_proto_msgTypes[62]
+	mi := &file_meshpb_mesh_proto_msgTypes[63]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5160,7 +5287,7 @@ func (x *ClientDisconnect) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ClientDisconnect.ProtoReflect.Descriptor instead.
 func (*ClientDisconnect) Descriptor() ([]byte, []int) {
-	return file_meshpb_mesh_proto_rawDescGZIP(), []int{62}
+	return file_meshpb_mesh_proto_rawDescGZIP(), []int{63}
 }
 
 func (x *ClientDisconnect) GetGatewayId() string {
@@ -5214,7 +5341,7 @@ const file_meshpb_mesh_proto_rawDesc = "" +
 	"\tlog_batch\x18\x15 \x01(\v2\x10.meshpb.LogBatchH\x00R\blogBatch\x12E\n" +
 	"\x11admin_topic_event\x18\x16 \x01(\v2\x17.meshpb.AdminTopicEventH\x00R\x0fadminTopicEvent\x12W\n" +
 	"\x17service_event_subscribe\x183 \x01(\v2\x1d.meshpb.ServiceEventSubscribeH\x00R\x15serviceEventSubscribeB\x05\n" +
-	"\x03msg\"\xe0\b\n" +
+	"\x03msg\"\xb0\t\n" +
 	"\fCoordMessage\x12 \n" +
 	"\vcoord_epoch\x18\xc8\x01 \x01(\x04R\n" +
 	"coordEpoch\x128\n" +
@@ -5238,7 +5365,8 @@ const file_meshpb_mesh_proto_rawDesc = "" +
 	"\x10session_register\x18\x13 \x01(\v2\x17.meshpb.SessionRegisterH\x00R\x0fsessionRegister\x125\n" +
 	"\vcell_rename\x18\x14 \x01(\v2\x12.meshpb.CellRenameH\x00R\n" +
 	"cellRename\x12?\n" +
-	"\x0fcoord_time_sync\x18\x15 \x01(\v2\x15.meshpb.CoordTimeSyncH\x00R\rcoordTimeSyncB\x05\n" +
+	"\x0fcoord_time_sync\x18\x15 \x01(\v2\x15.meshpb.CoordTimeSyncH\x00R\rcoordTimeSync\x12N\n" +
+	"\x14cell_transfer_commit\x18\x16 \x01(\v2\x1a.meshpb.CellTransferCommitH\x00R\x12cellTransferCommitB\x05\n" +
 	"\x03msg\"\x8b\x01\n" +
 	"\fRegisterHost\x12\x17\n" +
 	"\ahost_id\x18\x01 \x01(\tR\x06hostId\x12\x1b\n" +
@@ -5465,7 +5593,7 @@ const file_meshpb_mesh_proto_rawDesc = "" +
 	"\vcommit_tick\x18\x04 \x01(\x04R\n" +
 	"commitTick\x12#\n" +
 	"\rtransfer_blob\x18\x05 \x01(\fR\ftransferBlob\x12\x17\n" +
-	"\aconn_id\x18\x06 \x01(\rR\x06connId\"\x87\x01\n" +
+	"\aconn_id\x18\x06 \x01(\rR\x06connId\"\xac\x01\n" +
 	"\fForwardInput\x12 \n" +
 	"\ffrom_cell_id\x18\x01 \x01(\tR\n" +
 	"fromCellId\x12\x17\n" +
@@ -5473,7 +5601,8 @@ const file_meshpb_mesh_proto_rawDesc = "" +
 	"\n" +
 	"input_blob\x18\x03 \x01(\fR\tinputBlob\x12\x1d\n" +
 	"\n" +
-	"gateway_id\x18\x04 \x01(\tR\tgatewayId\"\xdc\x01\n" +
+	"gateway_id\x18\x04 \x01(\tR\tgatewayId\x12#\n" +
+	"\rsession_epoch\x18\x05 \x01(\x04R\fsessionEpoch\"\xdc\x01\n" +
 	"\x0fCrossCellAction\x12 \n" +
 	"\ffrom_cell_id\x18\x01 \x01(\tR\n" +
 	"fromCellId\x12\x1f\n" +
@@ -5487,7 +5616,7 @@ const file_meshpb_mesh_proto_rawDesc = "" +
 	"\x01x\x18\x01 \x01(\x02R\x01x\x12\f\n" +
 	"\x01y\x18\x02 \x01(\x02R\x01y\x12\x16\n" +
 	"\x06facing\x18\x03 \x01(\x02R\x06facing\x12\x10\n" +
-	"\x03tag\x18\x04 \x01(\tR\x03tag\"\xd6\x02\n" +
+	"\x03tag\x18\x04 \x01(\tR\x03tag\"\x83\x03\n" +
 	"\x10PlayerAssignment\x12 \n" +
 	"\ffrom_cell_id\x18\x01 \x01(\tR\n" +
 	"fromCellId\x12\x1c\n" +
@@ -5502,20 +5631,29 @@ const file_meshpb_mesh_proto_rawDesc = "" +
 	"\fis_reconnect\x18\b \x01(\bR\visReconnect\x12\x14\n" +
 	"\x05epoch\x18\t \x01(\x04R\x05epoch\x127\n" +
 	"\x0espawn_location\x18\n" +
-	" \x01(\v2\x10.meshpb.LocationR\rspawnLocation\"\x99\x01\n" +
+	" \x01(\v2\x10.meshpb.LocationR\rspawnLocation\x12+\n" +
+	"\x11stream_generation\x18\v \x01(\rR\x10streamGeneration\"\xcb\x02\n" +
 	"\x0fSessionTransfer\x12 \n" +
 	"\ffrom_cell_id\x18\x01 \x01(\tR\n" +
 	"fromCellId\x12\x17\n" +
 	"\aconn_id\x18\x02 \x01(\rR\x06connId\x12\x1a\n" +
 	"\busername\x18\x03 \x01(\tR\busername\x12\x1b\n" +
 	"\tstate_tag\x18\x04 \x01(\tR\bstateTag\x12\x12\n" +
-	"\x04data\x18\x05 \x01(\fR\x04data\"\x9f\x01\n" +
+	"\x04data\x18\x05 \x01(\fR\x04data\x12\x17\n" +
+	"\auser_id\x18\x06 \x01(\tR\x06userId\x12+\n" +
+	"\x11stream_generation\x18\a \x01(\rR\x10streamGeneration\x12\x1d\n" +
+	"\n" +
+	"gateway_id\x18\b \x01(\tR\tgatewayId\x12&\n" +
+	"\x0fgateway_conn_id\x18\t \x01(\rR\rgatewayConnId\x12#\n" +
+	"\rsession_epoch\x18\n" +
+	" \x01(\x04R\fsessionEpoch\"\xcc\x01\n" +
 	"\rSpawnTransfer\x12 \n" +
 	"\ffrom_cell_id\x18\x01 \x01(\tR\n" +
 	"fromCellId\x12\x17\n" +
 	"\aconn_id\x18\x02 \x01(\rR\x06connId\x12\x1a\n" +
 	"\busername\x18\x03 \x01(\tR\busername\x127\n" +
-	"\x0espawn_location\x18\x04 \x01(\v2\x10.meshpb.LocationR\rspawnLocation\"R\n" +
+	"\x0espawn_location\x18\x04 \x01(\v2\x10.meshpb.LocationR\rspawnLocation\x12+\n" +
+	"\x11stream_generation\x18\x05 \x01(\rR\x10streamGeneration\"R\n" +
 	"\x12BorderContextEntry\x12\x16\n" +
 	"\x06entity\x18\x01 \x01(\fR\x06entity\x12$\n" +
 	"\x0esource_cell_id\x18\x02 \x01(\tR\fsourceCellId\"\x92\x03\n" +
@@ -5580,6 +5718,9 @@ const file_meshpb_mesh_proto_rawDesc = "" +
 	"\acell_id\x18\x05 \x01(\tR\x06cellId\"2\n" +
 	"\x11CellTransferAbort\x12\x1d\n" +
 	"\n" +
+	"request_id\x18\x01 \x01(\x04R\trequestId\"3\n" +
+	"\x12CellTransferCommit\x12\x1d\n" +
+	"\n" +
 	"request_id\x18\x01 \x01(\x04R\trequestId\"\x89\x01\n" +
 	"\vClientInput\x12\x17\n" +
 	"\aconn_id\x18\x01 \x01(\rR\x06connId\x12\x12\n" +
@@ -5622,7 +5763,7 @@ func file_meshpb_mesh_proto_rawDescGZIP() []byte {
 }
 
 var file_meshpb_mesh_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_meshpb_mesh_proto_msgTypes = make([]protoimpl.MessageInfo, 64)
+var file_meshpb_mesh_proto_msgTypes = make([]protoimpl.MessageInfo, 65)
 var file_meshpb_mesh_proto_goTypes = []any{
 	(CellTransferKind)(0),         // 0: meshpb.CellTransferKind
 	(*HostMessage)(nil),           // 1: meshpb.HostMessage
@@ -5685,10 +5826,11 @@ var file_meshpb_mesh_proto_goTypes = []any{
 	(*SpawnResolved)(nil),         // 58: meshpb.SpawnResolved
 	(*SessionRegister)(nil),       // 59: meshpb.SessionRegister
 	(*CellTransferAbort)(nil),     // 60: meshpb.CellTransferAbort
-	(*ClientInput)(nil),           // 61: meshpb.ClientInput
-	(*ClientFrame)(nil),           // 62: meshpb.ClientFrame
-	(*ClientDisconnect)(nil),      // 63: meshpb.ClientDisconnect
-	nil,                           // 64: meshpb.PeerList.EventRoutingEntry
+	(*CellTransferCommit)(nil),    // 61: meshpb.CellTransferCommit
+	(*ClientInput)(nil),           // 62: meshpb.ClientInput
+	(*ClientFrame)(nil),           // 63: meshpb.ClientFrame
+	(*ClientDisconnect)(nil),      // 64: meshpb.ClientDisconnect
+	nil,                           // 65: meshpb.PeerList.EventRoutingEntry
 }
 var file_meshpb_mesh_proto_depIdxs = []int32{
 	3,  // 0: meshpb.HostMessage.register:type_name -> meshpb.RegisterHost
@@ -5730,44 +5872,45 @@ var file_meshpb_mesh_proto_depIdxs = []int32{
 	59, // 36: meshpb.CoordMessage.session_register:type_name -> meshpb.SessionRegister
 	21, // 37: meshpb.CoordMessage.cell_rename:type_name -> meshpb.CellRename
 	37, // 38: meshpb.CoordMessage.coord_time_sync:type_name -> meshpb.CoordTimeSync
-	5,  // 39: meshpb.Heartbeat.metrics:type_name -> meshpb.CellMetricsReport
-	7,  // 40: meshpb.LogBatch.entries:type_name -> meshpb.LogEntry
-	24, // 41: meshpb.PeerList.hosts:type_name -> meshpb.HostRecord
-	23, // 42: meshpb.PeerList.cells:type_name -> meshpb.CellOwnership
-	25, // 43: meshpb.PeerList.gateways:type_name -> meshpb.GatewayRecord
-	26, // 44: meshpb.PeerList.services:type_name -> meshpb.ServiceRecord
-	64, // 45: meshpb.PeerList.event_routing:type_name -> meshpb.PeerList.EventRoutingEntry
-	41, // 46: meshpb.CommandRequest.caller:type_name -> meshpb.Caller
-	42, // 47: meshpb.Caller.grants:type_name -> meshpb.Grant
-	44, // 48: meshpb.MeshFrame.border_frame:type_name -> meshpb.BorderFrame
-	45, // 49: meshpb.MeshFrame.handoff:type_name -> meshpb.Handoff
-	46, // 50: meshpb.MeshFrame.forward_input:type_name -> meshpb.ForwardInput
-	53, // 51: meshpb.MeshFrame.cell_transfer:type_name -> meshpb.CellTransfer
-	55, // 52: meshpb.MeshFrame.cell_transfer_ready:type_name -> meshpb.CellTransferReady
-	60, // 53: meshpb.MeshFrame.cell_transfer_abort:type_name -> meshpb.CellTransferAbort
-	61, // 54: meshpb.MeshFrame.client_input:type_name -> meshpb.ClientInput
-	62, // 55: meshpb.MeshFrame.client_frame:type_name -> meshpb.ClientFrame
-	47, // 56: meshpb.MeshFrame.cross_action:type_name -> meshpb.CrossCellAction
-	49, // 57: meshpb.MeshFrame.player_assignment:type_name -> meshpb.PlayerAssignment
-	50, // 58: meshpb.MeshFrame.session_transfer:type_name -> meshpb.SessionTransfer
-	51, // 59: meshpb.MeshFrame.spawn_transfer:type_name -> meshpb.SpawnTransfer
-	63, // 60: meshpb.MeshFrame.client_disconnect:type_name -> meshpb.ClientDisconnect
-	31, // 61: meshpb.MeshFrame.service_event:type_name -> meshpb.ServiceEvent
-	48, // 62: meshpb.PlayerAssignment.spawn_location:type_name -> meshpb.Location
-	48, // 63: meshpb.SpawnTransfer.spawn_location:type_name -> meshpb.Location
-	0,  // 64: meshpb.CellTransfer.kind:type_name -> meshpb.CellTransferKind
-	54, // 65: meshpb.CellTransfer.bounds:type_name -> meshpb.CellBounds
-	52, // 66: meshpb.CellTransfer.context:type_name -> meshpb.BorderContextEntry
-	29, // 67: meshpb.PeerList.EventRoutingEntry.value:type_name -> meshpb.ProcessList
-	1,  // 68: meshpb.MeshControl.Control:input_type -> meshpb.HostMessage
-	43, // 69: meshpb.MeshData.Data:input_type -> meshpb.MeshFrame
-	2,  // 70: meshpb.MeshControl.Control:output_type -> meshpb.CoordMessage
-	43, // 71: meshpb.MeshData.Data:output_type -> meshpb.MeshFrame
-	70, // [70:72] is the sub-list for method output_type
-	68, // [68:70] is the sub-list for method input_type
-	68, // [68:68] is the sub-list for extension type_name
-	68, // [68:68] is the sub-list for extension extendee
-	0,  // [0:68] is the sub-list for field type_name
+	61, // 39: meshpb.CoordMessage.cell_transfer_commit:type_name -> meshpb.CellTransferCommit
+	5,  // 40: meshpb.Heartbeat.metrics:type_name -> meshpb.CellMetricsReport
+	7,  // 41: meshpb.LogBatch.entries:type_name -> meshpb.LogEntry
+	24, // 42: meshpb.PeerList.hosts:type_name -> meshpb.HostRecord
+	23, // 43: meshpb.PeerList.cells:type_name -> meshpb.CellOwnership
+	25, // 44: meshpb.PeerList.gateways:type_name -> meshpb.GatewayRecord
+	26, // 45: meshpb.PeerList.services:type_name -> meshpb.ServiceRecord
+	65, // 46: meshpb.PeerList.event_routing:type_name -> meshpb.PeerList.EventRoutingEntry
+	41, // 47: meshpb.CommandRequest.caller:type_name -> meshpb.Caller
+	42, // 48: meshpb.Caller.grants:type_name -> meshpb.Grant
+	44, // 49: meshpb.MeshFrame.border_frame:type_name -> meshpb.BorderFrame
+	45, // 50: meshpb.MeshFrame.handoff:type_name -> meshpb.Handoff
+	46, // 51: meshpb.MeshFrame.forward_input:type_name -> meshpb.ForwardInput
+	53, // 52: meshpb.MeshFrame.cell_transfer:type_name -> meshpb.CellTransfer
+	55, // 53: meshpb.MeshFrame.cell_transfer_ready:type_name -> meshpb.CellTransferReady
+	60, // 54: meshpb.MeshFrame.cell_transfer_abort:type_name -> meshpb.CellTransferAbort
+	62, // 55: meshpb.MeshFrame.client_input:type_name -> meshpb.ClientInput
+	63, // 56: meshpb.MeshFrame.client_frame:type_name -> meshpb.ClientFrame
+	47, // 57: meshpb.MeshFrame.cross_action:type_name -> meshpb.CrossCellAction
+	49, // 58: meshpb.MeshFrame.player_assignment:type_name -> meshpb.PlayerAssignment
+	50, // 59: meshpb.MeshFrame.session_transfer:type_name -> meshpb.SessionTransfer
+	51, // 60: meshpb.MeshFrame.spawn_transfer:type_name -> meshpb.SpawnTransfer
+	64, // 61: meshpb.MeshFrame.client_disconnect:type_name -> meshpb.ClientDisconnect
+	31, // 62: meshpb.MeshFrame.service_event:type_name -> meshpb.ServiceEvent
+	48, // 63: meshpb.PlayerAssignment.spawn_location:type_name -> meshpb.Location
+	48, // 64: meshpb.SpawnTransfer.spawn_location:type_name -> meshpb.Location
+	0,  // 65: meshpb.CellTransfer.kind:type_name -> meshpb.CellTransferKind
+	54, // 66: meshpb.CellTransfer.bounds:type_name -> meshpb.CellBounds
+	52, // 67: meshpb.CellTransfer.context:type_name -> meshpb.BorderContextEntry
+	29, // 68: meshpb.PeerList.EventRoutingEntry.value:type_name -> meshpb.ProcessList
+	1,  // 69: meshpb.MeshControl.Control:input_type -> meshpb.HostMessage
+	43, // 70: meshpb.MeshData.Data:input_type -> meshpb.MeshFrame
+	2,  // 71: meshpb.MeshControl.Control:output_type -> meshpb.CoordMessage
+	43, // 72: meshpb.MeshData.Data:output_type -> meshpb.MeshFrame
+	71, // [71:73] is the sub-list for method output_type
+	69, // [69:71] is the sub-list for method input_type
+	69, // [69:69] is the sub-list for extension type_name
+	69, // [69:69] is the sub-list for extension extendee
+	0,  // [0:69] is the sub-list for field type_name
 }
 
 func init() { file_meshpb_mesh_proto_init() }
@@ -5817,6 +5960,7 @@ func file_meshpb_mesh_proto_init() {
 		(*CoordMessage_SessionRegister)(nil),
 		(*CoordMessage_CellRename)(nil),
 		(*CoordMessage_CoordTimeSync)(nil),
+		(*CoordMessage_CellTransferCommit)(nil),
 	}
 	file_meshpb_mesh_proto_msgTypes[42].OneofWrappers = []any{
 		(*MeshFrame_BorderFrame)(nil),
@@ -5840,7 +5984,7 @@ func file_meshpb_mesh_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_meshpb_mesh_proto_rawDesc), len(file_meshpb_mesh_proto_rawDesc)),
 			NumEnums:      1,
-			NumMessages:   64,
+			NumMessages:   65,
 			NumExtensions: 0,
 			NumServices:   2,
 		},

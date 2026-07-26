@@ -172,6 +172,7 @@ func (gl *GameLoop) tick(dt float32) {
 	tickStart := time.Now()
 	eng := gl.engine
 	eng.Tick++
+	eng.BeginRemovalTick()
 
 	// Clear per-tick state
 	if gl.hooks.ClearTickState != nil {
@@ -211,9 +212,9 @@ func (gl *GameLoop) tick(dt float32) {
 		gl.hooks.PreFlush()
 	}
 
-	// Flush entity removals (clear + repopulate RemovedNetIDs so NetworkSystem
-	// can read the previous tick's removals to distinguish removals from AoI exits)
-	eng.RemovedNetIDs = eng.RemovedNetIDs[:0]
+	// Flush entity removals. If replication already sampled this tick's
+	// tombstones, these removals are published next tick; otherwise they remain
+	// in the current pending batch until a consumer samples them.
 	eng.FlushRemovals()
 
 	// Post-flush: post-removal work (spawns, state changes)

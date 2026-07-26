@@ -1868,6 +1868,7 @@ func (c *Process) Build() {
 
 		// Compute topology and wire neighbors
 		c.Control.Topology = ComputeTopology(cells, coords.CellSize)
+		c.mu.Lock()
 		for cell, neighborCells := range c.Control.Topology.Neighbors {
 			nodeID := c.CellOwner[cell]
 			node := c.Cells[nodeID]
@@ -1876,6 +1877,7 @@ func (c *Process) Build() {
 				node.Neighbors[neighborID] = c.Cells[neighborID]
 			}
 		}
+		c.mu.Unlock()
 
 		// Auto-register /metrics endpoint on the ConnManager's HTTP mux.
 		cfg.ConnManager.Handle("/metrics", c.MetricsHandler())
@@ -2111,6 +2113,28 @@ func fireCellSystemsReady(p *Process, cell *Cell) {
 	}
 }
 
+// defaultPlayerLeaveCleanup returns the framework lifecycle action for a
+// player leaving an authoritative cell. A handoff demotes Live -> Replica
+// before it transitions the source session to StateTransferring, so replicas
+// are detached from the session but deliberately retained for visual
+// continuity and eventual local-only expiry.
+func defaultPlayerLeaveCleanup(base *Stage) func(*engine.PlayerSession, *engine.PlayerManager) {
+	return func(s *engine.PlayerSession, _ *engine.PlayerManager) {
+		if s.Entity == (ecs.Entity{}) || !base.ECSWorld().Alive(s.Entity) {
+			return
+		}
+		if base.IsGhost(s.Entity) {
+			return
+		}
+		if base.IsReplica(s.Entity) {
+			s.Entity = ecs.Entity{}
+			return
+		}
+		base.MarkForRemoval(s.Entity)
+		s.Entity = ecs.Entity{}
+	}
+}
+
 // initSystems calls Init() on each system that implements it, then
 // triggers the query build phase for any system whose queries were
 // auto-discovered via BindQueries.
@@ -2288,16 +2312,7 @@ func (c *Process) createNode(cell CellID, spatialBucketSize float32, owningHost 
 	// on EVERY exit from Active — including transitions to game-defined
 	// states like Docking where the entity must persist. The transition
 	// Action fires only on the specific destinations registered here.
-	defaultLeaveCleanup := func(s *engine.PlayerSession, _ *engine.PlayerManager) {
-		if s.Entity == (ecs.Entity{}) || !base.ECSWorld().Alive(s.Entity) {
-			return
-		}
-		if base.IsGhost(s.Entity) {
-			return
-		}
-		base.MarkForRemoval(s.Entity)
-		s.Entity = ecs.Entity{}
-	}
+	defaultLeaveCleanup := defaultPlayerLeaveCleanup(base)
 	eng.Players.AddTransitions([]engine.StateTransition{
 		{From: engine.StateActive, To: engine.StateTransferring, Action: defaultLeaveCleanup},
 		{From: engine.StateActive, To: engine.StateDisconnected, Action: defaultLeaveCleanup},
@@ -2392,14 +2407,6 @@ func (c *Process) createNode(cell CellID, spatialBucketSize float32, owningHost 
 
 		gameSystems[i] = sys
 		systemNames[i] = def.Name
-	}
-
-	eng.OnEntityRemoved = func(e ecs.Entity) {
-		base.spatialGrid.Deregister(e)
-		if base.netIDIdx != nil && base.netIDMap.HasAll(e) {
-			netID := base.netIDMap.Get(e).ID
-			base.netIDIdx.Exit(netID)
-		}
 	}
 
 	{
@@ -3479,15 +3486,9 @@ func (c *Process) broadcastPeerListIfReady() {
 	c.assignmentEngine.broadcastPeerList()
 }
 
-func (c *Process) setPlayerNode(connID uint32, nodeID MeshCellID) {
+func (c *Process) setPlayerNode(connID uint32, nodeID MeshCellID) uint64 {
 	key := SessionKey{GatewayID: InprocGatewayID, ConnID: connID}
-	if !c.sessionRoutes.UpdateCell(key, nodeID) {
-		c.sessionRoutes.Set(&SessionRoute{
-			Key:    key,
-			CellID: nodeID,
-			Epoch:  1,
-		})
-	}
+	return c.sessionRoutes.AdvanceCell(key, nodeID)
 }
 
 func (c *Process) removePlayerNode(connID uint32) {

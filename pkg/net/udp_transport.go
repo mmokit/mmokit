@@ -1,6 +1,7 @@
 package net
 
 import (
+	"io"
 	"log"
 	"net"
 	"sync"
@@ -18,11 +19,32 @@ const (
 	connectionTimeout  = 10 * time.Second
 )
 
+// udpClockEpoch lets the activity timestamps stay both atomic and monotonic.
+// Storing Unix timestamps would make timeout handling sensitive to wall-clock
+// adjustments, while storing time.Time values would require another mutex on
+// every unreliable packet.
+var udpClockEpoch = time.Now()
+
+func udpClockStamp(now time.Time) int64 {
+	return now.Sub(udpClockEpoch).Nanoseconds()
+}
+
+func advanceUDPClock(clock *atomic.Int64, stamp int64) {
+	for {
+		previous := clock.Load()
+		if stamp <= previous || clock.CompareAndSwap(previous, stamp) {
+			return
+		}
+	}
+}
+
 type reliableEntry struct {
-	payload []byte
-	sentAt  time.Time
-	acked   bool
-	used    bool
+	seq         uint16
+	payload     []byte
+	firstSentAt time.Time
+	lastSentAt  time.Time
+	acked       bool
+	used        bool
 }
 
 // UDPTransport implements Transport over UDP with reliable and unreliable channels.
@@ -38,7 +60,11 @@ type UDPTransport struct {
 	sendSeq uint16
 	sendBuf [reliableBufSize]reliableEntry
 
-	// Inbound reliability tracking
+	// Inbound reliability tracking. UDPServer currently dispatches from one
+	// reader goroutine, but maintenance and tests are concurrent, and keeping
+	// this state synchronized makes dispatch safe if it is parallelized later.
+	recvMu   sync.Mutex
+	recvInit bool
 	recvSeq  uint16
 	recvBits uint32
 	ackDirty bool // true if we have new ACKs to send
@@ -51,11 +77,11 @@ type UDPTransport struct {
 	inbound   [][]byte // channel 0x00 (events + typed client-input)
 	opInbound [][]byte // channel 0x01 (operations); drained via DrainOpInput
 
-	lastRecv time.Time
-	lastSend time.Time
-	closed   bool
-	closeMu  sync.Mutex
-	done     chan struct{}
+	lastRecvTick atomic.Int64
+	lastSendTick atomic.Int64
+	closed       bool
+	closeMu      sync.Mutex
+	done         chan struct{}
 
 	bytesSent atomic.Uint64
 	bytesRecv atomic.Uint64
@@ -69,39 +95,69 @@ func newUDPTransport(server *UDPServer, addr *net.UDPAddr, token uint32, clientS
 		clientSalt: clientSalt,
 		serverSalt: serverSalt,
 		inbound:    make([][]byte, 0, 32),
-		lastRecv:   time.Now(),
-		lastSend:   time.Now(),
 		done:       make(chan struct{}),
 	}
+	now := udpClockStamp(time.Now())
+	t.lastRecvTick.Store(now)
+	t.lastSendTick.Store(now)
 	go t.tickLoop()
 	return t
 }
 
-// SendReliable sends a message with reliability guarantees.
-func (t *UDPTransport) SendReliable(data []byte) {
+// SendReliable submits a message to the experimental UDP reliability layer.
+// The current layer does not provide ordered delivery, so its conservative
+// delivery classification remains best-effort until that protocol is hardened.
+func (t *UDPTransport) SendReliable(data []byte) SendResult {
 	t.sendMu.Lock()
+	defer t.sendMu.Unlock()
+
+	// Do not consume a sequence or retain caller data when the transport is
+	// already closed. Close can still win after this preflight; sendRaw reports
+	// that race and the rollback below removes the staged retransmit entry.
+	t.closeMu.Lock()
+	closed := t.closed
+	t.closeMu.Unlock()
+	if closed {
+		return SendResult{Disposition: SendClosed}
+	}
+
 	seq := t.sendSeq
-	t.sendSeq++
 	idx := seq % reliableBufSize
+	if entry := &t.sendBuf[idx]; entry.used && !entry.acked {
+		// The reliability window is full. Overwriting an unacknowledged slot
+		// would make the old packet impossible to retransmit and would let a
+		// delayed ACK for it acknowledge the replacement.
+		return SendResult{Disposition: SendBackpressure}
+	}
+	t.sendSeq++
 	// Copy payload so caller can reuse buffer
 	payload := make([]byte, len(data))
 	copy(payload, data)
+	now := time.Now()
 	t.sendBuf[idx] = reliableEntry{
-		payload: payload,
-		sentAt:  time.Now(),
-		acked:   false,
-		used:    true,
+		seq:         seq,
+		payload:     payload,
+		firstSentAt: now,
+		lastSentAt:  now,
+		acked:       false,
+		used:        true,
 	}
-	t.sendMu.Unlock()
 
 	pkt := udpproto.EncodeReliable(t.token, seq, payload)
-	t.sendRaw(pkt)
+	result := t.sendRaw(pkt)
+	if !result.Queued() {
+		// A failed/closed initial write did not accept ownership. Keep the
+		// returned disposition definitive by preventing a later tick from
+		// retransmitting the supposedly rejected frame.
+		t.sendBuf[idx] = reliableEntry{}
+	}
+	return result
 }
 
 // SendUnreliable sends a message with no delivery guarantee.
-func (t *UDPTransport) SendUnreliable(data []byte) {
+func (t *UDPTransport) SendUnreliable(data []byte) SendResult {
 	pkt := udpproto.EncodeUnreliable(t.token, data)
-	t.sendRaw(pkt)
+	return t.sendRaw(pkt)
 }
 
 // DrainOpInput returns all queued operation messages (channel 0x01) and
@@ -149,14 +205,21 @@ func (t *UDPTransport) BytesRecv() uint64 { return t.bytesRecv.Load() }
 
 // Close shuts down the transport.
 func (t *UDPTransport) Close() {
+	// Match the sendMu -> closeMu order used by SendReliable and maintenance.
+	// Closing also releases retained retransmit payloads immediately instead of
+	// waiting for the transport and its ring to become unreachable.
+	t.sendMu.Lock()
 	t.closeMu.Lock()
 	if t.closed {
 		t.closeMu.Unlock()
+		t.sendMu.Unlock()
 		return
 	}
 	t.closed = true
 	close(t.done)
 	t.closeMu.Unlock()
+	clear(t.sendBuf[:])
+	t.sendMu.Unlock()
 
 	// Send disconnect packet (best effort)
 	pkt := udpproto.EncodeDisconnect(t.token)
@@ -170,7 +233,7 @@ func (t *UDPTransport) Close() {
 // bytes left intact (legacy compat for pre-Plan-G senders that omit the
 // channel prefix). See routePayload.
 func (t *UDPTransport) handleUnreliable(payload []byte) {
-	t.lastRecv = time.Now()
+	advanceUDPClock(&t.lastRecvTick, udpClockStamp(time.Now()))
 	t.bytesRecv.Add(uint64(len(payload)))
 	if len(payload) == 0 {
 		return // keepalive
@@ -209,14 +272,18 @@ func (t *UDPTransport) routePayload(payload []byte) {
 
 // handleReliable processes an inbound reliable message.
 func (t *UDPTransport) handleReliable(seq uint16, payload []byte) {
-	t.lastRecv = time.Now()
+	advanceUDPClock(&t.lastRecvTick, udpClockStamp(time.Now()))
 	t.bytesRecv.Add(uint64(len(payload)))
 
 	// Update receive tracking for ACK generation
-	if t.recvSeq == 0 && !t.ackDirty {
+	t.recvMu.Lock()
+	deliver := false
+	if !t.recvInit {
 		// First reliable message received
+		t.recvInit = true
 		t.recvSeq = seq
 		t.recvBits = 0
+		deliver = true
 	} else if udpproto.SeqGreaterThan(seq, t.recvSeq) {
 		// New highest sequence — shift bits
 		diff := seq - t.recvSeq
@@ -226,25 +293,32 @@ func (t *UDPTransport) handleReliable(seq uint16, payload []byte) {
 			t.recvBits = 0
 		}
 		t.recvSeq = seq
+		deliver = true
 	} else {
-		// Older or duplicate — set the appropriate bit
+		// Older or duplicate — deliver an unseen packet within the receive
+		// window exactly once, and only update ACK state for repeats.
 		diff := t.recvSeq - seq
 		if diff > 0 && diff <= 32 {
-			t.recvBits |= 1 << (diff - 1)
+			bit := uint32(1) << (diff - 1)
+			if t.recvBits&bit == 0 {
+				t.recvBits |= bit
+				deliver = true
+			}
 		}
-		// diff == 0 is a duplicate of recvSeq, ignore
-		// diff > 32 is too old, ignore
+		// diff == 0 is a duplicate of recvSeq; diff > 32 is too old to
+		// distinguish safely. Neither is re-delivered.
 	}
 	t.ackDirty = true
+	t.recvMu.Unlock()
 
-	if len(payload) > 0 {
+	if deliver && len(payload) > 0 {
 		t.routePayload(payload)
 	}
 }
 
 // handleACK processes an inbound ACK packet.
 func (t *UDPTransport) handleACK(ackSeq uint16, ackBits uint32) {
-	t.lastRecv = time.Now()
+	advanceUDPClock(&t.lastRecvTick, udpClockStamp(time.Now()))
 
 	t.sendMu.Lock()
 	defer t.sendMu.Unlock()
@@ -263,28 +337,64 @@ func (t *UDPTransport) handleACK(ackSeq uint16, ackBits uint32) {
 func (t *UDPTransport) markAcked(seq uint16) {
 	idx := seq % reliableBufSize
 	entry := &t.sendBuf[idx]
-	if entry.used {
-		entry.acked = true
+	if entry.used && entry.seq == seq {
+		// Release the payload immediately. Sequence identity prevents a delayed
+		// ACK from clearing a newer packet that reused the same ring slot.
+		*entry = reliableEntry{}
 	}
 }
 
-func (t *UDPTransport) sendRaw(data []byte) {
+func (t *UDPTransport) sendRaw(data []byte) SendResult {
 	t.closeMu.Lock()
 	if t.closed {
 		t.closeMu.Unlock()
-		return
+		return SendResult{Disposition: SendClosed}
 	}
-	t.closeMu.Unlock()
-
-	t.server.conn.WriteToUDP(data, t.addr)
-	t.lastSend = time.Now()
+	n, err := t.server.conn.WriteToUDP(data, t.addr)
+	if err != nil {
+		t.closeMu.Unlock()
+		return SendResult{Disposition: SendFailed, Err: err}
+	}
+	if n != len(data) {
+		t.closeMu.Unlock()
+		return SendResult{Disposition: SendFailed, Err: io.ErrShortWrite}
+	}
+	t.lastSendTick.Store(udpClockStamp(time.Now()))
 	t.bytesSent.Add(uint64(len(data)))
+	t.closeMu.Unlock()
+	return queuedSend(DeliveryBestEffort)
 }
 
 func (t *UDPTransport) sendACK() {
-	pkt := udpproto.EncodeACK(t.token, t.recvSeq, t.recvBits)
-	t.sendRaw(pkt)
+	ackSeq, ackBits, ok := t.takePendingACK()
+	if !ok {
+		return
+	}
+
+	pkt := udpproto.EncodeACK(t.token, ackSeq, ackBits)
+	result := t.sendRaw(pkt)
+	if !result.Queued() && result.Disposition != SendClosed {
+		// Retry a failed ACK using the latest receive-window snapshot. If a new
+		// reliable packet arrived while this write was in flight, ackDirty is
+		// already true and this assignment is intentionally idempotent.
+		t.recvMu.Lock()
+		t.ackDirty = true
+		t.recvMu.Unlock()
+	}
+}
+
+func (t *UDPTransport) takePendingACK() (uint16, uint32, bool) {
+	t.recvMu.Lock()
+	defer t.recvMu.Unlock()
+	if !t.ackDirty {
+		return 0, 0, false
+	}
+
+	ackSeq, ackBits := t.recvSeq, t.recvBits
+	// Clear before the write. A receive concurrent with the write sets this
+	// back to true, so completing the older ACK can never erase newer work.
 	t.ackDirty = false
+	return ackSeq, ackBits, true
 }
 
 // tickLoop handles retransmission, ACKs, keepalives, and timeouts at ~10Hz.
@@ -297,46 +407,56 @@ func (t *UDPTransport) tickLoop() {
 		case <-t.done:
 			return
 		case now := <-ticker.C:
-			// Connection timeout
-			if now.Sub(t.lastRecv) > connectionTimeout {
-				log.Printf("udp: connection timeout for token %08x", t.token)
-				t.server.removeTransport(t)
+			if !t.maintenanceTick(now) {
 				return
-			}
-
-			// Retransmit unacked reliable messages
-			t.sendMu.Lock()
-			for i := range t.sendBuf {
-				entry := &t.sendBuf[i]
-				if !entry.used || entry.acked {
-					continue
-				}
-				age := now.Sub(entry.sentAt)
-				if age > reliableTimeout {
-					log.Printf("udp: reliable message seq timed out for token %08x", t.token)
-					t.sendMu.Unlock()
-					t.server.removeTransport(t)
-					return
-				}
-				if age >= retransmitInterval {
-					seq := uint16(i) // approximate — the slot index matches seq%256
-					pkt := udpproto.EncodeReliable(t.token, seq, entry.payload)
-					t.sendRaw(pkt)
-					entry.sentAt = now
-				}
-			}
-			t.sendMu.Unlock()
-
-			// Send standalone ACK if dirty
-			if t.ackDirty {
-				t.sendACK()
-			}
-
-			// Keepalive
-			if now.Sub(t.lastSend) > keepaliveInterval {
-				pkt := udpproto.EncodeUnreliable(t.token, nil)
-				t.sendRaw(pkt)
 			}
 		}
 	}
+}
+
+// maintenanceTick performs one pass of timeout, retransmit, ACK, and
+// keepalive work. Keeping the pass separate from the ticker makes the
+// cross-goroutine contract directly testable without timing-dependent sleeps.
+func (t *UDPTransport) maintenanceTick(now time.Time) bool {
+	nowTick := udpClockStamp(now)
+
+	// Connection timeout
+	if time.Duration(nowTick-t.lastRecvTick.Load()) > connectionTimeout {
+		log.Printf("udp: connection timeout for token %08x", t.token)
+		t.server.removeTransport(t)
+		return false
+	}
+
+	// Retransmit unacked reliable messages
+	t.sendMu.Lock()
+	for i := range t.sendBuf {
+		entry := &t.sendBuf[i]
+		if !entry.used || entry.acked {
+			continue
+		}
+		lifetime := now.Sub(entry.firstSentAt)
+		if lifetime > reliableTimeout {
+			log.Printf("udp: reliable message seq timed out for token %08x", t.token)
+			t.sendMu.Unlock()
+			t.server.removeTransport(t)
+			return false
+		}
+		if now.Sub(entry.lastSentAt) >= retransmitInterval {
+			pkt := udpproto.EncodeReliable(t.token, entry.seq, entry.payload)
+			t.sendRaw(pkt)
+			entry.lastSentAt = now
+		}
+	}
+	t.sendMu.Unlock()
+
+	// Atomically snapshots and clears the dirty flag before writing, so a
+	// packet arriving during the write remains pending for the next pass.
+	t.sendACK()
+
+	// Keepalive
+	if time.Duration(nowTick-t.lastSendTick.Load()) > keepaliveInterval {
+		pkt := udpproto.EncodeUnreliable(t.token, nil)
+		t.sendRaw(pkt)
+	}
+	return true
 }

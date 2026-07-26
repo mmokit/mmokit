@@ -2,6 +2,7 @@ import { px } from "./view";
 import type { GameState } from "./state";
 import { abilityParamsForSlot, getAbilityRange, TargetingMode } from "./ui/ability-bar";
 import { devOverlay } from "./ui/dev-overlay";
+import { estimatedServerNow } from "../sdk/_core/clock-sync.js";
 import {
   CastAbility,
   ChannelAim,
@@ -14,6 +15,29 @@ import {
   ToggleSuperCruise,
   Undock,
 } from "../sdk/index.js";
+
+function sendMoveTarget(
+  state: GameState,
+  command: { active: boolean; x: number; y: number },
+): void {
+  if (!state.client) return;
+  state.inputSeq = (state.inputSeq + 1) >>> 0;
+  if (state.inputSeq === 0) state.inputSeq = 1; // zero is legacy/unsequenced
+  const sequence = state.inputSeq;
+  const clientNowMs = performance.now();
+  const issuedAtMs = state.clockSync.initialized
+    ? estimatedServerNow(state.clockSync, clientNowMs)
+    : 0;
+  // The wire codec sends float32 coordinates. Replay those exact values so
+  // reconciliation does not accumulate a JS-double versus Go-float32 drift.
+  const wireCommand = {
+    active: command.active,
+    x: Math.fround(command.x),
+    y: Math.fround(command.y),
+  };
+  state.movementPrediction.push(sequence, { ...wireCommand, issuedAtMs });
+  state.client.send(new SetMoveTarget({ sequence, ...wireCommand }));
+}
 
 // handleAbilityPress drives the aim-state machine for one slot.
 //   - Self / LockOn / on-cooldown / quickcast-mode → fire immediately
@@ -367,13 +391,7 @@ export function setupInput(
     // sees at the end of a normal click-to-move). Also clears the local
     // move pin so the indicator disappears immediately.
     if (e.code === "KeyS" && !state.isDead && !state.isDocked && state.connected && state.client) {
-      state.inputSeq++;
-      state.client.send(new SetMoveTarget({
-        sequence: state.inputSeq,
-        active: false,
-        x: 0,
-        y: 0,
-      }));
+      sendMoveTarget(state, { active: false, x: 0, y: 0 });
       state.moveTarget = { x: 0, y: 0, active: false };
       state.pendingLootCrateId = 0;
     }
@@ -434,6 +452,9 @@ export function setupInput(
       // or click-empty-space to clear the selection.
       state.rightMouseDown = true;
       issueMove(e.clientX, e.clientY);
+      // Start local prediction and send the first target immediately. Held
+      // cursor refresh remains on the 20 Hz sender below to avoid flooding.
+      sendInput(state);
     }
   });
 
@@ -546,13 +567,7 @@ export function sendInput(state: GameState): void {
   // is also dispatched once when the click is released.
   const mt = state.moveTarget;
   if (mt.active) {
-    state.inputSeq++;
-    state.client.send(new SetMoveTarget({
-      sequence: state.inputSeq,
-      active: true,
-      x: mt.x,
-      y: mt.y,
-    }));
+    sendMoveTarget(state, { active: true, x: mt.x, y: mt.y });
     mt.active = false; // consume after sending (fire-and-forget)
   }
 

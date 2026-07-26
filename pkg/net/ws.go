@@ -11,12 +11,12 @@ func NewWSTransport(conn *Conn) *WSTransport {
 	return &WSTransport{conn: conn}
 }
 
-func (t *WSTransport) SendReliable(data []byte)   { t.conn.Send(data) }
-func (t *WSTransport) SendUnreliable(data []byte) { t.conn.Send(data) }
-func (t *WSTransport) DrainInput() [][]byte       { return t.conn.DrainInput() }
-func (t *WSTransport) DrainOpInput() [][]byte     { return t.conn.DrainOpInput() }
-func (t *WSTransport) InjectInput(data []byte)    { t.conn.InjectInput(data) }
-func (t *WSTransport) Close()                     { t.conn.Close() }
-func (t *WSTransport) BytesSent() uint64          { return t.conn.BytesSent() }
-func (t *WSTransport) BytesRecv() uint64          { return t.conn.BytesRecv() }
-func (t *WSTransport) Stats() ConnStats           { return t.conn.Stats() }
+func (t *WSTransport) SendReliable(data []byte) SendResult   { return t.conn.Send(data) }
+func (t *WSTransport) SendUnreliable(data []byte) SendResult { return t.conn.Send(data) }
+func (t *WSTransport) DrainInput() [][]byte                  { return t.conn.DrainInput() }
+func (t *WSTransport) DrainOpInput() [][]byte                { return t.conn.DrainOpInput() }
+func (t *WSTransport) InjectInput(data []byte)               { t.conn.InjectInput(data) }
+func (t *WSTransport) Close()                                { t.conn.Close() }
+func (t *WSTransport) BytesSent() uint64                     { return t.conn.BytesSent() }
+func (t *WSTransport) BytesRecv() uint64                     { return t.conn.BytesRecv() }
+func (t *WSTransport) Stats() ConnStats                      { return t.conn.Stats() }

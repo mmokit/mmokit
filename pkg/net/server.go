@@ -88,23 +88,25 @@ func (cm *ConnManager) Get(id uint32) Transport {
 
 // Send sends a message unreliably (world updates, ephemeral state).
 // For TCP transports this is identical to SendReliable.
-func (cm *ConnManager) Send(connID uint32, data []byte) {
+func (cm *ConnManager) Send(connID uint32, data []byte) SendResult {
 	cm.mu.RLock()
 	t := cm.conns[connID]
 	cm.mu.RUnlock()
 	if t != nil {
-		t.SendUnreliable(data)
+		return t.SendUnreliable(data)
 	}
+	return SendResult{Disposition: SendNoRoute}
 }
 
 // SendReliable sends a message reliably (login, spawn, state changes).
-func (cm *ConnManager) SendReliable(connID uint32, data []byte) {
+func (cm *ConnManager) SendReliable(connID uint32, data []byte) SendResult {
 	cm.mu.RLock()
 	t := cm.conns[connID]
 	cm.mu.RUnlock()
 	if t != nil {
-		t.SendReliable(data)
+		return t.SendReliable(data)
 	}
+	return SendResult{Disposition: SendNoRoute}
 }
 
 // InjectInput appends data to the channel 0x00 input queue for a connection,
@@ -218,13 +220,17 @@ func (cm *ConnManager) Unregister(id uint32) {
 	cm.events <- PlayerEvent{ConnID: id, Disconnect: true}
 }
 
-// AddTransport registers any Transport and returns its assigned connection ID.
-func (cm *ConnManager) AddTransport(t Transport) uint32 {
-	connID := cm.nextID.Add(1)
+func (cm *ConnManager) registerTransport(connID uint32, t Transport) {
 	cm.mu.Lock()
 	cm.conns[connID] = t
 	cm.mu.Unlock()
 	cm.events <- PlayerEvent{ConnID: connID, Connected: true}
+}
+
+// AddTransport registers any Transport and returns its assigned connection ID.
+func (cm *ConnManager) AddTransport(t Transport) uint32 {
+	connID := cm.nextID.Add(1)
+	cm.registerTransport(connID, t)
 	return connID
 }
 
@@ -238,10 +244,13 @@ func (cm *ConnManager) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	conn := newConn(0, ws) // ID assigned by AddTransport
+	// Allocate the ID before the write pump starts. Conn.id is immutable after
+	// construction, so writers, diagnostics, and event consumers can never race
+	// with a post-publication ID assignment.
+	connID := cm.nextID.Add(1)
+	conn := newConn(connID, ws)
 	t := NewWSTransport(conn)
-	connID := cm.AddTransport(t)
-	conn.id = connID
+	cm.registerTransport(connID, t)
 
 	// Record the remote address for auth handlers (rate limiting, audit logs).
 	// r.RemoteAddr is set by the HTTP server from the TCP connection before any

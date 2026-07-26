@@ -17,12 +17,16 @@ import (
 // mockTransport satisfies net.Transport for testing.
 type mockTransport struct{}
 
-func (m *mockTransport) SendReliable(data []byte)   {}
-func (m *mockTransport) SendUnreliable(data []byte) {}
-func (m *mockTransport) DrainInput() [][]byte       { return nil }
-func (m *mockTransport) DrainOpInput() [][]byte     { return nil }
-func (m *mockTransport) InjectInput(_ []byte)       {}
-func (m *mockTransport) Close()                     {}
+func (m *mockTransport) SendReliable(data []byte) net.SendResult {
+	return net.SendResult{Disposition: net.SendQueued, Delivery: net.DeliveryReliableOrdered}
+}
+func (m *mockTransport) SendUnreliable(data []byte) net.SendResult {
+	return net.SendResult{Disposition: net.SendQueued, Delivery: net.DeliveryReliableOrdered}
+}
+func (m *mockTransport) DrainInput() [][]byte   { return nil }
+func (m *mockTransport) DrainOpInput() [][]byte { return nil }
+func (m *mockTransport) InjectInput(_ []byte)   {}
+func (m *mockTransport) Close()                 {}
 
 func newTestGameWorld() (*GameWorld, *net.ConnManager) {
 	log := mmokit.NewLogger()
@@ -54,6 +58,105 @@ func addMockConn(gw *GameWorld, cm *net.ConnManager) uint32 {
 	connID := cm.AddTransport(&mockTransport{})
 	<-cm.Events() // drain connect event
 	return connID
+}
+
+func TestPlayerTransfer_PreservesSourceContinuityReplicaWithoutTombstone(t *testing.T) {
+	gw, cm := newTestGameWorld()
+	connID := addMockConn(gw, cm)
+	gw.Players.RegisterPlayer(connID, "player")
+	sess := gw.Players.ByConnID(connID)
+	sess.UserID = testUserID(sess.Username)
+	if err := gw.Players.Transition(sess, mmokit.StateActive); err != nil {
+		t.Fatalf("activate player session: %v", err)
+	}
+
+	entity := gw.stage.Spawn(
+		mmokit.Position{X: 100, Y: 200},
+		mmokit.Collider{Radius: 5},
+	).Handle()
+	netID := gw.stage.NetworkIDMap().Get(entity).ID
+	sess.Entity = entity
+	if err := gw.stage.DemoteLiveToReplica(netID, "cell_1_0"); err != nil {
+		t.Fatalf("demote source entity: %v", err)
+	}
+	gw.Engine().BeginRemovalTick()
+
+	if err := gw.Players.Transition(sess, mmokit.StateTransferring); err != nil {
+		t.Fatalf("transition player session: %v", err)
+	}
+	gw.Engine().FlushRemovals()
+
+	if sess.Entity != (mmokit.EntityHandle{}) {
+		t.Fatalf("source session entity = %v, want detached zero handle", sess.Entity)
+	}
+	if !gw.stage.ECSWorld().Alive(entity) {
+		t.Fatal("game transfer cleanup removed source continuity replica")
+	}
+	if !gw.Spatial.IsRegistered(entity) {
+		t.Fatal("game transfer cleanup deregistered source continuity replica from spatial AoI")
+	}
+	if got, presence, ok := gw.stage.LookupNetID(netID); !ok || got != entity || presence != pkguniverse.PresenceReplica {
+		t.Fatalf("source netID slot = (%v, %v, %v), want original entity PresenceReplica", got, presence, ok)
+	}
+	if got := gw.Engine().SampleRemovedNetIDs(); len(got) != 0 {
+		t.Fatalf("game transfer cleanup published false tombstones: %v", got)
+	}
+	saved := gw.PlayerDB.GetByUserID(sess.UserID)
+	if saved == nil {
+		t.Fatal("active transfer did not run the persistence checkpoint")
+	}
+	if !saved.HasSave || saved.X != 100 || saved.Y != 200 {
+		t.Fatalf("persisted transfer state = {HasSave:%v X:%v Y:%v}, want {true 100 200}", saved.HasSave, saved.X, saved.Y)
+	}
+	gw.PlayerDB.mu.RLock()
+	dirty := gw.PlayerDB.dirty[sess.UserID]
+	gw.PlayerDB.mu.RUnlock()
+	if !dirty {
+		t.Fatal("active transfer persistence checkpoint did not mark player state dirty")
+	}
+}
+
+func TestDeadPlayerTransfer_PreservesSourceContinuityReplicaWithoutTombstone(t *testing.T) {
+	gw, cm := newTestGameWorld()
+	connID := addMockConn(gw, cm)
+	gw.Players.RegisterPlayer(connID, "dead-player")
+	sess := gw.Players.ByConnID(connID)
+	gw.Players.AddTransition(mmokit.StateTransition{From: mmokit.StatePending, To: StateDead})
+	if err := gw.Players.Transition(sess, StateDead); err != nil {
+		t.Fatalf("enter dead state: %v", err)
+	}
+
+	entity := gw.stage.Spawn(
+		mmokit.Position{X: 300, Y: 400},
+		mmokit.Collider{Radius: 5},
+	).Handle()
+	netID := gw.stage.NetworkIDMap().Get(entity).ID
+	sess.Entity = entity
+	if err := gw.stage.DemoteLiveToReplica(netID, "cell_1_0"); err != nil {
+		t.Fatalf("demote source entity: %v", err)
+	}
+	gw.Engine().BeginRemovalTick()
+
+	if err := gw.Players.Transition(sess, mmokit.StateTransferring); err != nil {
+		t.Fatalf("transition dead player session: %v", err)
+	}
+	gw.Engine().FlushRemovals()
+
+	if sess.Entity != (mmokit.EntityHandle{}) {
+		t.Fatalf("source session entity = %v, want detached zero handle", sess.Entity)
+	}
+	if !gw.stage.ECSWorld().Alive(entity) {
+		t.Fatal("dead-player transfer cleanup removed source continuity replica")
+	}
+	if !gw.Spatial.IsRegistered(entity) {
+		t.Fatal("dead-player transfer cleanup deregistered source continuity replica from spatial AoI")
+	}
+	if got, presence, ok := gw.stage.LookupNetID(netID); !ok || got != entity || presence != pkguniverse.PresenceReplica {
+		t.Fatalf("source netID slot = (%v, %v, %v), want original entity PresenceReplica", got, presence, ok)
+	}
+	if got := gw.Engine().SampleRemovedNetIDs(); len(got) != 0 {
+		t.Fatalf("dead-player transfer cleanup published false tombstones: %v", got)
+	}
 }
 
 // ---------------------------------------------------------------------------

@@ -4,10 +4,13 @@ package net
 // UDP, etc.). Messages are complete application frames ([]byte); the
 // client-facing protocol is not protobuf.
 type Transport interface {
-	// SendReliable sends a message that must be delivered (e.g. login, spawn, state changes).
-	SendReliable(data []byte)
-	// SendUnreliable sends a message that can be dropped (e.g. world updates).
-	SendUnreliable(data []byte)
+	// SendReliable submits a message through the transport's strongest
+	// available delivery path. The result reports the guarantee actually
+	// provided; a queued result is transport acceptance, not a remote ACK.
+	SendReliable(data []byte) SendResult
+	// SendUnreliable submits a message through the transport's hot update path.
+	// Ordered transports may still report a stronger delivery class.
+	SendUnreliable(data []byte) SendResult
 	// DrainInput returns all queued inbound messages (channel 0x00) and clears the queue.
 	// Typed client-input frames ride this channel after Plan 1 Phase 5.
 	DrainInput() [][]byte

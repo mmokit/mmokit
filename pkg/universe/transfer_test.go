@@ -1,7 +1,12 @@
 package universe
 
 import (
+	"encoding/binary"
+	"fmt"
+	"strings"
 	"testing"
+
+	"github.com/google/uuid"
 
 	"github.com/zenion/mmoserver/pkg/component"
 )
@@ -40,6 +45,102 @@ func TestTransferFrame_EpochRoundtrip(t *testing.T) {
 	}
 	if out.NetworkID != in.NetworkID {
 		t.Errorf("NetworkID round-trip: got %d, want %d", out.NetworkID, in.NetworkID)
+	}
+}
+
+func TestTransferFrame_StreamGenerationRoundtripAndPeek(t *testing.T) {
+	userID := uuid.MustParse("8ebc2a6d-d92e-42a8-a8b9-a047b2b94ba7")
+	for _, generation := range []uint32{0, 7, ^uint32(0)} {
+		t.Run(fmt.Sprintf("generation_%d", generation), func(t *testing.T) {
+			in := &TransferFrame{
+				NetworkID:        42,
+				Epoch:            9,
+				StreamGeneration: generation,
+				EntityType:       1,
+				ConnID:           77,
+				GatewayID:        "gateway-a",
+				GatewayConnID:    88,
+				Username:         "alice",
+				UserID:           userID,
+			}
+			data, err := MarshalTransferFrame(in)
+			if err != nil {
+				t.Fatalf("MarshalTransferFrame: %v", err)
+			}
+			out, err := UnmarshalTransferFrame(data)
+			if err != nil {
+				t.Fatalf("UnmarshalTransferFrame: %v", err)
+			}
+			if out.StreamGeneration != generation {
+				t.Fatalf("StreamGeneration round-trip = %d, want %d", out.StreamGeneration, generation)
+			}
+			connID, peekGeneration, gatewayID, gatewayConnID, username, peekUserID := PeekTransferPlayer(data)
+			if connID != in.ConnID || peekGeneration != generation || gatewayID != in.GatewayID ||
+				gatewayConnID != in.GatewayConnID || username != in.Username || peekUserID != userID {
+				t.Fatalf("PeekTransferPlayer = (%d,%d,%q,%d,%q,%s), want (%d,%d,%q,%d,%q,%s)",
+					connID, peekGeneration, gatewayID, gatewayConnID, username, peekUserID,
+					in.ConnID, generation, in.GatewayID, in.GatewayConnID, in.Username, userID)
+			}
+		})
+	}
+}
+
+func TestUnmarshalTransferFrame_RejectsShiftedVariableTail(t *testing.T) {
+	data, err := MarshalTransferFrame(&TransferFrame{})
+	if err != nil {
+		t.Fatalf("MarshalTransferFrame: %v", err)
+	}
+	const gatewayLengthOffset = 4 + 4 + 4 + 1 + 4
+	data[gatewayLengthOffset] = 60
+	if _, err := UnmarshalTransferFrame(data); err == nil {
+		t.Fatal("UnmarshalTransferFrame accepted a gateway length that shifts the fixed tail past the buffer")
+	}
+}
+
+func TestUnmarshalTransferFrameRejectsImpossibleComponentCountBeforeAllocation(t *testing.T) {
+	data, err := MarshalTransferFrame(&TransferFrame{})
+	if err != nil {
+		t.Fatalf("MarshalTransferFrame: %v", err)
+	}
+	binary.LittleEndian.PutUint16(data[len(data)-2:], ^uint16(0))
+	if _, err := UnmarshalTransferFrame(data); err == nil || !strings.Contains(err.Error(), "component count") {
+		t.Fatalf("UnmarshalTransferFrame error = %v, want impossible component count", err)
+	}
+}
+
+func TestMarshalTransferFrameRejectsUnrepresentableLengths(t *testing.T) {
+	tests := []struct {
+		name  string
+		frame *TransferFrame
+		want  string
+	}{
+		{
+			name:  "gateway id",
+			frame: &TransferFrame{GatewayID: string(make([]byte, 256))},
+			want:  "gateway id",
+		},
+		{
+			name:  "username",
+			frame: &TransferFrame{Username: string(make([]byte, 256))},
+			want:  "username",
+		},
+		{
+			name:  "component count",
+			frame: &TransferFrame{Components: make([]ComponentSlice, 65536)},
+			want:  "component count",
+		},
+		{
+			name:  "component data",
+			frame: &TransferFrame{Components: []ComponentSlice{{Data: make([]byte, 65536)}}},
+			want:  "component 0 data",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if _, err := MarshalTransferFrame(tt.frame); err == nil || !strings.Contains(err.Error(), tt.want) {
+				t.Fatalf("MarshalTransferFrame error = %v, want error containing %q", err, tt.want)
+			}
+		})
 	}
 }
 

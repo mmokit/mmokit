@@ -1,7 +1,11 @@
 package game
 
 import (
+	"math"
+	"time"
+
 	gamecomp "github.com/zenion/mmoserver/internal/component"
+	"github.com/zenion/mmoserver/pkg/coords"
 	"github.com/zenion/mmoserver/pkg/mmokit"
 )
 
@@ -9,8 +13,9 @@ import (
 // lifecycle handling (PlayerOwnState, auto-broadcast typed events).
 type NetworkSystem struct {
 	mmokit.SystemBase
-	gw       *GameWorld
+	gw      *GameWorld
 	replSys *mmokit.ReplicationSystem
+	clock   mmokit.ClusterClock
 
 	lockVictims mmokit.Query[struct {
 		LB *gamecomp.LockedBy
@@ -43,22 +48,40 @@ func (s *NetworkSystem) Init() {
 	if p := gw.stage.Process(); p != nil {
 		clock = p.ClusterClock
 	}
+	s.clock = clock
 	cfg := mmokit.DefaultReplicationConfig(gw.eng, gw.Spatial, clock)
-	// StateDocked players keep their entity (Dormant + at station center), so
-	// they're still a valid viewer with a position. Including them in the
-	// viewer list keeps WorldUpdateMsg flowing — tick counter, AoI of
-	// other ships flying past the station — so the HUD stays alive while
-	// the player is hangared.
-	cfg.Viewers = mmokit.NewPlayerViewerSource(gw.eng.ECS, gw.Players, mmokit.StateActive, StateDocking, StateDocked)
+	// Dead and docked players keep their entities, so they remain valid viewers
+	// with positions. Keeping those connected lifecycle states in the viewer
+	// list preserves one ordered replication stream while their own Dormant
+	// entity stays hidden from other players.
+	cfg.Viewers = mmokit.NewPlayerViewerSource(
+		gw.eng.ECS,
+		gw.Players,
+		mmokit.StateActive,
+		StateDead,
+		StateDocking,
+		StateDocked,
+	)
 	cfg.Replicators = replicators
 	cfg.AoIRadius = gw.Config.AoIRadius
 	cfg.GetAoIRadius = func() float32 { return gw.Config.AoIRadius }
 	cfg.FullRefreshInterval = gw.FullRefreshInterval
-	cfg.RemovedIDs = func() []uint32 { return gw.eng.RemovedNetIDs }
+	cfg.RemovedIDs = gw.eng.SampleRemovedNetIDs
 	cfg.OnBeforeTick = s.beforeTick
 	cfg.OnBeforeSend = s.beforeSend
 	cfg.OnAfterSend = s.afterSend
 	cfg.OnAfterTick = s.afterTick
+	cfg.ProcessedInputSeq = func(viewer *mmokit.ViewerInfo) (uint32, bool) {
+		if !gw.stage.ECSWorld().Alive(viewer.Entity) {
+			return 0, false
+		}
+		entity := mmokit.EntityFromECS(gw.stage, viewer.Entity)
+		mt := mmokit.Get[mmokit.MoveTarget](entity)
+		if mt == nil || mt.Sequence == 0 {
+			return 0, false
+		}
+		return mt.Sequence, true
+	}
 	s.replSys = mmokit.NewReplicationSystem(cfg)
 }
 
@@ -90,10 +113,72 @@ func (s *NetworkSystem) beforeTick(tick uint32) {
 func (s *NetworkSystem) beforeSend(viewer *mmokit.ViewerInfo, visible map[uint32]bool) {
 	gw := s.gw
 
-	// Send own-entity state.
-	if sess := gw.Players.ByConnID(viewer.ConnID); sess != nil && sess.State == mmokit.StateActive && gw.stage.ECSWorld().Alive(sess.Entity) {
-		s.sendOwnState(viewer.ConnID, sess.Entity)
+	// Send an authoritative movement seed for every live viewer state. Docking
+	// and docked sessions still consume movement sequence numbers, so omitting
+	// their seed would leave the client unable to retire pending commands. The
+	// PredictionTicks tells the client how many ShipDynamics steps are safe.
+	if sess := gw.Players.ByConnID(viewer.ConnID); sess != nil && gw.stage.ECSWorld().Alive(sess.Entity) {
+		entity := mmokit.EntityFromECS(gw.stage, sess.Entity)
+		predictionTicks := movementPredictionTicks(sess.State, entity, gw.eng.TickIntervalMs())
+		s.sendOwnState(viewer.ConnID, sess.Entity, viewer.StreamEpoch, predictionTicks)
 	}
+}
+
+const maxMovementPredictionHorizonMs uint64 = 250
+
+func movementPredictionTicks(state mmokit.PlayerState, entity mmokit.Entity, tickIntervalMs uint64) uint8 {
+	if state != mmokit.StateActive {
+		return 0
+	}
+	// Supercruise's channel phase roots the ship in a later system, after
+	// ShipDynamics has run. The lightweight client predictor deliberately does
+	// not reproduce that surrounding system, so it must wait for authority.
+	if supercruise := mmokit.Get[gamecomp.Supercruise](entity); supercruise != nil {
+		if supercruise.Phase == gamecomp.SupercruiseChanneling {
+			return 0
+		}
+	}
+	if tickIntervalMs == 0 {
+		return 0
+	}
+
+	maxTicks := uint8(1 + (maxMovementPredictionHorizonMs-1)/tickIntervalMs)
+	// The seed carries one aggregate speed multiplier. Bound replay to the
+	// earliest movement modifier expiry so packet loss cannot extend it past
+	// the ShipDynamics step on which authority last consumes it. Repeated
+	// float32 subtraction intentionally mirrors StatusEffectSystem.TickDown;
+	// ceil(duration/dt) differs at representational boundaries.
+	ticks := maxTicks
+	if effects := mmokit.Get[gamecomp.StatusEffects](entity); effects != nil {
+		if speedMultiplier := EffectiveSpeedMul(effects); math.IsNaN(float64(speedMultiplier)) || math.IsInf(float64(speedMultiplier), 0) {
+			return 0
+		}
+		dt := float32(tickIntervalMs) / 1000
+		for _, statusType := range [...]gamecomp.StatusType{
+			gamecomp.StatusAfterburner,
+			gamecomp.StatusSlow,
+			gamecomp.StatusSupercruise,
+		} {
+			effect := effects.Get(statusType)
+			if effect == nil {
+				continue
+			}
+			if math.IsNaN(float64(effect.Duration)) || math.IsNaN(float64(effect.Value)) {
+				return 0
+			}
+			remaining := effect.Duration
+			for uses := uint8(1); uses <= maxTicks; uses++ {
+				remaining -= dt
+				if remaining <= 0 {
+					if uses < ticks {
+						ticks = uses
+					}
+					break
+				}
+			}
+		}
+	}
+	return ticks
 }
 
 // afterSend filters auto-broadcast typed events by AoI and writes a single
@@ -136,11 +221,12 @@ func (s *NetworkSystem) afterTick(tick uint32) {
 
 // sendOwnState builds and sends a typed PlayerOwnState event to the owning
 // player each tick.
-func (s *NetworkSystem) sendOwnState(connID uint32, entity mmokit.EntityHandle) {
+func (s *NetworkSystem) sendOwnState(connID uint32, entity mmokit.EntityHandle, streamEpoch uint32, predictionTicks uint8) {
 	gw := s.gw
 	e := mmokit.EntityFromECS(gw.stage, entity)
 
 	msg := &PlayerOwnState{}
+	msg.Movement = s.buildMovementState(e, streamEpoch, predictionTicks)
 
 	// Ability cooldowns
 	if abilities := mmokit.Get[gamecomp.AbilitySet](e); abilities != nil {
@@ -181,4 +267,51 @@ func (s *NetworkSystem) sendOwnState(connID uint32, entity mmokit.EntityHandle) 
 	}
 
 	mmokit.SendEvent(gw.stage, connID, msg)
+}
+
+func (s *NetworkSystem) buildMovementState(entity mmokit.Entity, streamEpoch uint32, predictionTicks uint8) PlayerMovementState {
+	gw := s.gw
+	pos := mmokit.Get[mmokit.Position](entity)
+	cell := mmokit.Get[mmokit.CellCoord](entity)
+	vel := mmokit.Get[mmokit.Velocity](entity)
+	rot := mmokit.Get[mmokit.Rotation](entity)
+	ship := mmokit.Get[gamecomp.ShipControl](entity)
+	target := mmokit.Get[mmokit.MoveTarget](entity)
+	netID := mmokit.Get[mmokit.NetworkID](entity)
+	if pos == nil || cell == nil || vel == nil || rot == nil || ship == nil || target == nil || netID == nil {
+		return PlayerMovementState{}
+	}
+
+	producedAtMs := uint64(time.Now().UnixMilli())
+	if s.clock != nil {
+		producedAtMs = s.clock.TickTime(gw.eng.TickIntervalMs())
+	}
+	cellSize := coords.CellSize
+	return PlayerMovementState{
+		Valid:             true,
+		PredictionTicks:   predictionTicks,
+		Tick:              gw.eng.Tick,
+		ProducedAtMs:      producedAtMs,
+		EntityNetID:       netID.ID,
+		StreamEpoch:       streamEpoch,
+		ProcessedSequence: target.Sequence,
+		TickIntervalMs:    uint32(gw.eng.TickIntervalMs()),
+		WorldX:            pos.X + float32(cell.CellX)*cellSize,
+		WorldY:            pos.Y + float32(cell.CellY)*cellSize,
+		VelocityX:         vel.X,
+		VelocityY:         vel.Y,
+		Angle:             rot.Angle,
+		AngularVelocity:   ship.AngularVel,
+		TargetActive:      target.Active,
+		TargetX:           target.LocalX + float32(target.CellX)*cellSize,
+		TargetY:           target.LocalY + float32(target.CellY)*cellSize,
+		Thrust:            ship.Thrust,
+		TurnRate:          ship.TurnRate,
+		TurnAccel:         ship.TurnAccel,
+		MaxSpeed:          ship.MaxSpeed,
+		SpeedMultiplier:   EffectiveSpeedMul(mmokit.Get[gamecomp.StatusEffects](entity)),
+		DragCoefficient:   gw.Config.ShipDragCoeff,
+		ArrivalDistance:   gw.Config.MoveArrivalDist,
+		DecelerationDist:  gw.Config.MoveDecelDist,
+	}
 }

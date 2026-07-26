@@ -3,6 +3,8 @@
 /** Entity kind 0. */
 export interface ShipEntity {
   netID: number;
+  /** Authority generation for this netID (uint32 serial). */
+  authorityEpoch: number;
   entityType: 0;
   /**
    * Cluster-clock stamp (Unix ms) from the authoritative producer at
@@ -46,6 +48,8 @@ export interface ShipStatusEffectsItem {
 /** Entity kind 1. */
 export interface AsteroidEntity {
   netID: number;
+  /** Authority generation for this netID (uint32 serial). */
+  authorityEpoch: number;
   entityType: 1;
   /**
    * Cluster-clock stamp (Unix ms) from the authoritative producer at
@@ -68,6 +72,8 @@ export interface AsteroidEntity {
 /** Entity kind 2. */
 export interface StationEntity {
   netID: number;
+  /** Authority generation for this netID (uint32 serial). */
+  authorityEpoch: number;
   entityType: 2;
   /**
    * Cluster-clock stamp (Unix ms) from the authoritative producer at
@@ -88,6 +94,8 @@ export interface StationEntity {
 /** Entity kind 3. */
 export interface LootCrateEntity {
   netID: number;
+  /** Authority generation for this netID (uint32 serial). */
+  authorityEpoch: number;
   entityType: 3;
   /**
    * Cluster-clock stamp (Unix ms) from the authoritative producer at
@@ -116,6 +124,8 @@ export interface LootCrateItemsItem {
 /** Entity kind 4. */
 export interface NPCEntity {
   netID: number;
+  /** Authority generation for this netID (uint32 serial). */
+  authorityEpoch: number;
   entityType: 4;
   /**
    * Cluster-clock stamp (Unix ms) from the authoritative producer at
@@ -150,6 +160,8 @@ export interface NPCStatusEffectsItem {
 /** Entity kind 5. */
 export interface POIEntity {
   netID: number;
+  /** Authority generation for this netID (uint32 serial). */
+  authorityEpoch: number;
   entityType: 5;
   /**
    * Cluster-clock stamp (Unix ms) from the authoritative producer at
@@ -173,6 +185,8 @@ export interface POIEntity {
 /** Entity kind 6. */
 export interface AoEMarkerEntity {
   netID: number;
+  /** Authority generation for this netID (uint32 serial). */
+  authorityEpoch: number;
   entityType: 6;
   /**
    * Cluster-clock stamp (Unix ms) from the authoritative producer at
@@ -200,6 +214,8 @@ export interface AoEMarkerEntity {
 /** Entity kind 7. */
 export interface ProjectileEntity {
   netID: number;
+  /** Authority generation for this netID (uint32 serial). */
+  authorityEpoch: number;
   entityType: 7;
   /**
    * Cluster-clock stamp (Unix ms) from the authoritative producer at
@@ -229,6 +245,8 @@ export interface ProjectileEntity {
 /** Entity kind 8. */
 export interface LineTelegraphEntity {
   netID: number;
+  /** Authority generation for this netID (uint32 serial). */
+  authorityEpoch: number;
   entityType: 8;
   /**
    * Cluster-clock stamp (Unix ms) from the authoritative producer at
@@ -254,6 +272,8 @@ export interface LineTelegraphEntity {
 /** Entity kind 9. */
 export interface DungeonEntity {
   netID: number;
+  /** Authority generation for this netID (uint32 serial). */
+  authorityEpoch: number;
   entityType: 9;
   /**
    * Cluster-clock stamp (Unix ms) from the authoritative producer at
@@ -276,6 +296,8 @@ export interface DungeonEntity {
 /** Entity kind 10. */
 export interface DungeonWallEntity {
   netID: number;
+  /** Authority generation for this netID (uint32 serial). */
+  authorityEpoch: number;
   entityType: 10;
   /**
    * Cluster-clock stamp (Unix ms) from the authoritative producer at
@@ -297,6 +319,8 @@ export interface DungeonWallEntity {
 /** Entity kind 11. */
 export interface DecorationEntity {
   netID: number;
+  /** Authority generation for this netID (uint32 serial). */
+  authorityEpoch: number;
   entityType: 11;
   /**
    * Cluster-clock stamp (Unix ms) from the authoritative producer at
@@ -331,6 +355,10 @@ export interface DeltaWorldUpdate {
    * never learn about cells, authority transfers, or server boundaries.
    */
   freshSnapshot: boolean;
+  /** True when the decoder adopted a new explicit stream generation. */
+  streamChanged: boolean;
+  /** Input sequence causally reflected by this frame; null on legacy/unsequenced streams. */
+  processedInputSeq: number | null;
   entered: AnyEntity[];
   updated: AnyEntity[];
   removed: number[];

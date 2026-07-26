@@ -1,6 +1,13 @@
 import type { SpaceClient } from "../sdk/index.js";
 import type { AbilityCastEvent, ClientEntity, Explosion, RangeRingEvent, Toast } from "./types";
-import { newClockSync, type ClockSync } from "../sdk/_core/clock-sync.js";
+import type { ClockSync } from "../sdk/_core/clock-sync.js";
+import {
+  AdaptivePlaybackController,
+  isForwardSequence,
+} from "../sdk/_core/playback-controller.js";
+import { PredictionBuffer } from "../sdk/_core/prediction-buffer.js";
+import { MAX_RENDER_DELAY, RENDER_DELAY, TICK_INTERVAL } from "./constants";
+import type { AuthoritativeShipPredictionSeed } from "./prediction";
 
 // Settlement currency item ID — must match server GameConfig.SettlementCurrencyID
 export const SETTLEMENT_CURRENCY_ID = 1;
@@ -59,6 +66,15 @@ export interface GameState {
   frameCount: number;
   /** Server wall-clock offset estimator for snapshot interpolation. */
   clockSync: ClockSync;
+  /** Connection-level jitter/loss estimator and monotonic render timeline. */
+  playback: AdaptivePlaybackController;
+  /** Unacknowledged click-to-move intents (pose replay is game-adapter owned). */
+  movementPrediction: PredictionBuffer<MovementPredictionInput>;
+  processedMovementSeq: number | null;
+  /** Newest owner-only authoritative checkpoint, accepted before paired ACK. */
+  movementSeed: AuthoritativeShipPredictionSeed | null;
+  /** Monotonic server-time cursor used by the local prediction render path. */
+  movementPredictionTimeMs: number | null;
 
   // Entities
   entities: Map<number, ClientEntity>;
@@ -195,7 +211,62 @@ export interface GameState {
   screenShake: { intensity: number; startTime: number; duration: number } | null;
 }
 
+export interface MovementPredictionInput {
+  active: boolean;
+  x: number;
+  y: number;
+  /** Estimated server-clock time at which the local player issued the command. */
+  issuedAtMs: number;
+}
+
+// A grace-period reconnect can attach a brand-new browser client to an
+// existing ship whose MoveTarget.Sequence is already non-zero. Seed the
+// client's shared input counter from the cumulative movement ACK so the next
+// command is newer in uint32 serial space instead of restarting at one and
+// being rejected until the old counter wraps.
+export function rebaseInputSequence(current: number, processed: number): number {
+  const currentSeq = current >>> 0;
+  const processedSeq = processed >>> 0;
+  if (currentSeq === 0 || isForwardSequence(currentSeq, processedSeq)) {
+    return processedSeq;
+  }
+  return currentSeq;
+}
+
+function createPlaybackController(tickIntervalMs = TICK_INTERVAL): AdaptivePlaybackController {
+  return new AdaptivePlaybackController({
+    tickIntervalMs,
+    minDelayMs: RENDER_DELAY,
+    maxDelayMs: MAX_RENDER_DELAY,
+  });
+}
+
+export function playbackTickInterval(tickRate: number): number {
+  return Number.isFinite(tickRate) && tickRate > 0
+    ? 1000 / tickRate
+    : TICK_INTERVAL;
+}
+
+/** Apply the gateway-advertised simulation rate before world frames arrive. */
+export function setPlaybackTickRate(state: GameState, tickRate: number): void {
+  const playback = createPlaybackController(playbackTickInterval(tickRate));
+  state.playback = playback;
+  state.clockSync = playback.clock;
+}
+
+/** Reset all connection-scoped timing/prediction state on a true reconnect. */
+export function resetNetworkPrediction(state: GameState): void {
+  const playback = createPlaybackController();
+  state.playback = playback;
+  state.clockSync = playback.clock;
+  state.movementPrediction.reset();
+  state.processedMovementSeq = null;
+  state.movementSeed = null;
+  state.movementPredictionTimeMs = null;
+}
+
 export function createInitialState(): GameState {
+  const playback = createPlaybackController();
   return {
     playerUsername: "",
     loggedIn: false,
@@ -212,7 +283,12 @@ export function createInitialState(): GameState {
     fps: 0,
     lastFpsTime: performance.now(),
     frameCount: 0,
-    clockSync: newClockSync(),
+    clockSync: playback.clock,
+    playback,
+    movementPrediction: new PredictionBuffer<MovementPredictionInput>(),
+    processedMovementSeq: null,
+    movementSeed: null,
+    movementPredictionTimeMs: null,
 
     entities: new Map(),
 

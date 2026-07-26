@@ -2,15 +2,16 @@
 package udpclient
 
 import (
+	"crypto/rand"
+	"encoding/binary"
 	"errors"
 	"fmt"
+	"io"
 	"log"
 	"net"
 	"sync"
+	"sync/atomic"
 	"time"
-
-	"crypto/rand"
-	"encoding/binary"
 
 	"github.com/zenion/mmoserver/pkg/net/udpproto"
 )
@@ -25,11 +26,33 @@ const (
 	connectionTimeout  = 10 * time.Second
 )
 
+// ErrReliableWindowFull reports that all reliable ring slots are still
+// awaiting ACKs. Callers may retry after the peer advances the ACK window.
+var ErrReliableWindowFull = errors.New("udp client: reliable send window full")
+
+// clientClockEpoch keeps activity timestamps atomic without giving up
+// time.Time's monotonic clock behavior.
+var clientClockEpoch = time.Now()
+
+func clientClockStamp(now time.Time) int64 {
+	return now.Sub(clientClockEpoch).Nanoseconds()
+}
+
+func advanceClientClock(clock *atomic.Int64, stamp int64) {
+	for {
+		previous := clock.Load()
+		if stamp <= previous || clock.CompareAndSwap(previous, stamp) {
+			return
+		}
+	}
+}
+
 type reliableEntry struct {
-	payload []byte
-	sentAt  time.Time
-	acked   bool
-	used    bool
+	seq         uint16
+	payload     []byte
+	firstSentAt time.Time
+	lastSentAt  time.Time
+	used        bool
 }
 
 // Client is a UDP game client that connects to the server.
@@ -43,6 +66,8 @@ type Client struct {
 	sendBuf [reliableBufSize]reliableEntry
 
 	// Inbound reliability tracking
+	recvMu   sync.Mutex
+	recvInit bool
 	recvSeq  uint16
 	recvBits uint32
 	ackDirty bool
@@ -52,11 +77,11 @@ type Client struct {
 	inCond  *sync.Cond
 	inbound [][]byte
 
-	lastRecv time.Time
-	lastSend time.Time
-	closed   bool
-	closeMu  sync.Mutex
-	done     chan struct{}
+	lastRecvTick atomic.Int64
+	lastSendTick atomic.Int64
+	closed       bool
+	closeMu      sync.Mutex
+	done         chan struct{}
 }
 
 // Dial connects to the game server at addr (e.g. "localhost:9000").
@@ -116,13 +141,14 @@ func Dial(addr string) (*Client, error) {
 	token := udpproto.MakeToken(clientSalt, serverSalt)
 
 	c := &Client{
-		conn:     conn,
-		token:    token,
-		inbound:  make([][]byte, 0, 32),
-		lastRecv: time.Now(),
-		lastSend: time.Now(),
-		done:     make(chan struct{}),
+		conn:    conn,
+		token:   token,
+		inbound: make([][]byte, 0, 32),
+		done:    make(chan struct{}),
 	}
+	now := clientClockStamp(time.Now())
+	c.lastRecvTick.Store(now)
+	c.lastSendTick.Store(now)
 	c.inCond = sync.NewCond(&c.inMu)
 
 	go c.readLoop()
@@ -134,31 +160,47 @@ func Dial(addr string) (*Client, error) {
 // SendReliable sends a message with reliability guarantees.
 func (c *Client) SendReliable(data []byte) error {
 	c.sendMu.Lock()
+	defer c.sendMu.Unlock()
+
+	c.closeMu.Lock()
+	closed := c.closed
+	c.closeMu.Unlock()
+	if closed {
+		return net.ErrClosed
+	}
+
 	seq := c.sendSeq
-	c.sendSeq++
 	idx := seq % reliableBufSize
+	if c.sendBuf[idx].used {
+		return ErrReliableWindowFull
+	}
+	c.sendSeq++
+
 	payload := make([]byte, len(data))
 	copy(payload, data)
+	now := time.Now()
 	c.sendBuf[idx] = reliableEntry{
-		payload: payload,
-		sentAt:  time.Now(),
-		acked:   false,
-		used:    true,
+		seq:         seq,
+		payload:     payload,
+		firstSentAt: now,
+		lastSentAt:  now,
+		used:        true,
 	}
-	c.sendMu.Unlock()
 
 	pkt := udpproto.EncodeReliable(c.token, seq, payload)
-	_, err := c.conn.Write(pkt)
-	c.lastSend = time.Now()
+	err := c.writePacket(pkt)
+	if err != nil {
+		// A rejected initial write must not leave a frame that maintenance can
+		// later retransmit despite the caller observing an error.
+		c.sendBuf[idx] = reliableEntry{}
+	}
 	return err
 }
 
 // SendUnreliable sends a message with no delivery guarantee.
 func (c *Client) SendUnreliable(data []byte) error {
 	pkt := udpproto.EncodeUnreliable(c.token, data)
-	_, err := c.conn.Write(pkt)
-	c.lastSend = time.Now()
-	return err
+	return c.writePacket(pkt)
 }
 
 // Recv blocks until a message is available and returns it.
@@ -182,20 +224,31 @@ func (c *Client) Recv() ([]byte, error) {
 
 // Close shuts down the client.
 func (c *Client) Close() error {
+	// Match SendReliable and maintenance's sendMu -> closeMu lock order. This
+	// makes close atomic with reliable admission and releases retained payloads.
+	c.sendMu.Lock()
 	c.closeMu.Lock()
 	if c.closed {
 		c.closeMu.Unlock()
+		c.sendMu.Unlock()
 		return nil
 	}
 	c.closed = true
 	close(c.done)
 	c.closeMu.Unlock()
+	clear(c.sendBuf[:])
+	c.sendMu.Unlock()
+
+	// Hold the condition lock while broadcasting so Recv cannot miss the close
+	// notification between checking c.closed and entering Cond.Wait.
+	c.inMu.Lock()
+	c.inCond.Broadcast()
+	c.inMu.Unlock()
 
 	// Send disconnect (best effort)
 	pkt := udpproto.EncodeDisconnect(c.token)
 	c.conn.Write(pkt)
 
-	c.inCond.Broadcast()
 	return c.conn.Close()
 }
 
@@ -222,13 +275,17 @@ func (c *Client) readLoop() {
 }
 
 func (c *Client) handlePacket(data []byte) {
+	if len(data) == 0 {
+		return
+	}
+
 	switch data[0] {
 	case udpproto.TypeUnreliable:
 		_, payload, err := udpproto.DecodeUnreliable(data)
 		if err != nil {
 			return
 		}
-		c.lastRecv = time.Now()
+		advanceClientClock(&c.lastRecvTick, clientClockStamp(time.Now()))
 		if len(payload) == 0 {
 			return // keepalive
 		}
@@ -242,9 +299,9 @@ func (c *Client) handlePacket(data []byte) {
 		if err != nil {
 			return
 		}
-		c.lastRecv = time.Now()
-		c.updateRecvTracking(seq)
-		if len(payload) > 0 {
+		advanceClientClock(&c.lastRecvTick, clientClockStamp(time.Now()))
+		deliver := c.updateRecvTracking(seq)
+		if deliver && len(payload) > 0 {
 			c.inMu.Lock()
 			c.inbound = append(c.inbound, payload)
 			c.inCond.Signal()
@@ -256,15 +313,21 @@ func (c *Client) handlePacket(data []byte) {
 		if err != nil {
 			return
 		}
-		c.lastRecv = time.Now()
+		advanceClientClock(&c.lastRecvTick, clientClockStamp(time.Now()))
 		c.processACK(ackSeq, ackBits)
 	}
 }
 
-func (c *Client) updateRecvTracking(seq uint16) {
-	if c.recvSeq == 0 && !c.ackDirty {
+func (c *Client) updateRecvTracking(seq uint16) bool {
+	c.recvMu.Lock()
+	defer c.recvMu.Unlock()
+
+	deliver := false
+	if !c.recvInit {
+		c.recvInit = true
 		c.recvSeq = seq
 		c.recvBits = 0
+		deliver = true
 	} else if udpproto.SeqGreaterThan(seq, c.recvSeq) {
 		diff := seq - c.recvSeq
 		if diff <= 32 {
@@ -273,31 +336,84 @@ func (c *Client) updateRecvTracking(seq uint16) {
 			c.recvBits = 0
 		}
 		c.recvSeq = seq
+		deliver = true
 	} else {
 		diff := c.recvSeq - seq
 		if diff > 0 && diff <= 32 {
-			c.recvBits |= 1 << (diff - 1)
+			bit := uint32(1) << (diff - 1)
+			if c.recvBits&bit == 0 {
+				c.recvBits |= bit
+				deliver = true
+			}
 		}
 	}
 	c.ackDirty = true
+	return deliver
 }
 
 func (c *Client) processACK(ackSeq uint16, ackBits uint32) {
 	c.sendMu.Lock()
 	defer c.sendMu.Unlock()
 
-	idx := ackSeq % reliableBufSize
-	if c.sendBuf[idx].used {
-		c.sendBuf[idx].acked = true
-	}
+	c.markAcked(ackSeq)
 	for i := uint32(0); i < 32; i++ {
 		if ackBits&(1<<i) != 0 {
-			s := ackSeq - uint16(i) - 1
-			idx := s % reliableBufSize
-			if c.sendBuf[idx].used {
-				c.sendBuf[idx].acked = true
-			}
+			c.markAcked(ackSeq - uint16(i) - 1)
 		}
+	}
+}
+
+func (c *Client) markAcked(seq uint16) {
+	idx := seq % reliableBufSize
+	entry := &c.sendBuf[idx]
+	if entry.used && entry.seq == seq {
+		*entry = reliableEntry{}
+	}
+}
+
+func (c *Client) writePacket(data []byte) error {
+	c.closeMu.Lock()
+	defer c.closeMu.Unlock()
+	if c.closed {
+		return net.ErrClosed
+	}
+
+	n, err := c.conn.Write(data)
+	if err != nil {
+		return err
+	}
+	if n != len(data) {
+		return io.ErrShortWrite
+	}
+	c.lastSendTick.Store(clientClockStamp(time.Now()))
+	return nil
+}
+
+func (c *Client) takePendingACK() (uint16, uint32, bool) {
+	c.recvMu.Lock()
+	defer c.recvMu.Unlock()
+	if !c.ackDirty {
+		return 0, 0, false
+	}
+
+	ackSeq, ackBits := c.recvSeq, c.recvBits
+	c.ackDirty = false
+	return ackSeq, ackBits, true
+}
+
+func (c *Client) sendACK() {
+	ackSeq, ackBits, ok := c.takePendingACK()
+	if !ok {
+		return
+	}
+
+	pkt := udpproto.EncodeACK(c.token, ackSeq, ackBits)
+	if err := c.writePacket(pkt); err != nil && !errors.Is(err, net.ErrClosed) {
+		// Preserve a newer dirty state and retry the latest receive-window
+		// snapshot after transient write failures.
+		c.recvMu.Lock()
+		c.ackDirty = true
+		c.recvMu.Unlock()
 	}
 }
 
@@ -310,49 +426,50 @@ func (c *Client) tickLoop() {
 		case <-c.done:
 			return
 		case now := <-ticker.C:
-			// Connection timeout
-			if now.Sub(c.lastRecv) > connectionTimeout {
-				log.Printf("udp client: connection timeout")
-				c.Close()
+			if !c.maintenanceTick(now) {
 				return
-			}
-
-			// Retransmit
-			c.sendMu.Lock()
-			for i := range c.sendBuf {
-				entry := &c.sendBuf[i]
-				if !entry.used || entry.acked {
-					continue
-				}
-				age := now.Sub(entry.sentAt)
-				if age > reliableTimeout {
-					c.sendMu.Unlock()
-					log.Printf("udp client: reliable message timed out")
-					c.Close()
-					return
-				}
-				if age >= retransmitInterval {
-					seq := uint16(i)
-					pkt := udpproto.EncodeReliable(c.token, seq, entry.payload)
-					c.conn.Write(pkt)
-					entry.sentAt = now
-				}
-			}
-			c.sendMu.Unlock()
-
-			// Send ACK
-			if c.ackDirty {
-				pkt := udpproto.EncodeACK(c.token, c.recvSeq, c.recvBits)
-				c.conn.Write(pkt)
-				c.ackDirty = false
-			}
-
-			// Keepalive
-			if now.Sub(c.lastSend) > keepaliveInterval {
-				pkt := udpproto.EncodeUnreliable(c.token, nil)
-				c.conn.Write(pkt)
-				c.lastSend = now
 			}
 		}
 	}
+}
+
+func (c *Client) maintenanceTick(now time.Time) bool {
+	nowTick := clientClockStamp(now)
+	if time.Duration(nowTick-c.lastRecvTick.Load()) > connectionTimeout {
+		log.Printf("udp client: connection timeout")
+		c.Close()
+		return false
+	}
+
+	c.sendMu.Lock()
+	for i := range c.sendBuf {
+		entry := &c.sendBuf[i]
+		if !entry.used {
+			continue
+		}
+		if now.Sub(entry.firstSentAt) > reliableTimeout {
+			c.sendMu.Unlock()
+			log.Printf("udp client: reliable message timed out")
+			c.Close()
+			return false
+		}
+		if now.Sub(entry.lastSentAt) >= retransmitInterval {
+			pkt := c.encodeReliableEntry(entry)
+			c.writePacket(pkt)
+			entry.lastSentAt = now
+		}
+	}
+	c.sendMu.Unlock()
+
+	c.sendACK()
+
+	if time.Duration(nowTick-c.lastSendTick.Load()) > keepaliveInterval {
+		pkt := udpproto.EncodeUnreliable(c.token, nil)
+		c.writePacket(pkt)
+	}
+	return true
+}
+
+func (c *Client) encodeReliableEntry(entry *reliableEntry) []byte {
+	return udpproto.EncodeReliable(c.token, entry.seq, entry.payload)
 }

@@ -101,10 +101,18 @@ func (idx *netIDIndex) Enter(netID uint32, entity ecs.Entity, to EntityPresence)
 	return TransitionResult{Action: ActionRejected}
 }
 
-func (idx *netIDIndex) Exit(netID uint32) {
+// ExitEntity removes netID only when its slot still belongs to entity. This
+// identity check is required by rollback cleanup: a rejected duplicate ECS row
+// must never evict the pre-existing Live or Replica slot it collided with.
+func (idx *netIDIndex) ExitEntity(netID uint32, entity ecs.Entity) bool {
 	idx.mu.Lock()
 	defer idx.mu.Unlock()
+	cur, ok := idx.slots[netID]
+	if !ok || cur.Entity != entity {
+		return false
+	}
 	delete(idx.slots, netID)
+	return true
 }
 
 // Demote is the explicit Live → Replica transition used by

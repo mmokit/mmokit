@@ -1,5 +1,6 @@
 using System;
 using System.Diagnostics;
+using System.IO;
 using System.Net;
 using System.Net.Sockets;
 using System.Security.Cryptography;
@@ -64,8 +65,11 @@ namespace Mmokit.Sdk.Core
 
             // Monotonic clock in ms (Stopwatch — netstandard2.1 has no Environment.TickCount64).
             var clock = Stopwatch.StartNew();
-            var t = new UdpTransport(raw => { try { socket.Send(raw, raw.Length); } catch { /* closed */ } },
-                                     () => clock.ElapsedMilliseconds, token);
+            var t = new UdpTransport(raw =>
+            {
+                int sent = socket.Send(raw, raw.Length);
+                if (sent != raw.Length) throw new IOException("UDP socket reported a short datagram write");
+            }, () => clock.ElapsedMilliseconds, token);
             t.AttachSocket(socket);
             return t;
         }
@@ -85,8 +89,20 @@ namespace Mmokit.Sdk.Core
             {
                 byte[] data;
                 try { data = _socket!.Receive(ref remote); }
-                catch { return; } // socket closed
-                if (data.Length > 0) HandlePacket(data); // inbound chokepoint
+                catch
+                {
+                    if (!ct.IsCancellationRequested) Close();
+                    return;
+                }
+                if (data.Length > 0)
+                {
+                    try { HandlePacket(data); } // inbound chokepoint
+                    catch
+                    {
+                        Close();
+                        return;
+                    }
+                }
             }
         }
 
@@ -96,7 +112,17 @@ namespace Mmokit.Sdk.Core
             {
                 try { Thread.Sleep((int)RetransmitIntervalMs); } catch { return; }
                 if (ct.IsCancellationRequested) return;
-                if (!Tick()) return; // timed out → Tick already closed
+                try
+                {
+                    if (!Tick()) return; // timed out / background I/O failed
+                }
+                catch
+                {
+                    // Last-resort containment for an unexpected clock/protocol
+                    // exception: background tasks must not fault silently.
+                    Close();
+                    return;
+                }
             }
         }
 

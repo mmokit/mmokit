@@ -18,6 +18,7 @@ import (
 
 	meshpb "github.com/zenion/mmoserver/gen/go/meshpb"
 	"github.com/zenion/mmoserver/pkg/logger"
+	pkgnet "github.com/zenion/mmoserver/pkg/net"
 	"github.com/zenion/mmoserver/pkg/service"
 )
 
@@ -27,6 +28,12 @@ const (
 	peerOutQueueSize = 256                    // depth of per-peer outbound channel
 	peerSendDeadline = 250 * time.Millisecond // reliable send block cap
 	meshMaxMsgBytes  = 16 << 20               // 16MB send/recv cap
+)
+
+var (
+	errPeerNoRoute       = errors.New("no peer route")
+	errPeerBackpressure  = errors.New("mesh peer backpressure")
+	errPeerIndeterminate = errors.New("mesh peer send outcome indeterminate")
 )
 
 // peerKind distinguishes node peers (other game server processes) from
@@ -55,13 +62,13 @@ const (
 //   - The peers map is guarded by a sync.RWMutex. All reads take RLock;
 //     mutations (ConnectPeer, dropPeer, Shutdown) take Lock.
 type HostNetwork struct {
-	hostID       string
-	grpcAddr     string
-	server       *grpc.Server
-	listener     net.Listener
-	log          *logger.Logger
-	host         *Host
-	gracePeriod  time.Duration // GracefulStop deadline before hard-Stop fallback
+	hostID      string
+	grpcAddr    string
+	server      *grpc.Server
+	listener    net.Listener
+	log         *logger.Logger
+	host        *Host
+	gracePeriod time.Duration // GracefulStop deadline before hard-Stop fallback
 
 	// coord is the owning Process, set by SetCoord immediately after
 	// construction. routeInboundFrame uses it to dispatch S7 CellTransfer
@@ -498,7 +505,7 @@ func (n *HostNetwork) SendOrdered(hostID string, frame *meshpb.MeshFrame) error 
 	p, ok := n.peers[hostID]
 	n.mu.RUnlock()
 	if !ok {
-		return fmt.Errorf("no peer %q", hostID)
+		return fmt.Errorf("%w: no peer %q", errPeerNoRoute, hostID)
 	}
 
 	deadline := time.NewTimer(peerSendDeadline)
@@ -508,7 +515,7 @@ func (n *HostNetwork) SendOrdered(hostID string, frame *meshpb.MeshFrame) error 
 	case p.outQ <- outboundFrame{frame: frame}:
 		return nil
 	case <-deadline.C:
-		return fmt.Errorf("peer %q queue backpressure", hostID)
+		return fmt.Errorf("%w: peer %q queue backpressure", errPeerBackpressure, hostID)
 	case <-n.ctx.Done():
 		return n.ctx.Err()
 	}
@@ -520,7 +527,7 @@ func (n *HostNetwork) SendOrdered(hostID string, frame *meshpb.MeshFrame) error 
 func (n *HostNetwork) SendOrderedToGateway(gatewayID string, frame *meshpb.MeshFrame) error {
 	found := n.findGatewayPeer(gatewayID)
 	if found == nil {
-		return fmt.Errorf("no gateway peer %q", gatewayID)
+		return fmt.Errorf("%w: no gateway peer %q", errPeerNoRoute, gatewayID)
 	}
 
 	deadline := time.NewTimer(peerSendDeadline)
@@ -530,7 +537,7 @@ func (n *HostNetwork) SendOrderedToGateway(gatewayID string, frame *meshpb.MeshF
 	case found.outQ <- outboundFrame{frame: frame}:
 		return nil
 	case <-deadline.C:
-		return fmt.Errorf("gateway peer %q queue backpressure", gatewayID)
+		return fmt.Errorf("%w: gateway peer %q queue backpressure", errPeerBackpressure, gatewayID)
 	case <-n.ctx.Done():
 		return n.ctx.Err()
 	}
@@ -546,7 +553,7 @@ func (n *HostNetwork) SendReliable(hostID string, frame *meshpb.MeshFrame) error
 	p, ok := n.peers[hostID]
 	n.mu.RUnlock()
 	if !ok {
-		return fmt.Errorf("no peer %q", hostID)
+		return fmt.Errorf("%w: no peer %q", errPeerNoRoute, hostID)
 	}
 
 	result := make(chan error, 1)
@@ -557,7 +564,7 @@ func (n *HostNetwork) SendReliable(hostID string, frame *meshpb.MeshFrame) error
 	select {
 	case p.outQ <- outboundFrame{frame: frame, result: result}:
 	case <-deadline.C:
-		return fmt.Errorf("peer %q queue backpressure", hostID)
+		return fmt.Errorf("%w: peer %q queue backpressure", errPeerBackpressure, hostID)
 	case <-n.ctx.Done():
 		return n.ctx.Err()
 	}
@@ -565,11 +572,14 @@ func (n *HostNetwork) SendReliable(hostID string, frame *meshpb.MeshFrame) error
 	// Phase 2: wait for the sender goroutine to Send and report the result.
 	select {
 	case err := <-result:
-		return err
+		if err != nil {
+			return fmt.Errorf("%w: peer %q stream send: %w", errPeerIndeterminate, hostID, err)
+		}
+		return nil
 	case <-deadline.C:
-		return fmt.Errorf("peer %q send deadline exceeded", hostID)
+		return fmt.Errorf("%w: peer %q send deadline", errPeerIndeterminate, hostID)
 	case <-n.ctx.Done():
-		return n.ctx.Err()
+		return fmt.Errorf("%w: peer %q shutdown after enqueue: %w", errPeerIndeterminate, hostID, n.ctx.Err())
 	}
 }
 
@@ -611,7 +621,7 @@ func (n *HostNetwork) SendLossyToGateway(gatewayID string, frame *meshpb.MeshFra
 func (n *HostNetwork) SendReliableToGateway(gatewayID string, frame *meshpb.MeshFrame) error {
 	found := n.findGatewayPeer(gatewayID)
 	if found == nil {
-		return fmt.Errorf("no gateway peer %q", gatewayID)
+		return fmt.Errorf("%w: no gateway peer %q", errPeerNoRoute, gatewayID)
 	}
 
 	result := make(chan error, 1)
@@ -621,18 +631,21 @@ func (n *HostNetwork) SendReliableToGateway(gatewayID string, frame *meshpb.Mesh
 	select {
 	case found.outQ <- outboundFrame{frame: frame, result: result}:
 	case <-deadline.C:
-		return fmt.Errorf("gateway peer %q queue backpressure", gatewayID)
+		return fmt.Errorf("%w: gateway peer %q queue backpressure", errPeerBackpressure, gatewayID)
 	case <-n.ctx.Done():
 		return n.ctx.Err()
 	}
 
 	select {
 	case err := <-result:
-		return err
+		if err != nil {
+			return fmt.Errorf("%w: gateway %q stream send: %w", errPeerIndeterminate, gatewayID, err)
+		}
+		return nil
 	case <-deadline.C:
-		return fmt.Errorf("gateway peer %q send deadline exceeded", gatewayID)
+		return fmt.Errorf("%w: gateway %q send deadline", errPeerIndeterminate, gatewayID)
 	case <-n.ctx.Done():
-		return n.ctx.Err()
+		return fmt.Errorf("%w: gateway %q shutdown after enqueue: %w", errPeerIndeterminate, gatewayID, n.ctx.Err())
 	}
 }
 
@@ -721,6 +734,32 @@ func (n *HostNetwork) routeInboundFrame(frame *meshpb.MeshFrame) error {
 			n.log.Log(CatMeshMsg, "[%s] ClientInput received but no VCM configured, dropping", n.hostID)
 			return nil
 		}
+		// Replication receipts share the ClientInput variant but occupy a
+		// reserved channel + DestCellId namespace. Intercept them before the
+		// ordinary input queues so malformed control traffic can never reach
+		// game input decoding.
+		isReceipt := ci.Channel == replicationReceiptChannel || hasReplicationReceiptMarker(frame.GetDestCellId())
+		if isReceipt {
+			receiptHostID, token, result, valid := decodeReplicationReceiptFrame(frame)
+			if !valid {
+				n.log.Log(CatMeshMsg, "[%s] malformed replication receipt gw=%s conn=%d, dropping", n.hostID, ci.GatewayId, ci.ConnId)
+				return nil
+			}
+			if receiptHostID != n.hostID {
+				n.log.Log(CatMeshMsg, "[%s] replication receipt targeted host=%s gw=%s conn=%d, dropping", n.hostID, receiptHostID, ci.GatewayId, ci.ConnId)
+				return nil
+			}
+			key := SessionKey{GatewayID: ci.GatewayId, ConnID: ci.ConnId}
+			localID, ok := n.vcm.LookupByKey(key)
+			if !ok {
+				n.log.Log(CatMeshMsg, "[%s] replication receipt for unknown session gw=%s conn=%d, dropping", n.hostID, ci.GatewayId, ci.ConnId)
+				return nil
+			}
+			if !n.vcm.recordReplicationReceipt(localID, ci.Epoch, token, result) {
+				n.log.Log(CatMeshMsg, "[%s] stale or unknown replication receipt gw=%s conn=%d epoch=%d token=%d, dropping", n.hostID, ci.GatewayId, ci.ConnId, ci.Epoch, token)
+			}
+			return nil
+		}
 		key := SessionKey{GatewayID: ci.GatewayId, ConnID: ci.ConnId}
 		localID, ok := n.vcm.LookupByKey(key)
 		if !ok {
@@ -736,15 +775,57 @@ func (n *HostNetwork) routeInboundFrame(frame *meshpb.MeshFrame) error {
 	// Receiving this on a node: protocol error (log and drop).
 	if cf := frame.GetClientFrame(); cf != nil {
 		if n.gw != nil {
+			marker := frame.GetDestCellId()
+			tracked := hasReplicationReceiptMarker(marker)
+			var sourceHostID string
+			var receiptToken uint64
+			if tracked {
+				var valid bool
+				sourceHostID, receiptToken, valid = parseReplicationReceiptMarker(marker)
+				if !valid {
+					n.log.Log(CatMeshMsg, "[%s] malformed tracked ClientFrame marker for conn=%d, dropping", n.hostID, cf.ConnId)
+					return nil
+				}
+				if _, valid = n.gw.replicationReceiptHost(cf.ConnId, cf.GatewayId, cf.Epoch, sourceHostID); !valid {
+					n.log.Log(CatMeshMsg, "[%s] tracked ClientFrame route mismatch source=%s gw=%s conn=%d epoch=%d, dropping", n.hostID, sourceHostID, cf.GatewayId, cf.ConnId, cf.Epoch)
+					return nil
+				}
+			}
 			// Validate authority epoch — drop stale frames from hosts that
 			// have lost authority for this session.
-			if cf.Epoch > 0 {
+			if !tracked && cf.Epoch > 0 {
 				if sess := n.gw.lookupSession(cf.ConnId); sess != nil && cf.Epoch < sess.epoch {
 					n.log.Log(CatMeshMsg, "[%s] ClientFrame stale epoch %d < %d for conn=%d, dropping", n.hostID, cf.Epoch, sess.epoch, cf.ConnId)
 					return nil
 				}
 			}
-			n.gw.connMgr.Send(cf.ConnId, cf.Data)
+			result := n.gw.connMgr.Send(cf.ConnId, cf.Data)
+			if !result.Queued() {
+				n.log.Log(CatMeshMsg,
+					"[%s] ClientFrame delivery rejected conn=%d disposition=%d err=%v",
+					n.hostID, cf.ConnId, result.Disposition, result.Err)
+				// Once an ordered world frame is rejected, later deltas on the
+				// same client stream may depend on a baseline the client never
+				// received. Closing a pressured or already-closed route forces the
+				// normal reconnect path to establish a fresh replication stream.
+				if result.Disposition == pkgnet.SendBackpressure || result.Disposition == pkgnet.SendClosed {
+					n.gw.connMgr.Remove(cf.ConnId)
+				}
+			}
+			if tracked && result.Supports(pkgnet.DeliveryReliableOrdered) {
+				// Re-read the route after final transport admission. A handoff may
+				// have switched authority while the frame was being enqueued; in
+				// that case the old epoch intentionally receives no acknowledgement.
+				hostID, current := n.gw.replicationReceiptHost(cf.ConnId, cf.GatewayId, cf.Epoch, sourceHostID)
+				if !current {
+					n.log.Log(CatMeshMsg, "[%s] tracked ClientFrame route changed before receipt conn=%d epoch=%d, dropping receipt", n.hostID, cf.ConnId, cf.Epoch)
+					return nil
+				}
+				receipt := newReplicationReceiptFrame(sourceHostID, cf.GatewayId, cf.ConnId, cf.Epoch, receiptToken, result)
+				if err := n.SendOrdered(hostID, receipt); err != nil {
+					n.log.Log(CatMeshMsg, "[%s] replication receipt enqueue to host=%s conn=%d token=%d: %v", n.hostID, hostID, cf.ConnId, receiptToken, err)
+				}
+			}
 			return nil
 		}
 		n.log.Log(CatMeshMsg, "[PROTO ERROR] [%s] unexpected ClientFrame received on node (protocol error), dropping", n.hostID)
@@ -844,15 +925,17 @@ func (n *HostNetwork) routeInboundFrame(frame *meshpb.MeshFrame) error {
 			// Copy all fields explicitly — proto structs embed sync.Mutex so struct
 			// assignment is unsafe.
 			rewritten := &meshpb.PlayerAssignment{
-				ConnId:        localID,
-				GatewayId:     "", // cleared so downstream cell sees a plain assignment
-				UserId:        pa.UserId,
-				Username:      pa.Username,
-				SessionToken:  pa.SessionToken,
-				IsReconnect:   pa.IsReconnect,
-				FromCellId:    pa.FromCellId,
-				ToCellId:      pa.ToCellId,
-				SpawnLocation: pa.SpawnLocation,
+				ConnId:           localID,
+				GatewayId:        "", // cleared so downstream cell sees a plain assignment
+				UserId:           pa.UserId,
+				Username:         pa.Username,
+				SessionToken:     pa.SessionToken,
+				IsReconnect:      pa.IsReconnect,
+				Epoch:            epoch,
+				StreamGeneration: pa.StreamGeneration,
+				FromCellId:       pa.FromCellId,
+				ToCellId:         pa.ToCellId,
+				SpawnLocation:    pa.SpawnLocation,
 			}
 			frame.Msg = &meshpb.MeshFrame_PlayerAssignment{PlayerAssignment: rewritten}
 			n.log.Log(CatMeshMsg, "[%s] PlayerAssignment gw=%s → localID=%d for %s", n.hostID, key.GatewayID, localID, pa.Username)

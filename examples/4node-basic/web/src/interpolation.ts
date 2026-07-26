@@ -1,7 +1,7 @@
 import type { AnyEntity } from "../sdk/entities.js";
 import { lerp, lerpAngle } from "../sdk/_core/interpolation-core.js";
 import { InterpolationBuffer } from "../sdk/_core/interpolation-buffer.js";
-import { type ClockSync, estimatedServerNow } from "../sdk/_core/clock-sync.js";
+import type { AdaptivePlaybackController } from "../sdk/_core/playback-controller.js";
 import { MAX_EXTRAPOLATE_MS, RENDER_DELAY, RING_SIZE } from "./constants.js";
 import type { ClientEntity, EntitySample } from "./state.js";
 import { recordEntityCreate, type ReplicationAudit } from "./replicationAudit.js";
@@ -19,6 +19,7 @@ function sampleFrom(e: AnyEntity, producedAtMs: number, prevRot: number): Entity
     velY: e.velY,
     rotation: entityRotation(e, prevRot),
     producedAtMs,
+    authorityEpoch: e.authorityEpoch,
   };
 }
 
@@ -43,7 +44,8 @@ export function updateEntityFromServer(
   producedAtMs: number,
   audit?: ReplicationAudit,
   nowMs?: number,
-): void {
+  allowStreamReset = false,
+): boolean {
   const id = serverState.netID;
   const existing = entities.get(id);
 
@@ -64,7 +66,7 @@ export function updateEntityFromServer(
       renderRot: first.rotation,
     };
     entities.set(id, ent);
-    return;
+    return true;
   }
   // Skip frames older than the newest sample we already hold. At a cell
   // boundary the same netID is delivered from two cell authorities; the
@@ -72,32 +74,36 @@ export function updateEntityFromServer(
   // buffer drops it (push), but Object.assign below would still snap
   // non-interpolated fields (radius/size, …) backward to the stale value —
   // flickering — so gate the whole snapshot on the same rule.
-  if (existing.buffer.isStale(producedAtMs)) {
-    return;
+  if (existing.buffer.isStale(producedAtMs, serverState.authorityEpoch)) {
+    if (!allowStreamReset) return false;
+    // The enclosing stream generation supersedes authority history from the
+    // previous stream. In particular, rollback may resume an older entity
+    // epoch on a newer stream after the speculative destination was visible.
+    existing.buffer.reset();
   }
   const prevRot = existing.renderRot;
   Object.assign(existing, serverState);
   existing.prevX = existing.renderX;
   existing.prevY = existing.renderY;
   existing.buffer.push(sampleFrom(serverState, producedAtMs, prevRot));
+  return true;
 }
 
 /**
  * interpolateEntities sets renderX/Y/Rot on every entity by
- * interpolating between the two buffer samples that bracket
- * (estimatedServerNow - RENDER_DELAY). Packet loss / phase drift
- * are absorbed naturally; extrapolation past the newest sample is
- * capped.
+ * interpolating between the two buffer samples that bracket the adaptive
+ * connection-level playback cursor. Packet loss and phase drift adjust that
+ * shared cursor; extrapolation past the newest sample remains capped.
  */
 export function interpolateEntities(
   entities: Map<number, ClientEntity>,
-  clock: ClockSync,
+  playback: AdaptivePlaybackController,
   clientNowMs: number,
 ): void {
-  if (!clock.initialized) return;
-  const renderTime = estimatedServerNow(clock, clientNowMs) - RENDER_DELAY;
+  const renderTime = playback.renderTime(clientNowMs);
+  if (renderTime === null) return;
   for (const ent of entities.values()) {
-    const r = ent.buffer.sampleAt(renderTime);
+    const r = ent.buffer.sampleAt(renderTime, playback.currentDelayMs);
     if (r) {
       ent.renderX = r.renderX;
       ent.renderY = r.renderY;

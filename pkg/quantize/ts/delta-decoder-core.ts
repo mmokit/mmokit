@@ -112,6 +112,27 @@ export const FRAME_HEADER_SIZE = 20;
  */
 export const FRAME_FLAG_FRESH_SNAPSHOT = 1 << 0;
 
+/** A uint32 processed-input sequence follows the normal frame payload. */
+export const FRAME_FLAG_INPUT_ACK = 1 << 1;
+
+/**
+ * Decode the optional processed-input acknowledgement trailer. `offset` must
+ * point just after the exited-ID list. Older frames omit both flag and trailer.
+ */
+export function decodeInputAck(
+  data: Uint8Array,
+  offset: number,
+  flags: number,
+): { sequence: number | null; offset: number } {
+  if ((flags & FRAME_FLAG_INPUT_ACK) === 0) {
+    return { sequence: null, offset };
+  }
+  if (offset + 4 > data.length) {
+    throw new RangeError("delta frame: truncated input acknowledgement trailer");
+  }
+  return { sequence: readUint32(data, offset), offset: offset + 4 };
+}
+
 /**
  * Decode the 20-byte frame header from the beginning of a delta world update frame.
  * Returns the parsed header and the byte offset immediately after the header.

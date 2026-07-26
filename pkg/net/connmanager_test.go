@@ -15,12 +15,18 @@ type mockTransport struct {
 	closed     bool
 }
 
-func (m *mockTransport) SendReliable(data []byte)   { m.reliable = append(m.reliable, data) }
-func (m *mockTransport) SendUnreliable(data []byte) { m.unreliable = append(m.unreliable, data) }
-func (m *mockTransport) DrainInput() [][]byte       { r := m.input; m.input = nil; return r }
-func (m *mockTransport) DrainOpInput() [][]byte     { r := m.opInput; m.opInput = nil; return r }
-func (m *mockTransport) InjectInput(data []byte)    { m.input = append(m.input, data) }
-func (m *mockTransport) Close()                     { m.closed = true }
+func (m *mockTransport) SendReliable(data []byte) SendResult {
+	m.reliable = append(m.reliable, data)
+	return SendResult{Disposition: SendQueued, Delivery: DeliveryReliableOrdered}
+}
+func (m *mockTransport) SendUnreliable(data []byte) SendResult {
+	m.unreliable = append(m.unreliable, data)
+	return SendResult{Disposition: SendQueued, Delivery: DeliveryBestEffort}
+}
+func (m *mockTransport) DrainInput() [][]byte    { r := m.input; m.input = nil; return r }
+func (m *mockTransport) DrainOpInput() [][]byte  { r := m.opInput; m.opInput = nil; return r }
+func (m *mockTransport) InjectInput(data []byte) { m.input = append(m.input, data) }
+func (m *mockTransport) Close()                  { m.closed = true }
 
 func drainEvent(t *testing.T, ch <-chan PlayerEvent) PlayerEvent {
 	t.Helper()
@@ -84,7 +90,10 @@ func TestConnManager_Send(t *testing.T) {
 	id := cm.AddTransport(mt)
 
 	data := []byte("hello")
-	cm.Send(id, data)
+	result := cm.Send(id, data)
+	if !result.Queued() || result.Delivery != DeliveryBestEffort {
+		t.Fatalf("Send result = %+v, want queued best-effort", result)
+	}
 
 	if len(mt.unreliable) != 1 {
 		t.Fatalf("expected 1 unreliable message, got %d", len(mt.unreliable))
@@ -100,7 +109,10 @@ func TestConnManager_SendReliable(t *testing.T) {
 	id := cm.AddTransport(mt)
 
 	data := []byte("important")
-	cm.SendReliable(id, data)
+	result := cm.SendReliable(id, data)
+	if !result.Supports(DeliveryReliableOrdered) {
+		t.Fatalf("SendReliable result = %+v, want reliable ordered enqueue", result)
+	}
 
 	if len(mt.reliable) != 1 {
 		t.Fatalf("expected 1 reliable message, got %d", len(mt.reliable))
@@ -112,9 +124,12 @@ func TestConnManager_SendReliable(t *testing.T) {
 
 func TestConnManager_Send_UnknownConnID_NoPanic(t *testing.T) {
 	cm := NewConnManager()
-	// Should not panic
-	cm.Send(9999, []byte("data"))
-	cm.SendReliable(9999, []byte("data"))
+	if result := cm.Send(9999, []byte("data")); result.Disposition != SendNoRoute {
+		t.Fatalf("Send unknown disposition = %v, want no-route", result.Disposition)
+	}
+	if result := cm.SendReliable(9999, []byte("data")); result.Disposition != SendNoRoute {
+		t.Fatalf("SendReliable unknown disposition = %v, want no-route", result.Disposition)
+	}
 }
 
 func TestConnManager_DrainInput(t *testing.T) {
@@ -186,8 +201,12 @@ func TestConnManager_Remove_SubsequentSendIsNoop(t *testing.T) {
 	cm.Remove(id)
 
 	// Should not panic and should not add messages
-	cm.Send(id, []byte("after-remove"))
-	cm.SendReliable(id, []byte("after-remove"))
+	if result := cm.Send(id, []byte("after-remove")); result.Disposition != SendNoRoute {
+		t.Fatalf("Send after Remove disposition = %v, want no-route", result.Disposition)
+	}
+	if result := cm.SendReliable(id, []byte("after-remove")); result.Disposition != SendNoRoute {
+		t.Fatalf("SendReliable after Remove disposition = %v, want no-route", result.Disposition)
+	}
 
 	if len(mt.unreliable) != 0 {
 		t.Fatal("Send after Remove should be a no-op")

@@ -178,8 +178,8 @@ func (b csharpBackend) genClient(schema ProtocolSchema) string {
 		sb.WriteString("        }\n\n")
 		for _, ct := range schema.ClientInputTypes {
 			cls := csReflectClassName(ct.Name)
-			fmt.Fprintf(&sb, "        /// Send a %s client-input (unreliable by default).\n", cls)
-			fmt.Fprintf(&sb, "        public void Send%s(%s msg, bool reliable = false) => SendInputFrame(%s.TypeID, msg.Encode(), reliable);\n\n", cls, cls, cls)
+			fmt.Fprintf(&sb, "        /// Send a %s client-input (reliable by default; opt out for replaceable high-rate samples).\n", cls)
+			fmt.Fprintf(&sb, "        public void Send%s(%s msg, bool reliable = true) => SendInputFrame(%s.TypeID, msg.Encode(), reliable);\n\n", cls, cls, cls)
 		}
 	}
 

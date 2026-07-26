@@ -87,7 +87,7 @@ func (b *Bot) dispatchTypedEvent(typeID uint32, body []byte) {
 	case tidWorldDelta:
 		var msg mmokit.WorldDelta
 		pkguniverse.ReflectUnmarshal(body, &msg)
-		b.applyWorldDelta(msg.Body)
+		b.applyWorldDelta(msg.Body, msg.StreamEpoch)
 
 	case tidPlayerEntityAssigned:
 		var msg mmokit.PlayerEntityAssigned
@@ -195,10 +195,13 @@ func (b *Bot) handleOwnState(msg *game.PlayerOwnState) {
 // the OnSpawn hook on the next tick boundary). So we additionally
 // promote-on-sight: the first WorldDelta carrying our player's
 // entity id (matched via PilotName) seeds b.alive.
-func (b *Bot) applyWorldDelta(body []byte) {
-	ws, ok := decodeBinaryFrame(body, b.baselines, b.decoders)
+func (b *Bot) applyWorldDelta(body []byte, streamEpoch uint32) {
+	ws, ok := decodeBinaryFrame(body, streamEpoch, b.decoderState, b.decoders)
 	if !ok {
 		log.Printf("[bot:%s] WorldDelta decode failed body=%d bytes", b.name, len(body))
+		return
+	}
+	if ws.Discarded {
 		return
 	}
 

@@ -18,6 +18,7 @@ export interface EntitySample {
   velY: number;
   rotation: number;
   producedAtMs: number;
+  authorityEpoch?: number;
 }
 
 export interface ClientEntity {

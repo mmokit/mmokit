@@ -4,9 +4,11 @@ import (
 	"testing"
 
 	"github.com/mlange-42/ark/ecs"
+	"github.com/zenion/mmoserver/pkg/component"
 	"github.com/zenion/mmoserver/pkg/engine"
 	"github.com/zenion/mmoserver/pkg/logger"
 	"github.com/zenion/mmoserver/pkg/net"
+	"github.com/zenion/mmoserver/pkg/spatial"
 )
 
 // TestCommands_Defer_ExecutesInSubmitOrder verifies that Defer closures
@@ -54,6 +56,63 @@ func TestCommands_Despawn_NoopOnDeadHandle(t *testing.T) {
 	c.Despawn(h) // queue against an already-dead handle
 	// Should not panic on flush.
 	c.Flush()
+}
+
+func TestCommands_Despawn_UsesAuthoritativeRemovalPath(t *testing.T) {
+	eng := engine.New(engine.DefaultConfig(), net.NewConnManager(), logger.New())
+	stage := NewStage(eng, CellID{X: 0, Y: 0}, 100, nil)
+	grid := spatial.NewHashGrid(100)
+	stage.SetSpatialGrid(grid)
+
+	entity := stage.Spawn(
+		component.Position{X: 10, Y: 20},
+		component.Collider{Radius: 5},
+	)
+	h := entity.Handle()
+	netID := entity.NetID()
+	if !grid.IsRegistered(h) {
+		t.Fatal("spawned entity was not registered in the spatial grid")
+	}
+	if _, presence, ok := stage.LookupNetID(netID); !ok || presence != PresenceLive {
+		t.Fatalf("spawned entity presence = (%v, %v), want live", presence, ok)
+	}
+
+	cleanupCalls := 0
+	eng.OnEntityRemoved = func(ecs.Entity) {
+		cleanupCalls++
+	}
+
+	// Queue twice to verify repeated command-buffer despawns are exact-once.
+	stage.Commands().Despawn(h)
+	stage.Commands().Despawn(h)
+	if !eng.ECS.Alive(h) {
+		t.Fatal("despawn applied before command flush")
+	}
+	stage.Commands().Flush()
+
+	if eng.ECS.Alive(h) {
+		t.Fatal("despawn was not visible after command flush")
+	}
+	if cleanupCalls != 1 {
+		t.Fatalf("cleanup hook calls = %d, want 1", cleanupCalls)
+	}
+	if grid.IsRegistered(h) {
+		t.Fatal("despawned entity remains registered in the spatial grid")
+	}
+	if _, _, ok := stage.LookupNetID(netID); ok {
+		t.Fatal("despawned entity remains registered in the NetID index")
+	}
+	if len(eng.RemovedNetIDs) != 1 || eng.RemovedNetIDs[0] != netID {
+		t.Fatalf("RemovedNetIDs = %v, want [%d]", eng.RemovedNetIDs, netID)
+	}
+
+	// An end-of-tick removal queued before the command flush must also be a
+	// no-op once FlushRemovals sees the now-dead handle.
+	eng.MarkForRemoval(h)
+	eng.FlushRemovals()
+	if cleanupCalls != 1 || len(eng.RemovedNetIDs) != 1 {
+		t.Fatalf("repeated deferred removal changed bookkeeping: cleanup=%d removed=%v", cleanupCalls, eng.RemovedNetIDs)
+	}
 }
 
 // TestStage_HasCommands verifies the stage exposes its Commands buffer

@@ -168,6 +168,10 @@ func TestApplyBorderFrame_UpdatesExistingReplica(t *testing.T) {
 	if base.highestSeenEpoch[7] != 2 {
 		t.Fatalf("highestSeenEpoch[7] = %d, want 2 after epoch bump", base.highestSeenEpoch[7])
 	}
+	netID := ecs.NewMap1[component.NetworkID](base.ECSWorld()).Get(ent2)
+	if netID.Epoch != 2 {
+		t.Fatalf("replica NetworkID.Epoch = %d, want 2 after epoch bump", netID.Epoch)
+	}
 }
 
 // TestApplyBorderFrame_UpdatesReplicaRadius is the regression guard for the
@@ -240,6 +244,57 @@ func TestApplyBorderFrame_DropsStaleEpoch(t *testing.T) {
 	if base.highestSeenEpoch[9] != 5 {
 		t.Fatalf("stale frame rewound highestSeenEpoch: got %d, want 5", base.highestSeenEpoch[9])
 	}
+	if got := ecs.NewMap1[component.NetworkID](base.ECSWorld()).Get(ent).Epoch; got != 5 {
+		t.Fatalf("stale frame rewound replica NetworkID.Epoch: got %d, want 5", got)
+	}
+}
+
+func TestApplyBorderFrame_EpochWraparoundOrdering(t *testing.T) {
+	base := newTestWorldBase(t, CellID{X: 1, Y: 0})
+	const (
+		netID    = uint32(12)
+		maxEpoch = ^uint32(0)
+	)
+
+	apply := func(epoch uint32, worldX float32) {
+		t.Helper()
+		base.ApplyBorderFrame(replication.Frame{Entries: []replication.FrameEntry{{
+			NetID:    replication.NetID{ID: netID, Epoch: epoch},
+			Kind:     1,
+			DeltaBuf: buildWireEntry(worldX, 100, 5, 0, 0),
+		}}}, "source")
+	}
+	assertReplica := func(wantEpoch uint32, wantLocalX float32) {
+		t.Helper()
+		ent, ok := base.replicaNetIDs[netID]
+		if !ok {
+			t.Fatalf("replica %d does not exist", netID)
+		}
+		if got := ecs.NewMap1[component.NetworkID](base.ECSWorld()).Get(ent).Epoch; got != wantEpoch {
+			t.Fatalf("replica epoch = %d, want %d", got, wantEpoch)
+		}
+		if got := ecs.NewMap1[component.Position](base.ECSWorld()).Get(ent).X; got != wantLocalX {
+			t.Fatalf("replica local X = %.1f, want %.1f", got, wantLocalX)
+		}
+		if got := base.highestSeenEpoch[netID]; got != wantEpoch {
+			t.Fatalf("highestSeenEpoch[%d] = %d, want %d", netID, got, wantEpoch)
+		}
+	}
+
+	apply(maxEpoch, 1100)
+	assertReplica(maxEpoch, 76)
+
+	// Zero is the immediate successor to MaxUint32 and must advance authority.
+	apply(0, 1200)
+	assertReplica(0, 176)
+
+	// A delayed pre-wrap frame must not overwrite the wrapped authority.
+	apply(maxEpoch, 1300)
+	assertReplica(0, 176)
+
+	// Equal epochs are ordinary state updates, not stale authority frames.
+	apply(0, 1250)
+	assertReplica(0, 226)
 }
 
 func TestApplyBorderFrame_SkipsShortDeltaBuf(t *testing.T) {
@@ -898,4 +953,3 @@ func TestPromoteReplicaToLive_PreservesBorderRotation(t *testing.T) {
 			rotMap.Get(ent).Angle, wantAngle)
 	}
 }
-

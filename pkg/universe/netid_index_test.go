@@ -140,3 +140,25 @@ func TestNetIDIndex_PromoteNonReplicaRejected(t *testing.T) {
 		t.Fatal("Promote on Live slot must reject")
 	}
 }
+
+func TestNetIDIndex_ExitEntityPreservesDifferentOwner(t *testing.T) {
+	idx := newNetIDIndex()
+	eng := engine.New(engine.DefaultConfig(), net.NewConnManager(), logger.New())
+	winner := eng.ECS.NewEntity()
+	rejected := eng.ECS.NewEntity()
+	idx.Enter(7, winner, PresenceLive)
+
+	if idx.ExitEntity(7, rejected) {
+		t.Fatal("ExitEntity removed a slot owned by another entity")
+	}
+	got, presence, ok := idx.Lookup(7)
+	if !ok || got != winner || presence != PresenceLive {
+		t.Fatalf("slot after rejected cleanup = (%v, %v, %v), want winner/live/true", got, presence, ok)
+	}
+	if !idx.ExitEntity(7, winner) {
+		t.Fatal("ExitEntity did not remove its matching owner")
+	}
+	if _, _, ok := idx.Lookup(7); ok {
+		t.Fatal("matching ExitEntity left the slot installed")
+	}
+}

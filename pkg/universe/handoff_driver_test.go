@@ -1,12 +1,15 @@
 package universe
 
 import (
+	"bytes"
 	"testing"
 
 	"github.com/mlange-42/ark/ecs"
 
 	"github.com/zenion/mmoserver/pkg/component"
 	"github.com/zenion/mmoserver/pkg/coords"
+	"github.com/zenion/mmoserver/pkg/engine"
+	pkgnet "github.com/zenion/mmoserver/pkg/net"
 )
 
 // TestDemoteLiveToReplica_PreservesEntityAndTransitionsSlot verifies
@@ -90,8 +93,11 @@ func TestDemoteLiveToReplica_UnknownNetIDReturnsError(t *testing.T) {
 // universe_test.go.
 type handoffRecordingBridge struct {
 	NoopBridge
-	handoffs        []*HandoffPayload
-	playerTransfers int
+	handoffs           []*HandoffPayload
+	playerTransfers    int
+	forwardingRequired bool
+	forwarded          []*ForwardInputPayload
+	forwardFailures    int
 
 	// failsForDest, if non-empty, causes SendHandoff to return false
 	// when destCellID matches.
@@ -108,6 +114,40 @@ func (r *handoffRecordingBridge) SendHandoff(destCellID MeshCellID, p *HandoffPa
 func (r *handoffRecordingBridge) OnPlayerTransfer(connID uint32, destCellID MeshCellID) {
 	r.playerTransfers++
 }
+func (r *handoffRecordingBridge) RequiresInputForwarding(MeshCellID) bool {
+	return r.forwardingRequired
+}
+func (r *handoffRecordingBridge) SendForwardInput(_ MeshCellID, payload *ForwardInputPayload) bool {
+	if r.forwardFailures > 0 {
+		r.forwardFailures--
+		return false
+	}
+	clone := *payload
+	clone.InputBlob = append([]byte(nil), payload.InputBlob...)
+	r.forwarded = append(r.forwarded, &clone)
+	return true
+}
+
+type handoffInputTransport struct {
+	input [][]byte
+}
+
+func (*handoffInputTransport) SendReliable([]byte) pkgnet.SendResult {
+	return pkgnet.SendResult{Disposition: pkgnet.SendQueued, Delivery: pkgnet.DeliveryReliableOrdered}
+}
+func (*handoffInputTransport) SendUnreliable([]byte) pkgnet.SendResult {
+	return pkgnet.SendResult{Disposition: pkgnet.SendQueued, Delivery: pkgnet.DeliveryBestEffort}
+}
+func (t *handoffInputTransport) DrainInput() [][]byte {
+	out := t.input
+	t.input = nil
+	return out
+}
+func (*handoffInputTransport) DrainOpInput() [][]byte { return nil }
+func (t *handoffInputTransport) InjectInput(data []byte) {
+	t.input = append(t.input, append([]byte(nil), data...))
+}
+func (*handoffInputTransport) Close() {}
 
 // TestHandoffDriver_HardCut_QueuesDemoteForCommitTick verifies the
 // H1 hard-cut behavior on the source side:
@@ -347,7 +387,21 @@ func TestHandoffDriver_PlayerSessionTransfersAtCommitTick(t *testing.T) {
 	netID := base.NetworkIDMap().Get(ent).ID
 
 	connID := uint32(42)
-	base.Engine().Players.RegisterPlayer(connID, "player")
+	pm := base.Engine().Players
+	pm.AddTransition(engine.StateTransition{
+		From:   engine.StateActive,
+		To:     engine.StateTransferring,
+		Action: defaultPlayerLeaveCleanup(base),
+	})
+	pm.RegisterPlayer(connID, "player")
+	sess := pm.ByConnID(connID)
+	const sourceGeneration = ^uint32(0)
+	sess.StreamGeneration = sourceGeneration
+	if err := pm.Transition(sess, engine.StateActive); err != nil {
+		t.Fatalf("activate player session: %v", err)
+	}
+	sess.Entity = ent
+	base.Engine().BeginRemovalTick()
 
 	base.QueueCrossing(CrossingEvent{
 		Entity:     ent,
@@ -375,6 +429,16 @@ func TestHandoffDriver_PlayerSessionTransfersAtCommitTick(t *testing.T) {
 	if rec.handoffs[0].CommitTick != uint64(1+HandoffLeadTicks) {
 		t.Errorf("Handoff.CommitTick = %d, want %d", rec.handoffs[0].CommitTick, 1+HandoffLeadTicks)
 	}
+	transferredFrame, err := UnmarshalTransferFrame(rec.handoffs[0].TransferBlob)
+	if err != nil {
+		t.Fatalf("UnmarshalTransferFrame: %v", err)
+	}
+	if transferredFrame.StreamGeneration != 0 {
+		t.Errorf("transferred StreamGeneration = %d, want wrapped N+1 = 0", transferredFrame.StreamGeneration)
+	}
+	if sess.StreamGeneration != sourceGeneration {
+		t.Errorf("source StreamGeneration changed during lead window: got %d, want %d", sess.StreamGeneration, sourceGeneration)
+	}
 
 	// Advance to CommitTick: session transfer fires now.
 	hd.Tick(uint64(1 + HandoffLeadTicks))
@@ -383,6 +447,98 @@ func TestHandoffDriver_PlayerSessionTransfersAtCommitTick(t *testing.T) {
 	}
 	if base.Engine().Players.ByConnID(connID) != nil {
 		t.Fatal("at CommitTick: player session still on source — should have been removed")
+	}
+
+	// The lifecycle action runs after Live -> Replica. It must detach the
+	// source session without destroying the continuity replica or publishing
+	// an authoritative tombstone for an entity that still exists on the
+	// destination cell.
+	base.Engine().FlushRemovals()
+	if !base.ECSWorld().Alive(ent) {
+		t.Fatal("at CommitTick: source continuity replica was removed")
+	}
+	if got, presence, ok := base.LookupNetID(netID); !ok || got != ent || presence != PresenceReplica {
+		t.Fatalf("at CommitTick: netID slot = (%v, %v, %v), want original entity PresenceReplica", got, presence, ok)
+	}
+	if !base.IsReplica(ent) {
+		t.Fatal("at CommitTick: source entity lost Replica marker")
+	}
+	if got := base.Engine().SampleRemovedNetIDs(); len(got) != 0 {
+		t.Fatalf("topology handoff published false authoritative tombstones: %v", got)
+	}
+}
+
+func TestHandoffDriver_ForwardsCommitWindowInputAcrossRemoteHost(t *testing.T) {
+	base := newTestWorldBase(t, CellID{X: 0, Y: 0})
+	rec := &handoffRecordingBridge{forwardingRequired: true}
+	hd := NewHandoffDriver(base, rec)
+
+	entity := base.Spawn(
+		component.Position{X: 100, Y: 100},
+		component.EntityKind{Type: 1},
+		component.Collider{Radius: 5},
+	).Handle()
+	netID := base.NetworkIDMap().Get(entity).ID
+
+	connMgr, ok := base.Engine().ConnMgr.(*pkgnet.ConnManager)
+	if !ok {
+		t.Fatalf("test ConnMgr type = %T, want *net.ConnManager", base.Engine().ConnMgr)
+	}
+	transport := &handoffInputTransport{}
+	connID := connMgr.AddTransport(transport)
+
+	pm := base.Engine().Players
+	pm.AddTransition(engine.StateTransition{
+		From:   engine.StateActive,
+		To:     engine.StateTransferring,
+		Action: defaultPlayerLeaveCleanup(base),
+	})
+	pm.RegisterPlayer(connID, "player")
+	sess := pm.ByConnID(connID)
+	if err := pm.Transition(sess, engine.StateActive); err != nil {
+		t.Fatalf("activate player session: %v", err)
+	}
+	sess.Entity = entity
+	base.Engine().BeginRemovalTick()
+
+	base.QueueCrossing(CrossingEvent{
+		Entity:     entity,
+		NetID:      netID,
+		ConnID:     connID,
+		DestCellID: "cell_1_0",
+	})
+	hd.Tick(1)
+
+	// This input arrives after the commit tick's normal input drain but before
+	// the source demotes/removes the player session.
+	commitInput := []byte{0x01, 0x02, 0x03}
+	connMgr.InjectInput(connID, commitInput)
+	hd.Tick(1 + HandoffLeadTicks)
+	if len(rec.forwarded) != 1 || !bytes.Equal(rec.forwarded[0].InputBlob, commitInput) {
+		t.Fatalf("commit-window forwards = %+v, want one exact frame %v", rec.forwarded, commitInput)
+	}
+
+	// A frame already routed to the source host while the gateway processes
+	// its upstream switch is drained during the bounded grace window too. A
+	// failed destination enqueue remains buffered and is retried in order.
+	lateInput := []byte{0x04, 0x05}
+	rec.forwardFailures = 1
+	connMgr.InjectInput(connID, lateInput)
+	hd.Tick(2 + HandoffLeadTicks)
+	if len(rec.forwarded) != 1 {
+		t.Fatalf("failed forward was treated as delivered: %+v", rec.forwarded)
+	}
+	hd.Tick(3 + HandoffLeadTicks)
+	if len(rec.forwarded) != 2 || !bytes.Equal(rec.forwarded[1].InputBlob, lateInput) {
+		t.Fatalf("retried grace-window forwards = %+v, want late frame %v", rec.forwarded, lateInput)
+	}
+
+	// The forwarding route is bounded and retires after one second.
+	hd.Tick(1 + HandoffLeadTicks + HandoffInputForwardTicks)
+	connMgr.InjectInput(connID, []byte{0x06})
+	hd.Tick(2 + HandoffLeadTicks + HandoffInputForwardTicks)
+	if len(rec.forwarded) != 2 {
+		t.Fatalf("expired forwarding route emitted %d frames, want 2", len(rec.forwarded))
 	}
 }
 
@@ -654,12 +810,12 @@ func TestHandoffDriver_BypassCooldown(t *testing.T) {
 //     for netID=2.
 //  3. HandoffDriver.Tick(T) runs:
 //     a. Drains pending demotes due now (the previous handoff commits;
-//        entity becomes Replica on this cell). The entry is removed
-//        from pendingDemotes — so hasPendingDemote(netID) returns false
-//        when the next phase asks.
+//     entity becomes Replica on this cell). The entry is removed
+//     from pendingDemotes — so hasPendingDemote(netID) returns false
+//     when the next phase asks.
 //     b. Processes new crossings. The queued crossing for netID=2 is
-//        still in the queue. handleCrossing fires for an entity that is
-//        now Replica on this cell.
+//     still in the queue. handleCrossing fires for an entity that is
+//     now Replica on this cell.
 //
 // Without the presence check, step 3b ships a Handoff for a Replica.
 // The destination spawns a new Live, leaving the previous destination's

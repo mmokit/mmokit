@@ -33,14 +33,20 @@ type SessionID uint64
 
 // PlayerSession tracks a single player's connection and lifecycle state.
 type PlayerSession struct {
-	ID             SessionID
-	ConnID         uint32      // 0 = no active connection
-	UserID         uuid.UUID   // canonical identity from auth.users (zero = unauthenticated)
-	Username       string
-	State          PlayerState
-	Entity         ecs.Entity  // zero-value when no entity exists
-	PriorState     PlayerState // state before disconnect, for reconnect resume
-	DisconnectTime time.Time   // when connection was lost
+	ID               SessionID
+	ConnID           uint32 // 0 = no active connection
+	StreamGeneration uint32 // scopes client replication frame ordering for this session
+	// ReplicationSuspended temporarily removes a connected session from its
+	// ViewerSource without changing the gameplay lifecycle state. Topology
+	// transfers use it for custom states such as dead or docked while their
+	// destination replication stream is being prepared.
+	ReplicationSuspended bool
+	UserID               uuid.UUID // canonical identity from auth.users (zero = unauthenticated)
+	Username             string
+	State                PlayerState
+	Entity               ecs.Entity  // zero-value when no entity exists
+	PriorState           PlayerState // state before disconnect, for reconnect resume
+	DisconnectTime       time.Time   // when connection was lost
 
 	// SpawnLocation is the world-space point the gateway resolved for this
 	// session's login (or the most recent respawn/teleport). Populated by
@@ -70,7 +76,7 @@ type StateTransition struct {
 	From   PlayerState
 	To     PlayerState
 	Guard  func(s *PlayerSession) bool               // optional, can block transition
-	Action func(s *PlayerSession, pm *PlayerManager)  // runs during transition (before OnExit)
+	Action func(s *PlayerSession, pm *PlayerManager) // runs during transition (before OnExit)
 }
 
 // StateCallbacks are invoked when entering or exiting a state.

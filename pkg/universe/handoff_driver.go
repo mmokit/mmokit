@@ -23,6 +23,13 @@ const HandoffLeadTicks = 2
 // (1 s at 20 Hz) prevents thrash for entities hovering on a boundary.
 const HandoffCooldownTicks = 20
 
+// HandoffInputForwardTicks bounds the source-side grace window that drains
+// event inputs already routed to the old host while the gateway applies an
+// upstream switch. At 20 Hz this is one second. Movement inputs are idempotent
+// and sequence-gated, so a duplicate delivery is safe while a lost final click
+// would otherwise remain unacknowledged indefinitely.
+const HandoffInputForwardTicks = 20
+
 // pendingDemote is a source-side demote queued for a specific
 // cluster-tick. HandoffDriver.Tick drains due demotes at tick start
 // (before handling new crossings), flipping the local Live entity
@@ -35,6 +42,19 @@ type pendingDemote struct {
 	netID      uint32
 	destCellID MeshCellID
 	connID     uint32
+}
+
+type pendingInputForward struct {
+	destCellID  MeshCellID
+	expiresTick uint64
+	// backlog owns frames already drained from the source connection but not
+	// yet accepted by the destination path. Preserve order and retry from the
+	// first failed frame instead of converting enqueue pressure into input loss.
+	backlog [][]byte
+}
+
+type inputForwardingBridge interface {
+	RequiresInputForwarding(destCellID MeshCellID) bool
 }
 
 // HandoffDriver orchestrates entity handoff across cell boundaries
@@ -76,6 +96,10 @@ type HandoffDriver struct {
 	// most recent successful handoff. Anti-thrash: a new crossing is
 	// dropped when currentClusterTick - last < HandoffCooldownTicks.
 	lastHandoff map[uint32]map[MeshCellID]uint64
+
+	// inputForwards exists only for real cross-host handoffs. Same-host cells
+	// share a connection queue and must let the destination drain it directly.
+	inputForwards map[uint32]pendingInputForward
 }
 
 // CancelPendingDemotesTo drops every queued pending demote whose destCellID
@@ -152,6 +176,7 @@ func NewHandoffDriver(base *Stage, bridge Bridge) *HandoffDriver {
 		cellMap:        ecs.NewMap1[component.CellCoord](w),
 		pendingDemotes: make(map[uint64][]pendingDemote),
 		lastHandoff:    make(map[uint32]map[MeshCellID]uint64),
+		inputForwards:  make(map[uint32]pendingInputForward),
 	}
 }
 
@@ -174,6 +199,7 @@ func NewHandoffDriver(base *Stage, bridge Bridge) *HandoffDriver {
 // Pending crossings that accumulate during drain are discarded. Pending
 // demotes are also skipped — the cell is about to be torn down.
 func (hd *HandoffDriver) Tick(currentClusterTick uint64) {
+	hd.forwardPendingInputs(currentClusterTick)
 	if hd.base.IsDrainingForMerge() {
 		hd.base.DrainCrossingQueue() // drop pending events; see docstring
 		return
@@ -211,6 +237,14 @@ func (hd *HandoffDriver) Tick(currentClusterTick uint64) {
 		// at crossing time — matches the authoritative flip.
 		if d.connID != 0 {
 			hd.bridge.OnPlayerTransfer(d.connID, d.destCellID)
+			if forwarding, ok := hd.bridge.(inputForwardingBridge); ok && forwarding.RequiresInputForwarding(d.destCellID) {
+				route := pendingInputForward{
+					destCellID:  d.destCellID,
+					expiresTick: currentClusterTick + HandoffInputForwardTicks,
+				}
+				hd.forwardConnectionInputs(d.connID, &route)
+				hd.inputForwards[d.connID] = route
+			}
 			if sess := hd.base.eng.Players.ByConnID(d.connID); sess != nil {
 				_ = hd.base.eng.Players.Transition(sess, engine.StateTransferring)
 				// RemoveTransferred (not Remove) so onSessionRemoved
@@ -229,6 +263,38 @@ func (hd *HandoffDriver) Tick(currentClusterTick uint64) {
 	events := hd.base.DrainCrossingQueue()
 	for _, evt := range events {
 		hd.handleCrossing(evt, currentClusterTick)
+	}
+}
+
+func (hd *HandoffDriver) forwardPendingInputs(currentClusterTick uint64) {
+	for connID, route := range hd.inputForwards {
+		hd.forwardConnectionInputs(connID, &route)
+		if currentClusterTick >= route.expiresTick && len(route.backlog) == 0 {
+			delete(hd.inputForwards, connID)
+		} else {
+			hd.inputForwards[connID] = route
+		}
+	}
+}
+
+func (hd *HandoffDriver) forwardConnectionInputs(connID uint32, route *pendingInputForward) {
+	if hd.base.eng.ConnMgr != nil {
+		route.backlog = append(route.backlog, hd.base.eng.ConnMgr.DrainInput(connID)...)
+	}
+	sent := 0
+	for _, frame := range route.backlog {
+		if !hd.bridge.SendForwardInput(route.destCellID, &ForwardInputPayload{
+			ConnID:    connID,
+			InputBlob: frame,
+		}) {
+			break
+		}
+		sent++
+	}
+	if sent == len(route.backlog) {
+		route.backlog = nil
+	} else if sent > 0 {
+		route.backlog = route.backlog[sent:]
 	}
 }
 
@@ -338,6 +404,13 @@ func (hd *HandoffDriver) handleCrossing(evt CrossingEvent, currentClusterTick ui
 	// Serialize the entity, then overwrite the frame's Position +
 	// CellCoord with the normalized values for the destination's frame.
 	frame := hd.base.SerializeEntityCore(evt.Entity)
+	// A destination cell owns a fresh per-viewer replication stream whose
+	// sequence restarts at one. Advance only the transferred copy so the
+	// source session remains pinned to its current generation throughout the
+	// lead window and any failed-send retry serializes the same N+1 value.
+	if frame.ConnID != 0 {
+		frame.StreamGeneration++
+	}
 	if normalizedAvailable {
 		frame.PosX = normPosX
 		frame.PosY = normPosY

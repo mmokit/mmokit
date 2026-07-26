@@ -115,9 +115,7 @@ func stepMigrateApplyCoordMutation(c *Process, ctx *CommitContext) error {
 	}
 	// Neighbor topology doesn't change on migrate — same CellID, same
 	// depth, same adjacency. We intentionally do NOT rewire Node.Neighbors
-	// here: the cell's game loop reads that map every PostSystems tick
-	// without the coord lock, and rewriting it under c.mu would race with
-	// ensureBorderDispatcher. The destination cell picks up its neighbor
+	// here. The destination cell picks up its neighbor
 	// wiring via createNode -> reconcileCellNeighbors on Receive, and the
 	// post-commit PeerList broadcast gets the new ownership to every
 	// remote peer.

@@ -2,6 +2,7 @@ using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
+using System.Threading;
 
 namespace Mmokit.Sdk.Core
 {
@@ -28,7 +29,14 @@ namespace Mmokit.Sdk.Core
         const long KeepaliveIntervalMs = 1000;
         const long ConnectionTimeoutMs = 10000;
 
-        struct ReliableEntry { public byte[] Payload; public long SentAtMs; public bool Acked; public bool Used; }
+        struct ReliableEntry
+        {
+            public ushort Seq;
+            public byte[] Payload;
+            public long FirstSentAtMs;
+            public long LastSentAtMs;
+            public bool Used;
+        }
 
         readonly Action<byte[]> _sendRaw;
         readonly Func<long> _nowMs;
@@ -43,11 +51,13 @@ namespace Mmokit.Sdk.Core
         // memory model tolerates the unsynchronized access; C#'s permits
         // read-hoisting that could stall ACK flushing, so the lock is required.)
         readonly object _recvLock = new();
+        bool _recvInit;
         ushort _recvSeq;
         uint _recvBits;
         bool _ackDirty;
 
         readonly BlockingCollection<byte[]> _inbound = new(new ConcurrentQueue<byte[]>());
+        readonly object _inboundLock = new();
 
         long _lastRecvMs;
         long _lastSendMs;
@@ -61,8 +71,9 @@ namespace Mmokit.Sdk.Core
             _sendRaw = sendRaw;
             _nowMs = nowMs;
             _token = token;
-            _lastRecvMs = nowMs();
-            _lastSendMs = nowMs();
+            long now = nowMs();
+            _lastRecvMs = now;
+            _lastSendMs = now;
         }
 
         public uint Token => _token;
@@ -73,19 +84,46 @@ namespace Mmokit.Sdk.Core
             byte[] payload = (byte[])data.Clone();
             lock (_sendLock)
             {
+                ThrowIfClosedLocked();
                 seq = _sendSeq;
-                _sendSeq++;
                 int idx = seq % ReliableBufSize;
-                _sendBuf[idx] = new ReliableEntry { Payload = payload, SentAtMs = _nowMs(), Acked = false, Used = true };
+                if (_sendBuf[idx].Used)
+                    throw new InvalidOperationException("UDP reliable send window is full");
+                _sendSeq++;
+                long now = _nowMs();
+                _sendBuf[idx] = new ReliableEntry
+                {
+                    Seq = seq,
+                    Payload = payload,
+                    FirstSentAtMs = now,
+                    LastSentAtMs = now,
+                    Used = true,
+                };
+                try
+                {
+                    // Keep admission and the initial write atomic with Close.
+                    // Otherwise Close can clear the slot and emit Disconnect
+                    // before this reliable datagram reaches the socket.
+                    _sendRaw(UdpProto.EncodeReliable(_token, seq, payload));
+                    AdvanceClock(ref _lastSendMs, _nowMs());
+                }
+                catch
+                {
+                    if (_sendBuf[idx].Used && _sendBuf[idx].Seq == seq)
+                        _sendBuf[idx] = default;
+                    throw;
+                }
             }
-            _sendRaw(UdpProto.EncodeReliable(_token, seq, payload));
-            _lastSendMs = _nowMs();
         }
 
         public void SendUnreliable(byte[] data)
         {
-            _sendRaw(UdpProto.EncodeUnreliable(_token, data));
-            _lastSendMs = _nowMs();
+            lock (_sendLock)
+            {
+                ThrowIfClosedLocked();
+                _sendRaw(UdpProto.EncodeUnreliable(_token, data));
+                AdvanceClock(ref _lastSendMs, _nowMs());
+            }
         }
 
         /// Inbound chokepoint. `data` is a full, decrypted packet.
@@ -96,32 +134,47 @@ namespace Mmokit.Sdk.Core
             {
                 case UdpProto.TypeUnreliable:
                     if (!UdpProto.TryDecodeUnreliable(data, out _, out byte[] upay)) return;
-                    _lastRecvMs = _nowMs();
+                    AdvanceClock(ref _lastRecvMs, _nowMs());
                     if (upay.Length == 0) return; // keepalive
-                    _inbound.Add(upay);
+                    TryQueueInbound(upay);
                     break;
                 case UdpProto.TypeReliable:
                     if (!UdpProto.TryDecodeReliable(data, out _, out ushort seq, out byte[] rpay)) return;
-                    _lastRecvMs = _nowMs();
-                    UpdateRecvTracking(seq);
-                    if (rpay.Length > 0) _inbound.Add(rpay);
+                    AdvanceClock(ref _lastRecvMs, _nowMs());
+                    bool deliver = UpdateRecvTracking(seq);
+                    if (deliver && rpay.Length > 0) TryQueueInbound(rpay);
                     break;
                 case UdpProto.TypeAck:
                     if (!UdpProto.TryDecodeAck(data, out _, out ushort ackSeq, out uint ackBits)) return;
-                    _lastRecvMs = _nowMs();
+                    AdvanceClock(ref _lastRecvMs, _nowMs());
                     ProcessAck(ackSeq, ackBits);
                     break;
             }
         }
 
-        void UpdateRecvTracking(ushort seq)
+        void TryQueueInbound(byte[] payload)
+        {
+            // CompleteAdding racing Add/TryAdd throws InvalidOperationException.
+            // Serialize that boundary so a packet already being decoded is
+            // either admitted before Close or cleanly dropped after it.
+            lock (_inboundLock)
+            {
+                if (!_inbound.IsAddingCompleted)
+                    _inbound.Add(payload);
+            }
+        }
+
+        bool UpdateRecvTracking(ushort seq)
         {
             lock (_recvLock)
             {
-                if (_recvSeq == 0 && !_ackDirty)
+                bool deliver = false;
+                if (!_recvInit)
                 {
+                    _recvInit = true;
                     _recvSeq = seq;
                     _recvBits = 0;
+                    deliver = true;
                 }
                 else if (UdpProto.SeqGreaterThan(seq, _recvSeq))
                 {
@@ -136,13 +189,23 @@ namespace Mmokit.Sdk.Core
                     }
                     else _recvBits = 0;
                     _recvSeq = seq;
+                    deliver = true;
                 }
                 else
                 {
                     int diff = (ushort)(_recvSeq - seq);
-                    if (diff > 0 && diff <= 32) _recvBits |= 1u << (diff - 1);
+                    if (diff > 0 && diff <= 32)
+                    {
+                        uint bit = 1u << (diff - 1);
+                        if ((_recvBits & bit) == 0)
+                        {
+                            _recvBits |= bit;
+                            deliver = true;
+                        }
+                    }
                 }
                 _ackDirty = true;
+                return deliver;
             }
         }
 
@@ -150,18 +213,23 @@ namespace Mmokit.Sdk.Core
         {
             lock (_sendLock)
             {
-                int idx = ackSeq % ReliableBufSize;
-                if (_sendBuf[idx].Used) _sendBuf[idx].Acked = true;
+                MarkAcked(ackSeq);
                 for (int i = 0; i < 32; i++)
                 {
                     if ((ackBits & (1u << i)) != 0)
                     {
                         ushort s = (ushort)(ackSeq - i - 1);
-                        int j = s % ReliableBufSize;
-                        if (_sendBuf[j].Used) _sendBuf[j].Acked = true;
+                        MarkAcked(s);
                     }
                 }
             }
+        }
+
+        void MarkAcked(ushort seq)
+        {
+            int idx = seq % ReliableBufSize;
+            if (_sendBuf[idx].Used && _sendBuf[idx].Seq == seq)
+                _sendBuf[idx] = default;
         }
 
         /// Drive periodic work: timeout, retransmit, ACK flush, keepalive.
@@ -169,44 +237,100 @@ namespace Mmokit.Sdk.Core
         public bool Tick()
         {
             long now = _nowMs();
-            if (now - _lastRecvMs > ConnectionTimeoutMs) { Close(); return false; }
+            if (now - Interlocked.Read(ref _lastRecvMs) > ConnectionTimeoutMs)
+            {
+                Close();
+                return false;
+            }
 
+            bool reliableTimedOut = false;
+            bool sendFailed = false;
             lock (_sendLock)
             {
+                lock (_closeLock)
+                {
+                    if (_closed) return false;
+                }
+
                 for (int i = 0; i < _sendBuf.Length; i++)
                 {
-                    if (!_sendBuf[i].Used || _sendBuf[i].Acked) continue;
-                    long age = now - _sendBuf[i].SentAtMs;
-                    if (age > ReliableTimeoutMs) { Close(); return false; }
-                    if (age >= RetransmitIntervalMs)
+                    if (!_sendBuf[i].Used) continue;
+                    if (now - _sendBuf[i].FirstSentAtMs > ReliableTimeoutMs)
                     {
-                        // NOTE: reconstructs seq from the buffer index — faithful
-                        // to the Go reference; correct only for the first
-                        // ReliableBufSize reliable sends (known upstream limitation).
-                        ushort seq = (ushort)i;
-                        _sendRaw(UdpProto.EncodeReliable(_token, seq, _sendBuf[i].Payload));
-                        _sendBuf[i].SentAtMs = now;
+                        reliableTimedOut = true;
+                        break;
+                    }
+                    if (now - _sendBuf[i].LastSentAtMs >= RetransmitIntervalMs)
+                    {
+                        try
+                        {
+                            _sendRaw(UdpProto.EncodeReliable(
+                                _token,
+                                _sendBuf[i].Seq,
+                                _sendBuf[i].Payload));
+                        }
+                        catch
+                        {
+                            sendFailed = true;
+                            break;
+                        }
+                        _sendBuf[i].LastSentAtMs = now;
+                        AdvanceClock(ref _lastSendMs, now);
+                    }
+                }
+
+                if (!reliableTimedOut && !sendFailed)
+                {
+                    // Snapshot under the receive lock, but never hold that lock
+                    // across user/socket I/O. A later receive sets dirty again.
+                    bool flushAck;
+                    ushort ackSeq;
+                    uint ackBits;
+                    lock (_recvLock)
+                    {
+                        flushAck = _ackDirty;
+                        ackSeq = _recvSeq;
+                        ackBits = _recvBits;
+                        if (flushAck) _ackDirty = false;
+                    }
+                    if (flushAck)
+                    {
+                        try
+                        {
+                            _sendRaw(UdpProto.EncodeAck(_token, ackSeq, ackBits));
+                            AdvanceClock(ref _lastSendMs, now);
+                        }
+                        catch
+                        {
+                            // Preserve a newer dirty state, or restore this
+                            // snapshot, so a non-closing caller could retry it.
+                            lock (_recvLock) _ackDirty = true;
+                            sendFailed = true;
+                        }
+                    }
+                }
+
+                if (!reliableTimedOut && !sendFailed &&
+                    now - Interlocked.Read(ref _lastSendMs) > KeepaliveIntervalMs)
+                {
+                    try
+                    {
+                        _sendRaw(UdpProto.EncodeUnreliable(_token, null));
+                        AdvanceClock(ref _lastSendMs, now);
+                    }
+                    catch
+                    {
+                        sendFailed = true;
                     }
                 }
             }
 
-            // Snapshot the recv-tracking trio under the lock, then emit outside it.
-            bool flushAck;
-            ushort ackSeq;
-            uint ackBits;
-            lock (_recvLock)
+            if (reliableTimedOut || sendFailed)
             {
-                flushAck = _ackDirty;
-                ackSeq = _recvSeq;
-                ackBits = _recvBits;
-                if (flushAck) _ackDirty = false;
-            }
-            if (flushAck) _sendRaw(UdpProto.EncodeAck(_token, ackSeq, ackBits));
-
-            if (now - _lastSendMs > KeepaliveIntervalMs)
-            {
-                _sendRaw(UdpProto.EncodeUnreliable(_token, null));
-                _lastSendMs = now;
+                // Maintenance is background work: contain I/O failures, close
+                // deterministically, and let TickLoop exit instead of faulting.
+                Close();
+                return false;
             }
             return true;
         }
@@ -227,14 +351,49 @@ namespace Mmokit.Sdk.Core
             // Atomic check-then-set so concurrent Close() callers (consumer +
             // Tick timeout path) can't both run the body and double-complete the
             // inbound collection (which would throw on the second call).
+            lock (_sendLock)
+            {
+                lock (_closeLock)
+                {
+                    if (_closed) return;
+                    _closed = true;
+                }
+                Array.Clear(_sendBuf, 0, _sendBuf.Length);
+                // Wake consumers and close inbound admission before potentially
+                // blocking on the best-effort network write.
+                lock (_inboundLock)
+                {
+                    if (!_inbound.IsAddingCompleted)
+                        _inbound.CompleteAdding();
+                }
+                // Keep the final packet inside the outbound serialization gate:
+                // no reliable, ACK, or keepalive can be emitted after it.
+                try { _sendRaw(UdpProto.EncodeDisconnect(_token)); } catch { /* best effort */ }
+            }
+            CloseSocket(); // partial-class hook; no-op for the core-only ctor
+        }
+
+        void ThrowIfClosedLocked()
+        {
+            // Callers hold _sendLock, preserving the repository-wide
+            // send -> close lock order.
             lock (_closeLock)
             {
-                if (_closed) return;
-                _closed = true;
+                if (_closed) throw new ObjectDisposedException(nameof(UdpTransport));
             }
-            try { _sendRaw(UdpProto.EncodeDisconnect(_token)); } catch { /* best effort */ }
-            _inbound.CompleteAdding();
-            CloseSocket(); // partial-class hook; no-op for the core-only ctor
+        }
+
+        static void AdvanceClock(ref long clock, long stamp)
+        {
+            // Interlocked both publishes activity across receive/tick/caller
+            // threads and prevents a delayed older writer from moving it back.
+            while (true)
+            {
+                long previous = Interlocked.Read(ref clock);
+                if (stamp <= previous ||
+                    Interlocked.CompareExchange(ref clock, stamp, previous) == previous)
+                    return;
+            }
         }
 
         // Implemented in the socket section; the core ctor leaves it a no-op.

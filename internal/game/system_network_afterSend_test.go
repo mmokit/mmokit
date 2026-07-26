@@ -34,20 +34,22 @@ type captureTransport struct {
 	reliable   [][]byte
 }
 
-func (t *captureTransport) SendReliable(data []byte) {
+func (t *captureTransport) SendReliable(data []byte) pkgnet.SendResult {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	cp := make([]byte, len(data))
 	copy(cp, data)
 	t.reliable = append(t.reliable, cp)
+	return pkgnet.SendResult{Disposition: pkgnet.SendQueued, Delivery: pkgnet.DeliveryReliableOrdered}
 }
 
-func (t *captureTransport) SendUnreliable(data []byte) {
+func (t *captureTransport) SendUnreliable(data []byte) pkgnet.SendResult {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	cp := make([]byte, len(data))
 	copy(cp, data)
 	t.unreliable = append(t.unreliable, cp)
+	return pkgnet.SendResult{Disposition: pkgnet.SendQueued, Delivery: pkgnet.DeliveryReliableOrdered}
 }
 
 func (t *captureTransport) DrainInput() [][]byte   { return nil }

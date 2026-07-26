@@ -743,6 +743,10 @@ type DeltaPayload = system.DeltaPayload
 // (ConnID, Entity, and position X/Y for AoI center).
 type ViewerInfo = system.ViewerInfo
 
+// ViewerLiveness is the optional ViewerSource capability used to distinguish
+// temporarily inactive viewers from sessions that are truly gone.
+type ViewerLiveness = system.ViewerLiveness
+
 // AckMode controls how replication baselines advance: AckReliable auto-advances
 // on send (TCP/WebSocket), AckExplicit waits for client acks (UDP).
 type AckMode = replication.AckMode
@@ -761,20 +765,28 @@ type ReplicationTier = system.ReplicationTier
 
 // DefaultReplicationConfig returns a ReplicationConfig with the standard
 // boilerplate fields pre-filled: World, SpatialGrid, Viewers, Frame,
-// GetTick, and ClusterClock. Games set game-specific fields (Replicators,
-// AoIRadius, callbacks, etc.) on the returned struct before passing it to
-// NewReplicationSystem. The clock argument is typically the Process's
-// shared *universe.ClusterClock (from Coordinator/host/Stage) — it
+// GetTick, RemovedIDs, and ClusterClock. Games set game-specific fields
+// (Replicators, AoIRadius, callbacks, etc.) on the returned struct before
+// passing it to NewReplicationSystem. The clock argument is typically the
+// Process's shared *universe.ClusterClock (from Coordinator/host/Stage) — it
 // satisfies the small system.ClusterClock interface structurally.
 func DefaultReplicationConfig(eng *engine.Engine, grid *spatial.HashGrid, clock system.ClusterClock) ReplicationConfig {
 	return ReplicationConfig{
 		World:          eng.ECS,
 		SpatialGrid:    grid,
 		Viewers:        system.NewPlayerViewerSource(eng.ECS, eng.Players, engine.StateActive),
-		Frame:          system.NewBinaryFrameWriter(eng.ConnMgr, makeWorldDeltaFrame),
+		Frame:          system.NewBinaryFrameWriterWithMetadata(eng.ConnMgr, makeWorldDeltaFrame),
 		GetTick:        func() uint32 { return eng.Tick },
+		RemovedIDs:     eng.SampleRemovedNetIDs,
 		ClusterClock:   clock,
 		TickIntervalMs: eng.TickIntervalMs(),
+		StreamGeneration: func(viewer *system.ViewerInfo) (uint32, bool) {
+			session := eng.Players.ByConnID(viewer.ConnID)
+			if session == nil {
+				return 0, false
+			}
+			return session.StreamGeneration, true
+		},
 	}
 }
 
@@ -881,6 +893,10 @@ var (
 
 	// NewBinaryFrameWriter creates a FrameWriter that encodes replication frames as binary.
 	NewBinaryFrameWriter = system.NewBinaryFrameWriter
+
+	// NewBinaryFrameWriterWithMetadata also exposes ReplicationFrame metadata
+	// to the typed envelope builder.
+	NewBinaryFrameWriterWithMetadata = system.NewBinaryFrameWriterWithMetadata
 
 	// NewPlayerViewerSource creates a ViewerSource backed by PlayerManager sessions.
 	NewPlayerViewerSource = system.NewPlayerViewerSource
@@ -1162,11 +1178,16 @@ func autoDiscoverReplicators(stage *universe.Stage, cfg *ReplicationConfig) {
 // passes through the reflection codec's []byte fast path
 // ([u32 len][N bytes]), so the wire layout is:
 //
-//	[0x00][typeID(WorldDelta):u32 LE][bodyLen:u32 LE][u32 LE bodyByteLen][delta bytes]
+//	[0x00][typeID(WorldDelta):u32 LE][bodyLen:u32 LE][u32 LE bodyByteLen][delta bytes][streamEpoch:u32 LE]
 //
-// where bodyLen == 4 + bodyByteLen.
-func makeWorldDeltaFrame(body []byte) []byte {
-	return universe.BuildTypedEventFrameRaw(&WorldDelta{Body: body})
+// where bodyLen == 8 + bodyByteLen. StreamEpoch scopes the delta header's
+// frame sequence to the session's replication generation, so a delayed frame
+// from the previous source can be rejected before its FreshSnapshot flag is applied.
+func makeWorldDeltaFrame(frame *system.ReplicationFrame, body []byte) []byte {
+	return universe.BuildTypedEventFrameRaw(&WorldDelta{
+		Body:        body,
+		StreamEpoch: frame.StreamEpoch,
+	})
 }
 
 // Component creates a ComponentBinding by reflecting on T's net:"..." struct tags.

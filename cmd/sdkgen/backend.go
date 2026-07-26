@@ -28,6 +28,8 @@ type backendOpts struct {
 	InterpTS       string // TS: interpolation-core.ts source path
 	ClockSyncTS    string // TS: clock-sync.ts source path
 	InterpBufferTS string // TS: interpolation-buffer.ts source path
+	PlaybackTS     string // TS: playback-controller.ts source path
+	PredictionTS   string // TS: prediction-buffer.ts source path
 	CSharpCoreDir  string // C#: dir holding the hand-written _core .cs files
 	Namespace      string // C#: root namespace for generated files
 }
@@ -36,7 +38,10 @@ type backendOpts struct {
 func backendFor(lang string, o backendOpts) (Backend, error) {
 	switch lang {
 	case "ts":
-		return tsBackend{coreTS: o.CoreTS, interpTS: o.InterpTS, clockSyncTS: o.ClockSyncTS, interpBufferTS: o.InterpBufferTS}, nil
+		return tsBackend{
+			coreTS: o.CoreTS, interpTS: o.InterpTS, clockSyncTS: o.ClockSyncTS,
+			interpBufferTS: o.InterpBufferTS, playbackTS: o.PlaybackTS, predictionTS: o.PredictionTS,
+		}, nil
 	case "csharp":
 		ns := o.Namespace
 		if ns == "" {

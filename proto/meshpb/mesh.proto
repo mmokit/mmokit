@@ -61,6 +61,7 @@ message CoordMessage {
     SessionRegister   session_register    = 19;  // S9: coord → host VCM session registration
     CellRename        cell_rename         = 20;  // Phase 4: coord → host merge survivor rename
     CoordTimeSync     coord_time_sync     = 21;  // Replication Timeline Redesign: cluster-clock advisory refresh
+    CellTransferCommit cell_transfer_commit = 22; // topology committed: host may retire rollback state
   }
 }
 
@@ -460,6 +461,7 @@ message ForwardInput {
   uint32 conn_id      = 2;
   bytes  input_blob   = 3;
   string gateway_id   = 4; // gateway_id + conn_id forms the composite session key
+  uint64 session_epoch = 5; // source gateway-route generation; destination drops stale forwards
 }
 
 // CrossCellAction mirrors pkg/universe/action.go CrossCellAction.
@@ -495,6 +497,7 @@ message PlayerAssignment {
   bool     is_reconnect    = 8;
   uint64   epoch           = 9;
   Location spawn_location  = 10;
+  uint32   stream_generation = 11;
 }
 
 // SessionTransfer mirrors pkg/universe/message.go SessionTransfer.
@@ -504,6 +507,11 @@ message SessionTransfer {
   string username     = 3;
   string state_tag    = 4;
   bytes  data         = 5;
+  string user_id      = 6;
+  uint32 stream_generation = 7;
+  string gateway_id = 8;
+  uint32 gateway_conn_id = 9;
+  uint64 session_epoch = 10;
 }
 
 // SpawnTransfer mirrors pkg/universe/message.go SpawnTransfer.
@@ -512,6 +520,7 @@ message SpawnTransfer {
   uint32   conn_id        = 2;
   string   username       = 3;
   Location spawn_location = 4;
+  uint32   stream_generation = 5;
 }
 
 // ═══════════════════════════════════════════════
@@ -653,6 +662,13 @@ message SessionRegister {
 // S7: orchestrator instructs a target host to discard a CellTransfer that
 // has not yet committed. Sent as part of rollback on timeout or error.
 message CellTransferAbort {
+  uint64 request_id = 1;
+}
+
+// S7: orchestrator confirms that every destination is ready and the topology
+// mutation committed. Hosts can now discard rollback bookkeeping retained for
+// this transfer request.
+message CellTransferCommit {
   uint64 request_id = 1;
 }
 

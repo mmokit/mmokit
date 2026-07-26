@@ -168,18 +168,14 @@ var topologies = []topoBuilder{
 // passing a fresh clusterFixture each time. Cleanup happens via t.Cleanup
 // registered inside the builders.
 //
-// Subtests are run in parallel via t.Parallel(): the two topologies of a
-// single forEachTopology call always share the same CellSize, so the
-// per-package coords.CellSize global stays consistent across them. Across
-// different parent tests, the global remains a serialization hazard —
-// don't add t.Parallel() at the parent test level without first auditing
-// every coords.SetCellSize / CellSize-dependent helper.
+// Topology fixtures run sequentially because coords.CellSize is mutable
+// package-global configuration. Parallel fixtures race even when they set the
+// same value and could observe different sizes if a future test diverges.
 func forEachTopology(t *testing.T, cfg FixtureConfig, body func(t *testing.T, fx clusterFixture)) {
 	t.Helper()
 	for _, topo := range topologies {
 		topo := topo
 		t.Run(topo.name, func(t *testing.T) {
-			t.Parallel()
 			// Colocated supports exactly 1 host. Multi-host scenarios
 			// (declared via cfg.HostIDs with >1 entry) run distributed-only.
 			if topo.name == "colocated" && len(cfg.HostIDs) > 1 {
@@ -296,8 +292,8 @@ func newColocatedFixture(t *testing.T, cfg FixtureConfig) clusterFixture {
 	return &colocatedFixture{coord: coord, hosts: []string{hostID}}
 }
 
-func (f *colocatedFixture) Coord() *Process { return f.coord }
-func (f *colocatedFixture) HostIDs() []string   { return f.hosts }
+func (f *colocatedFixture) Coord() *Process   { return f.coord }
+func (f *colocatedFixture) HostIDs() []string { return f.hosts }
 
 func (f *colocatedFixture) CellOwner(cellKey string) string {
 	return f.coord.HostForCellID(MeshCellID(cellKey))
@@ -368,4 +364,3 @@ func (f *colocatedFixture) WaitForCellReleased(ctx context.Context, cellKey, hos
 		}
 	}
 }
-

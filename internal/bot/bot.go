@@ -75,9 +75,9 @@ type Bot struct {
 
 	inputRate time.Duration
 
-	// Binary frame decoding state for WorldDelta bodies
-	baselines map[uint32]*baselineEntry
-	decoders  *deltaDecoders
+	// Binary frame decoding state for WorldDelta bodies.
+	decoderState *deltaDecoderState
+	decoders     *deltaDecoders
 
 	// Event callbacks
 	onSpawn  func()
@@ -95,13 +95,13 @@ type Bot struct {
 // New creates a new Bot with the given username.
 func New(username string, opts ...Option) *Bot {
 	b := &Bot{
-		name:      username,
-		inputRate: defaultInputRate,
-		baselines: make(map[uint32]*baselineEntry),
-		decoders:  newDeltaDecoders(),
-		state:     WorldState{Entities: make(map[uint32]*EntitySnapshot)},
-		spawnCh:   make(chan struct{}, 1),
-		deathCh:   make(chan uint32, 1),
+		name:         username,
+		inputRate:    defaultInputRate,
+		decoderState: newDeltaDecoderState(),
+		decoders:     newDeltaDecoders(),
+		state:        WorldState{Entities: make(map[uint32]*EntitySnapshot)},
+		spawnCh:      make(chan struct{}, 1),
+		deathCh:      make(chan uint32, 1),
 	}
 	for _, o := range opts {
 		o(b)
@@ -118,6 +118,10 @@ func (b *Bot) Name() string { return b.name }
 // http(s):// URL, or a ws(s):// URL — the helper normalizes both the
 // HTTP path used for /auth/{register,login} and the WS path /ws.
 func (b *Bot) Connect(addr string) error {
+	// A transport reconnect starts a new frame-sequence scope even when the
+	// server reuses the same player entity during its reconnect grace window.
+	b.decoderState = newDeltaDecoderState()
+
 	cookie, err := Authenticate(toHTTPURL(addr), b.name)
 	if err != nil {
 		return fmt.Errorf("auth: %w", err)

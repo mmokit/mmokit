@@ -79,11 +79,6 @@ func newTestCell(cell pkguniverse.CellID) *pkguniverse.Cell {
 		systemNames[i] = def.Name
 	}
 
-	// Wire spatial grid deregistration
-	eng.OnEntityRemoved = func(e ecs.Entity) {
-		base.SpatialGrid().Deregister(e)
-	}
-
 	gameLoop := engine.NewGameLoop(eng, gameSystems, systemNames, base.Hooks())
 	gameLoop.SetEventsCh(events)
 

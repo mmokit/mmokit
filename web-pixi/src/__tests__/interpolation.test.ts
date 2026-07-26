@@ -1,6 +1,7 @@
 import { describe, test, expect, beforeEach } from "bun:test";
 import { updateEntityFromServer, interpolateEntities } from "../interpolation";
 import { newClockSync, observeServerTime } from "../../sdk/_core/clock-sync.js";
+import { AdaptivePlaybackController } from "../../sdk/_core/playback-controller.js";
 import { InterpolationBuffer } from "../../sdk/_core/interpolation-buffer.js";
 import type { ClientEntity, EntitySample } from "../types";
 import type { AnyEntity } from "../../sdk/index.js";
@@ -28,6 +29,16 @@ function mkEntity(firstX: number, firstT: number): ClientEntity {
   };
 }
 
+function fixedPlayback(): AdaptivePlaybackController {
+  const clock = newClockSync();
+  observeServerTime(clock, 1000, 0);
+  return new AdaptivePlaybackController({
+    clock,
+    minDelayMs: RENDER_DELAY,
+    maxDelayMs: RENDER_DELAY,
+  });
+}
+
 describe("InterpolationBuffer.push", () => {
   test("appends and caps at RING_SIZE", () => {
     const ent = mkEntity(0, 1000);
@@ -44,19 +55,18 @@ describe("InterpolationBuffer.push", () => {
 
 describe("interpolateEntities", () => {
   let entities: Map<number, ClientEntity>;
-  let clock = newClockSync();
+  let playback = fixedPlayback();
 
   beforeEach(() => {
     entities = new Map();
-    clock = newClockSync();
-    observeServerTime(clock, 1000, 0); // offset = 1000
+    playback = fixedPlayback(); // offset = 1000
   });
 
   test("single sample: renders at that sample's position", () => {
     const ent = mkEntity(50, 1000);
     entities.set(1, ent);
     // clientNow=0 ⇒ serverNow=1000, renderTime=900
-    interpolateEntities(entities, clock, 0);
+    interpolateEntities(entities, playback, 0);
     expect(ent.renderX).toBe(50);
   });
 
@@ -66,7 +76,7 @@ describe("interpolateEntities", () => {
     entities.set(1, ent);
     // We want renderTime = 1050 (halfway). serverNow = clientNow + 1000, so clientNow = 50+RENDER_DELAY.
     const clientNow = 50 + RENDER_DELAY;
-    interpolateEntities(entities, clock, clientNow);
+    interpolateEntities(entities, playback, clientNow);
     expect(ent.renderX).toBeCloseTo(50, 1);
   });
 
@@ -77,7 +87,7 @@ describe("interpolateEntities", () => {
     // Force renderTime = 1100 + 40ms, well past newest but inside cap.
     // clientNow ⇒ serverNow = 1140 ⇒ clientNow = 140 + RENDER_DELAY
     const clientNow = 140 + RENDER_DELAY;
-    interpolateEntities(entities, clock, clientNow);
+    interpolateEntities(entities, playback, clientNow);
     // newest worldX 100 + velX 10 * 0.04s = 100.4
     expect(ent.renderX).toBeCloseTo(100.4, 1);
   });
@@ -88,7 +98,7 @@ describe("interpolateEntities", () => {
     entities.set(1, ent);
     // renderTime = 1100 + 500ms (way past cap)
     const clientNow = 500 + RENDER_DELAY + 100;
-    interpolateEntities(entities, clock, clientNow);
+    interpolateEntities(entities, playback, clientNow);
     // Capped: 100 + 10 * (50/1000) = 100.5
     expect(ent.renderX).toBeCloseTo(100.5, 1);
   });
@@ -99,7 +109,7 @@ describe("interpolateEntities", () => {
     entities.set(1, ent);
     // renderTime = 900 (before oldest at 1000)
     const clientNow = -100 + RENDER_DELAY;
-    interpolateEntities(entities, clock, clientNow);
+    interpolateEntities(entities, playback, clientNow);
     expect(ent.renderX).toBe(42);
   });
 });
@@ -180,6 +190,37 @@ describe("updateEntityFromServer — handoff robustness", () => {
     // First sample must be preserved — no reset.
     expect(ent.buffer.samples[0]).toBe(firstSample);
   });
+
+  test("new stream snapshot can recover an older source authority after rollback", () => {
+    const entities = new Map<number, ClientEntity>();
+    const destination = {
+      netID: 42,
+      authorityEpoch: 11,
+      entityType: 0,
+      producedAtMs: 1100,
+      worldX: 110,
+      worldY: 0,
+      velX: 0,
+      velY: 0,
+    } as AnyEntity;
+    const resumedSource = {
+      ...destination,
+      authorityEpoch: 10,
+      producedAtMs: 1000,
+      worldX: 100,
+    } as AnyEntity;
+
+    updateEntityFromServer(entities, destination, destination.producedAtMs);
+    updateEntityFromServer(entities, resumedSource, resumedSource.producedAtMs);
+    expect(entities.get(42)!.current.authorityEpoch).toBe(11);
+
+    updateEntityFromServer(entities, resumedSource, resumedSource.producedAtMs, true);
+    const recovered = entities.get(42)!;
+    expect(recovered.current.authorityEpoch).toBe(10);
+    expect(recovered.current.worldX).toBe(100);
+    expect(recovered.buffer.samples).toHaveLength(1);
+    expect(recovered.buffer.authorityEpoch).toBe(10);
+  });
 });
 
 describe("interpolation — gap-preserves-interp-baseline (handoff regression)", () => {
@@ -192,12 +233,11 @@ describe("interpolation — gap-preserves-interp-baseline (handoff regression)",
     const entities = new Map<number, ClientEntity>();
     entities.set(1, ent);
 
-    const clock = newClockSync();
-    observeServerTime(clock, 1000, 0); // offset = 1000
+    const playback = fixedPlayback();
 
     // Render at t = 1250 (between samples 100→300).
     const clientNow = 250 + RENDER_DELAY;
-    interpolateEntities(entities, clock, clientNow);
+    interpolateEntities(entities, playback, clientNow);
 
     // Interp lerps between the two real samples (not a reset to newest).
     expect(ent.renderX).toBeGreaterThan(150);

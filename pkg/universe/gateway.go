@@ -122,8 +122,8 @@ type localSession struct {
 	connID   uint32
 	userID   uuid.UUID
 	username string
-	token    string     // session token bound to the auth login
-	hostID   string     // current authoritative host; "local" sentinel in single-host mode
+	token    string // session token bound to the auth login
+	hostID   string // current authoritative host; "local" sentinel in single-host mode
 	cellID   MeshCellID
 	epoch    uint64
 	spawnLoc coords.Location // resolved at login; forwarded in PlayerAssignment
@@ -438,10 +438,10 @@ func (g *Gateway) sendServerConfig(connID uint32) {
 }
 
 // handleDisconnect owns the full disconnect cleanup for a connection:
-//   1. If the connection was still in pending login, remove it from the login queue.
-//   2. If authenticated, remove the session record and clean up sessionRoutes.
-//   3. Forward the disconnect event to the owning cell's Events channel so the
-//      engine's grace-period state machine fires unchanged.
+//  1. If the connection was still in pending login, remove it from the login queue.
+//  2. If authenticated, remove the session record and clean up sessionRoutes.
+//  3. Forward the disconnect event to the owning cell's Events channel so the
+//     engine's grace-period state machine fires unchanged.
 //
 // In embedded mode the owning cell is looked up directly; in standalone mode
 // a ClientDisconnect MeshFrame is sent to the remote node via hostNetwork
@@ -625,12 +625,13 @@ func (g *Gateway) dispatchPlayerAssignment(sess *localSession) error {
 			node.Inbox <- CellMessage{
 				Type: MsgPlayerAssignment,
 				Assignment: &PlayerAssignment{
-					ConnID:        sess.connID,
-					UserID:        sess.userID,
-					Username:      sess.username,
-					SessionToken:  sess.token,
-					IsReconnect:   true,
-					SpawnLocation: sess.spawnLoc,
+					ConnID:           sess.connID,
+					UserID:           sess.userID,
+					Username:         sess.username,
+					SessionToken:     sess.token,
+					IsReconnect:      true,
+					StreamGeneration: uint32(sess.epoch),
+					SpawnLocation:    sess.spawnLoc,
 				},
 			}
 			g.log.Log(CatNetConn, "gateway: reconnect conn=%d user=%s -> %s", sess.connID, sess.username, reconnectCellID)
@@ -664,11 +665,12 @@ func (g *Gateway) dispatchPlayerAssignment(sess *localSession) error {
 	node.Inbox <- CellMessage{
 		Type: MsgPlayerAssignment,
 		Assignment: &PlayerAssignment{
-			ConnID:        sess.connID,
-			UserID:        sess.userID,
-			Username:      sess.username,
-			SessionToken:  sess.token,
-			SpawnLocation: sess.spawnLoc,
+			ConnID:           sess.connID,
+			UserID:           sess.userID,
+			Username:         sess.username,
+			SessionToken:     sess.token,
+			StreamGeneration: uint32(sess.epoch),
+			SpawnLocation:    sess.spawnLoc,
 		},
 	}
 	g.log.Log(CatNetConn, "gateway: conn=%d user=%s -> %s", sess.connID, sess.username, targetNodeID)
@@ -703,11 +705,39 @@ func (g *Gateway) isLocalShortcut(hostID string) bool {
 	return ok
 }
 
-// lookupSession returns the localSession for the given connID, or nil if absent.
+// lookupSession returns an immutable-by-convention snapshot of the localSession
+// for connID, or nil if absent. Never expose the map-owned pointer after
+// releasing g.mu: OnUpstreamSwitch mutates route fields concurrently with the
+// session pump, and a torn hostID/epoch pair sends an otherwise valid frame to
+// the wrong routing generation.
 func (g *Gateway) lookupSession(connID uint32) *localSession {
 	g.mu.RLock()
 	defer g.mu.RUnlock()
-	return g.sessions[connID]
+	sess := g.sessions[connID]
+	if sess == nil {
+		return nil
+	}
+	snapshot := *sess
+	return &snapshot
+}
+
+// replicationReceiptHost snapshots the current upstream route for a tracked
+// replication frame. Receipt traffic is stricter than ordinary frame routing:
+// both the gateway identity and epoch must match exactly so an enqueue from a
+// superseded authority cannot acknowledge a new cell's pending transaction.
+func (g *Gateway) replicationReceiptHost(connID uint32, gatewayID string, epoch uint64, sourceHostID string) (string, bool) {
+	if g == nil || epoch == 0 || gatewayID == "" || gatewayID != g.id || sourceHostID == "" {
+		return "", false
+	}
+	g.mu.RLock()
+	sess, ok := g.sessions[connID]
+	if !ok || sess.epoch != epoch || sess.hostID == "" || sess.hostID != sourceHostID {
+		g.mu.RUnlock()
+		return "", false
+	}
+	hostID := sess.hostID
+	g.mu.RUnlock()
+	return hostID, true
 }
 
 // removeSession removes the session record for the given connID.
@@ -904,14 +934,16 @@ func (g *Gateway) dispatchPlayerAssignmentRemote(sess *localSession) error {
 		DestCellId: string(sess.cellID),
 		Msg: &meshpb.MeshFrame_PlayerAssignment{
 			PlayerAssignment: &meshpb.PlayerAssignment{
-				ConnId:        sess.connID,
-				GatewayId:     g.id,
-				UserId:        sess.userID.String(),
-				Username:      sess.username,
-				SessionToken:  sess.token,
-				ToCellId:      string(sess.cellID),
-				SpawnLocation: locationToProto(sess.spawnLoc),
-				IsReconnect:   sess.isReconnect,
+				ConnId:           sess.connID,
+				GatewayId:        g.id,
+				UserId:           sess.userID.String(),
+				Username:         sess.username,
+				SessionToken:     sess.token,
+				ToCellId:         string(sess.cellID),
+				Epoch:            sess.epoch,
+				StreamGeneration: uint32(sess.epoch),
+				SpawnLocation:    locationToProto(sess.spawnLoc),
+				IsReconnect:      sess.isReconnect,
 			},
 		},
 	}

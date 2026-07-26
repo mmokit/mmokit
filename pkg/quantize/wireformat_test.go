@@ -207,3 +207,35 @@ func TestFrameHeader_NoServerTimeMs(t *testing.T) {
 		t.Fatalf("empty frame size = %d, want 20 (header only, no serverTimeMs)", len(buf))
 	}
 }
+
+func TestFrameEncoder_OptionalInputAckTrailer(t *testing.T) {
+	enc := NewFrameEncoder(64)
+	const wantAck = uint32(0xFFFF_FFFE)
+	buf := enc.Encode(9, 4, FrameFlagFreshSnapshot, nil, nil, nil, nil, wantAck)
+
+	if len(buf) != frameHeaderSize+4 {
+		t.Fatalf("frame size = %d, want %d-byte header + 4-byte ack", len(buf), frameHeaderSize)
+	}
+	dec := NewFrameDecoder(buf)
+	hdr := dec.Header()
+	if hdr.Flags&FrameFlagFreshSnapshot == 0 || hdr.Flags&FrameFlagInputAck == 0 {
+		t.Fatalf("flags = %#x, want fresh + input ack", hdr.Flags)
+	}
+	got, ok := dec.NextInputAck(hdr.Flags)
+	if !ok || got != wantAck {
+		t.Fatalf("input ack = (%#x, %v), want (%#x, true)", got, ok, wantAck)
+	}
+}
+
+func TestFrameEncoder_ClearsCallerInputAckFlagWithoutTrailer(t *testing.T) {
+	enc := NewFrameEncoder(64)
+	buf := enc.Encode(1, 1, FrameFlagInputAck, nil, nil, nil, nil)
+	dec := NewFrameDecoder(buf)
+	hdr := dec.Header()
+	if hdr.Flags&FrameFlagInputAck != 0 {
+		t.Fatalf("flags = %#x, encoder advertised a missing input ack trailer", hdr.Flags)
+	}
+	if _, ok := dec.NextInputAck(hdr.Flags); ok {
+		t.Fatal("unexpected input ack")
+	}
+}

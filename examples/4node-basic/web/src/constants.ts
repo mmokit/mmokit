@@ -9,7 +9,7 @@ export const VIEWPORT_SCALE = 3500;
  * cell handoff. 4 gives ~200ms window at 20Hz — one tick of margin
  * behind renderTime even under a dropped-frame burst.
  */
-export const RING_SIZE = 4;
+export const RING_SIZE = 8;
 
 /**
  * How far behind the latest server snapshot the client renders, in
@@ -17,6 +17,9 @@ export const RING_SIZE = 4;
  * typical cell-goroutine phase jitter.
  */
 export const RENDER_DELAY = 100;
+
+/** Adaptive playback ceiling under burst jitter/loss. */
+export const MAX_RENDER_DELAY = 300;
 
 /**
  * Maximum forward velocity extrapolation when render time runs past

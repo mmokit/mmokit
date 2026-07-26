@@ -122,7 +122,9 @@ type Dormant struct{}
 //
 // LocalX/LocalY are cell-local coordinates within (CellX, CellY). Use
 // SetTarget(worldX, worldY) to convert from world-absolute input. Sequence is
-// an optional client-supplied counter used by games that ack movement.
+// an optional client-supplied counter used by games that ack movement. Games
+// may define it as "processed" rather than "applied" so a rejected command can
+// still be retired by client prediction and reconciled to authoritative state.
 type MoveTarget struct {
 	LocalX, LocalY float32 // destination local coordinates within target cell
 	CellX, CellY   int32   // cell of the destination
@@ -166,4 +168,3 @@ type DirectionInput struct {
 	X, Y   float32 // direction vector (normalized by client)
 	Active bool    // currently holding a direction key
 }
-

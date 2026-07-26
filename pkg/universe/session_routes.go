@@ -90,6 +90,42 @@ func (r *sessionRoutes) UpdateCell(key SessionKey, newCell MeshCellID) bool {
 	return true
 }
 
+// AdvanceCell moves a same-host session to newCell and advances its route
+// fencing epoch atomically. A missing route is initialized at epoch one.
+// Replication StreamGeneration is deliberately separate: callers advance the
+// transferred PlayerSession copy when (and only when) its frame sequence will
+// restart on a new replication source.
+func (r *sessionRoutes) AdvanceCell(key SessionKey, newCell MeshCellID) uint64 {
+	return r.AdvanceCellFrom(key, newCell, 0)
+}
+
+// AdvanceCellFrom is AdvanceCell with an optional lower bound supplied by a
+// colocated VCM. This closes recovery/coexistence seams where the transport
+// already observed a newer fencing epoch than a missing or stale coordinator
+// route. The returned epoch is always one step beyond both counters.
+func (r *sessionRoutes) AdvanceCellFrom(key SessionKey, newCell MeshCellID, floor uint64) uint64 {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if route, ok := r.routes[key]; ok {
+		if floor > route.Epoch {
+			route.Epoch = floor
+		}
+		route.Epoch++
+		route.CellID = newCell
+		return route.Epoch
+	}
+	epoch := uint64(1)
+	if floor != 0 {
+		epoch = floor + 1
+	}
+	r.routes[key] = &SessionRoute{
+		Key:    key,
+		CellID: newCell,
+		Epoch:  epoch,
+	}
+	return epoch
+}
+
 // Get returns a deep copy of the route for key, or (nil, false) if absent.
 // Callers may freely mutate the returned struct. The copy happens under the
 // read lock so concurrent writers (Migrate, remapCell, remapHostCell) can't

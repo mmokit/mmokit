@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"testing"
 
+	"github.com/google/uuid"
+
 	meshpb "github.com/zenion/mmoserver/gen/go/meshpb"
 )
 
@@ -52,8 +54,10 @@ func TestMeshFrameRoundTrip(t *testing.T) {
 				Type:       MsgForwardInput,
 				FromCellID: "cell_0_0",
 				ForwardInput: &ForwardInputPayload{
-					ConnID:    55,
-					InputBlob: []byte{0xAB, 0xCD},
+					GatewayID:    "gateway-a",
+					ConnID:       55,
+					SessionEpoch: 9,
+					InputBlob:    []byte{0xAB, 0xCD},
 				},
 			},
 		},
@@ -77,9 +81,10 @@ func TestMeshFrameRoundTrip(t *testing.T) {
 				Type:       MsgPlayerAssignment,
 				FromCellID: "cell_0_0",
 				Assignment: &PlayerAssignment{
-					ConnID:      42,
-					Username:    "bob",
-					IsReconnect: false,
+					ConnID:           42,
+					Username:         "bob",
+					IsReconnect:      false,
+					StreamGeneration: 17,
 				},
 			},
 		},
@@ -89,9 +94,10 @@ func TestMeshFrameRoundTrip(t *testing.T) {
 				Type:       MsgPlayerAssignment,
 				FromCellID: "cell_0_0",
 				Assignment: &PlayerAssignment{
-					ConnID:      43,
-					Username:    "carol",
-					IsReconnect: true,
+					ConnID:           43,
+					Username:         "carol",
+					IsReconnect:      true,
+					StreamGeneration: 0,
 				},
 			},
 		},
@@ -102,10 +108,15 @@ func TestMeshFrameRoundTrip(t *testing.T) {
 				FromCellID: "cell_0_0",
 				Sessions: []SessionTransfer{
 					{
-						ConnID:   11,
-						Username: "dave",
-						StateTag: "docked",
-						Data:     []byte{0xFF},
+						ConnID:           11,
+						GatewayID:        "gateway-a",
+						GatewayConnID:    991,
+						SessionEpoch:     37,
+						UserID:           uuid.MustParse("d096079e-e90b-4ae9-b3eb-0cbd9f5f4f1b"),
+						Username:         "dave",
+						StreamGeneration: 23,
+						StateTag:         "docked",
+						Data:             []byte{0xFF},
 					},
 				},
 			},
@@ -117,10 +128,11 @@ func TestMeshFrameRoundTrip(t *testing.T) {
 				FromCellID: "cell_0_0",
 				Sessions: []SessionTransfer{
 					{
-						ConnID:   12,
-						Username: "eve",
-						StateTag: "dead",
-						Data:     nil,
+						ConnID:           12,
+						Username:         "eve",
+						StreamGeneration: 0,
+						StateTag:         "dead",
+						Data:             nil,
 					},
 				},
 			},
@@ -131,8 +143,9 @@ func TestMeshFrameRoundTrip(t *testing.T) {
 				Type:       MsgSpawnTransfer,
 				FromCellID: "cell_0_0",
 				Spawn: &SpawnTransfer{
-					ConnID:   33,
-					Username: "frank",
+					ConnID:           33,
+					Username:         "frank",
+					StreamGeneration: ^uint32(0),
 				},
 			},
 		},
@@ -157,6 +170,46 @@ func TestMeshFrameRoundTrip(t *testing.T) {
 				t.Errorf("round-trip mismatch:\n  orig:    %+v\n  decoded: %+v", tc.msg, decoded)
 			}
 		})
+	}
+}
+
+func TestPlayerAssignmentWireSeparatesRouteEpochFromStreamGeneration(t *testing.T) {
+	frame, err := encodeCellMessage(CellMessage{
+		Type:       MsgPlayerAssignment,
+		FromCellID: "cell_0_0",
+		Assignment: &PlayerAssignment{
+			ConnID:           42,
+			StreamGeneration: 29,
+		},
+	}, "cell_1_0")
+	if err != nil {
+		t.Fatalf("encodeCellMessage: %v", err)
+	}
+
+	assignment := frame.GetPlayerAssignment()
+	if assignment == nil {
+		t.Fatal("encoded PlayerAssignment is nil")
+	}
+	if assignment.Epoch != 0 {
+		t.Fatalf("route Epoch = %d, want 0 for embedded CellMessage", assignment.Epoch)
+	}
+	if assignment.StreamGeneration != 29 {
+		t.Fatalf("StreamGeneration = %d, want 29", assignment.StreamGeneration)
+	}
+
+	// A host route fence can differ from the replication stream generation.
+	// Decoding the cell payload must never truncate or reinterpret that epoch.
+	assignment.Epoch = ^uint64(0)
+	assignment.StreamGeneration = ^uint32(0)
+	decoded, err := decodeMeshFrame(frame)
+	if err != nil {
+		t.Fatalf("decodeMeshFrame: %v", err)
+	}
+	if decoded.Assignment == nil {
+		t.Fatal("decoded PlayerAssignment is nil")
+	}
+	if decoded.Assignment.StreamGeneration != ^uint32(0) {
+		t.Fatalf("decoded StreamGeneration = %d, want %d", decoded.Assignment.StreamGeneration, uint32(^uint32(0)))
 	}
 }
 
@@ -210,7 +263,9 @@ func cellMessagesEqual(t *testing.T, orig, got CellMessage) bool {
 			check("ForwardInput nil", of, gf)
 			break
 		}
+		check("ForwardInput.GatewayID", of.GatewayID, gf.GatewayID)
 		check("ForwardInput.ConnID", of.ConnID, gf.ConnID)
+		check("ForwardInput.SessionEpoch", of.SessionEpoch, gf.SessionEpoch)
 		check("ForwardInput.InputBlob", of.InputBlob, gf.InputBlob)
 
 	case MsgCrossCellAction:
@@ -234,6 +289,7 @@ func cellMessagesEqual(t *testing.T, orig, got CellMessage) bool {
 		check("Assignment.ConnID", oa.ConnID, ga.ConnID)
 		check("Assignment.Username", oa.Username, ga.Username)
 		check("Assignment.IsReconnect", oa.IsReconnect, ga.IsReconnect)
+		check("Assignment.StreamGeneration", oa.StreamGeneration, ga.StreamGeneration)
 
 	case MsgSessionTransfer:
 		if len(orig.Sessions) != len(got.Sessions) {
@@ -244,7 +300,12 @@ func cellMessagesEqual(t *testing.T, orig, got CellMessage) bool {
 		for i := range orig.Sessions {
 			os, gs := orig.Sessions[i], got.Sessions[i]
 			check("Sessions[i].ConnID", os.ConnID, gs.ConnID)
+			check("Sessions[i].GatewayID", os.GatewayID, gs.GatewayID)
+			check("Sessions[i].GatewayConnID", os.GatewayConnID, gs.GatewayConnID)
+			check("Sessions[i].SessionEpoch", os.SessionEpoch, gs.SessionEpoch)
+			check("Sessions[i].UserID", os.UserID, gs.UserID)
 			check("Sessions[i].Username", os.Username, gs.Username)
+			check("Sessions[i].StreamGeneration", os.StreamGeneration, gs.StreamGeneration)
 			check("Sessions[i].StateTag", os.StateTag, gs.StateTag)
 			// Data is any -> compare as []byte
 			var origData, gotData []byte
@@ -265,6 +326,7 @@ func cellMessagesEqual(t *testing.T, orig, got CellMessage) bool {
 		}
 		check("Spawn.ConnID", os.ConnID, gs.ConnID)
 		check("Spawn.Username", os.Username, gs.Username)
+		check("Spawn.StreamGeneration", os.StreamGeneration, gs.StreamGeneration)
 	}
 
 	return ok
@@ -293,7 +355,6 @@ func TestDecodeMeshFrameNilMsg(t *testing.T) {
 		t.Errorf("error %q does not contain \"no oneof payload\"", got)
 	}
 }
-
 
 // contains is a local helper to avoid importing strings in the test file.
 func contains(s, substr string) bool {

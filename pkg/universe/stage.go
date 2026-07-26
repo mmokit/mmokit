@@ -83,7 +83,7 @@ type Stage struct {
 	clusterClock *ClusterClock
 
 	replicaNetIDs    map[uint32]ecs.Entity
-	highestSeenEpoch map[uint32]uint32 // per-netID: highest epoch seen from border frames
+	highestSeenEpoch map[uint32]uint32 // per-netID: latest epoch seen under RFC 1982 ordering
 
 	// borderLastSeen is the per-source-cell snapshot of the netIDs we
 	// last received from that source in a MsgBorderFrame. ApplyBorderFrame
@@ -153,17 +153,13 @@ type Stage struct {
 	// with handoffs disabled.
 	drainingForMerge atomic.Bool
 
-	// transferDeactivatedViewers holds the player sessions this cell
-	// transitioned StateActive→StateTransferring when it was serialized for a
-	// cell transfer (split/merge/migrate). Deactivating them drops the player
-	// from this cell's ActiveViewers (NewPlayerViewerSource filters
-	// StateActive), so the doomed source cell stops sending the migrated
-	// player WorldDelta frames — fixing the dual-viewer race where the source
-	// kept replicating to the player until its deferred commit teardown,
-	// duplicating every frame the destination cell already sends (~1s of
-	// interpolation jitter). Recorded so an aborted transfer can return them
-	// to StateActive; lives on the stage so the normal success path (cell torn
-	// down at commit) GCs it with the stage. Loop-goroutine only.
+	// transferDeactivatedViewers holds every connected, non-Pending player
+	// session whose replication was suspended for a split/merge/migrate.
+	// Active sessions additionally transition to StateTransferring; custom
+	// lifecycle states retain their state while ReplicationSuspended keeps
+	// them out of the ViewerSource. Recorded so abort can clear suspension and
+	// advance the resumed source beyond the abandoned destination generation;
+	// the normal success path tears the stage down. Loop-goroutine only.
 	transferDeactivatedViewers []*engine.PlayerSession
 
 	// dispatcher routes typed messages to registered handlers (mmokit.Handle /
@@ -273,7 +269,36 @@ func NewStage(eng *engine.Engine, cell CellID, aoiRadius float32, replRegistry *
 
 	result := &base
 	result.commands = &Commands{world: w, stage: result}
+	eng.SetEntityRemovalCleanup(result.cleanupEntityRemoval)
 	return result
+}
+
+// cleanupEntityRemoval is the mandatory Stage-side half of every
+// engine-mediated teardown. It runs while ECS components are still readable
+// and deliberately uses entity-identity checks when clearing netID tracking so
+// rollback of a rejected duplicate cannot erase the entity that won the slot.
+func (b *Stage) cleanupEntityRemoval(entity ecs.Entity) {
+	if b.spatialGrid != nil {
+		b.spatialGrid.Deregister(entity)
+	}
+
+	if b.replicaMap.HasAll(entity) {
+		netID := b.replicaMap.Get(entity).SourceNetID
+		if tracked, ok := b.replicaNetIDs[netID]; ok && tracked == entity {
+			delete(b.replicaNetIDs, netID)
+			b.forgetBorderNetID(netID)
+		}
+	}
+
+	if b.netIDIdx != nil && b.netIDMap.HasAll(entity) {
+		b.netIDIdx.ExitEntity(b.netIDMap.Get(entity).ID, entity)
+	}
+}
+
+func (b *Stage) forgetBorderNetID(netID uint32) {
+	for _, seen := range b.borderLastSeen {
+		delete(seen, netID)
+	}
 }
 
 // ---------------------------------------------------------------------------
@@ -331,21 +356,29 @@ func (b *Stage) IsDrainingForMerge() bool {
 	return b.drainingForMerge.Load()
 }
 
-// DeactivateTransferViewers transitions every StateActive player on this cell
-// to StateTransferring, dropping them from the cell's ActiveViewers so it
-// stops sending them WorldDelta frames. Called by the executor at serialize
-// time for split/merge/migrate — all of which fully evacuate the source cell,
-// so every active player here is leaving. Recorded for ReactivateTransferViewers
-// (abort recovery). MUST run on this cell's game-loop goroutine (it mutates
-// engine.Players). Idempotent across the 4 per-quadrant SPLIT Execute calls:
-// the first transitions all players, the rest find none still StateActive.
+// DeactivateTransferViewers suspends replication for every connected,
+// non-Pending player on this cell. Active sessions also retain the existing
+// StateActive→StateTransferring lifecycle transition; custom states such as
+// dead, docking, or docked remain unchanged while their viewer is suppressed.
+// Called by the executor at serialize time for split/merge/migrate — all of
+// which fully evacuate the source cell. Recorded for
+// ReactivateTransferViewers (abort recovery). MUST run on this cell's
+// game-loop goroutine (it mutates engine.Players). Idempotent across the four
+// per-quadrant SPLIT Execute calls because already-suspended sessions are
+// skipped.
 func (b *Stage) DeactivateTransferViewers() {
 	var moved []*engine.PlayerSession
-	b.eng.Players.ForEach(engine.StateActive, func(s *engine.PlayerSession) {
+	for _, s := range b.eng.Players.AllSessions() {
+		if s.ConnID == 0 || s.State == engine.StatePending || s.ReplicationSuspended {
+			continue
+		}
+		s.ReplicationSuspended = true
 		moved = append(moved, s)
-	})
+	}
 	for _, s := range moved {
-		_ = b.eng.Players.Transition(s, engine.StateTransferring)
+		if s.State == engine.StateActive {
+			_ = b.eng.Players.Transition(s, engine.StateTransferring)
+		}
 	}
 	b.transferDeactivatedViewers = append(b.transferDeactivatedViewers, moved...)
 }
@@ -353,9 +386,16 @@ func (b *Stage) DeactivateTransferViewers() {
 // ReactivateTransferViewers returns the sessions deactivated by
 // DeactivateTransferViewers to StateActive. Called on the source cell when a
 // transfer is aborted or its serialize/ship fails and the source cell survives.
+// The attempted destination may already have emitted generation N+1 before an
+// abort arrives, so the resumed source advances from N to N+2 before becoming
+// visible again. This forces a fresh replication stream that cannot be rejected
+// behind the abandoned destination stream. NetworkID epochs are intentionally
+// untouched: no entity-authority commit occurred.
 // MUST run on this cell's game-loop goroutine.
 func (b *Stage) ReactivateTransferViewers() {
 	for _, s := range b.transferDeactivatedViewers {
+		s.StreamGeneration += 2
+		s.ReplicationSuspended = false
 		if s.State == engine.StateTransferring {
 			_ = b.eng.Players.Transition(s, engine.StateActive)
 		}
@@ -548,6 +588,14 @@ func (b *Stage) GhostMap() *ecs.Map1[component.Ghost] { return b.ghostMap }
 // wrapper around GhostMap().HasAll(e).
 func (b *Stage) IsGhost(e ecs.Entity) bool {
 	return b.ghostMap.HasAll(e)
+}
+
+// IsReplica reports whether the entity is a local continuity representation
+// whose authority lives on another cell. Lifecycle cleanup must not treat a
+// Replica as an authoritative despawn: handoff demotes Live -> Replica before
+// transitioning the source player session to StateTransferring.
+func (b *Stage) IsReplica(e ecs.Entity) bool {
+	return b.replicaMap.HasAll(e)
 }
 
 // Topology is an alias for ClusterCells. Reads more naturally at call
@@ -775,6 +823,7 @@ func (b *Stage) SerializeEntityCore(entity ecs.Entity) *TransferFrame {
 		if f.ConnID != 0 {
 			if s := b.eng.Players.ByConnID(f.ConnID); s != nil {
 				f.Username = s.Username
+				f.StreamGeneration = s.StreamGeneration
 				f.DebugFlags = uint32(s.DebugFlags)
 				f.UserID = s.UserID
 			}
@@ -911,6 +960,7 @@ func (b *Stage) SpawnFromTransferCore(data []byte, presence EntityPresence) (ecs
 	if frame.ConnID != 0 {
 		if s := b.eng.Players.ByConnID(frame.ConnID); s != nil {
 			s.Entity = entity
+			s.StreamGeneration = frame.StreamGeneration
 			s.DebugFlags = engine.DebugFlag(frame.DebugFlags)
 			s.UserID = frame.UserID
 		}
@@ -931,7 +981,7 @@ func (b *Stage) SpawnFromTransferCore(data []byte, presence EntityPresence) (ecs
 			b.eng.Log.Log(CatMeshTransfer,
 				"[%s] duplicate live spawn blocked: netID=%d", b.cellID, frame.NetworkID)
 			if b.strictNetIDIndex {
-				b.eng.ECS.RemoveEntity(entity)
+				b.eng.RemoveEntityNowWithPolicy(entity, engine.RemovalLocalOnly)
 				return ecs.Entity{}, nil, fmt.Errorf("duplicate live netID %d", frame.NetworkID)
 			}
 		case ActionRejected:
@@ -944,7 +994,7 @@ func (b *Stage) SpawnFromTransferCore(data []byte, presence EntityPresence) (ecs
 				"[%s] transfer rejected by netIDIndex: netID=%d presence=%d",
 				b.cellID, frame.NetworkID, presence)
 			if b.strictNetIDIndex {
-				b.eng.ECS.RemoveEntity(entity)
+				b.eng.RemoveEntityNowWithPolicy(entity, engine.RemovalLocalOnly)
 				return ecs.Entity{}, nil, fmt.Errorf("transfer rejected: netID %d conflicts with existing presence", frame.NetworkID)
 			}
 		}
@@ -1228,8 +1278,16 @@ func (b *Stage) netIDStillPushedByOtherSource(netID uint32, excludeSource MeshCe
 	return false
 }
 
+// serialUint32After reports whether candidate follows current under RFC 1982
+// serial-number arithmetic. The comparison is intentionally false for equal
+// values and for the undefined half-range distance (1<<31).
+func serialUint32After(candidate, current uint32) bool {
+	delta := candidate - current
+	return delta != 0 && delta < 1<<31
+}
+
 // upsertBorderReplica is the single entry point for creating or updating a
-// replica entity from a border frame. Tracks the highest-seen epoch per netID
+// replica entity from a border frame. Tracks the serial-latest epoch per netID
 // so stale frames are dropped trivially. componentTail is the length-prefixed
 // component-slice section of the wire entry (may be empty) and is applied via
 // the ReplicationRegistry after fixed-field updates.
@@ -1240,8 +1298,19 @@ func (b *Stage) upsertBorderReplica(
 	producedAtMs uint64,
 	componentTail []byte,
 ) {
-	if prev, ok := b.highestSeenEpoch[netID]; ok && epoch < prev {
-		return // stale
+	// highestSeenEpoch is normally sufficient to reject stale frames, but
+	// compare against the materialized component too so an existing replica
+	// can never be rewound if bookkeeping was reconstructed independently.
+	if ent, ok := b.replicaNetIDs[netID]; ok && b.eng.ECS.Alive(ent) && b.netIDMap.HasAll(ent) {
+		materializedEpoch := b.netIDMap.Get(ent).Epoch
+		if epoch != materializedEpoch && !serialUint32After(epoch, materializedEpoch) {
+			return // stale
+		}
+	}
+	if prev, ok := b.highestSeenEpoch[netID]; ok {
+		if epoch != prev && !serialUint32After(epoch, prev) {
+			return // stale
+		}
 	}
 	b.highestSeenEpoch[netID] = epoch
 
@@ -1264,6 +1333,12 @@ func (b *Stage) upsertBorderReplica(
 
 	if ent, ok := b.replicaNetIDs[netID]; ok && b.eng.ECS.Alive(ent) {
 		// Update existing replica position, velocity, and rotation.
+		if b.netIDMap.HasAll(ent) {
+			nid := b.netIDMap.Get(ent)
+			if serialUint32After(epoch, nid.Epoch) {
+				nid.Epoch = epoch
+			}
+		}
 		if b.posMap.HasAll(ent) {
 			pos := b.posMap.Get(ent)
 			pos.X = localX
@@ -1340,7 +1415,7 @@ func (b *Stage) upsertBorderReplica(
 				"[%s] replica ignored: netID=%d is already live here",
 				b.cellID, netID)
 			if b.strictNetIDIndex && b.eng.ECS.Alive(ent) {
-				b.eng.ECS.RemoveEntity(ent)
+				b.eng.RemoveEntityNowWithPolicy(ent, engine.RemovalLocalOnly)
 			}
 			return
 		}
@@ -1472,19 +1547,7 @@ func (b *Stage) ExpireReplicas() {
 	}
 	for _, e := range expired {
 		if b.eng.ECS.Alive(e) {
-			if b.replicaMap.HasAll(e) {
-				netID := b.replicaMap.Get(e).SourceNetID
-				delete(b.replicaNetIDs, netID)
-				// Also drop the netID from every per-source interest-set
-				// snapshot. Keeps borderLastSeen bounded when an orphaned
-				// source is cleaned up via TTL, so a later "source came
-				// back" case doesn't see phantom removals from a stale
-				// snapshot.
-				for _, seen := range b.borderLastSeen {
-					delete(seen, netID)
-				}
-			}
-			b.eng.MarkForRemoval(e)
+			b.eng.MarkForRemovalWithPolicy(e, engine.RemovalLocalOnly)
 		}
 	}
 }
@@ -1493,17 +1556,26 @@ func (b *Stage) RemoveReplicaByNetID(netID uint32) {
 	if e, ok := b.replicaNetIDs[netID]; ok {
 		b.eng.Log.Log(CatMeshReplica, "[%s] replica removed: netID=%d", b.cellID, netID)
 		if b.eng.ECS.Alive(e) {
-			b.eng.ECS.RemoveEntity(e)
+			b.eng.RemoveEntityNowWithPolicy(e, engine.RemovalLocalOnly)
+		} else {
+			// Heal stale bookkeeping even if another path removed the ECS row
+			// without going through the engine primitive.
+			if tracked, exists := b.replicaNetIDs[netID]; exists && tracked == e {
+				delete(b.replicaNetIDs, netID)
+			}
+			if b.netIDIdx != nil {
+				b.netIDIdx.ExitEntity(netID, e)
+			}
 		}
-		delete(b.replicaNetIDs, netID)
-		// ECS.RemoveEntity here is synchronous and bypasses
-		// engine.FlushRemovals — so the engine's OnEntityRemoved hook
-		// (which normally Exits the netIDIdx) does NOT fire. Exit
-		// explicitly so a subsequent SpawnFromTransferCore(Live) for
-		// this netID finds an empty slot (ActionInstalled) instead of
-		// colliding with the stale Replica slot (ActionRejected).
-		if b.netIDIdx != nil {
-			b.netIDIdx.Exit(netID)
+	} else if b.netIDIdx != nil {
+		// replicaNetIDs is the fast path, but recover a replica slot if its
+		// companion map entry was lost. Never touch a Live slot here.
+		if e, presence, ok := b.netIDIdx.Lookup(netID); ok && presence == PresenceReplica {
+			if b.eng.ECS.Alive(e) {
+				b.eng.RemoveEntityNowWithPolicy(e, engine.RemovalLocalOnly)
+			} else {
+				b.netIDIdx.ExitEntity(netID, e)
+			}
 		}
 	}
 	// Always drop the netID from every per-source snapshot, even if the
@@ -1511,9 +1583,7 @@ func (b *Stage) RemoveReplicaByNetID(netID uint32) {
 	// during interest-set diffs and from handoff teardown — both need
 	// to forget this netID so the next diff tick doesn't see it as
 	// "missing" and re-issue a RemoveReplicaByNetID for a ghost.
-	for _, seen := range b.borderLastSeen {
-		delete(seen, netID)
-	}
+	b.forgetBorderNetID(netID)
 }
 
 // VelScale returns the max velocity scale used for qvel quantization.
@@ -1583,7 +1653,7 @@ func (b *Stage) TickGhosts() {
 	}
 	for _, e := range expired {
 		if b.eng.ECS.Alive(e) {
-			b.eng.MarkForRemoval(e)
+			b.eng.MarkForRemovalWithPolicy(e, engine.RemovalLocalOnly)
 		}
 	}
 }

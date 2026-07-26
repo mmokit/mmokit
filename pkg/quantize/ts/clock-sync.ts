@@ -47,6 +47,21 @@ export function newClockSync(): ClockSync {
   };
 }
 
+/**
+ * Drop observations from a superseded producer stream.
+ *
+ * A replacement authority can legitimately publish an earlier cluster-clock
+ * stamp than the authority it replaces. Retaining the old sliding-window
+ * maximum would keep estimated server time ahead for up to two seconds.
+ */
+export function resetClockSync(c: ClockSync): void {
+  c.offsetMs = 0;
+  c.initialized = false;
+  c.instants.fill(0);
+  c.instantsIdx = 0;
+  c.instantsCount = 0;
+}
+
 /** Minimal shape required to anchor a frame on the clock. */
 interface HasProducedAt { producedAtMs: number; }
 

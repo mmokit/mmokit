@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/mlange-42/ark/ecs"
 	"github.com/zenion/mmoserver/pkg/logger"
 	"github.com/zenion/mmoserver/pkg/net"
 )
@@ -13,6 +14,10 @@ type mockSystem struct {
 	name string
 	log  *[]string
 }
+
+type updateFunc func(float32)
+
+func (f updateFunc) Update(dt float32) { f(dt) }
 
 func (m *mockSystem) Name() string { return m.name }
 func (m *mockSystem) Update(dt float32) {
@@ -91,6 +96,69 @@ func TestGameLoop_HookOrder(t *testing.T) {
 	// Systems should have run between ProcessLogins and PreFlush
 	if len(sysLog) == 0 {
 		t.Error("system was never called")
+	}
+}
+
+func TestGameLoop_DespawnAfterRemovalSamplingPublishesNextTick(t *testing.T) {
+	eng := newLoopTestEngine()
+	mapper := ecs.NewMap1[testComp](eng.ECS)
+	entity := mapper.NewEntity(&testComp{ID: 73})
+	eng.GetNetID = func(e ecs.Entity) (uint32, bool) {
+		return mapper.Get(e).ID, true
+	}
+
+	var sampled [][]uint32
+	sample := updateFunc(func(float32) {
+		sampled = append(sampled, append([]uint32(nil), eng.SampleRemovedNetIDs()...))
+	})
+	despawn := updateFunc(func(float32) {
+		eng.RemoveEntityNow(entity)
+	})
+	gl := NewGameLoop(eng, []System{sample, despawn}, []string{"replication", "late-despawn"}, Hooks{})
+
+	gl.tick(0.05)
+	gl.tick(0.05)
+
+	if len(sampled) != 2 {
+		t.Fatalf("sample count = %d, want 2", len(sampled))
+	}
+	if len(sampled[0]) != 0 {
+		t.Fatalf("first tick sample = %v, want empty", sampled[0])
+	}
+	if len(sampled[1]) != 1 || sampled[1][0] != 73 {
+		t.Fatalf("second tick sample = %v, want [73]", sampled[1])
+	}
+}
+
+func TestGameLoop_EndTickRemovalAfterSamplingPublishesNextTick(t *testing.T) {
+	eng := newLoopTestEngine()
+	mapper := ecs.NewMap1[testComp](eng.ECS)
+	entity := mapper.NewEntity(&testComp{ID: 74})
+	eng.GetNetID = func(e ecs.Entity) (uint32, bool) {
+		return mapper.Get(e).ID, true
+	}
+
+	var sampled [][]uint32
+	sample := updateFunc(func(float32) {
+		sampled = append(sampled, append([]uint32(nil), eng.SampleRemovedNetIDs()...))
+	})
+	queueRemoval := updateFunc(func(float32) {
+		eng.MarkForRemoval(entity)
+	})
+	gl := NewGameLoop(eng, []System{sample, queueRemoval}, []string{"replication", "queue-removal"}, Hooks{})
+
+	// FlushRemovals runs after both systems, hence after the tick-one sample.
+	gl.tick(0.05)
+	gl.tick(0.05)
+
+	if len(sampled) != 2 {
+		t.Fatalf("sample count = %d, want 2", len(sampled))
+	}
+	if len(sampled[0]) != 0 {
+		t.Fatalf("first tick sample = %v, want empty", sampled[0])
+	}
+	if len(sampled[1]) != 1 || sampled[1][0] != 74 {
+		t.Fatalf("second tick sample = %v, want [74]", sampled[1])
 	}
 }
 

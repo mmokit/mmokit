@@ -193,9 +193,8 @@ func stepMergeRenameSurvivorHost(c *Process, ctx *CommitContext) error {
 	return nil
 }
 
-// stepMergeApplyRewireDirectives applies the per-cell neighbor rewires
-// off the coord lock and on each target cell's own game loop — see
-// applyRewireDirectives.
+// stepMergeApplyRewireDirectives applies per-cell neighbor snapshots off the
+// caller's coord lock and at each target cell's next tick boundary.
 func stepMergeApplyRewireDirectives(c *Process, ctx *CommitContext) error {
 	c.applyRewireDirectives(ctx.MergeDirectives)
 	return nil

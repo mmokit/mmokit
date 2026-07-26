@@ -15,31 +15,55 @@ namespace Mmokit.Sdk.Core
     {
         public const int InstantWindow = 40;
 
-        public double OffsetMs { get; private set; }
-        public bool Initialized { get; private set; }
-
+        readonly object _sync = new();
         readonly double[] _instants = new double[InstantWindow];
         int _idx;
         int _count;
+        double _offsetMs;
+        bool _initialized;
+
+        public double OffsetMs
+        {
+            get
+            {
+                lock (_sync)
+                    return _offsetMs;
+            }
+        }
+
+        public bool Initialized
+        {
+            get
+            {
+                lock (_sync)
+                    return _initialized;
+            }
+        }
 
         /// Feed one (serverTimeMs, clientNowMs) observation; recompute offset.
         public void ObserveServerTime(double serverTimeMs, double clientNowMs)
-        {
-            double instant = serverTimeMs - clientNowMs;
-            _instants[_idx] = instant;
-            _idx = (_idx + 1) % _instants.Length;
-            if (_count < _instants.Length) _count++;
+            => ObserveServerTimeAndGetOffset(serverTimeMs, clientNowMs);
 
-            if (!Initialized)
+        /// Observe and return the resulting offset under one clock lock. This
+        /// lets AdaptivePlaybackController use the exact observation it just
+        /// submitted even when the clock is shared by multiple controllers.
+        internal double ObserveServerTimeAndGetOffset(double serverTimeMs, double clientNowMs)
+        {
+            lock (_sync)
             {
-                OffsetMs = instant;
-                Initialized = true;
-                return;
+                return ObserveServerTimeUnsafe(serverTimeMs, clientNowMs);
             }
-            double max = double.NegativeInfinity;
-            for (int i = 0; i < _count; i++)
-                if (_instants[i] > max) max = _instants[i];
-            OffsetMs = max;
+        }
+
+        /// Atomically replace a superseded producer's samples and observe the
+        /// replacement stream's first timestamp.
+        internal double ResetAndObserveServerTimeAndGetOffset(double serverTimeMs, double clientNowMs)
+        {
+            lock (_sync)
+            {
+                ResetUnsafe();
+                return ObserveServerTimeUnsafe(serverTimeMs, clientNowMs);
+            }
         }
 
         /// Feed the freshest producedAtMs across a frame's decoded entities.
@@ -51,7 +75,60 @@ namespace Mmokit.Sdk.Core
             if (maxStamp > 0) ObserveServerTime(maxStamp, clientNowMs);
         }
 
+        /// Drop samples from a superseded producer stream. A replacement
+        /// authority may legitimately publish an earlier cluster-clock stamp.
+        public void Reset()
+        {
+            lock (_sync)
+            {
+                ResetUnsafe();
+            }
+        }
+
+        double ObserveServerTimeUnsafe(double serverTimeMs, double clientNowMs)
+        {
+            double instant = serverTimeMs - clientNowMs;
+            _instants[_idx] = instant;
+            _idx = (_idx + 1) % _instants.Length;
+            if (_count < _instants.Length) _count++;
+
+            if (!_initialized)
+            {
+                _offsetMs = instant;
+                _initialized = true;
+                return _offsetMs;
+            }
+            double max = double.NegativeInfinity;
+            for (int i = 0; i < _count; i++)
+                if (_instants[i] > max) max = _instants[i];
+            _offsetMs = max;
+            return _offsetMs;
+        }
+
+        void ResetUnsafe()
+        {
+            System.Array.Clear(_instants, 0, _instants.Length);
+            _idx = 0;
+            _count = 0;
+            _offsetMs = 0;
+            _initialized = false;
+        }
+
         /// Estimated current server wall-clock ms, given a client clock reading.
-        public double EstimatedServerNow(double clientNowMs) => clientNowMs + OffsetMs;
+        public double EstimatedServerNow(double clientNowMs)
+        {
+            lock (_sync)
+                return clientNowMs + _offsetMs;
+        }
+
+        /// Atomically test initialization and estimate server time.
+        internal bool TryEstimatedServerNow(double clientNowMs, out double serverNowMs)
+        {
+            lock (_sync)
+            {
+                serverNowMs = clientNowMs + _offsetMs;
+                return _initialized;
+            }
+        }
     }
 }

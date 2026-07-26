@@ -28,6 +28,8 @@ func main() {
 	interpTS := flag.String("interp", "pkg/quantize/ts/interpolation-core.ts", "Path to interpolation-core.ts to copy")
 	clockSyncTS := flag.String("clock-sync", "pkg/quantize/ts/clock-sync.ts", "Path to clock-sync.ts to copy")
 	interpBufferTS := flag.String("interp-buffer", "pkg/quantize/ts/interpolation-buffer.ts", "Path to interpolation-buffer.ts to copy")
+	playbackTS := flag.String("playback", "pkg/quantize/ts/playback-controller.ts", "Path to playback-controller.ts to copy")
+	predictionTS := flag.String("prediction", "pkg/quantize/ts/prediction-buffer.ts", "Path to prediction-buffer.ts to copy")
 	namespace := flag.String("namespace", "Mmokit.Sdk", "C#: root namespace for generated files")
 	csharpCore := flag.String("csharp-core", "csharp/Mmokit.Sdk.Core", "C#: dir holding the hand-written _core .cs sources")
 	flag.Parse()
@@ -54,6 +56,8 @@ func main() {
 		InterpTS:       *interpTS,
 		ClockSyncTS:    *clockSyncTS,
 		InterpBufferTS: *interpBufferTS,
+		PlaybackTS:     *playbackTS,
+		PredictionTS:   *predictionTS,
 		CSharpCoreDir:  *csharpCore,
 		Namespace:      *namespace,
 	})
@@ -100,4 +104,3 @@ func titleCase(s string) string {
 	}
 	return strings.ToUpper(s[:1]) + s[1:]
 }
-

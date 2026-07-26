@@ -4,7 +4,8 @@ package replication
 type AckMode uint8
 
 const (
-	// AckReliable auto-advances the baseline after each send.
+	// AckReliable auto-advances the baseline after each send accepted by a
+	// reliable ordered transport.
 	// Use for TCP/WebSocket where delivery is guaranteed and ordered.
 	AckReliable AckMode = iota
 
@@ -27,6 +28,19 @@ type SentSnapshot struct {
 // BaselineStore cover allocation and lookup; everything else is direct
 // field access on the hot path. See Phase 3 for the concrete consumer.
 type EntityBaseline struct {
+	// AuthorityEpoch identifies the entity lifecycle that Acked belongs to.
+	// Border replication sets this field and invalidates the baseline when an
+	// authority handoff advances the epoch, preventing byte-identical state
+	// from being encoded as "unchanged" against the prior lifecycle.
+	AuthorityEpoch    uint32
+	HasAuthorityEpoch bool
+
+	// FullTailFramesRemaining is border replication's bounded redundancy
+	// window for a newly-created or epoch-reset baseline. Each full-tail
+	// emission decrements it; unchanged sentinels are suppressed until it
+	// reaches zero so one lossy send cannot strand a fresh replica.
+	FullTailFramesRemaining uint8
+
 	// Acked is the snapshot the client has confirmed receiving.
 	// Deltas are always encoded against this.
 	Acked []byte
@@ -71,7 +85,7 @@ func (b *EntityBaseline) AdvanceTo(seq uint32) {
 	for i := 0; i < b.RingLen; i++ {
 		idx := (start + i) % len(b.Ring)
 		entry := &b.Ring[idx]
-		if entry.Seq <= seq {
+		if int32(entry.Seq-seq) <= 0 {
 			best = entry
 		}
 	}
@@ -81,7 +95,7 @@ func (b *EntityBaseline) AdvanceTo(seq uint32) {
 		pruned := 0
 		for i := 0; i < b.RingLen; i++ {
 			idx := (start + i) % len(b.Ring)
-			if b.Ring[idx].Seq <= seq {
+			if int32(b.Ring[idx].Seq-seq) <= 0 {
 				b.Ring[idx] = SentSnapshot{} // release memory
 				pruned++
 			} else {
@@ -91,6 +105,37 @@ func (b *EntityBaseline) AdvanceTo(seq uint32) {
 		b.RingLen -= pruned
 		b.RingHead = (start + pruned + b.RingLen) % len(b.Ring)
 	}
+}
+
+// PruneSentThrough releases attempted snapshots at or before seq without
+// changing Acked. Explicit-ACK replication uses this after promoting the exact
+// frame transaction rather than inferring acknowledged state from ring order.
+func (b *EntityBaseline) PruneSentThrough(seq uint32) {
+	if len(b.Ring) == 0 || b.RingLen == 0 {
+		return
+	}
+	start := (b.RingHead - b.RingLen + len(b.Ring)) % len(b.Ring)
+	pruned := 0
+	for i := 0; i < b.RingLen; i++ {
+		idx := (start + i) % len(b.Ring)
+		entry := b.Ring[idx]
+		if int32(entry.Seq-seq) > 0 {
+			break
+		}
+		b.Ring[idx] = SentSnapshot{}
+		pruned++
+	}
+	b.RingLen -= pruned
+	// RingHead remains the next write position. The retained suffix stays in
+	// its original circular slots, avoiding overlap corruption when start is
+	// near the end of the backing array.
+}
+
+// ClearSent releases every unacknowledged attempted snapshot.
+func (b *EntityBaseline) ClearSent() {
+	clear(b.Ring)
+	b.RingHead = 0
+	b.RingLen = 0
 }
 
 // EntityPriorityState tracks per-entity replication priority for one viewer.
@@ -191,6 +236,14 @@ func (s *BaselineStore) Priority(netID uint32) *EntityPriorityState {
 		s.priorities[netID] = ps
 	}
 	return ps
+}
+
+// ExistingPriority returns the priority state for an entity without
+// allocating it. Callers must treat the returned pointer as read-only unless
+// they intend to mutate the store immediately; use Priority to allocate on a
+// miss.
+func (s *BaselineStore) ExistingPriority(netID uint32) *EntityPriorityState {
+	return s.priorities[netID]
 }
 
 // ForEachBaseline invokes fn for every baseline currently in the store.

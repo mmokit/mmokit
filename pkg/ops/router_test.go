@@ -14,9 +14,14 @@ type smokeTransport struct {
 	reliable [][]byte
 }
 
-func (s *smokeTransport) SendReliable(data []byte)   { s.reliable = append(s.reliable, data) }
-func (s *smokeTransport) SendUnreliable(data []byte) {}
-func (s *smokeTransport) DrainInput() [][]byte       { return nil }
+func (s *smokeTransport) SendReliable(data []byte) net.SendResult {
+	s.reliable = append(s.reliable, data)
+	return net.SendResult{Disposition: net.SendQueued, Delivery: net.DeliveryReliableOrdered}
+}
+func (s *smokeTransport) SendUnreliable(data []byte) net.SendResult {
+	return net.SendResult{Disposition: net.SendQueued, Delivery: net.DeliveryReliableOrdered}
+}
+func (s *smokeTransport) DrainInput() [][]byte { return nil }
 func (s *smokeTransport) DrainOpInput() [][]byte {
 	r := s.opInput
 	s.opInput = nil

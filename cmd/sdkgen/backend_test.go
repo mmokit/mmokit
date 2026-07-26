@@ -34,17 +34,25 @@ func TestBackendFor(t *testing.T) {
 }
 
 func TestTSBackendCoreFiles(t *testing.T) {
-	b := tsBackend{coreTS: "a/delta-decoder-core.ts", interpTS: "b/interpolation-core.ts"}
+	b := tsBackend{
+		coreTS:         "a/delta-decoder-core.ts",
+		interpTS:       "b/interpolation-core.ts",
+		clockSyncTS:    "c/clock-sync.ts",
+		interpBufferTS: "d/interpolation-buffer.ts",
+		playbackTS:     "e/playback-controller.ts",
+		predictionTS:   "f/prediction-buffer.ts",
+	}
 	core := b.CoreFiles()
-	if len(core) != 2 {
-		t.Fatalf("CoreFiles len = %d, want 2", len(core))
+	if len(core) != 6 {
+		t.Fatalf("CoreFiles len = %d, want 6", len(core))
 	}
 	// Dst names are the _core/ basenames the SDK imports.
-	if core[0].Dst != "delta-decoder-core.ts" || core[1].Dst != "interpolation-core.ts" {
-		t.Fatalf("CoreFiles Dst = %q,%q", core[0].Dst, core[1].Dst)
-	}
-	if core[0].Src != "a/delta-decoder-core.ts" || core[1].Src != "b/interpolation-core.ts" {
-		t.Fatalf("CoreFiles Src not threaded from struct: %q,%q", core[0].Src, core[1].Src)
+	wantDst := []string{"delta-decoder-core.ts", "interpolation-core.ts", "clock-sync.ts", "interpolation-buffer.ts", "playback-controller.ts", "prediction-buffer.ts"}
+	wantSrc := []string{"a/delta-decoder-core.ts", "b/interpolation-core.ts", "c/clock-sync.ts", "d/interpolation-buffer.ts", "e/playback-controller.ts", "f/prediction-buffer.ts"}
+	for i := range core {
+		if core[i].Dst != wantDst[i] || core[i].Src != wantSrc[i] {
+			t.Fatalf("CoreFiles[%d] = %+v, want Src=%q Dst=%q", i, core[i], wantSrc[i], wantDst[i])
+		}
 	}
 }
 

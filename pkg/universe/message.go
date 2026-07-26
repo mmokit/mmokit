@@ -22,33 +22,43 @@ const (
 
 // SpawnTransfer requests a player spawn on another cell.
 type SpawnTransfer struct {
-	ConnID        uint32
-	Username      string
-	SpawnLocation coords.Location
+	ConnID           uint32
+	Username         string
+	StreamGeneration uint32
+	SpawnLocation    coords.Location
 }
 
 // PlayerAssignment is sent by the gateway to a cell after successful auth.
 // UserID is the canonical identity from auth.users; SessionToken is the
 // opaque session token bound to that login.
 type PlayerAssignment struct {
-	ConnID        uint32
-	UserID        uuid.UUID
-	Username      string
-	SessionToken  string
-	IsReconnect   bool
-	SpawnLocation coords.Location
+	ConnID           uint32
+	UserID           uuid.UUID
+	Username         string
+	SessionToken     string
+	IsReconnect      bool
+	StreamGeneration uint32
+	SpawnLocation    coords.Location
 }
 
-// SessionTransfer carries an entity-less player session during cell splits.
-// UserID is the auth identity stamped at login; carried across the split so
+// SessionTransfer carries an entity-less player session during cell transfers.
+// ConnID is local to the source host. GatewayID + GatewayConnID preserve the
+// stable, mesh-wide SessionKey so a different destination host can allocate
+// its own local ID. SessionEpoch is the source VCM's routing fence; the
+// coordinator advances it at commit independently of StreamGeneration.
+// UserID is the auth identity stamped at login; carried across the transfer so
 // the destination cell can populate PlayerSession.UserID and subsequent
 // SavePlayerState calls don't panic in PlayerRepo.Bind on a zero UserID.
 type SessionTransfer struct {
-	ConnID   uint32
-	UserID   uuid.UUID
-	Username string
-	StateTag string // state name (e.g., "docked", "dead")
-	Data     any    // game-specific session data
+	ConnID           uint32
+	GatewayID        string
+	GatewayConnID    uint32
+	SessionEpoch     uint64
+	UserID           uuid.UUID
+	Username         string
+	StreamGeneration uint32
+	StateTag         string // state name (e.g., "docked", "dead")
+	Data             any    // game-specific session data
 }
 
 // HandoffPayload is the single authority-transfer message. Mirrors the
@@ -80,8 +90,16 @@ type HandoffPayload struct {
 // flipped. The old owner forwards the frame to the new owner rather
 // than processing it locally. Rare safety path.
 type ForwardInputPayload struct {
+	// GatewayID + ConnID identifies the wire session for cross-host
+	// forwarding. GatewayID is empty on same-host/in-process paths, where
+	// ConnID is already destination-local.
+	GatewayID string
 	ConnID    uint32
-	InputBlob []byte
+	// SessionEpoch is the gateway-route generation observed on the source
+	// host. Cross-host destinations pass it through the VCM's normal stale
+	// input fence before enqueueing the frame.
+	SessionEpoch uint64
+	InputBlob    []byte
 }
 
 // DisconnectPayload carries the disconnect info for MsgPlayerDisconnected.

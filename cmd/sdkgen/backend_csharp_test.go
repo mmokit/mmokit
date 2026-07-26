@@ -74,7 +74,7 @@ func sampleEntitySchema() ProtocolSchema {
 				RequestTypeName: "auth.AuthLoginRequest", RequestTypeID: 0xAA01,
 				RequestFields:    []BroadcastFieldSchema{{Name: "Username", Encoding: "string"}, {Name: "Password", Encoding: "string"}},
 				ResponseTypeName: "auth.AuthLoginResponse", ResponseTypeID: 0xAA02,
-				ResponseFields:   []BroadcastFieldSchema{{Name: "SessionToken", Encoding: "string"}, {Name: "ExpiresAtMs", Encoding: "i64"}},
+				ResponseFields: []BroadcastFieldSchema{{Name: "SessionToken", Encoding: "string"}, {Name: "ExpiresAtMs", Encoding: "i64"}},
 			},
 		},
 	}
@@ -100,14 +100,15 @@ func TestCsharpBackend_Entities(t *testing.T) {
 		"public abstract class EntityBase",
 		"public uint NetID;",
 		"public sealed class ShipEntity : EntityBase",
-		"public float x;",         // f32 → float
-		"public float vx;",        // qvel → float
+		"public float x;",                // f32 → float
+		"public float vx;",               // qvel → float
 		"public string shipName = \"\";", // string field initialized (no CS8618)
 		"public List<ShipStatusEffectsItem> statusEffects = new();",
 		"public sealed class ShipStatusEffectsItem",
-		"public byte kind;",       // u8 → byte
+		"public byte kind;", // u8 → byte
 		"public sealed class AsteroidEntity : EntityBase",
 		"public sealed class DeltaWorldUpdate",
+		"public bool StreamChanged;",
 		"public List<EntityBase> Entered = new();",
 	} {
 		if !strings.Contains(out, want) {
@@ -131,8 +132,8 @@ func TestCsharpBackend_OutputFiles_SkipsWhenNoEntities(t *testing.T) {
 
 func TestCsharpBackend_CoreFiles(t *testing.T) {
 	core := csharpBackend{coreDir: "x/core"}.CoreFiles()
-	if len(core) != 6 {
-		t.Fatalf("CoreFiles len = %d, want 6", len(core))
+	if len(core) != 10 {
+		t.Fatalf("CoreFiles len = %d, want 10", len(core))
 	}
 	// Dst basenames are what the SDK compiles; Src is threaded from coreDir.
 	if core[0].Dst != "DeltaDecoderCore.cs" || core[0].Src != "x/core/DeltaDecoderCore.cs" {
@@ -217,7 +218,7 @@ func TestCsharpBackend_DeltaDecoder(t *testing.T) {
 	out := csharpBackend{namespace: "Mmokit.Sdk"}.genDeltaDecoder(sampleEntitySchema())
 	for _, want := range []string{
 		"public sealed class DemoDeltaDecoder",
-		"public DeltaWorldUpdate Decode(byte[] data)",
+		"public DeltaWorldUpdate? Decode(byte[] data, uint? streamEpoch = null)",
 		"static ShipEntity DecodeShipEntitySnapshot(byte[] snap, byte[]? initial, ShipEntity? existing)",
 		"e.x = DeltaDecoderCore.ReadFloat32(snap, o); o += 4;",
 		"e.vx = (float)DeltaDecoderCore.UnVel(DeltaDecoderCore.ReadInt16(snap, o), 0.01); o += 2;",
@@ -251,7 +252,7 @@ func TestCsharpBackend_Client(t *testing.T) {
 		"public async Task<AuthLoginResponse> AuthLogin(AuthLoginRequest req)",
 		"byte[] raw = await CallOp(AuthLoginRequest.TypeID, req.Encode());",
 		"return AuthLoginResponse.Decode(raw);",
-		"public void SendSetMoveTarget(SetMoveTarget msg, bool reliable = false)",
+		"public void SendSetMoveTarget(SetMoveTarget msg, bool reliable = true)",
 		"public Action OnPong(Action<Pong> handler) => TypedEvents.On(Pong.TypeID, b => handler(Pong.Decode(b)));",
 		"frame[0] = 0x01;",
 		"frame[0] = 0x00;",
@@ -275,13 +276,13 @@ func TestCsharpBackend_OutputFiles_IncludesClient(t *testing.T) {
 func TestCsharpBackend_StructFields(t *testing.T) {
 	out := csharpBackend{namespace: "Mmokit.Sdk"}.genEvents(sampleEntitySchema())
 	for _, want := range []string{
-		"public sealed class ChatState_Channel",          // struct field nested class
-		"public sealed class ChatState_MembersItem",     // slice-of-struct item class
-		"public ChatState_Channel channel = new();",      // struct field decl
+		"public sealed class ChatState_Channel",     // struct field nested class
+		"public sealed class ChatState_MembersItem", // slice-of-struct item class
+		"public ChatState_Channel channel = new();", // struct field decl
 		"public List<ChatState_MembersItem> members = new();",
-		"m.channel = new ChatState_Channel();",           // struct inline decode
+		"m.channel = new ChatState_Channel();", // struct inline decode
 		"m.channel.slug = r.ReadString();",
-		"var _it0 = new ChatState_MembersItem();",       // slice-of-struct decode
+		"var _it0 = new ChatState_MembersItem();", // slice-of-struct decode
 	} {
 		if !strings.Contains(out, want) {
 			t.Fatalf("genEvents struct support missing %q in:\n%s", want, out)

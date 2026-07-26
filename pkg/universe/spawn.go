@@ -9,6 +9,7 @@ import (
 	"github.com/mlange-42/ark/ecs"
 
 	"github.com/zenion/mmoserver/pkg/component"
+	"github.com/zenion/mmoserver/pkg/engine"
 	"github.com/zenion/mmoserver/pkg/spatial"
 )
 
@@ -123,7 +124,7 @@ func (b *Stage) Spawn(components ...any) Entity {
 			b.eng.Log.Log(CatMeshCell,
 				"[%s] duplicate live spawn blocked: netID=%d", b.cellID, nid)
 			if b.strictNetIDIndex {
-				b.eng.ECS.RemoveEntity(entity)
+				b.eng.RemoveEntityNowWithPolicy(entity, engine.RemovalLocalOnly)
 				return Entity{}
 			}
 		case ActionRejected:
@@ -131,7 +132,7 @@ func (b *Stage) Spawn(components ...any) Entity {
 			// under normal operation; if they do, strict mode rolls back.
 			// The sanctioned Replica→Live path is PromoteReplicaToLive.
 			if b.strictNetIDIndex && b.eng.ECS.Alive(entity) {
-				b.eng.ECS.RemoveEntity(entity)
+				b.eng.RemoveEntityNowWithPolicy(entity, engine.RemovalLocalOnly)
 				return Entity{}
 			}
 		}

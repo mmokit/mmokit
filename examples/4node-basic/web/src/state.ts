@@ -1,6 +1,8 @@
 import type { AnyEntity, PlayerEntity } from "../sdk/entities.js";
-import { type ClockSync, newClockSync } from "../sdk/_core/clock-sync.js";
+import type { ClockSync } from "../sdk/_core/clock-sync.js";
 import { InterpolationBuffer } from "../sdk/_core/interpolation-buffer.js";
+import { AdaptivePlaybackController } from "../sdk/_core/playback-controller.js";
+import { MAX_RENDER_DELAY, RENDER_DELAY } from "./constants.js";
 import { newReplicationAudit, type ReplicationAudit } from "./replicationAudit.js";
 
 export interface EntitySample {
@@ -13,6 +15,7 @@ export interface EntitySample {
   // the replication-timeline redesign). Rings lerp on this axis so
   // cross-cell handoff produces adjacent-tick samples.
   producedAtMs: number;
+  authorityEpoch?: number;
 }
 
 /**
@@ -80,6 +83,7 @@ export interface GameState {
 
   // Clock sync for snapshot interpolation.
   clockSync: ClockSync;
+  playback: AdaptivePlaybackController;
 
   /**
    * Diagnostic audit of replication entity churn — counts FreshSnapshot
@@ -95,7 +99,25 @@ export function setTickRate(rate: number): void {
   state.tickRate = rate;
   state.tickMs = 1000 / rate;
   state.dt = state.tickMs / 1000;
+  resetNetworkTiming();
 }
+
+function makePlayback(tickIntervalMs = 50): AdaptivePlaybackController {
+  return new AdaptivePlaybackController({
+    tickIntervalMs,
+    minDelayMs: RENDER_DELAY,
+    maxDelayMs: MAX_RENDER_DELAY,
+  });
+}
+
+/** Reset timing state at a real connection boundary, not at cell handoff. */
+export function resetNetworkTiming(): void {
+  const playback = makePlayback(state.tickMs || 50);
+  state.playback = playback;
+  state.clockSync = playback.clock;
+}
+
+const initialPlayback = makePlayback();
 
 export const state: GameState = {
   client: null,
@@ -116,6 +138,7 @@ export const state: GameState = {
   fps: 0,
   frameCount: 0,
   lastFpsTime: 0,
-  clockSync: newClockSync(),
+  clockSync: initialPlayback.clock,
+  playback: initialPlayback,
   replicationAudit: newReplicationAudit(),
 };

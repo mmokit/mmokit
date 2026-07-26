@@ -36,6 +36,71 @@ func TestBorderDispatcher_TickIgnoresNilNeighbors(t *testing.T) {
 	d.Tick(1)
 }
 
+// TestBorderDispatcher_WireMembershipMatchesBaseline verifies both sides of
+// the authoritative interest-set contract: a configured update divisor cannot
+// suppress membership entries, while an entity rejected by the dispatcher's
+// radius gate is removed from hysteresis and loses its baseline.
+func TestBorderDispatcher_WireMembershipMatchesBaseline(t *testing.T) {
+	base := newTestWorldBase(t, CellID{X: 0, Y: 0})
+	world := base.ECSWorld()
+	posMap := ecs.NewMap1[component.Position](world)
+	nidMap := ecs.NewMap1[component.NetworkID](world)
+	kindMap := ecs.NewMap1[component.EntityKind](world)
+	colMap := ecs.NewMap1[component.Collider](world)
+
+	ent := world.NewEntity()
+	posMap.Add(ent, &component.Position{X: coords.CellSize - 15, Y: coords.CellSize - 15})
+	nidMap.Add(ent, &component.NetworkID{ID: 41, Epoch: 2})
+	kindMap.Add(ent, &component.EntityKind{Type: 7})
+	colMap.Add(ent, &component.Collider{Radius: 5})
+
+	tiers := map[uint16]replication.ReplicationTier{
+		7: {Radius: coords.CellSize * 2, UpdateDivisor: 5, BaseWeight: 2},
+	}
+	bd := NewBorderDispatcher(base, nil)
+	bx, by := neighborBoundaryMidpoint(CellID{X: 0, Y: 0}, 1, 1)
+	nv := NewCellViewer("neighbor", CellViewerID("neighbor"), bx, by, tiers, nil, nil)
+	nv.SetDirection(1, 1)
+
+	// Tick 1 would be skipped by a generic UpdateDivisor=5 viewer. Border
+	// viewers must still emit it because Entries are the complete set.
+	divisorTick := bd.disp.Walk(nv, 1, bd.candidatesFor(nv, 1))
+	if len(divisorTick.Entries) != 1 {
+		t.Fatalf("divisor tick entry count = %d, want 1 authoritative membership entry", len(divisorTick.Entries))
+	}
+	nv.SwapInSet()
+	if !nv.WasInSet(41) || nv.Baselines().Baseline(41) == nil {
+		t.Fatal("transmitted entity missing from retained membership/baseline")
+	}
+
+	// Tighten the custom tier radius so Dispatcher rejects the candidate.
+	// Because Build never runs, this tick's transmitted set is empty and
+	// SwapInSet must discard both membership and baseline.
+	tiers[7] = replication.ReplicationTier{Radius: 1, UpdateDivisor: 5, BaseWeight: 2}
+	radiusSkipped := bd.disp.Walk(nv, 2, bd.candidatesFor(nv, 2))
+	if len(radiusSkipped.Entries) != 0 {
+		t.Fatalf("radius-skipped entry count = %d, want 0", len(radiusSkipped.Entries))
+	}
+	nv.SwapInSet()
+	if nv.WasInSet(41) {
+		t.Fatal("dispatcher-rejected entity remained in transmitted membership")
+	}
+	if got := nv.Baselines().Baseline(41); got != nil {
+		t.Fatal("dispatcher-rejected entity retained a component baseline")
+	}
+
+	// Restore visibility. Re-entry must be present even on another divisor-
+	// skipped tick and must carry a full tail against the dropped baseline.
+	tiers[7] = replication.ReplicationTier{Radius: coords.CellSize * 2, UpdateDivisor: 5, BaseWeight: 2}
+	reentered := bd.disp.Walk(nv, 3, bd.candidatesFor(nv, 3))
+	if len(reentered.Entries) != 1 {
+		t.Fatalf("re-entry count = %d, want 1", len(reentered.Entries))
+	}
+	if got := binary.LittleEndian.Uint16(reentered.Entries[0].DeltaBuf[26:28]); got == borderTailUnchanged {
+		t.Fatal("re-entry after dispatcher skip emitted unchanged sentinel")
+	}
+}
+
 // TestBorderDispatcher_CornerEntityReachesAllNeighbors is a regression
 // test for an asymmetric visibility bug observed in the space game: an
 // entity near the shared corner of cells (0,0)/(1,0)/(0,1)/(1,1) was
@@ -72,8 +137,8 @@ func TestBorderDispatcher_TickIgnoresNilNeighbors(t *testing.T) {
 // idle NPCs.
 //
 // The test registers a game component with a deterministic marshaled
-// form so the two ticks produce byte-identical tails, then walks the
-// dispatcher twice at non-resync ticks and inspects the raw DeltaBuf.
+// form, consumes the bounded new-baseline full-tail window, then verifies
+// the next byte-identical tail uses the sentinel.
 func TestBorderDispatcher_DeltaCompression_UnchangedTailEmitsSentinel(t *testing.T) {
 	coords.SetCellSize(8192)
 	defer coords.SetCellSize(1024)
@@ -105,10 +170,7 @@ func TestBorderDispatcher_DeltaCompression_UnchangedTailEmitsSentinel(t *testing
 	nv := NewCellViewer("neighbor", CellViewerID("neighbor"), bx, by, nil, nil, nil)
 	nv.SetDirection(1, 1)
 
-	// Tick 1 is a forced resync (any tick % 30 == 0), so advance past it
-	// and use a tick pair that does NOT hit a resync: tick 5 → 6.
-	//
-	// First tick: no baseline yet, expect a full tail (component payload
+	// First tick: no baseline yet, so expect a full tail (component payload
 	// larger than 2 bytes).
 	first := bd.disp.Walk(nv, 5, bd.candidatesFor(nv, 5))
 	if len(first.Entries) != 1 {
@@ -123,18 +185,27 @@ func TestBorderDispatcher_DeltaCompression_UnchangedTailEmitsSentinel(t *testing
 		t.Fatalf("tick 5: expected full tail with component data, got %d bytes", len(firstTail))
 	}
 
-	// Second tick: component unchanged, tail bytes identical → sentinel.
-	second := bd.disp.Walk(nv, 6, bd.candidatesFor(nv, 6))
+	// A new baseline repeats its full tail for a short bounded window so
+	// one lossy send cannot strand a fresh receiver. Consume the remaining
+	// repetitions, then the next identical tail may use the sentinel.
+	for tick := uint64(6); tick < 5+uint64(borderLifecycleFullTailFrames); tick++ {
+		repeated := bd.disp.Walk(nv, tick, bd.candidatesFor(nv, tick))
+		if got := binary.LittleEndian.Uint16(repeated.Entries[0].DeltaBuf[26:28]); got == borderTailUnchanged {
+			t.Fatalf("tick %d: lifecycle full-tail window emitted sentinel", tick)
+		}
+	}
+	sentinelTick := uint64(5) + uint64(borderLifecycleFullTailFrames)
+	second := bd.disp.Walk(nv, sentinelTick, bd.candidatesFor(nv, sentinelTick))
 	if len(second.Entries) != 1 {
-		t.Fatalf("tick 6: expected 1 entry, got %d", len(second.Entries))
+		t.Fatalf("tick %d: expected 1 entry, got %d", sentinelTick, len(second.Entries))
 	}
 	secondTail := second.Entries[0].DeltaBuf[26:]
 	if len(secondTail) != 2 {
-		t.Fatalf("tick 6: expected 2-byte sentinel tail, got %d bytes: %x", len(secondTail), secondTail)
+		t.Fatalf("tick %d: expected 2-byte sentinel tail, got %d bytes: %x", sentinelTick, len(secondTail), secondTail)
 	}
 	secondCount := binary.LittleEndian.Uint16(secondTail[0:2])
 	if secondCount != borderTailUnchanged {
-		t.Fatalf("tick 6: expected sentinel 0x%X, got 0x%X", borderTailUnchanged, secondCount)
+		t.Fatalf("tick %d: expected sentinel 0x%X, got 0x%X", sentinelTick, borderTailUnchanged, secondCount)
 	}
 }
 
@@ -173,12 +244,15 @@ func TestBorderDispatcher_DeltaCompression_ForceResync(t *testing.T) {
 	nv := NewCellViewer("neighbor", CellViewerID("neighbor"), bx, by, nil, nil, nil)
 	nv.SetDirection(1, 1)
 
-	// Prime the baseline at a non-resync tick.
-	bd.disp.Walk(nv, 5, bd.candidatesFor(nv, 5))
+	// Prime the baseline and consume its bounded full-tail window.
+	for tick := uint64(5); tick < 5+uint64(borderLifecycleFullTailFrames); tick++ {
+		bd.disp.Walk(nv, tick, bd.candidatesFor(nv, tick))
+	}
 	// Confirm the intermediate tick emits the sentinel.
-	mid := bd.disp.Walk(nv, 6, bd.candidatesFor(nv, 6))
+	midTick := uint64(5) + uint64(borderLifecycleFullTailFrames)
+	mid := bd.disp.Walk(nv, midTick, bd.candidatesFor(nv, midTick))
 	if binary.LittleEndian.Uint16(mid.Entries[0].DeltaBuf[26:28]) != borderTailUnchanged {
-		t.Fatal("tick 6 should have been a sentinel (baseline primed)")
+		t.Fatalf("tick %d should have been a sentinel (baseline primed)", midTick)
 	}
 	// Force resync at tick 30 (30 % borderFullResyncInterval == 0).
 	if borderFullResyncInterval != 30 {
@@ -192,6 +266,184 @@ func TestBorderDispatcher_DeltaCompression_ForceResync(t *testing.T) {
 	}
 	if len(resyncTail) <= 2 {
 		t.Fatalf("resync tick should emit full tail, got %d bytes", len(resyncTail))
+	}
+}
+
+// TestBorderDispatcher_DeltaCompression_ReentryEmitsFullTail verifies that
+// leaving a neighbor's authoritative interest set invalidates the sender-side
+// component baseline. The receiver removes the replica when it observes the
+// empty frame, so an unchanged-sentinel on re-entry would recreate the entity
+// with zero-valued game components until the next periodic full resync.
+func TestBorderDispatcher_DeltaCompression_ReentryEmitsFullTail(t *testing.T) {
+	coords.SetCellSize(8192)
+	defer coords.SetCellSize(1024)
+	base := newTestWorldBase(t, CellID{X: 0, Y: 0})
+
+	world := base.ECSWorld()
+	healthMap := ecs.NewMap1[testReplicaComponent](world)
+	def := EntityKindDef{Kind: 1, Name: "TestShip"}
+	KindComponentByID(&def, world, ecs.ComponentID[testReplicaComponent](world), reflect.TypeFor[testReplicaComponent](), KindComponentRequired)
+	base.RegisterEntityKind(def)
+
+	posMap := ecs.NewMap1[component.Position](world)
+	velMap := ecs.NewMap1[component.Velocity](world)
+	nidMap := ecs.NewMap1[component.NetworkID](world)
+	kindMap := ecs.NewMap1[component.EntityKind](world)
+	colMap := ecs.NewMap1[component.Collider](world)
+	ent := world.NewEntity()
+	posMap.Add(ent, &component.Position{X: coords.CellSize - 15, Y: coords.CellSize - 15})
+	velMap.Add(ent, &component.Velocity{})
+	nidMap.Add(ent, &component.NetworkID{ID: 1, Epoch: 1})
+	kindMap.Add(ent, &component.EntityKind{Type: 1})
+	colMap.Add(ent, &component.Collider{Radius: 5})
+	healthMap.Add(ent, &testReplicaComponent{Health: 100, Shield: 50})
+
+	bd := NewBorderDispatcher(base, nil)
+	bx, by := neighborBoundaryMidpoint(CellID{X: 0, Y: 0}, 1, 1)
+	nv := NewCellViewer("neighbor", CellViewerID("neighbor"), bx, by, nil, nil, nil)
+	nv.SetDirection(1, 1)
+
+	first := bd.disp.Walk(nv, 5, bd.candidatesFor(nv, 5))
+	if len(first.Entries) != 1 {
+		t.Fatalf("initial entry count = %d, want 1", len(first.Entries))
+	}
+	nv.SwapInSet()
+
+	for tick := uint64(6); tick < 5+uint64(borderLifecycleFullTailFrames); tick++ {
+		bd.disp.Walk(nv, tick, bd.candidatesFor(nv, tick))
+		nv.SwapInSet()
+	}
+	unchangedTick := uint64(5) + uint64(borderLifecycleFullTailFrames)
+	unchanged := bd.disp.Walk(nv, unchangedTick, bd.candidatesFor(nv, unchangedTick))
+	if got := binary.LittleEndian.Uint16(unchanged.Entries[0].DeltaBuf[26:28]); got != borderTailUnchanged {
+		t.Fatalf("unchanged tail count = %#x, want sentinel %#x", got, borderTailUnchanged)
+	}
+	nv.SwapInSet()
+
+	// Leave both edge margins. Rotating this empty interest set must also
+	// discard the baseline that described the now-destroyed remote replica.
+	pos := posMap.Get(ent)
+	pos.X = coords.CellSize / 2
+	pos.Y = coords.CellSize / 2
+	leftTick := unchangedTick + 1
+	left := bd.disp.Walk(nv, leftTick, bd.candidatesFor(nv, leftTick))
+	if len(left.Entries) != 0 {
+		t.Fatalf("leave entry count = %d, want 0", len(left.Entries))
+	}
+	nv.SwapInSet()
+	if got := nv.Baselines().Baseline(1); got != nil {
+		t.Fatal("baseline survived interest-set exit")
+	}
+
+	// Re-enter with byte-identical components. This must be a full tail,
+	// because the receiver no longer has state for an unchanged sentinel.
+	pos.X = coords.CellSize - 15
+	pos.Y = coords.CellSize - 15
+	reentryTick := leftTick + 1
+	reentered := bd.disp.Walk(nv, reentryTick, bd.candidatesFor(nv, reentryTick))
+	if len(reentered.Entries) != 1 {
+		t.Fatalf("re-entry count = %d, want 1", len(reentered.Entries))
+	}
+	tail := reentered.Entries[0].DeltaBuf[26:]
+	if got := binary.LittleEndian.Uint16(tail[:2]); got == borderTailUnchanged {
+		t.Fatal("re-entry emitted unchanged sentinel instead of full component tail")
+	}
+	if len(tail) <= 2 {
+		t.Fatalf("re-entry tail length = %d, want component data", len(tail))
+	}
+	nv.SwapInSet()
+	// Treat the first re-entry frame as lost. The following attempts must
+	// remain full for the rest of the bounded lifecycle window.
+	for attempt := uint8(1); attempt < borderLifecycleFullTailFrames; attempt++ {
+		tick := reentryTick + uint64(attempt)
+		retry := bd.disp.Walk(nv, tick, bd.candidatesFor(nv, tick))
+		if got := binary.LittleEndian.Uint16(retry.Entries[0].DeltaBuf[26:28]); got == borderTailUnchanged {
+			t.Fatalf("re-entry retry %d emitted sentinel after a potentially lost full tail", attempt)
+		}
+		nv.SwapInSet()
+	}
+	afterWindowTick := reentryTick + uint64(borderLifecycleFullTailFrames)
+	afterWindow := bd.disp.Walk(nv, afterWindowTick, bd.candidatesFor(nv, afterWindowTick))
+	if got := binary.LittleEndian.Uint16(afterWindow.Entries[0].DeltaBuf[26:28]); got != borderTailUnchanged {
+		t.Fatalf("post-reentry window tail count = %#x, want sentinel %#x", got, borderTailUnchanged)
+	}
+}
+
+// TestBorderDispatcher_DeltaCompression_EpochChangeEmitsFullTail verifies
+// that a reused netID under a new authority epoch cannot inherit the prior
+// lifecycle's component baseline.
+func TestBorderDispatcher_DeltaCompression_EpochChangeEmitsFullTail(t *testing.T) {
+	coords.SetCellSize(8192)
+	defer coords.SetCellSize(1024)
+	base := newTestWorldBase(t, CellID{X: 0, Y: 0})
+
+	world := base.ECSWorld()
+	healthMap := ecs.NewMap1[testReplicaComponent](world)
+	def := EntityKindDef{Kind: 1, Name: "TestShip"}
+	KindComponentByID(&def, world, ecs.ComponentID[testReplicaComponent](world), reflect.TypeFor[testReplicaComponent](), KindComponentRequired)
+	base.RegisterEntityKind(def)
+
+	posMap := ecs.NewMap1[component.Position](world)
+	nidMap := ecs.NewMap1[component.NetworkID](world)
+	kindMap := ecs.NewMap1[component.EntityKind](world)
+	colMap := ecs.NewMap1[component.Collider](world)
+	ent := world.NewEntity()
+	posMap.Add(ent, &component.Position{X: coords.CellSize - 15, Y: coords.CellSize - 15})
+	nidMap.Add(ent, &component.NetworkID{ID: 1, Epoch: 4})
+	kindMap.Add(ent, &component.EntityKind{Type: 1})
+	colMap.Add(ent, &component.Collider{Radius: 5})
+	healthMap.Add(ent, &testReplicaComponent{Health: 100, Shield: 50})
+
+	bd := NewBorderDispatcher(base, nil)
+	bx, by := neighborBoundaryMidpoint(CellID{X: 0, Y: 0}, 1, 1)
+	nv := NewCellViewer("neighbor", CellViewerID("neighbor"), bx, by, nil, nil, nil)
+	nv.SetDirection(1, 1)
+
+	first := bd.disp.Walk(nv, 5, bd.candidatesFor(nv, 5))
+	if len(first.Entries) != 1 {
+		t.Fatalf("initial entry count = %d, want 1", len(first.Entries))
+	}
+	nv.SwapInSet()
+
+	for tick := uint64(6); tick < 5+uint64(borderLifecycleFullTailFrames); tick++ {
+		bd.disp.Walk(nv, tick, bd.candidatesFor(nv, tick))
+		nv.SwapInSet()
+	}
+	unchangedTick := uint64(5) + uint64(borderLifecycleFullTailFrames)
+	unchanged := bd.disp.Walk(nv, unchangedTick, bd.candidatesFor(nv, unchangedTick))
+	if got := binary.LittleEndian.Uint16(unchanged.Entries[0].DeltaBuf[26:28]); got != borderTailUnchanged {
+		t.Fatalf("same-epoch tail count = %#x, want sentinel %#x", got, borderTailUnchanged)
+	}
+	nv.SwapInSet()
+
+	// Identical bytes under a higher authority epoch describe a new
+	// lifecycle baseline and therefore must be sent in full.
+	nidMap.Get(ent).Epoch = 5
+	epochTick := unchangedTick + 1
+	advanced := bd.disp.Walk(nv, epochTick, bd.candidatesFor(nv, epochTick))
+	if len(advanced.Entries) != 1 {
+		t.Fatalf("advanced-epoch entry count = %d, want 1", len(advanced.Entries))
+	}
+	tail := advanced.Entries[0].DeltaBuf[26:]
+	if got := binary.LittleEndian.Uint16(tail[:2]); got == borderTailUnchanged {
+		t.Fatal("authority epoch change emitted unchanged sentinel")
+	}
+	if got := nv.Baselines().Baseline(1); got == nil || !got.HasAuthorityEpoch || got.AuthorityEpoch != 5 {
+		t.Fatalf("baseline epoch = %+v, want authority epoch 5", got)
+	}
+	nv.SwapInSet()
+	for attempt := uint8(1); attempt < borderLifecycleFullTailFrames; attempt++ {
+		tick := epochTick + uint64(attempt)
+		retry := bd.disp.Walk(nv, tick, bd.candidatesFor(nv, tick))
+		if got := binary.LittleEndian.Uint16(retry.Entries[0].DeltaBuf[26:28]); got == borderTailUnchanged {
+			t.Fatalf("epoch-change retry %d emitted sentinel after a potentially lost full tail", attempt)
+		}
+		nv.SwapInSet()
+	}
+	afterWindowTick := epochTick + uint64(borderLifecycleFullTailFrames)
+	afterWindow := bd.disp.Walk(nv, afterWindowTick, bd.candidatesFor(nv, afterWindowTick))
+	if got := binary.LittleEndian.Uint16(afterWindow.Entries[0].DeltaBuf[26:28]); got != borderTailUnchanged {
+		t.Fatalf("post-epoch window tail count = %#x, want sentinel %#x", got, borderTailUnchanged)
 	}
 }
 

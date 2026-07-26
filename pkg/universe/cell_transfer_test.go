@@ -22,9 +22,10 @@ import (
 // issued by the orchestrator during rollback. Tests assert on the recorded
 // sequences.
 type fakeDispatcher struct {
-	mu     sync.Mutex
-	sent   []cellTransferCommand
-	aborts []fakeAbort
+	mu      sync.Mutex
+	sent    []cellTransferCommand
+	aborts  []fakeAbort
+	commits []fakeAbort
 	// sendErr, if non-nil, causes Dispatch to synchronously fail with this
 	// error on every call.
 	sendErr error
@@ -52,6 +53,13 @@ func (f *fakeDispatcher) DispatchAbort(requestID uint64, hostID string) error {
 	return nil
 }
 
+func (f *fakeDispatcher) DispatchCommit(requestID uint64, hostID string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.commits = append(f.commits, fakeAbort{requestID, hostID})
+	return nil
+}
+
 func (f *fakeDispatcher) sentSnapshot() []cellTransferCommand {
 	f.mu.Lock()
 	defer f.mu.Unlock()
@@ -65,6 +73,14 @@ func (f *fakeDispatcher) abortSnapshot() []fakeAbort {
 	defer f.mu.Unlock()
 	out := make([]fakeAbort, len(f.aborts))
 	copy(out, f.aborts)
+	return out
+}
+
+func (f *fakeDispatcher) commitSnapshot() []fakeAbort {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	out := make([]fakeAbort, len(f.commits))
+	copy(out, f.commits)
 	return out
 }
 
@@ -180,6 +196,26 @@ func TestOrchestratorCommitsOnAllReady(t *testing.T) {
 	if got := orch.commitCount.Load(); got != 1 {
 		t.Errorf("commit count=%d want 1", got)
 	}
+	wantCommitHosts := map[string]bool{"host-a": true}
+	for _, cmd := range sent {
+		wantCommitHosts[cmd.DestHostID] = true
+	}
+	commits := disp.commitSnapshot()
+	if len(commits) != len(wantCommitHosts) {
+		t.Fatalf("commit notices=%v want one per host %v", commits, wantCommitHosts)
+	}
+	for _, commit := range commits {
+		if commit.requestID != req.ID {
+			t.Errorf("commit request=%d want %d", commit.requestID, req.ID)
+		}
+		if !wantCommitHosts[commit.hostID] {
+			t.Errorf("unexpected commit host %q", commit.hostID)
+		}
+		delete(wantCommitHosts, commit.hostID)
+	}
+	if len(wantCommitHosts) != 0 {
+		t.Errorf("missing commit notices for hosts %v", wantCommitHosts)
+	}
 	// Parent should have been removed from cellToHostMap and 4 children
 	// added.
 	coord.mu.RLock()
@@ -220,8 +256,8 @@ func TestOrchestratorRollsBackOnFailure(t *testing.T) {
 		t.Fatalf("sent=%d want 4", len(sent))
 	}
 
-	// Three hosts ack OK, then the fourth fails. Abort should fire on
-	// the first three destinations (and only the first three).
+	// Three hosts ack OK, then the fourth fails. Abort must reach the
+	// successful destinations and every source host that deactivated viewers.
 	for i := 0; i < 3; i++ {
 		orch.OnReady(req.ID, sent[i].DestCellID, sent[i].DestHostID, true, "", nil)
 	}
@@ -245,9 +281,13 @@ func TestOrchestratorRollsBackOnFailure(t *testing.T) {
 	if got := orch.commitCount.Load(); got != 0 {
 		t.Errorf("commit count=%d want 0", got)
 	}
-	// Three aborts should have fired (one per host that already
-	// acked OK). Multiple hosts in this test share the same src host
-	// though, so we dedupe by unique hostID.
+	expectedAbortHosts := map[string]bool{}
+	for i := 0; i < 3; i++ {
+		expectedAbortHosts[sent[i].DestHostID] = true
+	}
+	for _, cmd := range sent {
+		expectedAbortHosts[cmd.SrcHostID] = true
+	}
 	aborts := disp.abortSnapshot()
 	uniqueAbortHosts := map[string]bool{}
 	for _, a := range aborts {
@@ -256,15 +296,13 @@ func TestOrchestratorRollsBackOnFailure(t *testing.T) {
 		}
 		uniqueAbortHosts[a.hostID] = true
 	}
-	// Split always dispatches to the src host for all 4 children — the
-	// parent owner ships state to itself for quadrants that stay local.
-	// So in the single-host fallback case only 1 unique host sees aborts.
-	// Check that we got at least 1 and no more than 3 (one per acked OK).
-	if len(uniqueAbortHosts) == 0 {
-		t.Errorf("expected at least 1 abort, got 0")
+	if len(uniqueAbortHosts) != len(expectedAbortHosts) {
+		t.Errorf("abort hosts=%v, want %v", uniqueAbortHosts, expectedAbortHosts)
 	}
-	if len(aborts) > 3 {
-		t.Errorf("abort count=%d want <=3", len(aborts))
+	for hostID := range expectedAbortHosts {
+		if !uniqueAbortHosts[hostID] {
+			t.Errorf("missing abort for host %s", hostID)
+		}
 	}
 	// Inflight map should be clean.
 	orch.mu.Lock()
@@ -272,6 +310,39 @@ func TestOrchestratorRollsBackOnFailure(t *testing.T) {
 		t.Errorf("inflight entry not cleaned up")
 	}
 	orch.mu.Unlock()
+}
+
+func TestOrchestratorRollbackAbortsSourceAndDestinationHosts(t *testing.T) {
+	orch, disp, _ := newTestOrchestrator(t, map[string]string{
+		"cell_0_0": "source-a",
+		"cell_1_0": "source-b",
+	})
+	req := &CellTransferRequest{
+		ID:         991,
+		Kind:       CellTransferMerge,
+		Done:       make(chan struct{}),
+		receivedOK: map[string]struct{}{"destination": {}},
+		commands: []cellTransferCommand{
+			{SrcHostID: "source-a", DestHostID: "destination"},
+			{SrcHostID: "source-b", DestHostID: "destination"},
+			{SrcHostID: "source-a", DestHostID: "destination"},
+		},
+	}
+
+	orch.rollback(req, "test rollback")
+
+	got := map[string]int{}
+	for _, abort := range disp.abortSnapshot() {
+		got[abort.hostID]++
+	}
+	for _, hostID := range []string{"source-a", "source-b", "destination"} {
+		if got[hostID] != 1 {
+			t.Errorf("abort count for %s = %d, want exactly 1", hostID, got[hostID])
+		}
+	}
+	if len(got) != 3 {
+		t.Errorf("abort hosts = %v, want exactly source-a/source-b/destination", got)
+	}
 }
 
 // ───────────────────────────────────────────────────────────────────────────
@@ -303,9 +374,11 @@ func TestOrchestratorTimeoutTriggersRollback(t *testing.T) {
 	if req.Result == nil || !strings.Contains(req.Result.Error(), "timeout") {
 		t.Errorf("Result=%v want timeout error", req.Result)
 	}
-	// No acks were received, so no aborts should have been dispatched.
-	if aborts := disp.abortSnapshot(); len(aborts) != 0 {
-		t.Errorf("unexpected aborts on timeout: %v", aborts)
+	// No destination acknowledged, but the source serialized and may have
+	// suspended viewers, so rollback must still abort the source host.
+	aborts := disp.abortSnapshot()
+	if len(aborts) != 1 || aborts[0].hostID != "host-a" {
+		t.Errorf("timeout aborts = %v, want source host-a", aborts)
 	}
 	if got := orch.commitCount.Load(); got != 0 {
 		t.Errorf("commit count=%d want 0", got)
@@ -589,7 +662,7 @@ func TestS7RollbackOnTimeout(t *testing.T) {
 
 	// Seed a 2-host ownership map with the source cell on host-a.
 	orch, disp, coord := newTestOrchestrator(t, map[string]string{
-		cellKey: "host-a",
+		cellKey:                               "host-a",
 		string(CellID{X: 43, Y: 17}.MeshID()): "host-b",
 	})
 
@@ -668,11 +741,12 @@ func TestS7RollbackOnTimeout(t *testing.T) {
 		}
 	}
 
-	// Invariant 4: no aborts were dispatched — the dispatcher never
-	// fired OnReady, so the orchestrator has no host in receivedOK to
-	// target. The rollback path must be purely coordinator-local.
-	if aborts := disp.abortSnapshot(); len(aborts) != 0 {
-		t.Errorf("post-rollback: %d abort(s) dispatched, want 0 (nobody ack'd)", len(aborts))
+	// Invariant 4: even without a destination Ready, rollback aborts the
+	// source host so its executor can reactivate deactivated viewers. The
+	// unresponsive destination is not included because it never acknowledged.
+	aborts := disp.abortSnapshot()
+	if len(aborts) != 1 || aborts[0].hostID != "host-a" {
+		t.Errorf("post-rollback aborts = %v, want source host-a", aborts)
 	}
 
 	// Invariant 5: inflight map is clean.

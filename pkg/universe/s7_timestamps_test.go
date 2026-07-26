@@ -23,21 +23,23 @@ type capturedFrame struct {
 	data   []byte
 }
 
-func (c *captureSender) Send(connID uint32, data []byte) {
+func (c *captureSender) Send(connID uint32, data []byte) net.SendResult {
 	c.mu.Lock()
 	b := make([]byte, len(data))
 	copy(b, data)
 	c.sent = append(c.sent, capturedFrame{connID: connID, data: b})
 	c.mu.Unlock()
 	if c.inner != nil {
-		c.inner.Send(connID, data)
+		return c.inner.Send(connID, data)
 	}
+	return net.SendResult{Disposition: net.SendQueued, Delivery: net.DeliveryReliableOrdered}
 }
 
-func (c *captureSender) SendReliable(connID uint32, data []byte) {
+func (c *captureSender) SendReliable(connID uint32, data []byte) net.SendResult {
 	if c.inner != nil {
-		c.inner.SendReliable(connID, data)
+		return c.inner.SendReliable(connID, data)
 	}
+	return net.SendResult{Disposition: net.SendQueued, Delivery: net.DeliveryReliableOrdered}
 }
 
 func (c *captureSender) InjectInput(connID uint32, data []byte) {

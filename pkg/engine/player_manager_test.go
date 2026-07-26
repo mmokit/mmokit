@@ -22,6 +22,9 @@ func TestPlayerManager_NewSession(t *testing.T) {
 	if s.ID == 0 {
 		t.Error("SessionID should be non-zero")
 	}
+	if s.StreamGeneration != 1 {
+		t.Errorf("StreamGeneration = %d, want 1", s.StreamGeneration)
+	}
 	got := pm.ByConnID(42)
 	if got != s {
 		t.Error("ByConnID should return the created session")

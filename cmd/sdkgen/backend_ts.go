@@ -8,6 +8,8 @@ type tsBackend struct {
 	interpTS       string // path to interpolation-core.ts
 	clockSyncTS    string // path to clock-sync.ts
 	interpBufferTS string // path to interpolation-buffer.ts
+	playbackTS     string // path to playback-controller.ts
+	predictionTS   string // path to prediction-buffer.ts
 }
 
 func (b tsBackend) Lang() string { return "ts" }
@@ -18,6 +20,8 @@ func (b tsBackend) CoreFiles() []CoreFile {
 		{Src: b.interpTS, Dst: "interpolation-core.ts"},
 		{Src: b.clockSyncTS, Dst: "clock-sync.ts"},
 		{Src: b.interpBufferTS, Dst: "interpolation-buffer.ts"},
+		{Src: b.playbackTS, Dst: "playback-controller.ts"},
+		{Src: b.predictionTS, Dst: "prediction-buffer.ts"},
 	}
 }
 

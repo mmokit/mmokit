@@ -116,6 +116,40 @@ type AbilityCooldownState struct {
 	Total     float32 // total cooldown duration
 }
 
+// PlayerMovementState is an owner-only authoritative seed for client-side
+// prediction. The client may use the pose immediately, but retires buffered
+// inputs only after pairing it with the accepted WorldDelta from the same
+// stream and tick. Remote players never receive another ship's control
+// parameters or destination. Position and target coordinates are flat,
+// world-absolute values so cell topology remains server-internal.
+type PlayerMovementState struct {
+	Valid             bool
+	PredictionTicks   uint8 // zero = authoritative interpolation only
+	Tick              uint32
+	ProducedAtMs      uint64
+	EntityNetID       uint32
+	StreamEpoch       uint32
+	ProcessedSequence uint32
+	TickIntervalMs    uint32
+	WorldX            float32
+	WorldY            float32
+	VelocityX         float32
+	VelocityY         float32
+	Angle             float32
+	AngularVelocity   float32
+	TargetActive      bool
+	TargetX           float32
+	TargetY           float32
+	Thrust            float32
+	TurnRate          float32
+	TurnAccel         float32
+	MaxSpeed          float32
+	SpeedMultiplier   float32
+	DragCoefficient   float32
+	ArrivalDistance   float32
+	DecelerationDist  float32
+}
+
 // PlayerOwnState — per-tick state sent only to the owning player.
 type PlayerOwnState struct {
 	AbilityCooldowns      []AbilityCooldownState
@@ -125,6 +159,7 @@ type PlayerOwnState struct {
 	MaxCargoMass          float32
 	BeingLockedByID       uint32
 	BeingLockedByProgress float32
+	Movement              PlayerMovementState
 }
 
 // ItemDef — single item-registry entry (used in PlayerSpawned).

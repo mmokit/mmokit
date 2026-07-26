@@ -109,9 +109,8 @@ func stepSplitApplyCoordMutation(c *Process, ctx *CommitContext) error {
 	return nil
 }
 
-// stepSplitApplyRewireDirectives applies the per-cell neighbor rewires via
-// loop jobs so the writes happen on the same goroutine that reads
-// Cell.Neighbors from PostSystems, avoiding a race with the game loop.
+// stepSplitApplyRewireDirectives applies per-cell neighbor snapshots at a tick
+// boundary; applyRewireDirectives also takes Process.mu for off-loop readers.
 func stepSplitApplyRewireDirectives(c *Process, ctx *CommitContext) error {
 	c.applyRewireDirectives(ctx.SplitDirectives)
 	return nil

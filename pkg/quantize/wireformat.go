@@ -29,6 +29,8 @@ import (
 //
 // Removed IDs: [4] * removedCount
 // Exited IDs:  [4] * exitedCount
+// Optional input acknowledgement trailer (when FrameFlagInputAck is set):
+//   [4] processedInputSeq (uint32 big-endian)
 
 const frameHeaderSize = 20
 
@@ -43,6 +45,12 @@ const (
 	// reset, exactly like Valve Source's cl_fullupdate or Gaffer's
 	// "encoded relative to initial state" flag.
 	FrameFlagFreshSnapshot uint32 = 1 << 0
+
+	// FrameFlagInputAck announces a four-byte trailer containing the newest
+	// game-defined input sequence whose effects are reflected by this exact
+	// authoritative frame. Keeping the acknowledgement in a trailer preserves
+	// the 20-byte header and lets older clients safely ignore the extension.
+	FrameFlagInputAck uint32 = 1 << 1
 )
 
 // FrameHeader is the decoded header of a delta world update frame.
@@ -92,8 +100,14 @@ func (e *FrameEncoder) Encode(
 	deltas []DeltaEntry,
 	removed []uint32,
 	exited []uint32,
+	inputAck ...uint32,
 ) []byte {
 	e.buf = e.buf[:0]
+	if len(inputAck) > 0 {
+		flags |= FrameFlagInputAck
+	} else {
+		flags &^= FrameFlagInputAck
+	}
 
 	// Header (no serverTimeMs — stamps travel per-entity now).
 	e.buf = e.appendUint32(e.buf, tick)
@@ -142,7 +156,20 @@ func (e *FrameEncoder) Encode(
 		e.buf = e.appendUint32(e.buf, id)
 	}
 
+	if len(inputAck) > 0 {
+		e.buf = e.appendUint32(e.buf, inputAck[0])
+	}
+
 	return e.buf
+}
+
+// NextInputAck reads the optional processed-input acknowledgement trailer.
+// Call it after consuming all full, delta, removed, and exited entries.
+func (d *FrameDecoder) NextInputAck(flags uint32) (uint32, bool) {
+	if flags&FrameFlagInputAck == 0 || d.pos+4 > len(d.data) {
+		return 0, false
+	}
+	return d.readUint32(), true
 }
 
 func (e *FrameEncoder) appendFloat32(b []byte, v float32) []byte {

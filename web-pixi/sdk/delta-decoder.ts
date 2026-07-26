@@ -3,7 +3,7 @@
 import {
   readFloat32, readInt16, readUint16, readUint32,
   unAngle, unNorm, unVel,
-  decodeFrameHeader, decodeFullEntry, decodeDeltaEntry, decodeRemovedIDs,
+  decodeFrameHeader, decodeFullEntry, decodeDeltaEntry, decodeRemovedIDs, decodeInputAck,
   FRAME_FLAG_FRESH_SNAPSHOT,
   applyDelta, BaselineStore,
   decodeLengthPrefixedStringU8,
@@ -49,7 +49,7 @@ function decodeShipEntitySnapshot(snap: Uint8Array, initial: Uint8Array | null, 
   const name = initial && initialOff < initial.length ? decodeLengthPrefixedStringU8(initial.subarray(initialOff)) : (existing?.name ?? "");
   if (initial && initialOff < initial.length) initialOff += 1 + initial[initialOff];
   void initialOff;
-  return { netID: 0, producedAtMs: 0, entityType: 0, worldX, worldY, velX, velY, radius, width, height, name, healthCurrent, healthMax, shieldCurrent, shieldMax, phase, bufferHP, bufferMax, channelRemaining, lockoutRemaining, lockerNetID, lockerProgress, beam0Active, beam1Active, miningTargetNetID, angle, statusEffects };
+  return { netID: 0, authorityEpoch: 0, producedAtMs: 0, entityType: 0, worldX, worldY, velX, velY, radius, width, height, name, healthCurrent, healthMax, shieldCurrent, shieldMax, phase, bufferHP, bufferMax, channelRemaining, lockoutRemaining, lockerNetID, lockerProgress, beam0Active, beam1Active, miningTargetNetID, angle, statusEffects };
 }
 
 const ASTEROIDENTITY_FIELD_SIZES = [4, 4, 2, 2, 2, 2, 2, 4, 4];
@@ -66,7 +66,7 @@ function decodeAsteroidEntitySnapshot(snap: Uint8Array, initial: Uint8Array | nu
   const height = unVel(readInt16(snap, o), 500); o += 2;
   const itemID = readUint32(snap, o); o += 4;
   const remaining = readFloat32(snap, o); o += 4;
-  return { netID: 0, producedAtMs: 0, entityType: 1, worldX, worldY, velX, velY, radius, width, height, itemID, remaining };
+  return { netID: 0, authorityEpoch: 0, producedAtMs: 0, entityType: 1, worldX, worldY, velX, velY, radius, width, height, itemID, remaining };
 }
 
 const STATIONENTITY_FIELD_SIZES = [4, 4, 2, 2, 2, 2, 2];
@@ -81,7 +81,7 @@ function decodeStationEntitySnapshot(snap: Uint8Array, initial: Uint8Array | nul
   const radius = unVel(readInt16(snap, o), 500); o += 2;
   const width = unVel(readInt16(snap, o), 500); o += 2;
   const height = unVel(readInt16(snap, o), 500); o += 2;
-  return { netID: 0, producedAtMs: 0, entityType: 2, worldX, worldY, velX, velY, radius, width, height };
+  return { netID: 0, authorityEpoch: 0, producedAtMs: 0, entityType: 2, worldX, worldY, velX, velY, radius, width, height };
 }
 
 const LOOTCRATEENTITY_FIELD_SIZES = [4, 4, 2, 2, 2, 2, 2, 4];
@@ -105,7 +105,7 @@ function decodeLootCrateEntitySnapshot(snap: Uint8Array, initial: Uint8Array | n
     const quantity = readUint32(snap, o); o += 4;
     items.push({ itemId, quantity });
   }
-  return { netID: 0, producedAtMs: 0, entityType: 3, worldX, worldY, velX, velY, radius, width, height, remaining, items };
+  return { netID: 0, authorityEpoch: 0, producedAtMs: 0, entityType: 3, worldX, worldY, velX, velY, radius, width, height, remaining, items };
 }
 
 const NPCENTITY_FIELD_SIZES = [4, 4, 2, 2, 2, 2, 2, 4, 4, 4, 4, 1, 2];
@@ -138,7 +138,7 @@ function decodeNPCEntitySnapshot(snap: Uint8Array, initial: Uint8Array | null, e
   const state = initial && initialOff < initial.length ? initial[initialOff] : (existing?.state ?? 0);
   if (initial && initialOff < initial.length) initialOff += 1;
   void initialOff;
-  return { netID: 0, producedAtMs: 0, entityType: 4, worldX, worldY, velX, velY, radius, width, height, healthCurrent, healthMax, shieldCurrent, shieldMax, archetype, state, angle, statusEffects };
+  return { netID: 0, authorityEpoch: 0, producedAtMs: 0, entityType: 4, worldX, worldY, velX, velY, radius, width, height, healthCurrent, healthMax, shieldCurrent, shieldMax, archetype, state, angle, statusEffects };
 }
 
 const POIENTITY_FIELD_SIZES = [4, 4, 2, 2, 2, 2, 2, 1];
@@ -160,7 +160,7 @@ function decodePOIEntitySnapshot(snap: Uint8Array, initial: Uint8Array | null, e
   const tier = initial && initialOff < initial.length ? initial[initialOff] : (existing?.tier ?? 0);
   if (initial && initialOff < initial.length) initialOff += 1;
   void initialOff;
-  return { netID: 0, producedAtMs: 0, entityType: 5, worldX, worldY, velX, velY, radius, width, height, type, status, tier };
+  return { netID: 0, authorityEpoch: 0, producedAtMs: 0, entityType: 5, worldX, worldY, velX, velY, radius, width, height, type, status, tier };
 }
 
 const AOEMARKERENTITY_FIELD_SIZES = [4, 4, 2, 2, 2, 2, 2, 4, 4, 4, 4, 1, 1, 1];
@@ -182,7 +182,7 @@ function decodeAoEMarkerEntitySnapshot(snap: Uint8Array, initial: Uint8Array | n
   const factionMask = snap[o]; o += 1;
   const damageType = snap[o]; o += 1;
   const abilityType = snap[o]; o += 1;
-  return { netID: 0, producedAtMs: 0, entityType: 6, worldX, worldY, velX, velY, radius, width, height, remaining, aoESpecRadius, damage, ownerNetID, factionMask, damageType, abilityType };
+  return { netID: 0, authorityEpoch: 0, producedAtMs: 0, entityType: 6, worldX, worldY, velX, velY, radius, width, height, remaining, aoESpecRadius, damage, ownerNetID, factionMask, damageType, abilityType };
 }
 
 const PROJECTILEENTITY_FIELD_SIZES = [4, 4, 2, 2, 2, 2, 2, 4, 4, 4, 4, 4, 4, 4, 1, 1];
@@ -206,7 +206,7 @@ function decodeProjectileEntitySnapshot(snap: Uint8Array, initial: Uint8Array | 
   const maxTurnRate = readFloat32(snap, o); o += 4;
   const type = snap[o]; o += 1;
   const pierceCount = snap[o]; o += 1;
-  return { netID: 0, producedAtMs: 0, entityType: 7, worldX, worldY, velX, velY, radius, width, height, remaining, ownerNetID, targetNetID, damage, splashRadius, splashDamage, maxTurnRate, type, pierceCount };
+  return { netID: 0, authorityEpoch: 0, producedAtMs: 0, entityType: 7, worldX, worldY, velX, velY, radius, width, height, remaining, ownerNetID, targetNetID, damage, splashRadius, splashDamage, maxTurnRate, type, pierceCount };
 }
 
 const LINETELEGRAPHENTITY_FIELD_SIZES = [4, 4, 2, 2, 2, 2, 2, 4, 4, 4, 4, 2];
@@ -226,7 +226,7 @@ function decodeLineTelegraphEntitySnapshot(snap: Uint8Array, initial: Uint8Array
   const halfWidth = readFloat32(snap, o); o += 4;
   const ownerNetID = readUint32(snap, o); o += 4;
   const angle = unAngle(readUint16(snap, o)); o += 2;
-  return { netID: 0, producedAtMs: 0, entityType: 8, worldX, worldY, velX, velY, radius, width, height, remaining, length, halfWidth, ownerNetID, angle };
+  return { netID: 0, authorityEpoch: 0, producedAtMs: 0, entityType: 8, worldX, worldY, velX, velY, radius, width, height, remaining, length, halfWidth, ownerNetID, angle };
 }
 
 const DUNGEONENTITY_FIELD_SIZES = [4, 4, 2, 2, 2, 2, 2];
@@ -247,7 +247,7 @@ function decodeDungeonEntitySnapshot(snap: Uint8Array, initial: Uint8Array | nul
   const entranceMask = initial && initialOff + 2 <= initial.length ? readUint16(initial, initialOff) : (existing?.entranceMask ?? 0);
   if (initial && initialOff + 2 <= initial.length) initialOff += 2;
   void initialOff;
-  return { netID: 0, producedAtMs: 0, entityType: 9, worldX, worldY, velX, velY, radius, width, height, name, entranceMask };
+  return { netID: 0, authorityEpoch: 0, producedAtMs: 0, entityType: 9, worldX, worldY, velX, velY, radius, width, height, name, entranceMask };
 }
 
 const DUNGEONWALLENTITY_FIELD_SIZES = [4, 4, 2, 2, 2, 2, 2, 2];
@@ -263,7 +263,7 @@ function decodeDungeonWallEntitySnapshot(snap: Uint8Array, initial: Uint8Array |
   const width = unVel(readInt16(snap, o), 500); o += 2;
   const height = unVel(readInt16(snap, o), 500); o += 2;
   const angle = unAngle(readUint16(snap, o)); o += 2;
-  return { netID: 0, producedAtMs: 0, entityType: 10, worldX, worldY, velX, velY, radius, width, height, angle };
+  return { netID: 0, authorityEpoch: 0, producedAtMs: 0, entityType: 10, worldX, worldY, velX, velY, radius, width, height, angle };
 }
 
 const DECORATIONENTITY_FIELD_SIZES = [4, 4, 2, 2, 2, 2, 2];
@@ -284,16 +284,60 @@ function decodeDecorationEntitySnapshot(snap: Uint8Array, initial: Uint8Array | 
   const variant = initial && initialOff < initial.length ? decodeLengthPrefixedStringU8(initial.subarray(initialOff)) : (existing?.variant ?? "");
   if (initial && initialOff < initial.length) initialOff += 1 + initial[initialOff];
   void initialOff;
-  return { netID: 0, producedAtMs: 0, entityType: 11, worldX, worldY, velX, velY, radius, width, height, kind, variant };
+  return { netID: 0, authorityEpoch: 0, producedAtMs: 0, entityType: 11, worldX, worldY, velX, velY, radius, width, height, kind, variant };
+}
+
+function isNewerAuthorityEpoch(candidate: number, current: number): boolean {
+  const distance = (candidate - current) >>> 0;
+  return distance !== 0 && distance < 0x80000000;
+}
+
+function isNewerFrameSequence(candidate: number, current: number): boolean {
+  const distance = (candidate - current) >>> 0;
+  return distance !== 0 && distance < 0x80000000;
 }
 
 export class SpaceDeltaDecoder {
-  private baselines = new BaselineStore<{ type: number; lastEntity?: AnyEntity }>();
+  private baselines = new BaselineStore<{ epoch: number; type: number; lastEntity?: AnyEntity }>();
 
-  clear(): void { this.baselines.clear(); }
+  private authorityEpochs = new Map<number, number>();
 
-  decode(data: Uint8Array): DeltaWorldUpdate {
+  private streamEpoch: number | null = null;
+  private lastFrameSequence: number | null = null;
+
+  clear(): void {
+    this.baselines.clear();
+    this.authorityEpochs.clear();
+    this.streamEpoch = null;
+    this.lastFrameSequence = null;
+  }
+
+  private acceptFrame(streamEpoch: number | undefined, sequence: number): { accepted: boolean; streamChanged: boolean } {
+    if (streamEpoch === undefined) return { accepted: true, streamChanged: false };
+    const epoch = streamEpoch >>> 0;
+    const seq = sequence >>> 0;
+    if (this.streamEpoch === null) {
+      this.streamEpoch = epoch;
+      this.lastFrameSequence = seq;
+      return { accepted: true, streamChanged: true };
+    }
+    if (epoch !== this.streamEpoch) {
+      if (!isNewerAuthorityEpoch(epoch, this.streamEpoch)) return { accepted: false, streamChanged: false };
+      this.streamEpoch = epoch;
+      this.lastFrameSequence = seq;
+      this.baselines.clear();
+      this.authorityEpochs.clear();
+      return { accepted: true, streamChanged: true };
+    }
+    if (this.lastFrameSequence !== null && !isNewerFrameSequence(seq, this.lastFrameSequence)) return { accepted: false, streamChanged: false };
+    this.lastFrameSequence = seq;
+    return { accepted: true, streamChanged: false };
+  }
+
+  decode(data: Uint8Array, streamEpoch?: number): DeltaWorldUpdate | null {
     const { header, offset: pos0 } = decodeFrameHeader(data, 0);
+    const frameOrder = this.acceptFrame(streamEpoch, header.seq);
+    if (!frameOrder.accepted) return null;
     let pos = pos0;
 
     const freshSnapshot = (header.flags & FRAME_FLAG_FRESH_SNAPSHOT) !== 0;
@@ -301,15 +345,23 @@ export class SpaceDeltaDecoder {
       this.baselines.clear();
     }
 
+    const freshAuthorityIDs = freshSnapshot && this.streamEpoch !== null ? new Set<number>() : null;
+
     const entered: AnyEntity[] = [];
     const updated: AnyEntity[] = [];
 
     for (let i = 0; i < header.fullCount; i++) {
       const { entry, offset: next } = decodeFullEntry(data, pos);
       pos = next;
+      freshAuthorityIDs?.add(entry.netID);
+      const highestEpoch = this.authorityEpochs.get(entry.netID);
+      if (highestEpoch !== undefined && entry.epoch !== highestEpoch && !isNewerAuthorityEpoch(entry.epoch, highestEpoch)) continue;
+      if (highestEpoch === undefined || isNewerAuthorityEpoch(entry.epoch, highestEpoch)) this.authorityEpochs.set(entry.netID, entry.epoch);
       const prevBl = this.baselines.get(entry.netID);
-      const entity = this.decodeEntity(entry.entityType, entry.snapshot, entry.initialData, entry.netID, entry.producedAtMs, prevBl?.meta?.lastEntity);
-      this.baselines.set(entry.netID, entry.snapshot, { type: entry.entityType, lastEntity: entity ?? undefined });
+      const prevMeta = prevBl?.meta;
+      const previousEntity = prevMeta?.epoch === entry.epoch && prevMeta.type === entry.entityType ? prevMeta.lastEntity : undefined;
+      const entity = this.decodeEntity(entry.entityType, entry.snapshot, entry.initialData, entry.netID, entry.epoch, entry.producedAtMs, previousEntity);
+      this.baselines.set(entry.netID, entry.snapshot, { epoch: entry.epoch, type: entry.entityType, lastEntity: entity ?? undefined });
       if (entity) entered.push(entity);
     }
 
@@ -317,41 +369,53 @@ export class SpaceDeltaDecoder {
       const { entry, offset: next } = decodeDeltaEntry(data, pos);
       pos = next;
       const bl = this.baselines.get(entry.netID);
-      if (!bl) continue;
+      if (!bl?.meta || bl.meta.epoch !== entry.epoch || bl.meta.type !== entry.entityType) continue;
       const fieldSizes = this.fieldSizesFor(entry.entityType);
       const hasVarTail = this.hasVarTailFor(entry.entityType);
       const newSnap = applyDelta(fieldSizes, hasVarTail, bl.snapshot, entry.deltaData);
-      const entity = this.decodeEntity(entry.entityType, newSnap, null, entry.netID, entry.producedAtMs, bl.meta?.lastEntity);
-      this.baselines.set(entry.netID, newSnap, { type: bl.meta?.type ?? entry.entityType, lastEntity: entity ?? undefined });
+      const entity = this.decodeEntity(entry.entityType, newSnap, null, entry.netID, entry.epoch, entry.producedAtMs, bl.meta.lastEntity);
+      this.baselines.set(entry.netID, newSnap, { epoch: entry.epoch, type: entry.entityType, lastEntity: entity ?? undefined });
       if (entity) updated.push(entity);
     }
 
     const { ids: removed, offset: pos2 } = decodeRemovedIDs(data, pos, header.removedCount);
-    const { ids: exited } = decodeRemovedIDs(data, pos2, header.exitedCount);
+    const { ids: exited, offset: pos3 } = decodeRemovedIDs(data, pos2, header.exitedCount);
+    const { sequence: processedInputSeq } = decodeInputAck(data, pos3, header.flags);
 
     for (const id of removed) this.baselines.delete(id);
     for (const id of exited) this.baselines.delete(id);
 
+    if (this.streamEpoch !== null) {
+      for (const id of removed) this.authorityEpochs.delete(id);
+      for (const id of exited) this.authorityEpochs.delete(id);
+    }
+
+    if (freshAuthorityIDs) {
+      for (const id of this.authorityEpochs.keys()) {
+        if (!freshAuthorityIDs.has(id)) this.authorityEpochs.delete(id);
+      }
+    }
+
     return {
-      tick: header.tick, seq: header.seq, freshSnapshot,
+      tick: header.tick, seq: header.seq, freshSnapshot, streamChanged: frameOrder.streamChanged, processedInputSeq,
       entered, updated, removed, exited,
     };
   }
 
-  private decodeEntity(type_: number, snap: Uint8Array, initial: Uint8Array | null, netID: number, producedAtMs: number, existing?: AnyEntity): AnyEntity | null {
+  private decodeEntity(type_: number, snap: Uint8Array, initial: Uint8Array | null, netID: number, authorityEpoch: number, producedAtMs: number, existing?: AnyEntity): AnyEntity | null {
     switch (type_) {
-      case 0: { const prev = existing && existing.entityType === 0 ? existing : undefined; const e = decodeShipEntitySnapshot(snap, initial, prev); e.netID = netID; e.producedAtMs = producedAtMs; return e; }
-      case 1: { const prev = existing && existing.entityType === 1 ? existing : undefined; const e = decodeAsteroidEntitySnapshot(snap, initial, prev); e.netID = netID; e.producedAtMs = producedAtMs; return e; }
-      case 2: { const prev = existing && existing.entityType === 2 ? existing : undefined; const e = decodeStationEntitySnapshot(snap, initial, prev); e.netID = netID; e.producedAtMs = producedAtMs; return e; }
-      case 3: { const prev = existing && existing.entityType === 3 ? existing : undefined; const e = decodeLootCrateEntitySnapshot(snap, initial, prev); e.netID = netID; e.producedAtMs = producedAtMs; return e; }
-      case 4: { const prev = existing && existing.entityType === 4 ? existing : undefined; const e = decodeNPCEntitySnapshot(snap, initial, prev); e.netID = netID; e.producedAtMs = producedAtMs; return e; }
-      case 5: { const prev = existing && existing.entityType === 5 ? existing : undefined; const e = decodePOIEntitySnapshot(snap, initial, prev); e.netID = netID; e.producedAtMs = producedAtMs; return e; }
-      case 6: { const prev = existing && existing.entityType === 6 ? existing : undefined; const e = decodeAoEMarkerEntitySnapshot(snap, initial, prev); e.netID = netID; e.producedAtMs = producedAtMs; return e; }
-      case 7: { const prev = existing && existing.entityType === 7 ? existing : undefined; const e = decodeProjectileEntitySnapshot(snap, initial, prev); e.netID = netID; e.producedAtMs = producedAtMs; return e; }
-      case 8: { const prev = existing && existing.entityType === 8 ? existing : undefined; const e = decodeLineTelegraphEntitySnapshot(snap, initial, prev); e.netID = netID; e.producedAtMs = producedAtMs; return e; }
-      case 9: { const prev = existing && existing.entityType === 9 ? existing : undefined; const e = decodeDungeonEntitySnapshot(snap, initial, prev); e.netID = netID; e.producedAtMs = producedAtMs; return e; }
-      case 10: { const prev = existing && existing.entityType === 10 ? existing : undefined; const e = decodeDungeonWallEntitySnapshot(snap, initial, prev); e.netID = netID; e.producedAtMs = producedAtMs; return e; }
-      case 11: { const prev = existing && existing.entityType === 11 ? existing : undefined; const e = decodeDecorationEntitySnapshot(snap, initial, prev); e.netID = netID; e.producedAtMs = producedAtMs; return e; }
+      case 0: { const prev = existing && existing.entityType === 0 ? existing : undefined; const e = decodeShipEntitySnapshot(snap, initial, prev); e.netID = netID; e.authorityEpoch = authorityEpoch; e.producedAtMs = producedAtMs; return e; }
+      case 1: { const prev = existing && existing.entityType === 1 ? existing : undefined; const e = decodeAsteroidEntitySnapshot(snap, initial, prev); e.netID = netID; e.authorityEpoch = authorityEpoch; e.producedAtMs = producedAtMs; return e; }
+      case 2: { const prev = existing && existing.entityType === 2 ? existing : undefined; const e = decodeStationEntitySnapshot(snap, initial, prev); e.netID = netID; e.authorityEpoch = authorityEpoch; e.producedAtMs = producedAtMs; return e; }
+      case 3: { const prev = existing && existing.entityType === 3 ? existing : undefined; const e = decodeLootCrateEntitySnapshot(snap, initial, prev); e.netID = netID; e.authorityEpoch = authorityEpoch; e.producedAtMs = producedAtMs; return e; }
+      case 4: { const prev = existing && existing.entityType === 4 ? existing : undefined; const e = decodeNPCEntitySnapshot(snap, initial, prev); e.netID = netID; e.authorityEpoch = authorityEpoch; e.producedAtMs = producedAtMs; return e; }
+      case 5: { const prev = existing && existing.entityType === 5 ? existing : undefined; const e = decodePOIEntitySnapshot(snap, initial, prev); e.netID = netID; e.authorityEpoch = authorityEpoch; e.producedAtMs = producedAtMs; return e; }
+      case 6: { const prev = existing && existing.entityType === 6 ? existing : undefined; const e = decodeAoEMarkerEntitySnapshot(snap, initial, prev); e.netID = netID; e.authorityEpoch = authorityEpoch; e.producedAtMs = producedAtMs; return e; }
+      case 7: { const prev = existing && existing.entityType === 7 ? existing : undefined; const e = decodeProjectileEntitySnapshot(snap, initial, prev); e.netID = netID; e.authorityEpoch = authorityEpoch; e.producedAtMs = producedAtMs; return e; }
+      case 8: { const prev = existing && existing.entityType === 8 ? existing : undefined; const e = decodeLineTelegraphEntitySnapshot(snap, initial, prev); e.netID = netID; e.authorityEpoch = authorityEpoch; e.producedAtMs = producedAtMs; return e; }
+      case 9: { const prev = existing && existing.entityType === 9 ? existing : undefined; const e = decodeDungeonEntitySnapshot(snap, initial, prev); e.netID = netID; e.authorityEpoch = authorityEpoch; e.producedAtMs = producedAtMs; return e; }
+      case 10: { const prev = existing && existing.entityType === 10 ? existing : undefined; const e = decodeDungeonWallEntitySnapshot(snap, initial, prev); e.netID = netID; e.authorityEpoch = authorityEpoch; e.producedAtMs = producedAtMs; return e; }
+      case 11: { const prev = existing && existing.entityType === 11 ? existing : undefined; const e = decodeDecorationEntitySnapshot(snap, initial, prev); e.netID = netID; e.authorityEpoch = authorityEpoch; e.producedAtMs = producedAtMs; return e; }
       default: return null;
     }
   }

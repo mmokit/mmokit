@@ -3,6 +3,8 @@
 /** Entity kind 1. */
 export interface PlayerEntity {
   netID: number;
+  /** Authority generation for this netID (uint32 serial). */
+  authorityEpoch: number;
   entityType: 1;
   /**
    * Cluster-clock stamp (Unix ms) from the authoritative producer at
@@ -27,6 +29,8 @@ export interface PlayerEntity {
 /** Entity kind 2. */
 export interface BotEntity {
   netID: number;
+  /** Authority generation for this netID (uint32 serial). */
+  authorityEpoch: number;
   entityType: 2;
   /**
    * Cluster-clock stamp (Unix ms) from the authoritative producer at
@@ -63,6 +67,10 @@ export interface DeltaWorldUpdate {
    * never learn about cells, authority transfers, or server boundaries.
    */
   freshSnapshot: boolean;
+  /** True when the decoder adopted a new explicit stream generation. */
+  streamChanged: boolean;
+  /** Input sequence causally reflected by this frame; null on legacy/unsequenced streams. */
+  processedInputSeq: number | null;
   entered: AnyEntity[];
   updated: AnyEntity[];
   removed: number[];

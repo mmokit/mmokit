@@ -1,6 +1,9 @@
 package metrics
 
-import "time"
+import (
+	"sync/atomic"
+	"time"
+)
 
 // CellMetrics collects per-node metrics on the tick hot path.
 //
@@ -9,7 +12,7 @@ import "time"
 // goroutines via lock-free atomics.
 // Read methods (Snapshot) allocate and are intended for low-frequency scraping.
 type CellMetrics struct {
-	cellID     string
+	cellID     atomic.Pointer[string]
 	tickBudget time.Duration
 
 	// Entity counts — set each tick from game loop.
@@ -57,14 +60,15 @@ func NewCellMetrics(
 	networkStatsFn func() (bytesSent, bytesRecv uint64, connCount int),
 ) *CellMetrics {
 	budget := time.Duration(1000/tickRate) * time.Millisecond
-	return &CellMetrics{
-		cellID:         cellID,
+	nm := &CellMetrics{
 		tickBudget:     budget,
 		loadEWMA:       NewEWMA(0.1),
 		tickRateEWMA:   NewEWMA(0.1),
 		tickStatsFn:    tickStatsFn,
 		networkStatsFn: networkStatsFn,
 	}
+	nm.SetCellID(cellID)
+	return nm
 }
 
 // RecordTick is called once per tick from the game loop goroutine.
@@ -164,12 +168,12 @@ func (nm *CellMetrics) Snapshot() LoadSnapshot {
 	}
 
 	return LoadSnapshot{
-		CellID: nm.cellID,
+		CellID: nm.CellID(),
 		Tick:   tick,
 		Entities: EntitySnapshot{
-			Real:    int(nm.realEntities.Load()),
-			Replica: int(nm.replicaEntities.Load()),
-			Ghost:   int(nm.ghostEntities.Load()),
+			Real:      int(nm.realEntities.Load()),
+			Replica:   int(nm.replicaEntities.Load()),
+			Ghost:     int(nm.ghostEntities.Load()),
 			Connected: int(nm.connected.Load()),
 		},
 		Network:       net,
@@ -188,7 +192,13 @@ func (nm *CellMetrics) TickStatsSnapshot() TickStats {
 }
 
 // CellID returns this metric collector's node identifier.
-func (nm *CellMetrics) CellID() string { return nm.cellID }
+func (nm *CellMetrics) CellID() string {
+	id := nm.cellID.Load()
+	if id == nil {
+		return ""
+	}
+	return *id
+}
 
 // SetCellID updates the node's identifier (used during cell split/merge).
-func (nm *CellMetrics) SetCellID(id string) { nm.cellID = id }
+func (nm *CellMetrics) SetCellID(id string) { nm.cellID.Store(&id) }

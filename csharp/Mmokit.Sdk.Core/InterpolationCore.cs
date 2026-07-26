@@ -13,6 +13,16 @@ namespace Mmokit.Sdk.Core
         public double VelY;
         public double Rotation;
         public double ProducedAtMs;
+        /// Authority epoch carried by the replication entry. Null keeps the
+        /// pre-epoch behavior for callers that construct samples manually.
+        public uint? AuthorityEpoch;
+    }
+
+    public enum InterpolationMode
+    {
+        Hold,
+        Interpolate,
+        Extrapolate,
     }
 
     /// Interpolated render position computed by InterpolateRing.
@@ -21,6 +31,34 @@ namespace Mmokit.Sdk.Core
         public double RenderX;
         public double RenderY;
         public double RenderRot;
+        public InterpolationMode Mode;
+        /// Producer-time distance applied to the newest sample's velocity.
+        /// This remains populated at the extrapolation cap even when Mode is
+        /// Hold because playback has exhausted the permitted prediction span.
+        public double ExtrapolatedMs;
+    }
+
+    public enum SampleRejectReason
+    {
+        StaleTime,
+        OlderEpoch,
+    }
+
+    /// Outcome of an epoch-aware ring append.
+    public readonly struct SamplePushStatus
+    {
+        public SamplePushStatus(bool accepted, bool reset, SampleRejectReason? reason = null)
+        {
+            Accepted = accepted;
+            Reset = reset;
+            Reason = reason;
+        }
+
+        public bool Accepted { get; }
+        /// True when a newer authority epoch moved producer time backward and
+        /// the old timeline had to be discarded before accepting the sample.
+        public bool Reset { get; }
+        public SampleRejectReason? Reason { get; }
     }
 
     /// Render-lag interpolation primitives. Faithful port of
@@ -48,9 +86,59 @@ namespace Mmokit.Sdk.Core
         {
             if (ring.Count > 0 && s.ProducedAtMs < ring[ring.Count - 1].ProducedAtMs)
                 return;
-            ring.Add(s);
-            if (ring.Count > ringSize)
-                ring.RemoveAt(0);
+            AppendSample(ring, s, ringSize);
+        }
+
+        /// Epoch-aware append used by InterpolationBuffer. An older authority
+        /// can never overwrite a newer one. A newer epoch preserves the ring
+        /// when producer time remains monotonic, but resets it when the new
+        /// producer's clock moves backward. Samples without an epoch retain
+        /// the legacy timestamp-only behavior.
+        public static SamplePushStatus PushSampleWithStatus(
+            List<Sample> ring,
+            ref uint? authorityEpoch,
+            Sample s,
+            int ringSize)
+        {
+            if (ringSize <= 0)
+                throw new ArgumentOutOfRangeException(nameof(ringSize), "Ring size must be positive.");
+
+            if (s.AuthorityEpoch.HasValue && authorityEpoch.HasValue)
+            {
+                uint incomingEpoch = s.AuthorityEpoch.Value;
+                uint currentEpoch = authorityEpoch.Value;
+                if (incomingEpoch != currentEpoch)
+                {
+                    if (!IsAuthorityEpochNewer(incomingEpoch, currentEpoch))
+                        return new SamplePushStatus(false, false, SampleRejectReason.OlderEpoch);
+
+                    authorityEpoch = incomingEpoch;
+                    bool timelineMovedBackward = ring.Count > 0 &&
+                        s.ProducedAtMs < ring[ring.Count - 1].ProducedAtMs;
+                    if (timelineMovedBackward)
+                        ring.Clear();
+
+                    AppendSample(ring, s, ringSize);
+                    return new SamplePushStatus(true, timelineMovedBackward);
+                }
+            }
+            else if (s.AuthorityEpoch.HasValue)
+            {
+                authorityEpoch = s.AuthorityEpoch.Value;
+                bool timelineMovedBackward = ring.Count > 0 &&
+                    s.ProducedAtMs < ring[ring.Count - 1].ProducedAtMs;
+                if (timelineMovedBackward)
+                    ring.Clear();
+
+                AppendSample(ring, s, ringSize);
+                return new SamplePushStatus(true, timelineMovedBackward);
+            }
+
+            if (ring.Count > 0 && s.ProducedAtMs < ring[ring.Count - 1].ProducedAtMs)
+                return new SamplePushStatus(false, false, SampleRejectReason.StaleTime);
+
+            AppendSample(ring, s, ringSize);
+            return new SamplePushStatus(true, false);
         }
 
         /// True if producedAtMs is older than the ring tip — i.e. PushSample
@@ -59,6 +147,33 @@ namespace Mmokit.Sdk.Core
         public static bool IsStaleSample(List<Sample> ring, double producedAtMs)
         {
             return ring.Count > 0 && producedAtMs < ring[ring.Count - 1].ProducedAtMs;
+        }
+
+        /// Epoch-aware stale predicate matching PushSampleWithStatus. A newer
+        /// epoch is accepted even if it must reset a backward producer
+        /// timeline; an older epoch is always stale.
+        public static bool IsStaleSample(
+            List<Sample> ring,
+            double producedAtMs,
+            uint? currentAuthorityEpoch,
+            uint? incomingAuthorityEpoch)
+        {
+            if (incomingAuthorityEpoch.HasValue && currentAuthorityEpoch.HasValue)
+            {
+                uint incomingEpoch = incomingAuthorityEpoch.Value;
+                uint currentEpoch = currentAuthorityEpoch.Value;
+                if (incomingEpoch != currentEpoch)
+                    return !IsAuthorityEpochNewer(incomingEpoch, currentEpoch);
+            }
+            return IsStaleSample(ring, producedAtMs);
+        }
+
+        /// RFC 1982-style uint serial comparison used by authority epochs.
+        /// The exactly-half-range case is intentionally unordered.
+        public static bool IsAuthorityEpochNewer(uint candidate, uint reference)
+        {
+            uint distance = unchecked(candidate - reference);
+            return distance != 0 && distance < 0x80000000u;
         }
 
         /// Compute the interpolated render position for one ring at
@@ -79,7 +194,14 @@ namespace Mmokit.Sdk.Core
             if (n == 1)
             {
                 var only = ring[0];
-                result = new InterpolationResult { RenderX = only.WorldX, RenderY = only.WorldY, RenderRot = only.Rotation };
+                result = new InterpolationResult
+                {
+                    RenderX = only.WorldX,
+                    RenderY = only.WorldY,
+                    RenderRot = only.Rotation,
+                    Mode = InterpolationMode.Hold,
+                    ExtrapolatedMs = 0,
+                };
                 return true;
             }
 
@@ -98,18 +220,30 @@ namespace Mmokit.Sdk.Core
 
             if (renderTimeMs <= effS0Stamp)
             {
-                result = new InterpolationResult { RenderX = s0.WorldX, RenderY = s0.WorldY, RenderRot = s0.Rotation };
+                result = new InterpolationResult
+                {
+                    RenderX = s0.WorldX,
+                    RenderY = s0.WorldY,
+                    RenderRot = s0.Rotation,
+                    Mode = InterpolationMode.Hold,
+                    ExtrapolatedMs = 0,
+                };
                 return true;
             }
             if (renderTimeMs >= s1.ProducedAtMs)
             {
-                double extMs = Math.Min(renderTimeMs - s1.ProducedAtMs, maxExtrapolateMs);
+                double requestedExtMs = Math.Max(0, renderTimeMs - s1.ProducedAtMs);
+                double extMs = Math.Min(requestedExtMs, Math.Max(0, maxExtrapolateMs));
                 double extS = extMs / 1000.0;
                 result = new InterpolationResult
                 {
                     RenderX = s1.WorldX + s1.VelX * extS,
                     RenderY = s1.WorldY + s1.VelY * extS,
                     RenderRot = s1.Rotation,
+                    Mode = extMs > 0 && requestedExtMs <= maxExtrapolateMs
+                        ? InterpolationMode.Extrapolate
+                        : InterpolationMode.Hold,
+                    ExtrapolatedMs = extMs,
                 };
                 return true;
             }
@@ -119,8 +253,19 @@ namespace Mmokit.Sdk.Core
                 RenderX = Lerp(s0.WorldX, s1.WorldX, t),
                 RenderY = Lerp(s0.WorldY, s1.WorldY, t),
                 RenderRot = LerpAngle(s0.Rotation, s1.Rotation, t),
+                Mode = InterpolationMode.Interpolate,
+                ExtrapolatedMs = 0,
             };
             return true;
+        }
+
+        static void AppendSample(List<Sample> ring, Sample s, int ringSize)
+        {
+            if (ringSize <= 0)
+                throw new ArgumentOutOfRangeException(nameof(ringSize), "Ring size must be positive.");
+            ring.Add(s);
+            if (ring.Count > ringSize)
+                ring.RemoveAt(0);
         }
     }
 }

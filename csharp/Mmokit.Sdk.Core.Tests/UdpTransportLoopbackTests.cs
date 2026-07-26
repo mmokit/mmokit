@@ -10,7 +10,7 @@ namespace Mmokit.Sdk.Core.Tests
     public class UdpTransportLoopbackTests
     {
         [Fact]
-        public void Connect_Handshake_And_ReliableRoundTrip()
+        public async Task Connect_Handshake_And_ReliableRoundTrip()
         {
             // Minimal in-test UDP "server": bind a loopback port, answer ConnReq
             // with ConnAccept, then on a reliable packet send back an unreliable
@@ -53,14 +53,15 @@ namespace Mmokit.Sdk.Core.Tests
             try
             {
                 client2.SendReliable(new byte[] { 1, 2, 3 });
-                Assert.True(client2.TryRecv(out byte[] reply, 3000), "expected a server reply within 3s");
+                Assert.True(client2.TryRecv(out byte[]? reply, 3000), "expected a server reply within 3s");
+                Assert.NotNull(reply);
                 Assert.Equal(new byte[] { 42, 43 }, reply);
             }
             finally
             {
                 serverDone.Cancel();
                 client2.Close();
-                serverTask.Wait(2000);
+                await serverTask.WaitAsync(TimeSpan.FromSeconds(2));
             }
         }
     }

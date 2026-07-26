@@ -25,15 +25,17 @@ func newCaptureConn() *captureConnSender {
 	return &captureConnSender{sent: make(map[uint32][]byte)}
 }
 
-func (c *captureConnSender) Send(connID uint32, data []byte) {
+func (c *captureConnSender) Send(connID uint32, data []byte) pkgnet.SendResult {
 	c.mu.Lock()
 	c.sent[connID] = append([]byte(nil), data...)
 	c.mu.Unlock()
+	return pkgnet.SendResult{Disposition: pkgnet.SendQueued, Delivery: pkgnet.DeliveryReliableOrdered}
 }
-func (c *captureConnSender) SendReliable(connID uint32, data []byte) {
+func (c *captureConnSender) SendReliable(connID uint32, data []byte) pkgnet.SendResult {
 	c.mu.Lock()
 	c.sent[connID] = append([]byte(nil), data...)
 	c.mu.Unlock()
+	return pkgnet.SendResult{Disposition: pkgnet.SendQueued, Delivery: pkgnet.DeliveryReliableOrdered}
 }
 func (c *captureConnSender) InjectInput(connID uint32, data []byte) {}
 func (c *captureConnSender) DrainInput(connID uint32) [][]byte      { return nil }

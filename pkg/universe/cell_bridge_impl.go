@@ -1,6 +1,8 @@
 package universe
 
 import (
+	"sync"
+
 	"github.com/zenion/mmoserver/pkg/coords"
 	"github.com/zenion/mmoserver/pkg/engine"
 )
@@ -9,6 +11,7 @@ import (
 type cellBridge struct {
 	cell             *Cell
 	coord            *Process
+	borderMu         sync.Mutex
 	borderDispatcher *BorderDispatcher
 	handoffDriver    *HandoffDriver
 }
@@ -18,7 +21,7 @@ func (b *cellBridge) PreTick() {
 }
 
 func (b *cellBridge) PostSystems() {
-	b.ensureBorderDispatcher()
+	borderDispatcher := b.ensureBorderDispatcher()
 	b.ensureHandoffDriver()
 	// Cluster-coherent tick index for hard-cut handoff CommitTick
 	// arithmetic. Both source (HandoffDriver.Tick) and destination
@@ -37,8 +40,8 @@ func (b *cellBridge) PostSystems() {
 	// included in this tick's outbound border frame and outbound client
 	// replication — the first authoritative sample from the new owner.
 	b.cell.drainPendingPromotes(clusterTick)
-	if b.borderDispatcher != nil {
-		b.borderDispatcher.Tick(clusterTick)
+	if borderDispatcher != nil {
+		borderDispatcher.Tick(clusterTick)
 	}
 	if b.handoffDriver != nil {
 		b.handoffDriver.Tick(clusterTick)
@@ -73,31 +76,48 @@ func (b *cellBridge) ensureHandoffDriver() {
 // PostSystems call, once the neighbor map is populated. It is also
 // re-invoked implicitly after invalidateBorderDispatcher nils the field
 // (e.g., after a cell split/merge rewires the Cell.Neighbors map).
-func (b *cellBridge) ensureBorderDispatcher() {
-	if b.borderDispatcher != nil {
-		return
-	}
+func (b *cellBridge) ensureBorderDispatcher() *BorderDispatcher {
 	if b.cell == nil || b.cell.Stage == nil {
-		return
+		return nil
+	}
+	b.borderMu.Lock()
+	cached := b.borderDispatcher
+	b.borderMu.Unlock()
+	if cached != nil {
+		return cached
+	}
+
+	// Neighbors is owned by Process.mu. Take locks in the repository-wide
+	// Process-before-child order also used by reconcileCellNeighbors, then
+	// build/install one immutable dispatcher snapshot. If topology changes
+	// immediately afterward, invalidation clears the cached pointer while this
+	// tick may safely finish using the returned snapshot.
+	b.coord.mu.RLock()
+	defer b.coord.mu.RUnlock()
+	b.borderMu.Lock()
+	defer b.borderMu.Unlock()
+	if b.borderDispatcher != nil {
+		return b.borderDispatcher
 	}
 	neighbors := b.cell.Neighbors
 	if len(neighbors) == 0 {
-		return
+		return nil
 	}
 	viewers := make(map[string]*CellViewer, len(neighbors))
-	info := b.neighborInfo()
+	baseCellSize := b.coord.baseCellSize()
 	for destID, destCell := range neighbors {
 		destStr := string(destID)
-		ni, ok := info[destStr]
-		if !ok {
+		if destCell == nil {
 			continue
 		}
-		bx, by := neighborBoundaryMidpoint(b.cell.Cell, ni.DX, ni.DY)
+		dx, dy := CellDirection(b.cell.Cell, destCell.Cell, baseCellSize)
+		bx, by := neighborBoundaryMidpoint(b.cell.Cell, dx, dy)
 		nv := NewCellViewer(MeshCellID(destStr), CellViewerID(destStr), bx, by, nil, b.cell, destCell)
-		nv.SetDirection(ni.DX, ni.DY)
+		nv.SetDirection(dx, dy)
 		viewers[destStr] = nv
 	}
 	b.borderDispatcher = NewBorderDispatcher(b.cell.Stage, viewers)
+	return b.borderDispatcher
 }
 
 // HandoffDriver returns the lazily-constructed HandoffDriver for this
@@ -116,7 +136,9 @@ func (b *cellBridge) HandoffDriver() *HandoffDriver {
 // Without this call, the cached viewers would keep pointing at stale
 // neighbors and miss newly-split siblings.
 func (b *cellBridge) invalidateBorderDispatcher() {
+	b.borderMu.Lock()
 	b.borderDispatcher = nil
+	b.borderMu.Unlock()
 }
 
 // neighborBoundaryMidpoint computes the world-space midpoint of the shared
@@ -172,7 +194,7 @@ func (b *cellBridge) CellOwnerAtPos(worldX, worldY float32) string {
 }
 
 func (b *cellBridge) OnPlayerTransfer(connID uint32, destCellID MeshCellID) {
-	b.coord.setPlayerNode(connID, destCellID)
+	gatewayConnID, newRouteEpoch := b.advancePlayerRoute(connID, destCellID)
 	// Refresh the gateway's cached localSession.cellID so the next WS
 	// disconnect routes its event to the destination cell (not the stale
 	// origin). Without this, the disconnect event is dispatched to the
@@ -184,11 +206,32 @@ func (b *cellBridge) OnPlayerTransfer(connID uint32, destCellID MeshCellID) {
 	// fires OnUpstreamSwitch; this branch covers the same-host path that
 	// grpcBridge.OnPlayerTransfer routes through us.
 	if b.coord != nil && b.coord.gateway != nil {
-		if sess := b.coord.gateway.lookupSession(connID); sess != nil {
-			b.coord.gateway.OnUpstreamSwitch(connID, sess.hostID, destCellID, sess.epoch)
+		if sess := b.coord.gateway.lookupSession(gatewayConnID); sess != nil {
+			b.coord.gateway.OnUpstreamSwitch(gatewayConnID, sess.hostID, destCellID, newRouteEpoch)
 		}
 	}
 	b.cell.Log.Log(CatMeshTransfer, "[%s] player transfer: conn=%d -> %s", b.cell.MeshID, connID, destCellID)
+}
+
+// advancePlayerRoute advances the coordinator's transport-fencing route for a
+// real same-host source change. Direct/in-process sessions use connID as-is.
+// When a VCM coexists (for example embedded always-proxy mode), connID is
+// node-local: resolve the stable gateway key, advance that composite route,
+// then re-register the returned route epoch in the VCM. StreamGeneration is a
+// separate replication counter and is intentionally not read or written here.
+func (b *cellBridge) advancePlayerRoute(connID uint32, destCellID MeshCellID) (gatewayConnID uint32, newRouteEpoch uint64) {
+	if b.coord != nil && b.coord.vcm != nil {
+		if key, vcmEpoch, ok := b.coord.vcm.LookupRouteByLocal(connID); ok {
+			newRouteEpoch = b.coord.sessionRoutes.AdvanceCellFrom(key, destCellID, vcmEpoch)
+			username := ""
+			if sess := b.cell.Engine.Players.ByConnID(connID); sess != nil {
+				username = sess.Username
+			}
+			b.coord.vcm.RegisterSession(key, username, newRouteEpoch, destCellID)
+			return key.ConnID, newRouteEpoch
+		}
+	}
+	return connID, b.coord.setPlayerNode(connID, destCellID)
 }
 
 func (b *cellBridge) RequestRespawn(connID uint32, username string) {
@@ -196,6 +239,15 @@ func (b *cellBridge) RequestRespawn(connID uint32, username string) {
 	b.coord.mu.RLock()
 	resolver := b.coord.spawnResolver
 	b.coord.mu.RUnlock()
+
+	// A cross-cell respawn creates a fresh replication source. Carry N+1 to
+	// the destination while leaving the source session pinned at N. Same-cell
+	// respawns keep the existing stream because the cell's ReplicationSystem
+	// and its per-viewer sequence continue.
+	streamGeneration := uint32(0)
+	if sourceSession := b.cell.Engine.Players.ByConnID(connID); sourceSession != nil {
+		streamGeneration = sourceSession.StreamGeneration
+	}
 
 	var loc coords.Location
 	if resolver != nil {
@@ -223,16 +275,41 @@ func (b *cellBridge) RequestRespawn(connID uint32, username string) {
 			b.cell.MeshID, targetCellID, username)
 		return
 	}
+	targetMeshID := MeshCellID(targetCellID)
+	if targetMeshID != b.cell.MeshID {
+		streamGeneration++
+		gatewayConnID, newRouteEpoch := b.advancePlayerRoute(connID, targetMeshID)
+		if b.coord.gateway != nil {
+			if sess := b.coord.gateway.lookupSession(gatewayConnID); sess != nil {
+				b.coord.gateway.OnUpstreamSwitch(gatewayConnID, sess.hostID, targetMeshID, newRouteEpoch)
+			}
+		}
+	} else {
+		// Preserve route establishment for tests and local setups that invoke
+		// respawn before an assignment route exists, without advancing an
+		// existing same-cell route or restarting the replication stream.
+		key := SessionKey{GatewayID: InprocGatewayID, ConnID: connID}
+		epoch := uint64(1)
+		if b.coord.vcm != nil {
+			if vcmKey, vcmEpoch, ok := b.coord.vcm.LookupRouteByLocal(connID); ok {
+				key = vcmKey
+				epoch = vcmEpoch
+			}
+		}
+		if _, ok := b.coord.sessionRoutes.Get(key); !ok {
+			b.coord.sessionRoutes.Set(&SessionRoute{Key: key, CellID: targetMeshID, Epoch: epoch})
+		}
+	}
 	dest.Inbox <- CellMessage{
 		Type:       MsgSpawnTransfer,
 		FromCellID: b.cell.MeshID,
 		Spawn: &SpawnTransfer{
-			ConnID:        connID,
-			Username:      username,
-			SpawnLocation: loc,
+			ConnID:           connID,
+			Username:         username,
+			StreamGeneration: streamGeneration,
+			SpawnLocation:    loc,
 		},
 	}
-	b.coord.setPlayerNode(connID, MeshCellID(targetCellID))
 }
 
 func (b *cellBridge) SendAction(targetCellID MeshCellID, action *CrossCellAction) {
@@ -289,38 +366,17 @@ func (b *cellBridge) SendHandoff(destCellID MeshCellID, payload *HandoffPayload)
 	return true
 }
 
-func (b *cellBridge) SendForwardInput(destCellID MeshCellID, payload *ForwardInputPayload) {
+func (b *cellBridge) SendForwardInput(destCellID MeshCellID, payload *ForwardInputPayload) bool {
 	b.coord.mu.RLock()
 	dest, ok := b.coord.Cells[destCellID]
 	b.coord.mu.RUnlock()
 	if !ok {
-		return
+		return false
 	}
 	dest.Inbox <- CellMessage{
 		Type:         MsgForwardInput,
 		FromCellID:   b.cell.MeshID,
 		ForwardInput: payload,
 	}
-}
-
-// neighborInfo builds the neighbor map used by border scanning.
-// Computes DX/DY from actual cell world bounds so direction-based replica
-// scanning works correctly across any depth mix, including siblings within
-// the same root cell after a split.
-func (b *cellBridge) neighborInfo() map[string]NeighborInfo {
-	b.coord.mu.RLock()
-	defer b.coord.mu.RUnlock()
-
-	baseCellSize := b.coord.baseCellSize()
-	neighbors := make(map[string]NeighborInfo, len(b.cell.Neighbors))
-	for nID, neighbor := range b.cell.Neighbors {
-		dx, dy := CellDirection(b.cell.Cell, neighbor.Cell, baseCellSize)
-		nIDStr := string(nID)
-		neighbors[nIDStr] = NeighborInfo{
-			CellID: nIDStr,
-			DX:     dx,
-			DY:     dy,
-		}
-	}
-	return neighbors
+	return true
 }

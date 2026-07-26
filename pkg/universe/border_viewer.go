@@ -20,10 +20,11 @@ type CellViewer struct {
 	x, y         float32
 	tiers        map[uint16]replication.ReplicationTier
 	baselines    *replication.BaselineStore
-	sourceCell   *Cell // cell that owns this viewer (the source of frames)
-	destCell     *Cell // destination neighbor cell that receives frames
-	dirDX        int32 // neighbor's direction from source cell (-1, 0, or +1)
-	dirDY        int32 // neighbor's direction from source cell (-1, 0, or +1)
+	tailScratch  []byte // reusable component-tail serialization buffer
+	sourceCell   *Cell  // cell that owns this viewer (the source of frames)
+	destCell     *Cell  // destination neighbor cell that receives frames
+	dirDX        int32  // neighbor's direction from source cell (-1, 0, or +1)
+	dirDY        int32  // neighbor's direction from source cell (-1, 0, or +1)
 
 	// prevInSet is the set of netIDs that were in this viewer's push set
 	// on the previous tick. currInSet is the set being accumulated on the
@@ -43,9 +44,9 @@ type CellViewer struct {
 // viewer's "position" for tier-radius distance checks.
 //
 // tiers is an optional per-entity-kind tier override. Pass nil for the
-// default tier (non-zero radius, no divisor), which is correct for
-// most games. Games that replicate different entity kinds at
-// different tiers can populate this map.
+// default tier. Radius and priority fields are honored; UpdateDivisor is
+// normalized to 1 because every border frame carries a complete interest-set
+// snapshot and therefore must include every retained member every tick.
 //
 // sourceCell is the cell that owns this viewer (may be nil in tests).
 // destCell is the destination neighbor that will receive frames (may be nil in tests).
@@ -76,6 +77,7 @@ func NewCellViewer(
 		y:            boundaryY,
 		tiers:        tiers,
 		baselines:    replication.NewBaselineStore(replication.AckReliable),
+		tailScratch:  make([]byte, 0, 256),
 		sourceCell:   sourceCell,
 		destCell:     destCell,
 		prevInSet:    make(map[uint32]struct{}),
@@ -92,8 +94,9 @@ func (v *CellViewer) WasInSet(netID uint32) bool {
 	return ok
 }
 
-// MarkInSet records that netID is part of this tick's push set. Called
-// by BorderDispatcher after the proximity predicate passes.
+// MarkInSet records that netID is part of this tick's transmitted push set.
+// BorderDispatcher calls it only after all proximity, tier-radius, and
+// update-rate gates accept the entity.
 func (v *CellViewer) MarkInSet(netID uint32) {
 	v.currInSet[netID] = struct{}{}
 }
@@ -102,8 +105,16 @@ func (v *CellViewer) MarkInSet(netID uint32) {
 // previous map for reuse on the next tick. Called by BorderDispatcher
 // at the end of each tick's walk so that any netID which failed the
 // predicate this tick is dropped from the hysteresis window going
-// forward.
+// forward. A departed entity's component baseline is dropped at the
+// same time: the receiver treats the missing netID as a despawn, so a
+// later re-entry must carry a full component tail rather than an
+// unchanged sentinel referring to state the receiver no longer owns.
 func (v *CellViewer) SwapInSet() {
+	for netID := range v.prevInSet {
+		if _, stillInSet := v.currInSet[netID]; !stillInSet {
+			v.baselines.DropBaseline(netID)
+		}
+	}
 	v.prevInSet, v.currInSet = v.currInSet, v.prevInSet
 	for k := range v.currInSet {
 		delete(v.currInSet, k)
@@ -144,6 +155,13 @@ func (v *CellViewer) Position() (float32, float32) { return v.x, v.y }
 func (v *CellViewer) Tier(kind uint16) replication.ReplicationTier {
 	if v.tiers != nil {
 		if t, ok := v.tiers[kind]; ok {
+			// A border frame's Entries are the neighbor's complete interest-set
+			// snapshot, not merely the entities updated this tick. Letting the
+			// shared Dispatcher apply UpdateDivisor would omit a still-visible
+			// entity and make the receiver interpret the omission as a despawn.
+			// Until membership and state updates have separate wire sections,
+			// border viewers must emit membership every tick.
+			t.UpdateDivisor = 1
 			return t
 		}
 	}

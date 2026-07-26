@@ -24,7 +24,10 @@ type Engine struct {
 	GetNetID func(ecs.Entity) (uint32, bool)
 
 	// OnEntityRemoved is called for each entity just before it is removed from
-	// the ECS during FlushRemovals. Use to deregister from spatial grid, etc.
+	// the ECS through an Engine removal path. It is an optional lifecycle
+	// observer; framework-owned cleanup is wired separately and cannot be
+	// replaced by assigning this callback. The callback must not structurally
+	// mutate the ECS world.
 	OnEntityRemoved func(ecs.Entity)
 
 	// Metrics collects per-cell observability data. Nil until wired by
@@ -35,10 +38,21 @@ type Engine struct {
 	// Injected by the universe layer to avoid importing ECS component types.
 	EntityCounter func() (real, replica, ghost, connected int)
 
-	netIDBase     uint32
-	nextNetID     atomic.Uint32
-	toRemove      []ecs.Entity
+	netIDBase uint32
+	nextNetID atomic.Uint32
+
+	toRemove          []removalRequest
+	removalQueueIndex map[ecs.Entity]int
+
+	// RemovedNetIDs is the authoritative tombstone batch available to the
+	// replication system in the current publication phase. Call
+	// SampleRemovedNetIDs rather than reading it directly in a tick consumer;
+	// sampling freezes this batch and routes later removals to the next tick.
 	RemovedNetIDs []uint32
+
+	nextRemovedNetIDs  []uint32
+	removalsSampled    bool
+	entityRemovalClean func(ecs.Entity)
 
 	// loopQ is the queue of jobs scheduled for execution on the game loop.
 	// External callers go through RunOnLoop / SubmitLoopJob, not by posting
@@ -81,16 +95,78 @@ func (e *Engine) NetIDBase() uint32 {
 // New creates a new Engine.
 func New(cfg Config, connMgr net.ConnSender, log *logger.Logger) *Engine {
 	eng := &Engine{
-		ECS:      ecs.NewWorld(1024),
-		ConnMgr:  connMgr,
-		Log:      log,
-		Config:   cfg,
-		toRemove: make([]ecs.Entity, 0, 64),
-		loopQ:    newLoopQueue(64),
+		ECS:               ecs.NewWorld(1024),
+		ConnMgr:           connMgr,
+		Log:               log,
+		Config:            cfg,
+		toRemove:          make([]removalRequest, 0, 64),
+		removalQueueIndex: make(map[ecs.Entity]int, 64),
+		RemovedNetIDs:     make([]uint32, 0, 64),
+		nextRemovedNetIDs: make([]uint32, 0, 64),
+		loopQ:             newLoopQueue(64),
 	}
 	eng.Players = NewPlayerManager()
 	eng.Players.eng = eng
 	return eng
+}
+
+// RemovalPolicy controls whether an ECS teardown is a genuine authoritative
+// destruction that clients must observe, or only the removal of a local
+// representation such as a border replica or transfer ghost.
+type RemovalPolicy uint8
+
+const (
+	// RemovalAuthoritative publishes the entity's network ID as a client
+	// tombstone after cleanup and ECS removal complete.
+	RemovalAuthoritative RemovalPolicy = iota
+
+	// RemovalLocalOnly performs the same mandatory cleanup and ECS removal but
+	// does not publish a client tombstone. Replica eviction, ghost expiry, and
+	// rejected speculative rows use this policy.
+	RemovalLocalOnly
+)
+
+type removalRequest struct {
+	entity ecs.Entity
+	policy RemovalPolicy
+}
+
+// SetEntityRemovalCleanup installs the framework-owned cleanup primitive run
+// for every engine-mediated removal while the entity is still alive. It is
+// separate from OnEntityRemoved so optional observers cannot accidentally
+// replace mandatory spatial/index cleanup.
+func (e *Engine) SetEntityRemovalCleanup(fn func(ecs.Entity)) {
+	e.entityRemovalClean = fn
+}
+
+// BeginRemovalTick advances the authoritative-removal publication phase. A
+// batch sampled last tick is retired and replaced by removals that happened
+// after that sample. If no consumer sampled the batch, it remains pending so
+// removals cannot disappear merely because replication was absent or skipped.
+//
+// The game loop calls this exactly once at the beginning of each tick.
+func (e *Engine) BeginRemovalTick() {
+	if e.removalsSampled {
+		e.RemovedNetIDs, e.nextRemovedNetIDs = e.nextRemovedNetIDs, e.RemovedNetIDs[:0]
+	}
+	e.removalsSampled = false
+}
+
+// SampleRemovedNetIDs returns the stable authoritative-removal batch for this
+// tick and closes its publication phase. Removals produced after this call are
+// retained for the next tick, making removal delivery independent of system
+// registration order. The returned slice is valid until BeginRemovalTick.
+func (e *Engine) SampleRemovedNetIDs() []uint32 {
+	e.removalsSampled = true
+	return e.RemovedNetIDs
+}
+
+func (e *Engine) publishRemovedNetID(netID uint32) {
+	if e.removalsSampled {
+		e.nextRemovedNetIDs = append(e.nextRemovedNetIDs, netID)
+		return
+	}
+	e.RemovedNetIDs = append(e.RemovedNetIDs, netID)
 }
 
 // NextNetID allocates and returns the next network entity ID.
@@ -112,25 +188,70 @@ func (e *Engine) TickIntervalMs() uint64 {
 
 // MarkForRemoval queues an entity for removal at the end of the tick.
 func (e *Engine) MarkForRemoval(entity ecs.Entity) {
-	e.toRemove = append(e.toRemove, entity)
+	e.MarkForRemovalWithPolicy(entity, RemovalAuthoritative)
+}
+
+// MarkForRemovalWithPolicy queues an entity for removal at the end of the
+// tick using policy. Local representations must use RemovalLocalOnly.
+func (e *Engine) MarkForRemovalWithPolicy(entity ecs.Entity, policy RemovalPolicy) {
+	if idx, ok := e.removalQueueIndex[entity]; ok {
+		// Authoritative destruction is the stronger request. This makes mixed
+		// duplicate requests deterministic when, for example, lifecycle and
+		// gameplay systems both classify the same entity in one tick.
+		if policy == RemovalAuthoritative {
+			e.toRemove[idx].policy = RemovalAuthoritative
+		}
+		return
+	}
+	e.removalQueueIndex[entity] = len(e.toRemove)
+	e.toRemove = append(e.toRemove, removalRequest{entity: entity, policy: policy})
+}
+
+// RemoveEntityNow immediately removes an entity through the authoritative
+// lifecycle path. It records the entity's network ID and invokes cleanup
+// hooks exactly once while the entity is still alive. Returns true when the
+// entity was removed, or false when the handle was already dead.
+//
+// Call only on the ECS owner goroutine at a structurally safe point (outside
+// a locked query). Commands.Flush and FlushRemovals are the normal callers.
+// This represents genuine entity destruction; replica eviction and authority
+// transfer teardown must use their dedicated paths so they are not published
+// to clients as authoritative removals.
+func (e *Engine) RemoveEntityNow(entity ecs.Entity) bool {
+	return e.RemoveEntityNowWithPolicy(entity, RemovalAuthoritative)
+}
+
+// RemoveEntityNowWithPolicy immediately removes an entity using the shared
+// cleanup path and publishes a tombstone only for RemovalAuthoritative.
+func (e *Engine) RemoveEntityNowWithPolicy(entity ecs.Entity, policy RemovalPolicy) bool {
+	if !e.ECS.Alive(entity) {
+		return false
+	}
+	var netID uint32
+	var hasNetID bool
+	if e.GetNetID != nil {
+		netID, hasNetID = e.GetNetID(entity)
+	}
+	if e.entityRemovalClean != nil {
+		e.entityRemovalClean(entity)
+	}
+	if e.OnEntityRemoved != nil {
+		e.OnEntityRemoved(entity)
+	}
+	e.ECS.RemoveEntity(entity)
+	if policy == RemovalAuthoritative && hasNetID {
+		e.publishRemovedNetID(netID)
+	}
+	return true
 }
 
 // FlushRemovals removes all entities marked for removal.
 // Uses the Engine's GetNetID callback to map entities to network IDs for
 // despawn tracking. If GetNetID is nil, entities are removed silently.
 func (e *Engine) FlushRemovals() {
-	for _, entity := range e.toRemove {
-		if e.ECS.Alive(entity) {
-			if e.GetNetID != nil {
-				if id, ok := e.GetNetID(entity); ok {
-					e.RemovedNetIDs = append(e.RemovedNetIDs, id)
-				}
-			}
-			if e.OnEntityRemoved != nil {
-				e.OnEntityRemoved(entity)
-			}
-			e.ECS.RemoveEntity(entity)
-		}
+	for _, req := range e.toRemove {
+		e.RemoveEntityNowWithPolicy(req.entity, req.policy)
+		delete(e.removalQueueIndex, req.entity)
 	}
 	e.toRemove = e.toRemove[:0]
 }

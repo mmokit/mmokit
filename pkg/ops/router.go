@@ -6,6 +6,8 @@ import (
 	"net/netip"
 	"sync"
 	"time"
+
+	pkgnet "github.com/zenion/mmoserver/pkg/net"
 )
 
 // EventCode is any integer type usable as an op code (proto enums are int32).
@@ -43,7 +45,7 @@ func (c *OpContext) Bag() *sync.Map { return &c.bag }
 type DrainSource interface {
 	ActiveConnIDs() []uint32
 	DrainOpInput(connID uint32) [][]byte
-	SendReliable(connID uint32, data []byte)
+	SendReliable(connID uint32, data []byte) pkgnet.SendResult
 	RemoteAddrString(connID uint32) string
 }
 

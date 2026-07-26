@@ -24,7 +24,7 @@ import (
 // IDs must match what gw.Players.RegisterState would assign — the registration
 // order in NewGameWorld below must keep these in lockstep.
 const (
-	StateDead    mmokit.PlayerState = mmokit.StateBuiltinEnd + iota
+	StateDead mmokit.PlayerState = mmokit.StateBuiltinEnd + iota
 	StateDocking
 	StateDocked
 )
@@ -68,14 +68,26 @@ func NewGameWorld(base *mmokit.Stage, cfg *GameConfig, playerDB *PlayerRepo, cel
 	}
 	// removeFromWorld saves and removes the player's ECS entity.
 	// Used by transitions where the player permanently leaves the world.
-	// If the entity has a Ghost component (transfer in progress), skip removal —
-	// the ghost lingers for visual continuity until the replica arrives.
+	// Ghost and Replica entities are transfer continuity representations and
+	// must not be removed here. A demoted Replica still passes through the
+	// normal transfer persistence checkpoint before the session is detached;
+	// Ghost preserves its historical early-return behavior.
 	removeFromWorld := func(s *mmokit.PlayerSession, pm *mmokit.PlayerManager) {
 		entity := mmokit.EntityFromECS(gw.stage, s.Entity)
 		if entity.Alive() {
 			if mmokit.Has[mmokit.Ghost](entity) {
-				// Transfer ghost — don't remove, let TTL expire.
-				// The ghost lingers for visual continuity until the replica arrives.
+				s.Entity = mmokit.EntityHandle{}
+				if gw.PlayerSessions != nil {
+					gw.PlayerSessions.Remove(s.ConnID)
+				}
+				gw.updatePlayerCompletions()
+				return
+			}
+			if mmokit.Has[mmokit.Replica](entity) {
+				// Handoff demoted authority before this transition. Persist the
+				// final source state, then retain the replica for visual continuity
+				// and local-only expiry without an authoritative tombstone.
+				gw.SavePlayerState(s)
 				s.Entity = mmokit.EntityHandle{}
 				if gw.PlayerSessions != nil {
 					gw.PlayerSessions.Remove(s.ConnID)
@@ -172,7 +184,10 @@ func NewGameWorld(base *mmokit.Stage, cfg *GameConfig, playerDB *PlayerRepo, cel
 	removeFromWorldDead := func(s *mmokit.PlayerSession, pm *mmokit.PlayerManager) {
 		entity := mmokit.EntityFromECS(gw.stage, s.Entity)
 		if entity.Alive() {
-			if mmokit.Has[mmokit.Ghost](entity) {
+			if mmokit.Has[mmokit.Ghost](entity) || mmokit.Has[mmokit.Replica](entity) {
+				// Cross-cell respawn uses the same hard-cut ordering as a live
+				// handoff: authority demotes before the session transition runs.
+				// Preserve the continuity representation for local-only expiry.
 				s.Entity = mmokit.EntityHandle{}
 				if gw.PlayerSessions != nil {
 					gw.PlayerSessions.Remove(s.ConnID)
@@ -235,8 +250,8 @@ func NewGameWorld(base *mmokit.Stage, cfg *GameConfig, playerDB *PlayerRepo, cel
 		{From: mmokit.StateDisconnected, To: StateDocked},                                      // reconnect resumes docked state
 		{From: StateDocking, To: StateDocked},
 		{From: StateDocking, To: StateDead, Action: dieKeepEntity},
-		{From: StateDocking, To: mmokit.StateDisconnected, Action: disconnectKeepEntity},       // disconnect mid-dock keeps the (Dormant) entity
-		{From: mmokit.StateDisconnected, To: StateDocking},                                     // reconnect resumes mid-dock
+		{From: StateDocking, To: mmokit.StateDisconnected, Action: disconnectKeepEntity}, // disconnect mid-dock keeps the (Dormant) entity
+		{From: mmokit.StateDisconnected, To: StateDocking},                               // reconnect resumes mid-dock
 		{From: StateDocked, To: mmokit.StateActive},
 		{From: StateDocked, To: mmokit.StateDisconnected, Action: disconnectKeepEntity},
 	})
@@ -345,4 +360,3 @@ func (gw *GameWorld) respawnLocation() (mmokit.CellCoord, float32, float32) {
 	}
 	return gw.Config.StationCell, 8100, 8100
 }
-

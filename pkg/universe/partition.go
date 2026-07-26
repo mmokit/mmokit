@@ -278,8 +278,7 @@ func (c *Process) MergeCell(cell CellID, bypassCooldown bool) error {
 }
 
 // rewireDirective describes a single cell's new neighbor set, computed under
-// c.mu and then applied on the cell's own game loop so the write doesn't
-// race with PostSystems reads of node.Neighbors.
+// c.mu and then applied at a structurally safe point on the cell's game loop.
 type rewireDirective struct {
 	cell      *Cell
 	neighbors map[MeshCellID]*Cell
@@ -343,10 +342,10 @@ func (c *Process) computeRewireDirectivesLocked(affected []CellID) []rewireDirec
 }
 
 // applyRewireDirectives writes every directive onto its target cell's game
-// loop via SubmitLoopJob so Cell.Neighbors mutations happen on the same
-// goroutine that reads them from PostSystems. Callers must NOT hold c.mu
-// while invoking this helper — the game loop may itself acquire c.mu while
-// draining the closure, and double-acquiring would deadlock.
+// loop via SubmitLoopJob so topology changes land at a tick boundary. The
+// closure also takes c.mu, which uniformly guards Cell.Neighbors against
+// off-loop mesh-control reconciliation. Callers must NOT hold c.mu while
+// invoking this helper — the loop closure acquires it while draining.
 //
 // Each directive also invalidates the cell's cached BorderDispatcher so
 // the next tick rebuilds its CellViewer set from the new neighbor map.
@@ -366,13 +365,15 @@ func (c *Process) applyRewireDirectives(dirs []rewireDirective) {
 		// Fire-and-forget: rewire directives are idempotent and the next
 		// full rewireNeighbors pass will converge if this one is dropped.
 		if !target.Engine.SubmitLoopJob(func() error {
+			c.mu.Lock()
+			defer c.mu.Unlock()
 			for k := range target.Neighbors {
 				delete(target.Neighbors, k)
 			}
 			for k, v := range neighbors {
 				target.Neighbors[k] = v
 			}
-			if nb, ok := target.Bridge.(*cellBridge); ok {
+			if nb := unwrapCellBridge(target.Bridge); nb != nil {
 				nb.invalidateBorderDispatcher()
 			}
 			return nil
@@ -385,8 +386,7 @@ func (c *Process) applyRewireDirectives(dirs []rewireDirective) {
 // (rewireNeighbors was removed as part of S7-T9. The full O(N) rebuild path
 // is no longer needed — cell-transfer commits use computeRewireDirectivesLocked
 // + applyRewireDirectives to rewire only the affected frontier on each cell's
-// own game loop, and Build() wires initial neighbor state via per-cell
-// reconcileCellNeighbors calls. If a future crash-recovery path needs a full
-// rebuild, rebuild the Topology.Neighbors map and then call applyRewireDirectives
-// over every cell — do not add a parallel code path that writes node.Neighbors
-// under c.mu, it races with the game loop's PostSystems tick.)
+// own game loop, and Build() wires initial neighbor state before loops start.
+// If a future crash-recovery path needs a full rebuild, rebuild the
+// Topology.Neighbors map and then call applyRewireDirectives over every cell;
+// every runtime Cell.Neighbors read/write must remain under Process.mu.)

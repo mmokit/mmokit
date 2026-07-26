@@ -100,8 +100,8 @@ type meshControlClient struct {
 // constants so tests can read them (but not override; they're
 // time.Duration values and the test fixture doesn't need tunability).
 const (
-	connectBackoffMin = 200 * time.Millisecond
-	connectBackoffMax = 30 * time.Second
+	connectBackoffMin    = 200 * time.Millisecond
+	connectBackoffMax    = 30 * time.Second
 	connectBackoffFactor = 2.0
 )
 
@@ -848,6 +848,19 @@ func (c *meshControlClient) dispatch(msg *meshpb.CoordMessage) {
 		}
 		if exec := c.coord.localHostExecutor(host.ID); exec != nil {
 			exec.Abort(cta)
+		}
+
+	case *meshpb.CoordMessage_CellTransferCommit:
+		ctc := v.CellTransferCommit
+		if ctc == nil {
+			return
+		}
+		host := c.coord.localHost()
+		if host == nil {
+			return
+		}
+		if exec := c.coord.localHostExecutor(host.ID); exec != nil {
+			exec.Commit(ctc.RequestId)
 		}
 
 	case *meshpb.CoordMessage_CommandRequest:

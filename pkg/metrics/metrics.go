@@ -39,10 +39,11 @@ func (g *Gauge) Add(delta int64) { g.val.Add(delta) }
 // Load returns the current value.
 func (g *Gauge) Load() int64 { return g.val.Load() }
 
-// EWMA computes an exponentially weighted moving average.
-// NOT goroutine-safe — intended for single-goroutine use on the tick loop.
+// EWMA computes an exponentially weighted moving average. Updates must be
+// serialized (the game loop has one writer); Value may be called concurrently
+// from any number of telemetry readers.
 type EWMA struct {
-	value float64
+	value atomic.Uint64 // math.Float64bits(value)
 	alpha float64
 	init  bool
 }
@@ -56,12 +57,13 @@ func NewEWMA(alpha float64) *EWMA {
 // Update adds a new sample to the moving average.
 func (e *EWMA) Update(sample float64) {
 	if !e.init {
-		e.value = sample
+		e.value.Store(math.Float64bits(sample))
 		e.init = true
 		return
 	}
-	e.value = e.alpha*sample + (1-e.alpha)*e.value
+	current := math.Float64frombits(e.value.Load())
+	e.value.Store(math.Float64bits(e.alpha*sample + (1-e.alpha)*current))
 }
 
 // Value returns the current smoothed value.
-func (e *EWMA) Value() float64 { return e.value }
+func (e *EWMA) Value() float64 { return math.Float64frombits(e.value.Load()) }

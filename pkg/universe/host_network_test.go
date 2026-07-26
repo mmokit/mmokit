@@ -3,6 +3,7 @@ package universe
 import (
 	"bytes"
 	"context"
+	"errors"
 	"runtime"
 	"strings"
 	"sync"
@@ -14,7 +15,27 @@ import (
 
 	meshpb "github.com/zenion/mmoserver/gen/go/meshpb"
 	"github.com/zenion/mmoserver/pkg/logger"
+	pkgnet "github.com/zenion/mmoserver/pkg/net"
 )
+
+type clientFrameTransport struct {
+	result pkgnet.SendResult
+	closed bool
+	sent   int
+}
+
+func (t *clientFrameTransport) SendReliable([]byte) pkgnet.SendResult {
+	t.sent++
+	return t.result
+}
+func (t *clientFrameTransport) SendUnreliable([]byte) pkgnet.SendResult {
+	t.sent++
+	return t.result
+}
+func (t *clientFrameTransport) DrainInput() [][]byte   { return nil }
+func (t *clientFrameTransport) DrainOpInput() [][]byte { return nil }
+func (t *clientFrameTransport) InjectInput([]byte)     {}
+func (t *clientFrameTransport) Close()                 { t.closed = true }
 
 // testHostNetworkLogger returns a default logger suitable for tests.
 func testHostNetworkLogger(t *testing.T) *logger.Logger {
@@ -166,6 +187,275 @@ func TestHostNetworkSendLossyDropsOnFullQueue(t *testing.T) {
 	}
 }
 
+func TestRouteInboundClientFrame_BackpressureClosesConnection(t *testing.T) {
+	cm := pkgnet.NewConnManager()
+	transport := &clientFrameTransport{
+		result: pkgnet.SendResult{Disposition: pkgnet.SendBackpressure},
+	}
+	connID := cm.AddTransport(transport)
+
+	n := newManualHostNetwork(t)
+	n.gw = &Gateway{connMgr: cm}
+	frame := &meshpb.MeshFrame{Msg: &meshpb.MeshFrame_ClientFrame{
+		ClientFrame: &meshpb.ClientFrame{ConnId: connID, Data: []byte{0x01}},
+	}}
+
+	if err := n.routeInboundFrame(frame); err != nil {
+		t.Fatalf("routeInboundFrame: %v", err)
+	}
+	if !transport.closed {
+		t.Fatal("backpressured client transport was not closed")
+	}
+	if got := cm.Get(connID); got != nil {
+		t.Fatalf("backpressured connection remains registered: %T", got)
+	}
+}
+
+func TestRouteInboundPlayerAssignmentPreservesStreamGenerationAcrossVCMRewrite(t *testing.T) {
+	host := NewHost("host-a")
+	cell := &Cell{MeshID: "cell_0_0", Inbox: make(chan CellMessage, 1)}
+	host.AddCell(CellID{X: 0, Y: 0}, cell)
+
+	n := newManualHostNetwork(t)
+	n.host = host
+	n.vcm = NewVirtualConnManager(n, n.log)
+	frame := &meshpb.MeshFrame{
+		DestCellId: string(cell.MeshID),
+		Msg: &meshpb.MeshFrame_PlayerAssignment{
+			PlayerAssignment: &meshpb.PlayerAssignment{
+				ConnId:           71,
+				GatewayId:        "gateway-a",
+				Username:         "generation-rewrite",
+				ToCellId:         string(cell.MeshID),
+				Epoch:            41,
+				StreamGeneration: 17,
+			},
+		},
+	}
+
+	if err := n.routeInboundFrame(frame); err != nil {
+		t.Fatalf("routeInboundFrame: %v", err)
+	}
+	select {
+	case msg := <-cell.Inbox:
+		if msg.Assignment == nil {
+			t.Fatal("rewritten PlayerAssignment payload is nil")
+		}
+		if msg.Assignment.StreamGeneration != 17 {
+			t.Fatalf("StreamGeneration = %d, want 17", msg.Assignment.StreamGeneration)
+		}
+		_, epoch, ok := n.vcm.LookupRouteByLocal(msg.Assignment.ConnID)
+		if !ok {
+			t.Fatalf("VCM route missing for local conn %d", msg.Assignment.ConnID)
+		}
+		if epoch != 41 {
+			t.Fatalf("VCM route epoch = %d, want 41", epoch)
+		}
+	default:
+		t.Fatal("target cell received no PlayerAssignment")
+	}
+}
+
+func TestRouteInboundTrackedClientFrameSendsReceiptAfterReliableOrderedEnqueue(t *testing.T) {
+	cm := pkgnet.NewConnManager()
+	transport := &clientFrameTransport{result: pkgnet.SendResult{
+		Disposition: pkgnet.SendQueued,
+		Delivery:    pkgnet.DeliveryReliableOrdered,
+	}}
+	connID := cm.AddTransport(transport)
+
+	n := newManualHostNetwork(t)
+	peer := newIdlePeer(t, "host-1")
+	peer.kind = peerKindNode
+	n.peers["host-1"] = peer
+	n.gw = &Gateway{
+		id:      "gw-1",
+		connMgr: cm,
+		sessions: map[uint32]*localSession{
+			connID: {connID: connID, hostID: "host-1", epoch: 7},
+		},
+	}
+
+	const token uint64 = 0x102030405
+	frame := &meshpb.MeshFrame{
+		DestCellId: replicationReceiptMarker("host-1", token),
+		Msg: &meshpb.MeshFrame_ClientFrame{ClientFrame: &meshpb.ClientFrame{
+			GatewayId: "gw-1",
+			ConnId:    connID,
+			Epoch:     7,
+			Data:      []byte{0x01},
+		}},
+	}
+	if err := n.routeInboundFrame(frame); err != nil {
+		t.Fatalf("routeInboundFrame: %v", err)
+	}
+
+	select {
+	case queued := <-peer.outQ:
+		gotHostID, gotToken, result, ok := decodeReplicationReceiptFrame(queued.frame)
+		if !ok {
+			t.Fatalf("queued frame is not a valid receipt: %+v", queued.frame)
+		}
+		if gotHostID != "host-1" {
+			t.Fatalf("receipt host = %q, want host-1", gotHostID)
+		}
+		if gotToken != token {
+			t.Fatalf("receipt token = %d, want %d", gotToken, token)
+		}
+		if !result.Supports(pkgnet.DeliveryReliableOrdered) {
+			t.Fatalf("receipt result = %+v, want reliable ordered", result)
+		}
+		ci := queued.frame.GetClientInput()
+		if ci.GatewayId != "gw-1" || ci.ConnId != connID || ci.Epoch != 7 {
+			t.Fatalf("receipt route fields = %+v", ci)
+		}
+	default:
+		t.Fatal("gateway did not enqueue a replication receipt")
+	}
+}
+
+func TestRouteInboundTrackedClientFrameDoesNotReceiptRejectedEnqueue(t *testing.T) {
+	cm := pkgnet.NewConnManager()
+	transport := &clientFrameTransport{result: pkgnet.SendResult{Disposition: pkgnet.SendBackpressure}}
+	connID := cm.AddTransport(transport)
+
+	n := newManualHostNetwork(t)
+	peer := newIdlePeer(t, "host-1")
+	peer.kind = peerKindNode
+	n.peers["host-1"] = peer
+	n.gw = &Gateway{
+		id:      "gw-1",
+		connMgr: cm,
+		sessions: map[uint32]*localSession{
+			connID: {connID: connID, hostID: "host-1", epoch: 3},
+		},
+	}
+
+	frame := &meshpb.MeshFrame{
+		DestCellId: replicationReceiptMarker("host-1", 11),
+		Msg: &meshpb.MeshFrame_ClientFrame{ClientFrame: &meshpb.ClientFrame{
+			GatewayId: "gw-1", ConnId: connID, Epoch: 3,
+		}},
+	}
+	if err := n.routeInboundFrame(frame); err != nil {
+		t.Fatalf("routeInboundFrame: %v", err)
+	}
+	if got := len(peer.outQ); got != 0 {
+		t.Fatalf("receipt queue length = %d after rejected client enqueue, want 0", got)
+	}
+}
+
+func TestRouteInboundTrackedClientFrameDoesNotReceiptWeakerDelivery(t *testing.T) {
+	cm := pkgnet.NewConnManager()
+	transport := &clientFrameTransport{result: pkgnet.SendResult{
+		Disposition: pkgnet.SendQueued,
+		Delivery:    pkgnet.DeliveryOrdered,
+	}}
+	connID := cm.AddTransport(transport)
+
+	n := newManualHostNetwork(t)
+	peer := newIdlePeer(t, "host-1")
+	peer.kind = peerKindNode
+	n.peers["host-1"] = peer
+	n.gw = &Gateway{
+		id:      "gw-1",
+		connMgr: cm,
+		sessions: map[uint32]*localSession{
+			connID: {connID: connID, hostID: "host-1", epoch: 3},
+		},
+	}
+
+	frame := &meshpb.MeshFrame{
+		DestCellId: replicationReceiptMarker("host-1", 12),
+		Msg: &meshpb.MeshFrame_ClientFrame{ClientFrame: &meshpb.ClientFrame{
+			GatewayId: "gw-1", ConnId: connID, Epoch: 3,
+		}},
+	}
+	if err := n.routeInboundFrame(frame); err != nil {
+		t.Fatalf("routeInboundFrame: %v", err)
+	}
+	if got := len(peer.outQ); got != 0 {
+		t.Fatalf("receipt queue length = %d for weaker delivery, want 0", got)
+	}
+}
+
+func TestRouteInboundTrackedClientFrameRequiresCurrentEpoch(t *testing.T) {
+	cm := pkgnet.NewConnManager()
+	transport := &clientFrameTransport{result: pkgnet.SendResult{
+		Disposition: pkgnet.SendQueued,
+		Delivery:    pkgnet.DeliveryReliableOrdered,
+	}}
+	connID := cm.AddTransport(transport)
+
+	n := newManualHostNetwork(t)
+	peer := newIdlePeer(t, "host-new")
+	peer.kind = peerKindNode
+	n.peers["host-new"] = peer
+	n.gw = &Gateway{
+		id:      "gw-1",
+		connMgr: cm,
+		sessions: map[uint32]*localSession{
+			connID: {connID: connID, hostID: "host-new", epoch: 6},
+		},
+	}
+
+	stale := &meshpb.MeshFrame{
+		DestCellId: replicationReceiptMarker("host-new", 13),
+		Msg: &meshpb.MeshFrame_ClientFrame{ClientFrame: &meshpb.ClientFrame{
+			GatewayId: "gw-1", ConnId: connID, Epoch: 5,
+		}},
+	}
+	if err := n.routeInboundFrame(stale); err != nil {
+		t.Fatalf("routeInboundFrame: %v", err)
+	}
+	if transport.sent != 0 {
+		t.Fatalf("stale tracked frame reached client transport %d times", transport.sent)
+	}
+	if got := len(peer.outQ); got != 0 {
+		t.Fatalf("stale tracked frame produced %d receipts", got)
+	}
+}
+
+func TestRouteInboundTrackedClientFrameRequiresAuthoritativeHostAtCurrentEpoch(t *testing.T) {
+	cm := pkgnet.NewConnManager()
+	transport := &clientFrameTransport{result: pkgnet.SendResult{
+		Disposition: pkgnet.SendQueued,
+		Delivery:    pkgnet.DeliveryReliableOrdered,
+	}}
+	connID := cm.AddTransport(transport)
+
+	n := newManualHostNetwork(t)
+	authorityPeer := newIdlePeer(t, "host-source")
+	authorityPeer.kind = peerKindNode
+	n.peers["host-source"] = authorityPeer
+	n.gw = &Gateway{
+		id:      "gw-1",
+		connMgr: cm,
+		sessions: map[uint32]*localSession{
+			connID: {connID: connID, hostID: "host-source", epoch: 6},
+		},
+	}
+
+	// During handoff preparation the destination can have a VCM session at
+	// the same epoch before the gateway's UpstreamSwitch. Its frame must not
+	// reset client baselines or receive a token that belongs to either host.
+	premature := &meshpb.MeshFrame{
+		DestCellId: replicationReceiptMarker("host-destination", 14),
+		Msg: &meshpb.MeshFrame_ClientFrame{ClientFrame: &meshpb.ClientFrame{
+			GatewayId: "gw-1", ConnId: connID, Epoch: 6,
+		}},
+	}
+	if err := n.routeInboundFrame(premature); err != nil {
+		t.Fatalf("routeInboundFrame: %v", err)
+	}
+	if transport.sent != 0 {
+		t.Fatalf("non-authoritative tracked frame reached client transport %d times", transport.sent)
+	}
+	if got := len(authorityPeer.outQ); got != 0 {
+		t.Fatalf("non-authoritative tracked frame produced %d receipts", got)
+	}
+}
+
 // TestHostNetworkSendReliableQueueBackpressureDeadline fills a peer queue to
 // capacity then asserts SendReliable returns a "queue backpressure" error
 // within peerSendDeadline + reasonable slack.
@@ -195,6 +485,20 @@ func TestHostNetworkSendReliableQueueBackpressureDeadline(t *testing.T) {
 	const slack = time.Second
 	if elapsed > peerSendDeadline+slack {
 		t.Errorf("SendReliable took %v, want <= %v", elapsed, peerSendDeadline+slack)
+	}
+}
+
+func TestHostNetworkSendReliablePostEnqueueTimeoutIsIndeterminate(t *testing.T) {
+	n := newManualHostNetwork(t)
+	peer := newIdlePeer(t, "peer")
+	n.peers["peer"] = peer
+
+	err := n.SendReliable("peer", &meshpb.MeshFrame{DestCellId: "cell_0_0"})
+	if !errors.Is(err, errPeerIndeterminate) {
+		t.Fatalf("SendReliable error = %v, want errPeerIndeterminate", err)
+	}
+	if errors.Is(err, errPeerBackpressure) {
+		t.Fatalf("post-enqueue timeout was misclassified as backpressure: %v", err)
 	}
 }
 

@@ -3,7 +3,7 @@
 import {
   readFloat32, readInt16, readUint16, readUint32,
   unAngle, unNorm, unVel,
-  decodeFrameHeader, decodeFullEntry, decodeDeltaEntry, decodeRemovedIDs,
+  decodeFrameHeader, decodeFullEntry, decodeDeltaEntry, decodeRemovedIDs, decodeInputAck,
   FRAME_FLAG_FRESH_SNAPSHOT,
   applyDelta, BaselineStore,
   decodeLengthPrefixedStringU8,
@@ -29,7 +29,7 @@ function decodePlayerEntitySnapshot(snap: Uint8Array, initial: Uint8Array | null
   const name = initial && initialOff < initial.length ? decodeLengthPrefixedStringU8(initial.subarray(initialOff)) : (existing?.name ?? "");
   if (initial && initialOff < initial.length) initialOff += 1 + initial[initialOff];
   void initialOff;
-  return { netID: 0, producedAtMs: 0, entityType: 1, worldX, worldY, velX, velY, radius, width, height, name, r, g, b };
+  return { netID: 0, authorityEpoch: 0, producedAtMs: 0, entityType: 1, worldX, worldY, velX, velY, radius, width, height, name, r, g, b };
 }
 
 const BOTENTITY_FIELD_SIZES = [4, 4, 2, 2, 2, 2, 2, 1, 1, 1];
@@ -51,16 +51,60 @@ function decodeBotEntitySnapshot(snap: Uint8Array, initial: Uint8Array | null, e
   const name = initial && initialOff < initial.length ? decodeLengthPrefixedStringU8(initial.subarray(initialOff)) : (existing?.name ?? "");
   if (initial && initialOff < initial.length) initialOff += 1 + initial[initialOff];
   void initialOff;
-  return { netID: 0, producedAtMs: 0, entityType: 2, worldX, worldY, velX, velY, radius, width, height, name, r, g, b };
+  return { netID: 0, authorityEpoch: 0, producedAtMs: 0, entityType: 2, worldX, worldY, velX, velY, radius, width, height, name, r, g, b };
+}
+
+function isNewerAuthorityEpoch(candidate: number, current: number): boolean {
+  const distance = (candidate - current) >>> 0;
+  return distance !== 0 && distance < 0x80000000;
+}
+
+function isNewerFrameSequence(candidate: number, current: number): boolean {
+  const distance = (candidate - current) >>> 0;
+  return distance !== 0 && distance < 0x80000000;
 }
 
 export class BasicDeltaDecoder {
-  private baselines = new BaselineStore<{ type: number; lastEntity?: AnyEntity }>();
+  private baselines = new BaselineStore<{ epoch: number; type: number; lastEntity?: AnyEntity }>();
 
-  clear(): void { this.baselines.clear(); }
+  private authorityEpochs = new Map<number, number>();
 
-  decode(data: Uint8Array): DeltaWorldUpdate {
+  private streamEpoch: number | null = null;
+  private lastFrameSequence: number | null = null;
+
+  clear(): void {
+    this.baselines.clear();
+    this.authorityEpochs.clear();
+    this.streamEpoch = null;
+    this.lastFrameSequence = null;
+  }
+
+  private acceptFrame(streamEpoch: number | undefined, sequence: number): { accepted: boolean; streamChanged: boolean } {
+    if (streamEpoch === undefined) return { accepted: true, streamChanged: false };
+    const epoch = streamEpoch >>> 0;
+    const seq = sequence >>> 0;
+    if (this.streamEpoch === null) {
+      this.streamEpoch = epoch;
+      this.lastFrameSequence = seq;
+      return { accepted: true, streamChanged: true };
+    }
+    if (epoch !== this.streamEpoch) {
+      if (!isNewerAuthorityEpoch(epoch, this.streamEpoch)) return { accepted: false, streamChanged: false };
+      this.streamEpoch = epoch;
+      this.lastFrameSequence = seq;
+      this.baselines.clear();
+      this.authorityEpochs.clear();
+      return { accepted: true, streamChanged: true };
+    }
+    if (this.lastFrameSequence !== null && !isNewerFrameSequence(seq, this.lastFrameSequence)) return { accepted: false, streamChanged: false };
+    this.lastFrameSequence = seq;
+    return { accepted: true, streamChanged: false };
+  }
+
+  decode(data: Uint8Array, streamEpoch?: number): DeltaWorldUpdate | null {
     const { header, offset: pos0 } = decodeFrameHeader(data, 0);
+    const frameOrder = this.acceptFrame(streamEpoch, header.seq);
+    if (!frameOrder.accepted) return null;
     let pos = pos0;
 
     const freshSnapshot = (header.flags & FRAME_FLAG_FRESH_SNAPSHOT) !== 0;
@@ -68,15 +112,23 @@ export class BasicDeltaDecoder {
       this.baselines.clear();
     }
 
+    const freshAuthorityIDs = freshSnapshot && this.streamEpoch !== null ? new Set<number>() : null;
+
     const entered: AnyEntity[] = [];
     const updated: AnyEntity[] = [];
 
     for (let i = 0; i < header.fullCount; i++) {
       const { entry, offset: next } = decodeFullEntry(data, pos);
       pos = next;
+      freshAuthorityIDs?.add(entry.netID);
+      const highestEpoch = this.authorityEpochs.get(entry.netID);
+      if (highestEpoch !== undefined && entry.epoch !== highestEpoch && !isNewerAuthorityEpoch(entry.epoch, highestEpoch)) continue;
+      if (highestEpoch === undefined || isNewerAuthorityEpoch(entry.epoch, highestEpoch)) this.authorityEpochs.set(entry.netID, entry.epoch);
       const prevBl = this.baselines.get(entry.netID);
-      const entity = this.decodeEntity(entry.entityType, entry.snapshot, entry.initialData, entry.netID, entry.producedAtMs, prevBl?.meta?.lastEntity);
-      this.baselines.set(entry.netID, entry.snapshot, { type: entry.entityType, lastEntity: entity ?? undefined });
+      const prevMeta = prevBl?.meta;
+      const previousEntity = prevMeta?.epoch === entry.epoch && prevMeta.type === entry.entityType ? prevMeta.lastEntity : undefined;
+      const entity = this.decodeEntity(entry.entityType, entry.snapshot, entry.initialData, entry.netID, entry.epoch, entry.producedAtMs, previousEntity);
+      this.baselines.set(entry.netID, entry.snapshot, { epoch: entry.epoch, type: entry.entityType, lastEntity: entity ?? undefined });
       if (entity) entered.push(entity);
     }
 
@@ -84,31 +136,43 @@ export class BasicDeltaDecoder {
       const { entry, offset: next } = decodeDeltaEntry(data, pos);
       pos = next;
       const bl = this.baselines.get(entry.netID);
-      if (!bl) continue;
+      if (!bl?.meta || bl.meta.epoch !== entry.epoch || bl.meta.type !== entry.entityType) continue;
       const fieldSizes = this.fieldSizesFor(entry.entityType);
       const hasVarTail = this.hasVarTailFor(entry.entityType);
       const newSnap = applyDelta(fieldSizes, hasVarTail, bl.snapshot, entry.deltaData);
-      const entity = this.decodeEntity(entry.entityType, newSnap, null, entry.netID, entry.producedAtMs, bl.meta?.lastEntity);
-      this.baselines.set(entry.netID, newSnap, { type: bl.meta?.type ?? entry.entityType, lastEntity: entity ?? undefined });
+      const entity = this.decodeEntity(entry.entityType, newSnap, null, entry.netID, entry.epoch, entry.producedAtMs, bl.meta.lastEntity);
+      this.baselines.set(entry.netID, newSnap, { epoch: entry.epoch, type: entry.entityType, lastEntity: entity ?? undefined });
       if (entity) updated.push(entity);
     }
 
     const { ids: removed, offset: pos2 } = decodeRemovedIDs(data, pos, header.removedCount);
-    const { ids: exited } = decodeRemovedIDs(data, pos2, header.exitedCount);
+    const { ids: exited, offset: pos3 } = decodeRemovedIDs(data, pos2, header.exitedCount);
+    const { sequence: processedInputSeq } = decodeInputAck(data, pos3, header.flags);
 
     for (const id of removed) this.baselines.delete(id);
     for (const id of exited) this.baselines.delete(id);
 
+    if (this.streamEpoch !== null) {
+      for (const id of removed) this.authorityEpochs.delete(id);
+      for (const id of exited) this.authorityEpochs.delete(id);
+    }
+
+    if (freshAuthorityIDs) {
+      for (const id of this.authorityEpochs.keys()) {
+        if (!freshAuthorityIDs.has(id)) this.authorityEpochs.delete(id);
+      }
+    }
+
     return {
-      tick: header.tick, seq: header.seq, freshSnapshot,
+      tick: header.tick, seq: header.seq, freshSnapshot, streamChanged: frameOrder.streamChanged, processedInputSeq,
       entered, updated, removed, exited,
     };
   }
 
-  private decodeEntity(type_: number, snap: Uint8Array, initial: Uint8Array | null, netID: number, producedAtMs: number, existing?: AnyEntity): AnyEntity | null {
+  private decodeEntity(type_: number, snap: Uint8Array, initial: Uint8Array | null, netID: number, authorityEpoch: number, producedAtMs: number, existing?: AnyEntity): AnyEntity | null {
     switch (type_) {
-      case 1: { const prev = existing && existing.entityType === 1 ? existing : undefined; const e = decodePlayerEntitySnapshot(snap, initial, prev); e.netID = netID; e.producedAtMs = producedAtMs; return e; }
-      case 2: { const prev = existing && existing.entityType === 2 ? existing : undefined; const e = decodeBotEntitySnapshot(snap, initial, prev); e.netID = netID; e.producedAtMs = producedAtMs; return e; }
+      case 1: { const prev = existing && existing.entityType === 1 ? existing : undefined; const e = decodePlayerEntitySnapshot(snap, initial, prev); e.netID = netID; e.authorityEpoch = authorityEpoch; e.producedAtMs = producedAtMs; return e; }
+      case 2: { const prev = existing && existing.entityType === 2 ? existing : undefined; const e = decodeBotEntitySnapshot(snap, initial, prev); e.netID = netID; e.authorityEpoch = authorityEpoch; e.producedAtMs = producedAtMs; return e; }
       default: return null;
     }
   }

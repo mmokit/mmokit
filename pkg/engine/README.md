@@ -26,9 +26,13 @@ rate.
 
 - `SetNetIDBase` installs the range base granted to the cell.
 - `NextNetID` atomically returns `base + next`.
-- `MarkForRemoval` defers removal until the loop's removal phase.
-- `FlushRemovals` records IDs through `GetNetID`, invokes
-  `OnEntityRemoved`, and then removes still-live entities from Ark.
+- `MarkForRemoval` defers authoritative destruction until the loop's removal
+  phase; local replica/ghost teardown uses `RemovalLocalOnly`.
+- Every engine-mediated removal runs the Stage's mandatory spatial/netID
+  cleanup before removing the Ark row. `OnEntityRemoved` is an optional
+  observer, not the cleanup mechanism.
+- `SampleRemovedNetIDs` freezes the current tombstone batch for replication;
+  later-system removals roll into the next tick instead of being cleared.
 
 The universe `Stage` wires the callbacks used to keep its spatial and network
 ID indexes synchronized. Game code should therefore use `Stage`/MMOKIT spawn
@@ -43,11 +47,12 @@ loop.Run(ctx) // blocks until ctx is cancelled
 
 Each tick runs in this order:
 
-1. Increment `Engine.Tick` and call `ClearTickState`.
+1. Increment `Engine.Tick`, advance the removal-publication phase, and call
+   `ClearTickState`.
 2. Drain connection events and queued loop jobs.
 3. Process pending player sessions and typed client input.
 4. Run systems in registration order, calling `AfterSystem` after each one.
-5. Call `PreFlush`, clear `RemovedNetIDs`, and flush entity removals.
+5. Call `PreFlush` and flush queued entity removals.
 6. Call `PostFlush` and `PostTick`.
 7. Record tick, per-system, and optional cell metrics.
 
