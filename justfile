@@ -48,13 +48,21 @@ clean:
     rm -rf bin/
 
 # build + run server & web-pixi vite dev server
-dev: build
+# UDP is off in the SERVER default (CE-005b Tier 1) and deliberately stays
+# that way — packets are unauthenticated and unencrypted. Enabling it here is
+# an explicit local-dev choice on loopback, and does not change the shipped
+# default. Override with a trailing `--udp-listen=:9001`, or disable with
+# `--udp-listen=` (std flag: last occurrence wins).
+#
+# The bind is the WILDCARD ':9000' on purpose: a wildcard bind opens an IPv6
+# socket that accepts IPv4 peers 4-in-6, while '127.0.0.1:9000' rejects them.
+dev *ARGS: build
     #!/usr/bin/env bash
     set -euo pipefail
     tmux kill-session -t space-vite 2>/dev/null || true
     tmux new-session -d -s space-vite -c "{{ justfile_directory() }}/web-pixi" 'bun run dev'
     trap 'tmux kill-session -t space-vite 2>/dev/null' INT TERM EXIT
-    ./bin/server --dev-insecure-cookie
+    ./bin/server --dev-insecure-cookie --udp-listen=:9000 {{ARGS}}
 
 # serve the built web client (web-pixi/dist) as a standalone static host.
 # Run alongside `just run` (server on :8080) for a no-vite build+run setup.
@@ -122,6 +130,10 @@ distributed-space: build db-up
         "$bin --mode=host --coordinator-addr=$coord_addr --host-id=space-host-2"
     tmux pipe-pane -t space-dist -o "cat > $logdir/host-2.log"
 
+    # UDP goes on the GATEWAY ONLY. Gateways are what terminate client
+    # connections; hosts and the coordinator never see client traffic, and
+    # giving them the same flag would just collide on :9000.
+    #
     # Gateway also runs the auth service (--mode=gateway,service) so the
     # /auth/* HTTPS endpoints mount on the gateway's HTTP listener on :8080
     # (the same listener the client's /ws + /auth requests reach). The auth kind needs Postgres,
@@ -130,7 +142,7 @@ distributed-space: build db-up
     # default-shell on this box) doesn't glob-expand the `?` in
     # `?sslmode=disable` and refuse to launch the binary.
     tmux split-window -t space-dist -h -l 50% -c "$root" \
-        "$bin --mode=gateway,service --services=auth --coordinator-addr=$coord_addr --gateway-id=space-gw-0 --port=8080 '--postgres-url=postgres://mmo:mmo@localhost:5432/mmo?sslmode=disable' --cors-origins=http://localhost:5174 --dev-insecure-cookie"
+        "$bin --mode=gateway,service --services=auth --coordinator-addr=$coord_addr --gateway-id=space-gw-0 --port=8080 '--postgres-url=postgres://mmo:mmo@localhost:5432/mmo?sslmode=disable' --cors-origins=http://localhost:5174 --dev-insecure-cookie --udp-listen=:9000"
     tmux pipe-pane -t space-dist -o "cat > $logdir/gateway.log"
 
     # Focus on the coordinator pane so the user lands at the admin prompt.
@@ -302,8 +314,10 @@ csharp-sdk:
 # against a RUNNING 4node server. Compiles the generated SDK from UNITY_SDK_DIR.
 # Args: just csharp-smoke [host] [username] [password] [seconds]   (defaults:
 # 127.0.0.1 smokebot 4node-demo-password 12). For WSL2→Windows use the WSL IP.
-# The UDP transport is experimental and OFF by default: start the target server
-# with --udp-listen=:9000 or this bot has nothing to connect to.
+# The UDP transport is experimental. The SERVER default is off, but the dev
+# recipes enable it: `just dev` / `just distributed` in examples/4node-basic
+# both pass --udp-listen=:9000. Launching the binary by hand does not.
+# In distributed mode only the GATEWAY binds UDP.
 csharp-smoke *ARGS:
     dotnet run --project csharp/Mmokit.Sdk.SmokeBot \
         -p:UnitySdkDir="{{ env('UNITY_SDK_DIR', '<WINDOWS-HOME>/unitygames/spacemmo-client/Assets/Mmokit/Sdk') }}" \

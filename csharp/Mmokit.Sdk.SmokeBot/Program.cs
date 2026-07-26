@@ -63,7 +63,15 @@ try
 catch (Exception ex)
 {
     Console.Error.WriteLine($"[smoke] CONNECT FAILED: {ex.Message}");
-    Console.Error.WriteLine("[smoke]   • is the server up and serving UDP? (cd examples/4node-basic && just dev)");
+    // The dev recipes pass --udp-listen=:9000; the SERVER default is still
+    // empty (CE-005b Tier 1), so anything launched by hand needs the flag.
+    Console.Error.WriteLine("[smoke]   • is a server up with UDP enabled?");
+    Console.Error.WriteLine("[smoke]       cd examples/4node-basic && just dev      (or: just distributed)");
+    Console.Error.WriteLine("[smoke]     Both pass --udp-listen=:9000 for you. Launching the binary by");
+    Console.Error.WriteLine("[smoke]     hand does NOT — the server default is off.");
+    Console.Error.WriteLine("[smoke]     Look for 'udp: listening on :9000' in the log; 'udp: listener");
+    Console.Error.WriteLine("[smoke]     disabled' means no flag reached it. In distributed mode only the");
+    Console.Error.WriteLine("[smoke]     GATEWAY binds UDP — check the gateway pane, not a host pane.");
     Console.Error.WriteLine("[smoke]   • WSL2→Windows? try the WSL IP (`hostname -I`) instead of 127.0.0.1");
     return 1;
 }

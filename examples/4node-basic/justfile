@@ -59,17 +59,24 @@ run: build
     trap 'tmux kill-session -t 4node-web 2>/dev/null' INT TERM EXIT
     cd {{root}} && ./bin/4node-basic '--postgres-url={{postgres_url}}' --cors-origins=http://localhost:5174 --dev-insecure-cookie
 
-# build Go + run with vite dev server (HMR on :5173, Go backend on :8080)
 # The Go side no longer serves web assets; vite is the sole client asset source.
 # We still rebuild the admin SPA — the game client uses HMR but the admin
 # dashboard is served from the embedded go:embed bundle.
+#
+# UDP is off in the SERVER default (CE-005b Tier 1) and deliberately stays
+# that way — packets are unauthenticated and unencrypted. Enabling it here is
+# an explicit local-dev choice on loopback, and does not change the shipped
+# default. Override with a trailing `--udp-listen=:9001`, or disable with
+# `--udp-listen=` (std flag: last occurrence wins). `just csharp-smoke` needs it.
+#
+# build Go + run with vite dev server (HMR on :5173, Go backend on :8080)
 dev *ARGS: admin-build build-go
     #!/usr/bin/env bash
     set -euo pipefail
     tmux kill-session -t 4node-vite 2>/dev/null || true
     tmux new-session -d -s 4node-vite -c "{{root}}/examples/4node-basic/web" 'bun run dev'
     trap 'tmux kill-session -t 4node-vite 2>/dev/null' INT TERM EXIT
-    cd {{root}} && ./bin/4node-basic '--postgres-url={{postgres_url}}' --dev-insecure-cookie {{ARGS}}
+    cd {{root}} && ./bin/4node-basic '--postgres-url={{postgres_url}}' --dev-insecure-cookie --udp-listen=:9000 {{ARGS}}
 
 # All-roles dev with the echo service enabled. Bring up Postgres first
 # (`just db-up` from the repo root) — echo requires DB. Vite runs on
@@ -114,8 +121,11 @@ distributed: build
         "{{bin}} --mode=coordinator --control-listen={{control_listen}} '--postgres-url={{postgres_url}}'"
     tmux pipe-pane -t basic-dist -o "cat > $logdir/coordinator.log"
 
+    # UDP goes on the GATEWAY ONLY. Gateways terminate client connections;
+    # hosts and the coordinator never see client traffic, and giving them the
+    # same flag would just collide on :9000.
     tmux split-window -t basic-dist -c "{{root}}" \
-        "{{bin}} --mode=gateway,service --services=auth,chat --coordinator-addr={{control_addr}} --gateway-id={{gateway_id}} --port={{gateway_port}} '--postgres-url={{postgres_url}}' --cors-origins=http://localhost:5174 --dev-insecure-cookie"
+        "{{bin}} --mode=gateway,service --services=auth,chat --coordinator-addr={{control_addr}} --gateway-id={{gateway_id}} --port={{gateway_port}} '--postgres-url={{postgres_url}}' --cors-origins=http://localhost:5174 --dev-insecure-cookie --udp-listen=:9000"
     tmux pipe-pane -t basic-dist -o "cat > $logdir/gateway.log"
     tmux select-layout -t basic-dist tiled
 
