@@ -21,13 +21,20 @@ import (
 
 // Manifest mirrors the C# GoldenModel DTOs (csharp/.../GoldenModel.cs).
 type Manifest struct {
-	Dequant    []DequantCase `json:"dequant"`
-	Frame      FrameCase     `json:"frame"`
-	ApplyDelta []ApplyCase   `json:"applyDelta"`
-	Strings    []StringCase  `json:"strings"`
-	Udp        UdpCases      `json:"udp"`
-	Reflect    ReflectCase   `json:"reflect"`
-	ClockSync  ClockSyncCase `json:"clockSync"`
+	Dequant []DequantCase `json:"dequant"`
+	Frame   FrameCase     `json:"frame"`
+	// InputAckFrame is a second frame carrying the FrameFlagInputAck trailer.
+	// Unlike Frame above it is produced through the REAL quantize.FrameEncoder
+	// rather than hand-assembled bytes, so the golden cannot drift from
+	// wireformat.go.
+	InputAckFrame FrameCase      `json:"inputAckFrame"`
+	ApplyDelta    []ApplyCase    `json:"applyDelta"`
+	Strings       []StringCase   `json:"strings"`
+	Udp           UdpCases       `json:"udp"`
+	Reflect       ReflectCase    `json:"reflect"`
+	ClockSync     ClockSyncCase  `json:"clockSync"`
+	Playback      PlaybackCase   `json:"playback"`
+	Prediction    PredictionCase `json:"prediction"`
 }
 
 // ClockSyncCase pins the sliding-window-max offset estimator across langs.
@@ -86,12 +93,12 @@ func buildClockSyncCase() ClockSyncCase {
 	const window = 40
 	type in struct{ server, client float64 }
 	seq := []in{
-		{1000, 0},     // init -> 1000
-		{1100, 150},   // instant 950, max stays 1000
-		{1200, 180},   // instant 1020, max -> 1020
-		{1300, 300},   // burst start (client fixed at 300): instant 1000
-		{1350, 300},   // instant 1050
-		{1400, 300},   // instant 1100, max -> 1100
+		{1000, 0},   // init -> 1000
+		{1100, 150}, // instant 950, max stays 1000
+		{1200, 180}, // instant 1020, max -> 1020
+		{1300, 300}, // burst start (client fixed at 300): instant 1000
+		{1350, 300}, // instant 1050
+		{1400, 300}, // instant 1100, max -> 1100
 	}
 	// Window rollover: 45 samples at a steady instant of 500 (server advances
 	// 50/step, client advances 50/step). After >window of these, the old 1100
@@ -181,6 +188,11 @@ type FrameCase struct {
 	Full         []FullEntry  `json:"full"`
 	Delta        []DeltaEntry `json:"delta"`
 	RemovedIDs   []uint32     `json:"removedIDs"`
+	ExitedIDs    []uint32     `json:"exitedIDs"`
+	// HasInputAck / ExpectedInputAck cover the optional four-byte
+	// processed-input-sequence trailer announced by FrameFlagInputAck.
+	HasInputAck      bool   `json:"hasInputAck"`
+	ExpectedInputAck uint32 `json:"expectedInputAck"`
 }
 
 type FullEntry struct {
@@ -276,6 +288,10 @@ func main() {
 		Full: []FullEntry{full}, Delta: []DeltaEntry{dlt}, RemovedIDs: removed,
 	}
 
+	m.InputAckFrame = buildInputAckFrameCase()
+	m.Playback = buildPlaybackCase()
+	m.Prediction = buildPredictionCase()
+
 	// --- applyDelta: 2 fixed fields (2 bytes, 2 bytes), no var tail; change field 1 only ---
 	// bitmask 1 byte = 0b00000010 (field index 1 set); delta = [bitmask][field1 new bytes]
 	baseline := []byte{0x11, 0x22, 0x33, 0x44}
@@ -293,7 +309,7 @@ func main() {
 	// baseline = fixed[AABB] + u16 len(2) + "xy"; delta changes ONLY the tail:
 	// bitmask 0x02 (tail logical-field bit 1 set, fixed bit 0 clear) + u16 len(3) + "zzz".
 	// result = fixed[AABB] + u16 len(3) + "zzz".
-	vtBaseline := []byte{0xAA, 0xBB, 0x00, 0x02, 0x78, 0x79}        // AABB | 0002 | "xy"
+	vtBaseline := []byte{0xAA, 0xBB, 0x00, 0x02, 0x78, 0x79}       // AABB | 0002 | "xy"
 	vtDelta := []byte{0x02, 0x00, 0x03, 0x7A, 0x7A, 0x7A}          // bitmask | 0003 | "zzz"
 	vtExpected := []byte{0xAA, 0xBB, 0x00, 0x03, 0x7A, 0x7A, 0x7A} // AABB | 0003 | "zzz"
 	m.ApplyDelta = append(m.ApplyDelta, ApplyCase{
@@ -355,4 +371,66 @@ func main() {
 		log.Fatalf("write: %v", err)
 	}
 	log.Printf("wrote %s (%d bytes)", out, len(data))
+}
+
+// buildInputAckFrameCase produces a frame carrying the FrameFlagInputAck
+// trailer through the REAL quantize.FrameEncoder.
+//
+// The hand-assembled Frame case above is deliberate for the base layout — it
+// proves the encoder itself matches the documented byte order. This one is
+// deliberately the opposite: the four-byte processed-input-sequence trailer is
+// new and lightly covered, so generating it from the production encoder means
+// the golden can never drift from wireformat.go, only fail when a port does.
+func buildInputAckFrameCase() FrameCase {
+	snapshot := []byte{0xDE, 0xAD, 0xBE, 0xEF}
+	initial := []byte("ack")
+	delta := []byte{0x01, 0x02}
+
+	full := quantize.FullEntry{
+		NetID: 2001, Epoch: 11, EntityType: 5, ProducedAtMs: 1717000009999,
+		Snapshot: snapshot, InitialData: initial,
+	}
+	dlt := quantize.DeltaEntry{
+		NetID: 2002, Epoch: 12, EntityType: 6, ProducedAtMs: 1717000010111,
+		Data: delta,
+	}
+	removed := []uint32{4242}
+	exited := []uint32{4343, 4444}
+	const inputAck = uint32(987654321)
+	const tick = uint32(99)
+	const seq = uint32(1234)
+
+	enc := quantize.NewFrameEncoder(512)
+	raw := enc.Encode(
+		tick, seq, quantize.FrameFlagFreshSnapshot,
+		[]quantize.FullEntry{full}, []quantize.DeltaEntry{dlt},
+		removed, exited, inputAck,
+	)
+	encoded := append([]byte(nil), raw...)
+
+	// Read the flags back rather than asserting them: Encode ORs in
+	// FrameFlagInputAck itself, and the golden must record what shipped.
+	flags := binary.BigEndian.Uint32(encoded[8:12])
+
+	return FrameCase{
+		HexBytes: hex.EncodeToString(encoded),
+		Tick:     tick, Seq: seq, Flags: flags,
+		FullCount: 1, DeltaCount: 1,
+		RemovedCount: uint16(len(removed)), ExitedCount: uint16(len(exited)),
+		Full: []FullEntry{{
+			NetID: full.NetID, Epoch: full.Epoch, EntityType: full.EntityType,
+			ProducedAtMs: full.ProducedAtMs,
+			SnapshotHex:  hex.EncodeToString(snapshot),
+			InitialHex:   hex.EncodeToString(initial),
+		}},
+		Delta: []DeltaEntry{{
+			NetID: dlt.NetID, Epoch: dlt.Epoch, EntityType: dlt.EntityType,
+			ProducedAtMs: dlt.ProducedAtMs,
+			DeltaHex:     hex.EncodeToString(delta),
+		}},
+		RemovedIDs:       removed,
+		ExitedIDs:        exited,
+		HasInputAck:      true,
+		ExpectedInputAck: inputAck,
+	}
 }

@@ -13,6 +13,82 @@ namespace Mmokit.Sdk.Core.Tests
         public UdpCases Udp { get; set; } = new();
         public ReflectCase Reflect { get; set; } = new();
         public ClockSyncCase ClockSync { get; set; } = new();
+        public FrameCase InputAckFrame { get; set; } = new();
+        public PlaybackCase Playback { get; set; } = new();
+        public PredictionCase Prediction { get; set; } = new();
+    }
+
+    /// Cross-language pin for AdaptivePlaybackController. Every step feeds one
+    /// frame observation and optionally samples renderTime.
+    public class PlaybackCase
+    {
+        public double TickIntervalMs { get; set; }
+        public double MinDelayMs { get; set; }
+        public double MaxDelayMs { get; set; }
+        public double MinPlaybackRate { get; set; }
+        public double MaxPlaybackRate { get; set; }
+        public double ConvergenceWindowMs { get; set; }
+        public double AttackFactor { get; set; }
+        public double DecayFactor { get; set; }
+        public double JitterFactor { get; set; }
+        public PlaybackStep[] Steps { get; set; } = Array.Empty<PlaybackStep>();
+    }
+
+    public class PlaybackStep
+    {
+        public string Note { get; set; } = "";
+        public uint Seq { get; set; }
+        public bool FreshSnapshot { get; set; }
+        public bool HasStreamChanged { get; set; }
+        public bool StreamChanged { get; set; }
+        public double ArrivalTimeMs { get; set; }
+        public bool HasProducedAt { get; set; }
+        public double ProducedAtMs { get; set; }
+
+        public double ExpectedTargetDelayMs { get; set; }
+        public double ExpectedJitterMs { get; set; }
+        public double ExpectedExcessDelayMs { get; set; }
+        public double ExpectedLossRate { get; set; }
+        public int ExpectedReceivedFrames { get; set; }
+        public int ExpectedLostFrames { get; set; }
+        public int ExpectedDuplicateFrames { get; set; }
+        public int ExpectedOutOfOrderFrames { get; set; }
+
+        public bool HasRender { get; set; }
+        public double RenderClientNowMs { get; set; }
+        public bool ExpectedRenderNull { get; set; }
+        public double ExpectedRenderTimeMs { get; set; }
+        public double ExpectedPlaybackRate { get; set; }
+        public double ExpectedCurrentDelayMs { get; set; }
+    }
+
+    /// Cross-language pin for PredictionBuffer, including the uint32 wrap and
+    /// capacity overflow.
+    public class PredictionCase
+    {
+        public int MaxPending { get; set; }
+        public PredictionStep[] Steps { get; set; } = Array.Empty<PredictionStep>();
+    }
+
+    public class PredictionStep
+    {
+        public string Note { get; set; } = "";
+        public string Op { get; set; } = "";
+        public uint Seq { get; set; }
+        public int Input { get; set; }
+        public bool HasSeq { get; set; }
+        public int State { get; set; }
+
+        public bool ExpectedAccepted { get; set; }
+        public bool ExpectedDropped { get; set; }
+        public uint ExpectedDroppedSeq { get; set; }
+        public bool ExpectedAdvanced { get; set; }
+        public int ExpectedAcknowledgedCount { get; set; }
+        public int ExpectedPendingCount { get; set; }
+        public int ExpectedOverflowCount { get; set; }
+        public int ExpectedState { get; set; }
+        public bool ExpectedHasLastAck { get; set; }
+        public uint ExpectedLastAck { get; set; }
     }
 
     public class ClockSyncCase
@@ -67,6 +143,9 @@ namespace Mmokit.Sdk.Core.Tests
         public FullEntry[] Full { get; set; } = Array.Empty<FullEntry>();
         public DeltaEntry[] Delta { get; set; } = Array.Empty<DeltaEntry>();
         public uint[] RemovedIDs { get; set; } = Array.Empty<uint>();
+        public uint[] ExitedIDs { get; set; } = Array.Empty<uint>();
+        public bool HasInputAck { get; set; }
+        public uint ExpectedInputAck { get; set; }
     }
     public class FullEntry { public uint NetID { get; set; } public uint Epoch { get; set; } public byte EntityType { get; set; } public ulong ProducedAtMs { get; set; } public string SnapshotHex { get; set; } = ""; public string InitialHex { get; set; } = ""; }
     public class DeltaEntry { public uint NetID { get; set; } public uint Epoch { get; set; } public byte EntityType { get; set; } public ulong ProducedAtMs { get; set; } public string DeltaHex { get; set; } = ""; }
