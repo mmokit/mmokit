@@ -113,11 +113,20 @@ This is worse than previously recorded. The path is reachable **pre-authenticati
 
 Acceptance criteria unchanged from the previous roadmap: a checked decoder returning consumed bytes and an error; bounds checks before every read; configurable limits on frame size, strings, slices, nesting, and aggregate allocation; rejection of truncated and trailing data; per-connection queue and per-tick work caps across WebSocket, UDP, and virtual connections; codec fuzzing; and bounded-cardinality rejection metrics. No fuzz target exists anywhere in the repository today.
 
-#### CE-004 — Destination acceptance before cross-host demotion · **Partial (1/7)**
+#### CE-004 — Destination acceptance before cross-host demotion · **Partial (6/7)**
 
-Failure propagation landed: [`pkg/universe/grpc_bridge.go:80-123`](../pkg/universe/grpc_bridge.go) now returns a status on every remote failure path, with rollback in `handoff_driver.go:449-465`.
+Failure propagation landed earlier: [`pkg/universe/grpc_bridge.go:80`](../pkg/universe/grpc_bridge.go) `sendViaGrpc` returns a status on every remote failure path, with rollback in `handoff_driver.go:562-573`.
 
-The acceptance protocol itself does not exist. `HandoffAccepted` appears in no source file. Demotion is still armed on local enqueue rather than destination acceptance, there is no `(NetID, Epoch)` deduplication, and mesh stream cleanup still deletes unconditionally by a payload-supplied ID (`mesh_control_server.go:154-159`), so a reconnect race can delete the newer stream's registration.
+**The acceptance protocol now exists.** A destination cell answers every `MsgHandoff` with a `MsgHandoffAccepted`, and that acceptance — not the local enqueue — is what arms the source's demote.
+
+- Transport: `MsgHandoffAccepted = 102` and `HandoffAckPayload` in [`pkg/universe/message.go`](../pkg/universe/message.go), tunnelled on the wire through the existing `meshpb.CrossCellAction` oneof under the engine-reserved `ActionHandoffAccepted = 101` ([`pkg/universe/handoff_ack.go`](../pkg/universe/handoff_ack.go), intercepted on both sides of `mesh_frame_codec.go`). **No meshpb change**, so this is not a lockstep cluster redeploy; `ActionTypedMessage = 100` is the existing precedent.
+- Sequencing: `handleCrossing` records an `inflightHandoff` before the send and queues nothing on success ([`pkg/universe/handoff_driver.go:562`](../pkg/universe/handoff_driver.go)). Only `OnHandoffAccepted` (`:597`) moves the entry into `pendingDemotes` and records the anti-thrash cooldown, so `OnPlayerTransfer`, the gateway upstream switch, `StateTransferring` and `RemoveTransferred` cannot fire until the destination has accepted. `retryInflight` (`:648`) re-sends the identical payload every `HandoffAcceptRetryTicks` (4) and escalates once at `HandoffAcceptWarnAttempts` (5).
+- Deduplication: `Stage.handoffAccepted` (netID → highest accepted epoch, [`pkg/universe/stage.go:144`](../pkg/universe/stage.go)) keyed at the promotion entry point `Cell.processMessage case MsgHandoff` (`cell.go:473`). A duplicate is re-acked and otherwise ignored, which also stops the eager session pre-register from re-running. The mark is forgotten in `DemoteLiveToReplica` and nowhere else.
+- Abandonment: a handoff is given up **only** when `SendHandoff` returns false on a retry — the one condition under which the destination provably cannot have promoted. The epoch is never rolled back on an accept timeout, because border frames carrying the bumped epoch have already shipped and rewinding would make every neighbour reject the entity permanently.
+
+**Residual, deliberately accepted:** if the destination receives the Handoff but its ack is lost, the destination promotes at `CommitTick` while the source stays Live until a retry ack lands. This is a bounded, self-healing **double**-authority window replacing a permanent **zero**-authority orphan; the destination already drops the source's border frames for a netID whose local slot is Live. Driving it to exactly zero requires the destination to gate its promote on a source-sent Commit — a three-phase protocol, filed as a separate item. The `(NetID, Epoch)` dedup and the ack plumbing landed here are its prerequisites.
+
+Remaining: mesh control-stream cleanup still deletes unconditionally by a payload-supplied ID (`mesh_control_server.go:156`), so a reconnect race can delete the newer stream's registration and run `MarkDead`/`UnregisterByHost`/`reassignOrphanedCells` against a live host.
 
 #### CE-005b — UDP security and gating · **Tier 1 done; Tier 2 open**
 

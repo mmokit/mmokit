@@ -30,6 +30,18 @@ const HandoffCooldownTicks = 20
 // would otherwise remain unacknowledged indefinitely.
 const HandoffInputForwardTicks = 20
 
+// HandoffAcceptRetryTicks is how often an unaccepted handoff is re-sent.
+// 4 ticks (200 ms at 20 Hz) is comfortably longer than the 2-tick lead the
+// ack normally needs. The destination dedups on (NetID, Epoch) and re-acks,
+// so re-sending the identical payload is always safe.
+const HandoffAcceptRetryTicks = 4
+
+// HandoffAcceptWarnAttempts is how many unacknowledged attempts pass before
+// the driver escalates to an error-level log. Retries continue after it —
+// abandoning a handoff the destination may already have committed would
+// leave two Live copies forever.
+const HandoffAcceptWarnAttempts = 5
+
 // pendingDemote is a source-side demote queued for a specific
 // cluster-tick. HandoffDriver.Tick drains due demotes at tick start
 // (before handling new crossings), flipping the local Live entity
@@ -42,6 +54,24 @@ type pendingDemote struct {
 	netID      uint32
 	destCellID MeshCellID
 	connID     uint32
+}
+
+// inflightHandoff is a Handoff that has been sent to a destination cell but
+// not yet acknowledged by it. It is the record that keeps the source Live:
+// the demote is queued only when a matching HandoffAckPayload arrives.
+//
+// payload is retained verbatim so a retry re-sends byte-identical bytes —
+// same Epoch, same CommitTick, same TransferBlob — which is what makes the
+// destination's (NetID, Epoch) dedup work.
+type inflightHandoff struct {
+	destCellID    MeshCellID
+	connID        uint32
+	epoch         uint32
+	commitTick    uint64
+	payload       *HandoffPayload
+	attempts      int
+	nextRetryTick uint64
+	warned        bool
 }
 
 type pendingInputForward struct {
@@ -61,16 +91,38 @@ type inputForwardingBridge interface {
 // via the hard-cut protocol.
 //
 // Each tick (driven from cellBridge.PostSystems):
-//  1. Drain pending demotes whose CommitTick <= currentClusterTick,
+//  1. Retry any handoff still awaiting destination acceptance.
+//  2. Drain pending demotes whose CommitTick <= currentClusterTick,
 //     flipping the local Live entity to a Replica of the destination.
-//  2. Drain the Stage crossing-event queue. For each crossing,
+//  3. Drain the Stage crossing-event queue. For each crossing,
 //     bump the source entity's epoch, serialize, send a single
 //     Handoff message with CommitTick = currentClusterTick +
-//     HandoffLeadTicks, and queue a pendingDemote for that CommitTick.
+//     HandoffLeadTicks, and record it as INFLIGHT.
+//
+// The send -> accept -> arm sequence is load-bearing. SendHandoff returning
+// true means only that the message was enqueued; for a remote destination
+// that is a local stream write, not delivery. Arming the demote on the
+// enqueue (which is what this driver used to do) means a dropped Handoff
+// demotes the source anyway and leaves the entity with ZERO authoritative
+// holders, permanently — a frozen player. Only OnHandoffAccepted, driven by
+// the destination's MsgHandoffAccepted, moves an inflight entry into
+// pendingDemotes.
+//
+// The residual exposure is a bounded DOUBLE-authority window: if the
+// destination receives the Handoff but its ack is lost, the destination
+// promotes at CommitTick while the source stays Live until a retry ack
+// lands (~HandoffAcceptRetryTicks). That is strictly better than the
+// zero-authority orphan it replaces — zero-authority is unrecoverable,
+// double-authority is transient and self-healing, and the destination drops
+// the source's border frames for the netID anyway because its own slot is
+// Live (see upsertBorderReplica). Driving the window to exactly zero
+// requires the destination to gate its promote on a source-sent Commit,
+// i.e. a three-phase protocol. That is deliberately deferred.
 //
 // The destination-side mirror is in pkg/universe/cell.go: the
-// MsgHandoff handler queues a pendingPromote for the same CommitTick,
-// drained at tick start by Cell.drainPendingPromotes.
+// MsgHandoff handler dedups on (NetID, Epoch), acks, and queues a
+// pendingPromote for the same CommitTick, drained at tick start by
+// Cell.drainPendingPromotes.
 type HandoffDriver struct {
 	base    *Stage
 	bridge  Bridge
@@ -78,12 +130,18 @@ type HandoffDriver struct {
 	posMap  *ecs.Map1[component.Position]
 	cellMap *ecs.Map1[component.CellCoord]
 
-	// mu guards pendingDemotes ONLY. Most accesses happen on the cell's
-	// game loop (Tick, handleCrossing) and don't need locking against
+	// mu guards pendingDemotes AND inflight. Most accesses happen on the
+	// cell's game loop (Tick, handleCrossing) and don't need locking against
 	// each other. The lock exists so CancelPendingDemotesTo can run
 	// off-loop (from the orchestrator's BeginMerge) and remove entries
 	// without racing with a concurrent loop-side drain in Tick.
 	mu sync.Mutex
+
+	// inflight holds handoffs sent but not yet accepted by the destination,
+	// keyed by netID. An entry here means the source is still authoritative
+	// and no demote is queued. Guarded by hd.mu because
+	// CancelPendingDemotesTo runs off-loop.
+	inflight map[uint32]*inflightHandoff
 
 	// pendingDemotes is keyed by the cluster-tick at which the demote
 	// should fire. Tick() drains every entry with key <=
@@ -102,27 +160,39 @@ type HandoffDriver struct {
 	inputForwards map[uint32]pendingInputForward
 }
 
-// CancelPendingDemotesTo drops every queued pending demote whose destCellID
-// is in the given set. Used by the merge orchestrator to clear stale demotes
-// on the survivor cell — they would otherwise fire AFTER the merge populated
-// the survivor with a (deduped) Live for the same netID, demote that Live
-// to a Replica with newSource = a now-torn-down donor, and the Replica
-// would expire via TTL when border replication never refreshed it.
+// CancelPendingDemotesTo drops every queued pending demote AND every
+// unaccepted inflight handoff whose destCellID is in the given set. Used by
+// the merge orchestrator to clear stale demotes on the survivor cell — they
+// would otherwise fire AFTER the merge populated the survivor with a
+// (deduped) Live for the same netID, demote that Live to a Replica with
+// newSource = a now-torn-down donor, and the Replica would expire via TTL
+// when border replication never refreshed it.
+//
+// The inflight sweep matters for the same reason: without it a donor's ack
+// arriving after BeginMerge cancelled the pending demotes would re-arm a
+// demote toward a torn-down donor, which is precisely the failure this
+// helper exists to prevent.
 //
 // Locks hd.mu so it is safe to call from off the cell's loop (BeginMerge
 // invokes it from the orchestrator goroutine, before donor Executes ship).
 //
-// Returns the number of demotes cancelled (for logging).
+// Returns the number of demotes and inflight handoffs cancelled (for logging).
 func (hd *HandoffDriver) CancelPendingDemotesTo(destCellIDs map[MeshCellID]struct{}) int {
 	if len(destCellIDs) == 0 {
 		return 0
 	}
 	hd.mu.Lock()
 	defer hd.mu.Unlock()
-	if len(hd.pendingDemotes) == 0 {
-		return 0
-	}
 	cancelled := 0
+	for netID, h := range hd.inflight {
+		if _, drop := destCellIDs[h.destCellID]; drop {
+			delete(hd.inflight, netID)
+			cancelled++
+		}
+	}
+	if len(hd.pendingDemotes) == 0 {
+		return cancelled
+	}
 	for commitTick, list := range hd.pendingDemotes {
 		kept := list[:0]
 		for _, d := range list {
@@ -141,18 +211,26 @@ func (hd *HandoffDriver) CancelPendingDemotesTo(destCellIDs map[MeshCellID]struc
 	return cancelled
 }
 
-// hasPendingDemote reports whether a demote for netID is already queued
-// for any future commit-tick. handleCrossing uses this to drop redundant
-// crossings while a handoff is in flight — preventing duplicate Live
-// entities when a player crosses two boundaries within HandoffLeadTicks
+// hasHandoffInFlight reports whether a handoff for netID is already
+// outstanding — either sent and awaiting destination acceptance, or accepted
+// and queued for a future commit-tick. handleCrossing uses this to drop
+// redundant crossings while a handoff is in flight, preventing duplicate
+// Live entities when a player crosses two boundaries within HandoffLeadTicks
 // (e.g. a diagonal click that triggers an east crossing and a south
 // crossing in the same window).
 //
+// The inflight half is what covers the pre-acceptance window this driver now
+// spends waiting; the pendingDemotes half covers the post-acceptance
+// lead-time window as before.
+//
 // Locks hd.mu for the same reason CancelPendingDemotesTo does: orchestrator
-// goroutines may be mutating pendingDemotes off-loop.
-func (hd *HandoffDriver) hasPendingDemote(netID uint32) bool {
+// goroutines may be mutating both maps off-loop.
+func (hd *HandoffDriver) hasHandoffInFlight(netID uint32) bool {
 	hd.mu.Lock()
 	defer hd.mu.Unlock()
+	if _, ok := hd.inflight[netID]; ok {
+		return true
+	}
 	for _, list := range hd.pendingDemotes {
 		for _, d := range list {
 			if d.netID == netID {
@@ -175,6 +253,7 @@ func NewHandoffDriver(base *Stage, bridge Bridge) *HandoffDriver {
 		posMap:         ecs.NewMap1[component.Position](w),
 		cellMap:        ecs.NewMap1[component.CellCoord](w),
 		pendingDemotes: make(map[uint64][]pendingDemote),
+		inflight:       make(map[uint32]*inflightHandoff),
 		lastHandoff:    make(map[uint32]map[MeshCellID]uint64),
 		inputForwards:  make(map[uint32]pendingInputForward),
 	}
@@ -188,16 +267,20 @@ func NewHandoffDriver(base *Stage, bridge Bridge) *HandoffDriver {
 // of a handoff compute CommitTick relative to this shared axis.
 //
 // Order of operations:
-//  1. Drain pending demotes due now or earlier (hard-cut commit on
+//  1. Re-send handoffs still awaiting destination acceptance.
+//  2. Drain pending demotes due now or earlier (hard-cut commit on
 //     source: Live → Replica of destination cell).
-//  2. Handle new crossings (bump epoch, send Handoff, queue demote).
+//  3. Handle new crossings (bump epoch, send Handoff, record inflight).
 //
 // Short-circuits when the cell is draining for a merge — the donor's
 // entities have been (or are about to be) serialized for shipping to
 // the survivor; emitting Handoff messages from here would race with
 // the merge populate and produce duplicate netIDs on the survivor cell.
 // Pending crossings that accumulate during drain are discarded. Pending
-// demotes are also skipped — the cell is about to be torn down.
+// demotes are also skipped — the cell is about to be torn down. Retries are
+// placed AFTER that short-circuit for the same reason: re-sending a Handoff
+// from a draining donor would race the merge populate exactly as a fresh
+// crossing would.
 func (hd *HandoffDriver) Tick(currentClusterTick uint64) {
 	hd.forwardPendingInputs(currentClusterTick)
 	if hd.base.IsDrainingForMerge() {
@@ -205,7 +288,9 @@ func (hd *HandoffDriver) Tick(currentClusterTick uint64) {
 		return
 	}
 
-	// 1. Drain due demotes FIRST. Use <=, not ==, so a missed commit
+	hd.retryInflight(currentClusterTick)
+
+	// 2. Drain due demotes. Use <=, not ==, so a missed commit
 	//    tick still commits on the next pass. Snapshot under hd.mu so a
 	//    concurrent CancelPendingDemotesTo (off-loop, from BeginMerge)
 	//    can't mutate the map mid-iteration.
@@ -259,7 +344,7 @@ func (hd *HandoffDriver) Tick(currentClusterTick uint64) {
 			hd.base.cellID, d.netID, d.destCellID, commitTick)
 	}
 
-	// 2. Handle new crossings.
+	// 3. Handle new crossings.
 	events := hd.base.DrainCrossingQueue()
 	for _, evt := range events {
 		hd.handleCrossing(evt, currentClusterTick)
@@ -322,17 +407,17 @@ func (hd *HandoffDriver) handleCrossing(evt CrossingEvent, currentClusterTick ui
 	}
 
 	// Entity must still be Live on this cell. Two stale-state cases this
-	// catches together with the hasPendingDemote check below:
+	// catches together with the hasHandoffInFlight check below:
 	//
 	//   1. Crossing queued by BoundarySystem on tick T while a previous
-	//      handoff for the same netID is still in flight (commit not yet
-	//      fired). The entity is still Live but a demote is pending —
-	//      caught by hasPendingDemote.
+	//      handoff for the same netID is still outstanding (unaccepted, or
+	//      accepted with the commit not yet fired). The entity is still
+	//      Live — caught by hasHandoffInFlight.
 	//
 	//   2. Crossing queued by BoundarySystem on tick T (entity still
 	//      Live), then HandoffDriver.Tick(T+lead) runs at end-of-tick:
 	//      first it drains the pending demote (entity becomes Replica),
-	//      then it processes new crossings. hasPendingDemote now returns
+	//      then it processes new crossings. hasHandoffInFlight now returns
 	//      false (just drained!), so this presence check is the second
 	//      net — handing off a Replica would leave a Live copy on the
 	//      previous destination AND spawn another Live on the new one,
@@ -348,7 +433,7 @@ func (hd *HandoffDriver) handleCrossing(evt CrossingEvent, currentClusterTick ui
 	// east-crossing and a south-crossing within HandoffLeadTicks targets
 	// two different destinations, slips past that cooldown, and ends up
 	// sending two Handoff messages for the same netID.
-	if hd.hasPendingDemote(evt.NetID) {
+	if hd.hasHandoffInFlight(evt.NetID) {
 		return
 	}
 
@@ -446,18 +531,38 @@ func (hd *HandoffDriver) handleCrossing(evt CrossingEvent, currentClusterTick ui
 
 	commitTick := currentClusterTick + HandoffLeadTicks
 
-	// Fire a single Handoff message to the destination. If the destination
-	// cell no longer exists on this process (concurrent merge commit), the
-	// bridge returns false — bail out, roll back the epoch bump, and let
-	// BoundarySystem re-detect the crossing next tick.
-	ok := hd.bridge.SendHandoff(evt.DestCellID, &HandoffPayload{
+	payload := &HandoffPayload{
 		NetID:        evt.NetID,
 		Epoch:        newEpoch,
 		CommitTick:   commitTick,
 		TransferBlob: data,
 		ConnID:       evt.ConnID,
-	})
-	if !ok {
+	}
+
+	// Record the inflight entry BEFORE the send. A same-process bridge
+	// delivers synchronously, so the destination can call back into
+	// OnHandoffAccepted from inside SendHandoff; inserting first means that
+	// ack finds the entry instead of being discarded as unmatched.
+	hd.mu.Lock()
+	hd.inflight[evt.NetID] = &inflightHandoff{
+		destCellID:    evt.DestCellID,
+		connID:        evt.ConnID,
+		epoch:         newEpoch,
+		commitTick:    commitTick,
+		payload:       payload,
+		attempts:      1,
+		nextRetryTick: currentClusterTick + HandoffAcceptRetryTicks,
+	}
+	hd.mu.Unlock()
+
+	// Fire a single Handoff message to the destination. If the destination
+	// cell no longer exists on this process (concurrent merge commit), the
+	// bridge returns false — bail out, roll back the epoch bump, and let
+	// BoundarySystem re-detect the crossing next tick.
+	if !hd.bridge.SendHandoff(evt.DestCellID, payload) {
+		hd.mu.Lock()
+		delete(hd.inflight, evt.NetID)
+		hd.mu.Unlock()
 		if hd.netMap.HasAll(evt.Entity) {
 			hd.netMap.Get(evt.Entity).Epoch = oldEpoch
 		}
@@ -467,25 +572,152 @@ func (hd *HandoffDriver) handleCrossing(evt CrossingEvent, currentClusterTick ui
 		return
 	}
 
-	// Queue demote for commit-tick. The source entity stays Live between
-	// now and commitTick; Tick() drains the queue when the cluster clock
-	// catches up. Lock guards against a concurrent off-loop
-	// CancelPendingDemotesTo (the merge orchestrator).
+	// NOTHING is queued here. The demote — and with it OnPlayerTransfer, the
+	// gateway upstream switch, StateTransferring and RemoveTransferred — is
+	// armed only by OnHandoffAccepted, so a lost Handoff can never leave the
+	// entity with zero authoritative holders. The anti-thrash cooldown is
+	// recorded there too, so an abandoned attempt does not block the retry.
+	hd.base.eng.Log.Log(CatMeshTransfer,
+		"[%s] handoff sent: netID=%d dest=%s commitTick=%d epoch=%d (lead=%d) — awaiting destination acceptance",
+		hd.base.cellID, evt.NetID, evt.DestCellID, commitTick, newEpoch, HandoffLeadTicks)
+}
+
+// OnHandoffAccepted is the source-side ingest of a destination's
+// MsgHandoffAccepted. It is the ONLY thing that arms a demote.
+//
+// Fences on the full (netID, epoch, commitTick, destCellID) tuple. An ack
+// that does not match the current inflight entry is a no-op: it is either a
+// late ack for a superseded attempt, or an ack from a cell that is no longer
+// the intended destination (e.g. after CancelPendingDemotesTo dropped the
+// entry during a merge). Idempotent by construction — a second matching ack
+// finds no inflight entry.
+//
+// Because Tick drains pendingDemotes with <=, an ack that arrives after
+// commitTick has already passed demotes on the very next Tick.
+func (hd *HandoffDriver) OnHandoffAccepted(netID, epoch uint32, commitTick uint64, from MeshCellID) {
 	hd.mu.Lock()
-	hd.pendingDemotes[commitTick] = append(hd.pendingDemotes[commitTick], pendingDemote{
-		netID:      evt.NetID,
-		destCellID: evt.DestCellID,
-		connID:     evt.ConnID,
+	h, ok := hd.inflight[netID]
+	if !ok {
+		hd.mu.Unlock()
+		hd.base.eng.Log.Log(CatMeshTransfer,
+			"[%s] handoff-ack ignored (no inflight handoff): netID=%d epoch=%d from=%s",
+			hd.base.cellID, netID, epoch, from)
+		return
+	}
+	if h.epoch != epoch || h.commitTick != commitTick || h.destCellID != from {
+		hd.mu.Unlock()
+		hd.base.eng.Log.Log(CatMeshTransfer,
+			"[%s] handoff-ack ignored (superseded): netID=%d got epoch=%d commitTick=%d from=%s; inflight epoch=%d commitTick=%d dest=%s",
+			hd.base.cellID, netID, epoch, commitTick, from, h.epoch, h.commitTick, h.destCellID)
+		return
+	}
+	delete(hd.inflight, netID)
+	hd.pendingDemotes[h.commitTick] = append(hd.pendingDemotes[h.commitTick], pendingDemote{
+		netID:      netID,
+		destCellID: h.destCellID,
+		connID:     h.connID,
 	})
+	if hd.lastHandoff[netID] == nil {
+		hd.lastHandoff[netID] = make(map[MeshCellID]uint64)
+	}
+	hd.lastHandoff[netID][h.destCellID] = h.commitTick
+	destCellID, armedCommitTick, attempts := h.destCellID, h.commitTick, h.attempts
 	hd.mu.Unlock()
 
-	// Record cooldown.
-	if hd.lastHandoff[evt.NetID] == nil {
-		hd.lastHandoff[evt.NetID] = make(map[MeshCellID]uint64)
-	}
-	hd.lastHandoff[evt.NetID][evt.DestCellID] = commitTick
-
 	hd.base.eng.Log.Log(CatMeshTransfer,
-		"[%s] handoff sent: netID=%d dest=%s commitTick=%d epoch=%d (lead=%d)",
-		hd.base.cellID, evt.NetID, evt.DestCellID, commitTick, newEpoch, HandoffLeadTicks)
+		"[%s] handoff accepted: netID=%d dest=%s commitTick=%d epoch=%d attempts=%d — demote armed",
+		hd.base.cellID, netID, destCellID, armedCommitTick, epoch, attempts)
+}
+
+// retryInflight re-sends handoffs the destination has not acknowledged, and
+// garbage-collects entries whose entity is no longer Live on this cell.
+//
+// The epoch is NEVER rolled back on an accept timeout. handleCrossing's
+// rollback is only safe because it happens in the same tick, before
+// BorderDispatcher.Tick has pushed the bumped value. Once border frames
+// carrying the bumped epoch have shipped, rewinding would leave every
+// neighbour's highestSeenEpoch ahead of the entity and silently freeze its
+// replicas everywhere.
+//
+// The one condition under which a handoff IS abandoned is SendHandoff
+// returning false — the destination cell is gone or its host is unroutable,
+// which is the only case where the destination provably cannot have
+// promoted. Then the inflight entry and the cooldown are dropped, the entity
+// stays Live, and BoundarySystem re-detects the crossing next tick with a
+// fresh epoch bump.
+func (hd *HandoffDriver) retryInflight(currentClusterTick uint64) {
+	hd.mu.Lock()
+	if len(hd.inflight) == 0 {
+		hd.mu.Unlock()
+		return
+	}
+	type retryTarget struct {
+		netID   uint32
+		entry   *inflightHandoff
+		payload *HandoffPayload
+		dest    MeshCellID
+	}
+	var due []retryTarget
+	var dead []uint32
+	for netID, h := range hd.inflight {
+		if currentClusterTick < h.nextRetryTick {
+			continue
+		}
+		due = append(due, retryTarget{netID: netID, entry: h, payload: h.payload, dest: h.destCellID})
+	}
+	hd.mu.Unlock()
+
+	for _, t := range due {
+		// GC: the entity died, was merged away, or already left this cell.
+		// Without this the map grows without bound and the driver keeps
+		// re-sending a handoff for something that no longer exists here.
+		if _, pres, ok := hd.base.LookupNetID(t.netID); !ok || pres != PresenceLive {
+			dead = append(dead, t.netID)
+			continue
+		}
+		if !hd.bridge.SendHandoff(t.dest, t.payload) {
+			hd.mu.Lock()
+			delete(hd.inflight, t.netID)
+			if dst, ok := hd.lastHandoff[t.netID]; ok {
+				delete(dst, t.dest)
+				if len(dst) == 0 {
+					delete(hd.lastHandoff, t.netID)
+				}
+			}
+			hd.mu.Unlock()
+			hd.base.eng.Log.Log(CatMeshTransfer,
+				"[%s] handoff abandoned (dest %s unreachable): netID=%d — source retains authority, will re-detect crossing",
+				hd.base.cellID, t.dest, t.netID)
+			continue
+		}
+		hd.mu.Lock()
+		// Re-check: the ack may have landed between the snapshot and here.
+		if cur, ok := hd.inflight[t.netID]; ok && cur == t.entry {
+			cur.attempts++
+			cur.nextRetryTick = currentClusterTick + HandoffAcceptRetryTicks
+			if cur.attempts >= HandoffAcceptWarnAttempts && !cur.warned {
+				cur.warned = true
+				attempts, dest, epoch := cur.attempts, cur.destCellID, cur.epoch
+				hd.mu.Unlock()
+				hd.base.eng.Log.Log(CatMeshTransfer,
+					"[%s] handoff UNACKNOWLEDGED after %d attempts: netID=%d dest=%s epoch=%d — source still authoritative, retrying",
+					hd.base.cellID, attempts, t.netID, dest, epoch)
+				continue
+			}
+		}
+		hd.mu.Unlock()
+	}
+
+	if len(dead) > 0 {
+		hd.mu.Lock()
+		for _, netID := range dead {
+			delete(hd.inflight, netID)
+		}
+		hd.mu.Unlock()
+		for _, netID := range dead {
+			hd.base.eng.Log.Log(CatMeshTransfer,
+				"[%s] handoff inflight dropped (netID=%d no longer live on this cell)",
+				hd.base.cellID, netID)
+		}
+	}
 }

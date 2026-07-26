@@ -351,6 +351,18 @@ type handoffDriverHost interface {
 	HandoffDriver() *HandoffDriver
 }
 
+// handoffDriver returns this cell's HandoffDriver, or nil when the bridge
+// does not host one (NoopBridge, test bridges). Nil-safe on every field.
+func (c *Cell) handoffDriver() *HandoffDriver {
+	if c == nil || c.Bridge == nil {
+		return nil
+	}
+	if h, ok := c.Bridge.(handoffDriverHost); ok {
+		return h.HandoffDriver()
+	}
+	return nil
+}
+
 // processMessage handles a single inter-cell message.
 func (c *Cell) processMessage(msg CellMessage) {
 	if c.onMessage != nil {
@@ -465,6 +477,50 @@ func (c *Cell) processMessage(msg CellMessage) {
 		c.Log.Log(CatMeshMsg, "[%s] msg MsgHandoff from=%s netID=%d epoch=%d commitTick=%d",
 			c.MeshID, msg.FromCellID, msg.Handoff.NetID, msg.Handoff.Epoch, msg.Handoff.CommitTick)
 
+		ack := &HandoffAckPayload{
+			NetID:      msg.Handoff.NetID,
+			Epoch:      msg.Handoff.Epoch,
+			CommitTick: msg.Handoff.CommitTick,
+		}
+
+		// No bridge means no way to ack, and an unacknowledged promote would
+		// make this cell authoritative with the source unable to learn it.
+		if c.Bridge == nil {
+			c.Log.Log(CatMeshTransfer,
+				"[%s] handoff dropped (no bridge to ack through): netID=%d epoch=%d from=%s",
+				c.MeshID, msg.Handoff.NetID, msg.Handoff.Epoch, msg.FromCellID)
+			return
+		}
+
+		// Dedup on (NetID, Epoch). The source re-sends the identical payload
+		// every HandoffAcceptRetryTicks until it sees an ack, so duplicates
+		// are the normal case under ack loss — not an error. Re-ack (the ack
+		// is idempotent) and do nothing else: in particular do NOT re-run the
+		// eager session pre-register below against a session that may already
+		// have transferred out again.
+		if c.Stage != nil && c.Stage.handoffAlreadyAccepted(msg.Handoff.NetID, msg.Handoff.Epoch) {
+			c.Bridge.SendHandoffAccepted(msg.FromCellID, ack)
+			c.Log.Log(CatMeshTransfer,
+				"[%s] duplicate handoff re-acked: netID=%d epoch=%d from=%s",
+				c.MeshID, msg.Handoff.NetID, msg.Handoff.Epoch, msg.FromCellID)
+			return
+		}
+
+		// Send the acceptance BEFORE committing to the promote. If the ack
+		// cannot be enqueued, this cell must not become authoritative: the
+		// source would never learn to demote and the entity would be Live on
+		// two cells with no protocol left to retire either. Dropping here is
+		// safe and self-healing — the source retries the identical Handoff.
+		if !c.Bridge.SendHandoffAccepted(msg.FromCellID, ack) {
+			c.Log.Log(CatMeshTransfer,
+				"[%s] handoff ack undeliverable — dropping, source will retry: netID=%d epoch=%d from=%s",
+				c.MeshID, msg.Handoff.NetID, msg.Handoff.Epoch, msg.FromCellID)
+			return
+		}
+		if c.Stage != nil {
+			c.Stage.markHandoffAccepted(msg.Handoff.NetID, msg.Handoff.Epoch)
+		}
+
 		// Pre-register the player session NOW (before commit-tick) so
 		// ClientInput frames arriving in the lead-time window have a
 		// destination-local ID to route to. The entity itself is still
@@ -532,6 +588,22 @@ func (c *Cell) processMessage(msg CellMessage) {
 		c.Log.Log(CatMeshTransfer,
 			"[%s] handoff queued: netID=%d epoch=%d commitTick=%d from=%s",
 			c.MeshID, msg.Handoff.NetID, msg.Handoff.Epoch, msg.Handoff.CommitTick, msg.FromCellID)
+
+	case MsgHandoffAccepted:
+		if msg.HandoffAck == nil {
+			return
+		}
+		// Runs on the cell loop via PreTick -> DrainInbox, strictly before
+		// PostSystems -> HandoffDriver.Tick, so an ack ingested this tick can
+		// arm a demote in the same tick.
+		hd := c.handoffDriver()
+		if hd == nil {
+			c.Log.Log(CatMeshTransfer,
+				"[%s] handoff-ack dropped (no handoff driver): netID=%d epoch=%d from=%s",
+				c.MeshID, msg.HandoffAck.NetID, msg.HandoffAck.Epoch, msg.FromCellID)
+			return
+		}
+		hd.OnHandoffAccepted(msg.HandoffAck.NetID, msg.HandoffAck.Epoch, msg.HandoffAck.CommitTick, msg.FromCellID)
 
 	case MsgForwardInput:
 		if msg.ForwardInput == nil {

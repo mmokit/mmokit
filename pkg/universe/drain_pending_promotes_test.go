@@ -85,7 +85,7 @@ func TestDrainPendingPromotes_BorderReplicaTip_WorldXCorrect(t *testing.T) {
 	RegisterComponent(src.ReplicationRegistry(), srcPosMap)
 
 	rec := &handoffRecordingBridge{}
-	hd := NewHandoffDriver(src, rec)
+	hd := newAutoAcceptHandoffDriver(src, rec)
 
 	// Source entity at pos.X=1030 (6px past east boundary), velX=200.
 	const srcPosX = float32(1030)
@@ -253,7 +253,7 @@ func TestDrainPendingPromotes_DeStalesColliderRadius(t *testing.T) {
 	// Source: blob captures the STALE radius at crossing time.
 	src := newTestWorldBase(t, CellID{X: 0, Y: 0})
 	rec := &handoffRecordingBridge{}
-	hd := NewHandoffDriver(src, rec)
+	hd := newAutoAcceptHandoffDriver(src, rec)
 
 	const staleRadius = float32(5)
 	ent := src.Spawn(
@@ -311,7 +311,7 @@ func TestDrainPendingPromotes_NoReplica_WorldXCorrect(t *testing.T) {
 
 	src := newTestWorldBase(t, CellID{X: 0, Y: 0})
 	rec := &handoffRecordingBridge{}
-	hd := NewHandoffDriver(src, rec)
+	hd := newAutoAcceptHandoffDriver(src, rec)
 
 	const srcPosX = float32(1030)
 	ent := src.Spawn(
@@ -390,7 +390,7 @@ func TestDrainPendingPromotes_WithMoveTargetInRegistry_WorldXCorrect(t *testing.
 	RegisterComponent(src.ReplicationRegistry(), mtMap)
 
 	rec := &handoffRecordingBridge{}
-	hd := NewHandoffDriver(src, rec)
+	hd := newAutoAcceptHandoffDriver(src, rec)
 
 	const srcPosX = float32(1030)
 	const velX = float32(200)

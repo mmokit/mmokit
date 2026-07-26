@@ -131,6 +131,18 @@ type Stage struct {
 	// consulted by the invNoDuplicatePresencePerCell invariant.
 	netIDIdx *netIDIndex
 
+	// handoffAccepted records the highest Handoff epoch accepted per netID on
+	// this cell, so a retried or duplicated Handoff cannot queue a second
+	// promote or re-run the eager session pre-register. netIDIdx cannot serve
+	// this: it is presence-only and its ActionDuplicate result merely logs in
+	// non-strict mode (how the reference game runs). highestSeenEpoch cannot
+	// either: the source's pre-commit border pushes have already advanced it
+	// to the bumped epoch, so it would reject the FIRST handoff.
+	//
+	// Loop-owned — written from Cell.processMessage and read/pruned on the
+	// same cell goroutine. No lock.
+	handoffAccepted map[uint32]uint32
+
 	// strictNetIDIndex enables enforcement of the netIDIndex transition
 	// policy (reject duplicates, etc). When false (default during
 	// rollout) the index tracks state observationally but transitions
@@ -255,6 +267,7 @@ func NewStage(eng *engine.Engine, cell CellID, aoiRadius float32, replRegistry *
 	}
 
 	base.netIDIdx = newNetIDIndex()
+	base.handoffAccepted = make(map[uint32]uint32)
 
 	// Register all framework log categories.
 	eng.Log.RegisterCategories(MeshCategories...)
@@ -318,6 +331,48 @@ func (b *Stage) LookupNetID(netID uint32) (ecs.Entity, EntityPresence, bool) {
 		return ecs.Entity{}, PresenceNone, false
 	}
 	return b.netIDIdx.Lookup(netID)
+}
+
+// handoffAlreadyAccepted reports whether this cell has already accepted a
+// Handoff for netID at an epoch at least as new as the candidate. Uses the
+// same RFC 1982 serial comparison as upsertBorderReplica so an epoch wrap
+// does not permanently wedge the entity.
+func (b *Stage) handoffAlreadyAccepted(netID, epoch uint32) bool {
+	if b.handoffAccepted == nil {
+		return false
+	}
+	stored, ok := b.handoffAccepted[netID]
+	if !ok {
+		return false
+	}
+	return !serialUint32After(epoch, stored)
+}
+
+// markHandoffAccepted records that this cell has accepted a Handoff for
+// netID at epoch. Only advances the stored value.
+func (b *Stage) markHandoffAccepted(netID, epoch uint32) {
+	if b.handoffAccepted == nil {
+		b.handoffAccepted = make(map[uint32]uint32)
+	}
+	if stored, ok := b.handoffAccepted[netID]; ok && !serialUint32After(epoch, stored) {
+		return
+	}
+	b.handoffAccepted[netID] = epoch
+}
+
+// forgetHandoffAccepted drops the acceptance mark for netID. Called ONLY from
+// DemoteLiveToReplica: authority has left this cell, so a future handoff back
+// in (necessarily at a higher epoch, but the mark must not linger across an
+// epoch wrap either) has to be accepted afresh.
+//
+// Deliberately NOT called from RemoveReplicaByNetID — drainPendingPromotes
+// invokes that immediately before SpawnLiveFromTransfer and would erase the
+// mark the promote it is executing depends on.
+func (b *Stage) forgetHandoffAccepted(netID uint32) {
+	if b.handoffAccepted == nil {
+		return
+	}
+	delete(b.handoffAccepted, netID)
 }
 
 // RegisterLiveNetID adds (netID, handle) to the stage's local NetID index
@@ -1074,6 +1129,10 @@ func (b *Stage) DemoteLiveToReplica(netID uint32, newSourceCellID string) error 
 	// Register so subsequent border frames update this entity in place
 	// instead of creating a second ECS replica.
 	b.replicaNetIDs[netID] = ent
+
+	// Authority has left this cell: clear the handoff-acceptance mark so a
+	// later handoff back into this cell is accepted rather than deduped away.
+	b.forgetHandoffAccepted(netID)
 
 	b.eng.Log.Log(CatMeshTransfer,
 		"[%s] demoted live→replica: netID=%d newSource=%s",

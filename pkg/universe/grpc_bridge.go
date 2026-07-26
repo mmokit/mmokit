@@ -254,13 +254,25 @@ func (b *grpcBridge) SendAction(targetCellID MeshCellID, action *CrossCellAction
 // SendHandoff sends a hard-cut authority-transfer payload. See Bridge
 // interface for the false-return semantics — a false return must NOT
 // demote the source entity. The cross-host path reports local routing,
-// encoding, and stream-enqueue failures; destination acceptance still needs
-// the handoff-accepted protocol tracked separately by the engine roadmap.
+// encoding, and stream-enqueue failures. A true return means only that the
+// send was enqueued; destination acceptance arrives separately as
+// MsgHandoffAccepted and is what actually arms the source's demote.
 func (b *grpcBridge) SendHandoff(destCellID MeshCellID, payload *HandoffPayload) bool {
 	return b.dispatchOrLocalBool(destCellID, true,
 		func() bool { return b.local.SendHandoff(destCellID, payload) },
 		func() CellMessage {
 			return CellMessage{Type: MsgHandoff, FromCellID: b.cell.MeshID, Handoff: payload}
+		})
+}
+
+// SendHandoffAccepted returns the destination's acceptance to the source
+// cell. Reliable so a cross-host stream failure is reported to the caller,
+// which then skips the promote and lets the source retry the Handoff.
+func (b *grpcBridge) SendHandoffAccepted(destCellID MeshCellID, ack *HandoffAckPayload) bool {
+	return b.dispatchOrLocalBool(destCellID, true,
+		func() bool { return b.local.SendHandoffAccepted(destCellID, ack) },
+		func() CellMessage {
+			return CellMessage{Type: MsgHandoffAccepted, FromCellID: b.cell.MeshID, HandoffAck: ack}
 		})
 }
 

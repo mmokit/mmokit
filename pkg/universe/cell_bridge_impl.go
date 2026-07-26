@@ -366,6 +366,39 @@ func (b *cellBridge) SendHandoff(destCellID MeshCellID, payload *HandoffPayload)
 	return true
 }
 
+// SendHandoffAccepted returns the destination's acceptance to the source
+// cell's inbox.
+//
+// Deliberately NON-blocking, unlike SendHandoff above. This runs on the
+// destination cell's loop (from Cell.processMessage during PreTick) and
+// targets the source cell's inbox; a blocking send there would deadlock two
+// cells that are handing entities to each other with saturated inboxes. A
+// false return is safe in both directions: the destination skips the promote
+// and the source re-sends the identical Handoff after
+// HandoffAcceptRetryTicks.
+func (b *cellBridge) SendHandoffAccepted(destCellID MeshCellID, ack *HandoffAckPayload) bool {
+	b.coord.mu.RLock()
+	dest, ok := b.coord.Cells[destCellID]
+	b.coord.mu.RUnlock()
+	if !ok || dest == nil {
+		b.cell.Log.Log(CatMeshTransfer, "[%s] handoff-ack dest gone: netID=%d -> %s (source cell deleted)",
+			b.cell.MeshID, ack.NetID, destCellID)
+		return false
+	}
+	select {
+	case dest.Inbox <- CellMessage{
+		Type:       MsgHandoffAccepted,
+		FromCellID: b.cell.MeshID,
+		HandoffAck: ack,
+	}:
+		return true
+	default:
+		b.cell.Log.Log(CatMeshTransfer, "[%s] handoff-ack inbox full: netID=%d -> %s (source will retry the handoff)",
+			b.cell.MeshID, ack.NetID, destCellID)
+		return false
+	}
+}
+
 func (b *cellBridge) SendForwardInput(destCellID MeshCellID, payload *ForwardInputPayload) bool {
 	b.coord.mu.RLock()
 	dest, ok := b.coord.Cells[destCellID]

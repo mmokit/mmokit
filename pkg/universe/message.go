@@ -16,6 +16,7 @@ const (
 	MsgSessionTransfer    MsgType = 12  // entity-less session transfer during split
 	MsgBorderFrame        MsgType = 100 // delta frame from one cell to a neighbor
 	MsgHandoff            MsgType = 101 // single-message hard-cut handoff (Phase G)
+	MsgHandoffAccepted    MsgType = 102 // destination -> source acceptance of MsgHandoff
 	MsgForwardInput       MsgType = 103 // safety path during single-tick routing overlap
 	MsgPlayerDisconnected MsgType = 107 // cross-process player disconnect notification
 )
@@ -85,6 +86,23 @@ type HandoffPayload struct {
 	ConnID       uint32 // 0 for non-player
 }
 
+// HandoffAckPayload is the destination's acceptance of a HandoffPayload.
+// It is what makes the source's demote safe: the source arms the demote
+// only after this arrives, so a lost Handoff can never produce an entity
+// with zero authoritative holders.
+//
+// Idempotent by construction. The destination re-sends the identical ack
+// for every duplicate Handoff it receives (its (NetID, Epoch) dedup makes
+// the promote itself happen once), and the source ignores any ack that
+// does not match its in-flight (netID, epoch, commitTick, destCellID)
+// tuple — so a late ack for a superseded attempt is a no-op rather than
+// an incorrect demote.
+type HandoffAckPayload struct {
+	NetID      uint32
+	Epoch      uint32
+	CommitTick uint64
+}
+
 // ForwardInputPayload carries an input frame that arrived at the old
 // owner during the single-tick routing overlap window after authority
 // flipped. The old owner forwards the frame to the new owner rather
@@ -119,6 +137,7 @@ type CellMessage struct {
 	Sessions     []SessionTransfer    // entity-less session transfers during split
 	BorderFrame  []byte               // encoded replication.Frame bytes for MsgBorderFrame
 	Handoff      *HandoffPayload      // for MsgHandoff
+	HandoffAck   *HandoffAckPayload   // for MsgHandoffAccepted
 	ForwardInput *ForwardInputPayload // for MsgForwardInput
 	Disconnect   *DisconnectPayload   // for MsgPlayerDisconnected
 }

@@ -86,6 +86,27 @@ func encodeCellMessage(msg CellMessage, destCellID MeshCellID) (*meshpb.MeshFram
 			},
 		}
 
+	case MsgHandoffAccepted:
+		if msg.HandoffAck == nil {
+			return nil, fmt.Errorf("encodeCellMessage: MsgHandoffAccepted payload is nil")
+		}
+		// Deliberately tunnelled through the existing CrossCellAction
+		// variant under the engine-reserved ActionHandoffAccepted opcode
+		// rather than given its own MeshFrame oneof field. See
+		// handoff_ack.go for why: the repo's never-reserve proto convention
+		// makes any meshpb edit a lockstep cluster redeploy. Do not
+		// "fix" this into a new proto message.
+		a := msg.HandoffAck
+		frame.Msg = &meshpb.MeshFrame_CrossAction{
+			CrossAction: &meshpb.CrossCellAction{
+				FromCellId:   string(msg.FromCellID),
+				ActionType:   uint32(ActionHandoffAccepted),
+				TargetNetId:  a.NetID,
+				SourceCellId: string(msg.FromCellID),
+				Payload:      encodeHandoffAck(a),
+			},
+		}
+
 	case MsgForwardInput:
 		if msg.ForwardInput == nil {
 			return nil, fmt.Errorf("encodeCellMessage: MsgForwardInput payload is nil")
@@ -249,6 +270,21 @@ func decodeMeshFrame(frame *meshpb.MeshFrame) (CellMessage, error) {
 			return CellMessage{}, fmt.Errorf("decodeMeshFrame: CrossAction payload is nil")
 		}
 		ca := p.CrossAction
+		// ActionHandoffAccepted is a wire carrier, not a real cross-cell
+		// action: intercept it here so it becomes a typed MsgHandoffAccepted
+		// and never reaches Stage.HandleEngineAction. See handoff_ack.go.
+		if ca.ActionType == uint32(ActionHandoffAccepted) {
+			ack, ok := decodeHandoffAck(ca.TargetNetId, ca.Payload)
+			if !ok {
+				return CellMessage{}, fmt.Errorf(
+					"decodeMeshFrame: malformed HandoffAccepted payload (%d bytes)", len(ca.Payload))
+			}
+			return CellMessage{
+				Type:       MsgHandoffAccepted,
+				FromCellID: MeshCellID(ca.FromCellId),
+				HandoffAck: ack,
+			}, nil
+		}
 		return CellMessage{
 			Type:       MsgCrossCellAction,
 			FromCellID: MeshCellID(ca.FromCellId),

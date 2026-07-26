@@ -275,3 +275,69 @@ func TestTwoHostAlwaysProxySelfRoute(t *testing.T) {
 		t.Errorf("TransferBlob = %q, want %q", msg.Handoff.TransferBlob, "always-proxy self-route")
 	}
 }
+
+// TestTwoHostHandoffAcceptedRoundTrip is the end-to-end proof that the CE-004
+// acceptance survives the real encode/route/decode path. The destination cell
+// answers a cross-host MsgHandoff with a MsgHandoffAccepted that travels back
+// through the CrossCellAction carrier, and the source cell decodes it as a
+// typed acceptance rather than a cross-cell action.
+func TestTwoHostHandoffAcceptedRoundTrip(t *testing.T) {
+	fx := newDistributedFixture(t, FixtureConfig{
+		CellsX:  2,
+		CellsY:  2,
+		HostIDs: []string{"host-a", "host-b"},
+	})
+
+	srcID := CellID{X: 0, Y: 0}.MeshID()
+	dstID := CellID{X: 1, Y: 0}.MeshID()
+	srcHost := fx.CellOwner(string(srcID))
+	dstHost := fx.CellOwner(string(dstID))
+	if srcHost == dstHost {
+		t.Fatalf("expected src and dst on different hosts; both on %q", srcHost)
+	}
+	src := fx.CellOn(srcHost, string(srcID))
+	dst := fx.CellOn(dstHost, string(dstID))
+	if src == nil || dst == nil {
+		t.Fatalf("cells not found: src=%v dst=%v", src, dst)
+	}
+
+	var (
+		mu      sync.Mutex
+		gotAck  *HandoffAckPayload
+		ackChan = make(chan struct{})
+	)
+	src.onMessage = func(msg CellMessage) {
+		if msg.Type != MsgHandoffAccepted {
+			return
+		}
+		mu.Lock()
+		defer mu.Unlock()
+		if gotAck != nil {
+			return
+		}
+		if msg.Action != nil {
+			t.Error("acceptance surfaced a CrossCellAction; the carrier must be intercepted")
+		}
+		clone := *msg.HandoffAck
+		gotAck = &clone
+		close(ackChan)
+	}
+
+	payload := &HandoffPayload{NetID: 4242, Epoch: 9, CommitTick: 1000}
+	if !src.Bridge.SendHandoff(dstID, payload) {
+		t.Fatal("SendHandoff returned false")
+	}
+
+	select {
+	case <-ackChan:
+	case <-time.After(3 * time.Second):
+		t.Fatal("timeout waiting for MsgHandoffAccepted on the source cell")
+	}
+
+	mu.Lock()
+	ack := *gotAck
+	mu.Unlock()
+	if ack.NetID != 4242 || ack.Epoch != 9 || ack.CommitTick != 1000 {
+		t.Fatalf("ack = %+v, want {4242 9 1000}", ack)
+	}
+}

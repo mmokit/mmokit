@@ -33,6 +33,13 @@ type Bridge interface {
 	// demote the source on a false return; the next BoundarySystem tick
 	// will re-detect the crossing and retry.
 	SendHandoff(destCellID MeshCellID, payload *HandoffPayload) bool
+	// SendHandoffAccepted returns the idempotent acceptance for a Handoff back
+	// to the source cell. Returns true only when the ack was accepted by the
+	// transport (in-process inbox or outbound stream). A false return MUST
+	// prevent the destination from queueing the promote — otherwise the
+	// destination becomes authoritative with no way for the source to learn
+	// it should demote, and the entity ends up Live on two cells forever.
+	SendHandoffAccepted(destCellID MeshCellID, ack *HandoffAckPayload) bool
 	// SendForwardInput forwards a player input frame to the new owner cell and
 	// reports whether the destination path accepted it. A false result must be
 	// retried; draining a source queue is not itself delivery.
@@ -42,13 +49,16 @@ type Bridge interface {
 // NoopBridge is a no-op implementation for single-cell mode.
 type NoopBridge struct{}
 
-func (NoopBridge) PreTick()                                               {}
-func (NoopBridge) PostSystems()                                           {}
-func (NoopBridge) CellOwner(CellID) string                                { return "" }
-func (NoopBridge) CellOwnerAtPos(float32, float32) string                 { return "" }
-func (NoopBridge) OnPlayerTransfer(uint32, MeshCellID)                    {}
-func (NoopBridge) RequestRespawn(uint32, string)                          {}
-func (NoopBridge) SendAction(MeshCellID, *CrossCellAction)                {}
-func (NoopBridge) SendBorderFrame(MeshCellID, MeshCellID, []byte)         {}
-func (NoopBridge) SendHandoff(MeshCellID, *HandoffPayload) bool           { return true }
+func (NoopBridge) PreTick()                                       {}
+func (NoopBridge) PostSystems()                                   {}
+func (NoopBridge) CellOwner(CellID) string                        { return "" }
+func (NoopBridge) CellOwnerAtPos(float32, float32) string         { return "" }
+func (NoopBridge) OnPlayerTransfer(uint32, MeshCellID)            {}
+func (NoopBridge) RequestRespawn(uint32, string)                  {}
+func (NoopBridge) SendAction(MeshCellID, *CrossCellAction)        {}
+func (NoopBridge) SendBorderFrame(MeshCellID, MeshCellID, []byte) {}
+func (NoopBridge) SendHandoff(MeshCellID, *HandoffPayload) bool   { return true }
+func (NoopBridge) SendHandoffAccepted(MeshCellID, *HandoffAckPayload) bool {
+	return true
+}
 func (NoopBridge) SendForwardInput(MeshCellID, *ForwardInputPayload) bool { return true }

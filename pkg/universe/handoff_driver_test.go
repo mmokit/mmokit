@@ -102,6 +102,17 @@ type handoffRecordingBridge struct {
 	// failsForDest, if non-empty, causes SendHandoff to return false
 	// when destCellID matches.
 	failsForDest MeshCellID
+
+	// driver + autoAccept simulate a destination cell that accepts a Handoff
+	// the instant it is sent. Set by newAutoAcceptHandoffDriver. Without an
+	// acceptance the source never arms a demote, which is the whole point of
+	// the acceptance protocol — but most source-side tests predate it and
+	// only care about post-acceptance behaviour.
+	driver     *HandoffDriver
+	autoAccept bool
+
+	// acks records every SendHandoffAccepted issued through this bridge.
+	acks []*HandoffAckPayload
 }
 
 func (r *handoffRecordingBridge) SendHandoff(destCellID MeshCellID, p *HandoffPayload) bool {
@@ -109,8 +120,29 @@ func (r *handoffRecordingBridge) SendHandoff(destCellID MeshCellID, p *HandoffPa
 		return false
 	}
 	r.handoffs = append(r.handoffs, p)
+	if r.autoAccept && r.driver != nil {
+		r.driver.OnHandoffAccepted(p.NetID, p.Epoch, p.CommitTick, destCellID)
+	}
 	return true
 }
+
+func (r *handoffRecordingBridge) SendHandoffAccepted(_ MeshCellID, ack *HandoffAckPayload) bool {
+	clone := *ack
+	r.acks = append(r.acks, &clone)
+	return true
+}
+
+// newAutoAcceptHandoffDriver builds a HandoffDriver whose recording bridge
+// acknowledges every handoff synchronously, standing in for a destination
+// cell that accepts on the spot. Use NewHandoffDriver directly when the test
+// is about the unaccepted window.
+func newAutoAcceptHandoffDriver(base *Stage, rec *handoffRecordingBridge) *HandoffDriver {
+	hd := NewHandoffDriver(base, rec)
+	rec.driver = hd
+	rec.autoAccept = true
+	return hd
+}
+
 func (r *handoffRecordingBridge) OnPlayerTransfer(connID uint32, destCellID MeshCellID) {
 	r.playerTransfers++
 }
@@ -162,7 +194,7 @@ func TestHandoffDriver_HardCut_QueuesDemoteForCommitTick(t *testing.T) {
 	world := base.ECSWorld()
 
 	rec := &handoffRecordingBridge{}
-	hd := NewHandoffDriver(base, rec)
+	hd := newAutoAcceptHandoffDriver(base, rec)
 
 	ent := base.Spawn(
 		component.Position{X: 100, Y: 100},
@@ -223,7 +255,7 @@ func TestHandoffDriver_HardCut_QueuesDemoteForCommitTick(t *testing.T) {
 func TestHandoffDriver_HardCut_SlippedCommitTickStillCommits(t *testing.T) {
 	base := newTestWorldBase(t, CellID{X: 0, Y: 0})
 	rec := &handoffRecordingBridge{}
-	hd := NewHandoffDriver(base, rec)
+	hd := newAutoAcceptHandoffDriver(base, rec)
 
 	ent := base.Spawn(
 		component.Position{X: 100, Y: 100},
@@ -250,7 +282,7 @@ func TestHandoffDriver_HardCut_SlippedCommitTickStillCommits(t *testing.T) {
 func TestHandoffDriver_HardCut_AntiThrashCooldown(t *testing.T) {
 	base := newTestWorldBase(t, CellID{X: 0, Y: 0})
 	rec := &handoffRecordingBridge{}
-	hd := NewHandoffDriver(base, rec)
+	hd := newAutoAcceptHandoffDriver(base, rec)
 
 	ent := base.Spawn(
 		component.Position{X: 100, Y: 100},
@@ -300,7 +332,7 @@ func TestHandoffDriver_SendFailsWhenDestGone(t *testing.T) {
 	world := base.ECSWorld()
 
 	rec := &handoffRecordingBridge{failsForDest: "cell_1_0"}
-	hd := NewHandoffDriver(base, rec)
+	hd := newAutoAcceptHandoffDriver(base, rec)
 
 	ent := base.Spawn(
 		component.Position{X: 100, Y: 100},
@@ -347,7 +379,7 @@ func TestHandoffDriver_DrainingForMerge_SkipsCrossings(t *testing.T) {
 	base := newTestWorldBase(t, CellID{X: 0, Y: 0})
 
 	rec := &handoffRecordingBridge{}
-	hd := NewHandoffDriver(base, rec)
+	hd := newAutoAcceptHandoffDriver(base, rec)
 
 	ent := base.Spawn(
 		component.Position{X: 100, Y: 100},
@@ -377,7 +409,7 @@ func TestHandoffDriver_PlayerSessionTransfersAtCommitTick(t *testing.T) {
 	base := newTestWorldBase(t, CellID{X: 0, Y: 0})
 
 	rec := &handoffRecordingBridge{}
-	hd := NewHandoffDriver(base, rec)
+	hd := newAutoAcceptHandoffDriver(base, rec)
 
 	ent := base.Spawn(
 		component.Position{X: 100, Y: 100},
@@ -471,7 +503,7 @@ func TestHandoffDriver_PlayerSessionTransfersAtCommitTick(t *testing.T) {
 func TestHandoffDriver_ForwardsCommitWindowInputAcrossRemoteHost(t *testing.T) {
 	base := newTestWorldBase(t, CellID{X: 0, Y: 0})
 	rec := &handoffRecordingBridge{forwardingRequired: true}
-	hd := NewHandoffDriver(base, rec)
+	hd := newAutoAcceptHandoffDriver(base, rec)
 
 	entity := base.Spawn(
 		component.Position{X: 100, Y: 100},
@@ -554,7 +586,7 @@ func TestHandoffDriver_LeavesSourceEntityPositionUnchanged(t *testing.T) {
 	base := newTestWorldBase(t, CellID{X: 0, Y: 0})
 
 	rec := &handoffRecordingBridge{failsForDest: "cell_1_0"}
-	hd := NewHandoffDriver(base, rec)
+	hd := newAutoAcceptHandoffDriver(base, rec)
 
 	// Entity just past the east boundary of cell (0,0), world-space
 	// equivalent to ~1030.
@@ -609,7 +641,7 @@ func TestHandoffDriver_PositionReplicatorInRegistry_DoesNotCorruptDestSpawn(t *t
 	RegisterComponent(src.ReplicationRegistry(), srcPosMap)
 
 	rec := &handoffRecordingBridge{}
-	hd := NewHandoffDriver(src, rec)
+	hd := newAutoAcceptHandoffDriver(src, rec)
 
 	// Spawn entity just past the east boundary of cell(0,0).
 	// Raw X=1030, normalized X=1030-1024=6.
@@ -673,7 +705,7 @@ func TestHandoffDriver_PositionReplicatorInRegistry_DoesNotCorruptDestSpawn(t *t
 func TestHandoffDriver_DropsRedundantCrossingWhilePending(t *testing.T) {
 	base := newTestWorldBase(t, CellID{X: 0, Y: 0})
 	rec := &handoffRecordingBridge{}
-	hd := NewHandoffDriver(base, rec)
+	hd := newAutoAcceptHandoffDriver(base, rec)
 
 	ent := base.Spawn(
 		component.Position{X: 100, Y: 100},
@@ -720,7 +752,7 @@ func TestHandoffDriver_DropsRedundantCrossingWhilePending(t *testing.T) {
 func TestHandoffDriver_AcceptsNonNeighborDestination(t *testing.T) {
 	base := newTestWorldBase(t, CellID{X: 0, Y: 0})
 	rec := &handoffRecordingBridge{}
-	hd := NewHandoffDriver(base, rec)
+	hd := newAutoAcceptHandoffDriver(base, rec)
 
 	ent := base.Spawn(
 		component.Position{X: 100, Y: 100},
@@ -752,7 +784,7 @@ func TestHandoffDriver_AcceptsNonNeighborDestination(t *testing.T) {
 func TestHandoffDriver_BypassCooldown(t *testing.T) {
 	base := newTestWorldBase(t, CellID{X: 0, Y: 0})
 	rec := &handoffRecordingBridge{}
-	hd := NewHandoffDriver(base, rec)
+	hd := newAutoAcceptHandoffDriver(base, rec)
 
 	ent := base.Spawn(
 		component.Position{X: 100, Y: 100},
@@ -824,7 +856,7 @@ func TestHandoffDriver_BypassCooldown(t *testing.T) {
 func TestHandoffDriver_DropsCrossingForReplicaInSameTickAsCommit(t *testing.T) {
 	base := newTestWorldBase(t, CellID{X: 0, Y: 0})
 	rec := &handoffRecordingBridge{}
-	hd := NewHandoffDriver(base, rec)
+	hd := newAutoAcceptHandoffDriver(base, rec)
 
 	ent := base.Spawn(
 		component.Position{X: 100, Y: 100},

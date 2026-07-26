@@ -303,13 +303,7 @@ func stepMergeDrainDonorResiduals(c *Process, ctx *CommitContext) error {
 // configured bridge does). Used by the merge executor's Receive path to
 // cancel stale pending demotes on the survivor before populate runs.
 func survivorHandoffDriver(survivor *Cell) *HandoffDriver {
-	if survivor == nil || survivor.Bridge == nil {
-		return nil
-	}
-	if h, ok := survivor.Bridge.(handoffDriverHost); ok {
-		return h.HandoffDriver()
-	}
-	return nil
+	return survivor.handoffDriver()
 }
 
 // cancelStaleDemotesOnSurvivor drops every pending demote on the survivor

@@ -382,3 +382,110 @@ func TestEncodeSessionTransferMultipleRejected(t *testing.T) {
 		t.Fatal("expected error for multi-entry Sessions, got nil")
 	}
 }
+
+// TestHandoffAcceptedCarrierRoundTrip pins the deliberate wire choice: a
+// MsgHandoffAccepted travels inside the existing CrossCellAction oneof under
+// ActionHandoffAccepted rather than a new meshpb message, and must decode back
+// into a typed CellMessage — never into a CrossCellAction that would reach
+// Stage.HandleEngineAction. See handoff_ack.go for why.
+func TestHandoffAcceptedCarrierRoundTrip(t *testing.T) {
+	msg := CellMessage{
+		Type:       MsgHandoffAccepted,
+		FromCellID: "cell_1_0",
+		HandoffAck: &HandoffAckPayload{NetID: 4242, Epoch: 9, CommitTick: 123456789},
+	}
+
+	frame, err := encodeCellMessage(msg, "cell_0_0")
+	if err != nil {
+		t.Fatalf("encodeCellMessage: %v", err)
+	}
+	ca, ok := frame.Msg.(*meshpb.MeshFrame_CrossAction)
+	if !ok {
+		t.Fatalf("encoded oneof = %T, want *meshpb.MeshFrame_CrossAction", frame.Msg)
+	}
+	if got := ca.CrossAction.ActionType; got != uint32(ActionHandoffAccepted) {
+		t.Fatalf("ActionType = %d, want %d", got, ActionHandoffAccepted)
+	}
+	if got := ca.CrossAction.TargetNetId; got != 4242 {
+		t.Fatalf("TargetNetId = %d, want 4242", got)
+	}
+
+	got, err := decodeMeshFrame(frame)
+	if err != nil {
+		t.Fatalf("decodeMeshFrame: %v", err)
+	}
+	if got.Type != MsgHandoffAccepted {
+		t.Fatalf("decoded Type = %v, want MsgHandoffAccepted", got.Type)
+	}
+	if got.Action != nil {
+		t.Fatal("decoded a CrossCellAction; the carrier must be intercepted, not surfaced")
+	}
+	if got.FromCellID != "cell_1_0" {
+		t.Fatalf("FromCellID = %q, want cell_1_0", got.FromCellID)
+	}
+	if got.HandoffAck == nil {
+		t.Fatal("HandoffAck is nil")
+	}
+	if *got.HandoffAck != *msg.HandoffAck {
+		t.Fatalf("HandoffAck = %+v, want %+v", *got.HandoffAck, *msg.HandoffAck)
+	}
+}
+
+// TestHandoffAcceptedMalformedPayloadRejected asserts a truncated carrier
+// payload fails at the codec boundary rather than arming a demote against a
+// garbage commit tick.
+func TestHandoffAcceptedMalformedPayloadRejected(t *testing.T) {
+	frame := &meshpb.MeshFrame{
+		DestCellId: "cell_0_0",
+		Msg: &meshpb.MeshFrame_CrossAction{
+			CrossAction: &meshpb.CrossCellAction{
+				FromCellId:  "cell_1_0",
+				ActionType:  uint32(ActionHandoffAccepted),
+				TargetNetId: 42,
+				Payload:     []byte{1, 2, 3},
+			},
+		},
+	}
+	if _, err := decodeMeshFrame(frame); err == nil {
+		t.Fatal("decodeMeshFrame accepted a malformed HandoffAccepted payload")
+	}
+}
+
+// TestOrdinaryCrossCellActionStillDecodes is the regression guard for the
+// carrier interception: ActionTypedMessage (100) and game action types must
+// still decode as MsgCrossCellAction.
+func TestOrdinaryCrossCellActionStillDecodes(t *testing.T) {
+	frame := &meshpb.MeshFrame{
+		DestCellId: "cell_0_0",
+		Msg: &meshpb.MeshFrame_CrossAction{
+			CrossAction: &meshpb.CrossCellAction{
+				FromCellId:  "cell_1_0",
+				ActionType:  uint32(ActionTypedMessage),
+				TargetNetId: 42,
+				Payload:     []byte{1, 2, 3},
+			},
+		},
+	}
+	got, err := decodeMeshFrame(frame)
+	if err != nil {
+		t.Fatalf("decodeMeshFrame: %v", err)
+	}
+	if got.Type != MsgCrossCellAction {
+		t.Fatalf("Type = %v, want MsgCrossCellAction", got.Type)
+	}
+	if got.Action == nil || got.Action.Type != ActionTypedMessage {
+		t.Fatalf("Action = %+v, want ActionTypedMessage", got.Action)
+	}
+	if !bytes.Equal(got.Action.Payload, []byte{1, 2, 3}) {
+		t.Fatalf("Payload = %v, want [1 2 3]", got.Action.Payload)
+	}
+}
+
+// TestEncodeNilHandoffAckPayload asserts the encoder rejects a
+// MsgHandoffAccepted with no payload rather than emitting a zero-value ack
+// that would fail the source's fence in a confusing way.
+func TestEncodeNilHandoffAckPayload(t *testing.T) {
+	if _, err := encodeCellMessage(CellMessage{Type: MsgHandoffAccepted, FromCellID: "cell_1_0"}, "cell_0_0"); err == nil {
+		t.Fatal("encodeCellMessage accepted a nil HandoffAck payload")
+	}
+}

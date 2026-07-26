@@ -90,6 +90,9 @@ func (b *loopbackBridge) SendBorderFrame(pkguniverse.MeshCellID, pkguniverse.Mes
 func (b *loopbackBridge) SendHandoff(pkguniverse.MeshCellID, *pkguniverse.HandoffPayload) bool {
 	return true
 }
+func (b *loopbackBridge) SendHandoffAccepted(pkguniverse.MeshCellID, *pkguniverse.HandoffAckPayload) bool {
+	return true
+}
 func (b *loopbackBridge) SendForwardInput(pkguniverse.MeshCellID, *pkguniverse.ForwardInputPayload) bool {
 	return true
 }
