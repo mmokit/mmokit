@@ -981,6 +981,32 @@ func (s *ReplicationSystem) drainFrameReceipts(connID uint32, conn *connState) {
 			}
 			continue
 		}
+		if receipt.Result.Queued() && receipt.Result.Delivery < net.DeliveryReliableOrdered &&
+			conn.mode == replication.AckReliable {
+			// Distributed mode: this cell's ConnMgr is a VirtualConnManager,
+			// so AckModeFor could not see the client's transport and started
+			// the connection reliable. The gateway's receipt reports the class
+			// actually achieved, and it is weaker than reliable-ordered — the
+			// client is on a datagram transport and owes us explicit ACKs.
+			//
+			// The BaselineStore is constructed from the mode, so replace the
+			// whole connection state rather than mutating conn.mode in place;
+			// letting the two diverge would silently mis-manage the sent ring.
+			// Cost is exactly one wasted frame per connection, self-healing.
+			fresh := newConnState(replication.AckExplicit)
+			fresh.streamEpoch = conn.streamEpoch
+			fresh.hasStreamEpoch = conn.hasStreamEpoch
+			fresh.hasExplicitGeneration = conn.hasExplicitGeneration
+			fresh.nextSeq = conn.nextSeq
+			fresh.selfNetID = conn.selfNetID
+			fresh.forceFresh = true
+			s.connections[connID] = fresh
+			delete(s.lastVisible, connID)
+			// Update ranges s.connections; replacing the value for a key it
+			// has already visited is safe, but the caller's local conn is now
+			// stale, so return rather than continue.
+			return
+		}
 		if receipt.Result.Supports(net.DeliveryReliableOrdered) {
 			s.commitPendingAttempt(connID, conn, false)
 		} else {

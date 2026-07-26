@@ -812,7 +812,21 @@ func (n *HostNetwork) routeInboundFrame(frame *meshpb.MeshFrame) error {
 					n.gw.connMgr.Remove(cf.ConnId)
 				}
 			}
-			if tracked && result.Supports(pkgnet.DeliveryReliableOrdered) {
+			if tracked && result.Queued() {
+				// Emit a receipt for every SUCCESSFUL enqueue, not only for
+				// reliable-ordered ones. The payload carries the class actually
+				// achieved (see encodeReplicationReceiptResult), so this is how
+				// a host behind a gateway learns its client is on a datagram
+				// transport — without any meshpb change. Restricting it to
+				// reliable-ordered meant a UDP client behind a separate gateway
+				// process got NO receipt at all, so the host's pending attempt
+				// timed out every PendingReceiptTimeoutTicks: a full snapshot
+				// every third tick with two dead ticks between.
+				//
+				// The non-queued branch above (which removes the connection on
+				// backpressure or close) still returns no receipt; the host's
+				// receipt timeout covers that.
+				//
 				// Re-read the route after final transport admission. A handoff may
 				// have switched authority while the frame was being enqueued; in
 				// that case the old epoch intentionally receives no acknowledgement.

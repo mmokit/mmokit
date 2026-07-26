@@ -345,37 +345,70 @@ func TestRouteInboundTrackedClientFrameDoesNotReceiptRejectedEnqueue(t *testing.
 	}
 }
 
-func TestRouteInboundTrackedClientFrameDoesNotReceiptWeakerDelivery(t *testing.T) {
-	cm := pkgnet.NewConnManager()
-	transport := &clientFrameTransport{result: pkgnet.SendResult{
-		Disposition: pkgnet.SendQueued,
-		Delivery:    pkgnet.DeliveryOrdered,
-	}}
-	connID := cm.AddTransport(transport)
+// TestRouteInboundTrackedClientFrameReceiptsWeakerDelivery pins the CE-003
+// distributed contract: a receipt is emitted for every SUCCESSFUL enqueue,
+// carrying the delivery class actually achieved — not only for
+// reliable-ordered ones.
+//
+// This deliberately inverts the previous assertion. Withholding the receipt
+// meant a UDP client behind a separate gateway process got none at all, so the
+// host's pending attempt timed out every PendingReceiptTimeoutTicks: a full
+// snapshot every third tick with two dead ticks between. Reporting the real
+// class is how the host learns to latch that connection to explicit client
+// ACKs, and it needs no meshpb change because the payload already carries it.
+func TestRouteInboundTrackedClientFrameReceiptsWeakerDelivery(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		delivery pkgnet.DeliveryClass
+	}{
+		{"ordered", pkgnet.DeliveryOrdered},
+		{"best-effort", pkgnet.DeliveryBestEffort},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			cm := pkgnet.NewConnManager()
+			transport := &clientFrameTransport{result: pkgnet.SendResult{
+				Disposition: pkgnet.SendQueued,
+				Delivery:    tc.delivery,
+			}}
+			connID := cm.AddTransport(transport)
 
-	n := newManualHostNetwork(t)
-	peer := newIdlePeer(t, "host-1")
-	peer.kind = peerKindNode
-	n.peers["host-1"] = peer
-	n.gw = &Gateway{
-		id:      "gw-1",
-		connMgr: cm,
-		sessions: map[uint32]*localSession{
-			connID: {connID: connID, hostID: "host-1", epoch: 3},
-		},
-	}
+			n := newManualHostNetwork(t)
+			peer := newIdlePeer(t, "host-1")
+			peer.kind = peerKindNode
+			n.peers["host-1"] = peer
+			n.gw = &Gateway{
+				id:      "gw-1",
+				connMgr: cm,
+				sessions: map[uint32]*localSession{
+					connID: {connID: connID, hostID: "host-1", epoch: 3},
+				},
+			}
 
-	frame := &meshpb.MeshFrame{
-		DestCellId: replicationReceiptMarker("host-1", 12),
-		Msg: &meshpb.MeshFrame_ClientFrame{ClientFrame: &meshpb.ClientFrame{
-			GatewayId: "gw-1", ConnId: connID, Epoch: 3,
-		}},
-	}
-	if err := n.routeInboundFrame(frame); err != nil {
-		t.Fatalf("routeInboundFrame: %v", err)
-	}
-	if got := len(peer.outQ); got != 0 {
-		t.Fatalf("receipt queue length = %d for weaker delivery, want 0", got)
+			frame := &meshpb.MeshFrame{
+				DestCellId: replicationReceiptMarker("host-1", 12),
+				Msg: &meshpb.MeshFrame_ClientFrame{ClientFrame: &meshpb.ClientFrame{
+					GatewayId: "gw-1", ConnId: connID, Epoch: 3,
+				}},
+			}
+			if err := n.routeInboundFrame(frame); err != nil {
+				t.Fatalf("routeInboundFrame: %v", err)
+			}
+			if got := len(peer.outQ); got != 1 {
+				t.Fatalf("receipt queue length = %d, want 1", got)
+			}
+			queued := <-peer.outQ
+			_, _, result, ok := decodeReplicationReceiptFrame(queued.frame)
+			if !ok {
+				t.Fatal("queued frame is not a decodable replication receipt")
+			}
+			if result.Delivery != tc.delivery {
+				t.Fatalf("receipt Delivery = %v, want %v — the host latches its ACK mode from this",
+					result.Delivery, tc.delivery)
+			}
+			if !result.Queued() {
+				t.Fatalf("receipt Disposition = %v, want a queued result", result.Disposition)
+			}
+		})
 	}
 }
 
