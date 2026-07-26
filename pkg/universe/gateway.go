@@ -721,6 +721,25 @@ func (g *Gateway) lookupSession(connID uint32) *localSession {
 	return &snapshot
 }
 
+// snapshotSessions returns a slice of copies of every live local session,
+// taken under g.mu with the same discipline as lookupSession: the map-owned
+// pointers are never exposed, because OnUpstreamSwitch mutates route fields
+// concurrently with the session pump. Used by the control client to replay
+// SessionAnnounce after a coordinator reconnect.
+func (g *Gateway) snapshotSessions() []*localSession {
+	g.mu.RLock()
+	defer g.mu.RUnlock()
+	out := make([]*localSession, 0, len(g.sessions))
+	for _, sess := range g.sessions {
+		if sess == nil {
+			continue
+		}
+		snapshot := *sess
+		out = append(out, &snapshot)
+	}
+	return out
+}
+
 // replicationReceiptHost snapshots the current upstream route for a tracked
 // replication frame. Receipt traffic is stricter than ordinary frame routing:
 // both the gateway identity and epoch must match exactly so an enqueue from a

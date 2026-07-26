@@ -199,8 +199,49 @@ func (c *meshGatewayClient) runConnection() error {
 	}
 	c.gw.log.Log(CatMeshCell, "gateway: registered as %q to coordinator %s (ws=%s grpc=%s)", c.gw.id, c.coordAddr, wsAddr, grpcAddr)
 
+	c.reannounceSessions()
+	c.reannounceServices()
+
 	go c.runHeartbeatLoop(streamCtx)
 	return c.runRecvLoop()
+}
+
+// reannounceServices replays service registrations and bus subscriptions for
+// a gateway,service process, mirroring meshControlClient.reannounceServices.
+func (c *meshGatewayClient) reannounceServices() {
+	if c.gw == nil || c.gw.process == nil {
+		return
+	}
+	proc := c.gw.process
+	if err := proc.announceServices(); err != nil {
+		c.gw.log.Log(CatServicesBus, "gateway: service re-announce failed: %v", err)
+	}
+	if proc.bus != nil {
+		proc.sendServiceEventSubscribe(proc.bus.SubscribedTypeNames())
+	}
+}
+
+// reannounceSessions replays a SessionAnnounce for every live local session
+// after (re)registering with the coordinator, mirroring what
+// meshControlClient.reannounceOwnedCells does for cells.
+//
+// Without it, a gateway<->coord blip leaves coord.sessionRoutes without
+// entries for sessions whose WebSocket connections are still very much alive
+// on this gateway, and client input routes nowhere after the next migrate.
+// Announcing is idempotent — sessionRoutes.Set overwrites by key — so the
+// first-connection replay of a still-empty session map is a no-op.
+func (c *meshGatewayClient) reannounceSessions() {
+	if c.gw == nil {
+		return
+	}
+	sessions := c.gw.snapshotSessions()
+	if len(sessions) == 0 {
+		return
+	}
+	for _, sess := range sessions {
+		c.gw.announceSession(sess)
+	}
+	c.gw.log.Log(CatMeshCell, "gateway: re-announced %d session(s) to coordinator %s", len(sessions), c.coordAddr)
 }
 
 // runHeartbeatLoop sends a Heartbeat every heartbeatInterval until ctx is cancelled.

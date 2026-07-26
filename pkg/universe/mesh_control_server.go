@@ -35,8 +35,7 @@ type recvResult struct {
 //   - RegisterHost  → handleHostControl (node path, unchanged from S4)
 //   - RegisterGateway → handleGatewayControl (new gateway path, T4+)
 //
-// Host streams are tracked in streams/streamMu/streamKill.
-// Gateway streams are tracked in gatewayStreams/gatewayMu/gatewayKill.
+// Host streams are tracked in streams, gateway streams in gatewayStreams.
 // One instance per coordinator process.
 type meshControlServer struct {
 	meshpb.UnimplementedMeshControlServer // forward-compat
@@ -46,19 +45,108 @@ type meshControlServer struct {
 	gatewayRegistry *GatewayRegistry
 	engine          *assignmentEngine
 
-	mu         sync.RWMutex
-	streams    map[string]meshpb.MeshControl_ControlServer // hostID -> stream
-	streamMu   map[string]*sync.Mutex                      // per-stream send mutex
-	streamKill map[string]chan struct{}                     // hostID -> kill signal from `host kill` cmd
+	mu             sync.RWMutex
+	streams        map[string]*controlStream // hostID -> stream record
+	gatewayStreams map[string]*controlStream // gatewayID -> stream record
 
-	gatewayMu      map[string]*sync.Mutex                      // per-gateway send mutex
-	gatewayStreams  map[string]meshpb.MeshControl_ControlServer // gatewayID -> stream
-	gatewayKill    map[string]chan struct{}                     // gatewayID -> kill signal
+	// streamSeq stamps each controlStream with a monotonic generation so
+	// reconnect races are legible in the log.
+	streamSeq atomic.Uint64
 
 	// clusterClockSeq is the monotonic counter for CoordTimeSync
 	// broadcasts. Bumped for both the initial-sync on RegisterHost and
 	// the periodic broadcast loop in Task C4.
 	clusterClockSeq atomic.Uint64
+}
+
+// controlStream bundles one bidi control stream with everything scoped to
+// that specific stream: its send mutex (grpc-go server streams are not safe
+// for concurrent Send), its kill channel, and a generation stamp.
+//
+// Bundling matters for correctness, not tidiness. Identity used to be a
+// payload-supplied hostID/gatewayID spread across three parallel maps, so a
+// stale handler's teardown deleted whatever was registered under that ID —
+// including a freshly reconnected stream's entry — and then ran MarkDead,
+// UnregisterByHost, RemoveProcess, reassignOrphanedCells, and
+// sessionRoutes.RemoveByGateway against a live registration. With one record
+// per handler invocation, teardown can be gated on pointer identity.
+type controlStream struct {
+	stream meshpb.MeshControl_ControlServer
+	sendMu sync.Mutex
+	kill   chan struct{}
+	gen    uint64
+}
+
+// closeKill closes cs.kill idempotently. Safe to call from any goroutine
+// holding s.mu.
+func (cs *controlStream) closeKill() {
+	select {
+	case <-cs.kill:
+		// already closed
+	default:
+		close(cs.kill)
+	}
+}
+
+// registerHostStream installs a fresh controlStream for hostID, evicting any
+// predecessor deterministically (closing its kill channel so the stale
+// handler actually returns instead of lingering) rather than only logging.
+func (s *meshControlServer) registerHostStream(hostID string, stream meshpb.MeshControl_ControlServer) *controlStream {
+	self := &controlStream{stream: stream, kill: make(chan struct{}), gen: s.streamSeq.Add(1)}
+	s.mu.Lock()
+	old := s.streams[hostID]
+	s.streams[hostID] = self
+	s.mu.Unlock()
+	if old != nil {
+		old.closeKill()
+		s.log.Log(CatMeshCell, "coordinator: host %s replacing stale control stream (gen %d -> %d)",
+			hostID, old.gen, self.gen)
+	}
+	return self
+}
+
+// registerGatewayStream is registerHostStream for the gateway side.
+func (s *meshControlServer) registerGatewayStream(gatewayID string, stream meshpb.MeshControl_ControlServer) *controlStream {
+	self := &controlStream{stream: stream, kill: make(chan struct{}), gen: s.streamSeq.Add(1)}
+	s.mu.Lock()
+	old := s.gatewayStreams[gatewayID]
+	s.gatewayStreams[gatewayID] = self
+	s.mu.Unlock()
+	if old != nil {
+		old.closeKill()
+		s.log.Log(CatMeshCell, "coordinator: gateway %s replacing stale control stream (gen %d -> %d)",
+			gatewayID, old.gen, self.gen)
+	}
+	return self
+}
+
+// releaseHostStream removes hostID's registration ONLY when it still points
+// at self, and reports whether it did. A false return means this handler was
+// already superseded by a reconnect: its caller must skip the whole teardown,
+// not just the map delete, because MarkDead / UnregisterByHost /
+// RemoveProcess / reassignOrphanedCells would otherwise run against the live
+// replacement.
+func (s *meshControlServer) releaseHostStream(hostID string, self *controlStream) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.streams[hostID] != self {
+		return false
+	}
+	delete(s.streams, hostID)
+	return true
+}
+
+// releaseGatewayStream is releaseHostStream for the gateway side. Gating
+// matters more here: the crash path runs sessionRoutes.RemoveByGateway, which
+// against a reconnected gateway wipes the routes of live sessions.
+func (s *meshControlServer) releaseGatewayStream(gatewayID string, self *controlStream) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.gatewayStreams[gatewayID] != self {
+		return false
+	}
+	delete(s.gatewayStreams, gatewayID)
+	return true
 }
 
 // Control is the bidi streaming RPC entry point. Dispatches on the first
@@ -85,15 +173,8 @@ func (s *meshControlServer) Control(stream meshpb.MeshControl_ControlServer) err
 func (s *meshControlServer) handleHostControl(stream meshpb.MeshControl_ControlServer, reg *meshpb.RegisterHost) error {
 	hostID := reg.HostId
 
-	kill := make(chan struct{})
-	s.mu.Lock()
-	if _, exists := s.streams[hostID]; exists {
-		s.log.Log(CatMeshCell, "coordinator: host %s replacing stale control stream", hostID)
-	}
-	s.streams[hostID] = stream
-	s.streamMu[hostID] = &sync.Mutex{}
-	s.streamKill[hostID] = kill
-	s.mu.Unlock()
+	self := s.registerHostStream(hostID, stream)
+	kill := self.kill
 
 	// Insert into HostRegistry and notify the assignment engine.
 	host := s.registry.Register(hostID, reg.GrpcAddr, reg.GetHasPlayerDb(), reg.GetServiceOnly())
@@ -152,11 +233,15 @@ func (s *meshControlServer) handleHostControl(stream meshpb.MeshControl_ControlS
 	s.log.Log(CatMeshCell, "coordinator: host %s registered from %s (epoch=%d)", hostID, reg.GrpcAddr, s.coord.coordEpoch)
 
 	defer func() {
-		s.mu.Lock()
-		delete(s.streams, hostID)
-		delete(s.streamMu, hostID)
-		delete(s.streamKill, hostID)
-		s.mu.Unlock()
+		// Pointer-identity gate. If this handler has already been superseded
+		// by a reconnect, the newer stream owns the registration and none of
+		// the teardown below may run against it.
+		if !s.releaseHostStream(hostID, self) {
+			s.log.Log(CatMeshCell,
+				"coordinator: host %s stale control stream (gen %d) closing — superseded, skipping teardown",
+				hostID, self.gen)
+			return
+		}
 
 		if s.registry == nil {
 			return
@@ -259,7 +344,31 @@ func (s *meshControlServer) handleHostControl(stream meshpb.MeshControl_ControlS
 			case *meshpb.HostMessage_CellReady:
 				ready := v.CellReady
 				if ready != nil {
+					// Ownership arbitration. AssignCell only ADDS to
+					// host.OwnedCells and HostForCell is a map-order linear
+					// scan, so a stale re-announce — reannounceOwnedCells
+					// replays every locally running cell after a stream blip,
+					// during which the coordinator may have reassigned them —
+					// yields a nondeterministic two-owner registry. Reject it
+					// and tell the announcer to release, using the CellRelease
+					// path that is already wired end to end.
+					//
+					// This cannot fire on a legitimate assignment: the
+					// coord-driven reassign path releases before it assigns,
+					// and the split/merge/migrate executor never emits
+					// CellReady.
 					if s.registry != nil {
+						if cur := s.registry.HostForCell(MeshCellID(ready.CellId)); cur != "" && cur != ready.HostId {
+							if h := s.registry.Get(cur); h != nil && h.State != RemoteHostDead {
+								if s.engine != nil {
+									s.engine.dispatchCellRelease(ready.HostId, ready.CellId)
+								}
+								s.log.Log(CatMeshCell,
+									"coordinator: rejecting stale CellReady %s from %s — owned by %s, sent CellRelease",
+									ready.CellId, ready.HostId, cur)
+								break
+							}
+						}
 						// Wire boundary: ready.CellId is proto string mesh form.
 						_ = s.registry.AssignCell(ready.HostId, MeshCellID(ready.CellId))
 					}
@@ -411,10 +520,14 @@ func (s *meshControlServer) handleHostControl(stream meshpb.MeshControl_ControlS
 			go recvOne() // queue the next Recv
 
 		case <-kill:
-			s.log.Log(CatMeshCell, "coordinator: host %s stream killed by admin", hostID)
+			// Two producers close this channel: the `host kill` console
+			// command, and registerHostStream evicting this stream when the
+			// same host reconnects. Word it neutrally so a reconnect is not
+			// read as an operator action.
+			s.log.Log(CatMeshCell, "coordinator: host %s control stream (gen %d) cancelled", hostID, self.gen)
 			// The leaked recvOne goroutine will unblock with an error once
 			// gRPC tears down the stream; its buffered result is discarded.
-			return fmt.Errorf("stream killed by admin")
+			return fmt.Errorf("host %s control stream cancelled (admin kill or reconnect eviction)", hostID)
 		}
 	}
 }
@@ -480,15 +593,8 @@ func (s *meshControlServer) handleGracefulLeave(leavingID string) {
 func (s *meshControlServer) handleGatewayControl(stream meshpb.MeshControl_ControlServer, reg *meshpb.RegisterGateway) error {
 	gatewayID := reg.GatewayId
 
-	kill := make(chan struct{})
-	s.mu.Lock()
-	if _, exists := s.gatewayStreams[gatewayID]; exists {
-		s.log.Log(CatMeshCell, "coordinator: gateway %s replacing stale control stream", gatewayID)
-	}
-	s.gatewayStreams[gatewayID] = stream
-	s.gatewayMu[gatewayID] = &sync.Mutex{}
-	s.gatewayKill[gatewayID] = kill
-	s.mu.Unlock()
+	self := s.registerGatewayStream(gatewayID, stream)
+	kill := self.kill
 
 	// Register in GatewayRegistry.
 	s.gatewayRegistry.Register(gatewayID, reg.WsAddr, reg.GrpcAddr)
@@ -529,11 +635,15 @@ func (s *meshControlServer) handleGatewayControl(stream meshpb.MeshControl_Contr
 	}
 
 	defer func() {
-		s.mu.Lock()
-		delete(s.gatewayStreams, gatewayID)
-		delete(s.gatewayMu, gatewayID)
-		delete(s.gatewayKill, gatewayID)
-		s.mu.Unlock()
+		// Pointer-identity gate — see handleHostControl. The crash branch
+		// below calls sessionRoutes.RemoveByGateway, which against a
+		// reconnected gateway would wipe the routes of its live sessions.
+		if !s.releaseGatewayStream(gatewayID, self) {
+			s.log.Log(CatMeshCell,
+				"coordinator: gateway %s stale control stream (gen %d) closing — superseded, skipping teardown",
+				gatewayID, self.gen)
+			return
+		}
 
 		if s.gatewayRegistry == nil {
 			return
@@ -760,8 +870,10 @@ func (s *meshControlServer) handleGatewayControl(stream meshpb.MeshControl_Contr
 			go recvOne()
 
 		case <-kill:
-			s.log.Log(CatMeshCell, "coordinator: gateway %s stream killed by admin", gatewayID)
-			return fmt.Errorf("stream killed by admin")
+			// Same two producers as the host path: `host kill` and
+			// registerGatewayStream's reconnect eviction.
+			s.log.Log(CatMeshCell, "coordinator: gateway %s control stream (gen %d) cancelled", gatewayID, self.gen)
+			return fmt.Errorf("gateway %s control stream cancelled (admin kill or reconnect eviction)", gatewayID)
 		}
 	}
 }
@@ -868,20 +980,12 @@ func timeFromUnixNanos(nanos int64) time.Time {
 // Returns true if a stream was found and cancelled.
 func (s *meshControlServer) cancelStream(hostID string) bool {
 	s.mu.Lock()
-	defer s.mu.Unlock()
-	kill, ok := s.streamKill[hostID]
+	cs, ok := s.streams[hostID]
+	s.mu.Unlock()
 	if !ok {
 		return false
 	}
-	// Close idempotently: check whether the channel is already closed
-	// by attempting a non-blocking receive. If it drains (already closed),
-	// do nothing; otherwise close it.
-	select {
-	case <-kill:
-		// already closed — nothing to do
-	default:
-		close(kill)
-	}
+	cs.closeKill()
 	return true
 }
 
@@ -930,23 +1034,21 @@ func (s *meshControlServer) broadcastCoordTimeSync() {
 // fallback is a no-op when both maps are populated correctly.
 func (s *meshControlServer) sendCoordMessageToHost(hostID string, msg *meshpb.CoordMessage) error {
 	s.mu.RLock()
-	stream := s.streams[hostID]
-	smu := s.streamMu[hostID]
-	if stream == nil {
+	cs := s.streams[hostID]
+	if cs == nil {
 		// Fallback: try gateway control streams. A gateway,service process
 		// registers via the gateway control stream and announces services
 		// keyed on its gatewayID, so service-routed commands targeting
 		// that ID need to traverse this stream.
-		stream = s.gatewayStreams[hostID]
-		smu = s.gatewayMu[hostID]
+		cs = s.gatewayStreams[hostID]
 	}
 	s.mu.RUnlock()
-	if stream == nil || smu == nil {
+	if cs == nil {
 		return fmt.Errorf("no control stream for host or gateway %q", hostID)
 	}
-	smu.Lock()
-	defer smu.Unlock()
-	return stream.Send(msg)
+	cs.sendMu.Lock()
+	defer cs.sendMu.Unlock()
+	return cs.stream.Send(msg)
 }
 
 // sendCoordMessageToGateway pushes a CoordMessage onto the given gateway's
@@ -955,13 +1057,12 @@ func (s *meshControlServer) sendCoordMessageToHost(hostID string, msg *meshpb.Co
 // are not safe for concurrent Send.
 func (s *meshControlServer) sendCoordMessageToGateway(gatewayID string, msg *meshpb.CoordMessage) error {
 	s.mu.RLock()
-	stream := s.gatewayStreams[gatewayID]
-	smu := s.gatewayMu[gatewayID]
+	cs := s.gatewayStreams[gatewayID]
 	s.mu.RUnlock()
-	if stream == nil || smu == nil {
+	if cs == nil {
 		return fmt.Errorf("no control stream for gateway %q", gatewayID)
 	}
-	smu.Lock()
-	defer smu.Unlock()
-	return stream.Send(msg)
+	cs.sendMu.Lock()
+	defer cs.sendMu.Unlock()
+	return cs.stream.Send(msg)
 }

@@ -270,6 +270,7 @@ func (c *meshControlClient) runConnection() error {
 	// is a no-op (no local cells yet); on reconnect after coordinator
 	// restart it's critical for continuity.
 	c.reannounceOwnedCells()
+	c.reannounceServices()
 
 	// Spawn heartbeat goroutine for this connection. It exits when
 	// streamCtx is cancelled (which happens in the deferred cleanup
@@ -279,6 +280,27 @@ func (c *meshControlClient) runConnection() error {
 	// Recv loop runs inline so the outer reconnect loop can observe
 	// the error and decide whether to retry.
 	return c.runRecvLoop()
+}
+
+// reannounceServices replays this process's service registrations and its
+// bus subscriptions after (re)registering with the coordinator. Both helpers
+// already exist and are re-callable; they were only ever invoked once, from
+// startServices, so a coordinator restart or a stream blip left the
+// coordinator without either.
+//
+// One known wart: service.CoordRegistry.Register rejects a duplicate
+// InstanceID, so re-announcing to a coordinator that still holds the entry
+// logs a rejection. Harmless — the entry it is rejecting is the correct one.
+func (c *meshControlClient) reannounceServices() {
+	if c.coord == nil {
+		return
+	}
+	if err := c.coord.announceServices(); err != nil {
+		c.log.Log(CatServicesBus, "host: service re-announce failed: %v", err)
+	}
+	if c.coord.bus != nil {
+		c.coord.sendServiceEventSubscribe(c.coord.bus.SubscribedTypeNames())
+	}
 }
 
 // reannounceOwnedCells sends a CellReady for every cell currently

@@ -2196,12 +2196,8 @@ func (c *Process) startControlPlane() {
 		log:             c.Log,
 		registry:        c.hostRegistry,
 		gatewayRegistry: c.gatewayRegistry,
-		streams:         make(map[string]meshpb.MeshControl_ControlServer),
-		streamMu:        make(map[string]*sync.Mutex),
-		streamKill:      make(map[string]chan struct{}),
-		gatewayStreams:  make(map[string]meshpb.MeshControl_ControlServer),
-		gatewayMu:       make(map[string]*sync.Mutex),
-		gatewayKill:     make(map[string]chan struct{}),
+		streams:         make(map[string]*controlStream),
+		gatewayStreams:  make(map[string]*controlStream),
 	}
 	eng := newAssignmentEngine(c, c.hostRegistry, ctrl)
 	ctrl.engine = eng

@@ -113,7 +113,7 @@ This is worse than previously recorded. The path is reachable **pre-authenticati
 
 Acceptance criteria unchanged from the previous roadmap: a checked decoder returning consumed bytes and an error; bounds checks before every read; configurable limits on frame size, strings, slices, nesting, and aggregate allocation; rejection of truncated and trailing data; per-connection queue and per-tick work caps across WebSocket, UDP, and virtual connections; codec fuzzing; and bounded-cardinality rejection metrics. No fuzz target exists anywhere in the repository today.
 
-#### CE-004 — Destination acceptance before cross-host demotion · **Partial (6/7)**
+#### CE-004 — Destination acceptance before cross-host demotion · **Done (7/7)**
 
 Failure propagation landed earlier: [`pkg/universe/grpc_bridge.go:80`](../pkg/universe/grpc_bridge.go) `sendViaGrpc` returns a status on every remote failure path, with rollback in `handoff_driver.go:562-573`.
 
@@ -126,7 +126,15 @@ Failure propagation landed earlier: [`pkg/universe/grpc_bridge.go:80`](../pkg/un
 
 **Residual, deliberately accepted:** if the destination receives the Handoff but its ack is lost, the destination promotes at `CommitTick` while the source stays Live until a retry ack lands. This is a bounded, self-healing **double**-authority window replacing a permanent **zero**-authority orphan; the destination already drops the source's border frames for a netID whose local slot is Live. Driving it to exactly zero requires the destination to gate its promote on a source-sent Commit — a three-phase protocol, filed as a separate item. The `(NetID, Epoch)` dedup and the ack plumbing landed here are its prerequisites.
 
-Remaining: mesh control-stream cleanup still deletes unconditionally by a payload-supplied ID (`mesh_control_server.go:156`), so a reconnect race can delete the newer stream's registration and run `MarkDead`/`UnregisterByHost`/`reassignOrphanedCells` against a live host.
+**Control-stream fencing landed.** The six parallel maps (stream / send-mutex / kill-channel, per side) collapsed into one `controlStream` record per handler invocation, carrying its own send mutex, kill channel, and generation stamp ([`pkg/universe/mesh_control_server.go`](../pkg/universe/mesh_control_server.go)). Teardown is now gated on pointer identity via `releaseHostStream` / `releaseGatewayStream`: a superseded handler skips the **entire** teardown, not just the map delete, so `MarkDead`, `UnregisterByHost`, `serviceEventRouter.RemoveProcess`, `reassignOrphanedCells`, and `sessionRoutes.RemoveByGateway` can no longer fire against a freshly reconnected registration. Registration also evicts its predecessor deterministically by closing that record's kill channel instead of only logging, and the resulting log line and error are worded so a reconnect eviction is not read as an operator `host kill`.
+
+**Reconnect replay closed at three levels.** Cells were already replayed (`reannounceOwnedCells`); added:
+
+- Ownership arbitration on `CellReady` (`mesh_control_server.go`, host drain loop). A re-announce for a cell a *different live* host now owns is rejected and answered with the already-wired `CellRelease`, instead of producing a nondeterministic two-owner registry (`AssignCell` only adds; `HostForCell` is a map-order scan). Accepted normally when the current owner is `RemoteHostDead`, so crash recovery is unaffected.
+- Gateway session replay: `meshGatewayClient.reannounceSessions` over the new `Gateway.snapshotSessions`, which copies under `g.mu` with the same discipline as `lookupSession`. Without it a gateway↔coord blip left `coord.sessionRoutes` empty while the gateway still held live WebSocket sessions, so client input routed nowhere after the next migrate.
+- Service and bus-subscription replay: `reannounceServices` on both the host and gateway control clients, reusing the existing re-callable `Process.announceServices` and `sendServiceEventSubscribe`. Known benign wart: `service.CoordRegistry.Register` rejects a duplicate InstanceID, so re-announcing to a coordinator that still holds the entry logs a rejection. A `CoordRegistry.Upsert` is the clean fix and is not blocking.
+
+Deliberately **not** done: preserving `HostRegistry.Register`'s `OwnedCells` across reconnects (restores ownership with no arbitration — the same two-owner bug from the other direction), and a versioned coordinator→host desired-state reconciliation (design item; the arbitration above is its safety-critical slice).
 
 #### CE-005b — UDP security and gating · **Tier 1 done; Tier 2 open**
 
