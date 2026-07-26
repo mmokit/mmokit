@@ -98,6 +98,22 @@ func (cm *ConnManager) Send(connID uint32, data []byte) SendResult {
 	return SendResult{Disposition: SendNoRoute}
 }
 
+// DeliveryClassFor reports the delivery guarantee of connID's transport.
+//
+// Unknown connections and transports that do not implement
+// DeliveryClassProvider report DeliveryReliableOrdered — the conservative
+// answer, because it is what preserves the pre-existing AckReliable
+// behaviour for every stub transport in the test suite.
+func (cm *ConnManager) DeliveryClassFor(connID uint32) DeliveryClass {
+	cm.mu.RLock()
+	t := cm.conns[connID]
+	cm.mu.RUnlock()
+	if p, ok := t.(DeliveryClassProvider); ok {
+		return p.DeliveryClass()
+	}
+	return DeliveryReliableOrdered
+}
+
 // SendReliable sends a message reliably (login, spawn, state changes).
 func (cm *ConnManager) SendReliable(connID uint32, data []byte) SendResult {
 	cm.mu.RLock()

@@ -176,13 +176,20 @@ Collision auditing is worse than previously recorded. `RegisterEvent` and `Regis
 
 Without this, a 2D client connecting to a 3D server decodes valid bytes into the wrong shape instead of being rejected.
 
-#### CE-003 residual — Datagram frame ACKs · **Partial (6/8)**
+#### CE-003 residual — Datagram frame ACKs · **Done (8/8)**
 
-Most of this landed in the working tree: typed delivery outcomes (`pkg/net/send_result.go`), a frame writer returning a result, baseline commit gated on delivery class (`pkg/system/replication.go:1525`), surfaced WebSocket backpressure, and the border re-entry fix (`border_viewer.go:115`).
+Earlier work landed typed delivery outcomes (`pkg/net/send_result.go`), a frame writer returning a result, baseline commit gated on delivery class, surfaced WebSocket backpressure, and the border re-entry fix (`border_viewer.go`). The ACK machinery existed but was **dead code**: `DefaultReplicationConfig` never set an ACK mode, so every `ReplicationSystem` ran with the zero value `AckReliable`, and `AckFrame`/`AckSequence` were called only from tests.
 
-Remaining: server-side frame ACKs are built but wired to nothing — no call site sets an ACK mode anywhere in `internal/`, `examples/`, `web-pixi/`, or `csharp/`. And there is no deterministic loss/reorder harness. **Reuse [`pkg/universe/loopback_bridge.go`](../pkg/universe/loopback_bridge.go)**, an existing latency and loss injection harness currently referenced by nothing but its own test, rather than building a new one.
+For a UDP client that meant `SendUnreliable` → `DeliveryBestEffort` → neither the `AckReliable` commit test nor the receipt-tracking test passed → the backpressure branch set `forceFresh`. **Every UDP frame was a complete FreshSnapshot, forever.** State was correct; bandwidth was worst-case and the entire delta pipeline was bypassed.
 
-Note the behaviour change: UDP now classifies as best-effort, so every UDP frame forces a fresh snapshot. That is a **bandwidth cliff**, not the correctness bug it used to be. It is blocked on CE-005.
+What shipped:
+
+- **Per-connection ACK mode latched from the transport's static class.** `net.DeliveryClassProvider` (implemented by `WSTransport` → `DeliveryReliableOrdered`, `UDPTransport` → `DeliveryBestEffort`), `ConnManager.DeliveryClassFor`, `ReplicationConfig.AckModeFor`, and a `mode` field on `connState` resolved once in `getConn` and preserved across stream resets. It cannot be a single scalar: one `ConnManager` holds a mixed map of WebSocket and UDP transports, so two viewers of the same cell legitimately differ. It is deliberately driven from the transport TYPE, never from a `SendResult` or any mutable state, so the generated wire schema stays constant.
+- **The ACK wire type and its routing.** `mmokit.ReplicationAck{StreamEpoch, Seq}`, registered as a client input by the engine-default `HandleClient` block in `pkg/mmokit/init.go` exactly the way `mmokit.Ping` is. Routing goes through a per-cell sink on `engine.Engine` (`SetReplicationAck` / `AckReplicationFrame`) that `NewReplicationSystem` installs via `ReplicationConfig.RegisterAck` — so `internal/game` and every other construction site pick it up with **zero** game-code changes. The typed-client-input phase runs before the system loop, so an ACK arriving before tick N commits before tick N's frame is built: zero added latency.
+- **Deterministic loss/reorder/duplicate harness** in `pkg/system/lossy_link_test.go` + `replication_lossy_test.go`. `pkg/universe/loopback_bridge.go` was evaluated and is unsuitable: wrong domain (it routes `CellMessage`, with no path from a frame writer into it), an import cycle (`pkg/universe` imports `pkg/system`), one constant latency so it can never reorder, no duplicate injection, and unjoinable wall-clock goroutines. The new link encodes real `quantize` wire bytes, returns exactly what `UDPTransport.SendUnreliable` returns, and drives a reference client decoder mirroring the generated TS/C# accept gate. Seven end-to-end properties plus a mixed-transport per-connection latch test.
+- `SentHistoryDepth` default 32 → 4. Under the one-attempt-in-flight invariant the ring never holds more than one live entry, while `GetOrCreateBaseline` eagerly allocates `ringDepth * sizeof(SentSnapshot)` per entity per viewer.
+
+**Residual risk, measured not guessed:** while an attempt is in flight the per-viewer loop skips emission, so a datagram viewer's AoI rate is the tick rate when RTT ≤ tickInterval and `ceil(RTT/tickInterval)` ticks otherwise. Bandwidth improves enormously; worst-case latency does not. `OnBeforeSend`/`OnAfterSend` still fire on skipped ticks, so per-tick own-state events and client prediction are unaffected. The real fix is pipelined delta replication (filed as CE-003b) — that needs a `deltaFromSeq` field in the 20-byte header and a per-seq snapshot ring in both client cores, i.e. a wire break, and it invalidates the C# ack-on-receipt shortcut.
 
 #### CE-005a — UDP reliability · **Done** (working tree)
 
@@ -297,7 +304,7 @@ Recorded so the next reader does not resurrect dead work.
 
 | Item | Disposition |
 | --- | --- |
-| **CE-001 — authoritative entity removal** | **Closed.** All criteria met in the working tree; `Commands.Despawn` now routes through a single removal primitive. Its problem statement is false and must not be carried forward. |
+| **CE-001 — authoritative entity removal** | **Closed.** All criteria met; `Commands.Despawn` routes through a single removal primitive. The two criteria that previously had no direct test now do: `TestCommands_DespawnVisibleToNextSystem` (a command despawn in system N is dead in system N+1, replacing a `t.Skip`) and `TestNewNetworkSystem_CommandDespawnPublishesRemovedNotExited` (the command-buffer path emits a Removed tombstone, not an AoI Exited). Its problem statement is false and must not be carried forward. |
 | **Co-simulation / overlap handoff** | **Deleted**, not deferred. The implementing files no longer exist. Some dated plans and older notes still describe it as merely unwired — they are wrong. The successor concern is CE-004. |
 | **Border-frame delta compression** | **Landed.** |
 | **World editor** | **Delivered** and live in the admin dashboard. |

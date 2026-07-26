@@ -68,8 +68,8 @@ func init() {
 	}
 
 	// Engine-default HandleClient handlers — installed once per Process by
-	// universe.New via this hook. Currently only Ping → Pong; further
-	// engine-default client inputs would register here.
+	// universe.New via this hook. Further engine-default client inputs would
+	// register here.
 	pkguniverse.EngineDefaultClientHandlers = func(p *pkguniverse.Process) {
 		HandleClient(p, func(player Entity, msg *Ping) {
 			conn := Get[component.PlayerConn](player)
@@ -80,6 +80,24 @@ func init() {
 				ClientTime: msg.ClientTime,
 				ServerTime: time.Now().UnixMilli(),
 			})
+		})
+
+		// Explicit replication frame ACK. Dispatch is per-Stage and resolves
+		// the handler against the player entity owned by the sending
+		// connection on THAT stage, so the ack always reaches the
+		// ReplicationSystem of the cell that currently holds authority.
+		HandleClient(p, func(player Entity, msg *ReplicationAck) {
+			conn := Get[component.PlayerConn](player)
+			if conn == nil {
+				return
+			}
+			stage := player.Stage()
+			if stage == nil {
+				return
+			}
+			if eng := stage.Engine(); eng != nil {
+				eng.AckReplicationFrame(conn.ConnID, msg.StreamEpoch, msg.Seq)
+			}
 		})
 	}
 

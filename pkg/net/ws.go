@@ -20,3 +20,7 @@ func (t *WSTransport) Close()                                { t.conn.Close() }
 func (t *WSTransport) BytesSent() uint64                     { return t.conn.BytesSent() }
 func (t *WSTransport) BytesRecv() uint64                     { return t.conn.BytesRecv() }
 func (t *WSTransport) Stats() ConnStats                      { return t.conn.Stats() }
+
+// DeliveryClass reports the static guarantee of a WebSocket transport.
+// Matches what Conn.Send already returns for both send paths.
+func (t *WSTransport) DeliveryClass() DeliveryClass { return DeliveryReliableOrdered }

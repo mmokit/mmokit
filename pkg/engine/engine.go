@@ -71,6 +71,31 @@ type Engine struct {
 	// (engine doesn't import universe). nil on engines used outside the
 	// universe stack.
 	clientInputTick func()
+
+	// replicationAck is this cell's ReplicationSystem.AckFrame, installed at
+	// system construction via ReplicationConfig.RegisterAck. The typed
+	// client-input phase calls it when a client acknowledges a replication
+	// frame. nil on engines with no replication system.
+	replicationAck func(connID, streamEpoch, seq uint32)
+}
+
+// SetReplicationAck installs this cell's explicit frame-ACK sink. Called once
+// by NewReplicationSystem via ReplicationConfig.RegisterAck.
+func (e *Engine) SetReplicationAck(fn func(connID, streamEpoch, seq uint32)) {
+	e.replicationAck = fn
+}
+
+// AckReplicationFrame routes a client frame acknowledgement to this cell's
+// ReplicationSystem. No-op when replication is absent.
+//
+// Cell-loop goroutine only. Its only production caller is the typed
+// client-input handler, which runs inside GameLoop.tick before the system
+// loop — so an ACK that arrives before tick N is committed before tick N's
+// frame is built, adding zero latency.
+func (e *Engine) AckReplicationFrame(connID, streamEpoch, seq uint32) {
+	if e.replicationAck != nil {
+		e.replicationAck(connID, streamEpoch, seq)
+	}
 }
 
 // SetClientInputTick wires the per-tick typed-client-input dispatch hook

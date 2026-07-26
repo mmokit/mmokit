@@ -126,23 +126,72 @@ func TestStage_HasCommands(t *testing.T) {
 	}
 }
 
-// TestCommands_FlushesBetweenSystems verifies that ops queued during
-// system N are visible to system N+1 within the same tick. Two-system
-// fixture: System A queues AddComponent for a marker tag, System B
-// asserts the tag is present and signals success via an outer flag.
+// funcSystem adapts a closure to engine.System for the two-system fixtures
+// below.
+type funcSystem struct{ fn func(dt float32) }
+
+func (s funcSystem) Update(dt float32) { s.fn(dt) }
+
+// TestCommands_DespawnVisibleToNextSystem is CE-001's system-N → system-N+1
+// visibility criterion for the COMMAND-BUFFER despawn path.
 //
-// This guards the engine.Hooks.AfterSystem wire-up: if the hook is
-// ever removed, this test fails because System B sees no tag.
-func TestCommands_FlushesBetweenSystems(t *testing.T) {
-	// Skip if the test machinery requires more than we can stand up here.
-	// The intent is: build a Stage with two minimal systems, tick once,
-	// and verify the second system observed the first's queued AddComponent.
-	//
-	// If this fixture is too heavy to write in pkg/universe (which sits
-	// below mmokit's typed sugar), defer the integration test to a
-	// follow-up — the Task 5 TickOne test will cover the same property
-	// from above. Skip explicitly so the gap is visible.
-	t.Skip("see Task 5 TickOne test for the same property at higher abstraction")
+// The property: a Commands.Despawn issued in system N is dead in system N+1
+// within the same tick, with the grid, the netID index, and RemovedNetIDs each
+// updated exactly once. TickOne is documented to mirror the game loop's
+// per-system Update+Flush contract (engine.Hooks.AfterSystem), so driving two
+// systems through it exercises the same wire-up the loop uses.
+func TestCommands_DespawnVisibleToNextSystem(t *testing.T) {
+	eng := engine.New(engine.DefaultConfig(), net.NewConnManager(), logger.New())
+	stage := NewStage(eng, CellID{X: 0, Y: 0}, 100, nil)
+	grid := spatial.NewHashGrid(100)
+	stage.SetSpatialGrid(grid)
+
+	entity := stage.Spawn(
+		component.Position{X: 10, Y: 20},
+		component.Collider{Radius: 5},
+	)
+	h := entity.Handle()
+	netID := entity.NetID()
+
+	cleanupCalls := 0
+	eng.OnEntityRemoved = func(ecs.Entity) { cleanupCalls++ }
+
+	aliveDuringA := true
+	sysA := funcSystem{fn: func(float32) {
+		aliveDuringA = eng.ECS.Alive(h)
+		stage.Commands().Despawn(h)
+	}}
+
+	observedByB := true
+	gridDuringB := true
+	netIDDuringB := true
+	sysB := funcSystem{fn: func(float32) {
+		observedByB = eng.ECS.Alive(h)
+		gridDuringB = grid.IsRegistered(h)
+		_, _, netIDDuringB = stage.LookupNetID(netID)
+	}}
+
+	stage.TickOne(sysA, 0.05)
+	stage.TickOne(sysB, 0.05)
+
+	if !aliveDuringA {
+		t.Fatal("entity was already dead when system A ran")
+	}
+	if observedByB {
+		t.Fatal("system B still saw the entity alive; the despawn was not flushed between systems")
+	}
+	if gridDuringB {
+		t.Fatal("system B still saw the entity in the spatial grid")
+	}
+	if netIDDuringB {
+		t.Fatal("system B still saw the entity in the netID index")
+	}
+	if cleanupCalls != 1 {
+		t.Fatalf("cleanup hook calls = %d, want exactly 1", cleanupCalls)
+	}
+	if len(eng.RemovedNetIDs) != 1 || eng.RemovedNetIDs[0] != netID {
+		t.Fatalf("RemovedNetIDs = %v, want [%d]", eng.RemovedNetIDs, netID)
+	}
 }
 
 // TestCommands_NestedDefer_LandsInNextFlush verifies that an op queued

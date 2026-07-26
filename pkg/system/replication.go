@@ -237,11 +237,41 @@ type ReplicationConfig struct {
 	FullRefreshInterval uint32         // ticks between forced keyframe (0 = disabled)
 	DormancyThreshold   uint32         // ticks unchanged before entity goes dormant (0 = disabled)
 
-	// AckMode controls baseline advancement.
+	// AckMode controls baseline advancement. Used only when AckModeFor is
+	// nil, and as the fallback for connections AckModeFor cannot classify.
 	AckMode replication.AckMode
 
+	// AckModeFor resolves the ACK mode for one connection from its
+	// transport's STATIC delivery class. Resolved exactly once, when the
+	// connection's state is created, and latched for its lifetime — a single
+	// ConnManager holds a mixed map of WebSocket and UDP transports, so two
+	// viewers of the same cell can legitimately have different delivery
+	// classes. Must never be driven from mutable runtime state (queue depth,
+	// backpressure, a SendResult): the generated wire schema is built
+	// assuming the answer is a property of the transport type.
+	//
+	// nil falls back to AckMode.
+	AckModeFor func(connID uint32) replication.AckMode
+
+	// RegisterAck is invoked once at construction with this system's AckFrame
+	// method so the inbound typed-client-input path can reach it. nil
+	// disables explicit ACK routing (unit tests call AckFrame directly).
+	RegisterAck func(ack func(connID, streamEpoch, seq uint32))
+
 	// SentHistoryDepth is the ring buffer depth for AckExplicit mode.
-	// Default 32 (~1.6s at 20Hz). Ignored for AckReliable.
+	// Default 4. Ignored for AckReliable.
+	//
+	// The depth is small on purpose. At most one causal attempt is in flight
+	// per connection (see pendingReplicationAttempt), so the ring never holds
+	// more than one live entry: retainSent pushes one per frame,
+	// commitExplicit prunes through the acked seq, discardPendingAttempt
+	// clears. Meanwhile GetOrCreateBaseline eagerly allocates
+	// ringDepth * sizeof(SentSnapshot) PER ENTITY PER VIEWER, so the previous
+	// default of 32 was pure waste.
+	//
+	// This is only safe under the one-in-flight invariant. Pipelined delta
+	// replication (CE-003b) must raise it in the same change that relaxes
+	// that invariant.
 	SentHistoryDepth int
 
 	// PendingReceiptTimeoutTicks bounds how long an AckReliable connection
@@ -252,6 +282,24 @@ type ReplicationConfig struct {
 	// PendingAckTimeoutTicks bounds how long AckExplicit waits for the
 	// matching application ACK before abandoning the attempt and forcing a
 	// fresh full snapshot. Default 10 ticks (~500ms at 20Hz).
+	//
+	// Observable behaviour, now that this has a production consumer. While an
+	// attempt is in flight the per-viewer loop skips emission entirely, so a
+	// datagram viewer's effective AoI frame rate is the tick rate when
+	// RTT <= tickInterval (the ACK lands in the typed-client-input phase,
+	// which runs before the system loop, so it commits in the same tick), and
+	// ceil(RTT/tickInterval) ticks otherwise. A LOST ack costs one full
+	// PendingAckTimeoutTicks stall followed by a self-contained
+	// FreshSnapshot.
+	//
+	// Do not lower the default without measuring: at ~4 ticks every link with
+	// RTT > 200 ms would time out on every frame and degrade to permanent
+	// full snapshots — strictly worse than no explicit ACK at all. The real
+	// fix is a per-connection adaptive timeout derived from observed ACK RTT.
+	//
+	// OnBeforeSend/OnAfterSend still fire on skipped ticks, so per-tick
+	// own-state events and client prediction are unaffected; only other
+	// entities' AoI updates slow down.
 	PendingAckTimeoutTicks uint32
 
 	// GetTick returns the current game tick number.
@@ -300,6 +348,12 @@ type ReplicationConfig struct {
 // connState holds system-specific per-connection fields alongside a
 // BaselineStore that manages baselines, hashes, and priorities.
 type connState struct {
+	// mode is this connection's ACK mode, latched from its transport's
+	// static delivery class when the state was created. It must stay in sync
+	// with the BaselineStore, which is constructed from the same value — so
+	// changing a connection's mode means replacing the whole connState, never
+	// mutating this field in place.
+	mode  replication.AckMode
 	store *replication.BaselineStore
 	txn   replicationStateTxn
 	// pendingScratch owns the transaction and slice storage for the sole
@@ -352,6 +406,7 @@ type connState struct {
 func newConnState(mode replication.AckMode) *connState {
 	store := replication.NewBaselineStore(mode)
 	return &connState{
+		mode:  mode,
 		store: store,
 		txn:   newReplicationStateTxn(store),
 		pendingScratch: pendingReplicationAttempt{
@@ -699,7 +754,7 @@ type ReplicationSystem struct {
 // NewReplicationSystem creates a replication system with the given configuration.
 func NewReplicationSystem(cfg ReplicationConfig) *ReplicationSystem {
 	if cfg.SentHistoryDepth == 0 {
-		cfg.SentHistoryDepth = 32
+		cfg.SentHistoryDepth = 4
 	}
 	if cfg.PendingReceiptTimeoutTicks == 0 {
 		cfg.PendingReceiptTimeoutTicks = 3
@@ -742,7 +797,7 @@ func NewReplicationSystem(cfg ReplicationConfig) *ReplicationSystem {
 	}
 
 	snapBuf := make([]byte, snapBufSize)
-	return &ReplicationSystem{
+	sys := &ReplicationSystem{
 		cfg:           cfg,
 		netIDMap:      ecs.NewMap1[component.NetworkID](cfg.World),
 		kindMap:       ecs.NewMap1[component.EntityKind](cfg.World),
@@ -762,6 +817,14 @@ func NewReplicationSystem(cfg ReplicationConfig) *ReplicationSystem {
 		snapWriter:    quantize.NewSnapshotWriter(snapBuf),
 		deltaTmp:      make([]byte, 0, 256),
 	}
+	// Hand the explicit frame-ACK entry point to whatever owns the inbound
+	// typed-client-input path (DefaultReplicationConfig wires this to
+	// engine.SetReplicationAck). Doing it here means every construction site
+	// picks the sink up with no game-code change.
+	if cfg.RegisterAck != nil {
+		cfg.RegisterAck(sys.AckFrame)
+	}
+	return sys
 }
 
 func (s *ReplicationSystem) Name() string { return "Replication" }
@@ -825,11 +888,11 @@ func (s *ReplicationSystem) IsVisible(connID uint32, netID uint32) bool {
 // UDP integrations must call AckFrame so a delayed same-sequence ACK from a
 // previous stream cannot commit the current transaction.
 func (s *ReplicationSystem) AckSequence(connID, seq uint32) {
-	if s.cfg.AckMode != replication.AckExplicit {
+	conn, ok := s.connections[connID]
+	if !ok || conn.mode != replication.AckExplicit {
 		return
 	}
-	conn, ok := s.connections[connID]
-	if !ok || conn.hasExplicitGeneration || conn.pending == nil || conn.pending.awaitReceipt || conn.pending.seq != seq {
+	if conn.hasExplicitGeneration || conn.pending == nil || conn.pending.awaitReceipt || conn.pending.seq != seq {
 		return
 	}
 	s.commitPendingAttempt(connID, conn, true)
@@ -839,11 +902,11 @@ func (s *ReplicationSystem) AckSequence(connID, seq uint32) {
 // generation zero is valid and is compared exactly rather than treated as an
 // absent value.
 func (s *ReplicationSystem) AckFrame(connID, streamEpoch, seq uint32) {
-	if s.cfg.AckMode != replication.AckExplicit {
+	conn, ok := s.connections[connID]
+	if !ok || conn.mode != replication.AckExplicit {
 		return
 	}
-	conn, ok := s.connections[connID]
-	if !ok || conn.pending == nil || conn.pending.awaitReceipt ||
+	if conn.pending == nil || conn.pending.awaitReceipt ||
 		conn.pending.streamEpoch != streamEpoch || conn.pending.seq != seq {
 		return
 	}
@@ -945,19 +1008,30 @@ func (s *ReplicationSystem) pendingTimedOut(conn *connState, tick uint32) bool {
 	return tick-conn.pending.sentTick >= timeout
 }
 
-// ringDepth returns the appropriate ring buffer depth based on ack mode.
-func (s *ReplicationSystem) ringDepth() int {
-	if s.cfg.AckMode == replication.AckReliable {
+// ringDepth returns the appropriate ring buffer depth for one connection's
+// latched ack mode.
+func (s *ReplicationSystem) ringDepth(mode replication.AckMode) int {
+	if mode == replication.AckReliable {
 		return 0 // no ring needed; baseline promoted immediately
 	}
 	return s.cfg.SentHistoryDepth
+}
+
+// ackModeFor resolves the ack mode for a connection about to be created.
+// Resolved exactly once per connection and latched on its connState — see
+// ReplicationConfig.AckModeFor for why it must not come from runtime state.
+func (s *ReplicationSystem) ackModeFor(connID uint32) replication.AckMode {
+	if s.cfg.AckModeFor != nil {
+		return s.cfg.AckModeFor(connID)
+	}
+	return s.cfg.AckMode
 }
 
 // getConn returns (or creates) connection state for a viewer.
 func (s *ReplicationSystem) getConn(connID uint32) *connState {
 	conn, ok := s.connections[connID]
 	if !ok {
-		conn = newConnState(s.cfg.AckMode)
+		conn = newConnState(s.ackModeFor(connID))
 		s.connections[connID] = conn
 	}
 	return conn
@@ -990,7 +1064,7 @@ func (s *ReplicationSystem) resolveStreamGeneration(viewer *ViewerInfo, conn *co
 		// scoped frames have already been sent. A different value changes the
 		// client's ordering domain, so make that adoption a complete reset.
 		if conn.nextSeq != 0 && conn.streamEpoch != generation {
-			conn = newConnState(s.cfg.AckMode)
+			conn = newConnState(conn.mode)
 			s.connections[viewer.ConnID] = conn
 			delete(s.lastVisible, viewer.ConnID)
 		}
@@ -1007,7 +1081,7 @@ func (s *ReplicationSystem) resolveStreamGeneration(viewer *ViewerInfo, conn *co
 		return conn, true
 	}
 
-	conn = newConnState(s.cfg.AckMode)
+	conn = newConnState(conn.mode)
 	conn.streamEpoch = generation
 	conn.hasStreamEpoch = true
 	conn.hasExplicitGeneration = true
@@ -1073,8 +1147,6 @@ func (s *ReplicationSystem) Update(dt float32) {
 		delete(s.connections, connID)
 	}
 
-	ringDepth := s.ringDepth()
-
 	// Per-viewer replication loop.
 	for i := range viewers {
 		viewer := &viewers[i]
@@ -1109,6 +1181,9 @@ func (s *ReplicationSystem) Update(dt float32) {
 				continue
 			}
 		}
+		// Per-connection: two viewers of this cell can be on transports with
+		// different delivery classes and therefore different latched modes.
+		ringDepth := s.ringDepth(conn.mode)
 		tx := conn.txn.begin(ringDepth)
 
 		stagedRecentRemovals := conn.recentRemovals
@@ -1371,7 +1446,7 @@ func (s *ReplicationSystem) Update(dt float32) {
 				}
 
 				// Store baseline.
-				if s.cfg.AckMode == replication.AckReliable {
+				if conn.mode == replication.AckReliable {
 					bl.Acked = snap
 				} else {
 					tx.pushSent(netID, snap)
@@ -1392,7 +1467,7 @@ func (s *ReplicationSystem) Update(dt float32) {
 					Snapshot:     snap,
 				})
 
-				if s.cfg.AckMode == replication.AckReliable {
+				if conn.mode == replication.AckReliable {
 					bl.Acked = snap
 				} else {
 					tx.pushSent(netID, snap)
@@ -1423,7 +1498,7 @@ func (s *ReplicationSystem) Update(dt float32) {
 				bl.HasAuthorityEpoch = true
 				snap := make([]byte, len(curr))
 				copy(snap, curr)
-				if s.cfg.AckMode == replication.AckReliable {
+				if conn.mode == replication.AckReliable {
 					bl.Acked = snap
 				} else {
 					tx.pushSent(netID, snap)
@@ -1522,7 +1597,7 @@ func (s *ReplicationSystem) Update(dt float32) {
 			Removed:           removed,
 		})
 
-		if s.cfg.AckMode == replication.AckReliable && result.Supports(net.DeliveryReliableOrdered) {
+		if conn.mode == replication.AckReliable && result.Supports(net.DeliveryReliableOrdered) {
 			tx.commit()
 			s.lastVisible[viewer.ConnID] = currentVisible
 			conn.selfNetID = stagedSelfNetID
@@ -1545,12 +1620,12 @@ func (s *ReplicationSystem) Update(dt float32) {
 				s.cfg.OnBlinkDetected(viewer.ConnID, blink.netID, blink.ticksSinceRemove)
 			}
 
-		} else if result.Queued() && (s.cfg.AckMode == replication.AckExplicit ||
+		} else if result.Queued() && (conn.mode == replication.AckExplicit ||
 			(result.Supports(net.DeliveryOrdered) && s.frameWriterTracksReceipts())) {
 			// AckExplicit retains only attempted snapshot history before the
 			// application ACK. AckReliable's ordered distributed path retains
 			// the whole transaction until its final gateway receipt arrives.
-			if s.cfg.AckMode == replication.AckExplicit {
+			if conn.mode == replication.AckExplicit {
 				tx.retainSent(frameSeq)
 			}
 			for _, netID := range removed {
@@ -1566,7 +1641,7 @@ func (s *ReplicationSystem) Update(dt float32) {
 				stagedBlinks,
 				exited,
 				removed,
-				s.cfg.AckMode == replication.AckReliable,
+				conn.mode == replication.AckReliable,
 			)
 		} else {
 			// RemovedIDs is tick-scoped. Preserve rejected removals in a

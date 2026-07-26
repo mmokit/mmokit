@@ -131,6 +131,101 @@ func TestNewNetworkSystem_AuthoritativeDespawnPublishesOneRemoval(t *testing.T) 
 	}
 }
 
+// TestNewNetworkSystem_CommandDespawnPublishesRemovedNotExited is CE-001's
+// fifth criterion for the COMMAND-BUFFER path.
+//
+// The sibling test above covers mmokit.Despawn, which is stage.MarkForRemoval
+// — the END-OF-TICK path. Commands.Despawn is a different entry point (it goes
+// through Commands.Flush → RemoveEntityNow), and until now nothing asserted it
+// produces a Removed tombstone rather than an AoI Exited at the replication
+// output. Those are not interchangeable: Exited tells the client the entity
+// left view and may come back; Removed tells it the entity is gone.
+func TestNewNetworkSystem_CommandDespawnPublishesRemovedNotExited(t *testing.T) {
+	const kind uint8 = 242
+
+	mmo := newTestProcess(t)
+	RegisterKind[networkRemovalTestBundle](mmo, kind, "CommandRemovalTest")
+	mmo.AddSystem(NewNetworkSystem())
+	mmo.Build()
+	t.Cleanup(mmo.Shutdown)
+
+	cell := firstCell(mmo)
+	if cell == nil {
+		t.Fatal("expected one cell")
+	}
+	network, ok := cell.Loop.SystemByName("Network")
+	if !ok {
+		t.Fatal("NewNetworkSystem was not installed")
+	}
+
+	stage := cell.Stage
+	eng := cell.Engine
+	transport := &networkRemovalCaptureTransport{}
+	connID := eng.ConnMgr.(*net.ConnManager).AddTransport(transport)
+
+	viewer := stage.Spawn(
+		Position{X: 0, Y: 0},
+		EntityKind{Type: kind},
+		Collider{Radius: 1},
+		networkRemovalTestState{Value: 1},
+	)
+	target := stage.Spawn(
+		Position{X: 10, Y: 0},
+		EntityKind{Type: kind},
+		Collider{Radius: 1},
+		networkRemovalTestState{Value: 2},
+	)
+	targetNetID := target.NetID()
+
+	eng.Players.RegisterSessionTransfer(connID, "command-removal-viewer", "active", nil)
+	session := eng.Players.ByConnID(connID)
+	if session == nil {
+		t.Fatal("active viewer session was not registered")
+	}
+	session.Entity = viewer.Handle()
+
+	runNetworkTick := func() quantize.FrameHeader {
+		t.Helper()
+		eng.Tick++
+		eng.BeginRemovalTick()
+		before := len(transport.frames)
+		stage.TickOne(network, 1.0/20.0)
+		if len(transport.frames) != before+1 {
+			t.Fatalf("network tick emitted %d frames, want 1", len(transport.frames)-before)
+		}
+		return decodeWorldDeltaHeader(t, transport.frames[len(transport.frames)-1])
+	}
+
+	initial := runNetworkTick()
+	if initial.FullCount < 1 {
+		t.Fatalf("initial frame FullCount=%d, want target visibility established", initial.FullCount)
+	}
+
+	// Same phase order as the sibling test, but through the command buffer.
+	// TickOne runs Network.Update (which samples an empty removal batch) and
+	// then Commands.Flush, so RemoveEntityNow publishes into nextRemovedNetIDs
+	// and the following runNetworkTick swaps it in. No eng.FlushRemovals here:
+	// the command flush already removed the entity, and calling it anyway
+	// would let this test pass through the end-of-tick path instead.
+	eng.Tick++
+	eng.BeginRemovalTick()
+	stage.Commands().Despawn(target.Handle())
+	stage.TickOne(network, 1.0/20.0)
+
+	removedFrame := runNetworkTick()
+	if removedFrame.RemovedCount != 1 {
+		t.Fatalf("command despawn RemovedCount=%d, want 1", removedFrame.RemovedCount)
+	}
+	if removedFrame.ExitedCount != 0 {
+		t.Fatalf("command despawn ExitedCount=%d, want 0 (a despawn is not an AoI exit)", removedFrame.ExitedCount)
+	}
+
+	removedID := decodeOnlyRemovedID(t, transport.frames[len(transport.frames)-1])
+	if removedID != targetNetID {
+		t.Fatalf("removed netID=%d, want %d", removedID, targetNetID)
+	}
+}
+
 func decodeWorldDeltaHeader(t *testing.T, frame []byte) quantize.FrameHeader {
 	t.Helper()
 	body := worldDeltaBody(t, frame)

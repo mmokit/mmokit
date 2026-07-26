@@ -269,3 +269,59 @@ func TestConnManager_ActiveConnIDs(t *testing.T) {
 		t.Fatalf("expected [%d %d], got %v", id1, id3, ids)
 	}
 }
+
+// classedTransport is a mockTransport that also reports a static delivery
+// class, standing in for WSTransport / UDPTransport without needing a socket.
+type classedTransport struct {
+	mockTransport
+	class DeliveryClass
+}
+
+func (c *classedTransport) DeliveryClass() DeliveryClass { return c.class }
+
+// TestConnManager_DeliveryClassFor is the backward-compat guarantee behind the
+// per-connection ACK mode latch: a transport that does not report a class, and
+// an unknown connection, must both answer DeliveryReliableOrdered so every
+// existing stub transport stays on AckReliable.
+func TestConnManager_DeliveryClassFor(t *testing.T) {
+	cm := NewConnManager()
+
+	wsLike := cm.AddTransport(&classedTransport{class: DeliveryReliableOrdered})
+	udpLike := cm.AddTransport(&classedTransport{class: DeliveryBestEffort})
+	stub := cm.AddTransport(&mockTransport{})
+
+	cases := []struct {
+		name   string
+		connID uint32
+		want   DeliveryClass
+	}{
+		{"reliable-ordered transport", wsLike, DeliveryReliableOrdered},
+		{"best-effort transport", udpLike, DeliveryBestEffort},
+		{"transport without the capability", stub, DeliveryReliableOrdered},
+		{"unknown connID", 9999, DeliveryReliableOrdered},
+	}
+	for _, tc := range cases {
+		if got := cm.DeliveryClassFor(tc.connID); got != tc.want {
+			t.Errorf("%s: DeliveryClassFor(%d) = %v, want %v", tc.name, tc.connID, got, tc.want)
+		}
+	}
+}
+
+// TestTransportDeliveryClasses pins the concrete transports' static answers.
+// These are what the replication ACK-mode latch is built on; changing either
+// silently changes how every connection of that type replicates.
+func TestTransportDeliveryClasses(t *testing.T) {
+	var ws Transport = &WSTransport{}
+	if p, ok := ws.(DeliveryClassProvider); !ok {
+		t.Fatal("WSTransport does not implement DeliveryClassProvider")
+	} else if got := p.DeliveryClass(); got != DeliveryReliableOrdered {
+		t.Fatalf("WSTransport.DeliveryClass() = %v, want DeliveryReliableOrdered", got)
+	}
+
+	var udp Transport = &UDPTransport{}
+	if p, ok := udp.(DeliveryClassProvider); !ok {
+		t.Fatal("UDPTransport does not implement DeliveryClassProvider")
+	} else if got := p.DeliveryClass(); got != DeliveryBestEffort {
+		t.Fatalf("UDPTransport.DeliveryClass() = %v, want DeliveryBestEffort", got)
+	}
+}

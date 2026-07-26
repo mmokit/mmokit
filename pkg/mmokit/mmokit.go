@@ -787,6 +787,23 @@ func DefaultReplicationConfig(eng *engine.Engine, grid *spatial.HashGrid, clock 
 			}
 			return session.StreamGeneration, true
 		},
+		AckModeFor: func(connID uint32) replication.AckMode {
+			src, ok := eng.ConnMgr.(net.ConnDeliveryClassSource)
+			if !ok {
+				// Host-side VirtualConnManager: the client transport lives on
+				// a remote gateway and this process cannot see its class.
+				// Start reliable; drainFrameReceipts latches explicit ACK if
+				// the gateway's mesh receipt reports a weaker class.
+				return replication.AckReliable
+			}
+			if src.DeliveryClassFor(connID) < net.DeliveryReliableOrdered {
+				eng.Log.Log(universe.CatNetConn,
+					"replication: conn=%d datagram transport, using explicit frame ACKs", connID)
+				return replication.AckExplicit
+			}
+			return replication.AckReliable
+		},
+		RegisterAck: eng.SetReplicationAck,
 	}
 }
 

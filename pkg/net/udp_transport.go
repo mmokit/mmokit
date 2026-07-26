@@ -209,6 +209,15 @@ func (t *UDPTransport) BytesSent() uint64 { return t.bytesSent.Load() }
 // BytesRecv returns cumulative bytes received on this transport.
 func (t *UDPTransport) BytesRecv() uint64 { return t.bytesRecv.Load() }
 
+// DeliveryClass reports the static guarantee of a UDP transport. Best-effort
+// for BOTH SendUnreliable and SendReliable: the reliability layer here
+// retransmits but is explicitly unordered and has no replay protection, so
+// classifying it any higher would let replication commit a baseline the peer
+// may never have applied in order. Hardening it is CE-005b Tier 2, not this
+// item — and honest best-effort classification is exactly what drives the
+// explicit-ACK selection that makes datagram delta compression work at all.
+func (t *UDPTransport) DeliveryClass() DeliveryClass { return DeliveryBestEffort }
+
 // Close shuts down the transport.
 func (t *UDPTransport) Close() {
 	// Match the sendMu -> closeMu order used by SendReliable and maintenance.

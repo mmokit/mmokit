@@ -72,6 +72,27 @@ type WorldDelta struct {
 	StreamEpoch uint32 // session replication generation; scopes frame sequence across restarts
 }
 
+// ReplicationAck — client→server acknowledgement of one WorldDelta frame.
+//
+// StreamEpoch is echoed from WorldDelta.StreamEpoch; Seq is the big-endian
+// uint32 at byte offset 4 of WorldDelta.Body (see pkg/quantize/wireformat.go
+// for the 20-byte header layout). Both are needed because Seq restarts at one
+// when a client's authority moves to another cell, so a delayed ACK from the
+// previous stream must not commit the current one.
+//
+// Only datagram transports need this. The server latches explicit-ACK
+// baseline advancement per connection from the transport's static delivery
+// class, so reliable-ordered transports (WebSocket) never ask for it — the
+// class appears in their generated SDK and is simply unused.
+//
+// Sending an unsolicited or stale ack is harmless: AckFrame promotes only the
+// exact (StreamEpoch, Seq) currently in flight, and a connection may have at
+// most one attempt in flight at a time.
+type ReplicationAck struct {
+	StreamEpoch uint32
+	Seq         uint32
+}
+
 // PlayerEntityAssigned — sent once per session right after the player's
 // entity is spawned, telling the client its authoritative entity NetID and
 // world-space position.

@@ -46,4 +46,16 @@ type ReplicationReceiptSource interface {
 	DrainReplicationReceipts(connID uint32, scope uint64) []ReplicationReceipt
 }
 
-var _ ConnSender = (*ConnManager)(nil)
+// ConnDeliveryClassSource is an optional ConnSender capability reporting the
+// delivery guarantee of one connection's client transport. Satisfied by
+// *ConnManager; deliberately NOT by VirtualConnManager, whose client
+// transport lives on a remote gateway — that path latches its class from the
+// mesh replication receipt instead.
+type ConnDeliveryClassSource interface {
+	DeliveryClassFor(connID uint32) DeliveryClass
+}
+
+var (
+	_ ConnSender              = (*ConnManager)(nil)
+	_ ConnDeliveryClassSource = (*ConnManager)(nil)
+)

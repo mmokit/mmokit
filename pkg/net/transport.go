@@ -31,3 +31,11 @@ type ByteCounter interface {
 	BytesSent() uint64
 	BytesRecv() uint64
 }
+
+// DeliveryClassProvider is an optional Transport capability reporting the
+// strongest guarantee this transport can ever provide. It is a property of
+// the transport TYPE, fixed for the connection's lifetime, and must never
+// vary with queue depth, backpressure, or any other mutable runtime state —
+// replication latches its per-connection ACK mode from it exactly once, and
+// the wire schema is built assuming the answer is static.
+type DeliveryClassProvider interface{ DeliveryClass() DeliveryClass }
