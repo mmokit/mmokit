@@ -119,11 +119,15 @@ Failure propagation landed: [`pkg/universe/grpc_bridge.go:80-123`](../pkg/univer
 
 The acceptance protocol itself does not exist. `HandoffAccepted` appears in no source file. Demotion is still armed on local enqueue rather than destination acceptance, there is no `(NetID, Epoch)` deduplication, and mesh stream cleanup still deletes unconditionally by a payload-supplied ID (`mesh_control_server.go:154-159`), so a reconnect race can delete the newer stream's registration.
 
-#### CE-005b — UDP security and gating · **Open**
+#### CE-005b — UDP security and gating · **Tier 1 done; Tier 2 open**
 
-The reliability defects are fixed (see CE-005a in P1). The security half is untouched: [`pkg/net/udp_server.go:88-133`](../pkg/net/udp_server.go) never compares the source address against the bound transport, and `:136-179` allocates a transport plus goroutine per spoofable connection request.
+Tier 1 landed. [`pkg/net/udp_server.go`](../pkg/net/udp_server.go) now routes every data packet through a single identity chokepoint, `routeFor`, which requires the packet's source address to match the address its session is bound to. A token is no longer a bearer credential: replaying one from another address neither injects input nor tears the session down, and a mismatch is dropped silently rather than answered, so the server cannot be used to confirm a guessed token or as a reflector.
 
-**UDP is on by default.** [`pkg/universe/bootstrap.go:73-75`](../pkg/universe/bootstrap.go) defaults `--udp-listen` to `:9000`. The only "experimental" marking anywhere is a code comment. Either gate it off by default or complete the security work — the current state is neither.
+Connection requests no longer allocate. An unauthenticated request now records only a `pendingHandshake`; the transport and its goroutine are created only when a data packet arrives carrying the token for that same source address, which proves return routability. Both the pending table and the session table are bounded, pending entries expire, and drop counters are exposed with rate-limited logging so the log itself cannot be used for amplification.
+
+**UDP is now off by default.** `--udp-listen` defaults to empty and logs an explicit experimental warning when enabled, escalated for a non-loopback bind. Nine regression tests in `pkg/net/udp_server_test.go` cover spoofed data, spoofed disconnect, foreign-token promotion, handshake idempotence, and both caps; the package is race-clean.
+
+Tier 2 remains open: real cryptographic connection identity (authenticated handshake and AEAD framing) so that an *on-path* attacker cannot read or forge traffic, and so address rebinding for roaming clients can be supported safely. That is the same work as WS-002 Unit 2 and depends on WS-003 delivering a UDP session key over HTTPS — track it there, not twice.
 
 #### CE-006 — Mesh authentication and authorization · **Open (0/7)**
 

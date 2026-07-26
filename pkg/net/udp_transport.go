@@ -3,7 +3,7 @@ package net
 import (
 	"io"
 	"log"
-	"net"
+	"net/netip"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -49,8 +49,14 @@ type reliableEntry struct {
 
 // UDPTransport implements Transport over UDP with reliable and unreliable channels.
 type UDPTransport struct {
-	server     *UDPServer
-	addr       *net.UDPAddr
+	server *UDPServer
+	// addr is the peer address this session is bound to. It is immutable
+	// after construction so UDPServer.routeFor can compare it without a
+	// lock. netip.AddrPort is stored raw off the read loop and never
+	// round-tripped through *net.UDPAddr: on a dual-stack socket that
+	// conversion re-maps a v4 peer into 4-in-6 form, which would compare
+	// unequal to the address the packet actually arrived from.
+	addr       netip.AddrPort
 	token      uint32
 	clientSalt uint64
 	serverSalt uint64
@@ -87,7 +93,7 @@ type UDPTransport struct {
 	bytesRecv atomic.Uint64
 }
 
-func newUDPTransport(server *UDPServer, addr *net.UDPAddr, token uint32, clientSalt, serverSalt uint64) *UDPTransport {
+func newUDPTransport(server *UDPServer, addr netip.AddrPort, token uint32, clientSalt, serverSalt uint64) *UDPTransport {
 	t := &UDPTransport{
 		server:     server,
 		addr:       addr,
@@ -223,7 +229,7 @@ func (t *UDPTransport) Close() {
 
 	// Send disconnect packet (best effort)
 	pkt := udpproto.EncodeDisconnect(t.token)
-	t.server.conn.WriteToUDP(pkt, t.addr)
+	t.server.conn.WriteToUDPAddrPort(pkt, t.addr)
 }
 
 // handleUnreliable processes an inbound unreliable message. The payload's
@@ -350,7 +356,7 @@ func (t *UDPTransport) sendRaw(data []byte) SendResult {
 		t.closeMu.Unlock()
 		return SendResult{Disposition: SendClosed}
 	}
-	n, err := t.server.conn.WriteToUDP(data, t.addr)
+	n, err := t.server.conn.WriteToUDPAddrPort(data, t.addr)
 	if err != nil {
 		t.closeMu.Unlock()
 		return SendResult{Disposition: SendFailed, Err: err}

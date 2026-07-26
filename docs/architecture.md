@@ -162,7 +162,7 @@ Hand-authored world content lives in tracked JSON under `world/` and is loaded t
 ## Observability and administration
 
 - Gateway HTTP defaults to `:8080` for `/ws`, `/auth`, and gateway metrics/routes.
-- Client UDP defaults to `:9000` and can be disabled with an empty `--udp-listen`.
+- Client UDP is experimental and disabled by default; enable with `--udp-listen=:9000`. Sessions are bound to a source address, but the framing is unauthenticated and unencrypted.
 - MeshControl defaults to `:9100` on the coordinator.
 - Coordinator admin/metrics defaults to `:9101`; `/admin/` hosts the operator UI when enabled.
 - Per-cell metrics cover tick timing, entity counts, connections, bytes, and border traffic.

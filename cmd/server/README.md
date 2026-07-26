@@ -71,7 +71,7 @@ Universal flags are defined by `mmokit.Config.BindFlags`. Common production-spac
 | `--coordinator-addr` | MeshControl endpoint for standalone hosts, gateways, and services |
 | `--control-listen` | Coordinator MeshControl bind; default `:9100` |
 | `--port` | Gateway HTTP port for `/ws`, `/auth`, and related routes; default `8080` |
-| `--udp-listen` | Gateway UDP bind; default `:9000`, empty to disable |
+| `--udp-listen` | Gateway UDP bind; EXPERIMENTAL and off by default, pass `:9000` to enable |
 | `--admin-listen` | Coordinator admin/metrics bind; default `:9101`, empty to disable |
 | `--world-dir` | Directory containing tracked world-manifest JSON; default `world` |
 | `--cors-origins` | Browser origins allowed for credentialed HTTP and, by fallback, WebSocket access |

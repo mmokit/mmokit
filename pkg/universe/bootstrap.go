@@ -71,8 +71,8 @@ func (c *Config) BindFlags() {
 		"MeshControl listen addr (coordinator role)",
 		":9100", &c.ControlListen)
 	stringFlag("udp-listen",
-		"client UDP game protocol listen addr (gateway role; pass empty to disable)",
-		":9000", &c.UDPListen)
+		"client UDP game protocol listen addr (gateway role; EXPERIMENTAL — framing is unauthenticated and unencrypted; empty/off by default, pass e.g. :9000 to enable)",
+		"", &c.UDPListen)
 	stringFlag("admin-listen",
 		"admin HTTP listen addr for /events, /commands, /metrics, /admin/* (default :9101, only binds on RoleCoordinator processes; pass empty to disable)",
 		":9101", &c.AdminListen)
@@ -280,6 +280,11 @@ func (c *Process) startUDPListener(ctx context.Context) {
 	if err != nil {
 		c.Log.Log(CatMeshCell, "udp: listener bind error on %s: %v", c.cfg.UDPListen, err)
 		return
+	}
+	if isLoopbackBind(c.cfg.UDPListen) {
+		c.Log.Log(CatMeshCell, "udp: WARNING experimental transport enabled on %s — packets are unauthenticated and unencrypted (sessions are source-address bound only)", c.cfg.UDPListen)
+	} else {
+		c.Log.Log(CatMeshCell, "udp: WARNING experimental transport enabled on NON-LOOPBACK address %s — packets are unauthenticated and unencrypted (sessions are source-address bound only); an on-path attacker can read and forge client traffic. Do not expose to untrusted networks until UDP secure framing lands", c.cfg.UDPListen)
 	}
 	c.Log.Log(CatMeshCell, "udp: listening on %s (roles=%s)", c.cfg.UDPListen, c.roles)
 	go udpServer.Run(ctx)

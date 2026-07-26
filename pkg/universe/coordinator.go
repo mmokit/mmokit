@@ -120,8 +120,14 @@ type Config struct {
 	// UDPListen is the listen address for the engine-owned client UDP server
 	// (the custom reliable/unreliable game protocol — see pkg/net/udpproto).
 	// Bound only on processes that bear the Gateway role (alongside the HTTP
-	// /ws listener), so every game gets UDP for free. Default ":9000" via
-	// BindFlags. Pass "" to disable.
+	// /ws listener).
+	//
+	// EXPERIMENTAL and DISABLED BY DEFAULT. The framing is unauthenticated and
+	// unencrypted: sessions are bound to a source address, which stops an
+	// off-path attacker from hijacking or killing one, but an on-path observer
+	// can still read and forge traffic. Enable with --udp-listen=:9000 or by
+	// setting this field, and do not expose it to untrusted networks until the
+	// authenticated secure framing work lands.
 	UDPListen string
 
 	// AdminListen is the listen address for an HTTP admin server that

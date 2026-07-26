@@ -2,6 +2,7 @@ package net
 
 import (
 	"net"
+	"net/netip"
 	"slices"
 	"sync"
 	"sync/atomic"
@@ -219,7 +220,7 @@ func TestUDPTransport_ConcurrentHandlersMaintenanceAndClose(t *testing.T) {
 	// all synchronization paths without binding a port or depending on sleeps.
 	tr := &UDPTransport{
 		server: &UDPServer{conn: &net.UDPConn{}},
-		addr:   &net.UDPAddr{},
+		addr:   netip.AddrPort{},
 		done:   make(chan struct{}),
 	}
 	nowTick := udpClockStamp(time.Now())
@@ -261,17 +262,17 @@ func TestUDPTransport_ReliableLifetimeSurvivesRetransmits(t *testing.T) {
 	server := &UDPServer{
 		conn:    &net.UDPConn{},
 		byToken: make(map[uint32]*UDPTransport),
-		byAddr:  make(map[string]*UDPTransport),
+		byAddr:  make(map[netip.AddrPort]*UDPTransport),
 		connIDs: make(map[*UDPTransport]uint32),
 	}
 	tr := &UDPTransport{
 		server: server,
-		addr:   &net.UDPAddr{},
+		addr:   netip.AddrPort{},
 		token:  0xABCDEF01,
 		done:   make(chan struct{}),
 	}
 	server.byToken[tr.token] = tr
-	server.byAddr[tr.addr.String()] = tr
+	server.byAddr[tr.addr] = tr
 
 	firstSentAt := time.Now()
 	tr.lastRecvTick.Store(udpClockStamp(firstSentAt))
@@ -320,7 +321,7 @@ func TestUDPTransport_ReliableLifetimeSurvivesRetransmits(t *testing.T) {
 	if tr.sendBuf[0].used || tr.sendBuf[0].payload != nil {
 		t.Fatalf("reliable timeout retained ring slot: %+v", tr.sendBuf[0])
 	}
-	if server.byToken[tr.token] != nil || server.byAddr[tr.addr.String()] != nil {
+	if server.byToken[tr.token] != nil || server.byAddr[tr.addr] != nil {
 		t.Fatal("reliable timeout did not remove transport routes")
 	}
 }

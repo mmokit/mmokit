@@ -287,6 +287,8 @@ csharp-sdk:
 # against a RUNNING 4node server. Compiles the generated SDK from UNITY_SDK_DIR.
 # Args: just csharp-smoke [host] [username] [password] [seconds]   (defaults:
 # 127.0.0.1 smokebot 4node-demo-password 12). For WSL2→Windows use the WSL IP.
+# The UDP transport is experimental and OFF by default: start the target server
+# with --udp-listen=:9000 or this bot has nothing to connect to.
 csharp-smoke *ARGS:
     dotnet run --project csharp/Mmokit.Sdk.SmokeBot \
         -p:UnitySdkDir="{{ env('UNITY_SDK_DIR', '<WINDOWS-HOME>/unitygames/spacemmo-client/Assets/Mmokit/Sdk') }}" \
