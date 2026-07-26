@@ -2,7 +2,9 @@
 
 **Last verified:** 2026-07-13
 
-MMOKIT is a server-authoritative 2D MMO framework and a space-game implementation. The reusable engine lives under `pkg/`; the space game composes it from `internal/` and `cmd/server/`. Games normally import the `pkg/mmokit` facade rather than assembling engine packages directly.
+MMOKIT is a server-authoritative multiplayer game framework; this repository also contains a reference space-game implementation. The reusable engine lives under `pkg/`; the space game composes it from `internal/` and `cmd/server/`. Games normally import the `pkg/mmokit` facade rather than assembling engine packages directly.
+
+The current implementation is 2D throughout. For project scope, goals, and planned direction — including first-class 3D support — see [`roadmap.md`](roadmap.md).
 
 This page describes the current implementation. It is not a future design proposal.
 
@@ -93,7 +95,7 @@ An entity's network ID can have these local representations:
 - **Replica:** read-only border state owned by another cell.
 - **Ghost:** non-authoritative transfer residue retained for protocol/lifecycle handling.
 
-The NetID index and authority epoch protect the one-writer invariant. Game-facing queries exclude Ghost and Replica by default; explicit all-entity iteration is reserved for framework and diagnostic paths.
+The NetID index and authority epoch protect the one-writer invariant. Bundle queries (`mmokit.Query`) exclude Ghost and Replica by default. Note that `ForEach1/2/3` do not: they iterate raw filters and can expose neighbour-owned replicas, including to WASM systems. Making all game-facing iteration default to authoritative live entities is tracked as CE-010 in [`roadmap.md`](roadmap.md).
 
 ### Spatial ownership and topology
 
@@ -110,7 +112,7 @@ Client traffic does not use protobuf. The client-facing protocol consists of:
 - Stable type IDs derived from registered Go types
 - Generated TypeScript or C# clients produced from the assembled Go protocol schema
 
-Channel `0x00` carries typed input/events and channel `0x01` carries operations. WebSocket and the custom UDP transport share the connection manager. UDP production-readiness and replication ACK semantics are tracked in the [core engine roadmap](roadmaps/core-engine-improvements.md).
+Channel `0x00` carries typed input/events and channel `0x01` carries operations. WebSocket and the custom UDP transport share the connection manager; [`pkg/net/README.md`](../pkg/net/README.md) is the authoritative reference for channel bytes and delivery classes. Remaining UDP security and gating work is tracked as CE-005b in [`roadmap.md`](roadmap.md).
 
 Only server-internal MeshControl and MeshData traffic uses protobuf, with its schema in [`proto/meshpb/mesh.proto`](../proto/meshpb/mesh.proto).
 
@@ -187,4 +189,4 @@ Reusable packages must not import `internal/`. Space-game logic uses MMOKIT APIs
 
 ## Known work
 
-The active [core engine improvement roadmap](roadmaps/core-engine-improvements.md) tracks reviewed correctness, security, scalability, and protocol work. In particular, current documentation should not be read as claiming that custom UDP, mesh authentication, or replication backpressure work is complete before the corresponding roadmap items close.
+[`roadmap.md`](roadmap.md) tracks all active correctness, security, scalability, and protocol work, with each item's status verified against source. In particular, this page should not be read as claiming that mesh authentication or UDP transport security are complete — both are open P0 items, and mesh gRPC still uses insecure credentials.

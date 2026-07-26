@@ -1,6 +1,8 @@
 # MMOServer
 
-MMOServer is a server-authoritative 2D MMO framework and reference space game written in Go. The reusable framework is exposed through [`pkg/mmokit`](pkg/mmokit/); the repository also contains a complete game, browser clients, generated client SDK tooling, and distributed deployment examples.
+MMOServer is a server-authoritative multiplayer game framework and reference space game written in Go. The reusable framework is exposed through [`pkg/mmokit`](pkg/mmokit/); the repository also contains a complete game, browser clients, generated client SDK tooling, and distributed deployment examples.
+
+The goal is a framework that can host any genre, with 2D and 3D both first-class. The implementation is 2D today; see [`docs/roadmap.md`](docs/roadmap.md) for the full vision, non-goals, and sequenced plan.
 
 Clients send typed input and render authoritative world-space updates. Cell ownership, host placement, replicas, and handoffs stay inside the server mesh.
 
@@ -124,6 +126,7 @@ The SDK generator assembles those registries after the process builds. Wire type
 ## Documentation
 
 - [`docs/README.md`](docs/README.md) — documentation index and maintenance status
+- [`docs/roadmap.md`](docs/roadmap.md) — vision, non-goals, and all active tracking
 - [`docs/architecture.md`](docs/architecture.md) — current roles, runtime, networking, replication, and persistence
 - [`architecture.excalidraw`](architecture.excalidraw) — editable visual architecture overview
 - [`pkg/mmokit/README.md`](pkg/mmokit/README.md) — game-facing framework guide
@@ -131,6 +134,5 @@ The SDK generator assembles those registries after the process builds. Wire type
 - [`examples/4node-basic/README.md`](examples/4node-basic/README.md) — distributed example and SDK workflow
 - [`AGENTS.md`](AGENTS.md) — authoritative repository guidance for coding agents and contributors
 - [`CLAUDE.md`](CLAUDE.md) — concise Claude Code working notes
-- [`docs/roadmaps/core-engine-improvements.md`](docs/roadmaps/core-engine-improvements.md) — reviewed engine improvement backlog
 
 Current source, tests, and [`justfile`](justfile) recipes are authoritative when a dated planning document disagrees with the implementation.

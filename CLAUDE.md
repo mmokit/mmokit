@@ -6,12 +6,12 @@ Read [`AGENTS.md`](AGENTS.md) before making changes. It is the authoritative, co
 
 - Verify behavior against current source, nearby tests, `go.mod`, and [`justfile`](justfile).
 - Use package READMEs for orientation, then confirm identifiers with `rg` before writing code.
-- Treat `docs/planning/` as a historical index and `docs/superpowers/{plans,specs}/` as dated design records, not proof of current behavior. Use `docs/architecture.md` for the maintained architecture overview.
+- Treat `docs/superpowers/{plans,specs}/` as dated design records, not proof of current behavior. Use `docs/architecture.md` for the maintained architecture overview and `docs/roadmap.md` for vision, non-goals, and active tracking. Never state direction in `architecture.md`.
 - Preserve unrelated worktree changes. Do not perform repository-wide formatting or regeneration as incidental cleanup.
 
 ## Current architecture
 
-This repository contains a reusable server-authoritative 2D MMO framework and a reference space game:
+This repository contains a reusable server-authoritative multiplayer game framework and a reference space game. The implementation is 2D today; first-class 3D is planned (see `docs/roadmap.md`).
 
 - `pkg/mmokit/` is the public game-facing facade. Games and examples should normally import it instead of several lower-level packages.
 - `pkg/engine/` owns the ECS loop, system lifecycle, players, loop jobs, and console foundations.

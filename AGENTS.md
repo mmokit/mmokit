@@ -6,12 +6,13 @@ This file applies to the entire repository. Keep it focused on durable rules; pu
 
 - Current source, tests, and `justfile` recipes are authoritative.
 - Read the implementation and nearby tests before changing a package. Use the nearest README and `CLAUDE.md` for orientation only, then verify names and behavior with `rg`; several examples in those documents describe removed APIs.
-- Use `docs/architecture.md` for the maintained architecture overview and `docs/roadmaps/` for active tracking. `docs/planning/` is a historical index. Treat `docs/superpowers/{plans,specs}` as plugin-owned dated design history, not proof of current behavior; do not edit it during ordinary documentation maintenance.
+- Use `docs/architecture.md` for the maintained architecture overview and `docs/roadmap.md` for vision, non-goals, and all active tracking. `architecture.md` describes what is; `roadmap.md` describes what will be — never state direction in `architecture.md`. Treat `docs/superpowers/{plans,specs}` as plugin-owned dated design history, not proof of current behavior; do not edit it during ordinary documentation maintenance.
+- Every fact has exactly one owning document; others link to it. Do not duplicate a claim into a second file.
 - Preserve unrelated worktree changes. Never perform broad cleanup, regeneration, or formatting unless the task requires it.
 
 ## Project snapshot
 
-This is a server-authoritative 2D MMO framework and space-game implementation. The Go module targets Go 1.25.1. Each cell has a 20 Hz ECS loop; clients send typed input and render absolute world-space updates without knowing the mesh topology.
+This is a server-authoritative multiplayer game framework and space-game implementation. The Go module targets Go 1.25.1. Each cell has a 20 Hz ECS loop; clients send typed input and render absolute world-space updates without knowing the mesh topology. The implementation is 2D today; first-class 3D support is planned and scoped in `docs/roadmap.md`.
 
 - `pkg/mmokit/`: public game-facing facade. Prefer this single import in games and examples.
 - `pkg/universe/`: processes, roles, cells, gateways, meshing, transfers, integrity checks, and cluster coordination.
