@@ -45,3 +45,23 @@ export class Ping {
   }
 }
 
+/** Client-input message mmokit.ReplicationAck (typeID 0xecfd3f69). */
+export class ReplicationAck {
+  static readonly typeID = 0xecfd3f69;
+  streamEpoch: number = 0;
+  seq: number = 0;
+
+  constructor(init?: Partial<ReplicationAck>) {
+    if (init) Object.assign(this, init);
+  }
+
+  encode(): Uint8Array {
+    const buf = new Uint8Array(8);
+    const dv = new DataView(buf.buffer);
+    let off = 0;
+    dv.setUint32(off, this.streamEpoch, true); off += 4;
+    dv.setUint32(off, this.seq, true); off += 4;
+    return buf;
+  }
+}
+
