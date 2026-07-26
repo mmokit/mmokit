@@ -10,6 +10,7 @@ type tsBackend struct {
 	interpBufferTS string // path to interpolation-buffer.ts
 	playbackTS     string // path to playback-controller.ts
 	predictionTS   string // path to prediction-buffer.ts
+	reconGateTS    string // path to reconciliation-gate.ts
 }
 
 func (b tsBackend) Lang() string { return "ts" }
@@ -22,6 +23,7 @@ func (b tsBackend) CoreFiles() []CoreFile {
 		{Src: b.interpBufferTS, Dst: "interpolation-buffer.ts"},
 		{Src: b.playbackTS, Dst: "playback-controller.ts"},
 		{Src: b.predictionTS, Dst: "prediction-buffer.ts"},
+		{Src: b.reconGateTS, Dst: "reconciliation-gate.ts"},
 	}
 }
 

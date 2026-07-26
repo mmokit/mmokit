@@ -102,17 +102,15 @@ namespace Mmokit.Sdk.Core.Tests
                     case "reconcile":
                     {
                         int state = buffer.Reconcile(
-                            step.Seq,
-                            step.State,
-                            (s, _, input) => s + input);
+                            authoritativeState: step.State,
+                            acknowledgedSequence: step.Seq,
+                            (s, input, _) => s + input);
                         Assert.Equal(step.ExpectedState, state);
                         break;
                     }
                     case "reset":
-                        // The C# core has no seeding Reset(ack) overload; a
-                        // seeded reset is emulated by clearing then acking.
-                        buffer.Reset();
-                        if (step.HasSeq) buffer.Acknowledge(step.Seq);
+                        if (step.HasSeq) buffer.Reset(step.Seq);
+                        else buffer.Reset();
                         break;
                     default:
                         throw new InvalidOperationException($"unknown prediction op {step.Op}");

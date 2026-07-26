@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { PredictionBuffer } from "./prediction-buffer";
+import { PredictionBuffer, predictionCorrection } from "./prediction-buffer";
 
 describe("PredictionBuffer", () => {
   test("cumulatively acknowledges and deterministically replays pending inputs", () => {
@@ -87,5 +87,66 @@ describe("PredictionBuffer", () => {
     expect(buffer.overflowCount).toBe(0);
     expect(buffer.push(100, 2).accepted).toBe(false);
     expect(buffer.push(101, 3).accepted).toBe(true);
+  });
+});
+
+describe("PredictionBuffer sequence edge cases", () => {
+  // Present in the C# suite (PredictionBufferTests.RecordRejectsAmbiguous
+  // HalfRangeAfterAcknowledgement) and previously absent here. The exact
+  // half-range distance is UNDEFINED under RFC 1982 serial arithmetic, so it
+  // must be rejected rather than guessed in either direction.
+  test("rejects an ambiguous exactly-half-range sequence after acknowledgement", () => {
+    const buffer = new PredictionBuffer<number>();
+    buffer.acknowledge(10);
+
+    expect(buffer.push((10 + 0x80000000) >>> 0, 1).accepted).toBe(false);
+    expect(buffer.pendingCount).toBe(0);
+  });
+
+  test("rejects an ambiguous exactly-half-range sequence after a push", () => {
+    const buffer = new PredictionBuffer<number>();
+    expect(buffer.push(10, 1).accepted).toBe(true);
+    expect(buffer.push((10 + 0x80000000) >>> 0, 2).accepted).toBe(false);
+    expect(buffer.pendingCount).toBe(1);
+  });
+});
+
+describe("PredictionBuffer.replay", () => {
+  // replay is reconcile without acknowledging — the surface the C# core has
+  // and TS lacked. Same pending set, same order, no frontier movement.
+  test("replays pending inputs without advancing the acknowledgement frontier", () => {
+    const buffer = new PredictionBuffer<number>();
+    buffer.push(1, 10);
+    buffer.push(2, 20);
+    buffer.push(3, 30);
+
+    const seen: number[] = [];
+    const state = buffer.replay(1000, (acc, input, seq) => {
+      seen.push(seq);
+      return acc + input;
+    });
+
+    expect(state).toBe(1060);
+    expect(seen).toEqual([1, 2, 3]);
+    expect(buffer.pendingCount).toBe(3);
+    expect(buffer.lastAcknowledgedSequence).toBeNull();
+  });
+
+  test("replays nothing on an empty buffer", () => {
+    const buffer = new PredictionBuffer<number>();
+    let calls = 0;
+    expect(buffer.replay(7, (acc, input) => { calls++; return acc + input; })).toBe(7);
+    expect(calls).toBe(0);
+  });
+});
+
+describe("predictionCorrection", () => {
+  test("delegates the error metric and clamps the blend factor to 0..1", () => {
+    expect(predictionCorrection.measure(7, 10, (a, b) => Math.abs(a - b))).toBe(3);
+
+    const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
+    expect(predictionCorrection.blend(0, 10, 0.5, lerp)).toBe(5);
+    expect(predictionCorrection.blend(0, 10, 2, lerp)).toBe(10);
+    expect(predictionCorrection.blend(0, 10, -1, lerp)).toBe(0);
   });
 });

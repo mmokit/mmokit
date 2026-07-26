@@ -30,6 +30,7 @@ func main() {
 	interpBufferTS := flag.String("interp-buffer", "pkg/quantize/ts/interpolation-buffer.ts", "Path to interpolation-buffer.ts to copy")
 	playbackTS := flag.String("playback", "pkg/quantize/ts/playback-controller.ts", "Path to playback-controller.ts to copy")
 	predictionTS := flag.String("prediction", "pkg/quantize/ts/prediction-buffer.ts", "Path to prediction-buffer.ts to copy")
+	reconGateTS := flag.String("recon-gate", "pkg/quantize/ts/reconciliation-gate.ts", "Path to reconciliation-gate.ts to copy")
 	namespace := flag.String("namespace", "Mmokit.Sdk", "C#: root namespace for generated files")
 	csharpCore := flag.String("csharp-core", "csharp/Mmokit.Sdk.Core", "C#: dir holding the hand-written _core .cs sources")
 	flag.Parse()
@@ -58,6 +59,7 @@ func main() {
 		InterpBufferTS: *interpBufferTS,
 		PlaybackTS:     *playbackTS,
 		PredictionTS:   *predictionTS,
+		ReconGateTS:    *reconGateTS,
 		CSharpCoreDir:  *csharpCore,
 		Namespace:      *namespace,
 	})

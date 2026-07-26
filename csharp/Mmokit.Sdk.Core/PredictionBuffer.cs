@@ -107,6 +107,18 @@ namespace Mmokit.Sdk.Core
             }
         }
 
+        /// Non-throwing analogue of the property above, matching the TS core's
+        /// nullable `lastAcknowledgedSequence` getter. Returns false before any
+        /// acknowledgement has been observed.
+        public bool TryGetLastAcknowledgedSequence(out uint sequence)
+        {
+            lock (_sync)
+            {
+                sequence = _lastAcknowledgedSequence;
+                return _hasLastAcknowledgement;
+            }
+        }
+
         /// True when candidate is later than reference in the uint serial
         /// number space. Comparisons exactly half the uint range apart are
         /// intentionally treated as unordered.
@@ -119,8 +131,17 @@ namespace Mmokit.Sdk.Core
         /// Record a newly-sent local input. Returns false for a duplicate,
         /// out-of-order sequence, or an input already covered by the latest
         /// acknowledgement. When full, the oldest pending input is evicted.
-        public bool TryRecord(uint sequence, TInput input)
+        public bool TryRecord(uint sequence, TInput input) =>
+            TryRecord(sequence, input, out _);
+
+        /// Overload that surfaces the evicted input, matching the TS core's
+        /// `push().dropped`. Silently discarding it made overflow invisible to
+        /// a caller that wanted to fold the lost command into its own state.
+        /// `dropped` is only meaningful when this returns true AND the buffer
+        /// was already at capacity; check the returned `hasDropped`.
+        public bool TryRecord(uint sequence, TInput input, out PendingInput<TInput> dropped)
         {
+            dropped = default;
             lock (_sync)
             {
                 if (_hasLastAcknowledgement &&
@@ -134,6 +155,7 @@ namespace Mmokit.Sdk.Core
 
                 if (_pending.Count == Capacity)
                 {
+                    dropped = _pending[0];
                     _pending.RemoveAt(0);
                     _droppedInputCount++;
                 }
@@ -177,9 +199,13 @@ namespace Mmokit.Sdk.Core
 
         /// Replay all pending inputs, in sequence order, starting from an
         /// authoritative state. The callback owns all simulation semantics.
+        /// Argument and callback order match the TS core's
+        /// `replay(state, replay)` with `replay(state, input, seq)`. The two
+        /// SDKs are one contract; a Unity client should be able to follow the
+        /// web client's code shape line for line.
         public TState Replay<TState>(
             TState authoritativeState,
-            Func<TState, uint, TInput, TState> replayInput)
+            Func<TState, TInput, uint, TState> replayInput)
         {
             if (replayInput == null)
                 throw new ArgumentNullException(nameof(replayInput));
@@ -192,7 +218,7 @@ namespace Mmokit.Sdk.Core
             for (int i = 0; i < pending.Length; i++)
             {
                 PendingInput<TInput> input = pending[i];
-                state = replayInput(state, input.Sequence, input.Input);
+                state = replayInput(state, input.Input, input.Sequence);
             }
             return state;
         }
@@ -200,10 +226,12 @@ namespace Mmokit.Sdk.Core
         /// Acknowledge through acknowledgedSequence, then rebuild predicted
         /// state from the supplied authoritative snapshot and remaining input
         /// history.
+        /// Argument and callback order match the TS core's
+        /// `reconcile(state, ack, replay)` with `replay(state, input, seq)`.
         public TState Reconcile<TState>(
-            uint acknowledgedSequence,
             TState authoritativeState,
-            Func<TState, uint, TInput, TState> replayInput)
+            uint acknowledgedSequence,
+            Func<TState, TInput, uint, TState> replayInput)
         {
             if (replayInput == null)
                 throw new ArgumentNullException(nameof(replayInput));
@@ -219,7 +247,7 @@ namespace Mmokit.Sdk.Core
             for (int i = 0; i < pending.Length; i++)
             {
                 PendingInput<TInput> input = pending[i];
-                state = replayInput(state, input.Sequence, input.Input);
+                state = replayInput(state, input.Input, input.Sequence);
             }
             return state;
         }
@@ -233,6 +261,20 @@ namespace Mmokit.Sdk.Core
                 _pending.Clear();
                 _hasLastAcknowledgement = false;
                 _lastAcknowledgedSequence = 0;
+                _droppedInputCount = 0;
+            }
+        }
+
+        /// Reset seeded with the authoritative cumulative acknowledgement, so
+        /// subsequent sequence ordering resumes from a known frontier rather
+        /// than accepting anything. Matches the TS core's `reset(ackSeq)`.
+        public void Reset(uint acknowledgedSequence)
+        {
+            lock (_sync)
+            {
+                _pending.Clear();
+                _hasLastAcknowledgement = true;
+                _lastAcknowledgedSequence = acknowledgedSequence;
                 _droppedInputCount = 0;
             }
         }

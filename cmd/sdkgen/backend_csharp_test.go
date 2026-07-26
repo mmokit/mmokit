@@ -132,22 +132,26 @@ func TestCsharpBackend_OutputFiles_SkipsWhenNoEntities(t *testing.T) {
 
 func TestCsharpBackend_CoreFiles(t *testing.T) {
 	core := csharpBackend{coreDir: "x/core"}.CoreFiles()
-	if len(core) != 10 {
-		t.Fatalf("CoreFiles len = %d, want 10", len(core))
+	if len(core) != 11 {
+		t.Fatalf("CoreFiles len = %d, want 11", len(core))
 	}
 	// Dst basenames are what the SDK compiles; Src is threaded from coreDir.
 	if core[0].Dst != "DeltaDecoderCore.cs" || core[0].Src != "x/core/DeltaDecoderCore.cs" {
 		t.Fatalf("CoreFiles[0] = %+v", core[0])
 	}
-	// ReflectCodec.cs must be among the copied runtime files.
-	var hasReflect bool
-	for _, c := range core {
-		if c.Dst == "ReflectCodec.cs" {
-			hasReflect = true
+	// ReflectCodec.cs and ReconciliationGate.cs must be among the copied
+	// runtime files — the gate is the hardest, most race-prone part of client
+	// reconciliation and a Unity client must not have to reinvent it.
+	for _, want := range []string{"ReflectCodec.cs", "ReconciliationGate.cs"} {
+		var found bool
+		for _, c := range core {
+			if c.Dst == want {
+				found = true
+			}
 		}
-	}
-	if !hasReflect {
-		t.Fatalf("CoreFiles missing ReflectCodec.cs: %+v", core)
+		if !found {
+			t.Fatalf("CoreFiles missing %s: %+v", want, core)
+		}
 	}
 }
 

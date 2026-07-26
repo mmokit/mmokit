@@ -138,6 +138,22 @@ export class PredictionBuffer<TInput> {
     };
   }
 
+  /**
+   * Replay every pending input over an authoritative state WITHOUT
+   * acknowledging. Use when a correction arrives out of band from the ACK
+   * frontier — reconcile is the usual entry point.
+   */
+  replay<TState>(
+    authoritativeState: TState,
+    replay: (state: TState, input: TInput, seq: number) => TState,
+  ): TState {
+    let state = authoritativeState;
+    for (const pending of this.entries) {
+      state = replay(state, pending.input, pending.seq);
+    }
+    return state;
+  }
+
   reconcile<TState>(
     authoritativeState: TState,
     ackSeq: number,
@@ -166,3 +182,31 @@ export class PredictionBuffer<TInput> {
     this.overflowCountValue = 0;
   }
 }
+
+/**
+ * Callback-based helpers for consumers that want to measure or visually blend
+ * a correction without coupling this core to a vector or math package.
+ *
+ * Mirrors PredictionCorrection in csharp/Mmokit.Sdk.Core/PredictionBuffer.cs so
+ * the two SDK cores present one contract.
+ */
+export const predictionCorrection = {
+  measure<TState>(
+    predictedState: TState,
+    reconciledState: TState,
+    measureError: (predicted: TState, reconciled: TState) => number,
+  ): number {
+    return measureError(predictedState, reconciledState);
+  },
+
+  /** factor is clamped to 0..1 before it reaches the blend callback. */
+  blend<TState>(
+    displayedState: TState,
+    reconciledState: TState,
+    factor: number,
+    blend: (displayed: TState, reconciled: TState, factor: number) => TState,
+  ): TState {
+    const clamped = Math.max(0, Math.min(1, factor));
+    return blend(displayedState, reconciledState, clamped);
+  },
+};

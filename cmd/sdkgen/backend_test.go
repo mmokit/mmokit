@@ -41,14 +41,15 @@ func TestTSBackendCoreFiles(t *testing.T) {
 		interpBufferTS: "d/interpolation-buffer.ts",
 		playbackTS:     "e/playback-controller.ts",
 		predictionTS:   "f/prediction-buffer.ts",
+		reconGateTS:    "g/reconciliation-gate.ts",
 	}
 	core := b.CoreFiles()
-	if len(core) != 6 {
-		t.Fatalf("CoreFiles len = %d, want 6", len(core))
+	if len(core) != 7 {
+		t.Fatalf("CoreFiles len = %d, want 7", len(core))
 	}
 	// Dst names are the _core/ basenames the SDK imports.
-	wantDst := []string{"delta-decoder-core.ts", "interpolation-core.ts", "clock-sync.ts", "interpolation-buffer.ts", "playback-controller.ts", "prediction-buffer.ts"}
-	wantSrc := []string{"a/delta-decoder-core.ts", "b/interpolation-core.ts", "c/clock-sync.ts", "d/interpolation-buffer.ts", "e/playback-controller.ts", "f/prediction-buffer.ts"}
+	wantDst := []string{"delta-decoder-core.ts", "interpolation-core.ts", "clock-sync.ts", "interpolation-buffer.ts", "playback-controller.ts", "prediction-buffer.ts", "reconciliation-gate.ts"}
+	wantSrc := []string{"a/delta-decoder-core.ts", "b/interpolation-core.ts", "c/clock-sync.ts", "d/interpolation-buffer.ts", "e/playback-controller.ts", "f/prediction-buffer.ts", "g/reconciliation-gate.ts"}
 	for i := range core {
 		if core[i].Dst != wantDst[i] || core[i].Src != wantSrc[i] {
 			t.Fatalf("CoreFiles[%d] = %+v, want Src=%q Dst=%q", i, core[i], wantSrc[i], wantDst[i])

@@ -70,9 +70,9 @@ namespace Mmokit.Sdk.Core.Tests
             var replayed = new List<uint>();
 
             int state = buffer.Reconcile(
-                100,
                 authoritativeState: 20,
-                (current, sequence, input) =>
+                acknowledgedSequence: 100,
+                (current, input, sequence) =>
                 {
                     replayed.Add(sequence);
                     return current * input;
@@ -83,9 +83,9 @@ namespace Mmokit.Sdk.Core.Tests
 
             replayed.Clear();
             int repeated = buffer.Reconcile(
-                100, // duplicate acknowledgement must not alter history
                 authoritativeState: 20,
-                (current, sequence, input) =>
+                acknowledgedSequence: 100, // duplicate ack must not alter history
+                (current, input, sequence) =>
                 {
                     replayed.Add(sequence);
                     return current * input;
@@ -135,9 +135,9 @@ namespace Mmokit.Sdk.Core.Tests
             using var replayStarted = new ManualResetEventSlim();
             using var releaseReplay = new ManualResetEventSlim();
             Task<int> reconcile = Task.Run(() => buffer.Reconcile(
-                1,
                 authoritativeState: 0,
-                (state, _, input) =>
+                acknowledgedSequence: 1,
+                (state, input, _) =>
                 {
                     replayStarted.Set();
                     Assert.True(releaseReplay.Wait(TimeSpan.FromSeconds(10)));
@@ -213,5 +213,83 @@ namespace Mmokit.Sdk.Core.Tests
                 result[i] = pending[i].Sequence;
             return result;
         }
+        [Fact]
+        public void ReplayRebuildsStateWithoutAdvancingTheAcknowledgementFrontier()
+        {
+            var buffer = new PredictionBuffer<int>();
+            buffer.TryRecord(1, 10);
+            buffer.TryRecord(2, 20);
+            buffer.TryRecord(3, 30);
+            var replayed = new List<uint>();
+
+            int state = buffer.Replay(1000, (acc, input, sequence) =>
+            {
+                replayed.Add(sequence);
+                return acc + input;
+            });
+
+            Assert.Equal(1060, state);
+            Assert.Equal(new uint[] { 1, 2, 3 }, replayed);
+            Assert.Equal(3, buffer.Count);
+            Assert.False(buffer.HasLastAcknowledgement);
+        }
+
+        [Fact]
+        public void SeededResetEstablishesTheAcknowledgementFrontier()
+        {
+            var buffer = new PredictionBuffer<int>();
+            buffer.TryRecord(1, 10);
+
+            buffer.Reset(100);
+
+            Assert.Empty(buffer.Pending);
+            Assert.True(buffer.HasLastAcknowledgement);
+            Assert.Equal(100u, buffer.LastAcknowledgedSequence);
+            // Sequences at or behind the seeded frontier are now rejected.
+            Assert.False(buffer.TryRecord(100, 1));
+            Assert.False(buffer.TryRecord(99, 1));
+            Assert.True(buffer.TryRecord(101, 1));
+        }
+
+        [Fact]
+        public void BareResetClearsTheAcknowledgementFrontier()
+        {
+            var buffer = new PredictionBuffer<int>();
+            buffer.Acknowledge(500);
+            buffer.Reset();
+
+            Assert.False(buffer.HasLastAcknowledgement);
+            Assert.False(buffer.TryGetLastAcknowledgedSequence(out _));
+            // Any sequence is acceptable once the frontier is gone.
+            Assert.True(buffer.TryRecord(1, 1));
+        }
+
+        [Fact]
+        public void TryRecordSurfacesTheEvictedInputOnOverflow()
+        {
+            var buffer = new PredictionBuffer<int>(capacity: 2);
+            Assert.True(buffer.TryRecord(1, 10, out var noneYet));
+            Assert.Equal(default, noneYet.Sequence);
+            Assert.True(buffer.TryRecord(2, 20, out _));
+
+            Assert.True(buffer.TryRecord(3, 30, out var dropped));
+            Assert.Equal(1u, dropped.Sequence);
+            Assert.Equal(10, dropped.Input);
+            Assert.Equal(1, buffer.DroppedInputCount);
+        }
+
+        [Fact]
+        public void TryGetLastAcknowledgedSequenceIsTheNonThrowingAnalogue()
+        {
+            var buffer = new PredictionBuffer<int>();
+            Assert.False(buffer.TryGetLastAcknowledgedSequence(out _));
+            Assert.Throws<InvalidOperationException>(() => buffer.LastAcknowledgedSequence);
+
+            buffer.Acknowledge(42);
+            Assert.True(buffer.TryGetLastAcknowledgedSequence(out uint seq));
+            Assert.Equal(42u, seq);
+            Assert.Equal(42u, buffer.LastAcknowledgedSequence);
+        }
+
     }
 }

@@ -1,14 +1,16 @@
 import { estimatedServerNow } from "../sdk/_core/clock-sync.js";
 import { isForwardSequence } from "../sdk/_core/playback-controller.js";
-import type { GameState } from "./state";
+import {
+  type AckedFrame,
+  ReconciliationGate,
+} from "../sdk/_core/reconciliation-gate.js";
+import { rebaseInputSequence, type GameState } from "./state";
 import {
   DEFAULT_MAX_PREDICTION_HORIZON_MS,
   projectShipPrediction,
   type AuthoritativeShipPredictionSeed,
   type ShipPredictionInput,
 } from "./prediction";
-
-const DEFAULT_STAGED_PAIRS = 8;
 
 export interface MovementSeedWire {
   valid: boolean;
@@ -38,127 +40,22 @@ export interface MovementSeedWire {
   decelerationDist: number;
 }
 
-export interface AcceptedMovementFrame {
-  streamEpoch: number;
-  tick: number;
-  processedSequence: number;
-}
-
-function pairKey(epoch: number, tick: number, sequence: number): string {
-  return `${epoch >>> 0}:${tick >>> 0}:${sequence >>> 0}`;
-}
-
-function addBounded<T>(map: Map<string, T>, key: string, value: T, limit: number): void {
-  map.delete(key);
-  map.set(key, value);
-  while (map.size > limit) {
-    const oldest = map.keys().next().value as string | undefined;
-    if (oldest === undefined) break;
-    map.delete(oldest);
-  }
-}
+/**
+ * The frame identity this game pairs on. Structurally the shared core's
+ * AckedFrame; kept as a named export because network.ts and the tests use it.
+ */
+export type AcceptedMovementFrame = AckedFrame;
 
 /**
- * Pairs owner movement seeds with accepted WorldDelta frames. The decoder's
- * whole-frame stream fence runs before frames enter this gate, and matching on
- * stream generation + tick + cumulative movement sequence prevents a
- * stale source from retiring commands during handoff. Both delivery orders are
- * supported and staging is deliberately bounded.
+ * Ship-typed view of the generic reconciliation gate.
+ *
+ * The pairing logic itself — bounded oldest-first staging, forward-only stream
+ * advance, epoch retention, both arrival orders — is game-neutral and now
+ * lives in the SDK core (`pkg/quantize/ts/reconciliation-gate.ts`) so a Unity
+ * client does not have to reinvent the most race-prone part of client
+ * reconciliation. Only the seed type is game-specific.
  */
-export class MovementReconciliationGate {
-  private readonly maxStaged: number;
-  private seeds = new Map<string, AuthoritativeShipPredictionSeed>();
-  private frames = new Map<string, AcceptedMovementFrame>();
-  private currentStreamEpoch: number | null = null;
-
-  constructor(maxStaged = DEFAULT_STAGED_PAIRS) {
-    if (!Number.isSafeInteger(maxStaged) || maxStaged < 1) {
-      throw new RangeError("maxStaged must be a positive safe integer");
-    }
-    this.maxStaged = maxStaged;
-  }
-
-  /** Returns true when an accepted frame establishes a fresh replication stream. */
-  observeStream(streamEpoch: number): boolean {
-    const epoch = streamEpoch >>> 0;
-    if (this.currentStreamEpoch === null) {
-      this.currentStreamEpoch = epoch;
-      this.retainEpoch(epoch);
-      return false;
-    }
-    if (epoch === this.currentStreamEpoch) return false;
-    if (!isForwardSequence(this.currentStreamEpoch, epoch)) return false;
-    this.currentStreamEpoch = epoch;
-    this.retainEpoch(epoch);
-    return true;
-  }
-
-  /** Clear pre-reset pair records while preserving this frame's early seed. */
-  resetForFreshSnapshot(frame: AcceptedMovementFrame | null): void {
-    let matchingSeed: AuthoritativeShipPredictionSeed | undefined;
-    let key = "";
-    if (frame) {
-      key = pairKey(frame.streamEpoch, frame.tick, frame.processedSequence);
-      matchingSeed = this.seeds.get(key);
-    }
-    this.seeds.clear();
-    this.frames.clear();
-    if (matchingSeed) this.seeds.set(key, matchingSeed);
-  }
-
-  /** Allow the current stream or an early seed from its forward successor. */
-  acceptsSeedStream(streamEpoch: number): boolean {
-    const epoch = streamEpoch >>> 0;
-    return this.currentStreamEpoch === null ||
-      epoch === this.currentStreamEpoch ||
-      isForwardSequence(this.currentStreamEpoch, epoch);
-  }
-
-  /**
-   * Whether a seed may affect prediction before its exact frame arrives.
-   * Successor-stream seeds remain quarantined until the delta decoder accepts
-   * that stream; an unestablished connection may use its first seed directly.
-   */
-  canApplySeedImmediately(streamEpoch: number): boolean {
-    const epoch = streamEpoch >>> 0;
-    return this.currentStreamEpoch === null || epoch === this.currentStreamEpoch;
-  }
-
-  private retainEpoch(epoch: number): void {
-    const prefix = `${epoch >>> 0}:`;
-    for (const key of this.seeds.keys()) {
-      if (!key.startsWith(prefix)) this.seeds.delete(key);
-    }
-    for (const key of this.frames.keys()) {
-      if (!key.startsWith(prefix)) this.frames.delete(key);
-    }
-  }
-
-  stageSeed(seed: AuthoritativeShipPredictionSeed): AuthoritativeShipPredictionSeed | null {
-    if (!this.acceptsSeedStream(seed.streamEpoch)) return null;
-    const key = pairKey(seed.streamEpoch, seed.tick, seed.processedSequence);
-    if (this.frames.delete(key)) return seed;
-    addBounded(this.seeds, key, seed, this.maxStaged);
-    return null;
-  }
-
-  stageFrame(frame: AcceptedMovementFrame): AuthoritativeShipPredictionSeed | null {
-    const key = pairKey(frame.streamEpoch, frame.tick, frame.processedSequence);
-    const seed = this.seeds.get(key);
-    if (seed) {
-      this.seeds.delete(key);
-      return seed;
-    }
-    addBounded(this.frames, key, frame, this.maxStaged);
-    return null;
-  }
-
-  reset(): void {
-    this.currentStreamEpoch = null;
-    this.seeds.clear();
-    this.frames.clear();
-  }
-}
+export class MovementReconciliationGate extends ReconciliationGate<AuthoritativeShipPredictionSeed> {}
 
 const finitePoseFields: (keyof MovementSeedWire)[] = [
   "worldX",
@@ -272,7 +169,7 @@ export function acceptMovementSeed(state: GameState, seed: AuthoritativeShipPred
     // matching delta. Seed the outbound counter now so the first click is not
     // rejected against an older server frontier; buffered entries still wait
     // for the exact pair before physical retirement.
-    state.inputSeq = rebaseSerial(state.inputSeq, seed.processedSequence);
+    state.inputSeq = rebaseInputSequence(state.inputSeq, seed.processedSequence);
   }
   // A new authority may stamp its first seed behind the old producer's
   // timeline. Reset the prediction cursor just as entity interpolation resets
@@ -293,14 +190,7 @@ export function acknowledgeMovementSeed(
   state.processedMovementSeq = state.movementPrediction.lastAcknowledgedSequence;
   state.inputSeq = seed.processedSequence === 0
     ? state.inputSeq
-    : rebaseSerial(state.inputSeq, seed.processedSequence);
-}
-
-function rebaseSerial(current: number, acknowledged: number): number {
-  const currentSeq = current >>> 0;
-  const ack = acknowledged >>> 0;
-  if (currentSeq === 0 || isForwardSequence(currentSeq, ack)) return ack;
-  return currentSeq;
+    : rebaseInputSequence(state.inputSeq, seed.processedSequence);
 }
 
 /** Override only the local render pose; authoritative entity samples stay intact. */

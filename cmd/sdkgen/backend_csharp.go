@@ -29,6 +29,7 @@ func (b csharpBackend) CoreFiles() []CoreFile {
 		"InterpolationBuffer.cs",
 		"AdaptivePlaybackController.cs",
 		"PredictionBuffer.cs",
+		"ReconciliationGate.cs",
 		"ReflectCodec.cs",
 		"UdpProto.cs",
 		"UdpTransport.cs",
