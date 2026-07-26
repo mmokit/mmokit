@@ -15,36 +15,59 @@ func inputSequenceAfter(candidate, current uint32) bool {
 	return candidate != current && int32(candidate-current) > 0
 }
 
+// moveTargetOutcome reports what consumeMoveTargetInput did with a command.
+// The distinction matters for diagnosis: a stale sequence means the client is
+// replaying or reordering, while a consumed-but-rejected target means the
+// client asked for somewhere it cannot go. Both look identical from the
+// client's side — it just sees the command acknowledged and never applied.
+type moveTargetOutcome uint8
+
+const (
+	// moveTargetStale — sequence at or behind the acknowledged frontier.
+	// Nothing was consumed and nothing was acknowledged.
+	moveTargetStale moveTargetOutcome = iota
+	// moveTargetApplied — consumed and the target was updated (or cleared).
+	moveTargetApplied
+	// moveTargetBlocked — consumed and acknowledged, but the player's
+	// lifecycle state forbids movement (dead, docking, docked).
+	moveTargetBlocked
+	// moveTargetRejected — consumed and acknowledged, but the target was
+	// non-finite or outside the world.
+	moveTargetRejected
+)
+
+func (o moveTargetOutcome) consumed() bool { return o != moveTargetStale }
+
 // consumeMoveTargetInput applies the latest idempotent movement command. A
 // non-zero sequence is marked processed even when semantic validation rejects
 // the target, allowing prediction clients to retire poison/bad commands and
 // reconcile to authoritative state instead of retrying forever.
-func consumeMoveTargetInput(mt *mmokit.MoveTarget, msg *SetMoveTarget, canMove bool, maxWorldX, maxWorldY float32) bool {
+func consumeMoveTargetInput(mt *mmokit.MoveTarget, msg *SetMoveTarget, canMove bool, maxWorldX, maxWorldY float32) moveTargetOutcome {
 	if msg.Sequence != 0 {
 		if mt.Sequence != 0 && !inputSequenceAfter(msg.Sequence, mt.Sequence) {
-			return false
+			return moveTargetStale
 		}
 		mt.Sequence = msg.Sequence
 	}
 	if !canMove {
-		return true
+		return moveTargetBlocked
 	}
 	if !msg.Active {
 		mt.Active = false
-		return true
+		return moveTargetApplied
 	}
 	if math.IsNaN(float64(msg.X)) || math.IsNaN(float64(msg.Y)) ||
 		math.IsInf(float64(msg.X), 0) || math.IsInf(float64(msg.Y), 0) {
-		return true
+		return moveTargetRejected
 	}
 	if maxWorldX > 0 && (msg.X < 0 || msg.X >= maxWorldX) {
-		return true
+		return moveTargetRejected
 	}
 	if maxWorldY > 0 && (msg.Y < 0 || msg.Y >= maxWorldY) {
-		return true
+		return moveTargetRejected
 	}
 	mt.SetTarget(msg.X, msg.Y)
-	return true
+	return moveTargetApplied
 }
 
 // movementInputPolicy keeps the input-ack contract aligned with the viewer
@@ -96,7 +119,14 @@ func RegisterInputs(mmo *mmokit.Process) {
 		}
 		maxWorldX := float32(gw.Config.MeshCellsX) * coords.CellSize
 		maxWorldY := float32(gw.Config.MeshCellsY) * coords.CellSize
-		if !consumeMoveTargetInput(mt, msg, canMove, maxWorldX, maxWorldY) {
+		before := mt.Sequence
+		outcome := consumeMoveTargetInput(mt, msg, canMove, maxWorldX, maxWorldY)
+		logMoveTargetOutcome(player, msg, outcome, before)
+		if !outcome.consumed() {
+			// Unlabelled counter: a per-player label would scale cardinality
+			// with the player count. A sustained non-zero rate means clients
+			// are replaying or reordering input.
+			gw.eng.Metrics.RecordInputSequenceRejected()
 			return
 		}
 		if input := mmokit.Get[gamecomp.PlayerInput](player); input != nil {
@@ -399,4 +429,52 @@ func RegisterInputs(mmo *mmokit.Process) {
 				player.NetID(), phase)
 		}
 	})
+}
+
+// logMoveTargetOutcome reports movement commands the server did not apply.
+//
+// Gated behind the per-session "input" debug flag rather than rate-limited:
+// a client can send SetMoveTarget at will, so an ungated log line here is a
+// log-volume amplifier, and the interesting case is always one specific
+// player being debugged. Applied commands are not logged at all — that is the
+// normal path and would be one line per click per player.
+func logMoveTargetOutcome(player mmokit.Entity, msg *SetMoveTarget, outcome moveTargetOutcome, previousSeq uint32) {
+	if outcome == moveTargetApplied {
+		return
+	}
+	stage := player.Stage()
+	if stage == nil {
+		return
+	}
+	eng := stage.Engine()
+	if eng == nil {
+		return
+	}
+	conn := mmokit.Get[mmokit.PlayerConn](player)
+	if conn == nil {
+		return
+	}
+	sess := eng.Players.ByConnID(conn.ConnID)
+	if sess == nil || sess.DebugFlags&DebugInput == 0 {
+		return
+	}
+
+	var netID uint32
+	if nid := mmokit.Get[mmokit.NetworkID](player); nid != nil {
+		netID = nid.ID
+	}
+	switch outcome {
+	case moveTargetStale:
+		eng.Log.Log(CatPlayerInput,
+			"move-target ignored (stale sequence): netID=%d got=%d have=%d",
+			netID, msg.Sequence, previousSeq)
+	case moveTargetBlocked:
+		eng.Log.Log(CatPlayerInput,
+			"move-target consumed but movement disabled: netID=%d seq=%d state=%v",
+			netID, msg.Sequence, mmokit.PlayerStateOf(player))
+	case moveTargetRejected:
+		eng.Log.Log(CatPlayerInput,
+			"move-target consumed but target rejected (non-finite or out of world): netID=%d seq=%d target=(%g,%g)",
+			netID, msg.Sequence, msg.X, msg.Y)
+	}
 }

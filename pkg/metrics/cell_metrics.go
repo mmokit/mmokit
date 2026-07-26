@@ -34,6 +34,12 @@ type CellMetrics struct {
 	borderFramesSent   Counter
 	borderFramesRecv   Counter
 
+	// Client-prediction input-ack loop. Observable in production, not only
+	// in the browser dev overlay. Plain counters, no per-player labels — the
+	// cardinality has to stay bounded.
+	inputAckFramesSent     Counter
+	inputSequencesRejected Counter
+
 	// Composite load score — EWMA-smoothed, game loop only.
 	loadEWMA     *EWMA
 	tickRateEWMA *EWMA
@@ -121,6 +127,39 @@ func (nm *CellMetrics) RecordBorderFrameRecv(bytes int) {
 	}
 	nm.borderFramesRecv.Add(1)
 	nm.interNodeBytesRecv.Add(uint64(bytes))
+}
+
+// RecordInputAckFrame is called once per replication frame that carries the
+// four-byte processed-input-sequence trailer. Together with the rejection
+// counter below it makes the client-prediction ACK loop visible in
+// production; before this it was observable only in the browser dev overlay.
+func (nm *CellMetrics) RecordInputAckFrame() {
+	if nm == nil {
+		return
+	}
+	nm.inputAckFramesSent.Add(1)
+}
+
+// RecordInputSequenceRejected is called when a client movement command is
+// dropped as stale or duplicate. A sustained non-zero rate means clients are
+// replaying or reordering input — the symptom that precedes rubber-banding.
+func (nm *CellMetrics) RecordInputSequenceRejected() {
+	if nm == nil {
+		return
+	}
+	nm.inputSequencesRejected.Add(1)
+}
+
+// InputAckSnapshot returns the client-prediction ACK counters as a single
+// read-consistent view.
+func (nm *CellMetrics) InputAckSnapshot() InputAckSnapshot {
+	if nm == nil {
+		return InputAckSnapshot{}
+	}
+	return InputAckSnapshot{
+		FramesWithInputAck: nm.inputAckFramesSent.Load(),
+		SequencesRejected:  nm.inputSequencesRejected.Load(),
+	}
 }
 
 // InterNodeSnapshot returns the current inter-node traffic counters as a

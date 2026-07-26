@@ -21,26 +21,26 @@ const ConfigVersion = 14
 
 // GameConfig holds all tunable game parameters.
 type GameConfig struct {
-	Version             int     `json:"version"`
-	AoIRadius           float32 `json:"aoiRadius"`
-	MaxSpeed            float32 `json:"maxSpeed"`
-	ShipThrust          float32 `json:"shipThrust"`
-	ShipTurnRate        float32 `json:"shipTurnRate"`  // max angular velocity, rad/s
-	ShipTurnAccel       float32 `json:"shipTurnAccel"` // angular acceleration, rad/s^2
-	ShipWidth           float32 `json:"shipWidth"`
-	ShipHeight          float32 `json:"shipHeight"`
-	ShipHealth          float32 `json:"shipHealth"`
-	ShipShield          float32 `json:"shipShield"`
-	ShieldRegenRate     float32 `json:"shieldRegenRate"`
-	ShieldRegenDelay    float32 `json:"shieldRegenDelay"`
-	AsteroidMinRadius   float32 `json:"asteroidMinRadius"`
-	AsteroidMaxRadius   float32 `json:"asteroidMaxRadius"`
-	AsteroidCount       int     `json:"asteroidCount"`
-	MaxCargo            float32 `json:"maxCargo"`
-	SellRange           float32 `json:"sellRange"`
-	StationRadius       float32 `json:"stationRadius"`
-	LootCrateRadius     float32 `json:"lootCrateRadius"`
-	LootCrateLifetime   float32 `json:"lootCrateLifetime"`
+	Version           int     `json:"version"`
+	AoIRadius         float32 `json:"aoiRadius"`
+	MaxSpeed          float32 `json:"maxSpeed"`
+	ShipThrust        float32 `json:"shipThrust"`
+	ShipTurnRate      float32 `json:"shipTurnRate"`  // max angular velocity, rad/s
+	ShipTurnAccel     float32 `json:"shipTurnAccel"` // angular acceleration, rad/s^2
+	ShipWidth         float32 `json:"shipWidth"`
+	ShipHeight        float32 `json:"shipHeight"`
+	ShipHealth        float32 `json:"shipHealth"`
+	ShipShield        float32 `json:"shipShield"`
+	ShieldRegenRate   float32 `json:"shieldRegenRate"`
+	ShieldRegenDelay  float32 `json:"shieldRegenDelay"`
+	AsteroidMinRadius float32 `json:"asteroidMinRadius"`
+	AsteroidMaxRadius float32 `json:"asteroidMaxRadius"`
+	AsteroidCount     int     `json:"asteroidCount"`
+	MaxCargo          float32 `json:"maxCargo"`
+	SellRange         float32 `json:"sellRange"`
+	StationRadius     float32 `json:"stationRadius"`
+	LootCrateRadius   float32 `json:"lootCrateRadius"`
+	LootCrateLifetime float32 `json:"lootCrateLifetime"`
 	// RepairCostPerHP is the credit cost to restore one HP at a station.
 	// Total cost = (MaxHP − CurrentHP) × RepairCostPerHP, rounded up.
 	// 0 disables the repair charge (free repairs).
@@ -145,7 +145,6 @@ type GameConfig struct {
 	// Selection-driven abilities stop the moment the selection clears.
 	LockLosLossBreakSec float32 `json:"lock_los_loss_break_sec"`
 
-
 	// Docking
 	DockTime         float32 `json:"dockTime"`         // seconds to complete docking
 	DockRange        float32 `json:"dockRange"`        // max distance from station surface (collider edge) to initiate docking
@@ -156,6 +155,14 @@ type GameConfig struct {
 	MoveArrivalDist float32 `json:"moveArrivalDist"` // stop thrusting within this distance
 	MoveDecelDist   float32 `json:"moveDecelDist"`   // start reducing thrust at this distance
 	ShipDragCoeff   float32 `json:"shipDragCoeff"`   // linear drag coefficient (higher = snappier stops)
+
+	// MovementPredictionHorizonMs bounds how far ahead the owner-only
+	// movement seed lets a client replay its own ship before it must wait for
+	// authority. 0 disables client movement prediction entirely, which is the
+	// operator kill switch if the predictor is ever suspected of causing
+	// rubber-banding. Was a hard const; an operator could not lower or
+	// disable it without a rebuild.
+	MovementPredictionHorizonMs uint64 `json:"movementPredictionHorizonMs"`
 
 	// Persistence
 	PersistFlushInterval  float32 `json:"persistFlushInterval"`  // seconds between dirty player flushes
@@ -340,6 +347,8 @@ func DefaultGameConfig() GameConfig {
 		MoveArrivalDist: 2.7,
 		MoveDecelDist:   10.0,
 		ShipDragCoeff:   1.5,
+
+		MovementPredictionHorizonMs: 250,
 
 		// Persistence
 		PersistFlushInterval:  15.0, // seconds

@@ -31,32 +31,32 @@ func TestInputSequenceAfterWrapSafe(t *testing.T) {
 
 func TestConsumeMoveTargetInputSequencesAndValidates(t *testing.T) {
 	mt := &mmokit.MoveTarget{}
-	if !consumeMoveTargetInput(mt, &SetMoveTarget{Sequence: 5, Active: true, X: 100, Y: 200}, true, 1000, 1000) {
-		t.Fatal("first input was not consumed")
+	if got := consumeMoveTargetInput(mt, &SetMoveTarget{Sequence: 5, Active: true, X: 100, Y: 200}, true, 1000, 1000); got != moveTargetApplied {
+		t.Fatalf("first input outcome = %v, want moveTargetApplied", got)
 	}
 	if mt.Sequence != 5 || !mt.Active {
 		t.Fatalf("first input: %+v", mt)
 	}
 
 	// Stale input neither rewinds the ack nor mutates the applied target.
-	if consumeMoveTargetInput(mt, &SetMoveTarget{Sequence: 4, Active: true, X: 300, Y: 400}, true, 1000, 1000) {
-		t.Fatal("stale input was consumed")
+	if got := consumeMoveTargetInput(mt, &SetMoveTarget{Sequence: 4, Active: true, X: 300, Y: 400}, true, 1000, 1000); got != moveTargetStale {
+		t.Fatalf("stale input outcome = %v, want moveTargetStale", got)
 	}
 	if mt.Sequence != 5 || mt.LocalX != 100 || mt.LocalY != 200 {
 		t.Fatalf("stale input mutated target: %+v", mt)
 	}
 
 	// Invalid coordinates are consumed/acked, but cannot poison movement.
-	if !consumeMoveTargetInput(mt, &SetMoveTarget{Sequence: 6, Active: true, X: float32(math.NaN()), Y: 1}, true, 1000, 1000) {
-		t.Fatal("invalid input should be consumed")
+	if got := consumeMoveTargetInput(mt, &SetMoveTarget{Sequence: 6, Active: true, X: float32(math.NaN()), Y: 1}, true, 1000, 1000); got != moveTargetRejected {
+		t.Fatalf("invalid input outcome = %v, want moveTargetRejected (consumed, not applied)", got)
 	}
 	if mt.Sequence != 6 || mt.LocalX != 100 || mt.LocalY != 200 {
 		t.Fatalf("invalid input changed target: %+v", mt)
 	}
 
 	// Docking consumes the newest sequence while leaving movement unchanged.
-	if !consumeMoveTargetInput(mt, &SetMoveTarget{Sequence: 7, Active: false}, false, 1000, 1000) {
-		t.Fatal("docking input should be consumed")
+	if got := consumeMoveTargetInput(mt, &SetMoveTarget{Sequence: 7, Active: false}, false, 1000, 1000); got != moveTargetBlocked {
+		t.Fatalf("docking input outcome = %v, want moveTargetBlocked", got)
 	}
 	if mt.Sequence != 7 || !mt.Active {
 		t.Fatalf("docking input changed target: %+v", mt)
@@ -71,12 +71,16 @@ func TestConsumeMoveTargetInputAcknowledgesLifecycleRejectedCommand(t *testing.T
 		Sequence: 7,
 	}
 
-	if !consumeMoveTargetInput(mt, &SetMoveTarget{
+	got := consumeMoveTargetInput(mt, &SetMoveTarget{
 		Sequence: 8,
 		Active:   true,
 		X:        800,
 		Y:        900,
-	}, false, 1000, 1000) {
+	}, false, 1000, 1000)
+	if got != moveTargetBlocked {
+		t.Fatalf("lifecycle-rejected command outcome = %v, want moveTargetBlocked", got)
+	}
+	if !got.consumed() {
 		t.Fatal("lifecycle-rejected movement command was not consumed")
 	}
 	if mt.Sequence != 8 {

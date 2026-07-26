@@ -26,9 +26,9 @@ type TickHealthSnapshot struct {
 
 // EntitySnapshot breaks down entity counts per node.
 type EntitySnapshot struct {
-	Real    int
-	Replica int
-	Ghost   int
+	Real      int
+	Replica   int
+	Ghost     int
 	Connected int
 }
 
@@ -48,6 +48,14 @@ type InterNodeSnapshot struct {
 	BytesRecv        uint64 // cumulative encoded border frame bytes received from neighbors
 	BorderFramesSent uint64 // count of MsgBorderFrame envelopes sent
 	BorderFramesRecv uint64 // count of MsgBorderFrame envelopes received
+}
+
+// InputAckSnapshot captures the client-prediction input-acknowledgement loop.
+// Counters are deliberately unlabelled: a per-player label would make
+// cardinality scale with the player count.
+type InputAckSnapshot struct {
+	FramesWithInputAck uint64 // replication frames carrying the processed-input trailer
+	SequencesRejected  uint64 // client movement commands dropped as stale or duplicate
 }
 
 // TimingStats holds computed percentile statistics for a single metric.

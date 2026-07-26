@@ -91,60 +91,111 @@ func TestMovementPredictionTicksRespectModeAndFiniteStatusExpiry(t *testing.T) {
 	)
 	entity := mmokit.EntityFromECS(gw.stage, handle)
 
-	if got := movementPredictionTicks(mmokit.StateActive, entity, 50); got != 5 {
+	if got := movementPredictionTicks(mmokit.StateActive, entity, 50, defaultPredictionHorizonMs); got != 5 {
 		t.Fatalf("ordinary active movement ticks = %d, want 5", got)
 	}
-	if movementPredictionTicks(StateDead, entity, 50) != 0 ||
-		movementPredictionTicks(StateDocking, entity, 50) != 0 ||
-		movementPredictionTicks(StateDocked, entity, 50) != 0 {
+	if movementPredictionTicks(StateDead, entity, 50, defaultPredictionHorizonMs) != 0 ||
+		movementPredictionTicks(StateDocking, entity, 50, defaultPredictionHorizonMs) != 0 ||
+		movementPredictionTicks(StateDocked, entity, 50, defaultPredictionHorizonMs) != 0 {
 		t.Fatal("non-active lifecycle states must remain authoritative")
 	}
 
 	mmokit.Set(entity, gamecomp.Supercruise{Phase: gamecomp.SupercruiseChanneling})
-	if movementPredictionTicks(mmokit.StateActive, entity, 50) != 0 {
+	if movementPredictionTicks(mmokit.StateActive, entity, 50, defaultPredictionHorizonMs) != 0 {
 		t.Fatal("supercruise channeling must remain authoritative")
 	}
 	mmokit.Get[gamecomp.Supercruise](entity).Phase = gamecomp.SupercruiseActive
-	if movementPredictionTicks(mmokit.StateActive, entity, 50) != 5 {
+	if movementPredictionTicks(mmokit.StateActive, entity, 50, defaultPredictionHorizonMs) != 5 {
 		t.Fatal("active supercruise can use the seeded speed multiplier")
 	}
-	if got := movementPredictionTicks(mmokit.StateActive, entity, 16); got != 16 {
+	if got := movementPredictionTicks(mmokit.StateActive, entity, 16, defaultPredictionHorizonMs); got != 16 {
 		t.Fatalf("non-20Hz horizon ticks = %d, want 16", got)
 	}
 
 	effects := gamecomp.StatusEffects{}
 	effects.Add(gamecomp.StatusEffect{Type: gamecomp.StatusAfterburner, Duration: 0, Value: 2})
 	mmokit.Set(entity, effects)
-	if got := movementPredictionTicks(mmokit.StateActive, entity, 50); got != 1 {
+	if got := movementPredictionTicks(mmokit.StateActive, entity, 50, defaultPredictionHorizonMs); got != 1 {
 		t.Fatalf("zero-duration surviving status prediction ticks = %d, want 1", got)
 	}
 	mmokit.Get[gamecomp.StatusEffects](entity).Effects[0].Duration = 0.05
-	if got := movementPredictionTicks(mmokit.StateActive, entity, 50); got != 1 {
+	if got := movementPredictionTicks(mmokit.StateActive, entity, 50, defaultPredictionHorizonMs); got != 1 {
 		t.Fatalf("one-tick status prediction ticks = %d, want 1", got)
 	}
 	mmokit.Get[gamecomp.StatusEffects](entity).Effects[0].Duration = 0.051
-	if got := movementPredictionTicks(mmokit.StateActive, entity, 50); got != 2 {
+	if got := movementPredictionTicks(mmokit.StateActive, entity, 50, defaultPredictionHorizonMs); got != 2 {
 		t.Fatalf("two-tick status prediction ticks = %d, want 2", got)
 	}
-	if got := movementPredictionTicks(mmokit.StateActive, entity, 16); got != 4 {
+	if got := movementPredictionTicks(mmokit.StateActive, entity, 16, defaultPredictionHorizonMs); got != 4 {
 		t.Fatalf("non-20Hz status prediction ticks = %d, want 4", got)
 	}
 
 	effects = *mmokit.Get[gamecomp.StatusEffects](entity)
 	effects.Add(gamecomp.StatusEffect{Type: gamecomp.StatusSlow, Duration: 0.01, Value: 0.5})
 	mmokit.Set(entity, effects)
-	if got := movementPredictionTicks(mmokit.StateActive, entity, 50); got != 1 {
+	if got := movementPredictionTicks(mmokit.StateActive, entity, 50, defaultPredictionHorizonMs); got != 1 {
 		t.Fatalf("stacked modifier minimum prediction ticks = %d, want 1", got)
 	}
 
 	effects = gamecomp.StatusEffects{}
 	effects.Add(gamecomp.StatusEffect{Type: gamecomp.StatusSupercruise, Duration: 0.051, Value: 2.5})
 	mmokit.Set(entity, effects)
-	if got := movementPredictionTicks(mmokit.StateActive, entity, 50); got != 2 {
+	if got := movementPredictionTicks(mmokit.StateActive, entity, 50, defaultPredictionHorizonMs); got != 2 {
 		t.Fatalf("finite supercruise prediction ticks = %d, want 2", got)
 	}
 	mmokit.Get[gamecomp.StatusEffects](entity).Effects[0].Value = float32(math.NaN())
-	if got := movementPredictionTicks(mmokit.StateActive, entity, 50); got != 0 {
+	if got := movementPredictionTicks(mmokit.StateActive, entity, 50, defaultPredictionHorizonMs); got != 0 {
 		t.Fatalf("non-finite multiplier prediction ticks = %d, want 0", got)
+	}
+}
+
+// defaultPredictionHorizonMs mirrors GameConfig.MovementPredictionHorizonMs's
+// default, so the cases above keep asserting the shipped behaviour.
+const defaultPredictionHorizonMs uint64 = 250
+
+// TestMovementPredictionTicks_ConfigurableHorizon covers
+// GameConfig.MovementPredictionHorizonMs, including the operator kill switch.
+func TestMovementPredictionTicks_ConfigurableHorizon(t *testing.T) {
+	gw, _ := newTestGameWorld()
+	handle := ecs.NewMap2[mmokit.Position, mmokit.NetworkID](gw.stage.ECSWorld()).NewEntity(
+		&mmokit.Position{},
+		&mmokit.NetworkID{ID: 1003},
+	)
+	entity := mmokit.EntityFromECS(gw.stage, handle)
+
+	cases := []struct {
+		name           string
+		horizonMs      uint64
+		tickIntervalMs uint64
+		want           uint8
+	}{
+		{"default 250ms at 20Hz", 250, 50, 5},
+		{"lowered to 100ms at 20Hz", 100, 50, 2},
+		{"exactly one tick", 50, 50, 1},
+		{"below one tick still authorizes one", 20, 50, 1},
+		{"raised to 500ms at 20Hz", 500, 50, 10},
+		// Zero is the kill switch. It must NOT underflow the
+		// 1 + (h-1)/tick expression, which on uint64 would otherwise
+		// authorize an enormous replay window instead of none.
+		{"zero disables prediction", 0, 50, 0},
+		{"zero disables prediction at any tick rate", 0, 16, 0},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := movementPredictionTicks(mmokit.StateActive, entity, tc.tickIntervalMs, tc.horizonMs)
+			if got != tc.want {
+				t.Fatalf("movementPredictionTicks(horizon=%d, tick=%d) = %d, want %d",
+					tc.horizonMs, tc.tickIntervalMs, got, tc.want)
+			}
+		})
+	}
+}
+
+// TestDefaultGameConfig_PredictionHorizon pins the shipped default so a
+// silent change to it shows up as a failing test rather than as a behaviour
+// change nobody noticed.
+func TestDefaultGameConfig_PredictionHorizon(t *testing.T) {
+	if got := DefaultGameConfig().MovementPredictionHorizonMs; got != 250 {
+		t.Fatalf("default MovementPredictionHorizonMs = %d, want 250", got)
 	}
 }

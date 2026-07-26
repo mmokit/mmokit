@@ -23,6 +23,11 @@ type NetworkSystem struct {
 
 	// Per-tick shared data hoisted outside the per-viewer loop
 	pendingBroadcasts []mmokit.BroadcastEvent
+
+	// warnedMissingSeed latches the "prediction disabled" warning per netID so
+	// a structurally-incomplete entity logs once rather than every tick.
+	// Cell-loop owned, like the rest of this system.
+	warnedMissingSeed map[uint32]struct{}
 }
 
 func (s *NetworkSystem) Init() {
@@ -80,6 +85,10 @@ func (s *NetworkSystem) Init() {
 		if mt == nil || mt.Sequence == 0 {
 			return 0, false
 		}
+		// Called once per frame actually emitted for this viewer (the
+		// per-viewer loop skips this path entirely while an attempt is
+		// pending), so this counts frames that ship the trailer.
+		gw.eng.Metrics.RecordInputAckFrame()
 		return mt.Sequence, true
 	}
 	s.replSys = mmokit.NewReplicationSystem(cfg)
@@ -119,15 +128,23 @@ func (s *NetworkSystem) beforeSend(viewer *mmokit.ViewerInfo, visible map[uint32
 	// PredictionTicks tells the client how many ShipDynamics steps are safe.
 	if sess := gw.Players.ByConnID(viewer.ConnID); sess != nil && gw.stage.ECSWorld().Alive(sess.Entity) {
 		entity := mmokit.EntityFromECS(gw.stage, sess.Entity)
-		predictionTicks := movementPredictionTicks(sess.State, entity, gw.eng.TickIntervalMs())
+		predictionTicks := movementPredictionTicks(
+			sess.State, entity, gw.eng.TickIntervalMs(), gw.Config.MovementPredictionHorizonMs)
 		s.sendOwnState(viewer.ConnID, sess.Entity, viewer.StreamEpoch, predictionTicks)
 	}
 }
 
-const maxMovementPredictionHorizonMs uint64 = 250
-
-func movementPredictionTicks(state mmokit.PlayerState, entity mmokit.Entity, tickIntervalMs uint64) uint8 {
+// movementPredictionTicks bounds how many ticks of local replay the owner
+// movement seed authorizes. horizonMs comes from
+// GameConfig.MovementPredictionHorizonMs; zero disables prediction.
+func movementPredictionTicks(state mmokit.PlayerState, entity mmokit.Entity, tickIntervalMs, horizonMs uint64) uint8 {
 	if state != mmokit.StateActive {
+		return 0
+	}
+	// Zero horizon is the operator kill switch, and it must be checked before
+	// the maxTicks expression below: 1 + (0-1)/tick underflows on uint64 and
+	// would authorize an enormous replay window rather than none.
+	if horizonMs == 0 {
 		return 0
 	}
 	// Supercruise's channel phase roots the ship in a later system, after
@@ -142,7 +159,7 @@ func movementPredictionTicks(state mmokit.PlayerState, entity mmokit.Entity, tic
 		return 0
 	}
 
-	maxTicks := uint8(1 + (maxMovementPredictionHorizonMs-1)/tickIntervalMs)
+	maxTicks := uint8(1 + (horizonMs-1)/tickIntervalMs)
 	// The seed carries one aggregate speed multiplier. Bound replay to the
 	// earliest movement modifier expiry so packet loss cannot extend it past
 	// the ShipDynamics step on which authority last consumes it. Repeated
@@ -279,6 +296,11 @@ func (s *NetworkSystem) buildMovementState(entity mmokit.Entity, streamEpoch uin
 	target := mmokit.Get[mmokit.MoveTarget](entity)
 	netID := mmokit.Get[mmokit.NetworkID](entity)
 	if pos == nil || cell == nil || vel == nil || rot == nil || ship == nil || target == nil || netID == nil {
+		// Prediction is silently disabled for this player. Worth saying once:
+		// a ship missing (say) ShipControl looks to the player like permanent
+		// rubber-banding with no server-side signal at all. Latched per entity
+		// so a persistently-incomplete entity cannot log every tick.
+		s.warnMissingSeedComponents(netID, pos, cell, vel, rot, ship, target)
 		return PlayerMovementState{}
 	}
 
@@ -314,4 +336,53 @@ func (s *NetworkSystem) buildMovementState(entity mmokit.Entity, streamEpoch uin
 		ArrivalDistance:   gw.Config.MoveArrivalDist,
 		DecelerationDist:  gw.Config.MoveDecelDist,
 	}
+}
+
+// warnMissingSeedComponents logs once per entity when buildMovementState
+// cannot produce a seed, naming the component that is absent.
+//
+// Latched rather than rate-limited: the condition is a structural defect in
+// how the entity was spawned, not a transient, so exactly one line per entity
+// is both sufficient and bounded. The latch is cleared when the entity's
+// netID is no longer live, so a respawned entity reports again.
+func (s *NetworkSystem) warnMissingSeedComponents(
+	netID *mmokit.NetworkID,
+	pos *mmokit.Position, cell *mmokit.CellCoord, vel *mmokit.Velocity,
+	rot *mmokit.Rotation, ship *gamecomp.ShipControl, target *mmokit.MoveTarget,
+) {
+	if s.gw == nil || s.gw.eng == nil {
+		return
+	}
+	// Without a NetworkID there is no stable key to latch on, and no useful
+	// identifier to log either.
+	if netID == nil {
+		return
+	}
+	if s.warnedMissingSeed == nil {
+		s.warnedMissingSeed = make(map[uint32]struct{})
+	}
+	if _, warned := s.warnedMissingSeed[netID.ID]; warned {
+		return
+	}
+	s.warnedMissingSeed[netID.ID] = struct{}{}
+
+	var missing []string
+	for _, c := range []struct {
+		name    string
+		present bool
+	}{
+		{"Position", pos != nil},
+		{"CellCoord", cell != nil},
+		{"Velocity", vel != nil},
+		{"Rotation", rot != nil},
+		{"ShipControl", ship != nil},
+		{"MoveTarget", target != nil},
+	} {
+		if !c.present {
+			missing = append(missing, c.name)
+		}
+	}
+	s.gw.eng.Log.Log(CatPlayerInput,
+		"movement seed unavailable — client prediction disabled for netID=%d: missing %v",
+		netID.ID, missing)
 }
