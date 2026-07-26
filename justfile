@@ -268,6 +268,21 @@ csharp-golden:
 ts-core-test:
     bun test pkg/quantize/ts/
 
+# regenerate the Go->TS ship-dynamics parity fixture by driving the REAL
+# ShipDynamicsSystem + PhysicsSystem. Consumed by
+# web-pixi/src/__tests__/prediction-golden.test.ts, which is what fails when
+# internal/game/system_ship_dynamics.go changes without web-pixi/src/prediction.ts.
+shipdyn-golden:
+    go test ./internal/game/ -run TestShipDynamicsGolden -count=1 -update-shipdyn-golden -v
+
+# run the game-client TS test suites (bun). These are the client-prediction,
+# reconciliation and interpolation tests, which ts-core-test does not cover.
+web-test:
+    bun test web-pixi/src/__tests__/ examples/4node-basic/web/src/__tests__/
+
+# every TypeScript suite in the repo
+client-test: ts-core-test web-test
+
 # compile-gate the generated C# SDK (emits a sample SDK + dotnet build)
 csharp-compile-test:
     go test -tags=csharptest ./cmd/sdkgen/ -run TestCsharpSdk_Compiles -v
