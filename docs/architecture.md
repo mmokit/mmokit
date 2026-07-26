@@ -111,6 +111,8 @@ Client traffic does not use protobuf. The client-facing protocol consists of:
 - Quantized full snapshots and deltas for world replication
 - Stable type IDs derived from registered Go types
 - Generated TypeScript or C# clients produced from the assembled Go protocol schema
+- An optional processed-input-sequence trailer on quantized frames, announced by `FrameFlagInputAck` ([`pkg/quantize/wireformat.go`](../pkg/quantize/wireformat.go)), which clients use to retire acknowledged predicted input
+- An optional client-to-server `mmokit.ReplicationAck`; connections on a datagram transport advance their replication baselines on that acknowledgement rather than on transport acceptance
 
 Channel `0x00` carries typed input/events and channel `0x01` carries operations. WebSocket and the custom UDP transport share the connection manager; [`pkg/net/README.md`](../pkg/net/README.md) is the authoritative reference for channel bytes and delivery classes. Remaining UDP security and gating work is tracked as CE-005b in [`roadmap.md`](roadmap.md).
 
@@ -179,7 +181,8 @@ Use TLS certificate flags or a TLS-terminating proxy in production. Self-signed 
 | `pkg/engine` | ECS loop, systems, players, loop jobs, console foundations |
 | `pkg/system` | Reusable physics, lifetime, spatial, replication, and debug systems |
 | `pkg/net`, `pkg/ops` | Client transports, connection management, and operation routing |
-| `pkg/replication`, `pkg/quantize` | Baselines, frame primitives, quantization, delta encoding, client cores |
+| `pkg/replication`, `pkg/quantize` | Baselines, frame primitives, quantization, delta encoding, and the shared TypeScript client cores in [`pkg/quantize/ts/`](../pkg/quantize/ts/) — delta decoding, interpolation, clock sync, adaptive playback, prediction buffering, and reconciliation pairing |
+| `csharp/Mmokit.Sdk.Core` | Hand-ported C# counterparts of those cores, copied into generated SDKs by `cmd/sdkgen` |
 | `pkg/cmdsys`, `pkg/admin` | Routed operator commands and dashboard backend |
 | `pkg/service`, `pkg/services` | Service runtime and built-in service kinds |
 | `internal/game`, `internal/component` | Space-game systems, entities, rules, and components |

@@ -244,3 +244,104 @@ describe("interpolation — gap-preserves-interp-baseline (handoff regression)",
     expect(ent.renderX).toBeLessThanOrEqual(250);
   });
 });
+
+describe("prediction never feeds back into the interpolation ring", () => {
+  // Repo invariant: `prev` must be the previous SERVER snapshot, never a
+  // rendered pose. If a predicted renderX/renderY/renderRot ever became a ring
+  // sample, interpolation would converge geometrically toward its own output
+  // and a teleport would smear instead of snapping.
+  //
+  // applyLocalMovementPrediction writes ONLY renderX/renderY/renderRot, and
+  // runs after interpolateEntities. This pins that the ring is built purely
+  // from serverState.
+  test("a predicted render pose does not become the prev anchor", () => {
+    const entities = new Map<number, ClientEntity>();
+    const playback = fixedPlayback();
+
+    // Two server samples establish the ring.
+    updateEntityFromServer(
+      entities,
+      { netID: 1, entityType: 0, worldX: 0, worldY: 0, velX: 10, velY: 0 } as unknown as AnyEntity,
+      1000,
+    );
+    updateEntityFromServer(
+      entities,
+      { netID: 1, entityType: 0, worldX: 100, worldY: 0, velX: 10, velY: 0 } as unknown as AnyEntity,
+      1100,
+    );
+    const ent = entities.get(1)!;
+    expect(ent.buffer.samples.length).toBe(2);
+
+    interpolateEntities(entities, playback, 50 + RENDER_DELAY);
+
+    // Stand in for applyLocalMovementPrediction: overwrite the render pose
+    // with something far from any server sample.
+    ent.renderX = 99_999;
+    ent.renderY = 88_888;
+    ent.renderRot = 1.234;
+
+    // A third server sample arrives.
+    updateEntityFromServer(
+      entities,
+      { netID: 1, entityType: 0, worldX: 200, worldY: 0, velX: 10, velY: 0 } as unknown as AnyEntity,
+      1200,
+    );
+
+    // The ring must contain only server-supplied positions.
+    const xs = ent.buffer.samples.map((s) => s.worldX);
+    expect(xs).toEqual([0, 100, 200]);
+    expect(xs).not.toContain(99_999);
+    for (const s of ent.buffer.samples) {
+      expect(s.worldY).toBe(0);
+      expect(s.rotation).not.toBe(1.234);
+    }
+
+    // And the prev anchor for the next interpolation is the SECOND server
+    // sample, not the predicted pose.
+    const newest = ent.buffer.samples[ent.buffer.samples.length - 1];
+    const prev = ent.buffer.samples[ent.buffer.samples.length - 2];
+    expect(newest.worldX).toBe(200);
+    expect(prev.worldX).toBe(100);
+  });
+
+  test("the rotation fallback DOES read renderRot — safe only because ships declare angle", () => {
+    // Honest pin of the one real feedback path. entityRotation falls back to
+    // the previous rotation for an entity with no `angle` field that is not
+    // moving, and updateEntityFromServer passes the LIVE renderRot as that
+    // fallback. So for such an entity a predicted rotation would re-enter the
+    // ring.
+    //
+    // It cannot fire for the predicted entity: prediction only ever writes
+    // state.myEntityId, and ShipEntity declares `angle`, so the fallback is
+    // never consulted for it. This test pins BOTH halves — that the path
+    // exists, and that declaring `angle` is what closes it — so a future
+    // change that drops `angle` from the ship schema fails here instead of
+    // shipping geometric convergence into the interpolator.
+    const entities = new Map<number, ClientEntity>();
+    const noAngle = (t: number) =>
+      ({ netID: 2, entityType: 0, worldX: 0, worldY: 0, velX: 0, velY: 0 }) as unknown as AnyEntity;
+
+    updateEntityFromServer(entities, noAngle(1000), 1000);
+    const ent = entities.get(2)!;
+    ent.renderRot = 2.5; // as if prediction had written it
+    updateEntityFromServer(entities, noAngle(1100), 1100);
+
+    const newest = ent.buffer.samples[ent.buffer.samples.length - 1];
+    expect(newest.rotation).toBe(2.5); // the feedback path is real
+
+    // An entity that declares `angle` ignores the fallback entirely, which is
+    // exactly why the local ship is safe.
+    const withAngle = new Map<number, ClientEntity>();
+    const angled = (angle: number) =>
+      ({ netID: 3, entityType: 0, worldX: 0, worldY: 0, velX: 0, velY: 0, angle }) as unknown as AnyEntity;
+
+    updateEntityFromServer(withAngle, angled(0.25), 1000);
+    const ship = withAngle.get(3)!;
+    ship.renderRot = 2.5;
+    updateEntityFromServer(withAngle, angled(0.5), 1100);
+
+    const shipNewest = ship.buffer.samples[ship.buffer.samples.length - 1];
+    expect(shipNewest.rotation).toBe(0.5);
+    expect(shipNewest.rotation).not.toBe(2.5);
+  });
+});

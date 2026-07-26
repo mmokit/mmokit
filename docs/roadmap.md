@@ -97,11 +97,9 @@ Every status below was verified against source on the date at the top of this fi
 | Partial | Some criteria met; the remainder is stated explicitly |
 | Done | All criteria met and verified in source |
 
-### 6.2 Immediate action: triage the working tree
+### 6.2 Working-tree triage — **done**
 
-The working tree currently holds **198 changed paths, 155 files, roughly 11,136 insertions, and 43 untracked files, with zero commits**. That work substantially implements CE-001, CE-003, CE-004, and the reliability half of CE-005, and it introduces an entire client-prediction workstream that exists in no document and on no branch.
-
-Until it is committed or deliberately discarded, any roadmap read against `HEAD` misstates four items and omits a workstream. **Commit or triage this before planning anything else.**
+The uncommitted work this section used to describe is committed. CE-001, CE-003, CE-004 and CE-005a are closed; CE-005b Tier 1 is closed with Tier 2 open; and the client-prediction workstream is documented as WS-001 below rather than existing only on disk. A roadmap read against `HEAD` is now accurate.
 
 ### 6.3 P0 — must close before the 2D/3D program begins
 
@@ -216,7 +214,7 @@ These exist in the working tree, in dated plans, or only in git history. They ar
 
 | ID | Workstream | Status | Where it lives today |
 | --- | --- | --- | --- |
-| WS-001 | **Client prediction, reconciliation, adaptive playback** | In working tree, undocumented | Uncommitted files only — highest-risk omission. Reverses a previously executed decision to remove client prediction. |
+| WS-001 | **Client prediction, reconciliation, adaptive playback** | **Partial — see [WS-001](#ws-001--client-prediction-reconciliation-and-adaptive-playback--partial) below** | Implemented, committed, and documented. Reverses a previously executed decision to remove client prediction. |
 | WS-002 | Security Units 2–4 (UDP AEAD framing, mesh shared-secret auth, app hardening) | Units 2–3 not started; Unit 4 partial | Umbrella spec records all three as "to be written". Overlaps CE-005b and CE-006 — reconcile, do not track twice. |
 | WS-003 | Auth over HTTPS with OIDC social login | HTTPS endpoints exist; OIDC is a schema seam only | Buried in a spec amendment. Gates WS-002 Unit 2. No `/auth/udp-key` route exists. |
 | WS-004 | WASM systems Phases 1–3 | Phase 0 shipped; Phase 1 entirely unbuilt | `pkg/wasmabi` declares no host imports, so commands, multi-component queries, and the query manifest do not exist. Live perf TODO: the module recompiles on every load. |
@@ -228,13 +226,39 @@ These exist in the working tree, in dated plans, or only in git history. They ar
 | WS-010 | Persistence schema-evolution tooling | Open | Migrations run embedded at startup; no rolling-migration story. |
 | WS-011 | Second reference game (`moita` branch) | Stranded on a branch | The only empirical evidence a structurally different genre fits. Either port it as validation of the multi-genre goal or formally retire it. |
 
+#### WS-001 — Client prediction, reconciliation, and adaptive playback · **Partial**
+
+Server-authoritative local movement prediction for the reference game's ship, with cumulative input acknowledgement and an adaptive interpolation timeline. Implemented and committed; the closed loop is:
+
+`web-pixi/src/input.ts` (sequence + buffer the command) → `internal/game/input_handlers.go` (`consumeMoveTargetInput` marks a non-zero sequence PROCESSED even when it rejects the target, so a client can retire a poison command instead of retrying forever) → `internal/game/system_network.go` (`ProcessedInputSeq` reads the authoritative `MoveTarget.Sequence`) → `pkg/system/replication.go` (attaches it to the frame) → `pkg/quantize/wireformat.go` (`FrameFlagInputAck` plus a four-byte trailer) → generated SDK decoders → `web-pixi/src/movement-reconciliation.ts` (pairs the owner seed with its accepted frame) → `web-pixi/src/main.ts` (prediction runs AFTER interpolation and overrides only `renderX/renderY/renderRot`).
+
+Shipped, and now enforced rather than asserted:
+
+- **Go↔TS ship-dynamics parity.** `just shipdyn-golden` drives the REAL `ShipDynamicsSystem` + `PhysicsSystem` through a real Stage over six scenarios for eight fixed ticks, and `web-pixi/src/__tests__/prediction-golden.test.ts` replays each tick through `projectShipPrediction`. This is the workstream's only continuously-triggered drift risk — ship dynamics get tuned routinely, and divergence used to surface in production as constant rubber-banding rather than as a failing build.
+- **Cross-language goldens** for `AdaptivePlaybackController`, `PredictionBuffer`, and the `FrameFlagInputAck` trailer, replayed from one Go-produced manifest by both `pkg/quantize/ts/playback-golden.test.ts` and `csharp/Mmokit.Sdk.Core.Tests/PlaybackGoldenTests.cs`. Closes the "cross-language golden vectors" gate in §6.7 for these cores.
+- **The reconciliation gate is shared, not game-specific.** `pkg/quantize/ts/reconciliation-gate.ts` and `csharp/Mmokit.Sdk.Core/ReconciliationGate.cs`, both in sdkgen's CoreFiles; `web-pixi`'s class is a game-typed alias. A Unity client no longer has to reinvent the most race-prone part of reconciliation. The C# port carries explicit insertion-order lists because `Dictionary` does not reproduce the JS `Map` ordering the TS reference relies on for oldest-first eviction — covered by an explicit eviction-order test on both sides.
+- **PredictionBuffer surface parity in both directions**, so the two SDK cores are one contract a consumer can follow line for line.
+- **Observability and an operator knob.** Movement commands the server did not apply are logged behind the new game-range `input` debug flag; `buildMovementState` says so once per entity when a missing component silently disables prediction; two unlabelled `CellMetrics` counters cover the ACK loop. `GameConfig.MovementPredictionHorizonMs` replaces a hard const, with 0 meaning prediction disabled.
+- **The TS suites are actually run.** `just web-test` and `just client-test` cover `web-pixi/src/__tests__/` and `examples/4node-basic/web/src/__tests__/`, which no recipe ran before — the largest body of WS-001 tests was invisible to the standard validation sweep.
+
+Known and deliberate:
+
+- **The rotation feedback path is real but unreachable for the predicted entity.** `entityRotation` falls back to the live `renderRot` for an entity with no `angle` field that is not moving, so a predicted rotation could in principle re-enter the interpolation ring. It cannot for the local ship, because `ShipEntity` declares `angle` and prediction only ever writes `state.myEntityId`. `web-pixi/src/__tests__/interpolation.test.ts` pins both halves, so dropping `angle` from the ship schema fails there instead of shipping geometric convergence into the interpolator.
+- **The input-ack trailer costs 4 bytes per frame** to every player with a non-zero `MoveTarget.Sequence`, ungated by change detection — about 80 B/s/player at 20 Hz. Negligible now; it interacts with CE-007 and should not be optimized independently of it.
+
+Open, and the reason this is Partial rather than Done:
+
+- No acceptance criteria exist for prediction *quality* — divergence budgets, correction magnitude distribution, or a rubber-banding metric. Everything above proves the client reproduces the server; nothing states how far apart they may drift before it is a defect.
+- Prediction covers ship movement only. Abilities, docking, and supercruise channeling deliberately wait for authority (`movementPredictionTicks` returns 0 for `SupercruiseChanneling`), and no plan exists for extending it.
+- `gamecomp.PlayerInput.Sequence` is still mirrored by `input_handlers.go` and read by nothing authoritative. Removing it is a separate cleanup with its own blast radius.
+
 ### 6.7 Cross-cutting verification gates
 
 Each work item should add the smallest regression test that fails before the fix. These gates belong alongside P0, not after it — **all four marked below are blocked on OSS-001**, since no CI exists.
 
 - [ ] Race-enabled tests for engine scheduling, transports, connection teardown, and mesh reconnects *(blocked on CI)*
 - [ ] Fuzz targets with retained corpora for reflection codecs, operation and input frames, and mesh frame decoders *(blocked on CI; zero fuzz targets exist today)*
-- [ ] Deterministic simulated loss/reorder/duplicate harnesses — build on `pkg/universe/loopback_bridge.go`
+- [x] Deterministic simulated loss/reorder/duplicate harnesses — landed as `pkg/system/lossy_link_test.go`. **Do not** build on `pkg/universe/loopback_bridge.go` as previously recommended here: it routes `CellMessage` (no path from a frame writer into it), `pkg/universe` imports `pkg/system` so the import cycle forbids it, it applies one constant latency so it can never reorder, and it has no duplicate injection
 - [ ] Linux integration jobs that permit localhost TCP and UDP listeners *(blocked on CI)*
 - [ ] Generated-schema diff checks and cross-language Go/TypeScript/C# golden vectors *(blocked on CI)*
 - [ ] Load tests asserting bounded memory, queue depth, tick work, and recovery after backpressure
@@ -311,7 +335,7 @@ Recorded so the next reader does not resurrect dead work.
 | **World editor** | **Delivered** and live in the admin dashboard. |
 | **CE-006's cluster-CA mTLS mechanism** | **Superseded** by the shared-secret plus ephemeral-TLS decision. The risk stays open; the mechanism is replaced. |
 | **Volumetric cell partitioning** | **Declined** — see [non-goal 1](#3-non-goals). |
-| **Client prediction removal** | **Reversed** by WS-001, which is being re-implemented in the working tree. |
+| **Client prediction removal** | **Reversed** by WS-001, which is implemented and committed. See the [WS-001 subsection](#ws-001--client-prediction-reconciliation-and-adaptive-playback--partial). |
 
 ---
 

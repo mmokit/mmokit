@@ -2,6 +2,7 @@ package game
 
 import (
 	"math"
+	"reflect"
 	"testing"
 
 	"github.com/zenion/mmoserver/pkg/mmokit"
@@ -113,5 +114,38 @@ func TestMovementInputPolicyMatchesReplicationViewerStates(t *testing.T) {
 					tt.state, consume, canMove, tt.consume, tt.canMove)
 			}
 		})
+	}
+}
+
+// TestMoveTargetSequenceIsTransferred pins that ShipBundle serializes
+// MoveTarget across a cell handoff.
+//
+// MoveTarget.Sequence IS the input-acknowledgement frontier: the server
+// reflects it back on every replication frame, and the client retires
+// buffered inputs against it. Tagging the field `mmokit:"local"` — an easy,
+// plausible-looking change, since three of its siblings carry that tag —
+// would reset the frontier to zero at every handoff. The client would then
+// replay its entire pending input buffer against a stale seed, i.e. visible
+// rubber-banding at every cell line, with nothing failing anywhere.
+func TestMoveTargetSequenceIsTransferred(t *testing.T) {
+	field, ok := reflect.TypeFor[ShipBundle]().FieldByName("MoveTarget")
+	if !ok {
+		t.Fatal("ShipBundle has no MoveTarget field")
+	}
+	if tag, tagged := field.Tag.Lookup("mmokit"); tagged {
+		t.Fatalf("ShipBundle.MoveTarget is tagged mmokit:%q — it MUST be serialized across "+
+			"cell transfers, because MoveTarget.Sequence is the input-ack frontier the "+
+			"client retires predicted inputs against", tag)
+	}
+
+	// Guard the premise: the tag really is what excludes a field, and other
+	// fields in this same bundle really do use it.
+	local, ok := reflect.TypeFor[ShipBundle]().FieldByName("PlayerInput")
+	if !ok {
+		t.Fatal("ShipBundle has no PlayerInput field")
+	}
+	if got := local.Tag.Get("mmokit"); got != "local" {
+		t.Fatalf(`ShipBundle.PlayerInput mmokit tag = %q, want "local" — `+
+			"the exclusion mechanism this test depends on has changed", got)
 	}
 }
