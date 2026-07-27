@@ -1,7 +1,7 @@
 # MMOKIT Roadmap and Vision
 
 **Status:** Single source of truth for project direction
-**Last verified against source:** 2026-07-26
+**Last verified against source:** 2026-07-28
 **Companion:** [`architecture.md`](architecture.md) describes what exists today. This file describes where the project is going. Neither should restate the other.
 
 ---
@@ -58,7 +58,7 @@ These are permanent boundaries, recorded here so they stop being re-litigated.
 2. **Clients stay topology-agnostic** and receive absolute world coordinates. Cells are a server-internal concern.
 3. **The coordinator is a control plane**, never a per-tick payload relay. Gameplay and replication traffic flow directly between gateways, hosts, and services.
 4. **No wire backward compatibility** across registered-type moves or renames. Wire IDs derive from package-qualified Go type names; moving a type is a breaking protocol change by design.
-5. **Not core's job:** client rendering, art pipeline, navmesh generation, dynamic rigid-body physics solving, and character controllers (slopes, step-up, crouch, air control). The framework provides broad-phase, queries, and static push-out; games bring their own solver. See [section 7.3](#73-collision-scope).
+5. **Not core's job:** client rendering, art pipeline, navmesh generation, dynamic rigid-body physics solving, and character controllers (slopes, step-up, crouch, air control). The framework provides broad-phase, queries, and static push-out; games bring their own solver. See [section 7.4](#74-collision-scope).
 
 ---
 
@@ -105,11 +105,17 @@ The uncommitted work this section used to describe is committed. CE-001, CE-003,
 
 #### CE-002 — Bounded decoding and ingress budgets · **Open (0/8)** · highest priority
 
-The reflection decoder performs unchecked reads and trusts wire-supplied lengths. [`pkg/universe/reflect_marshal.go:337`](../pkg/universe/reflect_marshal.go) slices `data[off:off+slen]` on an attacker-controlled `uint16`, and `:347-351` calls `make([]byte, n)` on an attacker-controlled `uint32`.
+The reflection decoder performs unchecked reads and trusts wire-supplied lengths. [`pkg/universe/reflect_marshal.go:337`](../pkg/universe/reflect_marshal.go) slices `data[off:off+slen]` on an attacker-controlled `uint16`, and `:347-351` calls `make([]byte, n)` on an attacker-controlled `uint32`. Every one of the eleven scalar arms at `:302-332` also indexes `data[off]` or `data[off:]` raw.
 
-This is worse than previously recorded. The path is reachable **pre-authentication** — [`pkg/universe/gateway.go:1054`](../pkg/universe/gateway.go) gates only on route kind and explicitly tolerates a nil session — inside a per-connection goroutine with **no `recover`**. An unrecovered panic there aborts the process. Treat this as an **unauthenticated remote denial of service**, not a robustness nit. The `make([]byte, n)` path cannot be mitigated by `recover` at all: a large enough length produces Go's unrecoverable out-of-memory fatal error.
+The path is reachable **pre-authentication** inside a goroutine with **no `recover`**. An unrecovered panic there aborts the process. Treat this as an **unauthenticated remote denial of service**, not a robustness nit.
 
-Acceptance criteria unchanged from the previous roadmap: a checked decoder returning consumed bytes and an error; bounds checks before every read; configurable limits on frame size, strings, slices, nesting, and aggregate allocation; rejection of truncated and trailing data; per-connection queue and per-tick work caps across WebSocket, UDP, and virtual connections; codec fuzzing; and bounded-cardinality rejection metrics. No fuzz target exists anywhere in the repository today.
+Three corrections to the previous statement of this item, each measured:
+
+- **There are two pre-auth op-decode paths, not one.** [`pkg/universe/gateway.go:1054`](../pkg/universe/gateway.go) is only reached when `runSessionPump` is launched, and that happens **only** under `if g.hostNetwork != nil` ([`gateway.go:160`](../pkg/universe/gateway.go)). On the single-process `all` preset — what `just dev` and `just run` use — the `0x01` drain is [`pkg/ops/router.go:118-147`](../pkg/ops/router.go), one process-wide goroutine on a 5 ms ticker servicing every connection, also with no `recover` and no work budget. A fix that hardens only `gateway.go` leaves the default preset exposed.
+- **The `make([]byte, n)` case is a mesh vector, not a client one.** It remains true that `recover` cannot mitigate it — a large enough length is Go's unrecoverable out-of-memory fatal error. But no registered client-input or op-request type has a `[]byte` field: `HandleClient` populates `ciByType` and `RegisterEvent` populates a separate `seByType`, and `mmokit.WorldDelta` — the only registered type carrying `[]byte` — is server→client. The **client**-reachable amplifier is the generic-slice arm at `:356-365`, which calls `reflect.MakeSlice(v.Type(), n, n)` on a wire `uint16` before reading a single element: a ~20-byte `chat.ChatBulkSetMembersRequest` body declaring `UserIDs` length `0xFFFF` forces a 65535-element allocation, roughly 50000× amplification, and that type is registered `RouteGatewayLocal` so its body is reflect-decoded on the gateway before any handler-side auth check.
+- **The cheapest exploit needs no malformed frame at all.** [`pkg/net/conn.go:196`](../pkg/net/conn.go) and `:203` append into `c.opInput`/`c.input` with no cap (`inputBufferSize = 32` is initial capacity, not a bound), and on the `all` preset nothing drains a pre-auth connection's channel `0x00` — `runSessionPump` is never launched, `Stage.DispatchClientInput` walks only `Players.ForEachConnected`, and `ops.Router.poll` drains only `DrainOpInput`. That is a pre-authentication unbounded-memory DoS reachable with well-formed frames.
+
+**The `(0/8)` count is settled.** The prose previously enumerated seven clauses under an eight-denominator heading. The eight criteria are: (1) a checked decoder returning consumed bytes and an error; (2) bounds checks before every read; (3) configurable limits on frame size, strings, slices, nesting, and aggregate allocation; (4) rejection of truncated and trailing data; (5) per-connection queue and per-tick work caps across WebSocket, UDP, and virtual connections; (6) codec fuzzing; (7) bounded-cardinality rejection metrics; and (8) **no unrecovered panic on any pre-authentication ingress goroutine** — the defect this entry describes at length but never listed. Exactly 7 `recover()` calls exist in all non-test Go code and none is in `gateway.go`, `pkg/ops/router.go`, `pkg/net/`, `mesh_data_server.go` or `mesh_control_server.go`. No fuzz target exists anywhere in the repository.
 
 #### CE-004 — Destination acceptance before cross-host demotion · **Done (7/7)**
 
@@ -138,23 +144,87 @@ Deliberately **not** done: preserving `HostRegistry.Register`'s `OwnedCells` acr
 
 Tier 1 landed. [`pkg/net/udp_server.go`](../pkg/net/udp_server.go) now routes every data packet through a single identity chokepoint, `routeFor`, which requires the packet's source address to match the address its session is bound to. A token is no longer a bearer credential: replaying one from another address neither injects input nor tears the session down, and a mismatch is dropped silently rather than answered, so the server cannot be used to confirm a guessed token or as a reflector.
 
-Connection requests no longer allocate. An unauthenticated request now records only a `pendingHandshake`; the transport and its goroutine are created only when a data packet arrives carrying the token for that same source address, which proves return routability. Both the pending table and the session table are bounded, pending entries expire, and drop counters are exposed with rate-limited logging so the log itself cannot be used for amplification.
+Connection requests no longer allocate. An unauthenticated request now records only a `pendingHandshake`; the transport and its goroutine are created only when a data packet arrives carrying the token for that same source address, which proves return routability. Both the pending table and the session table are bounded, and drop counters exist with rate-limited logging so the log itself cannot be used for amplification.
 
-**UDP is now off by default.** `--udp-listen` defaults to empty and logs an explicit experimental warning when enabled, escalated for a non-loopback bind. Nine regression tests in `pkg/net/udp_server_test.go` cover spoofed data, spoofed disconnect, foreign-token promotion, handshake idempotence, and both caps; the package is race-clean.
+Two Tier 1 claims are weaker than previously recorded, both measured:
 
-Tier 2 remains open: real cryptographic connection identity (authenticated handshake and AEAD framing) so that an *on-path* attacker cannot read or forge traffic, and so address rebinding for roaming clients can be supported safely. That is the same work as WS-002 Unit 2 and depends on WS-003 delivering a UDP session key over HTTPS — track it there, not twice.
+- **The drop counters are unreadable in production.** [`Process.startUDPListener`](../pkg/universe/bootstrap.go) at `bootstrap.go:271-291` discards the `*UDPServer` — `go udpServer.Run(ctx)` is the last use of the handle — so `SetLimits`, `SourceMismatchDrops`, `CapacityDrops` and `PendingFullDrops` have **zero** production callers. Their only callers are in `pkg/net/udp_server_test.go`. The configured limits never reach the running server either.
+- **Pending entries expire only under table pressure, never on a timer.** `sweepPendingLocked` is called from exactly one place, [`pkg/net/udp_server.go:335-337`](../pkg/net/udp_server.go), guarded by `if len(s.pending) >= s.maxPending`. So 1024 spoofed source addresses deny new connections for up to `pendingTTL` (15 s). Bounded and self-healing, but not the timer-based expiry the entry implied.
 
-#### CE-006 — Mesh authentication and authorization · **Open (0/7)**
+Both are fixed inside the P0 closure phase ([§6.8](#68-next-phase--p0-closure)).
 
-Mesh gRPC still uses `insecure.NewCredentials()` with live TODOs in [`pkg/universe/host_network.go:229-236`](../pkg/universe/host_network.go), `mesh_control_client.go:191-196`, and `mesh_gateway_client.go:136-138`. Identity is still read from the message payload (`mesh_control_server.go:86`, `:481`). No interceptor, peer-certificate inspection, or metadata authentication exists.
+**UDP is off in the shipped binary default:** `--udp-listen` defaults to empty ([`bootstrap.go:73-75`](../pkg/universe/bootstrap.go)) and logs an explicit experimental warning when enabled, escalated for a non-loopback bind. Note this is *not* true of local development — `just dev` (`justfile:65`) and `just distributed-space` (`justfile:145`) both pass `--udp-listen=:9000`, a wildcard bind, deliberately as of `52e6c15`. Every dev process carries the exposure. Nine regression tests in `pkg/net/udp_server_test.go` cover spoofed data, spoofed disconnect, foreign-token promotion, handshake idempotence, and both caps; the package is race-clean.
+
+**Tier 2 remains open, and it is the P0 item the next phase does not close.** Required: real cryptographic connection identity (authenticated handshake and AEAD framing) so an *on-path* attacker cannot read or forge traffic, and so address rebinding for roaming clients can be supported safely. This section is the single owner of that work — **WS-002 Unit 2 and the UDP-key half of WS-003 are folded in here**; see [§6.6](#66-workstreams-not-covered-by-a-ce-item) for what remains of those rows.
+
+Scope, roughly **12.5 engineer-days**: `POST /auth/udp-key` plus a process-level key registry and a UDP analogue of `Gateway.onAuthSuccess` (~2.5 d — the `AuthResolver` seam and cookie plumbing already exist); AEAD framing and unreliable-channel replay enforcement across `udpproto`/`udp_server`/`udp_transport`/`udpclient` (~5 d); C# parity plus golden interop (~3 d); retiring op-channel auth in the C# client (~2.5 d). A stateless HMAC handshake cookie replacing the pending table belongs here too — it is the natural first half of the authenticated handshake, and doing it separately means designing the same thing twice.
+
+Two corrections for whoever picks this up:
+
+- **The cipher must be reversed.** The umbrella spec names ChaCha20-Poly1305. `Mmokit.Sdk.Core.csproj` targets `netstandard2.1` — the TFM Unity consumes — where `ChaCha20Poly1305` does not exist and `AesGcm` does. `netstandard2.1` also has no `HKDF` class.
+- **OIDC does not gate this.** WS-003's real dependency is one route plus a key registry. OIDC is a single unused SQL table (`auth.identities`) with zero Go readers or writers.
+
+Also note the two approved specs contradict each other: `2026-06-06-csharp-sdk-unity-design.md` chose auth-over-op-channel specifically to *avoid* the split HTTPS-then-UDP design that the 2026-06-12 umbrella then locked in. The newer decision wins; the older spec section is superseded.
+
+#### CE-006 — Mesh authentication and authorization · **Open (0/12)**
+
+Mesh gRPC still uses `insecure.NewCredentials()` at [`pkg/universe/host_network.go:232`](../pkg/universe/host_network.go), `mesh_control_client.go:195`, and `mesh_gateway_client.go:137`, with live TODOs naming mTLS above the first two. Identity is read from the message payload and trusted. No interceptor, peer-certificate inspection, or metadata authentication exists anywhere: `rg 'grpc/metadata|UnaryInterceptor|StreamInterceptor|PerRPCCredentials|grpc.Creds'` returns zero hits across the module.
 
 **The June 2026 TLS work did not touch mesh code.** `pkg/universe/tls_config.go` scopes itself to client-facing HTTP listeners. Do not read Unit 1 as partially closing this item.
 
-**The mechanism is restated.** The previous roadmap prescribed cluster-CA mTLS with identity derived from peer certificates. That contradicts the locked security decision, which chose shared-secret join authentication in gRPC metadata plus ephemeral in-memory self-signed TLS, and named CA-based mTLS an explicit non-goal. The *risk* is fully open; the *mechanism* is shared-secret. Acceptance criteria should be rewritten against that model before work starts.
+**The mechanism is shared-secret.** The previous roadmap prescribed cluster-CA mTLS with identity derived from peer certificates. That contradicts the locked security decision, which chose shared-secret join authentication in gRPC metadata plus ephemeral in-memory self-signed TLS, and named CA-based mTLS an explicit non-goal. The two `TODO(mTLS)`/`TODO(S4)` comments name a mechanism that decision rejected — they must be **deleted, not implemented**. Certificate pinning by fingerprint is also out of scope.
+
+**This is two items wearing one number, and the undifferentiated `(0/7)` hid the asymmetry.** Authentication ("is this peer in the cluster") is criteria 1–7. Authorization ("is this peer allowed to do *this*, as *itself*") is criteria 8–12 and appears nowhere in the umbrella spec, whose Unit 3 detail is recorded as "(to be written)". A phase that stops at secret-plus-TLS ships a cluster in which every authenticated peer is an unrestricted `*.*` cluster admin.
+
+Three attack surfaces the previous entry omitted, all verified:
+
+- **`MeshData` — the payload plane — does zero identity checking.** [`mesh_data_server.go:24-37`](../pkg/universe/mesh_data_server.go) loops `Recv` straight into `routeInboundFrame`, and it is reachable without ever touching `MeshControl` because `PeerList` hands every peer's address to every other peer. That reaches client-input injection ([`host_network.go:769`](../pkg/universe/host_network.go)), arbitrary writes to any client socket (`:802`, whose stale-epoch check at `:796` is skipped entirely when `Epoch == 0`), session drops, `CellTransfer`/`Abort` into the transfer executor, `PlayerAssignment` session minting, and service-bus injection. Every host, gateway and service process runs one of these on a wildcard `:0` bind.
+- **Twelve authoritative sites re-read identity from the message body** rather than from the stream that authenticated: `mesh_control_server.go:364, :373, :383, :391, :394, :421, :427, :451, :480, :719, :776, :810`. (The previously cited `:86` and `:481` are stale — `:86` is a bare `default:` and `:481` is an `OpCodes` copy.) One authenticated peer can therefore drain another host's cells with `GracefulLeave{HostId:"victim"}`, steal cell ownership via `CellReady`, poison the load signal driving split/merge, forge transfer acks, hijack or tombstone any live player session, and register fake service instances so the coordinator routes real auth and chat traffic to it. `HostRegistry.Register` compounds this by writing a fresh struct unconditionally with an attacker-supplied `GrpcAddr`, making same-ID re-registration simultaneously a takeover and a denial primitive.
+- **RBAC grants are taken off the wire.** `callerFromProto` ([`cmdsys_transport.go:284-299`](../pkg/universe/cmdsys_transport.go)) copies `pb.Grants` verbatim into the `cmdsys.Caller` that `InvokeLocal` authorizes against, and `Check(caller, cmd.Capability)` is its *sole* authority check — `Caller.ID` is never consulted against any local store. `Grant{Pattern:"*.*", Allow:true}` on the wire executes any registered verb, on both streams. This directly contradicts `AGENTS.md`'s "typed cmdsys verb first, so routing, RBAC and audit logging remain intact."
+
+**Acceptance criteria, enumerated** (this is the referent the `(0/n)` fraction previously lacked):
+
+1. `universe.Config.ClusterSecret`, `--cluster-secret` and `MMO_CLUSTER_SECRET`, precedence flag > env > preset field.
+2. `MeshControl` rejects an unauthenticated `RegisterHost` with `codes.Unauthenticated` and leaves `hostRegistry.Get` nil.
+3. `MeshData` rejects an unauthenticated `Data` stream and no frame reaches `routeInboundFrame`.
+4. A wrong secret is rejected as firmly as an absent one, compared with `crypto/subtle`.
+5. Both mesh listeners are non-plaintext; certs are generated in memory per process, per process lifetime, and never written to disk. Their SANs and validity are deliberately irrelevant because peers dial with `InsecureSkipVerify`.
+6. The single-process `all` preset is closed by default via an auto-generated `crypto/rand` secret whose **fingerprint** (not value) is logged once. This must *not* be gated on a loopback check: `--control-listen` defaults to `":9100"` and `isLoopbackBind` treats an empty host as all-interfaces, so the "localhost dev bind" heuristic never fires for the bind every dev recipe uses.
+7. A multi-process deployment with no secret warns loudly and continues.
+8. All twelve authoritative payload-identity reads use the stream-bound ID; a mismatch is logged and **dropped**, never silently rewritten.
+9. Same-ID re-registration cannot evict a live peer or overwrite its `GrpcAddr`, while genuine crash-reconnect still works.
+10. RBAC grants are never taken from the wire. `Caller.ID` is preserved for audit; authority is resolved locally.
+11. No stale mechanism claims remain in code comments, `architecture.md`, or this file.
+12. **`MeshData` frame contents are bound to the authenticated stream**, not merely gated by it.
+
+Criterion 12 is called out separately because it is the one most easily mistaken for closed. `meshpb.MeshFrame` carries only `dest_cell_id` and the oneof — **there is no sender field** — and `routeInboundFrame` keys entirely off `ci.GatewayId`/`ci.ConnId` taken from the payload. Criteria 3 and 8 do not reach it: 3 authenticates the stream, 8 covers `mesh_control_server.go` only. Until 12 closes, a cluster-secret holder retains full client-input injection and client-socket write capability — **authenticated but not authorized**.
+
+**The mechanism is a real `sender_id` on `MeshFrame`.** Per [non-goal 4](#3-non-goals) there is no wire backward-compatibility guarantee and a lockstep cluster redeploy is the accepted normal cost, so "it needs a `just proto` run" carries no weight against a better design. Populate `sender_id` server-side from the authenticated stream, verify every payload-carried identity against it in `routeInboundFrame`, and log-and-drop on mismatch. The alternative — a gRPC-metadata peer ID captured once in `meshDataServer.Data` and threaded through — costs no per-frame bytes and is worth weighing on the hot path, but if per-frame width is the concern the answer is an interned numeric peer ID in the proto, not avoiding the field.
+
+Verified as safe for stream binding: every `MeshFrame_ClientInput` producer sends its **own** identity — `gateway.go:1127`/`:1151` and `newReplicationReceiptFrame` ([`replication_receipt.go:80`](../pkg/universe/replication_receipt.go)) all populate `GatewayId` with the sending process's ID, and payloads travel directly between peers rather than through a relay ([non-goal 3](#3-non-goals)). There is no legitimate case where a frame's claimed identity differs from its stream sender.
+
+**Fold in the overload this bias was hiding.** `newReplicationReceiptFrame` encodes a host ID and a token into `DestCellId` via `replicationReceiptMarker(sourceHostID, token)` — a cell-ID string field carrying neither a cell nor an ID. That workaround exists because a proto change felt expensive. Give the receipt its own oneof arm and its own fields in the same change.
 
 #### OSS-001 — Open-source readiness and CI · **Open** · cheap, and blocking
 
-There is no `LICENSE`, no `CONTRIBUTING.md`, no `.github/` directory, and no CI of any kind. This makes four of the six cross-cutting verification gates in [section 6.7](#67-cross-cutting-verification-gates) unimplementable. It is also incoherent with a stated goal of letting other developers build games on this framework.
+There is no `LICENSE`, no `CONTRIBUTING.md`, no `SECURITY.md`, no `.github/` directory, and no CI of any kind — in 2197 commits. Three of the six cross-cutting verification gates in [section 6.7](#67-cross-cutting-verification-gates) are unimplementable without CI (not four — see the gate-4 correction there). It is also incoherent with a stated goal of letting other developers build games on this framework.
+
+**The licence is MIT**, and it covers **mmokit core only**. The reference space game is not part of the open-source distribution.
+
+**The public boundary, verified.** `pkg/` and `examples/` contain **zero** imports of `internal/` — the only importers of `internal/` are `cmd/server`, `cmd/botclient` and `internal/` itself — and both `examples/simple` and `examples/4node-basic` ship their own `main.go`, so the public repo has runnable entry points without `cmd/server`. The split is therefore structurally clean today rather than something to be engineered.
+
+| | |
+| --- | --- |
+| **Published** | `pkg/` · `examples/` · `cmd/sdkgen` · `cmd/csharp-golden` · `proto/` · `gen/` · `csharp/` · `web-admin/` · `scripts/` · `docs/` |
+| **Not published** | `internal/` · `cmd/server` · `cmd/botclient` · `web-pixi/` · `data/` · `world/` · `db-init/` |
+
+Three consequences that follow from this and are easy to miss:
+
+- **Audio provenance stops being a blocker.** The 16 tracked `.ogg` files with no attribution anywhere in the tree live under `web-pixi/public/audio/`, which is not published. No archaeology required.
+- **Several validation recipes are game-coupled and cannot run in the public repo.** `just lint-no-ark` targets `internal/game/`; `just shipdyn-golden` and the `just web-test` prediction goldens span `internal/game/` **and** `web-pixi/`; `just space-sdk` runs `cmd/server`. The public repo's CI is necessarily a subset of this repo's, and WS-001's ship-dynamics parity gate — the workstream's only continuously-triggered drift risk — has no home there at all. Whichever repo keeps the game must keep that gate.
+- **The extraction mechanism is an open decision**, not covered by this item's estimate: a `git subtree` split, a fresh repo with the game as a downstream consumer of a tagged module, or publishing this repo with the game removed. The first two keep `go.mod:1`'s `github.com/zenion/mmoserver` path stable for consumers; the third does not.
+
+The CI half and the publication half are separable and the phase in [§6.8](#68-next-phase--p0-closure) closes the CI half completely.
 
 ### 6.4 P1 — quality and protocol
 
@@ -223,8 +293,11 @@ These exist in the working tree, in dated plans, or only in git history. They ar
 | ID | Workstream | Status | Where it lives today |
 | --- | --- | --- | --- |
 | WS-001 | **Client prediction, reconciliation, adaptive playback** | **Partial — see [WS-001](#ws-001--client-prediction-reconciliation-and-adaptive-playback--partial) below** | Implemented, committed, and documented. Reverses a previously executed decision to remove client prediction. |
-| WS-002 | Security Units 2–4 (UDP AEAD framing, mesh shared-secret auth, app hardening) | Units 2–3 not started; Unit 4 partial | Umbrella spec records all three as "to be written". Overlaps CE-005b and CE-006 — reconcile, do not track twice. |
-| WS-003 | Auth over HTTPS with OIDC social login | HTTPS endpoints exist; OIDC is a schema seam only | Buried in a spec amendment. Gates WS-002 Unit 2. No `/auth/udp-key` route exists. |
+| WS-002 | ~~Security Units 2–4~~ — **row split, see below** | — | The single row bundled three unrelated units and made all three invisible. |
+| WS-002/2 | Security Unit 2 — UDP AEAD framing | Not started | **Owned by [CE-005b](#ce-005b--udp-security-and-gating--tier-1-done-tier-2-open) Tier 2.** Not tracked here. |
+| WS-002/3 | Security Unit 3 — mesh shared-secret auth | Not started | **Owned by [CE-006](#ce-006--mesh-authentication-and-authorization--open-012).** Not tracked here. Closing CE-006 closes this. |
+| WS-002/4 | Security Unit 4 — application hardening | Partial | The only orphan of the three: it belongs to neither CE item and has no owner. Umbrella spec records its detail as "to be written". |
+| WS-003 | Auth over HTTPS with OIDC social login | HTTPS endpoints exist; OIDC is a schema seam only | The `/auth/udp-key` half is **owned by CE-005b Tier 2** (~2.5 d; the `AuthResolver` seam and cookie plumbing already exist). What stays here is OIDC proper — a single unused SQL table `auth.identities` with zero Go readers or writers. **OIDC does not gate the UDP key**; the previous entry implied it did. |
 | WS-004 | WASM systems Phases 1–3 | Phase 0 shipped; Phase 1 entirely unbuilt | `pkg/wasmabi` declares no host imports, so commands, multi-component queries, and the query manifest do not exist. Live perf TODO: the module recompiles on every load. |
 | WS-005 | C# SDK / Unity client remainder | All nine SDK plans shipped; four scope items open | The Unity demo project lives outside this repository. The RPC ergonomics layer was promised as a follow-on spec and never written. |
 | WS-006 | Async entity serialization | Open | Recovered from the retired roadmap. Network system is 15–25 ms of a 50 ms tick budget. CE-011 covers allocation, not moving frame construction off the loop goroutine. |
@@ -262,21 +335,92 @@ Open, and the reason this is Partial rather than Done:
 
 ### 6.7 Cross-cutting verification gates
 
-Each work item should add the smallest regression test that fails before the fix. These gates belong alongside P0, not after it — **all four marked below are blocked on OSS-001**, since no CI exists.
+Each work item should add the smallest regression test that fails before the fix. These gates belong alongside P0, not after it — **three of the six are blocked on OSS-001**, since no CI exists. Gate 5 is split below because its two halves have different blockers, and gate 4 turns out not to be CI-blocked in the way it was recorded.
 
-- [ ] Race-enabled tests for engine scheduling, transports, connection teardown, and mesh reconnects *(blocked on CI)*
-- [ ] Fuzz targets with retained corpora for reflection codecs, operation and input frames, and mesh frame decoders *(blocked on CI; zero fuzz targets exist today)*
+- [ ] Race-enabled tests for engine scheduling, transports, connection teardown, and mesh reconnects *(blocked on CI, and on the live `pkg/admin` race below)*
+- [ ] Fuzz targets with retained corpora for reflection codecs, operation and input frames, and mesh frame decoders *(blocked on CI; zero fuzz targets exist today. Note the gate names **three** decoder families: the reflection codec, the operation **and input** frame decoders, and the mesh frame decoder. `UnmarshalTransferFrame` is a payload decoder reached from inside `decodeMeshFrame`, not the frame decoder itself — covering it does not cover the third family)*
 - [x] Deterministic simulated loss/reorder/duplicate harnesses — landed as `pkg/system/lossy_link_test.go`. **Do not** build on `pkg/universe/loopback_bridge.go` as previously recommended here: it routes `CellMessage` (no path from a frame writer into it), `pkg/universe` imports `pkg/system` so the import cycle forbids it, it applies one constant latency so it can never reorder, and it has no duplicate injection
-- [ ] Linux integration jobs that permit localhost TCP and UDP listeners *(blocked on CI)*
-- [ ] Generated-schema diff checks and cross-language Go/TypeScript/C# golden vectors *(blocked on CI)*
-- [ ] Load tests asserting bounded memory, queue depth, tick work, and recovery after backpressure
+- [ ] Linux integration jobs that permit localhost TCP and UDP listeners — **not blocked on anything but the CI file itself.** The tests already exist and already bind localhost: `pkg/net/server_origin_test.go`, `pkg/net/udp_server_test.go`, `pkg/net/udpclient/handshake_race_test.go`, `pkg/admin/admin_e2e_test.go`, `internal/bot/auth_test.go`, `pkg/universe/udp_listener_test.go`. Any `go test ./...` job on `ubuntu-latest` satisfies this; tick it by naming that coverage, not by building something new
+- [ ] Generated-schema diff checks *(blocked on CI **and** on Postgres: `just space-sdk` is not DB-free — `cmd/server/main.go:126-137` opens Postgres unconditionally and `log.Fatalf`s regardless of `--admin-listen=`)*
+- [ ] Cross-language Go/TypeScript/C# golden vectors *(blocked on CI only; both regenerators are pure Go)*
+- [ ] Load tests asserting bounded memory, queue depth, tick work, and recovery after backpressure — **the only gate not blocked on CI**, and the direct verification gate for CE-002 criterion 5
 
-One known pre-existing race remains under `-race`; the second is fixed. Quarantining or fixing the remaining one makes every other failure attributable.
+**Two standing blind spots in any `go test ./...` gate**, stated so green is not mistaken for complete:
 
-1. **`ensureBorderDispatcher` vs `applyPeerList`** in the cell bridge.
-2. ~~**`Cell.MeshID` during a rename.**~~ **Fixed.** A cell's `(MeshID, CellID)` pair is now one immutable `cellIdentity` record behind an `atomic.Pointer`, read through `Cell.MeshID()` / `Cell.CellID()` / `Cell.Identity()` and replaced only by `setIdentity` on the rename path. The mutable exported fields are gone, so the whole class of unsynchronized off-loop reads is closed rather than just the one the detector found. `Host.CellByID` additionally stopped scanning on the identity and now resolves through the map key (`ParseCellID` + lookup), which is both race-free and O(1) instead of O(cells) on a path the mesh data plane hits per inbound frame. Note that a single-load `Identity()` is the only way to get both halves consistently — two separate accessor calls may legitimately straddle a rename, which `TestCellIdentity_SeparateAccessorsMayStraddleARename` documents.
+- **It covers zero PostgreSQL code.** All four `*/postgres` packages are behind `//go:build pgtest` and report `[no test files]`. Their tests are not skipped — they are invisible. Only `just test-pg` runs them.
+- **`gofmt` cannot be gated tree-wide.** `gofmt -l $(git ls-files '*.go')` reports 72 files / 1358 diff lines, almost all pre-existing Go 1.19+ doc-comment reflow, and `AGENTS.md` forbids clearing that as incidental cleanup. Gate changed files only. Relatedly, `go.mod` declares `go 1.25.1` with **no `toolchain` directive** while only go1.26.x is installed, so `vet` and `gofmt` results are toolchain-dependent and CI would measure a moving target until it is pinned.
 
-Also note: `pkg/universe` intermittently reports `executor: serialize timeout on cell_0_0` ([`cell_transfer_executor.go:239`](../pkg/universe/cell_transfer_executor.go)) under PARALLEL package execution. That one is CPU contention on a `RunOnLoop` deadline, not a logic race — it reproduces roughly 1 run in 4 with default `-p` and 0 in 4 when the package runs alone. Always use `-p 1` for any run that includes `pkg/universe`, or the flake gets misattributed.
+**Race inventory, re-measured at `17a9a2ce`:**
+
+1. **`pkg/admin` fails `-race` deterministically — this is live, real, and was not recorded.** `go test ./pkg/admin/ -race -count=1` fails 5/5 on `TestAdminE2E_SplitTriggersTopologyEvent`; the same package passes 3/3 without `-race`. It is a production bug, not a test artifact: `sseWriter.Deliver` ([`pkg/admin/sse.go:81`](../pkg/admin/sse.go)) calls `Flush()` on the handler's `http.ResponseWriter` from the `TopicBus.dispatcher` goroutine ([`topicbus.go:169`](../pkg/admin/topicbus.go)) **after `handleStream` returned**, racing net/http's own `finishRequest`/`chunkWriter.close`. `Unsubscribe` (`topicbus.go:77`) only closes `st.done` and never joins the dispatcher. `sseWriter`'s own mutex cannot help, because the other writer is net/http. Using a `ResponseWriter` after the handler returns violates the net/http contract. **Gate 1 cannot be ticked until this is fixed**, or the race job is red on its first run and everyone learns to ignore it.
+2. **`TestTopicBus_SlowSubscriberDropped` is a real flake** — 1 of 5 `-race` runs, asserting an exact drop count on a timing-dependent bound (`topicbus_test.go:67`).
+3. **`ensureBorderDispatcher` vs `applyPeerList`** in the cell bridge — **did not reproduce** at this commit. `go test ./pkg/universe/ -race -p 1 -count=1` passed (47.8 s), and `pkg/universe` was `ok` in a full `-race` run. Possibly closed by the cell-identity work in `1536ece`. Recorded as unreproducible rather than deleted; do not treat it as fixed without a targeted test.
+4. ~~**`Cell.MeshID` during a rename.**~~ **Fixed.** A cell's `(MeshID, CellID)` pair is now one immutable `cellIdentity` record behind an `atomic.Pointer`, read through `Cell.MeshID()` / `Cell.CellID()` / `Cell.Identity()` and replaced only by `setIdentity` on the rename path. The mutable exported fields are gone, so the whole class of unsynchronized off-loop reads is closed rather than just the one the detector found. `Host.CellByID` additionally stopped scanning on the identity and now resolves through the map key (`ParseCellID` + lookup), which is both race-free and O(1) instead of O(cells) on a path the mesh data plane hits per inbound frame. Note that a single-load `Identity()` is the only way to get both halves consistently — two separate accessor calls may legitimately straddle a rename, which `TestCellIdentity_SeparateAccessorsMayStraddleARename` documents.
+
+Also note: `pkg/universe` intermittently reports `executor: serialize timeout on cell_0_0` ([`cell_transfer_executor.go:239`](../pkg/universe/cell_transfer_executor.go)) under PARALLEL package execution. That one is CPU contention on a `RunOnLoop` deadline, not a logic race. The recorded "roughly 1 run in 4 with default `-p`" figure is **not confirmed at `17a9a2ce`** — it did not reproduce in 1 default-`-p` run (`go test ./... -count=1 -timeout 300s`, exit 0, 47.9 s, `ok pkg/universe 47.448s`) or 2 `-p 1` runs. One passing sample cannot refute a 1-in-4 rate, so **keep `-p 1` as retained insurance**, but treat it as insurance rather than a proven necessity, and note that under `-race` (2 m 55 s versus 48 s) contention is strictly worse, so a nightly race job should carry `-p 1` too.
+
+### 6.8 Next phase — P0 closure
+
+**Approximately 35 engineer-days.** This is the active phase. It takes CE-002, CE-006 and OSS-001's CI half to their full acceptance criteria. It is recorded here and nowhere else — no `docs/superpowers/` spec or plan is written for it — so this section is the deliverable, and [§4 principle 4](#4-design-principles) applies to it: **status is derived from source, not from these headings.**
+
+#### 6.8.1 What it does and does not close
+
+| Item | At phase end |
+| --- | --- |
+| CE-002 | **Done (8/8)** |
+| CE-006 | **Done (12/12)**, including the `MeshData` payload binding. That criterion is closed with a real `sender_id` field on `meshpb.MeshFrame` plus a `just proto` run and a lockstep cluster redeploy — an accepted cost here, not a reason to defer |
+| OSS-001 | **Partial.** CI half closed completely; publication half is the mmokit-core extraction, which carries an open mechanism decision |
+| CE-005b Tier 2 | **Still open** — see below |
+
+**§7.1's gate does not lift when this phase ends.** [§7.1](#71-sequencing-rule) gates the entire 104-day 2D/3D program on *every* P0 item, and CE-005b Tier 2 sits in [§6.3](#63-p0--must-close-before-the-2d3d-program-begins). The successor phase is CE-005b Tier 2 at roughly 12.5 days, after which it does. This is stated plainly here because the phase name invites the opposite reading.
+
+#### 6.8.2 Sequencing
+
+Four units have no dependencies and can start together: the roadmap of record, publication hygiene, greening the race gate, and ingress containment. The ordering that matters is everything else.
+
+- **Ingress containment does not wait for CI.** The pre-auth unbounded-queue DoS in `pkg/net/conn.go` and the missing panic barriers need neither the decoder refactor nor a malformed frame. Sequencing them behind an eleven-day refactor delays an active fix for no technical reason.
+- **CI comes early but not first.** CE-002 criterion 6 is codec fuzzing, and §6.7's fuzz gate is explicitly CI-blocked — the *retained corpora* half needs scheduled mutation runs, though seeds alone execute under a plain `go test`. Independently: CE-002 changes `ReflectCodec.Decode`'s signature, both `ComponentReplicator` closure field types, 19 non-test decode call sites across 9 files and 23 test sites spanning three packages. `go vet ./...` catches all of that in 0.41 s and today runs only when someone remembers.
+- **Greening `-race` gates the nightly job and nothing else.** `pkg/admin` fails deterministically at HEAD (§6.7). A race gate that is red on its first run is a gate nobody trusts.
+- **The limits type must be declared in `pkg/net`, not `pkg/universe`.** `pkg/universe` imports `pkg/net` one-way — `go list -deps ./pkg/net` returns only `pkg/net` and `pkg/net/udpproto` — so a type in `pkg/universe` is unreachable from all three `pkg/net` enforcement sites. This is a hard constraint, not a preference.
+- **`ReflectCodec.Decode`'s error return cannot be propagated before `decodeState` exists**, because `unmarshalStructOnStage` returns bare `int` until then. It belongs inside the decoder unit, not before it.
+- **Strict decoding must be built and switched on by different units.** `ReflectUnmarshalStrict` is built with the decoder; it can only be *enabled* by the unit that also owns `ValidateMessageType` wiring and depends on the error propagation. Building it without an owner for the switch is how criterion 4 ships half-closed while the close-out records it Done.
+- **Mesh TLS lands after both client-side tasks**, since flipping `RequireTransportSecurity()` breaks any dial that has not yet attached credentials. And fixture propagation must land in the *same merge* as the zero-config posture, or every distributed test and both dev recipes break the moment enforcement turns on.
+- **CE-006 splits three ways: authentication (1–7, ~6 d), control-plane authorization (8–11, ~5 d), payload-plane binding (12, ~2 d).** Split so a regression is attributable to one of the three. The control-plane authorization half touches crash-reconnect, graceful-leave and the operator command path and carries most of the phase's risk. The payload-plane unit is the only one carrying a proto change, so it is isolated to keep the `just proto` regeneration and the lockstep redeploy out of the other two units' blast radius — **isolated, not deferred.**
+- **A proto change is a normal cost, not a hazard to route around.** [Non-goal 4](#3-non-goals) waives wire backward compatibility and [the field-cleanup rule](#8-superseded-closed-and-deliberately-not-doing) already requires renumbering from 1 rather than reserving. When a schema change is the right design, take it and schedule the redeploy; do not tunnel through an existing field or file the criterion out of scope. Judge mechanisms on per-frame cost, capture-point clarity and forgeability — never on whether they touch `proto/meshpb/`.
+
+#### 6.8.3 Units
+
+| # | Unit | Item | Days | Risk | After |
+| --- | --- | --- | ---: | --- | --- |
+| 1 | Phase of record: this section, and the criteria rewrites above | tracking | 0.75 | low | — |
+| 2 | Publication hygiene, MIT `LICENSE`, secret-filename hardening, `CONTRIBUTING`/`SECURITY` | OSS-001 | 0.75 | low | — |
+| 3 | Green the gate: `pkg/admin` SSE-after-handler race, `TopicBus` flake, toolchain pin | OSS-001 | 1 | med | — |
+| 4 | CI foundation: PR jobs plus a nightly race and fuzz workflow | OSS-001 | 2 | low | 3 |
+| 5 | Ingress containment: panic barriers, pre-auth queue caps, per-drain work budgets, `WireLimits` carrier | CE-002 (5, 8) | 3.5 | med | — |
+| 6 | Fuzz harness covering all three decoder families §6.7 names | CE-002 (6) | 2 | low | 4 |
+| 7 | Encoder length guards that return an error rather than panicking | CE-002 | 0.75 | low | 4 |
+| 8 | `decodeState`: bounds before every read, allocation charged before every allocation | CE-002 (1, 2, 4) | 3.25 | med | 6, 7 |
+| 9 | Propagate decode errors through all 19 call sites, incl. the `ComponentReplicator` facade break | CE-002 | 2 | med | 8 |
+| 10 | Limits on `Config`, strict decoding switched on, registered wire types validated | CE-002 (3, 4) | 1.5 | med | 9 |
+| 11 | Bounded-cardinality rejection metrics, actually scraped, plus the sustained-ingress load test | CE-002 (7); gate 6 | 2 | med | 5, 9 |
+| 12 | CE-006 Phase A: authenticate and encrypt both mesh channels | CE-006 (1–7) | 6 | med | 2 |
+| 13 | CE-006 Phase B: bind control-stream identity, stop trusting RBAC grants off the wire | CE-006 (8–11) | 5 | **high** | 12 |
+| 14 | CE-006 Phase C: `MeshFrame.sender_id`, payload-plane binding, receipt oneof arm, `just proto` | CE-006 (12) | 2 | med | 12 |
+| 15 | Phase close: propagate the secret to fixtures and recipes, smoke both presets, write status back here | all | 2.5 | low | 1, 2, 4, 5, 10, 11, 13, 14 |
+
+#### 6.8.4 Traps this phase must not fall into
+
+Each of these was found by verifying a plausible plan against source and finding it wrong. They are recorded because they are cheap to re-derive incorrectly.
+
+- **Do not commit crashing fuzz seeds before the decoder is checked.** Go executes `testdata/fuzz/<Name>/` entries as ordinary subtests under a plain `go test`, so crashers committed early redden the required job for days. Ship non-crashing seeds with the harness; the truncated and oversized seeds land in the *same commit* as the checked decoder. The bounds-regression table has the same property in reverse — it asserts today's panics *via recover*, so it is green on HEAD and green after, never in between.
+- **Do not panic in the encoder guards.** `ReflectMarshal` runs on the cell tick goroutine and `gl.tick(dt)` runs bare with no recover — a panic there adds exactly the failure mode unit 5 exists to remove. Return an error. Widening a length prefix is also not an option: the widths are a frozen cross-language contract in `cmd/sdkgen` and `csharp/Mmokit.Sdk.Core/ReflectCodec.cs`.
+- **Do not wrap the whole of `Cell.processMessage` in a recover.** `MsgSpawnTransfer` mutates `Engine.Players` mid-handler and the handoff arms promote/demote and `Stage.handoffAccepted`; a mid-handler unwind can leave a half-registered player or a netID holding both a Live and a Replica slot. Scope the barrier to the decode step, or pair it with a forced integrity re-assert and a counter so a recovered handoff is visible rather than silent.
+- **Do not use `ValidateComponentType` for wire types.** 12 production types carry slice fields and pass only under `allowSlice=true`; the stricter validator panics all twelve at package init and looks like the guard causing mass breakage. A measured sweep of all 126 unique production wire types found **zero** failures under `ValidateMessageType` — the one offender repo-wide is test-only (`pkg/mmokit/messaging_all_test.go`, `N int`). This unit is small; it was previously priced against an unmeasured failure set.
+- **Do not put a per-connection label on the rejection metrics.** `pkg/metrics/cell_metrics.go` has the in-repo definition: "Plain counters, no per-player labels — the cardinality has to stay bounded." A connID or IP label lets an attacker drive unbounded metric-map growth, converting the DoS fix into a new DoS vector. Note the precedent to avoid copying: `RecordInputAckFrame`/`RecordInputSequenceRejected` are incremented today and their only reader has no callers — the counters exist and were never shipped. This unit is done when a scrape shows them, not when they exist. A gateway-role-only process currently serves a structurally empty `/metrics`, because the handler is fed from `allCellLoads` and a gateway owns no cells.
+- **Do not gate the auto-generated cluster secret on a loopback check.** `--control-listen` defaults to `":9100"` and `isLoopbackBind` treats an empty host as all-interfaces, so the heuristic never fires for the bind every dev recipe uses. `just dev` opens an unauthenticated wildcard `MeshControl` listener today.
+- **Do not reuse `Process.httpTLSConfig` for mesh TLS.** It `sync.Once`-memoizes the client-facing posture and falls back to plaintext on error; a mesh cert is required even when client TLS is plaintext, which is the default. Reuse `generateDevCert` unchanged instead, and do not "fix" its localhost-only SANs — peers dial with `InsecureSkipVerify`, so changing them would imply a verification that does not happen.
+- **Flag defaults never reach tests.** `universe.New`'s `if !flag.Parsed()` guard is always false under `go test`, so `BindFlags` is skipped entirely. Defaults must be applied as a zero-value fallback in `New()`, and roughly twenty fixture sites must set `Config.ClusterSecret` directly.
+- **A corrupt component blob must skip that component, not the entity.** Aborting the transfer turns a malformed blob into an entity-loss bug on the handoff path. The trade — an entity carrying a stale or absent component instead of a clean failure — is an authority-boundary decision and belongs in the roadmap entry, not only a code comment.
 
 ---
 
@@ -287,6 +431,8 @@ Also note: `pkg/universe` intermittently reports `executor: serialize timeout on
 ### 7.1 Sequencing rule
 
 **No work in this section begins until every P0 item in [section 6.3](#63-p0--must-close-before-the-2d3d-program-begins) is closed and verified against source.** This rule is recorded here so the ordering survives independently of whoever decided it.
+
+**The residual gate is CE-005b Tier 2.** The active phase in [§6.8](#68-next-phase--p0-closure) closes CE-002 and CE-006 and takes OSS-001 to Partial, but deliberately does not close CE-005b Tier 2 (~12.5 d). Four verified reasons: UDP is off in the shipped binary default while CE-002's decoder is reachable pre-auth on the WebSocket path that is on by default; AEAD does not help CE-002 at all, since the same reflection decoder runs on decrypted bytes; the locked cipher must be reversed first (ChaCha20-Poly1305 does not exist on `netstandard2.1`, the TFM Unity consumes); and CE-009 wants a version byte in the same 5-byte UDP header, so bundling them is one wire break and one golden regeneration instead of two. **This gate therefore does not lift at the end of §6.8** — it lifts one phase later.
 
 ### 7.2 Prerequisite gates
 
@@ -346,7 +492,11 @@ Recorded so the next reader does not resurrect dead work.
 | **Co-simulation / overlap handoff** | **Deleted**, not deferred. The implementing files no longer exist. Some dated plans and older notes still describe it as merely unwired — they are wrong. The successor concern is CE-004. |
 | **Border-frame delta compression** | **Landed.** |
 | **World editor** | **Delivered** and live in the admin dashboard. |
-| **CE-006's cluster-CA mTLS mechanism** | **Superseded** by the shared-secret plus ephemeral-TLS decision. The risk stays open; the mechanism is replaced. |
+| **CE-006's cluster-CA mTLS mechanism** | **Superseded** by the shared-secret plus ephemeral-TLS decision. The risk stays open; the mechanism is replaced. The two surviving `TODO(mTLS)`/`TODO(S4)` comments in `host_network.go` and `mesh_control_client.go` must be **deleted, not implemented** — and `host_network.go`'s claim that "S3 only runs in loopback" is false: all four production callers pass `":0"`, a wildcard ephemeral bind. |
+| **Certificate pinning by fingerprint for mesh TLS** | **Declined**, out of scope. Peers dial with `InsecureSkipVerify`; the residual is an active on-path MITM on an untrusted network, answered by network isolation rather than by PKI. |
+| **Audio-asset provenance as an OSS blocker** | **Moot.** The 16 unattributed `.ogg` files live under `web-pixi/`, which is not part of the mmokit open-source distribution. |
+| **ChaCha20-Poly1305 for UDP AEAD** | **Superseded** by AES-GCM. `Mmokit.Sdk.Core` targets `netstandard2.1`, where `ChaCha20Poly1305` does not exist and `AesGcm` does. `netstandard2.1` also has no `HKDF` class. |
+| **Auth over the op channel (C# client)** | **Superseded** by the 2026-06-12 umbrella's HTTPS-then-UDP decision. The 2026-06-06 Unity SDK spec chose the op channel specifically to avoid that split; the newer decision wins. |
 | **Volumetric cell partitioning** | **Declined** — see [non-goal 1](#3-non-goals). |
 | **Client prediction removal** | **Reversed** by WS-001, which is implemented and committed. See the [WS-001 subsection](#ws-001--client-prediction-reconciliation-and-adaptive-playback--partial). |
 
