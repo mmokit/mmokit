@@ -1051,7 +1051,27 @@ func (g *Gateway) runSessionPump(connID uint32) {
 // either a malformed frame or a misconfigured client; we drop with an
 // OperationError back to the client (best-effort) rather than silently
 // swallowing it.
+// The recover is PER FRAME, not per goroutine: runSessionPump owns the
+// connection's only drain, so unwinding it would leave the queues to fill until
+// the connection is torn down. Recovering here drops exactly the offending
+// frame and the pump keeps draining.
+//
+// The barrier is deliberately here and NOT inside DispatchTypedOpInbound. That
+// function must stay panic-transparent so the codec fuzz targets report
+// crashers instead of silently passing.
+//
+// This frame arrives PRE-AUTHENTICATION — sess is nil during the whole auth
+// exchange — and the reflection decoder reached from here still trusts
+// wire-supplied lengths, so a malformed 0x01 body panics on a slice bound
+// today. That panic is on a bare goroutine and takes the process with it.
 func (g *Gateway) processOpFrame(connID uint32, sess *localSession, raw []byte) {
+	defer func() {
+		if r := recover(); r != nil {
+			g.log.Log(CatNetConn, "gateway: op frame panic conn=%d bytes=%d panic=%v",
+				connID, len(raw), r)
+		}
+	}()
+
 	typeID, _, _, decErr := DecodeTypedOpFrame(raw)
 	if decErr != nil {
 		// Structurally invalid frame: nothing we can do. The dispatcher

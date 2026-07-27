@@ -2,9 +2,12 @@ package universe
 
 import (
 	"context"
+	"fmt"
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"github.com/google/uuid"
 
 	"github.com/zenion/mmoserver/pkg/engine"
 	"github.com/zenion/mmoserver/pkg/logger"
@@ -138,6 +141,15 @@ type Cell struct {
 	runMu     sync.Mutex
 	runCancel context.CancelFunc // nil until Run starts; reset when Run exits
 	runDone   chan struct{}      // closed when Run returns
+
+	// recoveredPanics counts inbox messages whose handling panicked and was
+	// recovered — by guardDecode (harmless, one frame lost) or by
+	// processMessageGuarded (not harmless; see its doc comment).
+	recoveredPanics atomic.Uint64
+
+	// integrityReassert single-flights the post-recovery invariant check so
+	// a flood of malformed frames cannot schedule unbounded ECS scans.
+	integrityReassert atomic.Bool
 }
 
 // NewCell constructs a Cell with its immutable identity installed. Callers
@@ -201,13 +213,102 @@ func (c *Cell) DrainInbox() {
 	for {
 		select {
 		case msg := <-c.Inbox:
-			c.processMessage(msg)
+			c.processMessageGuarded(msg)
 		default:
 			c.Stage.TickGhosts()
 			c.Stage.TickTransferCooldowns()
 			return
 		}
 	}
+}
+
+// processMessageGuarded is the last-resort barrier around one inbox message.
+//
+// It exists because gl.tick runs bare: DrainInbox is reached from
+// cellBridge.PreTick, so a panic anywhere under processMessage unwinds the cell
+// loop goroutine and kills the process. A peer frame is the input, so that is a
+// remote kill.
+//
+// Chosen semantics, stated because the safe scope here is not obvious:
+//
+//   - The DECODE steps carry their own scoped barriers (guardDecode below).
+//     Those are pure — they touch no engine state — so recovering one loses
+//     exactly one frame and nothing else is in doubt.
+//   - This outer barrier can only fire for a panic in a MUTATING arm, and a
+//     mid-handler unwind there is genuinely dangerous: MsgSpawnTransfer
+//     registers a player and then mutates the returned session, and MsgHandoff
+//     acks, marks handoffAccepted, pre-registers the session, and queues a
+//     promote in sequence. Unwinding between any two of those leaves a
+//     half-registered player, or a netID that will hold both a Live and a
+//     Replica slot.
+//
+// So a recovery here is NOT treated as handled. It bumps a counter and forces
+// a cluster-integrity re-assert through the configured InvariantMode, which
+// under the dev/test default (InvariantPanic) fails loudly and under the
+// production default (InvariantLog) records the violation. The alternative —
+// swallowing it — trades a visible crash for an invisible split-brain, which is
+// the worse failure. Keeping the loop alive is what buys the process the chance
+// to report the inconsistency at all.
+func (c *Cell) processMessageGuarded(msg CellMessage) {
+	defer func() {
+		r := recover()
+		if r == nil {
+			return
+		}
+		c.recoveredPanics.Add(1)
+		c.Log.Log(CatMeshMsg,
+			"[%s] processMessage panic (type=%d from=%s): %v — cell loop survived, forcing integrity re-assert",
+			c.MeshID(), msg.Type, msg.FromCellID, r)
+		c.requestIntegrityReassert(msg.Type)
+	}()
+	c.processMessage(msg)
+}
+
+// RecoveredMessagePanics returns how many inbox messages this cell recovered a
+// panic from. Non-zero means at least one mesh message left engine state in an
+// unverified condition; see processMessageGuarded.
+func (c *Cell) RecoveredMessagePanics() uint64 { return c.recoveredPanics.Load() }
+
+// requestIntegrityReassert schedules a cluster-integrity check after a
+// recovered handler panic.
+//
+// Off the cell loop on purpose: defaultInvariants scans every cell's ECS
+// through RunOnLoop with a one-second timeout each, which must not run inside
+// the tick it is reporting on. Single-flight on purpose too: the panics that
+// reach here are peer-triggered, so an unguarded check-per-panic would let a
+// malformed-frame flood schedule unbounded scans — converting a DoS fix into a
+// DoS vector.
+func (c *Cell) requestIntegrityReassert(msgType MsgType) {
+	if c.Stage == nil || c.Stage.coord == nil {
+		return
+	}
+	if !c.integrityReassert.CompareAndSwap(false, true) {
+		return
+	}
+	proc := c.Stage.coord
+	meshID := c.MeshID()
+	go func() {
+		defer c.integrityReassert.Store(false)
+		proc.CheckInvariants(defaultInvariants,
+			fmt.Sprintf("recovered processMessage panic on %s (msg type %d)", meshID, msgType))
+	}()
+}
+
+// guardDecode runs a pure decode/deserialize step behind a recover barrier and
+// reports whether it completed. Scoped to steps that read wire bytes and touch
+// no engine state, so a recovered panic costs exactly the offending frame and
+// leaves nothing half-applied — unlike the mutating arms, which fall through to
+// processMessageGuarded and its integrity re-assert.
+func (c *Cell) guardDecode(step string, fn func()) (ok bool) {
+	defer func() {
+		if r := recover(); r != nil {
+			c.recoveredPanics.Add(1)
+			c.Log.Log(CatMeshMsg, "[%s] %s decode panic, dropping frame: %v", c.MeshID(), step, r)
+			ok = false
+		}
+	}()
+	fn()
+	return true
 }
 
 // drainPendingPromotes applies every queued destination-side promote
@@ -540,7 +641,16 @@ func (c *Cell) processMessage(msg CellMessage) {
 			return
 		}
 		byteCount := len(msg.BorderFrame)
-		frame, err := replication.DecodeFrame(msg.BorderFrame)
+		var frame replication.Frame
+		var err error
+		// Pure decode: DecodeFrame reads wire-supplied lengths and touches
+		// no engine state, so a recovered panic here costs one border frame
+		// and nothing else. The neighbour re-sends every tick.
+		if !c.guardDecode("MsgBorderFrame", func() {
+			frame, err = replication.DecodeFrame(msg.BorderFrame)
+		}) {
+			return
+		}
 		if err != nil {
 			c.Log.Log(CatMeshMsg, "[%s] MsgBorderFrame decode error from=%s: %v", c.MeshID(), msg.FromCellID, err)
 			return
@@ -619,7 +729,19 @@ func (c *Cell) processMessage(msg CellMessage) {
 		// this host. SpawnFromTransferCore performs the matching remap
 		// when it decodes the blob (idempotent RegisterSession returns
 		// the same localID for the same key).
-		if srcConnID, streamGeneration, gwID, gwConnID, username, userID := PeekTransferPlayer(msg.Handoff.TransferBlob); srcConnID != 0 {
+		// Pure decode of the transfer blob's session prefix, scoped so a
+		// malformed blob loses this handoff instead of unwinding between
+		// the ack we just sent and the promote queued below — the exact
+		// mid-handler unwind that would leave a half-registered player.
+		var srcConnID, streamGeneration, gwConnID uint32
+		var gwID, username string
+		var userID uuid.UUID
+		if !c.guardDecode("MsgHandoff transfer blob", func() {
+			srcConnID, streamGeneration, gwID, gwConnID, username, userID = PeekTransferPlayer(msg.Handoff.TransferBlob)
+		}) {
+			return
+		}
+		if srcConnID != 0 {
 			localID := srcConnID
 			if gwConnID != 0 && c.Stage != nil && c.Stage.coord != nil && c.Stage.coord.vcm != nil {
 				key := SessionKey{GatewayID: gwID, ConnID: gwConnID}

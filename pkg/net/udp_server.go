@@ -51,6 +51,7 @@ type UDPServer struct {
 	maxConnections int
 	maxPending     int
 	pendingTTL     time.Duration
+	limits         WireLimits
 
 	sourceMismatchDrops atomic.Uint64
 	capacityDrops       atomic.Uint64
@@ -79,6 +80,7 @@ func NewUDPServer(addr string, connMgr *ConnManager) (*UDPServer, error) {
 		maxConnections: defaultMaxUDPConnections,
 		maxPending:     defaultMaxPendingHandshakes,
 		pendingTTL:     defaultPendingTTL,
+		limits:         DefaultWireLimits(),
 	}
 	return s, nil
 }
@@ -222,12 +224,18 @@ func (s *UDPServer) promotePending(token uint32, ap netip.AddrPort) *UDPTranspor
 		return nil
 	}
 	delete(s.pending, ap)
+	limits := s.limits
 	s.mu.Unlock()
 
 	// Construct outside s.mu: AddTransport pushes onto ConnManager's bounded
 	// event channel and can block on the routing goroutine.
-	t := newUDPTransport(s, ap, p.token, p.clientSalt, p.serverSalt)
-	connID := s.connMgr.AddTransport(t)
+	//
+	// The peer address is recorded with the transport. Without it every
+	// UDP-originated login in the cluster shares one IPRateLimiter bucket
+	// (ops.ParseClientIP yields the zero netip.Addr for an empty string) and
+	// every UDP audit row records a null IP.
+	t := newUDPTransport(s, ap, p.token, p.clientSalt, p.serverSalt, limits)
+	connID := s.connMgr.AddTransport(t, ap.String())
 
 	s.mu.Lock()
 	s.byToken[p.token] = t
@@ -289,6 +297,15 @@ func (s *UDPServer) SetLimits(maxConnections, maxPending int, pendingTTL time.Du
 	if pendingTTL > 0 {
 		s.pendingTTL = pendingTTL
 	}
+}
+
+// SetWireLimits installs the ingress limits applied to sessions promoted from
+// this point on. Non-positive fields fall back to their defaults. Sessions
+// already established keep the limits they were built with.
+func (s *UDPServer) SetWireLimits(l WireLimits) {
+	s.mu.Lock()
+	s.limits = l.Normalized()
+	s.mu.Unlock()
 }
 
 // SourceMismatchDrops returns the number of packets dropped because their

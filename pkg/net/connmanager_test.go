@@ -41,9 +41,9 @@ func drainEvent(t *testing.T, ch <-chan PlayerEvent) PlayerEvent {
 
 func TestConnManager_AddTransport_IncrementingIDs(t *testing.T) {
 	cm := NewConnManager()
-	id1 := cm.AddTransport(&mockTransport{})
-	id2 := cm.AddTransport(&mockTransport{})
-	id3 := cm.AddTransport(&mockTransport{})
+	id1 := cm.AddTransport(&mockTransport{}, "")
+	id2 := cm.AddTransport(&mockTransport{}, "")
+	id3 := cm.AddTransport(&mockTransport{}, "")
 
 	if id1 != 1 {
 		t.Fatalf("expected first connID=1, got %d", id1)
@@ -58,7 +58,7 @@ func TestConnManager_AddTransport_IncrementingIDs(t *testing.T) {
 
 func TestConnManager_AddTransport_SendsConnectedEvent(t *testing.T) {
 	cm := NewConnManager()
-	id := cm.AddTransport(&mockTransport{})
+	id := cm.AddTransport(&mockTransport{}, "")
 
 	evt := drainEvent(t, cm.Events())
 	if !evt.Connected {
@@ -72,7 +72,7 @@ func TestConnManager_AddTransport_SendsConnectedEvent(t *testing.T) {
 func TestConnManager_Get_RegisteredAndUnknown(t *testing.T) {
 	cm := NewConnManager()
 	mt := &mockTransport{}
-	id := cm.AddTransport(mt)
+	id := cm.AddTransport(mt, "")
 
 	got := cm.Get(id)
 	if got != mt {
@@ -87,7 +87,7 @@ func TestConnManager_Get_RegisteredAndUnknown(t *testing.T) {
 func TestConnManager_Send(t *testing.T) {
 	cm := NewConnManager()
 	mt := &mockTransport{}
-	id := cm.AddTransport(mt)
+	id := cm.AddTransport(mt, "")
 
 	data := []byte("hello")
 	result := cm.Send(id, data)
@@ -106,7 +106,7 @@ func TestConnManager_Send(t *testing.T) {
 func TestConnManager_SendReliable(t *testing.T) {
 	cm := NewConnManager()
 	mt := &mockTransport{}
-	id := cm.AddTransport(mt)
+	id := cm.AddTransport(mt, "")
 
 	data := []byte("important")
 	result := cm.SendReliable(id, data)
@@ -137,7 +137,7 @@ func TestConnManager_DrainInput(t *testing.T) {
 	mt := &mockTransport{
 		input: [][]byte{[]byte("msg1"), []byte("msg2")},
 	}
-	id := cm.AddTransport(mt)
+	id := cm.AddTransport(mt, "")
 
 	msgs := cm.DrainInput(id)
 	if len(msgs) != 2 {
@@ -167,7 +167,7 @@ func TestConnManager_DrainOpInput(t *testing.T) {
 	mt := &mockTransport{
 		opInput: [][]byte{[]byte("op1")},
 	}
-	id := cm.AddTransport(mt)
+	id := cm.AddTransport(mt, "")
 
 	msgs := cm.DrainOpInput(id)
 	if len(msgs) != 1 {
@@ -181,7 +181,7 @@ func TestConnManager_DrainOpInput(t *testing.T) {
 func TestConnManager_Remove(t *testing.T) {
 	cm := NewConnManager()
 	mt := &mockTransport{}
-	id := cm.AddTransport(mt)
+	id := cm.AddTransport(mt, "")
 
 	cm.Remove(id)
 
@@ -196,7 +196,7 @@ func TestConnManager_Remove(t *testing.T) {
 func TestConnManager_Remove_SubsequentSendIsNoop(t *testing.T) {
 	cm := NewConnManager()
 	mt := &mockTransport{}
-	id := cm.AddTransport(mt)
+	id := cm.AddTransport(mt, "")
 
 	cm.Remove(id)
 
@@ -219,7 +219,7 @@ func TestConnManager_Remove_SubsequentSendIsNoop(t *testing.T) {
 func TestConnManager_Unregister(t *testing.T) {
 	cm := NewConnManager()
 	mt := &mockTransport{}
-	id := cm.AddTransport(mt)
+	id := cm.AddTransport(mt, "")
 
 	// Drain the Connected event first
 	drainEvent(t, cm.Events())
@@ -244,9 +244,9 @@ func TestConnManager_Unregister(t *testing.T) {
 
 func TestConnManager_ActiveConnIDs(t *testing.T) {
 	cm := NewConnManager()
-	id1 := cm.AddTransport(&mockTransport{})
-	id2 := cm.AddTransport(&mockTransport{})
-	id3 := cm.AddTransport(&mockTransport{})
+	id1 := cm.AddTransport(&mockTransport{}, "")
+	id2 := cm.AddTransport(&mockTransport{}, "")
+	id3 := cm.AddTransport(&mockTransport{}, "")
 
 	ids := cm.ActiveConnIDs()
 	slices.Sort(ids)
@@ -286,9 +286,9 @@ func (c *classedTransport) DeliveryClass() DeliveryClass { return c.class }
 func TestConnManager_DeliveryClassFor(t *testing.T) {
 	cm := NewConnManager()
 
-	wsLike := cm.AddTransport(&classedTransport{class: DeliveryReliableOrdered})
-	udpLike := cm.AddTransport(&classedTransport{class: DeliveryBestEffort})
-	stub := cm.AddTransport(&mockTransport{})
+	wsLike := cm.AddTransport(&classedTransport{class: DeliveryReliableOrdered}, "")
+	udpLike := cm.AddTransport(&classedTransport{class: DeliveryBestEffort}, "")
+	stub := cm.AddTransport(&mockTransport{}, "")
 
 	cases := []struct {
 		name   string

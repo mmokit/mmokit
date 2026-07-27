@@ -286,8 +286,40 @@ func (c *Process) startUDPListener(ctx context.Context) {
 	} else {
 		c.Log.Log(CatMeshCell, "udp: WARNING experimental transport enabled on NON-LOOPBACK address %s — packets are unauthenticated and unencrypted (sessions are source-address bound only); an on-path attacker can read and forge client traffic. Do not expose to untrusted networks until UDP secure framing lands", c.cfg.UDPListen)
 	}
-	c.Log.Log(CatMeshCell, "udp: listening on %s (roles=%s)", c.cfg.UDPListen, c.roles)
+	// Apply the configured ingress limits and keep the reference. Dropping
+	// the *UDPServer on the floor here is what left SetWireLimits and every
+	// drop-counter accessor without a production caller.
+	udpServer.SetWireLimits(c.cfg.WireLimits)
+	c.udpServer.Store(udpServer)
+	c.Log.Log(CatMeshCell, "udp: listening on %s (roles=%s, maxFrameBytes=%d)",
+		c.cfg.UDPListen, c.roles, c.cfg.WireLimits.MaxFrameBytes)
 	go udpServer.Run(ctx)
+}
+
+// UDPServerStats is a snapshot of the client UDP listener's refusal counters.
+// Bounded cardinality by construction: aggregate counters only, no per-peer or
+// per-token breakdown, so an attacker cannot grow the reported set.
+type UDPServerStats struct {
+	SourceMismatchDrops uint64
+	CapacityDrops       uint64
+	PendingFullDrops    uint64
+	PendingCount        int
+}
+
+// UDPStats reports the client UDP listener's refusal counters, and whether a
+// listener is bound at all. Returns ok=false on processes without the Gateway
+// role or with Config.UDPListen empty.
+func (c *Process) UDPStats() (stats UDPServerStats, ok bool) {
+	s := c.udpServer.Load()
+	if s == nil {
+		return UDPServerStats{}, false
+	}
+	return UDPServerStats{
+		SourceMismatchDrops: s.SourceMismatchDrops(),
+		CapacityDrops:       s.CapacityDrops(),
+		PendingFullDrops:    s.PendingFullDrops(),
+		PendingCount:        s.PendingCount(),
+	}, true
 }
 
 // startAdminHTTPListener binds an admin HTTP server on Config.AdminListen

@@ -170,7 +170,7 @@ func TestDispatchClientInput_FiresHandler(t *testing.T) {
 	if !ok {
 		t.Fatalf("engine ConnMgr is %T, expected *net.ConnManager", eng.ConnMgr)
 	}
-	connID := connMgr.AddTransport(tr)
+	connID := connMgr.AddTransport(tr, "")
 
 	// Register the player session. RegisterSessionTransfer puts it
 	// directly into the named state (Active), bypassing the OnEnter
@@ -247,7 +247,7 @@ func TestDispatchClientInput_DropsUntrustedTypeID(t *testing.T) {
 
 	tr := &fakeInputTransport{}
 	connMgr := eng.ConnMgr.(*net.ConnManager)
-	connID := connMgr.AddTransport(tr)
+	connID := connMgr.AddTransport(tr, "")
 
 	eng.Players.RegisterSessionTransfer(connID, "p2", "active", nil)
 	sess := eng.Players.ByConnID(connID)
@@ -293,7 +293,7 @@ func TestDispatchClientInput_DropsMalformedFrame(t *testing.T) {
 
 	tr := &fakeInputTransport{}
 	connMgr := eng.ConnMgr.(*net.ConnManager)
-	connID := connMgr.AddTransport(tr)
+	connID := connMgr.AddTransport(tr, "")
 
 	eng.Players.RegisterSessionTransfer(connID, "p3", "active", nil)
 	sess := eng.Players.ByConnID(connID)

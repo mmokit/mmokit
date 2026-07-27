@@ -37,7 +37,7 @@ func (s *smokeTransport) Close()               {}
 func TestRouter_TypedOpHandler_DispatchesEveryFrame(t *testing.T) {
 	cm := net.NewConnManager()
 	st := &smokeTransport{}
-	cm.AddTransport(st)
+	cm.AddTransport(st, "")
 	<-cm.Events() // drain connect event
 
 	r := NewRouter(cm, NewPlayerSessions())
@@ -72,7 +72,7 @@ func TestRouter_TypedOpHandler_DispatchesEveryFrame(t *testing.T) {
 func TestRouter_NoTypedHandler_DropsFrames(t *testing.T) {
 	cm := net.NewConnManager()
 	st := &smokeTransport{}
-	cm.AddTransport(st)
+	cm.AddTransport(st, "")
 	<-cm.Events()
 
 	r := NewRouter(cm, NewPlayerSessions())

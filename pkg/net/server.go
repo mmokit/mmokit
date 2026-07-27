@@ -58,6 +58,11 @@ type ConnManager struct {
 	// "app.example.com" but not "app.example.com:8443" — browsers omit default
 	// ports, so this only matters for explicit non-standard ports.
 	AllowedOrigins []string
+
+	// limits bounds inbound frame size and per-connection queue depth for
+	// every WebSocket connection this manager accepts. Guarded by mu
+	// because SetWireLimits may run after the listener is up.
+	limits WireLimits
 }
 
 type route struct {
@@ -71,7 +76,24 @@ func NewConnManager() *ConnManager {
 		conns:       make(map[uint32]Transport),
 		remoteAddrs: make(map[uint32]string),
 		events:      make(chan PlayerEvent, 64),
+		limits:      DefaultWireLimits(),
 	}
+}
+
+// SetWireLimits installs the ingress limits applied to connections accepted
+// from this point on. Non-positive fields fall back to their defaults.
+// Connections already accepted keep the limits they were built with.
+func (cm *ConnManager) SetWireLimits(l WireLimits) {
+	cm.mu.Lock()
+	cm.limits = l.Normalized()
+	cm.mu.Unlock()
+}
+
+// WireLimits returns the ingress limits currently applied to new connections.
+func (cm *ConnManager) WireLimits() WireLimits {
+	cm.mu.RLock()
+	defer cm.mu.RUnlock()
+	return cm.limits.Normalized()
 }
 
 // Events returns the channel of player connect/disconnect events.
@@ -205,8 +227,9 @@ func (cm *ConnManager) ConnectionCount() int {
 }
 
 // RemoteAddrString returns the remote address string (e.g. "1.2.3.4:5678") for
-// a connection. Returns "" for connections registered via AddTransport (non-WS),
-// or for unknown connIDs. Populated by HandleWebSocket from r.RemoteAddr.
+// a connection. Returns "" only when the registering caller had no peer address
+// to record, or for unknown connIDs. Populated by HandleWebSocket from
+// r.RemoteAddr and by AddTransport's remoteAddr argument.
 func (cm *ConnManager) RemoteAddrString(connID uint32) string {
 	cm.mu.RLock()
 	addr := cm.remoteAddrs[connID]
@@ -236,17 +259,26 @@ func (cm *ConnManager) Unregister(id uint32) {
 	cm.events <- PlayerEvent{ConnID: id, Disconnect: true}
 }
 
-func (cm *ConnManager) registerTransport(connID uint32, t Transport) {
+func (cm *ConnManager) registerTransport(connID uint32, t Transport, remoteAddr string) {
 	cm.mu.Lock()
 	cm.conns[connID] = t
+	if remoteAddr != "" {
+		cm.remoteAddrs[connID] = remoteAddr
+	}
 	cm.mu.Unlock()
 	cm.events <- PlayerEvent{ConnID: connID, Connected: true}
 }
 
 // AddTransport registers any Transport and returns its assigned connection ID.
-func (cm *ConnManager) AddTransport(t Transport) uint32 {
+//
+// remoteAddr is the peer's address in "host:port" form. It is required, not
+// decorative: ops.ParseClientIP feeds it to the auth service's per-IP login
+// rate limiter and to the audit log. Passing "" collapses every such connection
+// into a single shared rate-limit bucket and records a null IP, so only pass ""
+// for transports that genuinely have no peer address (in-process test stubs).
+func (cm *ConnManager) AddTransport(t Transport, remoteAddr string) uint32 {
 	connID := cm.nextID.Add(1)
-	cm.registerTransport(connID, t)
+	cm.registerTransport(connID, t, remoteAddr)
 	return connID
 }
 
@@ -260,22 +292,25 @@ func (cm *ConnManager) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Bound the largest message the WebSocket layer will read at all. Without
+	// this the ceiling is coder/websocket's own defaultReadLimit — the right
+	// number, but an accidental dependency default rather than a decision we
+	// own. Exceeding it fails the read, which ends the pump and closes the
+	// connection; that is the intended answer for a peer sending frames the
+	// protocol has no shape for.
+	limits := cm.WireLimits()
+	ws.SetReadLimit(int64(limits.MaxFrameBytes))
+
 	// Allocate the ID before the write pump starts. Conn.id is immutable after
 	// construction, so writers, diagnostics, and event consumers can never race
 	// with a post-publication ID assignment.
 	connID := cm.nextID.Add(1)
-	conn := newConn(connID, ws)
+	conn := newConn(connID, ws, limits)
 	t := NewWSTransport(conn)
-	cm.registerTransport(connID, t)
-
 	// Record the remote address for auth handlers (rate limiting, audit logs).
 	// r.RemoteAddr is set by the HTTP server from the TCP connection before any
 	// proxy header processing — it is the direct peer address (e.g. "1.2.3.4:5678").
-	if r.RemoteAddr != "" {
-		cm.mu.Lock()
-		cm.remoteAddrs[connID] = r.RemoteAddr
-		cm.mu.Unlock()
-	}
+	cm.registerTransport(connID, t, r.RemoteAddr)
 
 	// Fire the upgrade hook synchronously before the read loop starts.
 	// The original *http.Request is still in scope here, so cookies are

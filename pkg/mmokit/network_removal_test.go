@@ -62,7 +62,7 @@ func TestNewNetworkSystem_AuthoritativeDespawnPublishesOneRemoval(t *testing.T) 
 	stage := cell.Stage
 	eng := cell.Engine
 	transport := &networkRemovalCaptureTransport{}
-	connID := eng.ConnMgr.(*net.ConnManager).AddTransport(transport)
+	connID := eng.ConnMgr.(*net.ConnManager).AddTransport(transport, "")
 
 	viewer := stage.Spawn(
 		Position{X: 0, Y: 0},
@@ -161,7 +161,7 @@ func TestNewNetworkSystem_CommandDespawnPublishesRemovedNotExited(t *testing.T) 
 	stage := cell.Stage
 	eng := cell.Engine
 	transport := &networkRemovalCaptureTransport{}
-	connID := eng.ConnMgr.(*net.ConnManager).AddTransport(transport)
+	connID := eng.ConnMgr.(*net.ConnManager).AddTransport(transport, "")
 
 	viewer := stage.Spawn(
 		Position{X: 0, Y: 0},

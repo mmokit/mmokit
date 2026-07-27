@@ -130,6 +130,15 @@ type Config struct {
 	// authenticated secure framing work lands.
 	UDPListen string
 
+	// WireLimits bounds inbound frame size and per-connection queue depth on
+	// every client ingress surface (WebSocket, UDP, and the host-side virtual
+	// connections a gateway forwards to). Zero fields fall back to
+	// net.DefaultWireLimits — which matters more than it looks, because
+	// universe.New's `if !flag.Parsed()` guard is always false under
+	// `go test`, so BindFlags never runs there and a Config built by a
+	// fixture reaches the runtime with this field zeroed.
+	WireLimits net.WireLimits
+
 	// AdminListen is the listen address for an HTTP admin server that
 	// exposes /events, /commands, /metrics, and /admin/*. Bound only on
 	// processes that bear RoleCoordinator — admin state (commit log,
@@ -605,6 +614,13 @@ type Process struct {
 	// after Build(); shut down at the top of Shutdown() before cells drain.
 	httpServer *http.Server
 
+	// udpServer is the engine-owned client UDP server, non-nil once
+	// startUDPListener has bound Config.UDPListen. Held so its limits can be
+	// configured and its drop counters read: without a reference here,
+	// SetLimits and every drop-counter accessor have no production caller and
+	// the listener is unobservable.
+	udpServer atomic.Pointer[net.UDPServer]
+
 	// tlsOnce memoizes the resolved client-facing TLS config so both HTTP
 	// listeners present the same certificate. Resolved lazily via
 	// httpTLSConfig(); nil tlsConfig means serve plaintext.
@@ -769,6 +785,10 @@ func New(cfg Config) *Process {
 		cfg.SettleWindow = settleWindow
 	}
 
+	// Apply the ingress limits as a zero-value fallback rather than relying on
+	// BindFlags: flag defaults never reach a Config built by a test fixture.
+	cfg.WireLimits = cfg.WireLimits.Normalized()
+
 	if cfg.CellSize > 0 {
 		coords.SetCellSize(cfg.CellSize)
 	}
@@ -786,6 +806,9 @@ func New(cfg Config) *Process {
 		coordEpoch:         uint64(time.Now().UnixNano()),
 		bus:                service.NewBus(processIDFromConfig(cfg)),
 		serviceEventRouter: newServiceEventRouter(),
+	}
+	if c.ConnMgr != nil {
+		c.ConnMgr.SetWireLimits(cfg.WireLimits)
 	}
 	c.invariantMode = cfg.InvariantMode
 	c.strictNetIDIndex = cfg.StrictNetIDIndex
@@ -1982,6 +2005,7 @@ func (c *Process) buildRemoteHost() {
 	hn.SetCoord(c)
 
 	vcm := NewVirtualConnManager(hn, c.Log)
+	vcm.SetWireLimits(c.cfg.WireLimits)
 	hn.SetVCM(vcm)
 	c.vcm = vcm
 

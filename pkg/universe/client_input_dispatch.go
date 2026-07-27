@@ -3,6 +3,7 @@ package universe
 import (
 	"encoding/binary"
 	"reflect"
+	"time"
 
 	"github.com/mlange-42/ark/ecs"
 
@@ -26,6 +27,23 @@ const CatClientInput = "input:client"
 // frame. The reflection codec (ReflectMarshal / ReflectUnmarshalOnStage)
 // handles the body bytes.
 const clientInputHeaderBytes = 8
+
+// Per-tick work budget for the client-input drain.
+//
+// DispatchClientInput runs inside gl.tick, which has no recover and no slack:
+// every millisecond it spends is taken from the 50 ms the systems have. Before
+// these caps it drained every queued frame for every connected player, so the
+// cost of one tick was set by how fast the clients chose to send. The
+// per-connection share is already bounded by each drain source's
+// MaxFramesPerDrain; these two bound the whole-cell aggregate.
+//
+// Whatever the budget leaves behind stays queued (behind MaxInputQueueDepth)
+// and is drained on the next tick 50 ms later. Shape copied from
+// GameLoop.processAdminCmds: deadline, slow warning, remainder left queued.
+const (
+	clientInputFrameBudget = 2048
+	clientInputTimeBudget  = 5 * time.Millisecond
+)
 
 // DispatchClientInput drains the inbound event channel (0x00) for every
 // connection routed to this stage and dispatches each frame through the
@@ -68,7 +86,23 @@ func (s *Stage) DispatchClientInput() {
 		return
 	}
 
+	deadline := time.Now().Add(clientInputTimeBudget)
+	dispatched := 0
+	exhausted := false
 	s.eng.Players.ForEachConnected(func(sess *engine.PlayerSession) {
+		if exhausted {
+			return
+		}
+		if dispatched >= clientInputFrameBudget || time.Now().After(deadline) {
+			// Stop before draining this player: a drained-but-undispatched
+			// frame would be lost, whereas an undrained queue is simply
+			// serviced next tick.
+			exhausted = true
+			s.eng.Log.Log(CatClientInput,
+				"[%s] client-input budget exhausted after %d frames, deferring remaining players to next tick",
+				s.cellID, dispatched)
+			return
+		}
 		msgs := connMgr.DrainInput(sess.ConnID)
 		if len(msgs) == 0 {
 			return
@@ -76,6 +110,7 @@ func (s *Stage) DispatchClientInput() {
 		for _, frame := range msgs {
 			s.dispatchInboundEventFrame(sess, frame)
 		}
+		dispatched += len(msgs)
 	})
 }
 

@@ -62,6 +62,29 @@ type Router struct {
 	// typedOpHandler is the typed-op dispatcher. Wired by pkg/universe in
 	// the gateway role; nil leaves all 0x01 frames silently dropped.
 	typedOpHandler TypedOpHandler
+
+	// framesPerPoll caps how many op frames one poll pass dispatches across
+	// ALL connections. Zero means defaultFramesPerPoll.
+	framesPerPoll int
+}
+
+// defaultFramesPerPoll bounds the work one poll pass may do. The loop ticks at
+// 200 Hz and, before this cap, drained every connection's op queue to empty on
+// every pass — one process-wide goroutine whose cost was set by how fast the
+// clients chose to send. The per-connection share is bounded separately, by
+// each drain source's MaxFramesPerDrain; whatever this cap leaves behind stays
+// queued (behind MaxOpQueueDepth) for the next pass 5 ms later.
+//
+// 1024 frames per pass is ~200k op frames/second sustained, far above any
+// legitimate op load, while still being a bound.
+const defaultFramesPerPoll = 1024
+
+// pollBudget returns the per-pass frame cap.
+func (r *Router) pollBudget() int {
+	if r.framesPerPoll <= 0 {
+		return defaultFramesPerPoll
+	}
+	return r.framesPerPoll
 }
 
 // TypedOpHandler is the inbound typed-op dispatcher. It consumes a 0x01
@@ -130,7 +153,17 @@ func (r *Router) poll() {
 		}
 		return
 	}
+	budget := r.pollBudget()
+	dispatched := 0
 	for _, connID := range src.ActiveConnIDs() {
+		if dispatched >= budget {
+			// Remaining connections keep their queued frames; the next
+			// tick 5 ms from now picks them up. ActiveConnIDs order is
+			// unspecified, so this is not a stable per-connection
+			// starvation: the set is re-walked from scratch each pass.
+			log.Printf("ops: poll budget %d frames exhausted, deferring remaining connections", budget)
+			return
+		}
 		msgs := src.DrainOpInput(connID)
 		for _, raw := range msgs {
 			username := r.sessions.Get(connID)
@@ -139,10 +172,33 @@ func (r *Router) poll() {
 				Username: username,
 				ClientIP: ParseClientIP(src.RemoteAddrString(connID)),
 			}
-			if respFrame := r.typedOpHandler(raw, ctx); respFrame != nil {
-				src.SendReliable(connID, respFrame)
-			}
+			r.dispatchOne(src, connID, raw, ctx)
+			dispatched++
 		}
+	}
+}
+
+// dispatchOne runs one op frame through the typed-op handler behind a per-frame
+// recover barrier.
+//
+// PER FRAME, not per goroutine: poll is the 0x01 drain for every connection on
+// the single-process `all` preset (runSessionPump is launched only when
+// g.hostNetwork != nil) and for host processes via SetDrainSource. Letting a
+// panic unwind the poll loop would take down op handling process-wide, and
+// letting it escape Run's goroutine would take down the process — the frame
+// that triggers it is attacker-supplied and, on the auth path, pre-
+// authentication.
+//
+// The barrier is here rather than inside the handler so the codec fuzz targets
+// still observe raw panics.
+func (r *Router) dispatchOne(src DrainSource, connID uint32, raw []byte, ctx *OpContext) {
+	defer func() {
+		if rec := recover(); rec != nil {
+			log.Printf("ops: op frame panic conn=%d bytes=%d panic=%v", connID, len(raw), rec)
+		}
+	}()
+	if respFrame := r.typedOpHandler(raw, ctx); respFrame != nil {
+		src.SendReliable(connID, respFrame)
 	}
 }
 

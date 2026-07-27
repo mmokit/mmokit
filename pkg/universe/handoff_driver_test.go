@@ -517,7 +517,7 @@ func TestHandoffDriver_ForwardsCommitWindowInputAcrossRemoteHost(t *testing.T) {
 		t.Fatalf("test ConnMgr type = %T, want *net.ConnManager", base.Engine().ConnMgr)
 	}
 	transport := &handoffInputTransport{}
-	connID := connMgr.AddTransport(transport)
+	connID := connMgr.AddTransport(transport, "")
 
 	pm := base.Engine().Players
 	pm.AddTransition(engine.StateTransition{

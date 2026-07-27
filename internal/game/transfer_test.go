@@ -55,7 +55,7 @@ func newTestGameWorld() (*GameWorld, *net.ConnManager) {
 // addMockConn registers a mock transport and drains the connect event.
 // cm must be the concrete *net.ConnManager backing gw.eng.ConnMgr.
 func addMockConn(gw *GameWorld, cm *net.ConnManager) uint32 {
-	connID := cm.AddTransport(&mockTransport{})
+	connID := cm.AddTransport(&mockTransport{}, "")
 	<-cm.Events() // drain connect event
 	return connID
 }

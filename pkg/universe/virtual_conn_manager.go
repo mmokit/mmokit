@@ -15,6 +15,7 @@ import (
 	"errors"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	meshpb "github.com/zenion/mmoserver/gen/go/meshpb"
 	"github.com/zenion/mmoserver/pkg/logger"
@@ -40,7 +41,27 @@ type VirtualConnManager struct {
 	mu      sync.RWMutex
 	byLocal map[uint32]*virtualSession
 	byKey   map[SessionKey]*virtualSession
+
+	// limits bounds the per-session inbound queues. This is the most
+	// exposed of the three inbound surfaces: the gateway forwards at
+	// WebSocket read speed over a 16 MiB gRPC channel while the host drains
+	// once per tick at 20 Hz, so the arrival rate can exceed the drain rate
+	// by orders of magnitude even for a well-behaved client.
+	limitsMu sync.RWMutex
+	limits   pkgnet.WireLimits
+
+	// Ingress drop counters. Bounded cardinality on purpose: no per-session
+	// or per-gateway breakdown, so a peer cannot grow a metric map.
+	inputDrops    atomic.Uint64
+	opInputDrops  atomic.Uint64
+	oversizeDrops atomic.Uint64
+	lastDropLog   atomic.Int64
 }
+
+// vcmDropLogInterval throttles appendChannel's drop logging. Same
+// anti-amplification reasoning as UDPServer.noteDrop: the drop rate is driven
+// by traffic the peer controls.
+const vcmDropLogInterval = time.Second
 
 // virtualSession holds per-connection state for one remote player.
 type virtualSession struct {
@@ -83,10 +104,38 @@ func NewVirtualConnManager(hn *HostNetwork, log *logger.Logger) *VirtualConnMana
 		log:     log,
 		byLocal: make(map[uint32]*virtualSession),
 		byKey:   make(map[SessionKey]*virtualSession),
+		limits:  pkgnet.DefaultWireLimits(),
 	}
 	vcm.nextLocal.Store(1) // reserve 0 as invalid
 	return vcm
 }
+
+// SetWireLimits installs the ingress limits enforced by appendChannel and the
+// drain calls. Non-positive fields fall back to their defaults.
+func (v *VirtualConnManager) SetWireLimits(l pkgnet.WireLimits) {
+	v.limitsMu.Lock()
+	v.limits = l.Normalized()
+	v.limitsMu.Unlock()
+}
+
+// wireLimits returns the current ingress limits, normalized so a
+// zero-value VirtualConnManager built directly in a test still behaves.
+func (v *VirtualConnManager) wireLimits() pkgnet.WireLimits {
+	v.limitsMu.RLock()
+	l := v.limits
+	v.limitsMu.RUnlock()
+	return l.Normalized()
+}
+
+// InputDrops returns the number of event-channel frames refused at the queue cap.
+func (v *VirtualConnManager) InputDrops() uint64 { return v.inputDrops.Load() }
+
+// OpInputDrops returns the number of op-channel frames refused at the queue cap.
+func (v *VirtualConnManager) OpInputDrops() uint64 { return v.opInputDrops.Load() }
+
+// OversizeFrameDrops returns the number of frames refused for exceeding
+// MaxFrameBytes.
+func (v *VirtualConnManager) OversizeFrameDrops() uint64 { return v.oversizeDrops.Load() }
 
 // RegisterSession allocates a new node-local connID for the given
 // {GatewayID, ConnID} key. If a session already exists for that key, the
@@ -433,6 +482,16 @@ func (v *VirtualConnManager) InjectForwardedInputWithEpoch(localID uint32, data 
 	return true
 }
 
+// appendChannel enqueues one forwarded client frame on the session's inbound
+// queue for the given channel.
+//
+// Both the frame size and the queue depth are bounded here. The gateway relays
+// whatever the client sends as fast as it can read it, over a gRPC channel
+// whose own message limit is 16 MiB, while this host drains the queue once per
+// 50 ms tick — so an unbounded append is a memory-exhaustion primitive that
+// needs no malformed frame, only a client that sends faster than 20 Hz and a
+// host that is momentarily behind. Drop-newest: the frames already accepted are
+// the older, still-relevant ones.
 func (v *VirtualConnManager) appendChannel(localID uint32, data []byte, channel byte) {
 	v.mu.RLock()
 	sess, ok := v.byLocal[localID]
@@ -441,22 +500,55 @@ func (v *VirtualConnManager) appendChannel(localID uint32, data []byte, channel 
 		return
 	}
 
+	limits := v.wireLimits()
+	if len(data) > limits.MaxFrameBytes {
+		v.noteAppendDrop(&v.oversizeDrops, "oversize", localID)
+		return
+	}
+
 	sess.inputMu.Lock()
 	switch channel {
 	case pkgnet.ChannelOperation:
+		if len(sess.opInput) >= limits.MaxOpQueueDepth {
+			sess.inputMu.Unlock()
+			v.noteAppendDrop(&v.opInputDrops, "op", localID)
+			return
+		}
 		sess.opInput = append(sess.opInput, data)
 	default:
 		// ChannelEvent (0x00) plus typed client-input frames after
 		// Plan 1 Phase 5 unified them onto the same channel. The
 		// typeID registry disambiguates downstream.
+		if len(sess.input) >= limits.MaxInputQueueDepth {
+			sess.inputMu.Unlock()
+			v.noteAppendDrop(&v.inputDrops, "event", localID)
+			return
+		}
 		sess.input = append(sess.input, data)
 	}
 	sess.inputMu.Unlock()
 }
 
-// DrainInput returns and clears the accumulated event-channel (0x00) input
-// for the given local connID. Returns nil if the session is unknown or no
-// data is queued.
+// noteAppendDrop counts a refused forwarded frame and logs at most one line per
+// vcmDropLogInterval across all reasons and all sessions.
+func (v *VirtualConnManager) noteAppendDrop(counter *atomic.Uint64, reason string, localID uint32) {
+	counter.Add(1)
+	now := time.Now().UnixNano()
+	previous := v.lastDropLog.Load()
+	if now-previous < int64(vcmDropLogInterval) {
+		return
+	}
+	if !v.lastDropLog.CompareAndSwap(previous, now) {
+		return
+	}
+	v.log.Log(CatMeshMsg, "vcm: dropped forwarded frame (%s) localID=%d [event=%d op=%d oversize=%d]",
+		reason, localID, v.inputDrops.Load(), v.opInputDrops.Load(), v.oversizeDrops.Load())
+}
+
+// DrainInput returns accumulated event-channel (0x00) input for the given local
+// connID, at most MaxFramesPerDrain frames. Any remainder stays queued for the
+// next tick rather than being dropped. Returns nil if the session is unknown or
+// no data is queued.
 func (v *VirtualConnManager) DrainInput(localID uint32) [][]byte {
 	v.mu.RLock()
 	sess, ok := v.byLocal[localID]
@@ -465,16 +557,22 @@ func (v *VirtualConnManager) DrainInput(localID uint32) [][]byte {
 		return nil
 	}
 
+	budget := v.wireLimits().MaxFramesPerDrain
 	sess.inputMu.Lock()
 	out := sess.input
-	sess.input = nil
+	if len(out) > budget {
+		sess.input = append([][]byte(nil), out[budget:]...)
+		out = out[:budget:budget]
+	} else {
+		sess.input = nil
+	}
 	sess.inputMu.Unlock()
 	return out
 }
 
-// DrainOpInput returns and clears the accumulated op-channel (0x01) input
-// for the given local connID. Returns nil if the session is unknown or no
-// data is queued.
+// DrainOpInput returns accumulated op-channel (0x01) input for the given local
+// connID, at most MaxFramesPerDrain frames. Returns nil if the session is
+// unknown or no data is queued.
 func (v *VirtualConnManager) DrainOpInput(localID uint32) [][]byte {
 	v.mu.RLock()
 	sess, ok := v.byLocal[localID]
@@ -483,9 +581,15 @@ func (v *VirtualConnManager) DrainOpInput(localID uint32) [][]byte {
 		return nil
 	}
 
+	budget := v.wireLimits().MaxFramesPerDrain
 	sess.inputMu.Lock()
 	out := sess.opInput
-	sess.opInput = nil
+	if len(out) > budget {
+		sess.opInput = append([][]byte(nil), out[budget:]...)
+		out = out[:budget:budget]
+	} else {
+		sess.opInput = nil
+	}
 	sess.inputMu.Unlock()
 	return out
 }

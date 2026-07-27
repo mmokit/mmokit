@@ -85,7 +85,7 @@ func TestAfterSend_WritesBatchedTypedEventFrame(t *testing.T) {
 
 	// Wire a capture transport so we can inspect the exact bytes sent.
 	tr := &captureTransport{}
-	connID := cm.AddTransport(tr)
+	connID := cm.AddTransport(tr, "")
 	<-cm.Events() // drain connect event
 
 	ns := wireNetworkSystemForTest(t, gw)
@@ -171,7 +171,7 @@ func TestAfterSend_NoVisibleAnchors_NoFrameSent(t *testing.T) {
 	gw, cm := newTestGameWorld()
 
 	tr := &captureTransport{}
-	connID := cm.AddTransport(tr)
+	connID := cm.AddTransport(tr, "")
 	<-cm.Events()
 
 	ns := wireNetworkSystemForTest(t, gw)

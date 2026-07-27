@@ -9,7 +9,7 @@ import (
 func TestNetworkSystemDeadSessionRemainsViewer(t *testing.T) {
 	gw, cm := newTestGameWorld()
 	transport := &captureTransport{}
-	connID := cm.AddTransport(transport)
+	connID := cm.AddTransport(transport, "")
 	<-cm.Events()
 
 	gw.Players.RegisterPlayer(connID, "dead-viewer")

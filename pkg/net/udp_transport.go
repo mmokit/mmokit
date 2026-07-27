@@ -83,6 +83,18 @@ type UDPTransport struct {
 	inbound   [][]byte // channel 0x00 (events + typed client-input)
 	opInbound [][]byte // channel 0x01 (operations); drained via DrainOpInput
 
+	// limits is immutable after construction; read it through lim() so a
+	// directly-constructed test transport still gets the defaults.
+	limits WireLimits
+
+	// Ingress drop counters, mirroring Conn's. maxUDPPacket already bounds
+	// a single datagram, so oversizeDrops only fires when MaxFrameBytes is
+	// configured below the MTU.
+	inboundDrops   atomic.Uint64
+	opInboundDrops atomic.Uint64
+	oversizeDrops  atomic.Uint64
+	dropLog        dropThrottle
+
 	lastRecvTick atomic.Int64
 	lastSendTick atomic.Int64
 	closed       bool
@@ -93,7 +105,7 @@ type UDPTransport struct {
 	bytesRecv atomic.Uint64
 }
 
-func newUDPTransport(server *UDPServer, addr netip.AddrPort, token uint32, clientSalt, serverSalt uint64) *UDPTransport {
+func newUDPTransport(server *UDPServer, addr netip.AddrPort, token uint32, clientSalt, serverSalt uint64, limits WireLimits) *UDPTransport {
 	t := &UDPTransport{
 		server:     server,
 		addr:       addr,
@@ -102,6 +114,7 @@ func newUDPTransport(server *UDPServer, addr netip.AddrPort, token uint32, clien
 		serverSalt: serverSalt,
 		inbound:    make([][]byte, 0, 32),
 		done:       make(chan struct{}),
+		limits:     limits.Normalized(),
 	}
 	now := udpClockStamp(time.Now())
 	t.lastRecvTick.Store(now)
@@ -166,17 +179,26 @@ func (t *UDPTransport) SendUnreliable(data []byte) SendResult {
 	return t.sendRaw(pkt)
 }
 
-// DrainOpInput returns all queued operation messages (channel 0x01) and
-// clears the queue. Mirrors Conn.DrainOpInput for the WebSocket transport.
+// lim returns this transport's ingress limits, normalizing the zero value so a
+// directly-constructed test transport behaves like a real one.
+func (t *UDPTransport) lim() WireLimits {
+	if t.limits.MaxFrameBytes <= 0 {
+		return DefaultWireLimits()
+	}
+	return t.limits
+}
+
+// DrainOpInput returns queued operation messages (channel 0x01), at most
+// MaxFramesPerDrain of them. Mirrors Conn.DrainOpInput for the WebSocket
+// transport, remainder-stays-queued semantics included.
 func (t *UDPTransport) DrainOpInput() [][]byte {
 	t.inMu.Lock()
-	if len(t.opInbound) == 0 {
-		t.inMu.Unlock()
+	defer t.inMu.Unlock()
+	msgs, rest := splitDrain(t.opInbound, t.lim().MaxFramesPerDrain)
+	if msgs == nil {
 		return nil
 	}
-	msgs := t.opInbound
-	t.opInbound = make([][]byte, 0, 8)
-	t.inMu.Unlock()
+	t.opInbound = rest
 	return msgs
 }
 
@@ -186,22 +208,49 @@ func (t *UDPTransport) InjectInput(data []byte) {
 	msg := make([]byte, len(data))
 	copy(msg, data)
 	t.inMu.Lock()
+	if len(t.inbound) >= t.lim().MaxInputQueueDepth {
+		t.inMu.Unlock()
+		t.noteInboundDrop(&t.inboundDrops, "event")
+		return
+	}
 	t.inbound = append(t.inbound, msg)
 	t.inMu.Unlock()
 }
 
-// DrainInput returns all queued inbound messages and clears the queue.
+// DrainInput returns queued inbound messages, at most MaxFramesPerDrain of them.
 func (t *UDPTransport) DrainInput() [][]byte {
 	t.inMu.Lock()
-	if len(t.inbound) == 0 {
-		t.inMu.Unlock()
+	defer t.inMu.Unlock()
+	msgs, rest := splitDrain(t.inbound, t.lim().MaxFramesPerDrain)
+	if msgs == nil {
 		return nil
 	}
-	msgs := t.inbound
-	t.inbound = make([][]byte, 0, 32)
-	t.inMu.Unlock()
+	t.inbound = rest
 	return msgs
 }
+
+// noteInboundDrop counts a refused inbound frame and logs at most one line per
+// dropLogInterval, for the same anti-amplification reason as
+// UDPServer.noteDrop: the drop rate is entirely peer-controlled.
+func (t *UDPTransport) noteInboundDrop(counter *atomic.Uint64, reason string) {
+	counter.Add(1)
+	if !t.dropLog.allow() {
+		return
+	}
+	log.Printf("udp: dropped inbound frame (%s queue) token=%08x from=%s [event=%d op=%d oversize=%d]",
+		reason, t.token, t.addr,
+		t.inboundDrops.Load(), t.opInboundDrops.Load(), t.oversizeDrops.Load())
+}
+
+// InboundDrops returns the number of channel-0x00 payloads refused at the queue cap.
+func (t *UDPTransport) InboundDrops() uint64 { return t.inboundDrops.Load() }
+
+// OpInboundDrops returns the number of channel-0x01 payloads refused at the queue cap.
+func (t *UDPTransport) OpInboundDrops() uint64 { return t.opInboundDrops.Load() }
+
+// OversizeFrameDrops returns the number of payloads refused for exceeding
+// MaxFrameBytes.
+func (t *UDPTransport) OversizeFrameDrops() uint64 { return t.oversizeDrops.Load() }
 
 // BytesSent returns cumulative bytes sent on this transport.
 func (t *UDPTransport) BytesSent() uint64 { return t.bytesSent.Load() }
@@ -261,28 +310,51 @@ func (t *UDPTransport) handleUnreliable(payload []byte) {
 // ChannelOperation (0x01) → op queue (both stripped of the channel byte).
 // An unknown leading byte is a legacy pre-channel-prefix event and routes
 // to the event queue with bytes left intact.
+//
+// Every branch is bounded. A UDP session is source-address bound but still
+// unauthenticated, and nothing drains it until the peer has a player session,
+// so the queues here grow under exactly the same conditions as the WebSocket
+// ones. Drop-newest, count, log at most once per interval.
 func (t *UDPTransport) routePayload(payload []byte) {
+	limits := t.lim()
+	if len(payload) > limits.MaxFrameBytes {
+		t.noteInboundDrop(&t.oversizeDrops, "oversize")
+		return
+	}
 	switch payload[0] {
 	case ChannelEvent:
 		body := make([]byte, len(payload)-1)
 		copy(body, payload[1:])
-		t.inMu.Lock()
-		t.inbound = append(t.inbound, body)
-		t.inMu.Unlock()
+		t.appendInbound(body, limits)
 	case ChannelOperation:
 		body := make([]byte, len(payload)-1)
 		copy(body, payload[1:])
 		t.inMu.Lock()
+		if len(t.opInbound) >= limits.MaxOpQueueDepth {
+			t.inMu.Unlock()
+			t.noteInboundDrop(&t.opInboundDrops, "op")
+			return
+		}
 		t.opInbound = append(t.opInbound, body)
 		t.inMu.Unlock()
 	default:
 		// Unknown leading byte — legacy channel-0x00 event, bytes intact.
 		body := make([]byte, len(payload))
 		copy(body, payload)
-		t.inMu.Lock()
-		t.inbound = append(t.inbound, body)
-		t.inMu.Unlock()
+		t.appendInbound(body, limits)
 	}
+}
+
+// appendInbound enqueues an event-channel body under the depth cap.
+func (t *UDPTransport) appendInbound(body []byte, limits WireLimits) {
+	t.inMu.Lock()
+	if len(t.inbound) >= limits.MaxInputQueueDepth {
+		t.inMu.Unlock()
+		t.noteInboundDrop(&t.inboundDrops, "event")
+		return
+	}
+	t.inbound = append(t.inbound, body)
+	t.inMu.Unlock()
 }
 
 // handleReliable processes an inbound reliable message.

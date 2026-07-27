@@ -727,7 +727,26 @@ func (n *HostNetwork) Shutdown() error {
 //   - all other variants → decodeMeshFrame + cell inbox delivery
 //
 // Dropped frames are logged; a full inbox logs and discards the message.
-func (n *HostNetwork) routeInboundFrame(frame *meshpb.MeshFrame) error {
+//
+// The recover is PER FRAME. Both callers — meshDataServer.Data and
+// runPeerReceiver — are bare goroutines with no barrier of their own, so a
+// panic here (a malformed peer payload reaching decodeMeshFrame, a receipt
+// marker with an unexpected shape) would take the process down rather than the
+// frame. Recovering per frame keeps the receive loop draining, which matters:
+// unwinding the loop would silently stop all mesh traffic from that peer.
+//
+// Recovering does NOT make the frame safe — it makes it survivable. The
+// checked decoder is what makes it safe; this is the barrier that stops one
+// bad frame from being remotely fatal in the meantime.
+func (n *HostNetwork) routeInboundFrame(frame *meshpb.MeshFrame) (err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			n.log.Log(CatMeshMsg, "[%s] routeInboundFrame panic dest=%s: %v",
+				n.hostID, frame.GetDestCellId(), r)
+			err = nil
+		}
+	}()
+
 	// ── ClientInput: gateway forwarding client bytes to node ──────────────
 	if ci := frame.GetClientInput(); ci != nil {
 		if n.vcm == nil {

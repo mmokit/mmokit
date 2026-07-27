@@ -69,7 +69,7 @@ func TestReplicationAck_RoutesToReplicationSystem(t *testing.T) {
 		t.Fatalf("engine ConnMgr is %T, expected *net.ConnManager", eng.ConnMgr)
 	}
 	tr := &bestEffortInputTransport{}
-	connID := connMgr.AddTransport(tr)
+	connID := connMgr.AddTransport(tr, "")
 
 	// PlayerConn is what the engine-default handler reads to learn which
 	// connection is acking — a real player entity always carries it.
@@ -126,7 +126,7 @@ func TestReplicationAck_NoLiveEntityIsDroppedSilently(t *testing.T) {
 
 	connMgr := eng.ConnMgr.(*net.ConnManager)
 	tr := &bestEffortInputTransport{}
-	connID := connMgr.AddTransport(tr)
+	connID := connMgr.AddTransport(tr, "")
 	eng.Players.RegisterSessionTransfer(connID, "entity-less", "active", nil)
 
 	tr.input = append(tr.input, buildReplicationAckFrame(t, 1, 1))
@@ -158,8 +158,8 @@ func TestDefaultReplicationConfig_LatchesAckModeFromTransportClass(t *testing.T)
 	eng := cell.Stage.Engine()
 	connMgr := eng.ConnMgr.(*net.ConnManager)
 
-	udpConn := connMgr.AddTransport(&bestEffortInputTransport{})
-	wsConn := connMgr.AddTransport(&fakeInputTransport{}) // no class -> conservative
+	udpConn := connMgr.AddTransport(&bestEffortInputTransport{}, "")
+	wsConn := connMgr.AddTransport(&fakeInputTransport{}, "") // no class -> conservative
 
 	cfg := mmokit.DefaultReplicationConfig(eng, spatial.NewHashGrid(100), nil)
 	if cfg.AckModeFor == nil {

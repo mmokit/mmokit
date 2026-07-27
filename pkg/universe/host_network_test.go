@@ -190,7 +190,7 @@ func TestRouteInboundClientFrame_BackpressureClosesConnection(t *testing.T) {
 	transport := &clientFrameTransport{
 		result: pkgnet.SendResult{Disposition: pkgnet.SendBackpressure},
 	}
-	connID := cm.AddTransport(transport)
+	connID := cm.AddTransport(transport, "")
 
 	n := newManualHostNetwork(t)
 	n.gw = &Gateway{connMgr: cm}
@@ -261,7 +261,7 @@ func TestRouteInboundTrackedClientFrameSendsReceiptAfterReliableOrderedEnqueue(t
 		Disposition: pkgnet.SendQueued,
 		Delivery:    pkgnet.DeliveryReliableOrdered,
 	}}
-	connID := cm.AddTransport(transport)
+	connID := cm.AddTransport(transport, "")
 
 	n := newManualHostNetwork(t)
 	peer := newIdlePeer(t, "host-1")
@@ -316,7 +316,7 @@ func TestRouteInboundTrackedClientFrameSendsReceiptAfterReliableOrderedEnqueue(t
 func TestRouteInboundTrackedClientFrameDoesNotReceiptRejectedEnqueue(t *testing.T) {
 	cm := pkgnet.NewConnManager()
 	transport := &clientFrameTransport{result: pkgnet.SendResult{Disposition: pkgnet.SendBackpressure}}
-	connID := cm.AddTransport(transport)
+	connID := cm.AddTransport(transport, "")
 
 	n := newManualHostNetwork(t)
 	peer := newIdlePeer(t, "host-1")
@@ -369,7 +369,7 @@ func TestRouteInboundTrackedClientFrameReceiptsWeakerDelivery(t *testing.T) {
 				Disposition: pkgnet.SendQueued,
 				Delivery:    tc.delivery,
 			}}
-			connID := cm.AddTransport(transport)
+			connID := cm.AddTransport(transport, "")
 
 			n := newManualHostNetwork(t)
 			peer := newIdlePeer(t, "host-1")
@@ -417,7 +417,7 @@ func TestRouteInboundTrackedClientFrameRequiresCurrentEpoch(t *testing.T) {
 		Disposition: pkgnet.SendQueued,
 		Delivery:    pkgnet.DeliveryReliableOrdered,
 	}}
-	connID := cm.AddTransport(transport)
+	connID := cm.AddTransport(transport, "")
 
 	n := newManualHostNetwork(t)
 	peer := newIdlePeer(t, "host-new")
@@ -454,7 +454,7 @@ func TestRouteInboundTrackedClientFrameRequiresAuthoritativeHostAtCurrentEpoch(t
 		Disposition: pkgnet.SendQueued,
 		Delivery:    pkgnet.DeliveryReliableOrdered,
 	}}
-	connID := cm.AddTransport(transport)
+	connID := cm.AddTransport(transport, "")
 
 	n := newManualHostNetwork(t)
 	authorityPeer := newIdlePeer(t, "host-source")
