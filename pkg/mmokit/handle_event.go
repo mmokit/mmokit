@@ -5,6 +5,8 @@ import (
 	"reflect"
 	"sort"
 	"sync"
+
+	pkguniverse "github.com/zenion/mmoserver/pkg/universe"
 )
 
 var (
@@ -24,6 +26,10 @@ var (
 // if it does, rename one type.
 func RegisterEvent[T any]() {
 	t := reflect.TypeFor[T]()
+	// Registration-time shape check. ValidateMessageType, never
+	// ValidateComponentType: twelve production wire types carry slice fields
+	// and the component validator rejects every one of them.
+	pkguniverse.ValidateMessageType(t)
 	id := TypeIDOf(t)
 
 	seMu.Lock()

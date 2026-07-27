@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"reflect"
 
+	pkgnet "github.com/zenion/mmoserver/pkg/net"
 	"github.com/zenion/mmoserver/pkg/ops"
 )
 
@@ -29,10 +30,15 @@ import (
 // nil from tests / stage-only paths and RoutePlayerCell ops will produce
 // an OperationError synchronously.
 //
+// lim is the client ingress profile the request body is decoded under —
+// Process.clientWireLimits() on every production path. The zero value is
+// accepted and falls back to the defaults, which is what a fixture that never
+// calls BindFlags gets.
+//
 // Universe cannot import pkg/mmokit (circular dep) — the typed-op
 // registry, RouteKind enum, and OperationError encoder are reached via
 // the TypedOpHooks indirection populated by mmokit's init().
-func DispatchTypedOpInbound(payload []byte, ctx *ops.OpContext, router CellOpRouter) []byte {
+func DispatchTypedOpInbound(payload []byte, ctx *ops.OpContext, router CellOpRouter, lim pkgnet.WireLimits) []byte {
 	typeID, requestID, body, err := DecodeTypedOpFrame(payload)
 	if err != nil {
 		return nil
@@ -70,7 +76,11 @@ func DispatchTypedOpInbound(payload []byte, ctx *ops.OpContext, router CellOpRou
 	}
 
 	reqPtr := reflect.New(reqType)
-	if err := ReflectUnmarshal(body, reqPtr.Interface()); err != nil {
+	// Strict: the body's length is part of the contract here. A body longer
+	// than reqType means the sender and this process disagree about which type
+	// typeID names, which is a protocol error and not a producer appending
+	// something — unlike the mesh blobs the tolerant wrapper still serves.
+	if err := ReflectUnmarshalStrict(nil, body, reqPtr.Interface(), lim); err != nil {
 		// Never call the handler on a body the decoder refused: reqPtr is only
 		// partially written, so the handler would see a request whose refused
 		// fields are indistinguishable from an intentional zero value.

@@ -4,6 +4,7 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/mlange-42/ark/ecs"
 
@@ -179,6 +180,92 @@ func TestReflectMarshal_IntTypes(t *testing.T) {
 	if out != a {
 		t.Fatalf("got %+v, want %+v", out, a)
 	}
+}
+
+// TestValidateMessageType_RejectsMapField pins the wire-type validator that
+// CE-002 unit 10 wired into RegisterEvent, RegisterOp, registerClientInputType
+// and RegisterBroadcastType. Until then ValidateMessageType had zero production
+// callers, so an unsupported field in a registered wire type was found (if at
+// all) by a codegen failure or a runtime decode, never at registration.
+//
+// It must be ValidateMessageType and not ValidateComponentType: twelve
+// production wire types carry slice fields and the component validator rejects
+// every one of them, which reads as the guard causing mass breakage.
+func TestValidateMessageType_RejectsMapField(t *testing.T) {
+	type Bad struct {
+		Data map[string]int32
+	}
+	defer func() {
+		if recover() == nil {
+			t.Fatal("ValidateMessageType accepted a map field; the codec has no arm for one")
+		}
+	}()
+	ValidateMessageType(reflect.TypeFor[Bad]())
+}
+
+// TestValidateMessageType_RejectsZeroByteStruct covers the silent-zero-bytes
+// class the guard was missing.
+//
+// A nested struct with no exported fields walks through validateStruct's loop
+// without executing the body, so it validates clean and then encodes to nothing
+// and decodes to nothing, with no error at either end. time.Time is the shape
+// that motivates this — every field is unexported — and nothing stopped someone
+// adding `SentAt time.Time` to a chat event tomorrow.
+//
+// The subtests pin the boundary deliberately: a nested empty struct is an
+// error, a top-level registered type with no fields is NOT. An empty request or
+// event is a legitimate message whose empty body is the whole content, and the
+// production registry contains such types.
+func TestValidateMessageType_RejectsZeroByteStruct(t *testing.T) {
+	t.Run("nested empty struct", func(t *testing.T) {
+		type Empty struct{ unexported int32 } //nolint:unused // the point is that it is invisible
+		type Bad struct {
+			When Empty
+		}
+		defer func() {
+			if recover() == nil {
+				t.Fatal("ValidateMessageType accepted a nested struct with no exported fields; " +
+					"it encodes to zero bytes and loses the field silently")
+			}
+		}()
+		ValidateMessageType(reflect.TypeFor[Bad]())
+	})
+
+	t.Run("nested time.Time", func(t *testing.T) {
+		type Bad struct {
+			SentAt time.Time
+		}
+		defer func() {
+			if recover() == nil {
+				t.Fatal("ValidateMessageType accepted a time.Time field")
+			}
+		}()
+		ValidateMessageType(reflect.TypeFor[Bad]())
+	})
+
+	t.Run("slice of empty structs", func(t *testing.T) {
+		type Empty struct{}
+		type Bad struct {
+			Items []Empty
+		}
+		defer func() {
+			if recover() == nil {
+				t.Fatal("ValidateMessageType accepted []Empty; the element contributes no bytes, " +
+					"so the length prefix is the only thing distinguishing 0 elements from 65535")
+			}
+		}()
+		ValidateMessageType(reflect.TypeFor[Bad]())
+	})
+
+	t.Run("top-level empty message is legal", func(t *testing.T) {
+		type EmptyRequest struct{}
+		defer func() {
+			if r := recover(); r != nil {
+				t.Fatalf("ValidateMessageType rejected an empty top-level message: %v", r)
+			}
+		}()
+		ValidateMessageType(reflect.TypeFor[EmptyRequest]())
+	})
 }
 
 func TestValidateComponentType_RejectsMap(t *testing.T) {

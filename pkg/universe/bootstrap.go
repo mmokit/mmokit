@@ -125,6 +125,27 @@ func (c *Config) BindFlags() {
 	intFlag("port",
 		"HTTP server port for /ws, /metrics, /auth (gateway role only; -1 disables)",
 		8080, &c.HTTPPort)
+	// Client ingress decode ceilings (CE-002 criterion 3). Only the five the
+	// criterion enumerates are exposed; the queue and per-drain caps stay
+	// Config-only. Every default here is also applied as a zero-value fallback
+	// in New() via WireLimits.Normalized, because a Config built by a test
+	// fixture never sees a flag default — New's `if !flag.Parsed()` guard is
+	// always false under `go test`.
+	intFlag("wire-max-frame-bytes",
+		"largest inbound client frame accepted, in bytes",
+		pkgnet.DefaultMaxFrameBytes, &c.WireLimits.MaxFrameBytes)
+	intFlag("wire-max-string-bytes",
+		"largest wire-declared string accepted when decoding a client body",
+		pkgnet.DefaultWireLimits().MaxStringBytes, &c.WireLimits.MaxStringBytes)
+	intFlag("wire-max-slice-elems",
+		"largest wire-declared slice element count accepted when decoding a client body",
+		pkgnet.DefaultWireLimits().MaxSliceElems, &c.WireLimits.MaxSliceElems)
+	intFlag("wire-max-depth",
+		"maximum struct nesting depth accepted when decoding a client body",
+		pkgnet.DefaultWireLimits().MaxDepth, &c.WireLimits.MaxDepth)
+	intFlag("wire-max-alloc-bytes",
+		"aggregate allocation budget for decoding one client body, in bytes",
+		pkgnet.DefaultWireLimits().MaxTotalAllocBytes, &c.WireLimits.MaxTotalAllocBytes)
 	flag.BoolVar(&c.Headless, "headless", c.Headless,
 		"disable interactive console (for non-TTY environments)")
 	flag.BoolVar(&c.DevInsecureCookie, "dev-insecure-cookie", c.DevInsecureCookie,

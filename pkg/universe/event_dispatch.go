@@ -36,6 +36,7 @@ func DispatchInboundEventFrame(stage *Stage, playerNetID uint32, payload []byte)
 	if stage == nil {
 		return
 	}
+	lim := stage.clientWireLimits()
 	off := 0
 	for off+8 <= len(payload) {
 		typeID := binary.LittleEndian.Uint32(payload[off : off+4])
@@ -72,7 +73,10 @@ func DispatchInboundEventFrame(stage *Stage, playerNetID uint32, payload []byte)
 			continue
 		}
 		msgPtr := reflect.New(t)
-		if err := ReflectUnmarshalOnStage(stage, body, msgPtr.Interface()); err != nil {
+		// Strict, under the stage's client profile: bodyLen already fixed how
+		// many bytes this entry owns, so anything left over after t is decoded
+		// means the client packed a different type than typeID names.
+		if err := ReflectUnmarshalStrict(stage, body, msgPtr.Interface(), lim); err != nil {
 			// Skip the entry but keep walking: bodyLen was honored above, so
 			// the stream is still aligned even though this body is not a
 			// well-formed t. Invoking on a partial decode would hand the

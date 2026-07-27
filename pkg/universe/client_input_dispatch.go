@@ -24,8 +24,10 @@ const CatClientInput = "input:client"
 // dispatcher walks until the buffer is exhausted. typeID is fnv32 of the
 // reflect.Type's package-qualified name; matches BroadcastTypes /
 // mmokit.TypeIDOf so client and server agree on the Go type for each
-// frame. The reflection codec (ReflectMarshal / ReflectUnmarshalOnStage)
-// handles the body bytes.
+// frame. The reflection codec handles the body bytes — encoded with
+// ReflectMarshal, decoded with ReflectUnmarshalStrict under the process's
+// client ingress profile (bodyLen fixes how many bytes the entry owns, so a
+// surplus after the registered type is decoded is a type disagreement).
 const clientInputHeaderBytes = 8
 
 // Per-tick work budget for the client-input drain.
@@ -194,8 +196,12 @@ func (s *Stage) dispatchOneClientInput(sess *engine.PlayerSession, typeID uint32
 	// would hand the handler a request whose refused fields are
 	// indistinguishable from a client that meant to send zeros, which is a
 	// worse outcome than the panic this replaced.
+	//
+	// Strict, under the process's configured client profile: bodyLen already
+	// carved this entry out of the frame, so surplus bytes after msgType is
+	// decoded mean the client packed a type other than the one typeID names.
 	msgPtr := reflect.New(msgType)
-	if err := ReflectUnmarshalOnStage(s, body, msgPtr.Interface()); err != nil {
+	if err := ReflectUnmarshalStrict(s, body, msgPtr.Interface(), s.clientWireLimits()); err != nil {
 		s.eng.Log.Log(CatClientInput,
 			"[%s] client-input dropped, body failed to decode: conn=%d typeID=%#x type=%s: %v",
 			s.cellID, sess.ConnID, typeID, msgType.String(), err)

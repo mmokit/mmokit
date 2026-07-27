@@ -7,6 +7,8 @@ import (
 	"sort"
 	"sync"
 	"unicode"
+
+	pkguniverse "github.com/zenion/mmoserver/pkg/universe"
 )
 
 // BroadcastTypeSchema is a serializable description of a broadcast-eligible
@@ -67,6 +69,10 @@ var (
 // HandleAllInternal[T] explicitly does not call this — that's how
 // server-internal types stay out of the broadcast registry. Idempotent.
 func RegisterBroadcastType(t reflect.Type) {
+	// Registration-time shape check, same validator as the other three wire
+	// registries: a broadcast body is encoded by ReflectMarshal and decoded by
+	// the generated SDKs, so it obeys the same field rules.
+	pkguniverse.ValidateMessageType(t)
 	brMu.Lock()
 	brSet[t] = struct{}{}
 	brMu.Unlock()

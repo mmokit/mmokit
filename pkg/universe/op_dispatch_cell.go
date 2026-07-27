@@ -70,6 +70,10 @@ func (p *Process) DispatchCellRoutedOp(
 
 	eng := cell.Stage.eng
 	connID := ctx.ConnID
+	// Resolve the profile off-loop: the closure below runs on the cell
+	// goroutine and p.wireLimits is frozen at New(), but reading it here keeps
+	// the loop job's captures to plain values.
+	lim := p.clientWireLimits()
 
 	// Schedule the handler on the cell engine loop. SubmitLoopJob is
 	// fire-and-forget — the typed-op poll goroutine returns immediately
@@ -89,7 +93,11 @@ func (p *Process) DispatchCellRoutedOp(
 		// decode is the same cost either way and keeping it on-loop
 		// means no allocations escape across goroutines.
 		reqPtr := reflect.New(reqType)
-		decodeErr := ReflectUnmarshalOnStage(cell.Stage, body, reqPtr.Interface())
+		// Strict, and under the client profile: this body came off a client
+		// socket, so a trailing surplus is a type disagreement rather than an
+		// appended blob. Same rule as the RouteGatewayLocal arm in
+		// DispatchTypedOpInbound.
+		decodeErr := ReflectUnmarshalStrict(cell.Stage, body, reqPtr.Interface(), lim)
 
 		var respFrame []byte
 		if decodeErr != nil {

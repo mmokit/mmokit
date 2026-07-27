@@ -53,6 +53,10 @@ var (
 // registerClientInputType marks t as a HandleClient-eligible type and
 // indexes it by typeID for inbound-frame lookup. Idempotent.
 func registerClientInputType(t reflect.Type) {
+	// Registration-time shape check. This is the one registry whose types are
+	// decoded straight off a client socket, so an unsupported field here is a
+	// wire bug reachable by an unauthenticated peer rather than a codegen one.
+	pkguniverse.ValidateMessageType(t)
 	id := TypeIDOf(t)
 	ciMu.Lock()
 	ciSet[t] = struct{}{}

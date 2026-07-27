@@ -112,6 +112,11 @@ var (
 func RegisterOp[Req any, Res any](kind RouteKind, handler func(*OpContext, *Req) (*Res, error)) {
 	reqType := reflect.TypeFor[Req]()
 	resType := reflect.TypeFor[Res]()
+	// Both halves: the request is decoded here from a client body, the
+	// response is decoded by the generated SDKs and by the console's
+	// `service call`. An unsupported field in either is a wire bug.
+	pkguniverse.ValidateMessageType(reqType)
+	pkguniverse.ValidateMessageType(resType)
 	reqID := TypeIDOf(reqType)
 	resID := TypeIDOf(resType)
 

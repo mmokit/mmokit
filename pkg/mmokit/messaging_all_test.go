@@ -9,7 +9,10 @@ import (
 	pkguniverse "github.com/zenion/mmoserver/pkg/universe"
 )
 
-type allPing struct{ N int }
+// N is int32, not int: the reflection codec has no arm for a
+// platform-width int, and HandleAll now runs ValidateMessageType at
+// registration. This was the one offender repo-wide.
+type allPing struct{ N int32 }
 
 // registerTestKindOnProcess wires the test entity kind into a Process via
 // RegisterKindSpec so every cell created by Build gets it. Mirrors the

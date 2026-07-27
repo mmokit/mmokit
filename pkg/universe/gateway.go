@@ -1066,9 +1066,11 @@ func (g *Gateway) runSessionPump(connID uint32) {
 // crashers instead of silently passing.
 //
 // This frame arrives PRE-AUTHENTICATION — sess is nil during the whole auth
-// exchange — and the reflection decoder reached from here still trusts
-// wire-supplied lengths, so a malformed 0x01 body panics on a slice bound
-// today. That panic is on a bare goroutine and takes the process with it.
+// exchange. The reflection decoder reached from here no longer trusts
+// wire-supplied lengths: DispatchTypedOpInbound decodes the body through
+// ReflectUnmarshalStrict under this process's client ingress profile, which
+// bounds every read and charges every allocation before making it. The recover
+// stays because it also covers the registered handler, which is game code.
 func (g *Gateway) processOpFrame(connID uint32, sess *localSession, raw []byte) {
 	defer func() {
 		if r := recover(); r != nil {
@@ -1113,7 +1115,10 @@ func (g *Gateway) processOpFrame(connID uint32, sess *localSession, raw []byte) 
 		// DispatchTypedOpInbound returns the response frame with the
 		// channel byte (0x01) already prepended, suitable for direct
 		// SendReliable.
-		if respFrame := DispatchTypedOpInbound(raw, opCtx, nil); respFrame != nil {
+		// g.process is set in BOTH embedded and standalone build paths, unlike
+		// g.coord which is nil for a standalone gateway. clientWireLimits
+		// tolerates a nil receiver for the fixtures that build a bare Gateway.
+		if respFrame := DispatchTypedOpInbound(raw, opCtx, nil, g.process.clientWireLimits()); respFrame != nil {
 			g.connMgr.SendReliable(connID, respFrame)
 		}
 		return

@@ -128,10 +128,38 @@ func validateType(t reflect.Type, path string, allowSlice bool, depth int) {
 		// legal and is what maxValidateDepth exists to stop.
 		validateType(t.Elem(), path+"[]", allowSlice, depth+1)
 	case reflect.Struct:
+		// A nested struct with nothing the codec can see encodes to zero
+		// bytes and decodes to nothing, silently. time.Time is the case that
+		// motivates this: every field is unexported, so validateStruct's loop
+		// body never runs and the type sails through, then a `SentAt time.Time`
+		// on a chat event round-trips as the zero instant with no error
+		// anywhere. There are no such fields today; the guard exists so the
+		// first one is a registration panic rather than a data-loss bug.
+		//
+		// Only nested structs are checked. A registered MESSAGE with no
+		// exported fields is a legitimate empty request whose empty body is
+		// the whole content, so ValidateMessageType's own entry into
+		// validateStruct is deliberately not covered.
+		if !hasEncodableFields(t) {
+			panic(fmt.Sprintf("reflect_marshal: struct %s at %s has no exported fields — it would encode to zero bytes", t, path))
+		}
 		validateStruct(t, path, allowSlice, depth+1)
 	default:
 		panic(fmt.Sprintf("reflect_marshal: unsupported type %s at %s (kind=%s)", t, path, t.Kind()))
 	}
+}
+
+// hasEncodableFields reports whether t has at least one field the codec will
+// write. ecs.Entity fields are skipped during marshal, so a struct made only of
+// them is as empty on the wire as one with no exported fields at all.
+func hasEncodableFields(t reflect.Type) bool {
+	for i := range t.NumField() {
+		f := t.Field(i)
+		if f.IsExported() && f.Type != ecsEntityType {
+			return true
+		}
+	}
+	return false
 }
 
 // ReflectMarshal serializes a struct pointer to binary.
@@ -179,8 +207,13 @@ func ReflectMarshal(ptr any) ([]byte, error) {
 // and discards the surplus. That asymmetry with ReflectUnmarshalStrict is
 // deliberate — mesh transfer blobs and border component blobs are appended to
 // today, and UnmarshalTransferFrame does not reject trailing data either.
+//
+// Decodes under meshProfile, NOT under the client profile: every remaining
+// caller is a mesh, transfer, loopback, or client-SDK path whose body this
+// cluster's own encoder produced. Client-supplied bodies go through
+// ReflectUnmarshalStrict with the process's configured client limits instead.
 func ReflectUnmarshalOnStage(stage *Stage, data []byte, ptr any) error {
-	_, err := decodeStruct(stage, data, ptr, pkgnet.DefaultWireLimits())
+	_, err := decodeStruct(stage, data, ptr, meshProfile())
 	return err
 }
 
@@ -206,8 +239,16 @@ func ReflectUnmarshal(data []byte, ptr any) error {
 // because universe.New's `if !flag.Parsed()` guard is always false under
 // `go test` and flag defaults therefore never reach a test.
 //
-// No production call site uses this yet. Switching them over depends on both
-// the error propagation (unit 9) and the ValidateMessageType wiring (unit 10).
+// This is the consumer of decodeStruct's consumed-byte count, and between them
+// they are CE-002 criterion 1 in full: decodeStruct is the checked decoder
+// returning (consumed, error), and the `consumed != len(data)` test below is
+// the only thing that count is for. No public (int, error) wrapper exists,
+// deliberately — it would have zero callers, and §6.8.4 records what shipping
+// an unread counter costs.
+//
+// Live on the four client-facing surfaces: DispatchTypedOpInbound,
+// Process.DispatchCellRoutedOp, DispatchInboundEventFrame and
+// Stage.dispatchOneClientInput.
 func ReflectUnmarshalStrict(stage *Stage, data []byte, ptr any, lim pkgnet.WireLimits) error {
 	lim = lim.Normalized()
 	if len(data) > lim.MaxFrameBytes {
@@ -753,6 +794,14 @@ func (d *decodeState) slice(off int, v reflect.Value) (int, error) {
 
 	// []byte fast path: [u32 len][N bytes]. See valueSize for rationale.
 	if elem.Kind() == reflect.Uint8 {
+		// The client profile closes this arm entirely rather than bounding
+		// it. Refused on the field's existence, not its declared length: a
+		// zero-length []byte on a client-ingress type is still a type nobody
+		// meant to put there, and failing on the first empty one is how the
+		// mistake gets found. See WireLimits.RejectByteFields.
+		if d.lim.RejectByteFields {
+			return 0, fmt.Errorf("byte fields are not decodable on this surface")
+		}
 		if err := d.need(off, 4); err != nil {
 			return 0, err
 		}

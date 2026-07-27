@@ -59,6 +59,21 @@ type WireLimits struct {
 	// decode, so many individually-legal fields cannot add up to an
 	// illegal total.
 	MaxTotalAllocBytes int
+
+	// RejectByteFields refuses a []byte field outright, whatever its
+	// declared length. It is surface POLICY rather than a size, which is
+	// why it is a bool and not "MaxBytesFieldLen = 0": Normalized treats
+	// every non-positive limit as unset and would replace a zero with the
+	// default, so zero cannot mean "none".
+	//
+	// Set on the client-ingress profile. The []byte arm is the one place
+	// the codec reads a u32 length, and no client-reachable registered type
+	// has such a field — verified against `--dump-schema`, where the sole
+	// `bytes` field in the whole registry is mmokit.WorldDelta.body and
+	// that is server→client. Closing the arm entirely means a game that
+	// later adds a []byte to a client-input or op-request type gets a loud
+	// decode failure on its first test rather than a quiet new amplifier.
+	RejectByteFields bool
 }
 
 // Default limit values. Kept as named constants so the enforcement sites and
@@ -106,11 +121,14 @@ func DefaultWireLimits() WireLimits {
 	}
 }
 
-// Normalized replaces every non-positive field with its default. Config
-// structs reach the runtime with zero values far more often than the flag
-// defaults suggest — universe.New's `if !flag.Parsed()` guard is always false
-// under `go test`, so BindFlags never runs there — and a zero limit would
-// otherwise reject every frame.
+// Normalized replaces every non-positive numeric field with its default.
+// Config structs reach the runtime with zero values far more often than the
+// flag defaults suggest — universe.New's `if !flag.Parsed()` guard is always
+// false under `go test`, so BindFlags never runs there — and a zero limit
+// would otherwise reject every frame.
+//
+// RejectByteFields is deliberately untouched: it is a policy flag whose zero
+// value ("accept them") is the permissive one, so there is nothing to fill in.
 func (l WireLimits) Normalized() WireLimits {
 	d := DefaultWireLimits()
 	if l.MaxFrameBytes <= 0 {

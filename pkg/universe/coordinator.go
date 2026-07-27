@@ -132,11 +132,21 @@ type Config struct {
 
 	// WireLimits bounds inbound frame size and per-connection queue depth on
 	// every client ingress surface (WebSocket, UDP, and the host-side virtual
-	// connections a gateway forwards to). Zero fields fall back to
+	// connections a gateway forwards to), and the decode ceilings applied to
+	// any body a client supplies. Zero fields fall back to
 	// net.DefaultWireLimits — which matters more than it looks, because
 	// universe.New's `if !flag.Parsed()` guard is always false under
 	// `go test`, so BindFlags never runs there and a Config built by a
 	// fixture reaches the runtime with this field zeroed.
+	//
+	// The five decode ceilings are also settable from the command line:
+	// --wire-max-frame-bytes, --wire-max-string-bytes, --wire-max-slice-elems,
+	// --wire-max-depth, --wire-max-alloc-bytes. The queue and drain caps are
+	// Config-only; they are a deployment shape rather than an operator dial.
+	//
+	// This configures the CLIENT profile only. Mesh and transfer bodies decode
+	// under the fixed meshProfile — see pkg/universe/wire_limits.go for why
+	// the two are not one number.
 	WireLimits net.WireLimits
 
 	// AdminListen is the listen address for an HTTP admin server that
@@ -498,6 +508,16 @@ type Process struct {
 	// Copied from Config.InvariantMode at New() time.
 	invariantMode InvariantMode
 
+	// wireLimits is the client ingress decode profile, derived from
+	// Config.WireLimits at New() time via clientProfile and frozen here.
+	// Read through clientWireLimits().
+	//
+	// Frozen rather than re-derived from cfg on each use because Build()
+	// reassigns c.cfg wholesale in three places (OpRouter auto-wire, DBStore
+	// open, AdminConfig defaults); a profile resolved once cannot drift with
+	// them. Copied by value into decodeState, never shared.
+	wireLimits net.WireLimits
+
 	// commitLog is a bounded in-memory ring of CommitEvents covering
 	// commit-plan steps, invariant violations, and host/session events.
 	// Initialized in New() with Config.CommitLogCapacity (default 1024).
@@ -811,6 +831,7 @@ func New(cfg Config) *Process {
 		c.ConnMgr.SetWireLimits(cfg.WireLimits)
 	}
 	c.invariantMode = cfg.InvariantMode
+	c.wireLimits = clientProfile(cfg.WireLimits)
 	c.strictNetIDIndex = cfg.StrictNetIDIndex
 	c.blinkDetectorTicks = cfg.BlinkDetectorTicks
 	if c.blinkDetectorTicks == 0 {
@@ -2633,7 +2654,7 @@ func (c *Process) Start(parent ...context.Context) {
 		// Process.DispatchCellRoutedOp (engine.RunOnLoop on the player's
 		// authoritative cell).
 		c.cfg.OpRouter.SetTypedOpHandler(func(payload []byte, ctx *ops.OpContext) []byte {
-			return DispatchTypedOpInbound(payload, ctx, c)
+			return DispatchTypedOpInbound(payload, ctx, c, c.clientWireLimits())
 		})
 		go c.cfg.OpRouter.Run(ctx)
 	}

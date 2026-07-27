@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/zenion/mmoserver/pkg/mmokit"
+	pkgnet "github.com/zenion/mmoserver/pkg/net"
 	"github.com/zenion/mmoserver/pkg/ops"
 	pkguniverse "github.com/zenion/mmoserver/pkg/universe"
 )
@@ -37,7 +38,7 @@ func TestDispatchTypedOp_GatewayLocal_HappyPath(t *testing.T) {
 
 	// Strip the channel byte to get the payload the dispatcher expects.
 	payload := frame[1:]
-	respFrame := pkguniverse.DispatchTypedOpInbound(payload, &ops.OpContext{ConnID: 7, Username: "alice"}, nil)
+	respFrame := pkguniverse.DispatchTypedOpInbound(payload, &ops.OpContext{ConnID: 7, Username: "alice"}, nil, pkgnet.WireLimits{})
 	if respFrame == nil {
 		t.Fatalf("DispatchTypedOpInbound: nil response frame")
 	}
@@ -70,7 +71,7 @@ func TestDispatchTypedOp_UnknownTypeID_ReturnsOperationError(t *testing.T) {
 
 	// Build a frame at a typeID nobody registered.
 	frame := pkguniverse.EncodeTypedOpFrame(0xDEADBEEF, 99, nil)
-	resp := pkguniverse.DispatchTypedOpInbound(frame[1:], &ops.OpContext{}, nil)
+	resp := pkguniverse.DispatchTypedOpInbound(frame[1:], &ops.OpContext{}, nil, pkgnet.WireLimits{})
 	if resp == nil {
 		t.Fatalf("expected OperationError frame for unknown typeID, got nil")
 	}
@@ -105,7 +106,7 @@ func TestDispatchTypedOp_HandlerError_ReturnsOperationError(t *testing.T) {
 	reqBody := mustMarshal(t, &dispReq{X: 1})
 	reqTypeID := mmokit.TypeIDOf(reflect.TypeFor[dispReq]())
 	frame := pkguniverse.EncodeTypedOpFrame(reqTypeID, 5, reqBody)
-	resp := pkguniverse.DispatchTypedOpInbound(frame[1:], &ops.OpContext{}, nil)
+	resp := pkguniverse.DispatchTypedOpInbound(frame[1:], &ops.OpContext{}, nil, pkgnet.WireLimits{})
 	if resp == nil {
 		t.Fatalf("expected OperationError frame on handler error, got nil")
 	}
@@ -139,7 +140,7 @@ func TestDispatchTypedOp_RoutePlayerCell_NoRouter_ReturnsOperationError(t *testi
 	reqBody := mustMarshal(t, &dispReq{X: 1})
 	reqTypeID := mmokit.TypeIDOf(reflect.TypeFor[dispReq]())
 	frame := pkguniverse.EncodeTypedOpFrame(reqTypeID, 7, reqBody)
-	resp := pkguniverse.DispatchTypedOpInbound(frame[1:], &ops.OpContext{}, nil)
+	resp := pkguniverse.DispatchTypedOpInbound(frame[1:], &ops.OpContext{}, nil, pkgnet.WireLimits{})
 	if resp == nil {
 		t.Fatalf("expected OperationError frame for cell-routed op, got nil")
 	}
@@ -159,7 +160,7 @@ func TestDispatchTypedOp_RoutePlayerCell_NoRouter_ReturnsOperationError(t *testi
 }
 
 func TestDispatchTypedOp_TruncatedFrame_ReturnsNil(t *testing.T) {
-	resp := pkguniverse.DispatchTypedOpInbound([]byte{0x01, 0x02}, &ops.OpContext{}, nil)
+	resp := pkguniverse.DispatchTypedOpInbound([]byte{0x01, 0x02}, &ops.OpContext{}, nil, pkgnet.WireLimits{})
 	if resp != nil {
 		t.Fatalf("truncated frame should drop silently (nil response), got %x", resp)
 	}
@@ -200,7 +201,7 @@ func TestDispatchTypedOpInbound_DecodeError(t *testing.T) {
 	frame := pkguniverse.EncodeTypedOpFrame(reqTypeID, 4242, []byte{64, 0})
 
 	resp := pkguniverse.DispatchTypedOpInbound(frame[1:],
-		&ops.OpContext{ConnID: 3, Username: "alice"}, nil)
+		&ops.OpContext{ConnID: 3, Username: "alice"}, nil, pkgnet.WireLimits{})
 	if resp == nil {
 		t.Fatal("expected an OperationError frame for a refused body; nil means " +
 			"\"response will arrive later\" and the client would wait forever")
@@ -228,6 +229,62 @@ func TestDispatchTypedOpInbound_DecodeError(t *testing.T) {
 	}
 	if opErr.Message == "" {
 		t.Error("OperationError.Message is empty; the client cannot tell which body was refused")
+	}
+}
+
+// TestDispatchTypedOpInbound_RejectsTrailingBytes pins CE-002 criterion 4's
+// trailing half on the client-facing op path.
+//
+// The body here is a perfectly well-formed dispReq followed by four surplus
+// bytes. Under the tolerant wrapper the dispatcher decoded the prefix, threw
+// the rest away, and called the handler as if nothing had happened — so a
+// client whose idea of dispReq has extra fields, or one probing for a type
+// confusion, got a successful dispatch against a type it was not sending. The
+// strict decoder answers OperationError{OpErrorDecodeFailed} instead.
+//
+// The op path is the one place where a length mismatch is unambiguous: unlike
+// the mesh blobs the tolerant wrapper still serves, nothing appends to a typed
+// op body, so surplus bytes mean the sender and this process disagree about
+// what typeID names.
+func TestDispatchTypedOpInbound_RejectsTrailingBytes(t *testing.T) {
+	t.Cleanup(mmokit.ResetTypedOpRegistryForTest)
+	mmokit.ResetTypedOpRegistryForTest()
+
+	handlerRan := false
+	mmokit.RegisterOp[dispReq, dispRes](mmokit.RouteGatewayLocal,
+		func(_ *mmokit.OpContext, _ *dispReq) (*dispRes, error) {
+			handlerRan = true
+			return &dispRes{}, nil
+		})
+
+	body := append(mustMarshal(t, &dispReq{X: 5}), 0xAA, 0xBB, 0xCC, 0xDD)
+	reqTypeID := mmokit.TypeIDOf(reflect.TypeFor[dispReq]())
+	frame := pkguniverse.EncodeTypedOpFrame(reqTypeID, 777, body)
+
+	resp := pkguniverse.DispatchTypedOpInbound(frame[1:],
+		&ops.OpContext{ConnID: 3, Username: "alice"}, nil, pkgnet.WireLimits{})
+	if resp == nil {
+		t.Fatal("expected an OperationError frame for a body with trailing bytes")
+	}
+	if handlerRan {
+		t.Error("handler ran on a body carrying 4 surplus bytes — the sender and " +
+			"this process disagree about the request type and neither found out")
+	}
+
+	gotTypeID, gotReqID, gotBody, err := pkguniverse.DecodeTypedOpFrame(resp[1:])
+	if err != nil {
+		t.Fatalf("DecodeTypedOpFrame: %v", err)
+	}
+	if want := mmokit.TypeIDOf(reflect.TypeFor[mmokit.OperationError]()); gotTypeID != want {
+		t.Errorf("typeID = %#x, want OperationError %#x", gotTypeID, want)
+	}
+	if gotReqID != 777 {
+		t.Errorf("request_id = %d, want 777", gotReqID)
+	}
+	var opErr mmokit.OperationError
+	mustUnmarshal(t, gotBody, &opErr)
+	if opErr.Code != mmokit.OpErrorDecodeFailed {
+		t.Errorf("code = %d, want OpErrorDecodeFailed(%d)", opErr.Code, mmokit.OpErrorDecodeFailed)
 	}
 }
 
@@ -285,7 +342,7 @@ func TestDispatchTypedOp_RoutePlayerCell_ForwardsToRouter(t *testing.T) {
 	frame := pkguniverse.EncodeTypedOpFrame(reqTypeID, 99, reqBody)
 
 	router := &fakeCellOpRouter{} // returns nil → "scheduled async"
-	resp := pkguniverse.DispatchTypedOpInbound(frame[1:], &ops.OpContext{ConnID: 7, Username: "alice"}, router)
+	resp := pkguniverse.DispatchTypedOpInbound(frame[1:], &ops.OpContext{ConnID: 7, Username: "alice"}, router, pkgnet.WireLimits{})
 
 	if !router.called {
 		t.Fatal("router.DispatchCellRoutedOp was not invoked")
@@ -337,6 +394,7 @@ func TestDispatchCellRoutedOp_NoActiveSession(t *testing.T) {
 		frame[1:],
 		&ops.OpContext{ConnID: 1, Username: "ghost"},
 		p, // *Process implements CellOpRouter
+		pkgnet.WireLimits{},
 	)
 	if resp == nil {
 		t.Fatal("expected synchronous OperationError frame for offline user")
