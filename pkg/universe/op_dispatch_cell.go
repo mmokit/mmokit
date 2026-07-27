@@ -30,6 +30,10 @@ import (
 //   - The named cell isn't owned by this process (transient — split /
 //     merge / migrate may have moved it; the client should retry)
 //
+// A request body the decoder refuses is answered ASYNCHRONOUSLY, from inside
+// the loop job, with OperationError{opErrorDecodeFailed} — it is found on the
+// loop goroutine, after this function has already returned nil.
+//
 // Implements universe.CellOpRouter for *Process. Wired into
 // DispatchTypedOpInbound by Process.installTypedOpDispatch when the
 // router goroutine starts.
@@ -85,27 +89,38 @@ func (p *Process) DispatchCellRoutedOp(
 		// decode is the same cost either way and keeping it on-loop
 		// means no allocations escape across goroutines.
 		reqPtr := reflect.New(reqType)
-		ReflectUnmarshalOnStage(cell.Stage, body, reqPtr.Interface())
-
-		handlerVal := reflect.ValueOf(handler)
-		results := handlerVal.Call([]reflect.Value{reflect.ValueOf(ctx), reqPtr})
-
-		resPtr := results[0]
-		errVal := results[1]
+		decodeErr := ReflectUnmarshalOnStage(cell.Stage, body, reqPtr.Interface())
 
 		var respFrame []byte
-		if !errVal.IsNil() {
-			respFrame = encodeOpErrorViaHooks(requestID, opErrorHandlerFailed,
-				errVal.Interface().(error).Error())
-		} else if resPtr.IsNil() {
-			respFrame = EncodeTypedOpFrame(resTypeID, requestID, nil)
-		} else if resBody, mErr := ReflectMarshal(resPtr.Interface()); mErr != nil {
-			// Handler succeeded but its response does not fit the wire; answer
-			// with a typed error so the client's requestID is not left pending.
-			respFrame = encodeOpErrorViaHooks(requestID, opErrorHandlerFailed,
-				fmt.Sprintf("encode response: %v", mErr))
+		if decodeErr != nil {
+			// Answer here rather than returning the error. SubmitLoopJob is
+			// fire-and-forget: GameLoop assigns the job's error and closes its
+			// done channel, but nothing reads either, so a returned error is
+			// dropped and the client's typed-op promise never settles. Before
+			// this the decode panicked and the loop-job recover turned that
+			// same hang into a silent one.
+			respFrame = encodeOpErrorViaHooks(requestID, opErrorDecodeFailed,
+				fmt.Sprintf("op %s: decode request: %v", reqType.String(), decodeErr))
 		} else {
-			respFrame = EncodeTypedOpFrame(resTypeID, requestID, resBody)
+			handlerVal := reflect.ValueOf(handler)
+			results := handlerVal.Call([]reflect.Value{reflect.ValueOf(ctx), reqPtr})
+
+			resPtr := results[0]
+			errVal := results[1]
+
+			if !errVal.IsNil() {
+				respFrame = encodeOpErrorViaHooks(requestID, opErrorHandlerFailed,
+					errVal.Interface().(error).Error())
+			} else if resPtr.IsNil() {
+				respFrame = EncodeTypedOpFrame(resTypeID, requestID, nil)
+			} else if resBody, mErr := ReflectMarshal(resPtr.Interface()); mErr != nil {
+				// Handler succeeded but its response does not fit the wire; answer
+				// with a typed error so the client's requestID is not left pending.
+				respFrame = encodeOpErrorViaHooks(requestID, opErrorHandlerFailed,
+					fmt.Sprintf("encode response: %v", mErr))
+			} else {
+				respFrame = EncodeTypedOpFrame(resTypeID, requestID, resBody)
+			}
 		}
 
 		if respFrame == nil {

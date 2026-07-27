@@ -57,7 +57,9 @@ func TestHealth_DeathFiredAndKillerSurviveTransferCodec(t *testing.T) {
 		t.Fatalf("ReflectMarshal: %v", err)
 	}
 	var out gamecomp.Health
-	pkguniverse.ReflectUnmarshal(data, &out)
+	if err := pkguniverse.ReflectUnmarshal(data, &out); err != nil {
+		t.Fatalf("ReflectUnmarshal: %v", err)
+	}
 	if out != in {
 		t.Fatalf("Health roundtrip: got %+v, want %+v", out, in)
 	}

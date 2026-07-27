@@ -3,6 +3,7 @@ package universe
 import (
 	"context"
 	"reflect"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -78,12 +79,13 @@ func installFrameworkHookStubs(t *testing.T) {
 	}
 }
 
-// TestProcessDispatchCellRoutedOp_HappyPath exercises the full cell-routed
-// path: Process resolves the user's cell, schedules the handler on that
-// cell's engine via SubmitLoopJob, the loop runs the handler, encodes the
-// response, and sends via the engine's ConnMgr.
-func TestProcessDispatchCellRoutedOp_HappyPath(t *testing.T) {
-	installFrameworkHookStubs(t)
+// newCellRoutedOpFixture builds the scaffolding DispatchCellRoutedOp needs to
+// reach a handler: a Process owning cell_0_0, a Stage on a real engine, "alice"
+// registered as active in that cell, and a running GameLoop — the loop is what
+// marks the loop goroutine and drains SubmitLoopJob entries, so without it the
+// job is queued and never runs.
+func newCellRoutedOpFixture(t *testing.T) (*Process, *captureConnSender) {
+	t.Helper()
 
 	conn := newCaptureConn()
 	p := minimalCoordWithCell(t, "host-a", "cell_0_0")
@@ -109,8 +111,6 @@ func TestProcessDispatchCellRoutedOp_HappyPath(t *testing.T) {
 		Active: true,
 	}
 
-	// Spin up a real GameLoop on the engine — that's what marks the
-	// loop goroutine and drains SubmitLoopJob queue entries each tick.
 	gl := engine.NewGameLoop(eng, nil, nil, engine.Hooks{})
 	ctx, cancel := context.WithCancel(context.Background())
 	loopDone := make(chan struct{})
@@ -126,6 +126,32 @@ func TestProcessDispatchCellRoutedOp_HappyPath(t *testing.T) {
 			t.Error("game loop did not exit within 2s of cancel")
 		}
 	})
+	return p, conn
+}
+
+// awaitFrame polls conn for a frame on connID. The response is sent from the
+// loop goroutine after this test's call already returned, so there is nothing
+// to synchronize on but the send itself.
+func awaitFrame(t *testing.T, conn *captureConnSender, connID uint32) []byte {
+	t.Helper()
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		if frame := conn.get(connID); frame != nil {
+			return frame
+		}
+		time.Sleep(2 * time.Millisecond)
+	}
+	t.Fatalf("no response frame sent to conn %d within timeout", connID)
+	return nil
+}
+
+// TestProcessDispatchCellRoutedOp_HappyPath exercises the full cell-routed
+// path: Process resolves the user's cell, schedules the handler on that
+// cell's engine via SubmitLoopJob, the loop runs the handler, encodes the
+// response, and sends via the engine's ConnMgr.
+func TestProcessDispatchCellRoutedOp_HappyPath(t *testing.T) {
+	installFrameworkHookStubs(t)
+	p, conn := newCellRoutedOpFixture(t)
 
 	body := mustMarshal(t, &cellOpReq{X: 21})
 	const requestID uint64 = 42
@@ -151,18 +177,7 @@ func TestProcessDispatchCellRoutedOp_HappyPath(t *testing.T) {
 	}
 
 	// Wait for the loop to drain and send the response.
-	deadline := time.Now().Add(2 * time.Second)
-	for time.Now().Before(deadline) {
-		if conn.get(7) != nil {
-			break
-		}
-		time.Sleep(2 * time.Millisecond)
-	}
-	frame := conn.get(7)
-	if frame == nil {
-		t.Fatal("no response frame sent within timeout")
-	}
-
+	frame := awaitFrame(t, conn, 7)
 	if frame[0] != pkgnet.ChannelOperation {
 		t.Errorf("response channel byte = %#x, want 0x01", frame[0])
 	}
@@ -177,7 +192,7 @@ func TestProcessDispatchCellRoutedOp_HappyPath(t *testing.T) {
 		t.Errorf("response requestID = %d, want %d", gotReqID, requestID)
 	}
 	var got cellOpRes
-	ReflectUnmarshal(gotBody, &got)
+	mustUnmarshal(t, gotBody, &got)
 	if got.Y != 42 {
 		t.Errorf("response Y = %d, want 42 (handler doubles input)", got.Y)
 	}
@@ -209,5 +224,118 @@ func TestProcessDispatchCellRoutedOp_OfflineUser(t *testing.T) {
 	}
 	if resp[0] != pkgnet.ChannelOperation {
 		t.Errorf("channel byte = %#x, want 0x01", resp[0])
+	}
+}
+
+// cellOpStrReq is the cell-routed mirror of dispStrReq: a request whose first
+// field is a length-prefixed string, so a truncated body is refused by the
+// decoder rather than silently arriving as an empty string.
+type cellOpStrReq struct {
+	Username string
+}
+
+// opErrorRecorder captures what encodeOpErrorViaHooks was asked to encode.
+// pkg/universe cannot import pkg/mmokit (import cycle), so swapping the hook is
+// how an in-package test reads an OperationError's code and message.
+type opErrorRecorder struct {
+	mu       sync.Mutex
+	codes    []uint32
+	messages []string
+}
+
+func (r *opErrorRecorder) record(code uint32, message string) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.codes = append(r.codes, code)
+	r.messages = append(r.messages, message)
+}
+
+func (r *opErrorRecorder) snapshot() ([]uint32, []string) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return append([]uint32(nil), r.codes...), append([]string(nil), r.messages...)
+}
+
+// installOpErrorRecorder replaces the OperationError body hook unconditionally
+// — unlike installFrameworkHookStubs, which defers to mmokit's real hook when
+// the external test package has linked it in. The hook fires on the cell loop
+// goroutine, hence the mutex.
+func installOpErrorRecorder(t *testing.T) *opErrorRecorder {
+	t.Helper()
+	rec := &opErrorRecorder{}
+	prevMakeBody := TypedOpHooks.MakeOperationErrorBody
+	prevErrTypeID := TypedOpHooks.OperationErrorTypeID
+	t.Cleanup(func() {
+		TypedOpHooks.MakeOperationErrorBody = prevMakeBody
+		TypedOpHooks.OperationErrorTypeID = prevErrTypeID
+	})
+	TypedOpHooks.MakeOperationErrorBody = func(code uint32, message string) []byte {
+		rec.record(code, message)
+		return []byte{0xEE}
+	}
+	TypedOpHooks.OperationErrorTypeID = 0xDEADDEAD
+	return rec
+}
+
+// TestProcessDispatchCellRoutedOp_DecodeError pins the user-visible behaviour
+// change CE-002 unit 9 makes on the cell-routed path.
+//
+// The decode runs inside eng.SubmitLoopJob, which is fire-and-forget: GameLoop
+// records a job's returned error and closes its done channel, but nothing reads
+// either. So a decode failure reported by returning an error would be dropped
+// and the client's pending typed-op promise would never settle — exactly the
+// hang the pre-CE-002 panic produced, minus the log line. The answer has to be
+// built and sent from inside the closure, and it is asserted here.
+func TestProcessDispatchCellRoutedOp_DecodeError(t *testing.T) {
+	rec := installOpErrorRecorder(t)
+	p, conn := newCellRoutedOpFixture(t)
+
+	handler := func(*ops.OpContext, *cellOpStrReq) (*cellOpRes, error) {
+		t.Error("handler ran on a body the decoder refused; it would have seen " +
+			"an empty Username indistinguishable from a real one")
+		return &cellOpRes{}, nil
+	}
+
+	const requestID uint64 = 4242
+	// Declares a 64-byte Username and supplies none of it.
+	resp := p.DispatchCellRoutedOp(
+		reflect.TypeFor[cellOpStrReq](),
+		0x33333333,
+		requestID,
+		[]byte{64, 0},
+		handler,
+		&ops.OpContext{ConnID: 7, Username: "alice"},
+	)
+	if resp != nil {
+		t.Fatalf("expected nil sync response: the body is not decoded until the "+
+			"loop job runs, got %x", resp)
+	}
+
+	frame := awaitFrame(t, conn, 7)
+	if frame[0] != pkgnet.ChannelOperation {
+		t.Errorf("response channel byte = %#x, want 0x01", frame[0])
+	}
+	gotTypeID, gotReqID, _, err := DecodeTypedOpFrame(frame[1:])
+	if err != nil {
+		t.Fatalf("DecodeTypedOpFrame: %v", err)
+	}
+	if gotTypeID != TypedOpHooks.OperationErrorTypeID {
+		t.Errorf("response typeID = %#x, want OperationError %#x",
+			gotTypeID, TypedOpHooks.OperationErrorTypeID)
+	}
+	if gotReqID != requestID {
+		t.Errorf("response requestID = %d, want %d (the client correlates on it)",
+			gotReqID, requestID)
+	}
+
+	codes, messages := rec.snapshot()
+	if len(codes) != 1 {
+		t.Fatalf("OperationError bodies encoded = %d, want exactly 1", len(codes))
+	}
+	if codes[0] != opErrorDecodeFailed {
+		t.Errorf("code = %d, want opErrorDecodeFailed(%d)", codes[0], opErrorDecodeFailed)
+	}
+	if !strings.Contains(messages[0], "decode request") {
+		t.Errorf("message = %q, want it to name the decode failure", messages[0])
 	}
 }

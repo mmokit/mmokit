@@ -512,7 +512,14 @@ func (c *Cell) drainPendingPromotes(currentClusterTick uint64) {
 				if reg := c.Stage.ReplicationRegistry(); reg != nil {
 					for _, cs := range recentComps {
 						if rep := reg.Get(cs.ID); rep != nil && rep.Apply != nil {
-							rep.Apply(newEnt, cs.Data)
+							// De-staling is best-effort: a refused blob leaves
+							// this one component at its (older) transfer-blob
+							// value rather than the replica's tip, which is
+							// exactly the divergence noteComponentDecodeDrop
+							// trades for keeping the promoted entity.
+							if err := rep.Apply(newEnt, cs.Data); err != nil {
+								noteComponentDecodeDrop("handoff de-stale", cs.ID, err)
+							}
 						}
 					}
 				}

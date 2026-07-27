@@ -142,10 +142,18 @@ func (b *Stage) applyEntityComponents(entity ecs.Entity, tail []byte) {
 		if rep.IsTransferCore {
 			continue
 		}
+		// A refused blob skips this component and the walk continues to the
+		// next one: the tail's framing is still trustworthy (dlen was honored
+		// above), and the replica keeps every component that did decode. See
+		// noteComponentDecodeDrop for the policy and its trade.
+		var err error
 		if rep.Apply != nil {
-			rep.Apply(entity, data)
+			err = rep.Apply(entity, data)
 		} else if rep.Add != nil {
-			rep.Add(entity, data)
+			err = rep.Add(entity, data)
+		}
+		if err != nil {
+			noteComponentDecodeDrop("border replica", ComponentID(id), err)
 		}
 	}
 }

@@ -987,16 +987,25 @@ func (b *Stage) SpawnFromTransferCore(data []byte, presence EntityPresence) (ecs
 	// Apply registered game-specific components.
 	// Skip IsTransferCore replicators — their authoritative values were already
 	// written from the dedicated frame fields (PosX/PosY etc.) above.
+	//
+	// A component that fails to decode is skipped and the spawn continues. The
+	// source cell has already demoted this entity by the time its blob arrives,
+	// so returning an error here would delete it from the cluster outright —
+	// see noteComponentDecodeDrop.
 	if b.replRegistry != nil {
 		for _, cs := range frame.Components {
 			if rep := b.replRegistry.Get(cs.ID); rep != nil {
 				if rep.IsTransferCore {
 					continue
 				}
+				var applyErr error
 				if rep.Add != nil {
-					rep.Add(entity, cs.Data)
+					applyErr = rep.Add(entity, cs.Data)
 				} else if rep.Apply != nil {
-					rep.Apply(entity, cs.Data)
+					applyErr = rep.Apply(entity, cs.Data)
+				}
+				if applyErr != nil {
+					noteComponentDecodeDrop("transfer spawn", cs.ID, applyErr)
 				}
 			}
 		}
@@ -1962,7 +1971,15 @@ func (s *Stage) HandleEngineAction(action *CrossCellAction) bool {
 	// Stage-aware decode so Entity fields resolve their handles via this
 	// stage's NetID index — without it Entity.Send / Entity.Get etc. on
 	// decoded fields would no-op.
-	DecodeTypedMessageOnStage(s, payload, msgPtr.Interface())
+	if err := DecodeTypedMessageOnStage(s, payload, msgPtr.Interface()); err != nil {
+		// Consumed (return true) but not dispatched: the action WAS an
+		// ActionTypedMessage, so handing it to the game's fallback would only
+		// make it decode the same refused payload again.
+		s.eng.Log.Log(CatMeshAction,
+			"[%s] HandleEngineAction: dropping cross-cell %q to netID=%d — %v",
+			s.cellID, typeName, action.TargetNetID, err)
+		return true
+	}
 	s.Dispatcher().Invoke(action.TargetNetID, msgPtr.Interface())
 	// Dest-cell post-handler push: the handler ran here authoritatively,
 	// result fields are populated, viewers near the target on this cell

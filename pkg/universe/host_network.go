@@ -1007,11 +1007,11 @@ func (n *HostNetwork) routeInboundFrame(frame *meshpb.MeshFrame) (err error) {
 // service event-type registry and re-enters the local Bus dispatch path.
 // Self-echo (sourceProcessID == this process's ID) is dropped defensively.
 //
-// A defensive recover guards against ReflectUnmarshal panicking on a
-// corrupt wire payload (low-likelihood but possible if a peer sends
-// malformed bytes). Without it, a single bad frame would crash the
-// recv-loop goroutine. Local-bus handler panics are already recovered
-// inside service.publishAny; this guard catches everything before it.
+// A corrupt payload is now reported by the decoder rather than panicking, and
+// is dropped below. The recover is kept anyway: it runs on the MeshData
+// recv-loop goroutine, which has no barrier of its own, and it still covers
+// service.LookupEventType and the reflect calls around the Bus hand-off.
+// Local-bus handler panics are already recovered inside service.publishAny.
 func (n *HostNetwork) deliverServiceEvent(se *meshpb.ServiceEvent) {
 	defer func() {
 		if r := recover(); r != nil {
@@ -1035,7 +1035,15 @@ func (n *HostNetwork) deliverServiceEvent(se *meshpb.ServiceEvent) {
 		return
 	}
 	instance := reflect.New(typ).Interface()
-	ReflectUnmarshal(se.GetPayload(), instance)
+	if err := ReflectUnmarshal(se.GetPayload(), instance); err != nil {
+		// MeshData is unauthenticated until CE-006, so this payload is
+		// attacker-shaped input. Publishing a partial decode would put a
+		// half-zeroed event on the local Bus, where subscribers cannot tell it
+		// from a real one — drop it instead.
+		n.log.Log(CatServicesBus, "[%s] ServiceEvent %q from %s failed to decode, dropping: %v",
+			n.hostID, se.GetTypeName(), se.GetSourceProcessId(), err)
+		return
+	}
 	// Dereference: instance is *T, we want T to enter the Bus.
 	val := reflect.ValueOf(instance).Elem().Interface()
 	service.PublishAny(n.coord.bus, typ, val)

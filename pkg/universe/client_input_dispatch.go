@@ -149,6 +149,10 @@ func (s *Stage) dispatchInboundEventFrame(sess *engine.PlayerSession, frame []by
 // typed-message handler for typeID, decodes body, and invokes the handler.
 // Wraps the reflection / dispatch in a recover barrier so a single
 // panicking handler drops one frame rather than crashing the cell loop.
+//
+// The barrier stays now that the decoder reports errors instead of panicking:
+// it covers the game's handler, not just the decode, and this runs inside
+// gl.tick which has no recover of its own.
 func (s *Stage) dispatchOneClientInput(sess *engine.PlayerSession, typeID uint32, body []byte) {
 	defer func() {
 		if r := recover(); r != nil {
@@ -184,8 +188,18 @@ func (s *Stage) dispatchOneClientInput(sess *engine.PlayerSession, typeID uint32
 	}
 	playerNetID := netIDMap.Get(sess.Entity).ID
 
-	// Allocate a fresh *T, decode body, dispatch.
+	// Allocate a fresh *T, decode body, dispatch. A body the checked decoder
+	// refuses drops this entry only — the caller keeps walking the rest of the
+	// frame, whose alignment bodyLen already guaranteed. Dispatching anyway
+	// would hand the handler a request whose refused fields are
+	// indistinguishable from a client that meant to send zeros, which is a
+	// worse outcome than the panic this replaced.
 	msgPtr := reflect.New(msgType)
-	ReflectUnmarshalOnStage(s, body, msgPtr.Interface())
+	if err := ReflectUnmarshalOnStage(s, body, msgPtr.Interface()); err != nil {
+		s.eng.Log.Log(CatClientInput,
+			"[%s] client-input dropped, body failed to decode: conn=%d typeID=%#x type=%s: %v",
+			s.cellID, sess.ConnID, typeID, msgType.String(), err)
+		return
+	}
 	s.Dispatcher().Invoke(playerNetID, msgPtr.Interface())
 }

@@ -223,7 +223,9 @@ func TestReflectUnmarshal_ToleratesMeshTrailing(t *testing.T) {
 	data := append(mustMarshal(t, &src), 0xDE, 0xAD, 0xBE, 0xEF)
 
 	var out truncU32
-	ReflectUnmarshal(data, &out)
+	if err := ReflectUnmarshal(data, &out); err != nil {
+		t.Fatalf("tolerant wrapper rejected trailing bytes: %v", err)
+	}
 	if out.V != src.V {
 		t.Fatalf("V = %#x, want %#x", out.V, src.V)
 	}

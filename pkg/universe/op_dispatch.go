@@ -13,7 +13,8 @@ import (
 //
 // Returns a non-nil frame synchronously for:
 //   - RouteGatewayLocal handlers (handler runs inline on the caller goroutine)
-//   - Framework-level failures (unknown typeID, decode error, handler error)
+//   - Framework-level failures (unknown typeID, request-body decode error,
+//     handler error)
 //
 // Returns nil for:
 //   - Structurally invalid frames (truncated header / body) — dropped silently
@@ -69,7 +70,13 @@ func DispatchTypedOpInbound(payload []byte, ctx *ops.OpContext, router CellOpRou
 	}
 
 	reqPtr := reflect.New(reqType)
-	ReflectUnmarshal(body, reqPtr.Interface())
+	if err := ReflectUnmarshal(body, reqPtr.Interface()); err != nil {
+		// Never call the handler on a body the decoder refused: reqPtr is only
+		// partially written, so the handler would see a request whose refused
+		// fields are indistinguishable from an intentional zero value.
+		return encodeOpErrorViaHooks(requestID, opErrorDecodeFailed,
+			fmt.Sprintf("decode %s: %v", reqType.String(), err))
+	}
 
 	handlerVal := reflect.ValueOf(handler)
 	results := handlerVal.Call([]reflect.Value{reflect.ValueOf(ctx), reqPtr})

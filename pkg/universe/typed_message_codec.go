@@ -60,6 +60,9 @@ func SplitTypedMessage(data []byte) (typeName string, payload []byte) {
 // Use on the dest cell of a cross-cell typed-message dispatch — Entity
 // fields decoded without a stage have a nil .Stage() and can't be Send'd
 // onward or used to lookup components.
-func DecodeTypedMessageOnStage(stage *Stage, payload []byte, ptr any) {
-	ReflectUnmarshalOnStage(stage, payload, ptr)
+//
+// Carries ReflectUnmarshalOnStage's error contract unchanged: on a non-nil
+// error ptr is only partially written and must be discarded, not dispatched.
+func DecodeTypedMessageOnStage(stage *Stage, payload []byte, ptr any) error {
+	return ReflectUnmarshalOnStage(stage, payload, ptr)
 }

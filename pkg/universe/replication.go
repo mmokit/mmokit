@@ -32,12 +32,18 @@ type ComponentReplicator struct {
 
 	// Apply deserializes component data onto an existing replica entity.
 	// Called on both new and updated replicas.
-	Apply func(entity ecs.Entity, data []byte)
+	//
+	// Returns a non-nil error when the checked decoder refuses data. Callers
+	// skip THAT COMPONENT and keep the entity — see noteComponentDecodeDrop,
+	// which is where the failure policy and its trade are written down. Apply
+	// decodes in place, so a refused blob can leave the live component
+	// partially updated; the next clean scan repairs it.
+	Apply func(entity ecs.Entity, data []byte) error
 
 	// Add adds the component (from serialized data) to a newly created replica entity.
 	// Some components need Add (first time) vs Apply (update).
-	// If nil, Apply is used for both.
-	Add func(entity ecs.Entity, data []byte)
+	// If nil, Apply is used for both. Same error contract as Apply.
+	Add func(entity ecs.Entity, data []byte) error
 }
 
 // ReplicationRegistry tracks which components should be replicated across nodes.

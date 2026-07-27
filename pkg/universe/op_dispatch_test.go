@@ -58,7 +58,7 @@ func TestDispatchTypedOp_GatewayLocal_HappyPath(t *testing.T) {
 		t.Errorf("response request_id: got %d, want 1234", gotReqID)
 	}
 	var got dispRes
-	pkguniverse.ReflectUnmarshal(gotBody, &got)
+	mustUnmarshal(t, gotBody, &got)
 	if got.Y != 42 {
 		t.Errorf("response Y: got %d, want 42 (handler doubles input)", got.Y)
 	}
@@ -87,7 +87,7 @@ func TestDispatchTypedOp_UnknownTypeID_ReturnsOperationError(t *testing.T) {
 		t.Errorf("request_id: got %d, want 99", gotReqID)
 	}
 	var opErr mmokit.OperationError
-	pkguniverse.ReflectUnmarshal(gotBody, &opErr)
+	mustUnmarshal(t, gotBody, &opErr)
 	if opErr.Code != mmokit.OpErrorUnknownTypeID {
 		t.Errorf("code: got %d, want OpErrorUnknownTypeID(%d)", opErr.Code, mmokit.OpErrorUnknownTypeID)
 	}
@@ -118,7 +118,7 @@ func TestDispatchTypedOp_HandlerError_ReturnsOperationError(t *testing.T) {
 		t.Errorf("typeID: got %#x, want OperationError %#x", gotTypeID, wantTypeID)
 	}
 	var opErr mmokit.OperationError
-	pkguniverse.ReflectUnmarshal(gotBody, &opErr)
+	mustUnmarshal(t, gotBody, &opErr)
 	if opErr.Code != mmokit.OpErrorHandlerFailed {
 		t.Errorf("code: got %d, want OpErrorHandlerFailed(%d)", opErr.Code, mmokit.OpErrorHandlerFailed)
 	}
@@ -152,16 +152,82 @@ func TestDispatchTypedOp_RoutePlayerCell_NoRouter_ReturnsOperationError(t *testi
 		t.Errorf("typeID: got %#x, want OperationError %#x", gotTypeID, wantTypeID)
 	}
 	var opErr mmokit.OperationError
-	pkguniverse.ReflectUnmarshal(gotBody, &opErr)
+	mustUnmarshal(t, gotBody, &opErr)
 	if opErr.Code != mmokit.OpErrorHandlerFailed {
 		t.Errorf("code: got %d, want OpErrorHandlerFailed", opErr.Code)
 	}
 }
 
 func TestDispatchTypedOp_TruncatedFrame_ReturnsNil(t *testing.T) {
-	resp := pkguniverse.DispatchTypedOpInbound([]byte{0x01, 0x02}, &ops.OpContext{}, nil, )
+	resp := pkguniverse.DispatchTypedOpInbound([]byte{0x01, 0x02}, &ops.OpContext{}, nil)
 	if resp != nil {
 		t.Fatalf("truncated frame should drop silently (nil response), got %x", resp)
+	}
+}
+
+// dispStrReq is shaped like the requests the decode-error path exists for: a
+// leading length-prefixed string, as an auth login or a chat send has. A
+// zero-valued decode of one of these reaches the handler as empty credentials
+// that it cannot distinguish from a client that really sent them.
+type dispStrReq struct {
+	Username string
+}
+
+// TestDispatchTypedOpInbound_DecodeError verifies that a RouteGatewayLocal op
+// whose body the checked decoder refuses answers with
+// OperationError{OpErrorDecodeFailed} — and does not reach the handler.
+//
+// Both halves matter. Returning nil would leave the client's typed-op promise
+// pending forever, since nil means "a response will arrive later" on this API.
+// Calling the handler anyway would be the correctness regression CE-002 unit 9
+// exists to prevent: bounding the decoder is worthless if a refused body is
+// dispatched as a zero value.
+func TestDispatchTypedOpInbound_DecodeError(t *testing.T) {
+	t.Cleanup(mmokit.ResetTypedOpRegistryForTest)
+	mmokit.ResetTypedOpRegistryForTest()
+
+	handlerRan := false
+	mmokit.RegisterOp[dispStrReq, dispRes](mmokit.RouteGatewayLocal,
+		func(_ *mmokit.OpContext, _ *dispStrReq) (*dispRes, error) {
+			handlerRan = true
+			return &dispRes{}, nil
+		})
+
+	// Body declares a 64-byte Username and supplies none of it. RouteGatewayLocal
+	// runs the handler inline on this goroutine, so handlerRan needs no
+	// synchronization.
+	reqTypeID := mmokit.TypeIDOf(reflect.TypeFor[dispStrReq]())
+	frame := pkguniverse.EncodeTypedOpFrame(reqTypeID, 4242, []byte{64, 0})
+
+	resp := pkguniverse.DispatchTypedOpInbound(frame[1:],
+		&ops.OpContext{ConnID: 3, Username: "alice"}, nil)
+	if resp == nil {
+		t.Fatal("expected an OperationError frame for a refused body; nil means " +
+			"\"response will arrive later\" and the client would wait forever")
+	}
+	if handlerRan {
+		t.Error("handler ran on a body the decoder refused — it would have seen an " +
+			"empty Username indistinguishable from a real one")
+	}
+
+	gotTypeID, gotReqID, gotBody, err := pkguniverse.DecodeTypedOpFrame(resp[1:])
+	if err != nil {
+		t.Fatalf("DecodeTypedOpFrame: %v", err)
+	}
+	wantTypeID := mmokit.TypeIDOf(reflect.TypeFor[mmokit.OperationError]())
+	if gotTypeID != wantTypeID {
+		t.Errorf("typeID = %#x, want OperationError %#x", gotTypeID, wantTypeID)
+	}
+	if gotReqID != 4242 {
+		t.Errorf("request_id = %d, want 4242 (the client correlates on it)", gotReqID)
+	}
+	var opErr mmokit.OperationError
+	mustUnmarshal(t, gotBody, &opErr)
+	if opErr.Code != mmokit.OpErrorDecodeFailed {
+		t.Errorf("code = %d, want OpErrorDecodeFailed(%d)", opErr.Code, mmokit.OpErrorDecodeFailed)
+	}
+	if opErr.Message == "" {
+		t.Error("OperationError.Message is empty; the client cannot tell which body was refused")
 	}
 }
 
@@ -171,14 +237,14 @@ func TestDispatchTypedOp_TruncatedFrame_ReturnsNil(t *testing.T) {
 // requestID, body, and OpContext (and that the body slice is a copy, not
 // an alias of the inbound buffer).
 type fakeCellOpRouter struct {
-	called   bool
-	reqType  reflect.Type
-	resTID   uint32
-	reqID    uint64
-	body     []byte
-	handler  any
-	ctx      *ops.OpContext
-	resp     []byte // returned synchronously
+	called  bool
+	reqType reflect.Type
+	resTID  uint32
+	reqID   uint64
+	body    []byte
+	handler any
+	ctx     *ops.OpContext
+	resp    []byte // returned synchronously
 }
 
 func (f *fakeCellOpRouter) DispatchCellRoutedOp(
@@ -284,7 +350,7 @@ func TestDispatchCellRoutedOp_NoActiveSession(t *testing.T) {
 		t.Errorf("typeID = %#x, want OperationError %#x", gotTypeID, wantTypeID)
 	}
 	var opErr mmokit.OperationError
-	pkguniverse.ReflectUnmarshal(gotBody, &opErr)
+	mustUnmarshal(t, gotBody, &opErr)
 	if opErr.Code != mmokit.OpErrorHandlerFailed {
 		t.Errorf("code = %d, want OpErrorHandlerFailed", opErr.Code)
 	}

@@ -21,6 +21,15 @@ func mustMarshal(tb testing.TB, ptr any) []byte {
 	return data
 }
 
+// mustUnmarshal is its decode-side mirror; the decoder bounds guards are
+// likewise asserted directly in the in-package reflect_marshal_bounds_test.go.
+func mustUnmarshal(tb testing.TB, data []byte, ptr any) {
+	tb.Helper()
+	if err := pkguniverse.ReflectUnmarshal(data, ptr); err != nil {
+		tb.Fatalf("ReflectUnmarshal(%T): %v", ptr, err)
+	}
+}
+
 // evDispatchInput is the test message routed through the inbound typed-event
 // dispatcher. Two int32 fields → 8-byte body via the reflection codec.
 type evDispatchInput struct {

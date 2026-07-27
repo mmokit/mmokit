@@ -14,10 +14,10 @@ import (
 // (populated by mmokit.HandleClient) via the ClientInputHooks indirection;
 // if registered, the body is decoded via the reflection codec and routed to
 // the matching handler through stage.Dispatcher().Invoke. If the typeID is
-// unknown, the entry is logged and skipped — a single bad entry doesn't
-// abort the rest of the payload. A truncated body (declared body_len
-// exceeds remaining bytes) is logged and stops parsing for the rest of the
-// payload, since the stream alignment can no longer be trusted.
+// unknown, or the body fails to decode, the entry is logged and skipped — a
+// single bad entry doesn't abort the rest of the payload. A truncated body
+// (declared body_len exceeds remaining bytes) is logged and stops parsing for
+// the rest of the payload, since the stream alignment can no longer be trusted.
 //
 // playerNetID is the NetID of the player entity associated with the
 // connection; resolved upstream by the caller.
@@ -72,7 +72,19 @@ func DispatchInboundEventFrame(stage *Stage, playerNetID uint32, payload []byte)
 			continue
 		}
 		msgPtr := reflect.New(t)
-		ReflectUnmarshalOnStage(stage, body, msgPtr.Interface())
+		if err := ReflectUnmarshalOnStage(stage, body, msgPtr.Interface()); err != nil {
+			// Skip the entry but keep walking: bodyLen was honored above, so
+			// the stream is still aligned even though this body is not a
+			// well-formed t. Invoking on a partial decode would hand the
+			// handler a message whose refused fields look like deliberate
+			// zeros.
+			if stage.eng != nil {
+				stage.eng.Log.Log(CatClientInput,
+					"[%s] DispatchInboundEventFrame: dropping typeID %#x (%s): %v",
+					stage.cellID, typeID, t.String(), err)
+			}
+			continue
+		}
 		stage.Dispatcher().Invoke(playerNetID, msgPtr.Interface())
 	}
 }

@@ -198,7 +198,11 @@ func FuzzReflectUnmarshal(f *testing.F) {
 			return
 		}
 		shape := reflectFuzzShapes[int(data[0])%len(reflectFuzzShapes)]
-		ReflectUnmarshal(data[1:], reflect.New(shape).Interface())
+		// The error is deliberately discarded: refusing arbitrary bytes is the
+		// expected outcome for nearly every input, and this target asserts that
+		// the decoder REPORTS rather than panics or over-allocates. Rejection
+		// behaviour is pinned by the bounds table, not here.
+		_ = ReflectUnmarshal(data[1:], reflect.New(shape).Interface())
 	})
 }
 

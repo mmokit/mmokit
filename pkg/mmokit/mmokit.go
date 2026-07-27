@@ -406,6 +406,12 @@ type ReplicationRegistry = universe.ReplicationRegistry
 
 // ComponentReplicator handles one component type's replication: Scan serializes
 // from a local entity, Apply updates an existing replica, Add attaches to a new replica.
+//
+// Apply and Add return an error. A hand-written replicator must report a body it
+// could not decode instead of writing a partial component — the framework skips
+// that one component and keeps the entity, because failing the surrounding
+// cross-cell transfer would delete an entity the source has already handed off.
+// RegisterComponent[T] builds all three closures for you and is the normal path.
 type ComponentReplicator = universe.ComponentReplicator
 
 // EntityKindDef describes an entity kind's components for transfer, client

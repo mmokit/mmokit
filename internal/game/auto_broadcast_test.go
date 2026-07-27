@@ -49,7 +49,9 @@ func TestAutoBroadcast_SameCell_PostHandler(t *testing.T) {
 
 	// Decode the body back and confirm post-handler state (Dealt populated).
 	var decoded Damage
-	pkguniverse.ReflectUnmarshalOnStage(gw.stage, e.Body, &decoded)
+	if err := pkguniverse.ReflectUnmarshalOnStage(gw.stage, e.Body, &decoded); err != nil {
+		t.Fatalf("ReflectUnmarshalOnStage: %v", err)
+	}
 	if decoded.Dealt <= 0 {
 		t.Errorf("Dealt = %v, want >0 (handler should have populated it before broadcast push)", decoded.Dealt)
 	}

@@ -430,13 +430,20 @@ func registerServiceBuiltins(reg *cmdsys.Registry, coord *Process) error {
 					Message string
 				}
 				var opErr opErrShape
-				ReflectUnmarshal(resBody, &opErr)
+				if err := ReflectUnmarshal(resBody, &opErr); err != nil {
+					// The operator asked what went wrong; reporting a
+					// half-decoded code and an empty message would answer with
+					// a different lie than the one they hit.
+					return nil, fmt.Errorf("decode OperationError body: %w", err)
+				}
 				fmt.Fprintf(&sb, "OperationError: code=%d %s\n", opErr.Code, opErr.Message)
 				return serviceCallResult{Output: sb.String()}, nil
 			}
 
 			resPtr := reflect.New(e.ResponseType)
-			ReflectUnmarshal(resBody, resPtr.Interface())
+			if err := ReflectUnmarshal(resBody, resPtr.Interface()); err != nil {
+				return nil, fmt.Errorf("decode %s response: %w", e.ResponseType.String(), err)
+			}
 			pretty, err := json.MarshalIndent(resPtr.Interface(), "  ", "  ")
 			if err != nil {
 				return nil, fmt.Errorf("render response JSON: %w", err)

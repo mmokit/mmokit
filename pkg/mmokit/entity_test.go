@@ -106,7 +106,9 @@ func TestEntity_ReflectRoundtrip(t *testing.T) {
 	}
 
 	var out DamageMsg
-	pkguniverse.ReflectUnmarshalOnStage(stage, body, &out)
+	if err := pkguniverse.ReflectUnmarshalOnStage(stage, body, &out); err != nil {
+		t.Fatalf("ReflectUnmarshalOnStage: %v", err)
+	}
 
 	if out.Amount != 25.0 || out.Slot != 3 {
 		t.Fatalf("primitives: got amount=%v slot=%v", out.Amount, out.Slot)

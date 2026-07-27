@@ -24,7 +24,9 @@ func TestEncodeDecodeTypedMessage(t *testing.T) {
 		t.Fatalf("type name = %q, want damageWire", typeName)
 	}
 	out := damageWire{}
-	pkguniverse.DecodeTypedMessageOnStage(nil, payload, &out)
+	if err := pkguniverse.DecodeTypedMessageOnStage(nil, payload, &out); err != nil {
+		t.Fatalf("DecodeTypedMessageOnStage: %v", err)
+	}
 	if !reflect.DeepEqual(src, out) {
 		t.Fatalf("roundtrip:\n got %+v\nwant %+v", out, src)
 	}

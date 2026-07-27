@@ -167,23 +167,21 @@ func ReflectMarshal(ptr any) ([]byte, error) {
 // types whose decode is stage-dependent (e.g. mmokit.Entity, which resolves
 // its local ECS handle via the stage's NetID index).
 //
+// A non-nil error means the checked decoder refused the body: a read past the
+// end, a length prefix over a configured ceiling, or an allocation over the
+// budget. The destination is then PARTIALLY written — fields decoded before the
+// failing one hold their decoded values and the rest are zero — so every caller
+// must treat an error as "drop this message", never as "use what arrived".
+// Ignoring the error dispatches a zero-valued request to a handler, which is a
+// worse failure than the panic this decoder replaced.
+//
 // TOLERATES trailing bytes: a body longer than the struct decodes the struct
 // and discards the surplus. That asymmetry with ReflectUnmarshalStrict is
 // deliberate — mesh transfer blobs and border component blobs are appended to
 // today, and UnmarshalTransferFrame does not reject trailing data either.
-//
-// TODO(CE-002 unit 9): this returns nothing, so a rejected body is counted and
-// logged but not reported to the caller. Widening the signature touches 19
-// non-test call sites across 9 files and is unit 9's work; until then the
-// decoder is CHECKED (it can no longer panic or over-allocate) but not
-// ENFORCED (a caller cannot tell a partial decode from a complete one).
-func ReflectUnmarshalOnStage(stage *Stage, data []byte, ptr any) {
-	if _, err := decodeStruct(stage, data, ptr, pkgnet.DefaultWireLimits()); err != nil {
-		// CatNetConn: the decoder's pre-authentication surface is the client
-		// connection, which is the category an operator investigating a
-		// rejection storm already has enabled.
-		NoteDecodeDrop(CatNetConn, "%v", err)
-	}
+func ReflectUnmarshalOnStage(stage *Stage, data []byte, ptr any) error {
+	_, err := decodeStruct(stage, data, ptr, pkgnet.DefaultWireLimits())
+	return err
 }
 
 // ReflectUnmarshal deserializes binary data into a struct pointer.
@@ -191,9 +189,9 @@ func ReflectUnmarshalOnStage(stage *Stage, data []byte, ptr any) {
 //
 // Preserves the no-stage call signature for callers that don't need stage
 // context (the existing transfer codec). Equivalent to
-// ReflectUnmarshalOnStage(nil, data, ptr).
-func ReflectUnmarshal(data []byte, ptr any) {
-	ReflectUnmarshalOnStage(nil, data, ptr)
+// ReflectUnmarshalOnStage(nil, data, ptr), including its error contract.
+func ReflectUnmarshal(data []byte, ptr any) error {
+	return ReflectUnmarshalOnStage(nil, data, ptr)
 }
 
 // ReflectUnmarshalStrict decodes data into the struct ptr under lim and, unlike
@@ -302,10 +300,13 @@ func NoteMarshalDrop(cat string, format string, args ...any) {
 func MarshalDrops() uint64 { return marshalDrops.total() }
 
 // NoteDecodeDrop is the decode-side counterpart: a body the checked decoder
-// refused, from a call site that cannot report the error onward. Today that is
-// only ReflectUnmarshalOnStage, whose signature stays void until unit 9 widens
-// the 19 call sites; keeping the counter separate from MarshalDrops is what
-// lets an operator tell "we are emitting garbage" from "we are being fed it".
+// refused, from a call site that cannot report the error onward. Since unit 9
+// widened ReflectUnmarshalOnStage those sites are the ones that deliberately
+// swallow the error as policy rather than for lack of a channel — chiefly
+// noteComponentDecodeDrop, where skipping one component is the correct outcome
+// and failing the surrounding transfer would be entity loss. Keeping the
+// counter separate from MarshalDrops is what lets an operator tell "we are
+// emitting garbage" from "we are being fed it".
 func NoteDecodeDrop(cat string, format string, args ...any) {
 	decodeDrops.note(cat, format, args...)
 }

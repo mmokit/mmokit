@@ -76,38 +76,56 @@ func (b *Bot) decodeTypedEventFrame(payload []byte) {
 // dispatchTypedEvent decodes the body for known typeIDs. Unknown
 // typeIDs are silently dropped — the bot is a partial client and
 // only consumes events it acts on.
+//
+// A body that fails to decode is logged and dropped rather than acted on: a
+// partial decode of PlayerSpawned would adopt entity ID 0 as the bot's own and
+// a partial WorldDelta would advance the baseline decoder past a frame it never
+// really read.
+//
+// This carried a recover() until CE-002 unit 9. It existed for the reflection
+// decoder, which could not report a malformed body any other way; now that it
+// can, a panic reaching here would be a genuine bug in the bot's own handlers
+// and swallowing it would hide a load-test failure rather than contain one.
 func (b *Bot) dispatchTypedEvent(typeID uint32, body []byte) {
-	defer func() {
-		if r := recover(); r != nil {
-			log.Printf("[bot:%s] event handler panic typeID=%#x: %v", b.name, typeID, r)
+	decode := func(kind string, ptr any) bool {
+		if err := pkguniverse.ReflectUnmarshal(body, ptr); err != nil {
+			log.Printf("[bot:%s] %s decode failed typeID=%#x bodyLen=%d: %v",
+				b.name, kind, typeID, len(body), err)
+			return false
 		}
-	}()
+		return true
+	}
 
 	switch typeID {
 	case tidWorldDelta:
 		var msg mmokit.WorldDelta
-		pkguniverse.ReflectUnmarshal(body, &msg)
-		b.applyWorldDelta(msg.Body, msg.StreamEpoch)
+		if decode("mmokit.WorldDelta", &msg) {
+			b.applyWorldDelta(msg.Body, msg.StreamEpoch)
+		}
 
 	case tidPlayerEntityAssigned:
 		var msg mmokit.PlayerEntityAssigned
-		pkguniverse.ReflectUnmarshal(body, &msg)
-		b.handleSpawned(msg.EntityNetID, "engine.PlayerEntityAssigned")
+		if decode("mmokit.PlayerEntityAssigned", &msg) {
+			b.handleSpawned(msg.EntityNetID, "engine.PlayerEntityAssigned")
+		}
 
 	case tidPlayerSpawned:
 		var msg game.PlayerSpawned
-		pkguniverse.ReflectUnmarshal(body, &msg)
-		b.handleSpawned(msg.YourEntityID, "game.PlayerSpawned")
+		if decode("game.PlayerSpawned", &msg) {
+			b.handleSpawned(msg.YourEntityID, "game.PlayerSpawned")
+		}
 
 	case tidPlayerDied:
 		var msg game.PlayerDied
-		pkguniverse.ReflectUnmarshal(body, &msg)
-		b.handleDied(msg.KillerID)
+		if decode("game.PlayerDied", &msg) {
+			b.handleDied(msg.KillerID)
+		}
 
 	case tidPlayerOwnState:
 		var msg game.PlayerOwnState
-		pkguniverse.ReflectUnmarshal(body, &msg)
-		b.handleOwnState(&msg)
+		if decode("game.PlayerOwnState", &msg) {
+			b.handleOwnState(&msg)
+		}
 
 	// Engine events the bot doesn't act on — drop silently to avoid
 	// noisy "unknown typeID" logs in normal operation.

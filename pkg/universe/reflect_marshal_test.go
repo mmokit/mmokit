@@ -22,6 +22,17 @@ func mustMarshal(tb testing.TB, ptr any) []byte {
 	return data
 }
 
+// mustUnmarshal is its decode-side mirror, for round-trips where a rejection
+// would be the bug under test rather than the behaviour being asserted.
+// Decoder-guard rejections are asserted explicitly in
+// reflect_marshal_bounds_test.go via checkedDecode.
+func mustUnmarshal(tb testing.TB, data []byte, ptr any) {
+	tb.Helper()
+	if err := ReflectUnmarshal(data, ptr); err != nil {
+		tb.Fatalf("ReflectUnmarshal(%T): %v", ptr, err)
+	}
+}
+
 func TestReflectMarshal_SimpleStruct(t *testing.T) {
 	type Health struct {
 		Current float32
@@ -30,7 +41,7 @@ func TestReflectMarshal_SimpleStruct(t *testing.T) {
 	h := Health{Current: 75.5, Max: 100}
 	data := mustMarshal(t, &h)
 	var out Health
-	ReflectUnmarshal(data, &out)
+	mustUnmarshal(t, data, &out)
 	if out != h {
 		t.Fatalf("got %+v, want %+v", out, h)
 	}
@@ -48,7 +59,7 @@ func TestReflectMarshal_NestedStruct(t *testing.T) {
 	o := Outer{Pos: Inner{X: 1.5, Y: -3.25}, Scale: 99.99}
 	data := mustMarshal(t, &o)
 	var out Outer
-	ReflectUnmarshal(data, &out)
+	mustUnmarshal(t, data, &out)
 	if out != o {
 		t.Fatalf("got %+v, want %+v", out, o)
 	}
@@ -66,7 +77,7 @@ func TestReflectMarshal_BoolFields(t *testing.T) {
 		t.Fatalf("expected 3 bytes, got %d", len(data))
 	}
 	var out Flags
-	ReflectUnmarshal(data, &out)
+	mustUnmarshal(t, data, &out)
 	if out != f {
 		t.Fatalf("got %+v, want %+v", out, f)
 	}
@@ -81,7 +92,7 @@ func TestReflectMarshal_StringFields(t *testing.T) {
 	n := Named{Name: "hello", Level: 42, Tag: "world"}
 	data := mustMarshal(t, &n)
 	var out Named
-	ReflectUnmarshal(data, &out)
+	mustUnmarshal(t, data, &out)
 	if out != n {
 		t.Fatalf("got %+v, want %+v", out, n)
 	}
@@ -98,7 +109,7 @@ func TestReflectMarshal_Uint8Fields(t *testing.T) {
 		t.Fatalf("expected 2 bytes, got %d", len(data))
 	}
 	var out Slot
-	ReflectUnmarshal(data, &out)
+	mustUnmarshal(t, data, &out)
 	if out != s {
 		t.Fatalf("got %+v, want %+v", out, s)
 	}
@@ -114,7 +125,7 @@ func TestReflectMarshal_FixedArray(t *testing.T) {
 		t.Fatalf("expected 16 bytes, got %d", len(data))
 	}
 	var out Color
-	ReflectUnmarshal(data, &out)
+	mustUnmarshal(t, data, &out)
 	if out != c {
 		t.Fatalf("got %+v, want %+v", out, c)
 	}
@@ -132,7 +143,7 @@ func TestReflectMarshal_EntityFieldSkipped(t *testing.T) {
 		t.Fatalf("expected 4 bytes (entity skipped), got %d", len(data))
 	}
 	var out Targeting
-	ReflectUnmarshal(data, &out)
+	mustUnmarshal(t, data, &out)
 	if out.Range != 500.0 {
 		t.Fatalf("Range: got %f, want 500", out.Range)
 	}
@@ -164,7 +175,7 @@ func TestReflectMarshal_IntTypes(t *testing.T) {
 	a := AllInts{I8: -1, I16: -1000, I32: -100000, I64: -9999999999}
 	data := mustMarshal(t, &a)
 	var out AllInts
-	ReflectUnmarshal(data, &out)
+	mustUnmarshal(t, data, &out)
 	if out != a {
 		t.Fatalf("got %+v, want %+v", out, a)
 	}
@@ -249,7 +260,7 @@ func TestReflectMarshal_SliceOfStructs(t *testing.T) {
 	}
 	data := mustMarshal(t, &b)
 	var out Bag
-	ReflectUnmarshal(data, &out)
+	mustUnmarshal(t, data, &out)
 	if out.Owner != b.Owner || len(out.Items) != len(b.Items) {
 		t.Fatalf("got %+v, want %+v", out, b)
 	}
@@ -267,7 +278,7 @@ func TestReflectMarshal_SliceOfPrimitives(t *testing.T) {
 	b := Bag{IDs: []uint32{42, 7, 1024}}
 	data := mustMarshal(t, &b)
 	var out Bag
-	ReflectUnmarshal(data, &out)
+	mustUnmarshal(t, data, &out)
 	if len(out.IDs) != len(b.IDs) {
 		t.Fatalf("len: got %d, want %d", len(out.IDs), len(b.IDs))
 	}
@@ -288,7 +299,7 @@ func TestReflectMarshal_EmptySlice(t *testing.T) {
 		t.Fatalf("expected 2 bytes (u16 length=0), got %d", len(data))
 	}
 	var out Bag
-	ReflectUnmarshal(data, &out)
+	mustUnmarshal(t, data, &out)
 	if len(out.Items) != 0 {
 		t.Fatalf("expected empty, got %v", out.Items)
 	}
@@ -326,7 +337,7 @@ func TestReflectMarshal_BytesFastPath(t *testing.T) {
 		}
 	}
 	var out Frame
-	ReflectUnmarshal(data, &out)
+	mustUnmarshal(t, data, &out)
 	if len(out.Body) != len(body) {
 		t.Fatalf("decoded body len = %d, want %d", len(out.Body), len(body))
 	}
@@ -349,7 +360,7 @@ func TestReflectMarshal_BytesFastPath_Empty(t *testing.T) {
 		t.Fatalf("expected 4 bytes (u32 length=0), got %d", len(data))
 	}
 	var out Frame
-	ReflectUnmarshal(data, &out)
+	mustUnmarshal(t, data, &out)
 	if len(out.Body) != 0 {
 		t.Fatalf("expected empty, got %v", out.Body)
 	}
@@ -372,7 +383,7 @@ func TestReflectMarshal_BytesFastPath_LargePayload(t *testing.T) {
 		t.Fatalf("expected %d bytes, got %d", 4+len(body), len(data))
 	}
 	var out Frame
-	ReflectUnmarshal(data, &out)
+	mustUnmarshal(t, data, &out)
 	if len(out.Body) != len(body) {
 		t.Fatalf("decoded body len = %d, want %d", len(out.Body), len(body))
 	}

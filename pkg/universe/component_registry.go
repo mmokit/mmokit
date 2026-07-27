@@ -24,8 +24,8 @@ type ErasedOpts struct {
 	Marshal       func(p unsafe.Pointer) []byte
 	UnmarshalInto func(b []byte, p unsafe.Pointer)
 	PreMarshal    func(p unsafe.Pointer)
-	Binding       any  // system.ComponentBinding — typed `any` to avoid an import cycle
-	BindingFn     any  // func(*ecs.World) system.ComponentBinding — typed `any` to avoid an import cycle
+	Binding       any // system.ComponentBinding — typed `any` to avoid an import cycle
+	BindingFn     any // func(*ecs.World) system.ComponentBinding — typed `any` to avoid an import cycle
 	LocalOnly     bool
 }
 
@@ -63,9 +63,9 @@ func WithPreMarshal[T any](fn func(*T)) ComponentOption {
 // must not overwrite the authoritative normalized values during handoff.
 // RegisterComponent detects membership here and sets IsTransferCore = true.
 var transferCoreTypes = map[reflect.Type]bool{
-	reflect.TypeFor[component.Position](): true,
-	reflect.TypeFor[component.Velocity](): true,
-	reflect.TypeFor[component.Rotation](): true,
+	reflect.TypeFor[component.Position]():  true,
+	reflect.TypeFor[component.Velocity]():  true,
+	reflect.TypeFor[component.Rotation]():  true,
 	reflect.TypeFor[component.CellCoord](): true,
 }
 
@@ -98,6 +98,34 @@ func reflectMarshalOrDrop(t reflect.Type, ptr any) []byte {
 		return nil
 	}
 	return b
+}
+
+// noteComponentDecodeDrop records a replicated component blob the checked
+// decoder refused. It is the one place the receive-side failure policy is
+// written down; the three consumers of ComponentReplicator.Apply/Add
+// (applyEntityComponents, SpawnFromTransferCore, drainPendingPromotes) all
+// route here and all keep going.
+//
+// The policy is per-COMPONENT, not per-entity. A malformed blob skips that
+// component and the entity survives with everything else. Aborting the
+// surrounding cross-cell transfer instead would turn one bad component into an
+// entity-LOSS bug on the handoff path: the source has already demoted, so an
+// entity the destination refuses to spawn exists nowhere in the cluster.
+//
+// State the trade plainly, because it is an authority-boundary decision rather
+// than an oversight (docs/roadmap.md §6.8.4): a transfer can now COMPLETE with
+// an entity carrying a stale, absent, or partially-updated copy of one
+// component — state divergence between the two cells — instead of failing
+// cleanly. Divergence that the next clean border scan repairs is the cheaper
+// failure; entity loss is permanent. This mirrors the send-side policy in
+// reflectMarshalOrDrop above.
+//
+// CatMeshCell because the blob arrives on the cell's mesh ingress, which is the
+// category an operator investigating divergence between two cells already has
+// enabled. The drop is counted (DecodeDrops) and throttled, never silent.
+func noteComponentDecodeDrop(where string, id ComponentID, err error) {
+	NoteDecodeDrop(CatMeshCell,
+		"replication: %s skipped component %d — %v", where, id, err)
 }
 
 // RegisterComponent registers an ECS component for automatic replication and
@@ -146,34 +174,39 @@ func RegisterComponent[T any](reg *ReplicationRegistry, m *ecs.Map1[T], opts ...
 			}
 			return reflectMarshalOrDrop(reflect.TypeFor[T](), c)
 		},
-		Apply: func(entity ecs.Entity, data []byte) {
+		Apply: func(entity ecs.Entity, data []byte) error {
 			if !m.HasAll(entity) {
-				return
+				return nil
 			}
 			if o.UnmarshalInto != nil {
 				o.UnmarshalInto(data, unsafe.Pointer(m.Get(entity)))
-				return
+				return nil
 			}
-			ReflectUnmarshal(data, m.Get(entity))
+			return ReflectUnmarshal(data, m.Get(entity))
 		},
-		Add: func(entity ecs.Entity, data []byte) {
+		Add: func(entity ecs.Entity, data []byte) error {
 			if m.HasAll(entity) {
 				// Entity already has this component (e.g. from CreateReplica
 				// or SpawnFromTransferCore) — update in place.
 				if o.UnmarshalInto != nil {
 					o.UnmarshalInto(data, unsafe.Pointer(m.Get(entity)))
-					return
+					return nil
 				}
-				ReflectUnmarshal(data, m.Get(entity))
-				return
+				return ReflectUnmarshal(data, m.Get(entity))
 			}
 			var comp T
 			if o.UnmarshalInto != nil {
 				o.UnmarshalInto(data, unsafe.Pointer(&comp))
-			} else {
-				ReflectUnmarshal(data, &comp)
+			} else if err := ReflectUnmarshal(data, &comp); err != nil {
+				// Do not attach a half-decoded component to a fresh replica.
+				// Leaving it absent lets EnsureEntityKindComponents zero-fill
+				// a kind-registered component; attaching one whose trailing
+				// fields are zero and whose leading fields came from a refused
+				// body is indistinguishable from real data downstream.
+				return err
 			}
 			m.Add(entity, &comp)
+			return nil
 		},
 	})
 }
@@ -236,27 +269,33 @@ func RegisterComponentByID(
 			}
 			return reflectMarshalOrDrop(t, reflect.NewAt(t, ptr).Interface())
 		},
-		Apply: func(entity ecs.Entity, data []byte) {
+		Apply: func(entity ecs.Entity, data []byte) error {
 			if !u.Has(entity, id) {
-				return
+				return nil
 			}
 			ptr := u.Get(entity, id)
 			if o.UnmarshalInto != nil {
 				o.UnmarshalInto(data, ptr)
-				return
+				return nil
 			}
-			ReflectUnmarshal(data, reflect.NewAt(t, ptr).Interface())
+			return ReflectUnmarshal(data, reflect.NewAt(t, ptr).Interface())
 		},
-		Add: func(entity ecs.Entity, data []byte) {
+		Add: func(entity ecs.Entity, data []byte) error {
+			// Unlike RegisterComponent's typed Add there is no off-entity
+			// scratch to decode into — the type-erased path can only write
+			// through the world's own storage — so a refused blob leaves the
+			// component attached and zero-valued (fresh) or partially updated
+			// (pre-existing). Both are the "stale or absent" side of the trade
+			// noteComponentDecodeDrop documents.
 			if !u.Has(entity, id) {
 				u.Add(entity, id) // ark zero-initializes
 			}
 			ptr := u.Get(entity, id)
 			if o.UnmarshalInto != nil {
 				o.UnmarshalInto(data, ptr)
-				return
+				return nil
 			}
-			ReflectUnmarshal(data, reflect.NewAt(t, ptr).Interface())
+			return ReflectUnmarshal(data, reflect.NewAt(t, ptr).Interface())
 		},
 	})
 }

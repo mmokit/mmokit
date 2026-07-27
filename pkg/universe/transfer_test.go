@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/google/uuid"
+	"github.com/mlange-42/ark/ecs"
 
 	"github.com/zenion/mmoserver/pkg/component"
 )
@@ -221,5 +222,103 @@ func TestTransferFrame_EpochSurvivesSpawn(t *testing.T) {
 	got := base.NetworkIDMap().Get(ent).Epoch
 	if got != 9 {
 		t.Errorf("spawned entity NetworkID.Epoch = %d, want 9 (epoch lost during transfer)", got)
+	}
+}
+
+// transferGoodComponent and transferBadComponent are the two replicated
+// components the per-component failure-policy test registers. Separate types so
+// each carries its own auto-assigned ComponentID and the assertion about one
+// cannot be satisfied by the other.
+type (
+	transferGoodComponent struct{ Health float32 }
+	transferBadComponent  struct{ Label string }
+)
+
+// TestSpawnFromTransfer_BadComponentSkipsComponentNotEntity pins the
+// authority-boundary decision documented on noteComponentDecodeDrop: a
+// component blob the checked decoder refuses skips THAT COMPONENT, and the
+// transferred entity still arrives.
+//
+// The failure this forbids is entity loss. By the time a transfer blob reaches
+// the destination the source cell has already demoted the entity, so a
+// destination that refuses to spawn deletes it from the cluster outright — one
+// malformed component would become a vanished player ship. The trade being
+// bought is state divergence instead: the entity lands carrying a stale or
+// absent copy of the offending component, which the next clean border scan
+// repairs.
+//
+// The malformed component is ordered FIRST so the test also proves the apply
+// walk continues past a rejection rather than stopping at it.
+func TestSpawnFromTransfer_BadComponentSkipsComponentNotEntity(t *testing.T) {
+	base := newTestWorldBase(t, CellID{X: 0, Y: 0})
+
+	w := base.ECSWorld()
+	badMap := ecs.NewMap1[transferBadComponent](w)
+	goodMap := ecs.NewMap1[transferGoodComponent](w)
+	reg := base.ReplicationRegistry()
+	RegisterComponent(reg, badMap)  // auto-assigned ID 1
+	RegisterComponent(reg, goodMap) // auto-assigned ID 2
+	badID := reg.All()[0].ID
+	goodID := reg.All()[1].ID
+
+	goodBlob, err := ReflectMarshal(&transferGoodComponent{Health: 88})
+	if err != nil {
+		t.Fatalf("ReflectMarshal(good): %v", err)
+	}
+
+	frame := &TransferFrame{
+		NetworkID:  77,
+		Epoch:      3,
+		EntityType: 1,
+		PosX:       10, PosY: 20,
+		Collider: component.Collider{Radius: 5},
+		Components: []ComponentSlice{
+			// A u16 string prefix declaring 65535 bytes with none following.
+			{ID: badID, Data: []byte{0xFF, 0xFF}},
+			{ID: goodID, Data: goodBlob},
+		},
+	}
+	blob, err := MarshalTransferFrame(frame)
+	if err != nil {
+		t.Fatalf("MarshalTransferFrame: %v", err)
+	}
+
+	dropsBefore := DecodeDrops()
+	ent, got, err := base.SpawnFromTransferCore(blob, PresenceLive)
+	if err != nil {
+		t.Fatalf("SpawnFromTransferCore refused the whole frame over one bad component: %v "+
+			"(the source has already demoted this entity — failing here loses it)", err)
+	}
+	if !base.eng.ECS.Alive(ent) {
+		t.Fatal("transferred entity is not alive after a malformed component blob")
+	}
+	if got.NetworkID != 77 {
+		t.Errorf("frame.NetworkID = %d, want 77", got.NetworkID)
+	}
+	if nid := base.NetworkIDMap().Get(ent); nid.ID != 77 || nid.Epoch != 3 {
+		t.Errorf("spawned NetworkID = %+v, want {ID:77 Epoch:3}", *nid)
+	}
+
+	// The component ordered after the rejected one must still have been
+	// applied — a rejection skips one component, it does not stop the walk.
+	if !goodMap.HasAll(ent) {
+		t.Fatal("component queued behind the malformed one was never applied")
+	}
+	if h := goodMap.Get(ent).Health; h != 88 {
+		t.Errorf("good component Health = %v, want 88", h)
+	}
+
+	// The refused component is absent rather than half-written: RegisterComponent's
+	// Add decodes into a scratch value and only attaches it on success.
+	if badMap.HasAll(ent) {
+		t.Errorf("refused component was attached anyway as %+v; a partial decode is "+
+			"indistinguishable from real data downstream", *badMap.Get(ent))
+	}
+
+	// Skipping must be visible. NoteDecodeDrop counts it whether or not the
+	// mesh:cell log category is enabled, because silent state loss between two
+	// cells is the failure mode this whole path exists to make observable.
+	if DecodeDrops() == dropsBefore {
+		t.Error("malformed component was skipped without being counted")
 	}
 }

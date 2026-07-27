@@ -295,15 +295,20 @@ type stringPayload struct{ Label string }
 // TestCellProcessMessage_RecoveryIsNotSilent. Both properties this test was
 // written for — the drain continues, and the malformed body is visible rather
 // than silent — are asserted below; only the mechanism changed.
+//
+// Unit 9 moved WHERE the drop is counted: the replicator's Apply now returns
+// the error and applyEntityComponents counts it via noteComponentDecodeDrop, so
+// DecodeDrops still moves but now proves the failure travelled from the decoder
+// to the component-skip policy rather than being swallowed at the wrapper.
 func TestCellProcessMessage_MalformedFrame_LoopSurvives(t *testing.T) {
 	cell := newTestCell("victim", CellID{X: 0, Y: 0})
 
 	// Register a replicated component whose Apply decodes a string field.
 	cell.Stage.ReplicationRegistry().Register(ComponentReplicator{
 		Scan: func(ecs.Entity) []byte { return nil },
-		Apply: func(_ ecs.Entity, data []byte) {
+		Apply: func(_ ecs.Entity, data []byte) error {
 			var v stringPayload
-			ReflectUnmarshal(data, &v)
+			return ReflectUnmarshal(data, &v)
 		},
 	})
 	compID := cell.Stage.ReplicationRegistry().All()[0].ID
