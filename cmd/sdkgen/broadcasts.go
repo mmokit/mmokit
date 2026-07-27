@@ -192,7 +192,7 @@ func broadcastFieldTSInit(f BroadcastFieldSchema) string {
 
 // writeBroadcastFieldDecode emits decode logic that consumes bytes for one
 // field and assigns them to the target lvalue (e.g. `m.killerID` or `item.id`).
-// Format matches reflect_marshal.unmarshalValueOnStage exactly.
+// Format matches reflect_marshal's decodeState.value exactly.
 func writeBroadcastFieldDecode(b *strings.Builder, target string, f BroadcastFieldSchema) {
 	switch f.Encoding {
 	case "f32":

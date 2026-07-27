@@ -71,9 +71,22 @@ const (
 	defaultMaxOpQueueDepth    = 64
 	defaultMaxFramesPerDrain  = 64
 
-	defaultMaxStringBytes     = 8192
-	defaultMaxSliceElems      = 4096
-	defaultMaxBytesFieldLen   = 65536
+	defaultMaxStringBytes = 8192
+	defaultMaxSliceElems  = 4096
+
+	// defaultMaxBytesFieldLen is deliberately far above DefaultMaxFrameBytes,
+	// so on a client surface it can never bind: the frame limit and the
+	// payload-derived "the bytes must actually be present" check both bound a
+	// []byte field long before this does. What it exists for is the mesh and
+	// client-side decodes, where bodies are not frame-limited — and the codec
+	// legitimately produces large ones. pkg/universe/reflect_marshal.go's
+	// valueSize records why the arm carries a u32 prefix at all ("typed binary
+	// payloads (e.g. WorldDelta body) routinely exceed 65535 bytes for
+	// stress-test densities"), and TestReflectMarshal_BytesFastPath_LargePayload
+	// round-trips 100 kB. A ceiling under that would reject the codec's own
+	// output.
+	defaultMaxBytesFieldLen = 1 << 20
+
 	defaultMaxDepth           = 16
 	defaultMaxTotalAllocBytes = 1 << 20
 )

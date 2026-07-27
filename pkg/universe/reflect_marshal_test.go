@@ -6,6 +6,8 @@ import (
 	"testing"
 
 	"github.com/mlange-42/ark/ecs"
+
+	pkgnet "github.com/zenion/mmoserver/pkg/net"
 )
 
 // mustMarshal is the test-side form of ReflectMarshal for values that are
@@ -414,6 +416,14 @@ func TestReflectMarshal_OversizedStringRejected(t *testing.T) {
 
 // TestReflectMarshal_MaxLengthStringAccepted pins the boundary: exactly
 // maxWireStringLen bytes still fits the u16 prefix and must encode.
+//
+// It also records the deliberate split between the two ceilings, which is the
+// one place they visibly disagree. maxWireStringLen is a WIRE-FORMAT limit —
+// the widest value a u16 prefix can describe, frozen across three languages.
+// WireLimits.MaxStringBytes is POLICY on a body someone else supplied, and it
+// is set two orders of magnitude lower because no production string field comes
+// close. A value the encoder will emit is therefore not automatically a value
+// the decoder will accept under the default limits.
 func TestReflectMarshal_MaxLengthStringAccepted(t *testing.T) {
 	type Named struct {
 		Name string
@@ -423,8 +433,18 @@ func TestReflectMarshal_MaxLengthStringAccepted(t *testing.T) {
 	if len(data) != 2+maxWireStringLen {
 		t.Fatalf("encoded %d bytes, want %d", len(data), 2+maxWireStringLen)
 	}
+
+	lim := pkgnet.DefaultWireLimits()
+	if err := checkedDecode(&Named{}, data); err == nil {
+		t.Fatalf("default limits accepted a %d-byte string; MaxStringBytes (%d) is not being applied",
+			maxWireStringLen, lim.MaxStringBytes)
+	}
+
+	lim.MaxStringBytes = maxWireStringLen
 	var out Named
-	ReflectUnmarshal(data, &out)
+	if _, err := decodeStruct(nil, data, &out, lim); err != nil {
+		t.Fatalf("decode under a wire-width string limit: %v", err)
+	}
 	if len(out.Name) != maxWireStringLen {
 		t.Fatalf("decoded string of %d bytes, want %d", len(out.Name), maxWireStringLen)
 	}

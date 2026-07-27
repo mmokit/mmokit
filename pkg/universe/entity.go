@@ -160,9 +160,13 @@ func init() {
 			e := v.Interface().(Entity)
 			binary.LittleEndian.PutUint32(buf, e.NetID())
 		},
-		Decode: func(stage *Stage, data []byte, v reflect.Value) {
+		Decode: func(stage *Stage, data []byte, v reflect.Value) error {
+			if len(data) < 4 {
+				return fmt.Errorf("entity codec: need 4 bytes, got %d", len(data))
+			}
 			netID := binary.LittleEndian.Uint32(data)
 			v.Set(reflect.ValueOf(EntityByNetID(stage, netID)))
+			return nil
 		},
 	})
 }

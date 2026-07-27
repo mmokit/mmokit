@@ -52,12 +52,6 @@ func SplitTypedMessage(data []byte) (typeName string, payload []byte) {
 	return string(data[2 : 2+n]), data[2+n:]
 }
 
-// DecodeTypedMessage unmarshals payload bytes into ptr (pointer to struct).
-// Wraps ReflectUnmarshal for symmetry with EncodeTypedMessage.
-func DecodeTypedMessage(payload []byte, ptr any) {
-	ReflectUnmarshal(payload, ptr)
-}
-
 // DecodeTypedMessageOnStage unmarshals payload bytes into ptr (pointer to
 // struct), threading stage to any registered field codecs that need it
 // (notably mmokit.Entity, which resolves its local ECS handle via the

@@ -1,38 +1,33 @@
 package universe
 
-import "testing"
+import (
+	"reflect"
+	"strings"
+	"testing"
 
-// Bounds-regression table for unmarshalValueOnStage.
+	pkgnet "github.com/zenion/mmoserver/pkg/net"
+)
+
+// Bounds-regression table for the checked decoder.
 //
-// Every case here asserts what the decoder does TODAY: an unchecked read past
-// the end of the buffer, which panics. That is deliberate and it is what makes
-// this file safe to land before the checked decoder exists — it is green on
-// HEAD and it is green again once the decoder returns errors, never red in
-// between (docs/roadmap.md §6.8.4).
-//
-// The table is the inventory the checked decoder has to satisfy. When
-// decodeState lands (§6.8.3 unit 8) the ONLY edits needed are:
-//
-//   - wantTruncatedRead flips from "must panic" to "must return an error and
-//     leave the destination at its zero value";
-//   - the flipsTo column stops being documentation and starts being the
-//     criterion the case actually verifies.
-//
-// The rows themselves — the arm inventory and the exact truncations — do not
-// change, which is the point of writing them down now.
+// Written by CE-002 unit 6 asserting the panic the decoder produced on HEAD, so
+// that it was green before the fix and green after, never red in between
+// (docs/roadmap.md §6.8.4). Unit 8 flipped the single assertion function below:
+// the rows and their data are unchanged, and the `closes` column has stopped
+// being documentation and started naming the criterion each row verifies.
 type truncatedDecodeCase struct {
-	// name identifies the arm of unmarshalValueOnStage under test.
+	// name identifies the arm of decodeState.value under test.
 	name string
 	// newPtr returns a fresh destination. One field per case: a shared
-	// multi-field struct would let an earlier arm panic first and the row
+	// multi-field struct would let an earlier arm fail first and the row
 	// would prove nothing about the arm it names.
 	newPtr func() any
 	// data is one byte short of, or otherwise inconsistent with, what the arm
 	// reads.
 	data []byte
-	// flipsTo names the CE-002 acceptance criterion this row closes once the
-	// checked decoder lands. See docs/roadmap.md §6.3.
-	flipsTo string
+	// closes names the CE-002 acceptance criterion this row verifies.
+	// See docs/roadmap.md §6.3.
+	closes string
 }
 
 // One destination struct per decoder arm.
@@ -54,147 +49,156 @@ type (
 	truncCodec struct{ E Entity }
 )
 
-// wantTruncatedRead asserts the CURRENT contract: the arm reads past the end of
-// the buffer and panics with a runtime bounds error.
+// checkedDecode runs the decoder the tolerant public wrappers call, with the
+// default limits, and returns the error they swallow. Tests use it rather than
+// ReflectUnmarshalStrict so a row asserts the BOUNDS check specifically and not
+// the strict trailing-byte rule, which is a different criterion.
+func checkedDecode(ptr any, data []byte) error {
+	_, err := decodeStruct(nil, data, ptr, pkgnet.DefaultWireLimits())
+	return err
+}
+
+// wantTruncatedRead asserts the contract the checked decoder introduced: the
+// arm reports an error rather than reading past the end of the buffer, and the
+// destination field is left at its zero value.
 //
-// This is the single function unit 8 rewrites. Everything else in the file is
+// This is the single function unit 8 rewrote. Everything else in the file is
 // the fixture the rewritten assertion runs against.
 func wantTruncatedRead(t *testing.T, tc truncatedDecodeCase) {
 	t.Helper()
-	defer func() {
-		if r := recover(); r == nil {
-			t.Fatalf("%s: decoded %d bytes without panicking.\n"+
-				"If the checked decoder has landed this is the expected win — flip "+
-				"wantTruncatedRead to assert an error return (%s) rather than deleting the row.",
-				tc.name, len(tc.data), tc.flipsTo)
-		}
-	}()
-	ReflectUnmarshal(tc.data, tc.newPtr())
+	ptr := tc.newPtr()
+	err := checkedDecode(ptr, tc.data)
+	if err == nil {
+		t.Fatalf("%s: decoded %d bytes without an error; this row verifies %s",
+			tc.name, len(tc.data), tc.closes)
+	}
+	field := reflect.ValueOf(ptr).Elem().Field(0)
+	if !field.IsZero() {
+		t.Fatalf("%s: rejected with %v but left the destination at %#v; a refused body "+
+			"must not half-populate the struct's failing field", tc.name, err, field.Interface())
+	}
 }
 
 // TestReflectUnmarshal_Truncated pins the unchecked-read inventory: eleven
-// scalar arms, the two length-prefixed arms, the generic-slice arm, and the
-// delegation into a registered ReflectCodec.
-//
-// Named so unit 8 can find it: the checked decoder is not done until every row
-// here reports an error instead of a panic.
+// scalar arms, the two length-prefixed arms, and the generic-slice arm. The
+// registered-codec delegation moved to TestReflectCodec_ShortBuffer so the unit
+// that widened ReflectCodec.Decode owns the assertion it flipped.
 func TestReflectUnmarshal_Truncated(t *testing.T) {
 	cases := []truncatedDecodeCase{
 		// ── The eleven scalar arms ───────────────────────────────────────────
-		// Each indexes data[off] or slices data[off:] and hands the result to
+		// Each indexed data[off] or sliced data[off:] and handed the result to
 		// encoding/binary without ever comparing off against len(data). Each
 		// case supplies one byte fewer than the arm reads.
 		{
-			name:    "float32/3-of-4-bytes",
-			newPtr:  func() any { return &truncF32{} },
-			data:    []byte{0x00, 0x00, 0x80},
-			flipsTo: "criterion 2 (bounds check before every read)",
+			name:   "float32/3-of-4-bytes",
+			newPtr: func() any { return &truncF32{} },
+			data:   []byte{0x00, 0x00, 0x80},
+			closes: "criterion 2 (bounds check before every read)",
 		},
 		{
-			name:    "float64/7-of-8-bytes",
-			newPtr:  func() any { return &truncF64{} },
-			data:    []byte{0, 0, 0, 0, 0, 0, 0},
-			flipsTo: "criterion 2 (bounds check before every read)",
+			name:   "float64/7-of-8-bytes",
+			newPtr: func() any { return &truncF64{} },
+			data:   []byte{0, 0, 0, 0, 0, 0, 0},
+			closes: "criterion 2 (bounds check before every read)",
 		},
 		{
-			name:    "uint8/0-of-1-bytes",
-			newPtr:  func() any { return &truncU8{} },
-			data:    []byte{},
-			flipsTo: "criterion 2 (bounds check before every read)",
+			name:   "uint8/0-of-1-bytes",
+			newPtr: func() any { return &truncU8{} },
+			data:   []byte{},
+			closes: "criterion 2 (bounds check before every read)",
 		},
 		{
-			name:    "uint16/1-of-2-bytes",
-			newPtr:  func() any { return &truncU16{} },
-			data:    []byte{0x01},
-			flipsTo: "criterion 2 (bounds check before every read)",
+			name:   "uint16/1-of-2-bytes",
+			newPtr: func() any { return &truncU16{} },
+			data:   []byte{0x01},
+			closes: "criterion 2 (bounds check before every read)",
 		},
 		{
-			name:    "uint32/3-of-4-bytes",
-			newPtr:  func() any { return &truncU32{} },
-			data:    []byte{0x01, 0x02, 0x03},
-			flipsTo: "criterion 2 (bounds check before every read)",
+			name:   "uint32/3-of-4-bytes",
+			newPtr: func() any { return &truncU32{} },
+			data:   []byte{0x01, 0x02, 0x03},
+			closes: "criterion 2 (bounds check before every read)",
 		},
 		{
-			name:    "uint64/7-of-8-bytes",
-			newPtr:  func() any { return &truncU64{} },
-			data:    []byte{1, 2, 3, 4, 5, 6, 7},
-			flipsTo: "criterion 2 (bounds check before every read)",
+			name:   "uint64/7-of-8-bytes",
+			newPtr: func() any { return &truncU64{} },
+			data:   []byte{1, 2, 3, 4, 5, 6, 7},
+			closes: "criterion 2 (bounds check before every read)",
 		},
 		{
-			name:    "int8/0-of-1-bytes",
-			newPtr:  func() any { return &truncI8{} },
-			data:    []byte{},
-			flipsTo: "criterion 2 (bounds check before every read)",
+			name:   "int8/0-of-1-bytes",
+			newPtr: func() any { return &truncI8{} },
+			data:   []byte{},
+			closes: "criterion 2 (bounds check before every read)",
 		},
 		{
-			name:    "int16/1-of-2-bytes",
-			newPtr:  func() any { return &truncI16{} },
-			data:    []byte{0xFF},
-			flipsTo: "criterion 2 (bounds check before every read)",
+			name:   "int16/1-of-2-bytes",
+			newPtr: func() any { return &truncI16{} },
+			data:   []byte{0xFF},
+			closes: "criterion 2 (bounds check before every read)",
 		},
 		{
-			name:    "int32/3-of-4-bytes",
-			newPtr:  func() any { return &truncI32{} },
-			data:    []byte{0xFF, 0xFF, 0xFF},
-			flipsTo: "criterion 2 (bounds check before every read)",
+			name:   "int32/3-of-4-bytes",
+			newPtr: func() any { return &truncI32{} },
+			data:   []byte{0xFF, 0xFF, 0xFF},
+			closes: "criterion 2 (bounds check before every read)",
 		},
 		{
-			name:    "int64/7-of-8-bytes",
-			newPtr:  func() any { return &truncI64{} },
-			data:    []byte{0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF},
-			flipsTo: "criterion 2 (bounds check before every read)",
+			name:   "int64/7-of-8-bytes",
+			newPtr: func() any { return &truncI64{} },
+			data:   []byte{0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF},
+			closes: "criterion 2 (bounds check before every read)",
 		},
 		{
-			name:    "bool/0-of-1-bytes",
-			newPtr:  func() any { return &truncBool{} },
-			data:    []byte{},
-			flipsTo: "criterion 2 (bounds check before every read)",
+			name:   "bool/0-of-1-bytes",
+			newPtr: func() any { return &truncBool{} },
+			data:   []byte{},
+			closes: "criterion 2 (bounds check before every read)",
 		},
 
 		// ── The length-prefixed arms ─────────────────────────────────────────
 		// This is the CE-002 headline defect: the prefix is attacker-supplied
-		// and is trusted as both a bound and an allocation size.
+		// and was trusted as both a bound and an allocation size.
 		{
 			// [u16 len = 16][no bytes] -> data[2:18] on a two-byte buffer.
-			name:    "string/length-prefix-past-end",
-			newPtr:  func() any { return &truncStr{} },
-			data:    []byte{0x10, 0x00},
-			flipsTo: "criteria 2 and 3 (string length ceiling)",
+			name:   "string/length-prefix-past-end",
+			newPtr: func() any { return &truncStr{} },
+			data:   []byte{0x10, 0x00},
+			closes: "criteria 2 and 3 (string length ceiling)",
 		},
 		{
-			// [u32 len = 4096][no bytes]. The true CE-002 case is
-			// n = 0xFFFFFFFF, and it deliberately is NOT a row here: that
-			// reaches make([]byte, 4294967295), which is Go's UNRECOVERABLE
-			// out-of-memory fatal error rather than a panic. recover() cannot
-			// catch it and the whole test binary dies, so the case can only be
-			// covered once the decoder charges the allocation before making it
-			// (criterion 3). 4096 exercises the same unchecked slice with an
-			// allocation the process survives.
-			name:    "bytes/length-prefix-past-end",
-			newPtr:  func() any { return &truncBytes{} },
-			data:    []byte{0x00, 0x10, 0x00, 0x00},
-			flipsTo: "criteria 2 and 3 (aggregate allocation ceiling)",
+			// [u32 len = 4096][no bytes].
+			name:   "bytes/length-prefix-past-end",
+			newPtr: func() any { return &truncBytes{} },
+			data:   []byte{0x00, 0x10, 0x00, 0x00},
+			closes: "criteria 2 and 3 (aggregate allocation ceiling)",
 		},
 		{
-			// [u16 len = 65535][no elements]. reflect.MakeSlice reserves all
-			// 65535 elements before a single one is read — the ~50000x
+			// [u32 len = 0xFFFFFFFF][no bytes]. THE row unit 6 could not write:
+			// on HEAD this reached make([]byte, 4294967295), and what happens
+			// next is the host's decision, not the program's. Measured with the
+			// guards removed on a machine with default overcommit, Go took the
+			// 4 GiB reservation and the following slice expression panicked;
+			// under a cgroup limit or a strict overcommit policy the same line
+			// is Go's out-of-memory FATAL error, which no recover anywhere in
+			// the process can contain. A decoder whose failure mode depends on
+			// the host's memory policy is the defect. It is coverable now for
+			// exactly one reason — the length is compared against the limit and
+			// the remaining payload BEFORE it is used as an allocation size.
+			name:   "bytes/4-gibibyte-length-prefix",
+			newPtr: func() any { return &truncBytes{} },
+			data:   []byte{0xFF, 0xFF, 0xFF, 0xFF},
+			closes: "criterion 3 (allocation charged before it is made)",
+		},
+		{
+			// [u16 len = 65535][no elements]. reflect.MakeSlice reserved all
+			// 65535 elements before a single one was read — the ~50000x
 			// amplifier CE-002 names, reachable pre-auth through any registered
 			// op body carrying a slice.
-			name:    "slice/element-count-past-end",
-			newPtr:  func() any { return &truncSlice{} },
-			data:    []byte{0xFF, 0xFF},
-			flipsTo: "criteria 2 and 3 (slice element ceiling)",
-		},
-
-		// ── Delegation into a registered ReflectCodec ────────────────────────
-		{
-			// unmarshalStructOnStage hands the codec data[off:] and then
-			// advances by codec.Size() without checking either. The Entity
-			// codec (entity.go) reads a u32 out of whatever it is given.
-			name:    "codec/entity-gets-3-of-4-bytes",
-			newPtr:  func() any { return &truncCodec{} },
-			data:    []byte{0x01, 0x02, 0x03},
-			flipsTo: "criterion 2 (bounds check before delegating to a codec)",
+			name:   "slice/element-count-past-end",
+			newPtr: func() any { return &truncSlice{} },
+			data:   []byte{0xFF, 0xFF},
+			closes: "criteria 2 and 3 (slice element ceiling)",
 		},
 	}
 
@@ -205,14 +209,15 @@ func TestReflectUnmarshal_Truncated(t *testing.T) {
 	}
 }
 
-// TestReflectUnmarshal_TrailingBytesAccepted records the other half of
-// criterion 4: a body LONGER than the struct decodes without complaint and the
-// surplus is silently discarded. Unlike the truncation rows this one is not a
-// crash, so it asserts the current (permissive) result directly.
+// TestReflectUnmarshal_ToleratesMeshTrailing pins the deliberate asymmetry
+// between the tolerant wrappers and ReflectUnmarshalStrict: a body LONGER than
+// the struct decodes and the surplus is discarded.
 //
-// Unit 10 owns the strict-decoding switch that turns this into a rejection;
-// when it lands, this test inverts alongside wantTruncatedRead.
-func TestReflectUnmarshal_TrailingBytesAccepted(t *testing.T) {
+// This is not an oversight that criterion 4 closes later. Mesh transfer blobs
+// and border component blobs are appended to today, and UnmarshalTransferFrame
+// does not reject trailing data either; the strict rule belongs to typed client
+// bodies, where a surplus means the two ends disagree about the type.
+func TestReflectUnmarshal_ToleratesMeshTrailing(t *testing.T) {
 	var src truncU32
 	src.V = 0xAABBCCDD
 	data := append(mustMarshal(t, &src), 0xDE, 0xAD, 0xBE, 0xEF)
@@ -222,6 +227,46 @@ func TestReflectUnmarshal_TrailingBytesAccepted(t *testing.T) {
 	if out.V != src.V {
 		t.Fatalf("V = %#x, want %#x", out.V, src.V)
 	}
-	// No assertion on the trailing bytes: today there is nowhere for the
-	// decoder to report them. That absence is criterion 4.
+}
+
+// TestReflectUnmarshalStrict_RejectsTrailing is the other half of the pair: the
+// same bytes the tolerant wrapper accepts must be refused by the strict entry
+// point, and the error must name the surplus.
+func TestReflectUnmarshalStrict_RejectsTrailing(t *testing.T) {
+	var src truncU32
+	src.V = 0xAABBCCDD
+	data := append(mustMarshal(t, &src), 0xDE, 0xAD, 0xBE, 0xEF)
+
+	var out truncU32
+	err := ReflectUnmarshalStrict(nil, data, &out, pkgnet.WireLimits{})
+	if err == nil {
+		t.Fatal("ReflectUnmarshalStrict accepted 4 trailing bytes")
+	}
+	if !strings.Contains(err.Error(), "consumed 4 of 8 bytes") {
+		t.Fatalf("error = %v, want it to name the consumed/total split", err)
+	}
+	// A zero-value WireLimits must behave as the defaults, not reject
+	// everything: flag defaults never reach tests (docs/roadmap.md §6.8.4).
+	if err := ReflectUnmarshalStrict(nil, data[:4], &out, pkgnet.WireLimits{}); err != nil {
+		t.Fatalf("exact-length body rejected under zero-value limits: %v", err)
+	}
+	if out.V != src.V {
+		t.Fatalf("V = %#x, want %#x", out.V, src.V)
+	}
+}
+
+// TestReflectUnmarshalStrict_RejectsOversizeFrame covers the other check strict
+// decoding adds: a body larger than MaxFrameBytes is refused before a single
+// field is decoded.
+func TestReflectUnmarshalStrict_RejectsOversizeFrame(t *testing.T) {
+	lim := pkgnet.DefaultWireLimits()
+	var out truncU32
+	err := ReflectUnmarshalStrict(nil, make([]byte, lim.MaxFrameBytes+1), &out, lim)
+	if err == nil {
+		t.Fatalf("accepted a %d-byte body under a %d-byte frame limit",
+			lim.MaxFrameBytes+1, lim.MaxFrameBytes)
+	}
+	if !strings.Contains(err.Error(), "frame limit") {
+		t.Fatalf("error = %v, want it to name the frame limit", err)
+	}
 }

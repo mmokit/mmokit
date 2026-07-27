@@ -149,6 +149,37 @@ func reflectUnmarshalSeeds(tb testing.TB) []fuzzSeed {
 	// survive it once the decoder is checked. It does not crash today because
 	// the target returns before decoding, which is what makes it committable.
 	seeds = append(seeds, fuzzSeed{name: "empty", data: nil})
+
+	// The crashers unit 6 deliberately withheld, landing in the same commit as
+	// the checked decoder exactly as docs/roadmap.md §6.8.4 requires: committed
+	// earlier they would have reddened a plain `go test` for days, because Go
+	// runs testdata/fuzz entries as ordinary subtests.
+	//
+	// Each of these aborted the process before CE-002 unit 8. They are the
+	// permanent regression seeds for that: any future decoder change that
+	// reintroduces an unchecked read or an uncharged allocation fails here
+	// under a plain `go test`, without needing a fuzzing budget.
+	seeds = append(seeds,
+		// The crasher FuzzReflectUnmarshal found in 0.14 s on HEAD. Selector
+		// 0x30 % 5 = 3 selects fuzzNested and leaves an empty body, so
+		// Head.Name's u16 length prefix is read off the end of a zero-byte
+		// buffer.
+		fuzzSeed{name: "crash-nested-empty-body", data: []byte("0")},
+		// fuzzLeadingString with [u16 len = 0xFFFF][no bytes]: the string arm
+		// used slen directly as a slice bound.
+		fuzzSeed{name: "crash-string-past-end", data: []byte{0x00, 0xFF, 0xFF}},
+		// fuzzStringSlice with an empty ChannelID and UserIDs declaring 65535
+		// elements: reflect.MakeSlice reserved ~1 MiB from a 5-byte body.
+		fuzzSeed{name: "crash-slice-65535-elems", data: []byte{0x01, 0x00, 0x00, 0xFF, 0xFF}},
+		// fuzzByteSlice with [u32 len = 0xFFFFFFFF]: make([]byte, 4294967295).
+		// The one seed whose old failure mode depended on the host — a
+		// survivable 4 GiB reservation where overcommit allows it, Go's
+		// unrecoverable out-of-memory fatal error where it does not, and no
+		// panic barrier can help with the latter. It is committable only
+		// because the length is now compared against the limit and the
+		// remaining payload before it is used as an allocation size.
+		fuzzSeed{name: "crash-bytes-4gib", data: []byte{0x02, 0, 0, 0, 0, 0xFF, 0xFF, 0xFF, 0xFF}},
+	)
 	return seeds
 }
 

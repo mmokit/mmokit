@@ -15,10 +15,16 @@ import (
 // width on the wire (fixed-size only for now); Decode reads from data at
 // offset 0. The stage parameter on Decode threads stage context to codecs
 // that need it (e.g. mmokit.Entity's NetID resolution via EntityByNetID).
+//
+// Decode is handed exactly Size() bytes and must still verify that, because it
+// is the last checked step before wire bytes become a Go value: the caller can
+// guarantee the length but not that the codec agrees about it. Return an error
+// rather than panicking — this runs on pre-authentication ingress goroutines
+// with no recover above them (docs/roadmap.md §6.3).
 type ReflectCodec struct {
 	Size   func() int
 	Encode func(buf []byte, v reflect.Value)
-	Decode func(stage *Stage, data []byte, v reflect.Value)
+	Decode func(stage *Stage, data []byte, v reflect.Value) error
 }
 
 var (

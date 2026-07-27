@@ -278,16 +278,23 @@ func TestDispatchClientInput_StopsAtPerTickCap(t *testing.T) {
 // ── Cell loop survival ───────────────────────────────────────────────────────
 
 // stringPayload stands in for any registered replicated component with a
-// string field. Its decoder is the reflection codec, which slices on a
-// wire-supplied u16 length without checking it.
+// string field. Its decoder is the reflection codec.
 type stringPayload struct{ Label string }
 
 // A malformed peer frame must not kill the cell loop. DrainInbox is reached
 // from cellBridge.PreTick inside gl.tick, and gl.tick runs bare with no
-// recover, so on HEAD the panic below aborts the process.
+// recover, so before CE-002 unit 5 the panic below aborted the process.
 //
-// The panic here comes from a registered component's Apply — the real decode
-// path for a border frame — not from a synthetic hook.
+// The frame here is decoded by a registered component's Apply — the real path
+// for a border frame — not by a synthetic hook.
+//
+// CE-002 unit 8 flipped the assertion, in the same way it flipped the bounds
+// table: the checked decoder now REFUSES the component body instead of
+// panicking, so the outer barrier is never reached and the recovery counter
+// must stay at zero. The barrier itself is still covered, by
+// TestCellProcessMessage_RecoveryIsNotSilent. Both properties this test was
+// written for — the drain continues, and the malformed body is visible rather
+// than silent — are asserted below; only the mechanism changed.
 func TestCellProcessMessage_MalformedFrame_LoopSurvives(t *testing.T) {
 	cell := newTestCell("victim", CellID{X: 0, Y: 0})
 
@@ -327,10 +334,15 @@ func TestCellProcessMessage_MalformedFrame_LoopSurvives(t *testing.T) {
 		Spawn:      &SpawnTransfer{ConnID: 4242, Username: "survivor"},
 	}
 
+	dropsBefore := DecodeDrops()
 	cell.DrainInbox() // must not panic — this is what runs inside gl.tick
 
-	if got := cell.RecoveredMessagePanics(); got != 1 {
-		t.Fatalf("RecoveredMessagePanics = %d, want 1", got)
+	if got := cell.RecoveredMessagePanics(); got != 0 {
+		t.Fatalf("RecoveredMessagePanics = %d, want 0: the decoder must refuse the body, "+
+			"not rely on the outer barrier to survive it", got)
+	}
+	if got := DecodeDrops(); got == dropsBefore {
+		t.Fatal("malformed component body was accepted; the decoder counted no rejection")
 	}
 	if sess := cell.Engine.Players.ByConnID(4242); sess == nil {
 		t.Fatal("message queued behind the poisoned frame was never processed")
