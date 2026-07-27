@@ -449,6 +449,14 @@ func buildTypedEventFrameAny(event any) []byte {
 		return nil
 	}
 	id := TypeIDOf(t)
-	body := pkguniverse.ReflectMarshal(event)
+	body, err := pkguniverse.ReflectMarshal(event)
+	if err != nil {
+		// Chat payloads carry player-supplied strings, so this is the one
+		// encoder-guard site an ordinary user can reach. Drop the event and
+		// count it; the fanout continues to the remaining recipients.
+		pkguniverse.NoteMarshalDrop(pkguniverse.CatServicesBus,
+			"chat: typed event %s dropped — %v", t.String(), err)
+		return nil
+	}
 	return pkguniverse.EncodeTypedEventFrame(id, body)
 }

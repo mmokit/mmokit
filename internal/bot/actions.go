@@ -160,7 +160,11 @@ func (b *Bot) sendTypedOp(msg any) {
 		t = t.Elem()
 	}
 	typeID := mmokit.TypeIDOf(t)
-	body := pkguniverse.ReflectMarshal(msg)
+	body, err := pkguniverse.ReflectMarshal(msg)
+	if err != nil {
+		log.Printf("[bot:%s] encode op %s failed: %v", b.name, t.String(), err)
+		return
+	}
 	frame := make([]byte, 1+4+8+4+len(body))
 	frame[0] = pkgnet.ChannelOperation
 	binary.LittleEndian.PutUint32(frame[1:5], typeID)
@@ -191,7 +195,11 @@ func (b *Bot) sendTypedInput(msg any) {
 	}
 	typeID := mmokit.TypeIDOf(t)
 
-	body := pkguniverse.ReflectMarshal(msg)
+	body, err := pkguniverse.ReflectMarshal(msg)
+	if err != nil {
+		log.Printf("[bot:%s] encode input %s failed: %v", b.name, t.String(), err)
+		return
+	}
 	frame := make([]byte, 1+8+len(body))
 	frame[0] = pkgnet.ChannelEvent
 	binary.LittleEndian.PutUint32(frame[1:5], typeID)

@@ -127,7 +127,7 @@ func TestProcessDispatchCellRoutedOp_HappyPath(t *testing.T) {
 		}
 	})
 
-	body := ReflectMarshal(&cellOpReq{X: 21})
+	body := mustMarshal(t, &cellOpReq{X: 21})
 	const requestID uint64 = 42
 	const respTypeID uint32 = 0x33333333
 
@@ -190,7 +190,7 @@ func TestProcessDispatchCellRoutedOp_OfflineUser(t *testing.T) {
 
 	p := minimalCoordWithCell(t, "host-a", "cell_0_0")
 
-	body := ReflectMarshal(&cellOpReq{X: 1})
+	body := mustMarshal(t, &cellOpReq{X: 1})
 	handler := func(*ops.OpContext, *cellOpReq) (*cellOpRes, error) {
 		t.Fatal("handler should not run when user is offline")
 		return nil, nil

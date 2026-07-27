@@ -2,10 +2,23 @@ package universe
 
 import (
 	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/mlange-42/ark/ecs"
 )
+
+// mustMarshal is the test-side form of ReflectMarshal for values that are
+// expected to fit the wire. Encoder-guard rejections are asserted explicitly by
+// the oversize tests below.
+func mustMarshal(tb testing.TB, ptr any) []byte {
+	tb.Helper()
+	data, err := ReflectMarshal(ptr)
+	if err != nil {
+		tb.Fatalf("ReflectMarshal(%T): %v", ptr, err)
+	}
+	return data
+}
 
 func TestReflectMarshal_SimpleStruct(t *testing.T) {
 	type Health struct {
@@ -13,7 +26,7 @@ func TestReflectMarshal_SimpleStruct(t *testing.T) {
 		Max     float32
 	}
 	h := Health{Current: 75.5, Max: 100}
-	data := ReflectMarshal(&h)
+	data := mustMarshal(t, &h)
 	var out Health
 	ReflectUnmarshal(data, &out)
 	if out != h {
@@ -31,7 +44,7 @@ func TestReflectMarshal_NestedStruct(t *testing.T) {
 		Scale float64
 	}
 	o := Outer{Pos: Inner{X: 1.5, Y: -3.25}, Scale: 99.99}
-	data := ReflectMarshal(&o)
+	data := mustMarshal(t, &o)
 	var out Outer
 	ReflectUnmarshal(data, &out)
 	if out != o {
@@ -46,7 +59,7 @@ func TestReflectMarshal_BoolFields(t *testing.T) {
 		Dead    bool
 	}
 	f := Flags{Active: true, Visible: false, Dead: true}
-	data := ReflectMarshal(&f)
+	data := mustMarshal(t, &f)
 	if len(data) != 3 {
 		t.Fatalf("expected 3 bytes, got %d", len(data))
 	}
@@ -64,7 +77,7 @@ func TestReflectMarshal_StringFields(t *testing.T) {
 		Tag   string
 	}
 	n := Named{Name: "hello", Level: 42, Tag: "world"}
-	data := ReflectMarshal(&n)
+	data := mustMarshal(t, &n)
 	var out Named
 	ReflectUnmarshal(data, &out)
 	if out != n {
@@ -78,7 +91,7 @@ func TestReflectMarshal_Uint8Fields(t *testing.T) {
 		Count uint8
 	}
 	s := Slot{Index: 3, Count: 255}
-	data := ReflectMarshal(&s)
+	data := mustMarshal(t, &s)
 	if len(data) != 2 {
 		t.Fatalf("expected 2 bytes, got %d", len(data))
 	}
@@ -94,7 +107,7 @@ func TestReflectMarshal_FixedArray(t *testing.T) {
 		RGBA [4]float32
 	}
 	c := Color{RGBA: [4]float32{0.1, 0.2, 0.3, 1.0}}
-	data := ReflectMarshal(&c)
+	data := mustMarshal(t, &c)
 	if len(data) != 16 {
 		t.Fatalf("expected 16 bytes, got %d", len(data))
 	}
@@ -111,7 +124,7 @@ func TestReflectMarshal_EntityFieldSkipped(t *testing.T) {
 		Range  float32
 	}
 	tgt := Targeting{Range: 500.0}
-	data := ReflectMarshal(&tgt)
+	data := mustMarshal(t, &tgt)
 	// Entity field should be skipped, only float32 remains
 	if len(data) != 4 {
 		t.Fatalf("expected 4 bytes (entity skipped), got %d", len(data))
@@ -133,7 +146,7 @@ func TestReflectMarshal_UnexportedFieldsSkipped(t *testing.T) {
 		private float32 //nolint:unused
 	}
 	m := Mixed{Public: 42.0}
-	data := ReflectMarshal(&m)
+	data := mustMarshal(t, &m)
 	if len(data) != 4 {
 		t.Fatalf("expected 4 bytes (unexported skipped), got %d", len(data))
 	}
@@ -147,7 +160,7 @@ func TestReflectMarshal_IntTypes(t *testing.T) {
 		I64 int64
 	}
 	a := AllInts{I8: -1, I16: -1000, I32: -100000, I64: -9999999999}
-	data := ReflectMarshal(&a)
+	data := mustMarshal(t, &a)
 	var out AllInts
 	ReflectUnmarshal(data, &out)
 	if out != a {
@@ -232,7 +245,7 @@ func TestReflectMarshal_SliceOfStructs(t *testing.T) {
 			{ID: 7, Name: "sword"},
 		},
 	}
-	data := ReflectMarshal(&b)
+	data := mustMarshal(t, &b)
 	var out Bag
 	ReflectUnmarshal(data, &out)
 	if out.Owner != b.Owner || len(out.Items) != len(b.Items) {
@@ -250,7 +263,7 @@ func TestReflectMarshal_SliceOfPrimitives(t *testing.T) {
 		IDs []uint32
 	}
 	b := Bag{IDs: []uint32{42, 7, 1024}}
-	data := ReflectMarshal(&b)
+	data := mustMarshal(t, &b)
 	var out Bag
 	ReflectUnmarshal(data, &out)
 	if len(out.IDs) != len(b.IDs) {
@@ -268,7 +281,7 @@ func TestReflectMarshal_EmptySlice(t *testing.T) {
 		Items []uint32
 	}
 	b := Bag{Items: nil}
-	data := ReflectMarshal(&b)
+	data := mustMarshal(t, &b)
 	if len(data) != 2 { // just the u16 zero length
 		t.Fatalf("expected 2 bytes (u16 length=0), got %d", len(data))
 	}
@@ -296,7 +309,7 @@ func TestReflectMarshal_BytesFastPath(t *testing.T) {
 	}
 	body := []byte{0x01, 0x02, 0x03, 0x04, 0xFF, 0xAB, 0xCD}
 	in := Frame{Body: body}
-	data := ReflectMarshal(&in)
+	data := mustMarshal(t, &in)
 	// Wire: [u32 len=7][7 bytes]
 	if len(data) != 4+len(body) {
 		t.Fatalf("expected %d bytes (u32 len + N bytes), got %d", 4+len(body), len(data))
@@ -329,7 +342,7 @@ func TestReflectMarshal_BytesFastPath_Empty(t *testing.T) {
 		Body []byte
 	}
 	in := Frame{Body: nil}
-	data := ReflectMarshal(&in)
+	data := mustMarshal(t, &in)
 	if len(data) != 4 {
 		t.Fatalf("expected 4 bytes (u32 length=0), got %d", len(data))
 	}
@@ -352,7 +365,7 @@ func TestReflectMarshal_BytesFastPath_LargePayload(t *testing.T) {
 		body[i] = byte(i & 0xff)
 	}
 	in := Frame{Body: body}
-	data := ReflectMarshal(&in)
+	data := mustMarshal(t, &in)
 	if len(data) != 4+len(body) {
 		t.Fatalf("expected %d bytes, got %d", 4+len(body), len(data))
 	}
@@ -365,5 +378,171 @@ func TestReflectMarshal_BytesFastPath_LargePayload(t *testing.T) {
 		if out.Body[i] != body[i] {
 			t.Fatalf("byte %d: got 0x%02x want 0x%02x", i, out.Body[i], body[i])
 		}
+	}
+}
+
+// TestReflectMarshal_OversizedStringRejected pins the CE-002 encoder guard.
+// Before it, marshalValue wrote uint16(len(s)) unchecked: a 70000-byte string
+// emitted a frame whose u16 prefix read 4464 (70000 mod 65536) followed by
+// 70000 bytes of payload, so every decoder in the cluster — Go, TypeScript and
+// C# alike — resynchronized on the wrong offset. The server produced that
+// frame itself, which is why the fix belongs on the encode side.
+func TestReflectMarshal_OversizedStringRejected(t *testing.T) {
+	type Named struct {
+		Name string
+	}
+	const oversize = 70_000
+	in := Named{Name: string(make([]byte, oversize))}
+
+	data, err := ReflectMarshal(&in)
+	if err == nil {
+		t.Fatalf("ReflectMarshal accepted a %d-byte string; u16 prefix would read %d",
+			oversize, oversize%(maxWireStringLen+1))
+	}
+	if data != nil {
+		t.Fatalf("ReflectMarshal returned %d bytes alongside an error", len(data))
+	}
+	// The message must name the offending field, or an operator seeing this in
+	// a log has no way to find it.
+	if !strings.Contains(err.Error(), "Named.Name") {
+		t.Errorf("error %q does not name the field", err)
+	}
+	if !strings.Contains(err.Error(), "70000") {
+		t.Errorf("error %q does not report the offending length", err)
+	}
+}
+
+// TestReflectMarshal_MaxLengthStringAccepted pins the boundary: exactly
+// maxWireStringLen bytes still fits the u16 prefix and must encode.
+func TestReflectMarshal_MaxLengthStringAccepted(t *testing.T) {
+	type Named struct {
+		Name string
+	}
+	in := Named{Name: string(make([]byte, maxWireStringLen))}
+	data := mustMarshal(t, &in)
+	if len(data) != 2+maxWireStringLen {
+		t.Fatalf("encoded %d bytes, want %d", len(data), 2+maxWireStringLen)
+	}
+	var out Named
+	ReflectUnmarshal(data, &out)
+	if len(out.Name) != maxWireStringLen {
+		t.Fatalf("decoded string of %d bytes, want %d", len(out.Name), maxWireStringLen)
+	}
+}
+
+// TestReflectMarshal_OversizedSliceRejected is the slice-arm counterpart:
+// the generic slice arm is [u16 len][elem0]..., so a 70000-element slice
+// truncated its own element count exactly the same way.
+func TestReflectMarshal_OversizedSliceRejected(t *testing.T) {
+	type Bag struct {
+		IDs []uint32
+	}
+	const oversize = 70_000
+	in := Bag{IDs: make([]uint32, oversize)}
+
+	data, err := ReflectMarshal(&in)
+	if err == nil {
+		t.Fatalf("ReflectMarshal accepted a %d-element slice; u16 prefix would read %d",
+			oversize, oversize%(maxWireSliceElems+1))
+	}
+	if data != nil {
+		t.Fatalf("ReflectMarshal returned %d bytes alongside an error", len(data))
+	}
+	if !strings.Contains(err.Error(), "Bag.IDs") {
+		t.Errorf("error %q does not name the field", err)
+	}
+}
+
+// TestReflectMarshal_OversizedNestedStringRejected verifies the guard travels
+// out of a nested value rather than only firing on top-level fields — the
+// slice-of-structs shape is what chat and inventory payloads actually use.
+func TestReflectMarshal_OversizedNestedStringRejected(t *testing.T) {
+	type Item struct {
+		Label string
+	}
+	type Bag struct {
+		Items []Item
+	}
+	in := Bag{Items: []Item{{Label: "ok"}, {Label: string(make([]byte, 70_000))}}}
+
+	if _, err := ReflectMarshal(&in); err == nil {
+		t.Fatal("ReflectMarshal accepted an oversized string nested in a slice element")
+	} else if !strings.Contains(err.Error(), "Item.Label") {
+		t.Errorf("error %q does not name the nested field", err)
+	}
+}
+
+// TestValueSizeAndMarshalValueAgree is the load-bearing consistency check.
+// If the size walk accepted a length the write walk rejects the frame is
+// short; if the write walk accepted one the size walk rejects, marshalStruct
+// writes past the end of a buffer sized by structSize. Drive both walks
+// directly over the same value at the boundary and one element past it.
+func TestValueSizeAndMarshalValueAgree(t *testing.T) {
+	cases := []struct {
+		name string
+		val  reflect.Value
+		ok   bool
+	}{
+		{"string at cap", reflect.ValueOf(string(make([]byte, maxWireStringLen))), true},
+		{"string over cap", reflect.ValueOf(string(make([]byte, maxWireStringLen+1))), false},
+		{"slice at cap", reflect.ValueOf(make([]uint32, maxWireSliceElems)), true},
+		{"slice over cap", reflect.ValueOf(make([]uint32, maxWireSliceElems+1)), false},
+	}
+	for _, tc := range cases {
+		size, sizeErr := valueSize(tc.val)
+		if (sizeErr == nil) != tc.ok {
+			t.Fatalf("%s: valueSize err = %v, want ok=%v", tc.name, sizeErr, tc.ok)
+		}
+		if sizeErr != nil {
+			// Mirrored guard: the write walk must reject it too.
+			if _, wErr := marshalValue(make([]byte, 8), 0, tc.val); wErr == nil {
+				t.Fatalf("%s: valueSize rejected but marshalValue accepted", tc.name)
+			}
+			continue
+		}
+		off, wErr := marshalValue(make([]byte, size), 0, tc.val)
+		if wErr != nil {
+			t.Fatalf("%s: valueSize accepted (%d bytes) but marshalValue rejected: %v",
+				tc.name, size, wErr)
+		}
+		if off != size {
+			t.Fatalf("%s: marshalValue wrote %d bytes, valueSize reserved %d", tc.name, off, size)
+		}
+	}
+}
+
+// TestEncodeTypedMessage_OversizedTypeNameRejected covers the other u16 prefix
+// this package writes by hand. SplitTypedMessage on the destination cell reads
+// the same field, so a truncated name resolves to a different type or to none.
+func TestEncodeTypedMessage_OversizedTypeNameRejected(t *testing.T) {
+	type Damage struct{ Amount float32 }
+	if _, err := EncodeTypedMessage(string(make([]byte, 70_000)), &Damage{Amount: 1}); err == nil {
+		t.Fatal("EncodeTypedMessage accepted a type name longer than its u16 prefix")
+	}
+}
+
+// TestReflectMarshalOrDrop_SkipsComponentAndCounts pins the ComponentReplicator
+// Scan contract: an encoder-guard rejection omits that one component from the
+// frame (nil, the same value Scan returns for "entity lacks this component")
+// rather than failing the whole entity, and the drop is counted — never silent.
+// See the roadmap's "corrupt component blob must skip that component, not the
+// entity" trap.
+func TestReflectMarshalOrDrop_SkipsComponentAndCounts(t *testing.T) {
+	type Label struct {
+		Text string
+	}
+	before := MarshalDrops()
+
+	if got := reflectMarshalOrDrop(reflect.TypeFor[Label](),
+		&Label{Text: string(make([]byte, 70_000))}); got != nil {
+		t.Fatalf("reflectMarshalOrDrop returned %d bytes, want nil", len(got))
+	}
+	if after := MarshalDrops(); after != before+1 {
+		t.Fatalf("MarshalDrops = %d, want %d", after, before+1)
+	}
+
+	// A component that fits still encodes normally.
+	if got := reflectMarshalOrDrop(reflect.TypeFor[Label](), &Label{Text: "ok"}); got == nil {
+		t.Fatal("reflectMarshalOrDrop dropped a component that fits the wire")
 	}
 }

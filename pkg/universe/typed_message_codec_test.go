@@ -14,7 +14,10 @@ type damageWire struct {
 
 func TestEncodeDecodeTypedMessage(t *testing.T) {
 	src := damageWire{Amount: 25, Dealt: 0}
-	bytes := pkguniverse.EncodeTypedMessage("damageWire", &src)
+	bytes, err := pkguniverse.EncodeTypedMessage("damageWire", &src)
+	if err != nil {
+		t.Fatalf("EncodeTypedMessage: %v", err)
+	}
 
 	typeName, payload := pkguniverse.SplitTypedMessage(bytes)
 	if typeName != "damageWire" {

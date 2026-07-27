@@ -191,7 +191,7 @@ func TestDispatchClientInput_FiresHandler(t *testing.T) {
 	typeID := mmokit.TypeIDOf(pingType)
 
 	msg := &clientPing{N: 42}
-	body := pkguniverse.ReflectMarshal(msg)
+	body := mustMarshal(t, msg)
 
 	frame := make([]byte, 8+len(body))
 	binary.LittleEndian.PutUint32(frame[0:4], typeID)

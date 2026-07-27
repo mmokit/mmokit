@@ -52,7 +52,10 @@ func TestDeathObserver_FiresOnceWhenHealthZero(t *testing.T) {
 // claim — Health.DeathFired and LastDamagedByNetID must survive the wire.
 func TestHealth_DeathFiredAndKillerSurviveTransferCodec(t *testing.T) {
 	in := gamecomp.Health{Current: 0, Max: 100, LastDamagedByNetID: 42, DeathFired: true}
-	data := pkguniverse.ReflectMarshal(&in)
+	data, err := pkguniverse.ReflectMarshal(&in)
+	if err != nil {
+		t.Fatalf("ReflectMarshal: %v", err)
+	}
 	var out gamecomp.Health
 	pkguniverse.ReflectUnmarshal(data, &out)
 	if out != in {

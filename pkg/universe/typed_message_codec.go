@@ -1,6 +1,9 @@
 package universe
 
-import "encoding/binary"
+import (
+	"encoding/binary"
+	"fmt"
+)
 
 // Wire format for a typed cross-cell message:
 //
@@ -14,14 +17,25 @@ import "encoding/binary"
 
 // EncodeTypedMessage builds the wire frame: type name length + name + body.
 // body is produced by ReflectMarshal on the message pointer.
-func EncodeTypedMessage(typeName string, msgPtr any) []byte {
-	body := ReflectMarshal(msgPtr)
+//
+// Returns an error rather than a truncated prefix when the body or the type
+// name does not fit its u16 length field — SplitTypedMessage on the receiving
+// cell would otherwise read the frame as a differently-shaped message.
+func EncodeTypedMessage(typeName string, msgPtr any) ([]byte, error) {
+	body, err := ReflectMarshal(msgPtr)
+	if err != nil {
+		return nil, err
+	}
 	nameBytes := []byte(typeName)
+	if len(nameBytes) > maxWireStringLen {
+		return nil, fmt.Errorf("reflect_marshal: type name of %d bytes exceeds the %d-byte u16 wire prefix",
+			len(nameBytes), maxWireStringLen)
+	}
 	out := make([]byte, 2+len(nameBytes)+len(body))
 	binary.LittleEndian.PutUint16(out[0:2], uint16(len(nameBytes)))
 	copy(out[2:], nameBytes)
 	copy(out[2+len(nameBytes):], body)
-	return out
+	return out, nil
 }
 
 // SplitTypedMessage decodes the wire frame's type name and returns the

@@ -138,7 +138,7 @@ func TestDrainPendingPromotes_BorderReplicaTip_WorldXCorrect(t *testing.T) {
 	// The entry from buildWireEntryAt ends with [0, 0] (count=0 component tail).
 	// Replace with a real component tail carrying Position.X=1030 (raw source value).
 	rawEntry := baseBorderEntry[:len(baseBorderEntry)-2] // strip count
-	posData := ReflectMarshal(&component.Position{X: srcPosX, Y: 500})
+	posData := mustMarshal(t, &component.Position{X: srcPosX, Y: 500})
 	// Find the Position component's registry ID on the src registry.
 	var posID ComponentID
 	for _, rep := range src.ReplicationRegistry().All() {

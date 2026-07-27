@@ -135,7 +135,7 @@ func TestDeliverServiceEvent_DecodesAndRepublishesLocally(t *testing.T) {
 	})
 
 	// Build a wire ServiceEvent as if it had arrived from a peer.
-	payload := ReflectMarshal(&tinyDispatchEvent{N: 7})
+	payload := mustMarshal(t, &tinyDispatchEvent{N: 7})
 	se := &meshpb.ServiceEvent{
 		SourceProcessId: "remote-peer", // not us — must not be self-echo-skipped
 		TypeName:        "github.com/zenion/mmoserver/pkg/universe.tinyDispatchEvent",

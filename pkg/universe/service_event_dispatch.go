@@ -44,7 +44,12 @@ func (c *Process) dispatchServiceEvent(call service.RemotePublishCall) {
 			call.TypeName)
 		return
 	}
-	payload := ReflectMarshal(call.Payload)
+	payload, err := ReflectMarshal(call.Payload)
+	if err != nil {
+		c.Log.Log(CatServicesBus, "service_event: drop %s — encode failed: %v",
+			call.TypeName, err)
+		return
+	}
 	frame := &meshpb.MeshFrame{
 		Msg: &meshpb.MeshFrame_ServiceEvent{
 			ServiceEvent: &meshpb.ServiceEvent{

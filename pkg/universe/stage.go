@@ -615,6 +615,10 @@ func (b *Stage) SendPlayerEntityAssigned(connID uint32, entity ecs.Entity) {
 		worldY = pos.Y + float32(cell.Y)*cs
 	}
 	frame := EngineDefaultFrameHooks.PlayerEntityAssigned(netID, worldX, worldY)
+	if frame == nil {
+		// Encoder guard rejected the payload — already counted and logged.
+		return
+	}
 	b.eng.ConnMgr.Send(connID, frame)
 }
 
@@ -755,7 +759,14 @@ func (b *Stage) Hooks() engine.Hooks {
 // generic methods on non-generic types. This is the canonical send path
 // after Plan 1 Phase 7 retired the proto-envelope Stage.SendEvent.
 func SendEventTyped[T any](stage *Stage, connID uint32, msg *T) {
-	stage.eng.ConnMgr.SendReliable(connID, BuildTypedEventFrameRaw(msg))
+	frame := BuildTypedEventFrameRaw(msg)
+	if frame == nil {
+		// Encoder guard rejected the payload; BuildTypedEventFrameRaw already
+		// counted and logged it. Sending a nil frame would close the read side
+		// on a zero-length write.
+		return
+	}
+	stage.eng.ConnMgr.SendReliable(connID, frame)
 }
 
 // BuildTypedEventFrameRaw returns the encoded channel-0x00 typed-event
@@ -766,6 +777,11 @@ func SendEventTyped[T any](stage *Stage, connID uint32, msg *T) {
 //
 // Same wire layout as SendEventTyped; the only difference is that the
 // caller is responsible for delivering the frame.
+//
+// Returns nil — never panics — when the encoder length guards reject the
+// payload, e.g. an event carrying a player-supplied string over 65535 bytes.
+// Misregistration is a startup-time programmer error and still panics; an
+// oversized field is runtime data on the tick goroutine and must not be.
 func BuildTypedEventFrameRaw[T any](msg *T) []byte {
 	t := reflect.TypeFor[T]()
 	if ServerEventHooks.IsRegistered == nil || ServerEventHooks.TypeIDOf == nil {
@@ -775,7 +791,11 @@ func BuildTypedEventFrameRaw[T any](msg *T) []byte {
 		panic(fmt.Sprintf("BuildTypedEventFrameRaw: type %s not registered via mmokit.RegisterEvent[T]", t.String()))
 	}
 	id := ServerEventHooks.TypeIDOf(t)
-	body := ReflectMarshal(msg)
+	body, err := ReflectMarshal(msg)
+	if err != nil {
+		NoteMarshalDrop(CatMeshAction, "typed event %s dropped — %v", t.String(), err)
+		return nil
+	}
 	return EncodeTypedEventFrame(id, body)
 }
 
@@ -1895,7 +1915,13 @@ func (s *Stage) RouteTypedMessage(targetNetID uint32, msgPtr any) bool {
 	}
 	rep := s.replicaMap.Get(h)
 	typeName := reflect.TypeOf(msgPtr).Elem().String()
-	payload := EncodeTypedMessage(typeName, msgPtr)
+	payload, err := EncodeTypedMessage(typeName, msgPtr)
+	if err != nil {
+		s.eng.Log.Log(CatMeshAction,
+			"[%s] RouteTypedMessage: encoding %q for netID=%d failed: %v",
+			s.cellID, typeName, rep.SourceNetID, err)
+		return false
+	}
 	if s.bridge == nil {
 		return false
 	}
@@ -1987,7 +2013,12 @@ func (s *Stage) maybeBroadcast(targetNetID uint32, msgPtr any) {
 		return
 	}
 
-	body := ReflectMarshal(msgPtr)
+	body, err := ReflectMarshal(msgPtr)
+	if err != nil {
+		s.eng.Log.Log(CatMeshAction,
+			"[%s] broadcast %s dropped: %v", s.cellID, t.String(), err)
+		return
+	}
 	s.broadcastQueue.Push(BroadcastEvent{
 		TypeID:  BroadcastHooks.TypeIDOf(t),
 		Body:    body,

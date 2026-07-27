@@ -80,6 +80,26 @@ func IsTransferCore(t reflect.Type) bool {
 	return transferCoreTypes[t]
 }
 
+// reflectMarshalOrDrop is the Scan-closure form of ReflectMarshal. Scan's
+// signature is `func(entity ecs.Entity) []byte` with no error return, and nil
+// already means "this entity does not carry the component", so an encoder-guard
+// rejection degrades to exactly that: the component is omitted from the border
+// or transfer frame and the rest of the entity still ships.
+//
+// That trade is deliberate. Failing the whole frame would turn one oversized
+// string field into entity loss on the destination cell; the destination
+// instead keeps a stale or absent copy of this one component, which the next
+// clean scan repairs. The drop is counted and logged, never silent.
+func reflectMarshalOrDrop(t reflect.Type, ptr any) []byte {
+	b, err := ReflectMarshal(ptr)
+	if err != nil {
+		NoteMarshalDrop(CatMeshCell,
+			"replication: component %s omitted from frame — %v", t, err)
+		return nil
+	}
+	return b
+}
+
 // RegisterComponent registers an ECS component for automatic replication and
 // transfer. It creates a ComponentReplicator with Scan, Apply, and Add closures
 // that capture the typed *ecs.Map1[T].
@@ -119,12 +139,12 @@ func RegisterComponent[T any](reg *ReplicationRegistry, m *ecs.Map1[T], opts ...
 				if o.Marshal != nil {
 					return o.Marshal(unsafe.Pointer(&tmp))
 				}
-				return ReflectMarshal(&tmp)
+				return reflectMarshalOrDrop(reflect.TypeFor[T](), &tmp)
 			}
 			if o.Marshal != nil {
 				return o.Marshal(unsafe.Pointer(c))
 			}
-			return ReflectMarshal(c)
+			return reflectMarshalOrDrop(reflect.TypeFor[T](), c)
 		},
 		Apply: func(entity ecs.Entity, data []byte) {
 			if !m.HasAll(entity) {
@@ -209,12 +229,12 @@ func RegisterComponentByID(
 				if o.Marshal != nil {
 					return o.Marshal(dst)
 				}
-				return ReflectMarshal(scratchPtr.Interface())
+				return reflectMarshalOrDrop(t, scratchPtr.Interface())
 			}
 			if o.Marshal != nil {
 				return o.Marshal(ptr)
 			}
-			return ReflectMarshal(reflect.NewAt(t, ptr).Interface())
+			return reflectMarshalOrDrop(t, reflect.NewAt(t, ptr).Interface())
 		},
 		Apply: func(entity ecs.Entity, data []byte) {
 			if !u.Has(entity, id) {

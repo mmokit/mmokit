@@ -31,7 +31,7 @@ func TestDispatchTypedOp_GatewayLocal_HappyPath(t *testing.T) {
 
 	// Build the request frame: encode the body via the reflection codec,
 	// wrap in a 0x01 typed-op frame.
-	reqBody := pkguniverse.ReflectMarshal(&dispReq{X: 21})
+	reqBody := mustMarshal(t, &dispReq{X: 21})
 	reqTypeID := mmokit.TypeIDOf(reflect.TypeFor[dispReq]())
 	frame := pkguniverse.EncodeTypedOpFrame(reqTypeID, 1234, reqBody)
 
@@ -102,7 +102,7 @@ func TestDispatchTypedOp_HandlerError_ReturnsOperationError(t *testing.T) {
 			return nil, errFakeHandler
 		})
 
-	reqBody := pkguniverse.ReflectMarshal(&dispReq{X: 1})
+	reqBody := mustMarshal(t, &dispReq{X: 1})
 	reqTypeID := mmokit.TypeIDOf(reflect.TypeFor[dispReq]())
 	frame := pkguniverse.EncodeTypedOpFrame(reqTypeID, 5, reqBody)
 	resp := pkguniverse.DispatchTypedOpInbound(frame[1:], &ops.OpContext{}, nil)
@@ -136,7 +136,7 @@ func TestDispatchTypedOp_RoutePlayerCell_NoRouter_ReturnsOperationError(t *testi
 	mmokit.RegisterOp[dispReq, dispRes](mmokit.RoutePlayerCell,
 		func(_ *mmokit.OpContext, _ *dispReq) (*dispRes, error) { return &dispRes{}, nil })
 
-	reqBody := pkguniverse.ReflectMarshal(&dispReq{X: 1})
+	reqBody := mustMarshal(t, &dispReq{X: 1})
 	reqTypeID := mmokit.TypeIDOf(reflect.TypeFor[dispReq]())
 	frame := pkguniverse.EncodeTypedOpFrame(reqTypeID, 7, reqBody)
 	resp := pkguniverse.DispatchTypedOpInbound(frame[1:], &ops.OpContext{}, nil)
@@ -213,7 +213,7 @@ func TestDispatchTypedOp_RoutePlayerCell_ForwardsToRouter(t *testing.T) {
 			return &dispRes{Y: req.X * 2}, nil
 		})
 
-	reqBody := pkguniverse.ReflectMarshal(&dispReq{X: 5})
+	reqBody := mustMarshal(t, &dispReq{X: 5})
 	reqTypeID := mmokit.TypeIDOf(reflect.TypeFor[dispReq]())
 	wantResTID := mmokit.TypeIDOf(reflect.TypeFor[dispRes]())
 	frame := pkguniverse.EncodeTypedOpFrame(reqTypeID, 99, reqBody)
@@ -263,7 +263,7 @@ func TestDispatchCellRoutedOp_NoActiveSession(t *testing.T) {
 	mmokit.RegisterOp[dispReq, dispRes](mmokit.RoutePlayerCell,
 		func(_ *mmokit.OpContext, _ *dispReq) (*dispRes, error) { return &dispRes{}, nil })
 
-	reqBody := pkguniverse.ReflectMarshal(&dispReq{X: 1})
+	reqBody := mustMarshal(t, &dispReq{X: 1})
 	reqTypeID := mmokit.TypeIDOf(reflect.TypeFor[dispReq]())
 	frame := pkguniverse.EncodeTypedOpFrame(reqTypeID, 11, reqBody)
 

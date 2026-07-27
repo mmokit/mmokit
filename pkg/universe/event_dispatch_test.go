@@ -9,6 +9,18 @@ import (
 	pkguniverse "github.com/zenion/mmoserver/pkg/universe"
 )
 
+// mustMarshal is the external-test-package form of ReflectMarshal for values
+// expected to fit the wire; the encoder length guards are asserted directly in
+// the in-package reflect_marshal_test.go.
+func mustMarshal(tb testing.TB, ptr any) []byte {
+	tb.Helper()
+	data, err := pkguniverse.ReflectMarshal(ptr)
+	if err != nil {
+		tb.Fatalf("ReflectMarshal(%T): %v", ptr, err)
+	}
+	return data
+}
+
 // evDispatchInput is the test message routed through the inbound typed-event
 // dispatcher. Two int32 fields → 8-byte body via the reflection codec.
 type evDispatchInput struct {
@@ -63,7 +75,7 @@ func TestDispatchInboundEventFrame_SingleEntry(t *testing.T) {
 
 	stage := singleStage(t, p)
 
-	body := pkguniverse.ReflectMarshal(&evDispatchInput{V: 42, W: 7})
+	body := mustMarshal(t, &evDispatchInput{V: 42, W: 7})
 	typeID := mmokit.TypeIDOf(reflect.TypeFor[evDispatchInput]())
 	payload := buildTypedEntry(typeID, body)
 
@@ -102,8 +114,8 @@ func TestDispatchInboundEventFrame_MultiEntry(t *testing.T) {
 	id1 := mmokit.TypeIDOf(reflect.TypeFor[evDispatchInput]())
 	id2 := mmokit.TypeIDOf(reflect.TypeFor[evDispatchOther]())
 
-	body1 := pkguniverse.ReflectMarshal(&evDispatchInput{V: 1, W: 2})
-	body2 := pkguniverse.ReflectMarshal(&evDispatchOther{X: 9})
+	body1 := mustMarshal(t, &evDispatchInput{V: 1, W: 2})
+	body2 := mustMarshal(t, &evDispatchOther{X: 9})
 
 	payload := append(buildTypedEntry(id1, body1), buildTypedEntry(id2, body2)...)
 
@@ -163,7 +175,7 @@ func TestDispatchInboundEventFrame_UnknownTypeID(t *testing.T) {
 	stage := singleStage(t, p)
 
 	knownID := mmokit.TypeIDOf(reflect.TypeFor[evDispatchInput]())
-	knownBody := pkguniverse.ReflectMarshal(&evDispatchInput{V: 11, W: 13})
+	knownBody := mustMarshal(t, &evDispatchInput{V: 11, W: 13})
 
 	// Layout: [unknown typeID, len=0, no body][known typeID, body]
 	payload := buildTypedEntry(0xDEADBEEF, nil)

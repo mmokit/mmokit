@@ -9,6 +9,17 @@ import (
 	pkguniverse "github.com/zenion/mmoserver/pkg/universe"
 )
 
+// mustMarshal is the mmokit_test form of ReflectMarshal for values expected to
+// fit the wire; the encoder length guards are asserted in pkg/universe.
+func mustMarshal(tb testing.TB, ptr any) []byte {
+	tb.Helper()
+	data, err := pkguniverse.ReflectMarshal(ptr)
+	if err != nil {
+		tb.Fatalf("ReflectMarshal(%T): %v", ptr, err)
+	}
+	return data
+}
+
 func TestEntity_ZeroValueIsNotAlive(t *testing.T) {
 	var e mmokit.Entity
 	if e.Alive() {
@@ -87,7 +98,7 @@ func TestEntity_ReflectRoundtrip(t *testing.T) {
 	src := mmokit.EntityByNetID(stage, 42)
 
 	in := DamageMsg{Amount: 25.0, Source: src, Slot: 3}
-	body := pkguniverse.ReflectMarshal(&in)
+	body := mustMarshal(t, &in)
 
 	// Wire format: float32 (4) + Entity codec (4) + uint8 (1) = 9 bytes.
 	if len(body) != 9 {

@@ -83,7 +83,14 @@ func DispatchTypedOpInbound(payload []byte, ctx *ops.OpContext, router CellOpRou
 	if resPtr.IsNil() {
 		return EncodeTypedOpFrame(resTypeID, requestID, nil)
 	}
-	resBody := ReflectMarshal(resPtr.Interface())
+	resBody, err := ReflectMarshal(resPtr.Interface())
+	if err != nil {
+		// The handler succeeded but its response does not fit the wire. Answer
+		// with a typed error rather than dropping the frame — the client is
+		// blocked on this requestID either way.
+		return encodeOpErrorViaHooks(requestID, opErrorHandlerFailed,
+			fmt.Sprintf("encode response: %v", err))
+	}
 	return EncodeTypedOpFrame(resTypeID, requestID, resBody)
 }
 

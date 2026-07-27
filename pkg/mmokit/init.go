@@ -124,7 +124,21 @@ func init() {
 	}
 	pkguniverse.TypedOpHooks.OperationErrorTypeID = TypeIDOf(reflect.TypeFor[OperationError]())
 	pkguniverse.TypedOpHooks.MakeOperationErrorBody = func(code uint32, message string) []byte {
-		return pkguniverse.ReflectMarshal(&OperationError{Code: code, Message: message})
+		body, err := pkguniverse.ReflectMarshal(&OperationError{Code: code, Message: message})
+		if err != nil {
+			// Only reachable when a handler's error string exceeds the u16
+			// wire prefix. Returning nil would drop the response and leave the
+			// client blocked on its requestID, so re-encode with the message
+			// replaced rather than the frame lost.
+			body, err = pkguniverse.ReflectMarshal(&OperationError{
+				Code:    code,
+				Message: "error message too large for the wire",
+			})
+			if err != nil {
+				return nil
+			}
+		}
+		return body
 	}
 	pkguniverse.TypedOpHooks.RouteGatewayLocal = uint8(RouteGatewayLocal)
 }

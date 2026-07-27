@@ -434,7 +434,12 @@ func (g *Gateway) sendServerConfig(connID uint32) {
 	if EngineDefaultFrameHooks.ServerConfig == nil {
 		return
 	}
-	g.connMgr.SendReliable(connID, EngineDefaultFrameHooks.ServerConfig(g.tickRate))
+	frame := EngineDefaultFrameHooks.ServerConfig(g.tickRate)
+	if frame == nil {
+		// Encoder guard rejected the payload — already counted and logged.
+		return
+	}
+	g.connMgr.SendReliable(connID, frame)
 }
 
 // handleDisconnect owns the full disconnect cleanup for a connection:

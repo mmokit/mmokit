@@ -352,8 +352,12 @@ func main() {
 	// by the C# ReflectReader/Writer. "héllo" is multibyte UTF-8 so the u16
 	// string prefix is exercised as a BYTE length, not a char count. ---
 	gr := goldenReflect{A: 1.5, B: 0xDEADBEEF, C: "héllo", D: true, E: -42, F: []uint32{7, 8, 9}}
+	grBytes, err := universe.ReflectMarshal(&gr)
+	if err != nil {
+		log.Fatalf("marshal reflect golden: %v", err)
+	}
 	m.Reflect = ReflectCase{
-		HexBytes: hex.EncodeToString(universe.ReflectMarshal(&gr)),
+		HexBytes: hex.EncodeToString(grBytes),
 		A:        gr.A, B: gr.B, C: gr.C, D: gr.D, E: gr.E, F: gr.F,
 	}
 

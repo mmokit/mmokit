@@ -189,7 +189,7 @@ func buildReplicationAckFrame(t *testing.T, streamEpoch, seq uint32) []byte {
 	if typeID == 0 {
 		t.Fatal("mmokit.ReplicationAck is not registered as a client-input type")
 	}
-	body := pkguniverse.ReflectMarshal(&mmokit.ReplicationAck{StreamEpoch: streamEpoch, Seq: seq})
+	body := mustMarshal(t, &mmokit.ReplicationAck{StreamEpoch: streamEpoch, Seq: seq})
 	frame := make([]byte, 8+len(body))
 	binary.LittleEndian.PutUint32(frame[0:4], typeID)
 	binary.LittleEndian.PutUint32(frame[4:8], uint32(len(body)))

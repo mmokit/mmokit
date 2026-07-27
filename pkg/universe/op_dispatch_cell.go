@@ -99,8 +99,12 @@ func (p *Process) DispatchCellRoutedOp(
 				errVal.Interface().(error).Error())
 		} else if resPtr.IsNil() {
 			respFrame = EncodeTypedOpFrame(resTypeID, requestID, nil)
+		} else if resBody, mErr := ReflectMarshal(resPtr.Interface()); mErr != nil {
+			// Handler succeeded but its response does not fit the wire; answer
+			// with a typed error so the client's requestID is not left pending.
+			respFrame = encodeOpErrorViaHooks(requestID, opErrorHandlerFailed,
+				fmt.Sprintf("encode response: %v", mErr))
 		} else {
-			resBody := ReflectMarshal(resPtr.Interface())
 			respFrame = EncodeTypedOpFrame(resTypeID, requestID, resBody)
 		}
 

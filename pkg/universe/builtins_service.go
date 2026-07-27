@@ -399,7 +399,10 @@ func registerServiceBuiltins(reg *cmdsys.Registry, coord *Process) error {
 				return nil, fmt.Errorf("parse request JSON: %w (input: %s)", err, jsonBody)
 			}
 
-			body := ReflectMarshal(reqPtr.Interface())
+			body, err := ReflectMarshal(reqPtr.Interface())
+			if err != nil {
+				return nil, fmt.Errorf("encode request: %w", err)
+			}
 			frame := EncodeTypedOpFrame(e.RequestID, 0, body)
 
 			// Synthesize an OpContext. ConnID 0 is a "no real client"
