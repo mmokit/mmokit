@@ -1,0 +1,2 @@
+go test fuzz v1
+[]byte("\xa2\x06\bcell_1_0b!\n\bcell_0_0\x10\a\x1a\x05alice\"\n\r\x00\x00@@\x15\x00\x00\x80@(\x02")

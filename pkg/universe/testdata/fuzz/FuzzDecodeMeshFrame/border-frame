@@ -1,0 +1,2 @@
+go test fuzz v1
+[]byte("\xa2\x06\bcell_1_0\n\x10\n\bcell_0_0\x12\x04\x01\x02\x03\x04")

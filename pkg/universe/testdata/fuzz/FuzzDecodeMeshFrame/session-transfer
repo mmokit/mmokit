@@ -1,0 +1,2 @@
+go test fuzz v1
+[]byte("\xa2\x06\bcell_1_0ZQ\n\bcell_0_0\x10\a\x1a\x05alice\"\x06docked*\x02\x01\x022$11111111-2222-3333-4444-5555555555558\x02B\x04gw-1H\vP\x02")

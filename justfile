@@ -268,6 +268,40 @@ admin-typecheck:
 lint-no-ark:
     ./scripts/no_ark_in_game.sh
 
+# mutate-fuzz every decoder family docs/roadmap.md §6.7 names (CE-002
+# criterion 6). A smoke run, not a campaign; the real mutation budget belongs
+# to a scheduled CI job.
+#
+# Seeds alone run under a plain `go test`; this recipe is the only thing that
+# MUTATES them. Two consequences worth knowing before you run it:
+#
+#   - Go writes every crasher it finds into that target's
+#     testdata/fuzz/<Target>/ directory, and a committed crasher reddens
+#     `go test ./...` for everyone (§6.8.4). Move a discovered crasher out of
+#     testdata before committing — unless you are landing the checked decoder
+#     in the same commit, which is exactly where those seeds belong.
+#   - Until the checked decoder lands, FuzzReflectUnmarshal is EXPECTED to
+#     crash within seconds. That is the harness working, not a broken recipe.
+#     It runs last so the other five still get their budget.
+#
+# Args are POSITIONAL.
+#
+#   just fuzz      # 20s per target
+#   just fuzz 5m   # a longer local pass
+fuzz seconds="20s":
+    go test ./pkg/net/udpproto -run '^$' -fuzz FuzzUDPProtoDecode -fuzztime {{seconds}}
+    go test ./pkg/universe -run '^$' -fuzz FuzzUnmarshalTransferFrame -fuzztime {{seconds}}
+    go test ./pkg/universe -run '^$' -fuzz FuzzDecodeTypedOpFrame -fuzztime {{seconds}}
+    go test ./pkg/universe -run '^$' -fuzz FuzzDispatchInboundEventFrame -fuzztime {{seconds}}
+    go test ./pkg/universe -run '^$' -fuzz FuzzDecodeMeshFrame -fuzztime {{seconds}}
+    go test ./pkg/universe -run '^$' -fuzz FuzzReflectUnmarshal -fuzztime {{seconds}}
+
+# regenerate the committed testdata/fuzz seed corpora from the builders in
+# pkg/universe/fuzz_test.go and pkg/net/udpproto/fuzz_test.go. TestFuzzSeedCorpus
+# asserts the committed files still match, so run this after changing a seed.
+fuzz-corpus:
+    go test ./pkg/universe ./pkg/net/udpproto -run TestFuzzSeedCorpus -count=1 -update-fuzz-corpus
+
 # run the C# SDK core unit + golden tests
 csharp-test:
     cd csharp && dotnet test

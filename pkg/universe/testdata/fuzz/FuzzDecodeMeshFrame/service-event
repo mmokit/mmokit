@@ -1,0 +1,2 @@
+go test fuzz v1
+[]byte("\xa2\x06\bcell_1_0\x92\x03H\n\x06proc-1\x129github.com/zenion/mmoserver/pkg/service.SessionEnterEvent\x1a\x01\x01 \x03")
