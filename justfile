@@ -333,16 +333,23 @@ client-test: ts-core-test web-test
 csharp-compile-test:
     go test -tags=csharptest ./cmd/sdkgen/ -run TestCsharpSdk_Compiles -v
 
+# Target Unity Assets tree for the generated C# SDK. Deliberately has no
+# default: the two recipes below fail with an explanation when it is unset.
+unity_sdk_dir := env('UNITY_SDK_DIR', '')
+
 # generate + deploy the C# client SDK for 4node-basic into the Unity Assets
-# tree. Override the target with UNITY_SDK_DIR (defaults to a /mnt/c path).
+# tree. UNITY_SDK_DIR is REQUIRED and has no default — it used to default to one
+# developer's absolute /mnt/c path, which silently wrote the SDK somewhere
+# meaningless (or nowhere) for everyone else.
 # Control/admin listeners are disabled so the schema dump works even while a
 # dev server is running. Requires Postgres (just db-up).
 csharp-sdk:
+    @test -n "{{ unity_sdk_dir }}" || { echo "error: UNITY_SDK_DIR is required. Set it to your Unity SDK target, e.g. UNITY_SDK_DIR=/path/to/UnityProject/Assets/Mmokit/Sdk just csharp-sdk" >&2; exit 1; }
     go run ./examples/4node-basic --dump-schema --control-listen= --admin-listen= \
         "--postgres-url={{ env('POSTGRES_URL', 'postgres://mmo:mmo@localhost:5432/mmo_4node?sslmode=disable') }}" \
       | go run ./cmd/sdkgen --lang=csharp \
           --csharp-core csharp/Mmokit.Sdk.Core \
-          --out "{{ env('UNITY_SDK_DIR', '<WINDOWS-HOME>/unitygames/spacemmo-client/Assets/Mmokit/Sdk') }}"
+          --out "{{ unity_sdk_dir }}"
 
 # headless C# smoke-bot: live UDP round-trip (connect → AuthLogin → OnWorldDelta)
 # against a RUNNING 4node server. Compiles the generated SDK from UNITY_SDK_DIR.
@@ -352,7 +359,9 @@ csharp-sdk:
 # recipes enable it: `just dev` / `just distributed` in examples/4node-basic
 # both pass --udp-listen=:9000. Launching the binary by hand does not.
 # In distributed mode only the GATEWAY binds UDP.
+# UNITY_SDK_DIR is REQUIRED and has no default (see csharp-sdk).
 csharp-smoke *ARGS:
+    @test -n "{{ unity_sdk_dir }}" || { echo "error: UNITY_SDK_DIR is required. Set it to the Unity SDK tree that 'just csharp-sdk' wrote, e.g. UNITY_SDK_DIR=/path/to/UnityProject/Assets/Mmokit/Sdk just csharp-smoke" >&2; exit 1; }
     dotnet run --project csharp/Mmokit.Sdk.SmokeBot \
-        -p:UnitySdkDir="{{ env('UNITY_SDK_DIR', '<WINDOWS-HOME>/unitygames/spacemmo-client/Assets/Mmokit/Sdk') }}" \
+        -p:UnitySdkDir="{{ unity_sdk_dir }}" \
         -- {{ARGS}}

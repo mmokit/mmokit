@@ -18,11 +18,16 @@ web/dist/*
 data/*
 .superpowers
 .worktrees/
-.claude/scheduled_tasks.lock
 gen/
 log/
 
 .superpowers/
+
+# agent / task-runner local state. .claude/settings.json used to be tracked and
+# carried a Bash(*) grant plus absolute developer paths; .task/ is go-task's
+# checksum cache. Neither belongs in a published repository.
+.claude/
+.task/
 
 # admin frontend build artifacts
 web-admin/node_modules/
@@ -32,3 +37,26 @@ web-admin/.vite/
 pkg/admin/static/dist/*
 !pkg/admin/static/dist/.gitkeep
 !pkg/admin/static/dist/index.html
+
+# ---------------------------------------------------------------------------
+# Secrets. Prerequisite for CE-006, which introduces this repository's first
+# cluster secret and the MMO_CLUSTER_SECRET convention. Before this block only
+# `.env` was caught (by the `*.env` rule above) — `.env.local`, `server.key`,
+# `tls.pem`, `secrets.json` and friends were all committable by accident.
+#
+# These are a backstop, not a control: git only ignores UNTRACKED files, so a
+# secret that is already tracked stays tracked. Nothing in the tree matches
+# these patterns today (verified with `git ls-files`); if a legitimate file
+# ever does, negate it explicitly here rather than weakening a pattern.
+# ---------------------------------------------------------------------------
+.env*
+!.env.example
+*.pem
+*.key
+*.crt
+*.pfx
+*.p12
+id_rsa*
+secrets.*
+credentials.*
+creds.*

@@ -136,3 +136,15 @@ The SDK generator assembles those registries after the process builds. Wire type
 - [`CLAUDE.md`](CLAUDE.md) — concise Claude Code working notes
 
 Current source, tests, and [`justfile`](justfile) recipes are authoritative when a dated planning document disagrees with the implementation.
+
+## License
+
+MIT — see [`LICENSE`](LICENSE).
+
+The licence covers **MMOKIT core**: `pkg/`, `examples/`, `cmd/sdkgen`, `cmd/csharp-golden`, `proto/`, `gen/`, `csharp/`, `web-admin/`, `scripts/`, and `docs/`.
+
+The reference space game is **not part of the distributed framework**. That is `internal/`, `cmd/server`, `cmd/botclient`, `web-pixi/`, `data/`, and `world/`. It lives here as a worked example and as the framework's most demanding test, but it is not published as part of MMOKIT and its assets carry no licence grant — in particular the audio under `web-pixi/public/audio/` has no attribution recorded and is not covered.
+
+`pkg/` and `examples/` contain zero imports of `internal/`, and both examples ship their own `main.go`, so the framework is usable without any of the game code. See [`docs/roadmap.md`](docs/roadmap.md) (OSS-001) for the published/not-published boundary and the open extraction decision.
+
+Contributing guidance is in [`CONTRIBUTING.md`](CONTRIBUTING.md); vulnerability reporting is in [`SECURITY.md`](SECURITY.md).

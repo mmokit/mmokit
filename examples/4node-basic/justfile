@@ -46,8 +46,9 @@ web-serve port="5174":
     cd {{root}}/examples/4node-basic/web/dist && bunx serve . --single --listen {{port}}
 
 # build + run: client on :5174 (bunx serve), server /ws+/auth on :8080,
-# admin on :9101/admin/ (login: josh / localdev). The client dials the
-# backend cross-origin, so the server allowlists :5174 via --cors-origins.
+# admin on :9101/admin/ (login: admin / admin, seeded only into an empty
+# database — see seedDefaultOperator in pkg/admin/admin.go). The client dials
+# the backend cross-origin, so the server allowlists :5174 via --cors-origins.
 run: build
     #!/usr/bin/env bash
     set -euo pipefail
