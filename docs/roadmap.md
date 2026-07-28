@@ -1,7 +1,7 @@
 # MMOKIT Roadmap and Vision
 
 **Status:** Single source of truth for project direction
-**Last verified against source:** 2026-07-28
+**Last verified against source:** 2026-07-28 (CE-002 re-verified after implementation)
 **Companion:** [`architecture.md`](architecture.md) describes what exists today. This file describes where the project is going. Neither should restate the other.
 
 ---
@@ -103,19 +103,42 @@ The uncommitted work this section used to describe is committed. CE-001, CE-003,
 
 ### 6.3 P0 — must close before the 2D/3D program begins
 
-#### CE-002 — Bounded decoding and ingress budgets · **Open (0/8)** · highest priority
+#### CE-002 — Bounded decoding and ingress budgets · **Done (8/8)**
 
-The reflection decoder performs unchecked reads and trusts wire-supplied lengths. [`pkg/universe/reflect_marshal.go:337`](../pkg/universe/reflect_marshal.go) slices `data[off:off+slen]` on an attacker-controlled `uint16`, and `:347-351` calls `make([]byte, n)` on an attacker-controlled `uint32`. Every one of the eleven scalar arms at `:302-332` also indexes `data[off]` or `data[off:]` raw.
+Closed on branch `ce-002-bounded-decoding` (8 commits, `0dc6bafe`..`91da84ef`). The reflection decoder now bounds every read and charges every allocation before making it; client ingress is queue-capped, work-budgeted and panic-contained on every surface.
 
-The path is reachable **pre-authentication** inside a goroutine with **no `recover`**. An unrecovered panic there aborts the process. Treat this as an **unauthenticated remote denial of service**, not a robustness nit.
+The original attack inputs, run against the branch:
 
-Three corrections to the previous statement of this item, each measured:
+| Attack | Result |
+| --- | --- |
+| `u16` string length `0xFFFF`, 2 payload bytes | `read of 65535 bytes at offset 2 exceeds the 4-byte body` |
+| ~20-byte body declaring 65535 slice elements | `slice of 65535 elements needs at least 131070 bytes, 0 remain` |
+| `u32` `[]byte` length `0xFFFFFFFF` | `byte field of 4294967295 bytes exceeds the 16777216-byte limit` |
+| truncated scalar | `read of 8 bytes at offset 0 exceeds the 1-byte body` |
 
-- **There are two pre-auth op-decode paths, not one.** [`pkg/universe/gateway.go:1054`](../pkg/universe/gateway.go) is only reached when `runSessionPump` is launched, and that happens **only** under `if g.hostNetwork != nil` ([`gateway.go:160`](../pkg/universe/gateway.go)). On the single-process `all` preset — what `just dev` and `just run` use — the `0x01` drain is [`pkg/ops/router.go:118-147`](../pkg/ops/router.go), one process-wide goroutine on a 5 ms ticker servicing every connection, also with no `recover` and no work budget. A fix that hardens only `gateway.go` leaves the default preset exposed.
-- **The `make([]byte, n)` case is a mesh vector, not a client one.** It remains true that `recover` cannot mitigate it — a large enough length is Go's unrecoverable out-of-memory fatal error. But no registered client-input or op-request type has a `[]byte` field: `HandleClient` populates `ciByType` and `RegisterEvent` populates a separate `seByType`, and `mmokit.WorldDelta` — the only registered type carrying `[]byte` — is server→client. The **client**-reachable amplifier is the generic-slice arm at `:356-365`, which calls `reflect.MakeSlice(v.Type(), n, n)` on a wire `uint16` before reading a single element: a ~20-byte `chat.ChatBulkSetMembersRequest` body declaring `UserIDs` length `0xFFFF` forces a 65535-element allocation, roughly 50000× amplification, and that type is registered `RouteGatewayLocal` so its body is reflect-decoded on the gateway before any handler-side auth check.
-- **The cheapest exploit needs no malformed frame at all.** [`pkg/net/conn.go:196`](../pkg/net/conn.go) and `:203` append into `c.opInput`/`c.input` with no cap (`inputBufferSize = 32` is initial capacity, not a bound), and on the `all` preset nothing drains a pre-auth connection's channel `0x00` — `runSessionPump` is never launched, `Stage.DispatchClientInput` walks only `Players.ForEachConnected`, and `ops.Router.poll` drains only `DrainOpInput`. That is a pre-authentication unbounded-memory DoS reachable with well-formed frames.
+Note the slice bound is payload-**derived** rather than a configured knob — strictly stronger, and it cannot be misconfigured.
 
-**The `(0/8)` count is settled.** The prose previously enumerated seven clauses under an eight-denominator heading. The eight criteria are: (1) a checked decoder returning consumed bytes and an error; (2) bounds checks before every read; (3) configurable limits on frame size, strings, slices, nesting, and aggregate allocation; (4) rejection of truncated and trailing data; (5) per-connection queue and per-tick work caps across WebSocket, UDP, and virtual connections; (6) codec fuzzing; (7) bounded-cardinality rejection metrics; and (8) **no unrecovered panic on any pre-authentication ingress goroutine** — the defect this entry describes at length but never listed. Exactly 7 `recover()` calls exist in all non-test Go code and none is in `gateway.go`, `pkg/ops/router.go`, `pkg/net/`, `mesh_data_server.go` or `mesh_control_server.go`. No fuzz target exists anywhere in the repository.
+| # | Criterion | Evidence |
+| --- | --- | --- |
+| 1 | Checked decoder returning consumed bytes and an error | `decodeState` in [`reflect_marshal.go`](../pkg/universe/reflect_marshal.go); `decodeStruct` returns `(int, error)`. The three public wrappers return `error`; the consumed count surfaces through `ReflectUnmarshalStrict`'s `consumed != len(data)` check rather than a public `(int, error)` signature — see residuals |
+| 2 | Bounds checks before every read | 16 `d.need(...)` preconditions; `rg 'binary\.LittleEndian\.Uint(16\|32\|64)\(data\[off'` over the file returns nothing. `TestReflectUnmarshal_Truncated` covers every switch arm |
+| 3 | Configurable limits | `net.WireLimits` (9 fields) + `universe.Config.WireLimits` + `--wire-max-*` flags, frozen at `New()` with a `Normalized()` zero-value fallback because `flag.Parsed()` is always true under `go test` |
+| 4 | Reject truncated and trailing data | `ReflectUnmarshalStrict` at 4 client-facing sites (`op_dispatch`, `op_dispatch_cell`, `event_dispatch`, `client_input_dispatch`). `TestReflectUnmarshalStrict_RejectsTrailing` / `TestReflectUnmarshal_ToleratesMeshTrailing` pin the deliberate asymmetry |
+| 5 | Per-connection queue and per-tick work caps | Caps on all three surfaces (`conn.go`, `udp_transport.go`, `virtual_conn_manager.go`), `ws.SetReadLimit` finally called, budgets on `ops.Router.poll` and `Stage.DispatchClientInput` | **done** `0dc6bafe`
+| 6 | Codec fuzzing | 6 targets covering all three families §6.7 names, incl. `FuzzDispatchInboundEventFrame` and `FuzzDecodeMeshFrame`; repo's first Go `testdata/fuzz` corpora; `just fuzz` | **done** `58c74f63`
+| 7 | Bounded-cardinality rejection metrics | `mmokit_ingress_rejected_total{reason,surface}` over a fixed `[2][12]` array — 24 series at start, 24 after any hostile traffic. `TestIngressMetrics_CardinalityIsFixed` is the guard against someone making it a map | **done** `d851414e`
+| 8 | No unrecovered panic on a pre-auth ingress goroutine | `recover()` in non-test Go rose 7 → 12, covering `Gateway.processOpFrame`, `ops.Router.dispatchOne`, `HostNetwork.routeInboundFrame` and a **scoped** `Cell` decode barrier | **done** `43297994`
+
+**Residual, deliberately accepted:**
+
+- **Mesh and transfer decode tolerate trailing bytes by design.** Those blobs are appended-to, and `UnmarshalTransferFrame` does not reject trailing data either. Strict decoding is client-facing only.
+- **`RoutePlayerCell` op decode failure is a user-visible behaviour change** — the client's typed-op promise used to hang forever and now receives `OperationError` code 3.
+- **Criterion 1's "consumed bytes" is satisfied by argument, not by a public signature.** `decodeState` carries `(int, error)` internally and `ReflectUnmarshalStrict` enforces exact consumption; no public `ReflectUnmarshalN` was added. Revisit if a caller ever needs the count.
+- **`ReflectCodec.Decode` failures are counted as `truncated`.** A registered codec gets exactly `Size()` bytes so it cannot over-read — it refused the *value*. A 13th enum arm nothing would alert on was judged worse than the approximation.
+- **The mesh profile widens `MaxTotalAllocBytes` to 16 MiB.** Defensible while the gRPC streams are already configured for 16 MiB messages, but it is [CE-006](#ce-006--mesh-authentication-and-authorization--open-012) landing mesh authentication that actually makes that number safe.
+- **`pkg/quantize`'s `FrameDecoder`, `SnapshotReader` and `DeltaEncoder.Decode` are left unchecked on purpose.** They are the most flagrantly unchecked decoders in the repo and have **zero** server-side inbound callers — the only production callers are in `internal/bot`, behind a recover. Anyone grepping for unchecked decoders finds these first; spending CE-002 budget there buys nothing.
+
+**Fixed along the way, not in the original scope:** `ConnManager.AddTransport` never recorded a peer address for UDP connections, so `RemoteAddrString` returned `""` for every UDP conn — every UDP-originated login in the cluster shared one `IPRateLimiter` bucket and every UDP audit row recorded a null IP. Separately, both `ComponentReplicator` registrars decoded straight into live world storage, so a refused body left a **torn component** (leading fields peer-supplied, trailing fields stale) on the border and handoff paths; both now stage into a scratch and commit only on success.
 
 #### CE-004 — Destination acceptance before cross-host demotion · **Done (7/7)**
 
@@ -343,7 +366,7 @@ Each work item should add the smallest regression test that fails before the fix
 - [ ] Linux integration jobs that permit localhost TCP and UDP listeners — **not blocked on anything but the CI file itself.** The tests already exist and already bind localhost: `pkg/net/server_origin_test.go`, `pkg/net/udp_server_test.go`, `pkg/net/udpclient/handshake_race_test.go`, `pkg/admin/admin_e2e_test.go`, `internal/bot/auth_test.go`, `pkg/universe/udp_listener_test.go`. Any `go test ./...` job on `ubuntu-latest` satisfies this; tick it by naming that coverage, not by building something new
 - [ ] Generated-schema diff checks *(blocked on CI **and** on Postgres: `just space-sdk` is not DB-free — `cmd/server/main.go:126-137` opens Postgres unconditionally and `log.Fatalf`s regardless of `--admin-listen=`)*
 - [ ] Cross-language Go/TypeScript/C# golden vectors *(blocked on CI only; both regenerators are pure Go)*
-- [ ] Load tests asserting bounded memory, queue depth, tick work, and recovery after backpressure — **the only gate not blocked on CI**, and the direct verification gate for CE-002 criterion 5
+- [x] Load tests asserting bounded memory, queue depth, tick work, and recovery after backpressure — landed as `TestIngress_SustainedLoadBoundedAndRecovers` (pkg/universe). Four assertions, one per clause; each was verified by neutering the cap it guards
 
 **Two standing blind spots in any `go test ./...` gate**, stated so green is not mistaken for complete:
 
@@ -353,9 +376,10 @@ Each work item should add the smallest regression test that fails before the fix
 **Race inventory, re-measured at `17a9a2ce`:**
 
 1. **`pkg/admin` fails `-race` deterministically — this is live, real, and was not recorded.** `go test ./pkg/admin/ -race -count=1` fails 5/5 on `TestAdminE2E_SplitTriggersTopologyEvent`; the same package passes 3/3 without `-race`. It is a production bug, not a test artifact: `sseWriter.Deliver` ([`pkg/admin/sse.go:81`](../pkg/admin/sse.go)) calls `Flush()` on the handler's `http.ResponseWriter` from the `TopicBus.dispatcher` goroutine ([`topicbus.go:169`](../pkg/admin/topicbus.go)) **after `handleStream` returned**, racing net/http's own `finishRequest`/`chunkWriter.close`. `Unsubscribe` (`topicbus.go:77`) only closes `st.done` and never joins the dispatcher. `sseWriter`'s own mutex cannot help, because the other writer is net/http. Using a `ResponseWriter` after the handler returns violates the net/http contract. **Gate 1 cannot be ticked until this is fixed**, or the race job is red on its first run and everyone learns to ignore it.
-2. **`TestTopicBus_SlowSubscriberDropped` is a real flake** — 1 of 5 `-race` runs, asserting an exact drop count on a timing-dependent bound (`topicbus_test.go:67`).
-3. **`ensureBorderDispatcher` vs `applyPeerList`** in the cell bridge — **did not reproduce** at this commit. `go test ./pkg/universe/ -race -p 1 -count=1` passed (47.8 s), and `pkg/universe` was `ok` in a full `-race` run. Possibly closed by the cell-identity work in `1536ece`. Recorded as unreproducible rather than deleted; do not treat it as fixed without a targeted test.
-4. ~~**`Cell.MeshID` during a rename.**~~ **Fixed.** A cell's `(MeshID, CellID)` pair is now one immutable `cellIdentity` record behind an `atomic.Pointer`, read through `Cell.MeshID()` / `Cell.CellID()` / `Cell.Identity()` and replaced only by `setIdentity` on the rename path. The mutable exported fields are gone, so the whole class of unsynchronized off-loop reads is closed rather than just the one the detector found. `Host.CellByID` additionally stopped scanning on the identity and now resolves through the map key (`ParseCellID` + lookup), which is both race-free and O(1) instead of O(cells) on a path the mesh data plane hits per inbound frame. Note that a single-load `Identity()` is the only way to get both halves consistently — two separate accessor calls may legitimately straddle a rename, which `TestCellIdentity_SeparateAccessorsMayStraddleARename` documents.
+2. **`examples/4node-basic` `TestE2EMeshSplitMergeWithBotTraffic` is a suspected pre-existing flake**, recorded here because it was not recorded anywhere. Observed twice consecutively during CE-002 (`post-resplit-0_0 entity conservation: 1 of 60 bots missing`), then 7 consecutive full-suite passes on byte-identical code, plus 16 standalone runs and 6 under 2× CPU oversubscription all green; a further 5 consecutive `-count=5` passes after the phase landed. Byte-identical code and an identical command producing failure-then-pass makes it nondeterministic by construction rather than attributable to a diff, and it did not reproduce on `HEAD` either. Note `9c320a96` shipped this test alongside three race fixes, so the area has prior form. Needs a targeted investigation, not a re-run.
+3. **`TestTopicBus_SlowSubscriberDropped` is a real flake** — 1 of 5 `-race` runs, asserting an exact drop count on a timing-dependent bound (`topicbus_test.go:67`).
+4. **`ensureBorderDispatcher` vs `applyPeerList`** in the cell bridge — **did not reproduce** at this commit. `go test ./pkg/universe/ -race -p 1 -count=1` passed (47.8 s), and `pkg/universe` was `ok` in a full `-race` run. Possibly closed by the cell-identity work in `1536ece`. Recorded as unreproducible rather than deleted; do not treat it as fixed without a targeted test.
+5. ~~**`Cell.MeshID` during a rename.**~~ **Fixed.** A cell's `(MeshID, CellID)` pair is now one immutable `cellIdentity` record behind an `atomic.Pointer`, read through `Cell.MeshID()` / `Cell.CellID()` / `Cell.Identity()` and replaced only by `setIdentity` on the rename path. The mutable exported fields are gone, so the whole class of unsynchronized off-loop reads is closed rather than just the one the detector found. `Host.CellByID` additionally stopped scanning on the identity and now resolves through the map key (`ParseCellID` + lookup), which is both race-free and O(1) instead of O(cells) on a path the mesh data plane hits per inbound frame. Note that a single-load `Identity()` is the only way to get both halves consistently — two separate accessor calls may legitimately straddle a rename, which `TestCellIdentity_SeparateAccessorsMayStraddleARename` documents.
 
 Also note: `pkg/universe` intermittently reports `executor: serialize timeout on cell_0_0` ([`cell_transfer_executor.go:239`](../pkg/universe/cell_transfer_executor.go)) under PARALLEL package execution. That one is CPU contention on a `RunOnLoop` deadline, not a logic race. The recorded "roughly 1 run in 4 with default `-p`" figure is **not confirmed at `17a9a2ce`** — it did not reproduce in 1 default-`-p` run (`go test ./... -count=1 -timeout 300s`, exit 0, 47.9 s, `ok pkg/universe 47.448s`) or 2 `-p 1` runs. One passing sample cannot refute a 1-in-4 rate, so **keep `-p 1` as retained insurance**, but treat it as insurance rather than a proven necessity, and note that under `-race` (2 m 55 s versus 48 s) contention is strictly worse, so a nightly race job should carry `-p 1` too.
 
@@ -367,7 +391,7 @@ Also note: `pkg/universe` intermittently reports `executor: serialize timeout on
 
 | Item | At phase end |
 | --- | --- |
-| CE-002 | **Done (8/8)** |
+| CE-002 | **Done (8/8)** — landed, see [§6.3](#ce-002--bounded-decoding-and-ingress-budgets--done-88) |
 | CE-006 | **Done (12/12)**, including the `MeshData` payload binding. That criterion is closed with a real `sender_id` field on `meshpb.MeshFrame` plus a `just proto` run and a lockstep cluster redeploy — an accepted cost here, not a reason to defer |
 | OSS-001 | **Partial.** CI half closed completely; publication half is the mmokit-core extraction, which carries an open mechanism decision |
 | CE-005b Tier 2 | **Still open** — see below |
@@ -390,23 +414,28 @@ Four units have no dependencies and can start together: the roadmap of record, p
 
 #### 6.8.3 Units
 
-| # | Unit | Item | Days | Risk | After |
-| --- | --- | --- | ---: | --- | --- |
-| 1 | Phase of record: this section, and the criteria rewrites above | tracking | 0.75 | low | — |
-| 2 | Publication hygiene, MIT `LICENSE`, secret-filename hardening, `CONTRIBUTING`/`SECURITY` | OSS-001 | 0.75 | low | — |
-| 3 | Green the gate: `pkg/admin` SSE-after-handler race, `TopicBus` flake, toolchain pin | OSS-001 | 1 | med | — |
-| 4 | CI foundation: PR jobs plus a nightly race and fuzz workflow | OSS-001 | 2 | low | 3 |
-| 5 | Ingress containment: panic barriers, pre-auth queue caps, per-drain work budgets, `WireLimits` carrier | CE-002 (5, 8) | 3.5 | med | — |
-| 6 | Fuzz harness covering all three decoder families §6.7 names | CE-002 (6) | 2 | low | 4 |
-| 7 | Encoder length guards that return an error rather than panicking | CE-002 | 0.75 | low | 4 |
-| 8 | `decodeState`: bounds before every read, allocation charged before every allocation | CE-002 (1, 2, 4) | 3.25 | med | 6, 7 |
-| 9 | Propagate decode errors through all 19 call sites, incl. the `ComponentReplicator` facade break | CE-002 | 2 | med | 8 |
-| 10 | Limits on `Config`, strict decoding switched on, registered wire types validated | CE-002 (3, 4) | 1.5 | med | 9 |
-| 11 | Bounded-cardinality rejection metrics, actually scraped, plus the sustained-ingress load test | CE-002 (7); gate 6 | 2 | med | 5, 9 |
-| 12 | CE-006 Phase A: authenticate and encrypt both mesh channels | CE-006 (1–7) | 6 | med | 2 |
-| 13 | CE-006 Phase B: bind control-stream identity, stop trusting RBAC grants off the wire | CE-006 (8–11) | 5 | **high** | 12 |
-| 14 | CE-006 Phase C: `MeshFrame.sender_id`, payload-plane binding, receipt oneof arm, `just proto` | CE-006 (12) | 2 | med | 12 |
-| 15 | Phase close: propagate the secret to fixtures and recipes, smoke both presets, write status back here | all | 2.5 | low | 1, 2, 4, 5, 10, 11, 13, 14 |
+CE-002's seven units are **done** (branch `ce-002-bounded-decoding`). Status is derived from the commits, not from this table — re-verify against source.
+
+| # | Unit | Item | Days | Risk | After | Status |
+| --- | --- | --- | ---: | --- | --- | --- |
+| 1 | Phase of record: this section, and the criteria rewrites above | tracking | 0.75 | low | — | done |
+| 2 | Publication hygiene, MIT `LICENSE`, secret-filename hardening, `CONTRIBUTING`/`SECURITY` | OSS-001 | 0.75 | low | — | open |
+| 3 | Green the gate: `pkg/admin` SSE-after-handler race, `TopicBus` flake, toolchain pin | OSS-001 | 1 | med | — | open |
+| 4 | CI foundation: PR jobs plus a nightly race and fuzz workflow | OSS-001 | 2 | low | 3 | open |
+| 5 | Ingress containment: panic barriers, pre-auth queue caps, per-drain work budgets, `WireLimits` carrier | CE-002 (5, 8) | 3.5 | med | — | **done** `0dc6bafe` |
+| 6 | Fuzz harness covering all three decoder families §6.7 names | CE-002 (6) | 2 | low | 4 | **done** `58c74f63` |
+| 7 | Encoder length guards that return an error rather than panicking | CE-002 | 0.75 | low | 4 | **done** `d851414e` |
+| 8 | `decodeState`: bounds before every read, allocation charged before every allocation | CE-002 (1, 2, 4) | 3.25 | med | 6, 7 | **done** `43297994` |
+| 9 | Propagate decode errors through all 19 call sites, incl. the `ComponentReplicator` facade break | CE-002 | 2 | med | 8 | **done** `3056091e` |
+| 10 | Limits on `Config`, strict decoding switched on, registered wire types validated | CE-002 (3, 4) | 1.5 | med | 9 | **done** `403c1f8c` |
+| 11 | Bounded-cardinality rejection metrics, actually scraped, plus the sustained-ingress load test | CE-002 (7); gate 6 | 2 | med | 5, 9 | **done** `47aa058c` |
+| 11b | Component apply atomicity — found during CE-002 verification, not originally scoped | CE-002 | 0.25 | low | 9 | **done** `91da84ef` |
+| 12 | CE-006 Phase A: authenticate and encrypt both mesh channels | CE-006 (1–7) | 6 | med | 2 | open |
+| 13 | CE-006 Phase B: bind control-stream identity, stop trusting RBAC grants off the wire | CE-006 (8–11) | 5 | **high** | 12 | open |
+| 14 | CE-006 Phase C: `MeshFrame.sender_id`, payload-plane binding, receipt oneof arm, `just proto` | CE-006 (12) | 2 | med | 12 | open |
+| 15 | Phase close: propagate the secret to fixtures and recipes, smoke both presets, write status back here | all | 2.5 | low | 1, 2, 4, 5, 10, 11, 13, 14 | open |
+
+Unit 4's dependency on units 6 and 7 was a sequencing preference, not a technical one, and was inverted when CE-002 ran first: the fuzz harness and encoder guards landed without CI. The CI foundation still owes them a scheduled mutation run, which is the half §6.7 gate 2 actually needs.
 
 #### 6.8.4 Traps this phase must not fall into
 
