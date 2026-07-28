@@ -56,8 +56,36 @@ jobs:
       # `-p 1` carries over from ci.yml for a stronger reason than it has
       # there: the serialize-timeout it insures against is CPU contention on a
       # RunOnLoop deadline, and -race makes contention strictly worse.
+      #
+      # The run is teed so the next step can answer the ONE question that
+      # decides how urgent a red is — was it a data race, or a flaky test?
+      # Without that split every failure costs a log-archaeology session, and
+      # the known flakes below make that a recurring cost.
       - name: go test -race
-        run: go test -race ./... -count=1 -p 1 -timeout 30m
+        id: race
+        run: |
+          set -o pipefail
+          go test -race ./... -count=1 -p 1 -timeout 30m 2>&1 | tee /tmp/race.log
+
+      # Runs on failure AND success: a DATA RACE can be reported by a test that
+      # still passes, so a green suite is not by itself proof of no race.
+      - name: classify
+        if: always()
+        run: |
+          races=$(grep -c 'WARNING: DATA RACE' /tmp/race.log || true)
+          if [ "$races" -gt 0 ]; then
+            echo "::error::$races DATA RACE report(s) — a real concurrency bug, triage immediately"
+            grep -A25 'WARNING: DATA RACE' /tmp/race.log | head -100
+            exit 1
+          fi
+          if [ "${{ steps.race.outcome }}" = "failure" ]; then
+            echo "::warning::suite failed with ZERO data races — a failing or flaky test, not a concurrency bug"
+            grep -E '^--- FAIL|^FAIL' /tmp/race.log | head -40
+            echo "Known flaky under load, both pre-existing and tracked in docs/roadmap.md 6.7:"
+            echo "  - pkg/mmokit TestTintSystem_PhaseFollowsClusterTimeNotCell"
+            echo "  - examples/4node-basic TestE2EMeshSplitMergeWithBotTraffic"
+            echo "If the failure is one of those, it still needs fixing — do not re-run it away."
+          fi
 
   fuzz:
     name: fuzz
