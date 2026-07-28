@@ -24,6 +24,9 @@ func (s *Server) handleStream(w http.ResponseWriter, r *http.Request) {
 	writer := newSSEWriter(w, r.Context(), topics)
 	writer.writeHeaders()
 	s.bus.Subscribe(writer, topics...)
+	// Unsubscribe blocks until the bus dispatcher has stopped. That is required,
+	// not incidental: w is only legal to write to until this handler returns, and
+	// the dispatcher writes to it from another goroutine. Never make this async.
 	defer s.bus.Unsubscribe(writer)
 
 	// Block until the client disconnects.

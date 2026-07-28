@@ -2,6 +2,8 @@ module github.com/zenion/mmoserver
 
 go 1.25.1
 
+toolchain go1.26.2
+
 require (
 	github.com/chzyer/readline v1.5.1
 	github.com/coder/websocket v1.8.14

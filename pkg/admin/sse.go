@@ -11,6 +11,13 @@ import (
 
 // sseWriter is a Subscriber that fans events out to an HTTP client over
 // the Server-Sent Events protocol. One sseWriter per dashboard tab.
+//
+// Deliver runs on the TopicBus dispatcher goroutine, not on the handler
+// goroutine, and writes to the handler's http.ResponseWriter. s.mu orders
+// concurrent Delivers against each other but cannot order them against
+// net/http, which writes to the same connection once the handler returns. What
+// keeps that safe is TopicBus.Unsubscribe joining the dispatcher before
+// handleStream returns; s.closed only covers the post-write-error case.
 type sseWriter struct {
 	w        http.ResponseWriter
 	flusher  http.Flusher
