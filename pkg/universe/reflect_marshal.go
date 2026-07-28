@@ -11,6 +11,7 @@ import (
 
 	"github.com/mlange-42/ark/ecs"
 
+	"github.com/zenion/mmoserver/pkg/metrics"
 	pkgnet "github.com/zenion/mmoserver/pkg/net"
 )
 
@@ -213,7 +214,7 @@ func ReflectMarshal(ptr any) ([]byte, error) {
 // cluster's own encoder produced. Client-supplied bodies go through
 // ReflectUnmarshalStrict with the process's configured client limits instead.
 func ReflectUnmarshalOnStage(stage *Stage, data []byte, ptr any) error {
-	_, err := decodeStruct(stage, data, ptr, meshProfile())
+	_, err := decodeStruct(stage, data, ptr, meshProfile(), metrics.SurfaceMesh)
 	return err
 }
 
@@ -252,14 +253,17 @@ func ReflectUnmarshal(data []byte, ptr any) error {
 func ReflectUnmarshalStrict(stage *Stage, data []byte, ptr any, lim pkgnet.WireLimits) error {
 	lim = lim.Normalized()
 	if len(data) > lim.MaxFrameBytes {
+		metrics.Ingress().RecordRejected(metrics.SurfaceClient, metrics.ReasonFrameTooLarge)
 		return fmt.Errorf("reflect_marshal: body of %d bytes exceeds the %d-byte frame limit",
 			len(data), lim.MaxFrameBytes)
 	}
-	consumed, err := decodeStruct(stage, data, ptr, lim)
+	consumed, err := decodeStruct(stage, data, ptr, lim, metrics.SurfaceClient)
 	if err != nil {
+		// Already counted inside decodeStruct, which knows which arm refused.
 		return err
 	}
 	if consumed != len(data) {
+		metrics.Ingress().RecordRejected(metrics.SurfaceClient, metrics.ReasonTrailing)
 		return fmt.Errorf("reflect_marshal: decode %T consumed %d of %d bytes",
 			ptr, consumed, len(data))
 	}
@@ -273,17 +277,27 @@ func ReflectUnmarshalStrict(stage *Stage, data []byte, ptr any, lim pkgnet.WireL
 // lim must already be Normalized. It is not re-normalized here because this runs
 // once per replicated component per entity per tick and a zero-valued limit set
 // can only arrive from inside this package.
-func decodeStruct(stage *Stage, data []byte, ptr any, lim pkgnet.WireLimits) (int, error) {
+//
+// surface says which ingress profile the caller is decoding under, and is the
+// label the rejection metric carries. Being the single entry point is what makes
+// the counter complete: every refusal the decoder can produce unwinds through
+// here, so no future arm can be added that fails without being counted.
+func decodeStruct(stage *Stage, data []byte, ptr any, lim pkgnet.WireLimits, surface metrics.IngressSurface) (int, error) {
 	v := reflect.ValueOf(ptr)
 	if v.Kind() == reflect.Pointer {
 		v = v.Elem()
 	}
 	if v.Kind() != reflect.Struct {
+		// Not an ingress rejection — the caller handed the decoder a non-struct,
+		// which is a programming error in this process and would be the same for
+		// every payload. Counting it would put a local bug on a metric that is
+		// meant to describe the peer.
 		return 0, fmt.Errorf("reflect_marshal: decode expected struct, got %s", v.Kind())
 	}
-	d := decodeState{stage: stage, data: data, lim: lim, alloc: uint64(lim.MaxTotalAllocBytes)}
+	d := decodeState{stage: stage, data: data, lim: lim, alloc: uint64(lim.MaxTotalAllocBytes), surface: surface}
 	off, err := d.structFields(0, v)
 	if err != nil {
+		metrics.Ingress().RecordRejected(surface, d.reason)
 		return 0, fmt.Errorf("reflect_marshal: decode %s: %w", v.Type(), err)
 	}
 	return off, nil
@@ -594,6 +608,24 @@ type decodeState struct {
 	// Debited by every allocating arm so many individually-legal fields
 	// cannot add up to an illegal total.
 	alloc uint64
+	// surface is which of the two ingress profiles this decode is running
+	// under, recorded on the rejection metric so a client-supplied malformed
+	// body and a malformed body from a trusted peer are distinguishable.
+	surface metrics.IngressSurface
+	// reason is set by reject() on the way out and read by decodeStruct once,
+	// at the top of the unwind. Carried on the state rather than in the error
+	// because the error is wrapped with a field path at every frame and an
+	// errors.As chain would cost an allocation per decode to classify
+	// something the failing arm already knows.
+	reason metrics.IngressReason
+}
+
+// reject records why this decode is failing and returns the error to unwind
+// with. Every error path in the decoder goes through it, so the metric and the
+// message can never disagree about the cause.
+func (d *decodeState) reject(reason metrics.IngressReason, format string, args ...any) error {
+	d.reason = reason
+	return fmt.Errorf(format, args...)
 }
 
 // need reports whether n bytes are readable at off. This is CE-002 criterion 2:
@@ -601,7 +633,8 @@ type decodeState struct {
 // itself overflow on a wire-supplied u32 length.
 func (d *decodeState) need(off, n int) error {
 	if off < 0 || n < 0 || off > len(d.data) || n > len(d.data)-off {
-		return fmt.Errorf("read of %d bytes at offset %d exceeds the %d-byte body", n, off, len(d.data))
+		return d.reject(metrics.ReasonTruncated,
+			"read of %d bytes at offset %d exceeds the %d-byte body", n, off, len(d.data))
 	}
 	return nil
 }
@@ -610,7 +643,8 @@ func (d *decodeState) need(off, n int) error {
 // before the corresponding make/MakeSlice rather than after it.
 func (d *decodeState) charge(n uint64) error {
 	if n > d.alloc {
-		return fmt.Errorf("allocation of %d bytes exceeds the %d bytes left of the %d-byte decode budget",
+		return d.reject(metrics.ReasonAllocBudget,
+			"allocation of %d bytes exceeds the %d bytes left of the %d-byte decode budget",
 			n, d.alloc, d.lim.MaxTotalAllocBytes)
 	}
 	d.alloc -= n
@@ -627,7 +661,7 @@ func (d *decodeState) charge(n uint64) error {
 // let this counter be mistaken for it.
 func (d *decodeState) enter() error {
 	if d.depth >= d.lim.MaxDepth {
-		return fmt.Errorf("nesting deeper than the %d-level limit", d.lim.MaxDepth)
+		return d.reject(metrics.ReasonDepth, "nesting deeper than the %d-level limit", d.lim.MaxDepth)
 	}
 	d.depth++
 	return nil
@@ -656,6 +690,12 @@ func (d *decodeState) structFields(off int, v reflect.Value) (int, error) {
 			// the body: Size() is documented fixed-width, so a codec reading
 			// past it would be reading the next field's bytes.
 			if err := codec.Decode(d.stage, d.data[off:off+size], v.Field(i)); err != nil {
+				// A registered codec got exactly Size() bytes, so it cannot
+				// have run off the end — it rejected the VALUE. Classified as
+				// truncated because the closed enum has no value-domain arm and
+				// inventing one for the handful of custom codecs would add a
+				// series nothing alerts on.
+				d.reason = metrics.ReasonTruncated
 				return 0, fmt.Errorf("%s.%s: %w", t.Name(), f.Name, err)
 			}
 			off += size
@@ -748,7 +788,8 @@ func (d *decodeState) value(off int, v reflect.Value) (int, error) {
 		slen := int(binary.LittleEndian.Uint16(d.data[off:]))
 		off += 2
 		if slen > d.lim.MaxStringBytes {
-			return 0, fmt.Errorf("string of %d bytes exceeds the %d-byte limit", slen, d.lim.MaxStringBytes)
+			return 0, d.reject(metrics.ReasonStringLimit,
+				"string of %d bytes exceeds the %d-byte limit", slen, d.lim.MaxStringBytes)
 		}
 		// The client-reachable vector: slen is fully wire-controlled and was
 		// used directly as a slice bound, so four bytes of payload produced a
@@ -800,7 +841,7 @@ func (d *decodeState) slice(off int, v reflect.Value) (int, error) {
 		// meant to put there, and failing on the first empty one is how the
 		// mistake gets found. See WireLimits.RejectByteFields.
 		if d.lim.RejectByteFields {
-			return 0, fmt.Errorf("byte fields are not decodable on this surface")
+			return 0, d.reject(metrics.ReasonBytesLimit, "byte fields are not decodable on this surface")
 		}
 		if err := d.need(off, 4); err != nil {
 			return 0, err
@@ -813,11 +854,15 @@ func (d *decodeState) slice(off int, v reflect.Value) (int, error) {
 		n := uint64(binary.LittleEndian.Uint32(d.data[off:]))
 		off += 4
 		if n > uint64(d.lim.MaxBytesFieldLen) {
-			return 0, fmt.Errorf("byte field of %d bytes exceeds the %d-byte limit",
+			return 0, d.reject(metrics.ReasonBytesLimit,
+				"byte field of %d bytes exceeds the %d-byte limit",
 				n, d.lim.MaxBytesFieldLen)
 		}
 		if n > uint64(len(d.data)-off) {
-			return 0, fmt.Errorf("byte field of %d bytes exceeds the %d bytes remaining",
+			// Payload-derived, so this is a short body rather than an
+			// over-large field: counted as truncated, not as bytes_limit.
+			return 0, d.reject(metrics.ReasonTruncated,
+				"byte field of %d bytes exceeds the %d bytes remaining",
 				n, len(d.data)-off)
 		}
 		if err := d.charge(n); err != nil {
@@ -842,7 +887,8 @@ func (d *decodeState) slice(off int, v reflect.Value) (int, error) {
 	n := int(binary.LittleEndian.Uint16(d.data[off:]))
 	off += 2
 	if n > d.lim.MaxSliceElems {
-		return 0, fmt.Errorf("slice of %d elements exceeds the %d-element limit", n, d.lim.MaxSliceElems)
+		return 0, d.reject(metrics.ReasonSliceLimit,
+			"slice of %d elements exceeds the %d-element limit", n, d.lim.MaxSliceElems)
 	}
 	// Payload-derived ceiling, the same shape as UnmarshalTransferFrame's
 	// "reject impossible counts before allocating attacker-controlled
@@ -851,7 +897,11 @@ func (d *decodeState) slice(off int, v reflect.Value) (int, error) {
 	// chat.ChatBulkSetMembersRequest declaring UserIDs length 0xFFFF used to
 	// force a 65535-element reservation before a single element was read.
 	if elemMin := minWireSize(elem); elemMin > 0 && n > (len(d.data)-off)/elemMin {
-		return 0, fmt.Errorf("slice of %d elements needs at least %d bytes, %d remain",
+		// Payload-derived, like the []byte arm above: the declared count is
+		// impossible for this body, which is a short body rather than a slice
+		// over the configured ceiling.
+		return 0, d.reject(metrics.ReasonTruncated,
+			"slice of %d elements needs at least %d bytes, %d remain",
 			n, n*elemMin, len(d.data)-off)
 	}
 	if err := d.charge(uint64(n) * uint64(elem.Size())); err != nil {

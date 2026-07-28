@@ -3722,10 +3722,42 @@ func (c *Process) allCellLoads() map[string]metrics.LoadSnapshot {
 	return result
 }
 
+// processMetrics returns the process-scoped half of a scrape: the ingress
+// rejection tally plus the client UDP listener's packet-level refusals.
+//
+// These are deliberately NOT shipped to the coordinator's aggregated /metrics
+// the way per-cell load is. A remote host's cell metrics travel inside
+// Heartbeat.metrics as a CellMetricsReport, so carrying ingress counters the
+// same way would mean new proto fields — but the reason not to is
+// architectural, not the cost of a schema change (roadmap §6.8.2 is explicit
+// that a proto change is a normal cost here). Non-goal 3 says the coordinator
+// is a control plane and must never become a payload or diagnostics relay, and
+// ingress counters are per-process by nature: the number an operator needs is
+// "how much is THIS gateway refusing", which is meaningless once summed across
+// a cluster and attributed to the coordinator. Scrape each process's own
+// /metrics — every role now serves a non-empty one.
+func (c *Process) processMetrics() metrics.ProcessSnapshot {
+	snap := metrics.ProcessSnapshot{Ingress: metrics.Ingress().Snapshot()}
+	if udp, ok := c.UDPStats(); ok {
+		snap.UDP = metrics.UDPDropSnapshot{
+			Bound:               true,
+			SourceMismatchDrops: udp.SourceMismatchDrops,
+			CapacityDrops:       udp.CapacityDrops,
+			PendingFullDrops:    udp.PendingFullDrops,
+			PendingCount:        uint64(udp.PendingCount),
+		}
+	}
+	return snap
+}
+
 // MetricsHandler returns an HTTP handler that serves Prometheus-compatible
 // metrics for all nodes. Mount on your HTTP mux: mux.Handle("/metrics", coord.MetricsHandler())
+//
+// Both halves are wired: allCellLoads is empty on a process that owns no cells
+// (a gateway-role-only one), and processMetrics is what makes such a process
+// serve real samples instead of a body of header comments.
 func (c *Process) MetricsHandler() http.HandlerFunc {
-	return metrics.Handler(c.allCellLoads)
+	return metrics.Handler(c.allCellLoads, c.processMetrics)
 }
 
 // convertTimingStats converts engine.TimingStats to metrics.TimingStats.

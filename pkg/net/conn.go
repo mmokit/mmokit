@@ -8,6 +8,8 @@ import (
 	"time"
 
 	"github.com/coder/websocket"
+
+	"github.com/zenion/mmoserver/pkg/metrics"
 )
 
 const (
@@ -218,8 +220,14 @@ func (c *Conn) InjectInput(data []byte) {
 // dropLogInterval across all of this connection's drop reasons. An unthrottled
 // line per drop would let a peer that is already flooding the queue also drive
 // unbounded log I/O.
+//
+// The per-connection counter above is what /debug/conn-stats and the tests
+// read; the process-wide tally is what a scrape reads, and it is the only one
+// that survives this connection being closed. Both are unlabelled — the
+// connID deliberately does not travel to the metric.
 func (c *Conn) noteInputDrop(counter *atomic.Uint64, reason string) {
 	counter.Add(1)
+	metrics.Ingress().RecordRejected(metrics.SurfaceClient, ingressReasonFor(reason))
 	if !c.dropLog.allow() {
 		return
 	}

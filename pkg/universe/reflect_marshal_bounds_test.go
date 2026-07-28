@@ -5,6 +5,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/zenion/mmoserver/pkg/metrics"
 	pkgnet "github.com/zenion/mmoserver/pkg/net"
 )
 
@@ -54,7 +55,7 @@ type (
 // ReflectUnmarshalStrict so a row asserts the BOUNDS check specifically and not
 // the strict trailing-byte rule, which is a different criterion.
 func checkedDecode(ptr any, data []byte) error {
-	_, err := decodeStruct(nil, data, ptr, pkgnet.DefaultWireLimits())
+	_, err := decodeStruct(nil, data, ptr, pkgnet.DefaultWireLimits(), metrics.SurfaceMesh)
 	return err
 }
 

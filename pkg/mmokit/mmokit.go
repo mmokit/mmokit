@@ -937,7 +937,11 @@ var (
 	// and bandwidth tracking.
 	NewCellMetrics = metrics.NewCellMetrics
 
-	// MetricsHandler returns an http.Handler that serves Prometheus-compatible metrics.
+	// MetricsHandler returns an http.Handler that serves Prometheus-compatible
+	// metrics. It takes two snapshot callbacks: the per-cell load map, and the
+	// process-scoped counters (ingress rejections, UDP packet refusals). Pass
+	// nil for the second to omit the process-scoped families. Process.MetricsHandler
+	// wires both and is what /metrics is mounted from in a normal game.
 	MetricsHandler = metrics.Handler
 
 	// NewConnManager creates a connection manager for WebSocket and UDP transports.

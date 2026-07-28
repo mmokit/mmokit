@@ -3,6 +3,8 @@ package net
 import (
 	"sync/atomic"
 	"time"
+
+	"github.com/zenion/mmoserver/pkg/metrics"
 )
 
 // WireLimits bounds every attacker-controlled quantity on the client ingress
@@ -168,6 +170,27 @@ func (l WireLimits) Normalized() WireLimits {
 // line is rate limited.
 type dropThrottle struct {
 	last atomic.Int64
+}
+
+// ingressReasonFor maps the short drop label the WebSocket and UDP drop
+// throttles already carry ("event", "op", "oversize") onto the closed metric
+// reason enum.
+//
+// The two queue labels collapse into one queue_full series on purpose. Which
+// channel overflowed is a per-connection detail the log line still carries; what
+// an operator alerts on is that a peer is outrunning its drain, and splitting
+// that across two series only makes the alert expression longer.
+//
+// pkg/net imports pkg/metrics rather than the reverse: pkg/metrics depends on
+// nothing outside the standard library (that is stated in its package doc), so
+// this direction cannot cycle. The alternative — a callback or a counter handle
+// on every Conn — would put a pointer on each connection to reach a tally that
+// is process-wide by nature.
+func ingressReasonFor(label string) metrics.IngressReason {
+	if label == "oversize" {
+		return metrics.ReasonFrameTooLarge
+	}
+	return metrics.ReasonQueueFull
 }
 
 // allow reports whether a log line may be emitted now.

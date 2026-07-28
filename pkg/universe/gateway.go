@@ -37,6 +37,7 @@ import (
 	meshpb "github.com/zenion/mmoserver/gen/go/meshpb"
 	"github.com/zenion/mmoserver/pkg/coords"
 	"github.com/zenion/mmoserver/pkg/logger"
+	"github.com/zenion/mmoserver/pkg/metrics"
 	"github.com/zenion/mmoserver/pkg/net"
 	"github.com/zenion/mmoserver/pkg/ops"
 	"github.com/zenion/mmoserver/pkg/service"
@@ -1074,6 +1075,7 @@ func (g *Gateway) runSessionPump(connID uint32) {
 func (g *Gateway) processOpFrame(connID uint32, sess *localSession, raw []byte) {
 	defer func() {
 		if r := recover(); r != nil {
+			metrics.Ingress().RecordRejected(metrics.SurfaceClient, metrics.ReasonPanicRecovered)
 			g.log.Log(CatNetConn, "gateway: op frame panic conn=%d bytes=%d panic=%v",
 				connID, len(raw), r)
 		}

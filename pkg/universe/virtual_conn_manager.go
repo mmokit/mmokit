@@ -19,6 +19,7 @@ import (
 
 	meshpb "github.com/zenion/mmoserver/gen/go/meshpb"
 	"github.com/zenion/mmoserver/pkg/logger"
+	"github.com/zenion/mmoserver/pkg/metrics"
 	pkgnet "github.com/zenion/mmoserver/pkg/net"
 )
 
@@ -533,6 +534,14 @@ func (v *VirtualConnManager) appendChannel(localID uint32, data []byte, channel 
 // vcmDropLogInterval across all reasons and all sessions.
 func (v *VirtualConnManager) noteAppendDrop(counter *atomic.Uint64, reason string, localID uint32) {
 	counter.Add(1)
+	// Surface is client, not mesh: these bytes are a player's, forwarded
+	// verbatim by a gateway. The mesh is only the carrier, and attributing the
+	// refusal to it would point an operator at the wrong peer.
+	if reason == "oversize" {
+		metrics.Ingress().RecordRejected(metrics.SurfaceClient, metrics.ReasonFrameTooLarge)
+	} else {
+		metrics.Ingress().RecordRejected(metrics.SurfaceClient, metrics.ReasonQueueFull)
+	}
 	now := time.Now().UnixNano()
 	previous := v.lastDropLog.Load()
 	if now-previous < int64(vcmDropLogInterval) {

@@ -7,6 +7,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/zenion/mmoserver/pkg/metrics"
 	pkgnet "github.com/zenion/mmoserver/pkg/net"
 )
 
@@ -161,6 +162,10 @@ func (r *Router) poll() {
 			// tick 5 ms from now picks them up. ActiveConnIDs order is
 			// unspecified, so this is not a stable per-connection
 			// starvation: the set is re-walked from scratch each pass.
+			// Counted, not just logged: the log line is throttled by nothing
+			// and this is the signal that op ingress is saturating the poll
+			// loop. No frame is lost here — the deferral is the metric.
+			metrics.Ingress().RecordRejected(metrics.SurfaceClient, metrics.ReasonTickBudgetExhausted)
 			log.Printf("ops: poll budget %d frames exhausted, deferring remaining connections", budget)
 			return
 		}
@@ -194,6 +199,10 @@ func (r *Router) poll() {
 func (r *Router) dispatchOne(src DrainSource, connID uint32, raw []byte, ctx *OpContext) {
 	defer func() {
 		if rec := recover(); rec != nil {
+			// A recovered panic is the one ingress counter that reads as a bug
+			// report rather than as a peer misbehaving: the checked decoder is
+			// supposed to have refused this frame long before it got here.
+			metrics.Ingress().RecordRejected(metrics.SurfaceClient, metrics.ReasonPanicRecovered)
 			log.Printf("ops: op frame panic conn=%d bytes=%d panic=%v", connID, len(raw), rec)
 		}
 	}()

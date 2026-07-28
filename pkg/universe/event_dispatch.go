@@ -3,6 +3,8 @@ package universe
 import (
 	"encoding/binary"
 	"reflect"
+
+	"github.com/zenion/mmoserver/pkg/metrics"
 )
 
 // DispatchInboundEventFrame consumes a payload (frame body, channel byte
@@ -43,6 +45,7 @@ func DispatchInboundEventFrame(stage *Stage, playerNetID uint32, payload []byte)
 		bodyLen := binary.LittleEndian.Uint32(payload[off+4 : off+8])
 		off += 8
 		if int(bodyLen) > len(payload)-off {
+			metrics.Ingress().RecordRejected(metrics.SurfaceClient, metrics.ReasonTruncated)
 			if stage.eng != nil {
 				stage.eng.Log.Log(CatClientInput,
 					"[%s] DispatchInboundEventFrame: truncated body for typeID %#x (declared=%d remaining=%d)",
@@ -65,6 +68,7 @@ func DispatchInboundEventFrame(stage *Stage, playerNetID uint32, payload []byte)
 		}
 		t := ClientInputHooks.TypeOfTypeID(typeID)
 		if t == nil {
+			metrics.Ingress().RecordRejected(metrics.SurfaceClient, metrics.ReasonUnknownTypeID)
 			if stage.eng != nil {
 				stage.eng.Log.Log(CatClientInput,
 					"[%s] DispatchInboundEventFrame: unknown typeID %#x (no HandleClient registration)",

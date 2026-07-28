@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"reflect"
 
+	"github.com/zenion/mmoserver/pkg/metrics"
 	pkgnet "github.com/zenion/mmoserver/pkg/net"
 	"github.com/zenion/mmoserver/pkg/ops"
 )
@@ -54,6 +55,10 @@ func DispatchTypedOpInbound(payload []byte, ctx *ops.OpContext, router CellOpRou
 
 	kind, reqType, _, resTypeID, handler, ok := TypedOpHooks.LookupTypedOp(typeID)
 	if !ok {
+		// A sustained rate here is either an SDK/server version skew or someone
+		// walking the registry; the hooks-unwired arm above is a local wiring
+		// fault and is deliberately not counted as ingress.
+		metrics.Ingress().RecordRejected(metrics.SurfaceClient, metrics.ReasonUnknownTypeID)
 		return encodeOpErrorViaHooks(requestID, opErrorUnknownTypeID,
 			fmt.Sprintf("unknown typed-op typeID %#x", typeID))
 	}

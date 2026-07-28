@@ -8,6 +8,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/zenion/mmoserver/pkg/metrics"
 	"github.com/zenion/mmoserver/pkg/net/udpproto"
 )
 
@@ -234,6 +235,9 @@ func (t *UDPTransport) DrainInput() [][]byte {
 // UDPServer.noteDrop: the drop rate is entirely peer-controlled.
 func (t *UDPTransport) noteInboundDrop(counter *atomic.Uint64, reason string) {
 	counter.Add(1)
+	// Same process-wide tally the WebSocket read pump feeds. The token and the
+	// peer address stay in the log line and out of the metric.
+	metrics.Ingress().RecordRejected(metrics.SurfaceClient, ingressReasonFor(reason))
 	if !t.dropLog.allow() {
 		return
 	}

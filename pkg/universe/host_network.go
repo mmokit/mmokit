@@ -18,6 +18,7 @@ import (
 
 	meshpb "github.com/zenion/mmoserver/gen/go/meshpb"
 	"github.com/zenion/mmoserver/pkg/logger"
+	"github.com/zenion/mmoserver/pkg/metrics"
 	pkgnet "github.com/zenion/mmoserver/pkg/net"
 	"github.com/zenion/mmoserver/pkg/service"
 )
@@ -741,6 +742,7 @@ func (n *HostNetwork) Shutdown() error {
 func (n *HostNetwork) routeInboundFrame(frame *meshpb.MeshFrame) (err error) {
 	defer func() {
 		if r := recover(); r != nil {
+			metrics.Ingress().RecordRejected(metrics.SurfaceMesh, metrics.ReasonPanicRecovered)
 			n.log.Log(CatMeshMsg, "[%s] routeInboundFrame panic dest=%s: %v",
 				n.hostID, frame.GetDestCellId(), r)
 			err = nil
@@ -1015,6 +1017,7 @@ func (n *HostNetwork) routeInboundFrame(frame *meshpb.MeshFrame) (err error) {
 func (n *HostNetwork) deliverServiceEvent(se *meshpb.ServiceEvent) {
 	defer func() {
 		if r := recover(); r != nil {
+			metrics.Ingress().RecordRejected(metrics.SurfaceMesh, metrics.ReasonPanicRecovered)
 			n.log.Log(CatServicesBus, "[%s] deliverServiceEvent panic: type=%s from=%s: %v",
 				n.hostID, se.GetTypeName(), se.GetSourceProcessId(), r)
 		}

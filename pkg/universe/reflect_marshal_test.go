@@ -8,6 +8,7 @@ import (
 
 	"github.com/mlange-42/ark/ecs"
 
+	"github.com/zenion/mmoserver/pkg/metrics"
 	pkgnet "github.com/zenion/mmoserver/pkg/net"
 )
 
@@ -540,7 +541,7 @@ func TestReflectMarshal_MaxLengthStringAccepted(t *testing.T) {
 
 	lim.MaxStringBytes = maxWireStringLen
 	var out Named
-	if _, err := decodeStruct(nil, data, &out, lim); err != nil {
+	if _, err := decodeStruct(nil, data, &out, lim, metrics.SurfaceMesh); err != nil {
 		t.Fatalf("decode under a wire-width string limit: %v", err)
 	}
 	if len(out.Name) != maxWireStringLen {

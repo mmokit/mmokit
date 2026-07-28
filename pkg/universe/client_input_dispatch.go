@@ -8,6 +8,7 @@ import (
 	"github.com/mlange-42/ark/ecs"
 
 	"github.com/zenion/mmoserver/pkg/engine"
+	"github.com/zenion/mmoserver/pkg/metrics"
 )
 
 // CatClientInput is the log category for the typed client-input dispatch
@@ -100,6 +101,10 @@ func (s *Stage) DispatchClientInput() {
 			// frame would be lost, whereas an undrained queue is simply
 			// serviced next tick.
 			exhausted = true
+			// Counted so a saturated drain is visible on a scrape and not only
+			// in a log category an operator has to have enabled in advance.
+			// No frame is lost — the deferral itself is the signal.
+			metrics.Ingress().RecordRejected(metrics.SurfaceClient, metrics.ReasonTickBudgetExhausted)
 			s.eng.Log.Log(CatClientInput,
 				"[%s] client-input budget exhausted after %d frames, deferring remaining players to next tick",
 				s.cellID, dispatched)
@@ -131,6 +136,7 @@ func (s *Stage) dispatchInboundEventFrame(sess *engine.PlayerSession, frame []by
 		bodyLen := binary.LittleEndian.Uint32(frame[off+4 : off+8])
 		off += clientInputHeaderBytes
 		if uint64(bodyLen) > uint64(len(frame)-off) {
+			metrics.Ingress().RecordRejected(metrics.SurfaceClient, metrics.ReasonTruncated)
 			s.eng.Log.Log(CatClientInput,
 				"[%s] truncated client-input entry: conn=%d typeID=%#x bodyLen=%d remaining=%d",
 				s.cellID, sess.ConnID, typeID, bodyLen, len(frame)-off)
@@ -141,6 +147,7 @@ func (s *Stage) dispatchInboundEventFrame(sess *engine.PlayerSession, frame []by
 		s.dispatchOneClientInput(sess, typeID, body)
 	}
 	if off != len(frame) {
+		metrics.Ingress().RecordRejected(metrics.SurfaceClient, metrics.ReasonTruncated)
 		s.eng.Log.Log(CatClientInput,
 			"[%s] malformed client-input frame: conn=%d remaining=%d (header underrun)",
 			s.cellID, sess.ConnID, len(frame)-off)
@@ -158,6 +165,7 @@ func (s *Stage) dispatchInboundEventFrame(sess *engine.PlayerSession, frame []by
 func (s *Stage) dispatchOneClientInput(sess *engine.PlayerSession, typeID uint32, body []byte) {
 	defer func() {
 		if r := recover(); r != nil {
+			metrics.Ingress().RecordRejected(metrics.SurfaceClient, metrics.ReasonPanicRecovered)
 			s.eng.Log.Log(CatClientInput,
 				"[%s] client-input handler panic: conn=%d panic=%v",
 				s.cellID, sess.ConnID, r)
@@ -166,6 +174,7 @@ func (s *Stage) dispatchOneClientInput(sess *engine.PlayerSession, typeID uint32
 
 	msgType := ClientInputHooks.TypeOfTypeID(typeID)
 	if msgType == nil {
+		metrics.Ingress().RecordRejected(metrics.SurfaceClient, metrics.ReasonUnknownTypeID)
 		s.eng.Log.Log(CatClientInput,
 			"[%s] untrusted client-input typeID: conn=%d typeID=%#x (no HandleClient registration)",
 			s.cellID, sess.ConnID, typeID)

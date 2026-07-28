@@ -256,6 +256,7 @@ func (c *Cell) processMessageGuarded(msg CellMessage) {
 			return
 		}
 		c.recoveredPanics.Add(1)
+		metrics.Ingress().RecordRejected(metrics.SurfaceMesh, metrics.ReasonPanicRecovered)
 		c.Log.Log(CatMeshMsg,
 			"[%s] processMessage panic (type=%d from=%s): %v — cell loop survived, forcing integrity re-assert",
 			c.MeshID(), msg.Type, msg.FromCellID, r)
@@ -303,6 +304,7 @@ func (c *Cell) guardDecode(step string, fn func()) (ok bool) {
 	defer func() {
 		if r := recover(); r != nil {
 			c.recoveredPanics.Add(1)
+			metrics.Ingress().RecordRejected(metrics.SurfaceMesh, metrics.ReasonPanicRecovered)
 			c.Log.Log(CatMeshMsg, "[%s] %s decode panic, dropping frame: %v", c.MeshID(), step, r)
 			ok = false
 		}

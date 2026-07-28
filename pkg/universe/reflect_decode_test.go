@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/zenion/mmoserver/pkg/metrics"
 	pkgnet "github.com/zenion/mmoserver/pkg/net"
 )
 
@@ -101,7 +102,7 @@ func TestReflectUnmarshal_Bounds(t *testing.T) {
 			}
 
 			lim := tc.tighten(pkgnet.DefaultWireLimits())
-			_, err := decodeStruct(nil, body, tc.newPtr(), lim)
+			_, err := decodeStruct(nil, body, tc.newPtr(), lim, metrics.SurfaceMesh)
 			if err == nil {
 				t.Fatalf("accepted %d bytes under the tightened limit; this row verifies %s",
 					len(body), tc.closes)
