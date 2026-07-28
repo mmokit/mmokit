@@ -153,6 +153,34 @@ func RegisterComponent[T any](reg *ReplicationRegistry, m *ecs.Map1[T], opts ...
 
 	isCore := transferCoreTypes[reflect.TypeFor[T]()]
 
+	// applyInPlace decodes into a scratch copy and commits it to the live
+	// component only once the whole body has been accepted.
+	//
+	// Decoding straight into m.Get(entity) tears the component when a body is
+	// refused partway: the fields the decoder already reached hold peer-supplied
+	// values while the rest keep the previous tick's, and nothing downstream can
+	// tell the difference from real data. That is reachable from anything that
+	// can put bytes on the border-replication or handoff path, so a refused blob
+	// must leave the component exactly as it found it.
+	//
+	// The scratch is SEEDED from the live value rather than zeroed, which keeps
+	// two existing behaviours intact: a custom UnmarshalInto that merges into
+	// prior state still sees it, and fields a short body never reaches keep
+	// their current values instead of silently reverting to zero.
+	applyInPlace := func(live *T, data []byte) error {
+		scratch := *live
+		if o.UnmarshalInto != nil {
+			o.UnmarshalInto(data, unsafe.Pointer(&scratch))
+			*live = scratch
+			return nil
+		}
+		if err := ReflectUnmarshal(data, &scratch); err != nil {
+			return err
+		}
+		*live = scratch
+		return nil
+	}
+
 	reg.Register(ComponentReplicator{
 		IsTransferCore: isCore,
 		Scan: func(entity ecs.Entity) []byte {
@@ -178,21 +206,13 @@ func RegisterComponent[T any](reg *ReplicationRegistry, m *ecs.Map1[T], opts ...
 			if !m.HasAll(entity) {
 				return nil
 			}
-			if o.UnmarshalInto != nil {
-				o.UnmarshalInto(data, unsafe.Pointer(m.Get(entity)))
-				return nil
-			}
-			return ReflectUnmarshal(data, m.Get(entity))
+			return applyInPlace(m.Get(entity), data)
 		},
 		Add: func(entity ecs.Entity, data []byte) error {
 			if m.HasAll(entity) {
 				// Entity already has this component (e.g. from CreateReplica
 				// or SpawnFromTransferCore) — update in place.
-				if o.UnmarshalInto != nil {
-					o.UnmarshalInto(data, unsafe.Pointer(m.Get(entity)))
-					return nil
-				}
-				return ReflectUnmarshal(data, m.Get(entity))
+				return applyInPlace(m.Get(entity), data)
 			}
 			var comp T
 			if o.UnmarshalInto != nil {
@@ -243,7 +263,34 @@ func RegisterComponentByID(
 	// Allocate a scratch buffer of type t once per replicator, reused under
 	// the PreMarshal-copy path. Cells use one ReplicationRegistry per Stage
 	// and Scan/Apply run on the loop goroutine, so single-buffer reuse is safe.
-	scratchPtr := reflect.New(t) // pointer to zero-valued T
+	scratchPtr := reflect.New(t) // pointer to zero-valued T, PreMarshal staging
+
+	// decodeScratch is the type-erased counterpart to RegisterComponent's
+	// applyInPlace scratch: bodies are decoded here and copied into world
+	// storage only once accepted, so a refused blob cannot tear a live
+	// component. Kept separate from scratchPtr because Scan and Apply are
+	// distinct phases and sharing one buffer would couple them for no gain.
+	// Both are safe to capture: a ReplicationRegistry is per-Stage, so every
+	// call arrives on that cell's own loop goroutine.
+	decodeScratch := reflect.New(t)
+
+	// applyInPlace mirrors the typed registrar's, seeding the scratch from the
+	// live value so a merging UnmarshalInto and unreached fields both behave
+	// exactly as they did when the decode wrote through to storage directly.
+	applyInPlace := func(ptr unsafe.Pointer, data []byte) error {
+		dst := unsafe.Pointer(decodeScratch.Pointer())
+		reflect.NewAt(t, dst).Elem().Set(reflect.NewAt(t, ptr).Elem())
+		if o.UnmarshalInto != nil {
+			o.UnmarshalInto(data, dst)
+			reflect.NewAt(t, ptr).Elem().Set(reflect.NewAt(t, dst).Elem())
+			return nil
+		}
+		if err := ReflectUnmarshal(data, decodeScratch.Interface()); err != nil {
+			return err
+		}
+		reflect.NewAt(t, ptr).Elem().Set(reflect.NewAt(t, dst).Elem())
+		return nil
+	}
 
 	reg.Register(ComponentReplicator{
 		IsTransferCore: isCore,
@@ -273,29 +320,27 @@ func RegisterComponentByID(
 			if !u.Has(entity, id) {
 				return nil
 			}
-			ptr := u.Get(entity, id)
-			if o.UnmarshalInto != nil {
-				o.UnmarshalInto(data, ptr)
-				return nil
-			}
-			return ReflectUnmarshal(data, reflect.NewAt(t, ptr).Interface())
+			return applyInPlace(u.Get(entity, id), data)
 		},
 		Add: func(entity ecs.Entity, data []byte) error {
-			// Unlike RegisterComponent's typed Add there is no off-entity
-			// scratch to decode into — the type-erased path can only write
-			// through the world's own storage — so a refused blob leaves the
-			// component attached and zero-valued (fresh) or partially updated
-			// (pre-existing). Both are the "stale or absent" side of the trade
-			// noteComponentDecodeDrop documents.
-			if !u.Has(entity, id) {
-				u.Add(entity, id) // ark zero-initializes
+			if u.Has(entity, id) {
+				return applyInPlace(u.Get(entity, id), data)
 			}
-			ptr := u.Get(entity, id)
+			// Fresh component: decode into the scratch FIRST and attach only on
+			// success, so a refused blob leaves the entity without the component
+			// rather than with a zero-valued one. An attached zero component is
+			// indistinguishable downstream from real data, while an absent one
+			// still lets EnsureEntityKindComponents zero-fill deliberately.
+			dst := unsafe.Pointer(decodeScratch.Pointer())
+			reflect.NewAt(t, dst).Elem().SetZero()
 			if o.UnmarshalInto != nil {
-				o.UnmarshalInto(data, ptr)
-				return nil
+				o.UnmarshalInto(data, dst)
+			} else if err := ReflectUnmarshal(data, decodeScratch.Interface()); err != nil {
+				return err
 			}
-			return ReflectUnmarshal(data, reflect.NewAt(t, ptr).Interface())
+			u.Add(entity, id) // ark zero-initializes
+			reflect.NewAt(t, u.Get(entity, id)).Elem().Set(reflect.NewAt(t, dst).Elem())
+			return nil
 		},
 	})
 }

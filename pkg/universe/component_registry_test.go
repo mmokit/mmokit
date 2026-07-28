@@ -166,3 +166,61 @@ func TestRegisterComponent_ApplyUpdatesExisting(t *testing.T) {
 		t.Fatalf("Apply did not update: got %+v", v)
 	}
 }
+
+// TestApply_RefusedBodyLeavesComponentUntorn pins the atomicity of a replicated
+// component update. A body whose leading field decodes and whose trailing field
+// is truncated must leave the live component exactly as it was, not half
+// overwritten — a torn component is indistinguishable downstream from real data,
+// and this path is reachable from anything that can put bytes on the border
+// replication or handoff path.
+//
+// Before applyInPlace this decoded straight into world storage, so Current held
+// the peer's 999 while Max and Regen kept the previous tick's values.
+func TestApply_RefusedBodyLeavesComponentUntorn(t *testing.T) {
+	type Shield struct {
+		Current float32
+		Max     float32
+		Regen   float32
+	}
+	w := ecs.NewWorld(64)
+	m := ecs.NewMap1[Shield](w)
+	reg := NewReplicationRegistry()
+	RegisterComponent(reg, m)
+	rep := reg.Get(1)
+
+	entity := w.NewEntity()
+	m.Add(entity, &Shield{Current: 50, Max: 100, Regen: 2.5})
+
+	// A full body is 12 bytes (three float32). Supply the first field plus a
+	// truncated second so the decoder accepts Current and then refuses.
+	torn := make([]byte, 6)
+	binary.LittleEndian.PutUint32(torn[0:], math.Float32bits(999))
+
+	if err := rep.Apply(entity, torn); err == nil {
+		t.Fatal("Apply accepted a truncated body")
+	}
+	if got := m.Get(entity); got.Current != 50 || got.Max != 100 || got.Regen != 2.5 {
+		t.Fatalf("refused body tore the live component: got %+v, want the pre-Apply value", got)
+	}
+
+	// The same bytes through Add's pre-existing-component branch, which shares
+	// the path and had the identical defect.
+	if err := rep.Add(entity, torn); err == nil {
+		t.Fatal("Add accepted a truncated body")
+	}
+	if got := m.Get(entity); got.Current != 50 || got.Max != 100 || got.Regen != 2.5 {
+		t.Fatalf("refused body tore the live component via Add: got %+v", got)
+	}
+
+	// A well-formed body must still apply, so the scratch is actually committed.
+	ok := make([]byte, 12)
+	binary.LittleEndian.PutUint32(ok[0:], math.Float32bits(7))
+	binary.LittleEndian.PutUint32(ok[4:], math.Float32bits(8))
+	binary.LittleEndian.PutUint32(ok[8:], math.Float32bits(9))
+	if err := rep.Apply(entity, ok); err != nil {
+		t.Fatalf("Apply refused a well-formed body: %v", err)
+	}
+	if got := m.Get(entity); got.Current != 7 || got.Max != 8 || got.Regen != 9 {
+		t.Fatalf("accepted body was not committed: got %+v", got)
+	}
+}
