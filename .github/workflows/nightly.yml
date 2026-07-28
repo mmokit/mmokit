@@ -1,0 +1,120 @@
+# Scheduled-only gates. These never run on the PR path.
+#
+# Both jobs here are slow enough or noisy enough that putting them in front of a
+# merge would train everyone to ignore them. `ci.yml` is the required set.
+#
+# Neither job is game-coupled in a way that blocks the mmokit-core extraction
+# described in docs/roadmap.md OSS-001: `go test -race ./...` narrows to the
+# published packages on its own, and all six fuzz targets live in pkg/.
+#
+# Action versions are pinned to the same majors as ci.yml — see the note there
+# before bumping either file.
+
+name: Nightly
+
+on:
+  schedule:
+    # 03:17 UTC. Off the hour so this does not queue behind the very large
+    # number of workflows that ask for exactly 0 * * * *.
+    - cron: "17 3 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  race:
+    name: race
+    runs-on: ubuntu-latest
+    # Measured locally at 2 m 55 s against 48 s for the same suite without
+    # -race. A hosted runner has fewer cores, so budget generously.
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      # This job is expected to be green: unit 3 fixed the deterministic
+      # pkg/admin failure that made it red (sseWriter.Deliver flushing the
+      # handler's http.ResponseWriter from the TopicBus dispatcher goroutine
+      # after handleStream had returned) and rewrote the timing-dependent
+      # TestTopicBus_SlowSubscriberDropped. Two full -race runs passed
+      # afterwards, so this is NOT marked continue-on-error — a race gate that
+      # is allowed to fail is a race gate nobody reads.
+      #
+      # Two known unknowns rather than proven-green claims. The
+      # ensureBorderDispatcher vs applyPeerList cell-bridge race recorded in
+      # docs/roadmap.md §6.7 did not reproduce, and is recorded there as
+      # unreproducible rather than fixed. And
+      # examples/4node-basic TestE2EMeshSplitMergeWithBotTraffic is a suspected
+      # pre-existing nondeterministic flake. Do not assume a perfect first
+      # month; investigate a failure here, do not re-run it away.
+      #
+      # `-p 1` carries over from ci.yml for a stronger reason than it has
+      # there: the serialize-timeout it insures against is CPU contention on a
+      # RunOnLoop deadline, and -race makes contention strictly worse.
+      - name: go test -race
+        run: go test -race ./... -count=1 -p 1 -timeout 30m
+
+  fuzz:
+    name: fuzz
+    runs-on: ubuntu-latest
+    # 6 targets x 5 minutes = 30 minutes of mutation, plus build.
+    timeout-minutes: 50
+    # A newly discovered crasher must produce an artifact to triage, not a red
+    # main. Committed seed corpora already run as ordinary subtests inside
+    # ci.yml's `go test ./...`, so a *known* crasher is caught there; this job
+    # exists to find new ones.
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - uses: extractions/setup-just@v2
+
+      # `just fuzz` defaults to a 20-second smoke budget, which its own comment
+      # calls "a smoke run, not a campaign; the real mutation budget belongs to
+      # a scheduled CI job". This is that job, so it asks for 5 minutes per
+      # target. That is what docs/roadmap.md §6.7's fuzz gate actually needs —
+      # the seeds alone already execute under a plain `go test`.
+      #
+      # just stops the recipe at the first failing line, so a crasher in an
+      # early target costs the later ones their budget. FuzzReflectUnmarshal is
+      # last in the recipe for exactly that reason.
+      - name: fuzz
+        run: just fuzz 5m
+
+      # Go writes discovered crashers into the target's
+      # testdata/fuzz/<Target>/ directory, alongside the tracked seeds. Only
+      # untracked entries are new, so diff against the index rather than
+      # listing the directory.
+      - name: report newly discovered corpus entries
+        if: always()
+        run: |
+          set -euo pipefail
+          new="$(git status --porcelain --untracked-files=all -- '*/testdata/fuzz/*')"
+          if [ -n "$new" ]; then
+            echo "::warning::go test -fuzz wrote new corpus entries — triage these as crashers:"
+            echo "$new"
+          else
+            echo "No new fuzz corpus entries."
+          fi
+
+      # Uploads the whole corpus, tracked seeds included, so a crasher can be
+      # reproduced locally without reconstructing the run. Cross-reference the
+      # step above to see which entries are actually new.
+      - name: upload fuzz corpora
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fuzz-corpora
+          path: "**/testdata/fuzz/**"
+          if-no-files-found: ignore
+          retention-days: 14

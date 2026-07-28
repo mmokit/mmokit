@@ -104,7 +104,7 @@ Keep generated diffs only when the corresponding source/schema changed.
 
 ## Build and run rules
 
-- `justfile` is the canonical task runner; there is currently no CI configuration or Makefile.
+- `justfile` is the canonical task runner; there is no Makefile. CI is GitHub Actions: `.github/workflows/ci.yml` on every push and pull request, and `.github/workflows/nightly.yml` on a schedule for `-race` and fuzz mutation. The workflows invoke `just` recipes and the same commands listed under Validation below — keep them in step when you change a recipe name.
 - Never build binaries into the repository or package roots, and do not use `go build ./...`. Use `just build-go` for a DB-free server compile or an explicit `go build -o bin/<name> <package>` recipe.
 - `just build` generates the space SDK, builds both web applications, and writes `bin/server`. It does not run protobuf or WASM generation.
 - Full root builds and SDK dumps require PostgreSQL. Start it first with `just db-up`; this requires Docker. Most build/run recipes do not declare `db-up` as a dependency.

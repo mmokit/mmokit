@@ -52,6 +52,28 @@ passed on the strength of a targeted test.
 `go vet ./...` compiles everything and is the compile check; `just build-go` is
 the DB-free server build.
 
+## Continuous integration
+
+`.github/workflows/ci.yml` runs on every push and pull request: a Go job
+(`go vet`, changed-file `gofmt`, `just lint-no-ark`'s script, the full
+`go test`, and a `cmd/server` build), a frontend job (`just ts-core-test`,
+`just web-test`, and web-admin typecheck/test/build), a C# job pinned to
+`csharp/Mmokit.Sdk.slnx`, and a drift job that regenerates the C# wire golden
+and the ship-dynamics parity fixture and fails if either moved.
+
+`.github/workflows/nightly.yml` runs on a schedule only: `go test -race` and a
+five-minutes-per-target fuzz campaign. Neither is on the pull-request path.
+
+**CI is not a superset of local validation.** It provisions no PostgreSQL, so
+`just test-pg` and every `//go:build pgtest` package are unrun, and the
+generated-schema drift check is absent because `just space-sdk` runs
+`cmd/server`, which requires a database. Run those locally when you touch
+persistence or a client schema.
+
+The workflows deliberately encode the rules below — changed-file-only `gofmt`,
+`-p 1`, and never `go build ./...`. If you change one, change both, and treat
+this file as the explanation and the workflow as the mechanism.
+
 ## Test-run conventions
 
 ### `-p 1` is retained insurance

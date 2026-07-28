@@ -1,0 +1,287 @@
+# Required checks for every push and pull request.
+#
+# Long-running, expensive, or advisory gates (`-race`, fuzz mutation) live in
+# `nightly.yml` and deliberately never run on the PR path.
+#
+# ---------------------------------------------------------------------------
+# GAME-COUPLED JOBS — these do not survive the mmokit-core extraction
+# ---------------------------------------------------------------------------
+# docs/roadmap.md OSS-001 publishes `pkg/ examples/ cmd/sdkgen cmd/csharp-golden
+# proto/ gen/ csharp/ web-admin/ scripts/ docs/` and does NOT publish `internal/
+# cmd/server cmd/botclient web-pixi/ data/ world/ db-init/`. The following steps
+# read the unpublished half and must stay with whichever repository keeps the
+# reference space game:
+#
+#   go job       · `./scripts/no_ark_in_game.sh` — greps internal/game/
+#   go job       · `go build -o /tmp/server ./cmd/server` — the game's
+#                  composition root
+#   frontend job · `just web-test` — the prediction goldens under
+#                  web-pixi/src/__tests__/ and their internal/game/ counterpart
+#   drift-go job · `just shipdyn-golden` — drives the real ShipDynamicsSystem in
+#                  internal/game/ and writes into web-pixi/
+#
+# `just csharp-golden` and everything else here is framework-only and moves with
+# mmokit core. WS-001's ship-dynamics parity gate is the workstream's only
+# continuously-triggered drift risk and has no home in a framework-only repo.
+#
+# ---------------------------------------------------------------------------
+# Action versions
+# ---------------------------------------------------------------------------
+# Verified resolvable on 2026-07-28. Newer majors exist (checkout v7, setup-go
+# v7, setup-dotnet v6, setup-just v4) and have moved from the node20 runtime to
+# node24; GitHub was still backporting to the majors pinned here eight days
+# before that date. Bump them together and deliberately, not incidentally.
+
+name: CI
+
+on: [push, pull_request]
+
+permissions:
+  contents: read
+
+# A branch in this repository with an open PR matches both triggers, so the
+# event name is part of the group: a later push must not cancel the PR run that
+# is actually reporting status on the merge commit.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  go:
+    name: go
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      # fetch-depth: 0 so the gofmt step can reach the base commit it diffs
+      # against. Nothing else in this job needs history.
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # go.mod is the single place the Go version is pinned: `go 1.25.1` plus
+      # `toolchain go1.26.2`. setup-go@v5 reads only the `go` directive from a
+      # version file, so it installs 1.25.1 and the toolchain directive then
+      # makes every `go` invocation re-exec into go1.26.2 (GOTOOLCHAIN=auto).
+      # The result is the pinned toolchain either way. Do not also hard-code a
+      # `go-version:` string here — it would silently win over the file.
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      # `go build ./...` is forbidden (AGENTS.md: it writes binaries into
+      # package directories). `go vet ./...` compiles every package anyway and
+      # takes well under a second warm, so it is both the compile check and the
+      # lint.
+      - name: go vet
+        run: go vet ./...
+
+      # Changed files ONLY. `gofmt -l $(git ls-files '*.go')` reports 69 files
+      # at this commit — almost entirely pre-existing Go 1.19+ doc-comment
+      # reflow that AGENTS.md forbids clearing as incidental cleanup. A
+      # tree-wide gate would be red on its first run and would bury every real
+      # finding. See the Formatting section of CONTRIBUTING.md, which owns this
+      # rule.
+      #
+      # gofmt is taken from `go env GOROOT` rather than PATH: PATH's gofmt
+      # belongs to the version setup-go installed (1.25.1), while `go env`
+      # re-execs into the pinned toolchain and reports go1.26.2's GOROOT. gofmt
+      # output is toolchain-dependent, so the gate must measure what
+      # contributors run.
+      - name: gofmt (changed files only)
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          PUSH_BEFORE_SHA: ${{ github.event.before }}
+        run: |
+          set -euo pipefail
+          if [ "$EVENT_NAME" = "pull_request" ]; then
+            base="$PR_BASE_SHA"
+          else
+            base="$PUSH_BEFORE_SHA"
+          fi
+          # Branch creation and the first push of a repository report an
+          # all-zero before-SHA; a force-push can report one that is no longer
+          # reachable. Fall back to the parent commit, then to checking nothing
+          # (a root commit has no parent).
+          if [ -z "$base" ] || ! git cat-file -e "${base}^{commit}" 2>/dev/null; then
+            base="$(git rev-parse --verify --quiet 'HEAD~1' || true)"
+          fi
+          if [ -z "$base" ]; then
+            echo "No usable base commit to diff against; skipping."
+            exit 0
+          fi
+          # Command substitution rather than process substitution: under
+          # `set -e` a failing `git diff` aborts here, where a failing process
+          # substitution would silently yield an empty list and pass the gate.
+          changed="$(git diff --name-only --diff-filter=ACM "${base}...HEAD" -- '*.go')"
+          if [ -z "$changed" ]; then
+            echo "No Go files added or modified against ${base}."
+            exit 0
+          fi
+          mapfile -t files <<< "$changed"
+          printf 'Checking %d changed Go file(s) against %s\n' "${#files[@]}" "$base"
+          gofmt_bin="$(go env GOROOT)/bin/gofmt"
+          unformatted="$("$gofmt_bin" -l "${files[@]}")"
+          if [ -n "$unformatted" ]; then
+            echo "::error::gofmt found unformatted files among the files this change touches:"
+            echo "$unformatted"
+            echo
+            "$gofmt_bin" -d "${files[@]}"
+            echo
+            echo "Fix with: gofmt -w \$(git diff --name-only --diff-filter=ACM HEAD -- '*.go')"
+            exit 1
+          fi
+          echo "All changed Go files are gofmt-clean."
+
+      # GAME-COUPLED. Fails if a non-allowlisted internal/game/ file imports
+      # ark/ecs directly.
+      - name: no ark in game layer
+        run: ./scripts/no_ark_in_game.sh
+
+      # ONE test command, not a fast/slow split. ubuntu-latest permits
+      # localhost TCP and UDP listeners, which is what docs/roadmap.md §6.7's
+      # "Linux integration jobs" gate asks for: pkg/net/server_origin_test.go,
+      # pkg/net/udp_server_test.go, pkg/net/udpclient/handshake_race_test.go,
+      # pkg/admin/admin_e2e_test.go, internal/bot/auth_test.go and
+      # pkg/universe/udp_listener_test.go all bind localhost and all run here.
+      #
+      # `-p 1` is RETAINED INSURANCE, not a proven requirement. It exists
+      # because pkg/universe has intermittently reported "executor: serialize
+      # timeout on cell_0_0" under parallel package execution — CPU contention
+      # on a RunOnLoop deadline, not a logic race. The recorded ~1-in-4 rate did
+      # not reproduce at 17a9a2ce and has not reproduced since, but one passing
+      # sample cannot refute it, so it stays. If you drop `-p 1` and see a
+      # serialize timeout, that is this and not your change.
+      #
+      # Blind spot, stated so green is not read as complete: this covers zero
+      # PostgreSQL code. All four */postgres packages sit behind `//go:build
+      # pgtest` and report "[no test files]" — their tests are invisible, not
+      # skipped. Only `just db-up && just test-pg` runs them, and no job here
+      # provides a database.
+      - name: go test
+        run: go test ./... -count=1 -p 1 -timeout 900s
+
+      # GAME-COUPLED. The DB-free compile of the space game's composition root.
+      # Written outside the tree on purpose (AGENTS.md forbids building
+      # binaries into package roots); `just build-go` is the local equivalent
+      # and writes the gitignored bin/server.
+      - name: build cmd/server
+        run: go build -o /tmp/server ./cmd/server
+
+  frontend:
+    name: frontend
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: extractions/setup-just@v2
+
+      # HARD-PINNED to local dev's version. None of the three package.json
+      # files declares an `engines` field or a `packageManager` field, and the
+      # repository has no .nvmrc and no .tool-versions, so an unpinned bun would
+      # drift silently and the first symptom would be an unrelated-looking test
+      # failure. Bump this and the developer install together.
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: "1.3.11"
+
+      # No `bun install` before these two. pkg/quantize/ts has no package.json
+      # at all, and the only bare specifier reachable from the web-pixi and
+      # 4node test trees is a type-only `import type { Container } from
+      # "pixi.js"` in web-pixi/src/types.ts, which bun erases before resolution.
+      # Verified by moving both node_modules trees aside: 53 + 147 tests pass.
+      # The generated SDKs those suites import (web-pixi/sdk,
+      # examples/4node-basic/web/sdk, 16 files each) are tracked.
+      - name: shared TypeScript codec/interpolation tests
+        run: just ts-core-test
+
+      # GAME-COUPLED. Client prediction, reconciliation and interpolation,
+      # including the prediction golden that pairs with just shipdyn-golden.
+      - name: game-client TypeScript suites
+        run: just web-test
+
+      - name: web-admin install
+        working-directory: web-admin
+        run: bun install --frozen-lockfile
+
+      - name: web-admin typecheck
+        working-directory: web-admin
+        run: bun run typecheck
+
+      - name: web-admin unit tests
+        working-directory: web-admin
+        run: bun run test
+
+      # Writes the embedded operator bundle into pkg/admin/static/dist. There is
+      # deliberately no `git diff --exit-code` on that directory: only the
+      # index.html placeholder is tracked (the hashed asset files are ignored),
+      # so such a check would assert almost nothing while breaking on any
+      # cosmetic change to the one file it can see.
+      - name: web-admin build
+        working-directory: web-admin
+        run: bun run build
+
+  csharp:
+    name: csharp
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+
+      # Pinned to the tracked solution file, which lists exactly
+      # Mmokit.Sdk.Core and Mmokit.Sdk.Core.Tests. Mmokit.Sdk.SmokeBot is
+      # excluded BY THE SOLUTION, and that is load-bearing: the smoke bot
+      # compiles a generated SDK out of UNITY_SDK_DIR, which now has no default
+      # and hard-errors when unset. Adding it here would have to be an explicit,
+      # reviewable change rather than a directory glob picking it up.
+      #
+      # `just csharp-compile-test` is deliberately absent: it is a Go test that
+      # shells out to dotnet and self-skips via exec.LookPath, so it belongs
+      # with the Go job's toolchain assumptions, not here.
+      - name: dotnet test
+        run: dotnet test csharp/Mmokit.Sdk.slnx --nologo
+
+  drift-go:
+    name: drift-go
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      # This job invokes just recipes, so it needs just. Installing it only in
+      # the frontend job is the obvious mistake here.
+      - uses: extractions/setup-just@v2
+
+      # Closes docs/roadmap.md §6.7's cross-language golden-vector gate. Both
+      # regenerators are pure Go and need no database.
+      #
+      # The generated-schema half of that gate is NOT closed here and cannot
+      # be: `just space-sdk` runs cmd/server, which opens PostgreSQL
+      # unconditionally and log.Fatalf's regardless of `--admin-listen=`. That
+      # needs either a service container or a DB-free schema dump path.
+      - name: regenerate the C# wire golden
+        run: just csharp-golden
+
+      # GAME-COUPLED. Drives the real ShipDynamicsSystem + PhysicsSystem in
+      # internal/game/ and writes web-pixi/src/__tests__/testdata. This is the
+      # gate that fails when internal/game/system_ship_dynamics.go changes
+      # without web-pixi/src/prediction.ts.
+      - name: regenerate the ship-dynamics parity fixture
+        run: just shipdyn-golden
+
+      - name: assert the goldens were already up to date
+        run: |
+          git diff --exit-code -- \
+            csharp/Mmokit.Sdk.Core.Tests/testdata \
+            web-pixi/src/__tests__/testdata
