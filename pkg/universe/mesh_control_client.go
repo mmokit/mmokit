@@ -206,7 +206,7 @@ func (c *meshControlClient) runConnection() error {
 
 	streamCtx, streamCancel := context.WithCancel(c.rootCtx)
 	client := meshpb.NewMeshControlClient(conn)
-	stream, err := client.Control(streamCtx)
+	stream, err := client.Control(outgoingMeshMD(streamCtx, c.coord.cfg.ClusterSecret, c.hostID))
 	if err != nil {
 		streamCancel()
 		_ = conn.Close()

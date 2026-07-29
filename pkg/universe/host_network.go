@@ -165,6 +165,7 @@ func NewHostNetwork(host *Host, grpcAddr string, log *logger.Logger, gracePeriod
 	n.clusterSecret = secret
 	n.server = grpc.NewServer(
 		grpc.Creds(credentials.NewTLS(tlsCfg)),
+		grpc.ChainStreamInterceptor(clusterSecretStreamInterceptor(secret)),
 		grpc.MaxRecvMsgSize(meshMaxMsgBytes),
 		grpc.MaxSendMsgSize(meshMaxMsgBytes),
 		grpc.KeepaliveParams(keepalive.ServerParameters{
@@ -263,7 +264,7 @@ func (n *HostNetwork) ConnectPeer(hostID, grpcAddr string, kind peerKind) error 
 
 	streamCtx, cancel := context.WithCancel(n.ctx)
 	client := meshpb.NewMeshDataClient(conn)
-	stream, err := client.Data(streamCtx)
+	stream, err := client.Data(outgoingMeshMD(streamCtx, n.clusterSecret, n.hostID))
 	if err != nil {
 		cancel()
 		_ = conn.Close()

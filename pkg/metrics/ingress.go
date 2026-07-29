@@ -65,6 +65,11 @@ const (
 	// because the per-drain budget ran out. NOT a dropped frame — the frames
 	// stay queued — but it is the signal that ingress is saturating the loop.
 	ReasonTickBudgetExhausted
+	// ReasonIdentityMismatch is a mesh frame whose payload-carried process ID
+	// disagreed with the identity its stream presented at open, or a stream
+	// that presented no identity at all. Non-zero means either a misrouted
+	// producer or a peer claiming to be someone else; neither is normal.
+	ReasonIdentityMismatch
 
 	// numIngressReasons must stay last. It sizes the counter table.
 	numIngressReasons
@@ -83,6 +88,7 @@ var ingressReasonNames = [numIngressReasons]string{
 	ReasonPanicRecovered:      "panic_recovered",
 	ReasonQueueFull:           "queue_full",
 	ReasonTickBudgetExhausted: "tick_budget_exhausted",
+	ReasonIdentityMismatch:    "identity_mismatch",
 }
 
 // String returns the scrape label value for r, or "invalid" when r is outside

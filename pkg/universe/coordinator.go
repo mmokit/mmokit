@@ -2263,6 +2263,7 @@ func (c *Process) startControlPlane() {
 	}
 	grpcSrv := grpc.NewServer(
 		grpc.Creds(credentials.NewTLS(meshTLS)),
+		grpc.ChainStreamInterceptor(clusterSecretStreamInterceptor(cfg.ClusterSecret)),
 		grpc.MaxRecvMsgSize(meshMaxMsgBytes),
 		grpc.MaxSendMsgSize(meshMaxMsgBytes),
 		grpc.KeepaliveParams(keepalive.ServerParameters{

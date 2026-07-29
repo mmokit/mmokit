@@ -130,6 +130,17 @@ func (c *meshGatewayClient) runConnectLoop() {
 	}
 }
 
+// gatewayClusterSecret reads the join secret off the owning Process. The nil
+// guard mirrors reannounceServices: a Gateway built by a test fixture may have
+// no Process, and an empty secret is the unauthenticated posture rather than
+// an error.
+func (c *meshGatewayClient) gatewayClusterSecret() string {
+	if c.gw == nil || c.gw.process == nil {
+		return ""
+	}
+	return c.gw.process.cfg.ClusterSecret
+}
+
 // runConnection attempts one full connection lifetime. Returns nil on clean
 // EOF; returns an error on dial failure, stream open failure, or recv error.
 func (c *meshGatewayClient) runConnection() error {
@@ -151,7 +162,7 @@ func (c *meshGatewayClient) runConnection() error {
 
 	streamCtx, streamCancel := context.WithCancel(c.rootCtx)
 	client := meshpb.NewMeshControlClient(conn)
-	stream, err := client.Control(streamCtx)
+	stream, err := client.Control(outgoingMeshMD(streamCtx, c.gatewayClusterSecret(), c.gw.id))
 	if err != nil {
 		streamCancel()
 		_ = conn.Close()
