@@ -22,6 +22,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/mlange-42/ark/ecs"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/keepalive"
 
 	meshpb "github.com/zenion/mmoserver/gen/go/meshpb"
@@ -662,6 +663,19 @@ type Process struct {
 	tlsOnce       sync.Once
 	tlsConfig     *tls.Config
 	tlsSelfSigned bool
+
+	// meshTLSOnce memoizes this process's mesh certificate, generated in
+	// memory and never written to disk. Separate from tlsOnce above: the mesh
+	// needs a certificate even when the client-facing posture is plaintext,
+	// which is the shipped default. See meshTLSConfig.
+	meshTLSOnce sync.Once
+	meshTLSCert tls.Certificate
+
+	// meshWarnOnce keeps the cluster-secret posture line to one per process.
+	// CatMeshCell is force-enabled via StartupCategories and 37+ test
+	// functions build distributed fixtures, so an unguarded line would add
+	// roughly a hundred lines to `go test ./pkg/universe`.
+	meshWarnOnce sync.Once
 
 	// adminHTTPServer is an optional admin HTTP server exposing /events,
 	// /commands, and /metrics. Non-nil when Config.AdminListen is set.
@@ -1858,7 +1872,7 @@ func (c *Process) Build() {
 			gwHost.Log = c.Log
 			gwHost.coord = c
 			c.Hosts[gwID] = gwHost
-			hn, err := NewHostNetwork(gwHost, ":0", c.Log, c.cfg.ShutdownGracePeriod)
+			hn, err := c.newMeshDataListener(gwHost, ":0")
 			if err != nil {
 				panic(fmt.Errorf("coordinator: coord+gateway NewHostNetwork: %w", err))
 			}
@@ -2041,7 +2055,7 @@ func (c *Process) buildRemoteHost() {
 	c.Hosts[hostID] = host
 	c.hostExecutors[hostID] = newCellTransferExecutor(c, host)
 
-	hn, err := NewHostNetwork(host, ":0", c.Log, c.cfg.ShutdownGracePeriod)
+	hn, err := c.newMeshDataListener(host, ":0")
 	if err != nil {
 		panic(fmt.Errorf("coordinator: remote host mode NewHostNetwork: %w", err))
 	}
@@ -2098,7 +2112,7 @@ func (c *Process) buildServiceHost() {
 	host.coord = c
 	c.Hosts[hostID] = host
 
-	hn, err := NewHostNetwork(host, ":0", c.Log, c.cfg.ShutdownGracePeriod)
+	hn, err := c.newMeshDataListener(host, ":0")
 	if err != nil {
 		panic(fmt.Errorf("coordinator: service-host NewHostNetwork: %w", err))
 	}
@@ -2132,7 +2146,7 @@ func (c *Process) buildStandaloneGateway() {
 	gwHost.Log = c.Log
 	gwHost.coord = c
 	c.Hosts[gwID] = gwHost
-	hn, err := NewHostNetwork(gwHost, ":0", c.Log, c.cfg.ShutdownGracePeriod)
+	hn, err := c.newMeshDataListener(gwHost, ":0")
 	if err != nil {
 		panic(fmt.Errorf("coordinator: gateway mode NewHostNetwork: %w", err))
 	}
@@ -2239,7 +2253,16 @@ func (c *Process) startControlPlane() {
 	if err != nil {
 		panic(fmt.Errorf("coordinator: MeshControl listen: %w", err))
 	}
+	// Fail rather than degrade to plaintext. Unlike the client-facing HTTP
+	// listener, the mesh has no plaintext posture to fall back to: every peer
+	// dials with TLS credentials and a plaintext server would reject them all
+	// at handshake anyway, just less legibly.
+	meshTLS, err := c.meshTLSConfig()
+	if err != nil {
+		panic(fmt.Errorf("coordinator: MeshControl TLS: %w", err))
+	}
 	grpcSrv := grpc.NewServer(
+		grpc.Creds(credentials.NewTLS(meshTLS)),
 		grpc.MaxRecvMsgSize(meshMaxMsgBytes),
 		grpc.MaxSendMsgSize(meshMaxMsgBytes),
 		grpc.KeepaliveParams(keepalive.ServerParameters{

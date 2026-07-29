@@ -2,6 +2,7 @@ package universe
 
 import (
 	"context"
+	"crypto/tls"
 	"errors"
 	"fmt"
 	"io"
@@ -12,7 +13,7 @@ import (
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/keepalive"
 	"google.golang.org/grpc/status"
 
@@ -92,6 +93,12 @@ type HostNetwork struct {
 	// coordinators. routeInboundFrame uses it to forward ClientFrame bytes
 	// to the correct WebSocket connection.
 	gw *Gateway
+
+	// clusterSecret authenticates inbound MeshData streams and is replayed
+	// on every outbound peer dial. Empty means unauthenticated (CE-006
+	// criterion 7: a role set that is not self-contained warns and
+	// continues).
+	clusterSecret string
 }
 
 // hostPeer holds one outbound stream to a remote host along with its
@@ -123,7 +130,17 @@ type outboundFrame struct {
 // Addr() returns the bound address (useful when grpcAddr was ":0").
 // gracePeriod bounds Shutdown's GracefulStop wait before hard-stopping
 // the gRPC server; zero falls back to 5s.
-func NewHostNetwork(host *Host, grpcAddr string, log *logger.Logger, gracePeriod time.Duration) (*HostNetwork, error) {
+//
+// tlsCfg and secret are parameters rather than reads off host.coord because
+// this constructor serves before returning: buildRemoteHost calls it 31 lines
+// before it assigns host.coord, so a back-reference read would nil-deref.
+// A nil tlsCfg is a programming error, not a plaintext opt-out — every mesh
+// listener is non-plaintext (CE-006 criterion 5). An empty secret disables
+// enforcement (criterion 7: warn and continue).
+func NewHostNetwork(host *Host, grpcAddr string, log *logger.Logger, gracePeriod time.Duration, tlsCfg *tls.Config, secret string) (*HostNetwork, error) {
+	if tlsCfg == nil {
+		return nil, fmt.Errorf("mesh listen %q: nil TLS config", grpcAddr)
+	}
 	listener, err := net.Listen("tcp", grpcAddr)
 	if err != nil {
 		return nil, fmt.Errorf("mesh listen %q: %w", grpcAddr, err)
@@ -145,7 +162,9 @@ func NewHostNetwork(host *Host, grpcAddr string, log *logger.Logger, gracePeriod
 		peers:       make(map[string]*hostPeer),
 	}
 
+	n.clusterSecret = secret
 	n.server = grpc.NewServer(
+		grpc.Creds(credentials.NewTLS(tlsCfg)),
 		grpc.MaxRecvMsgSize(meshMaxMsgBytes),
 		grpc.MaxSendMsgSize(meshMaxMsgBytes),
 		grpc.KeepaliveParams(keepalive.ServerParameters{
@@ -227,10 +246,7 @@ func (n *HostNetwork) ConnectPeer(hostID, grpcAddr string, kind peerKind) error 
 	n.mu.RUnlock()
 
 	conn, err := grpc.NewClient(grpcAddr,
-		// TODO(S4): replace with mTLS credentials once the cert management
-		// layer lands. insecure is acceptable here because S3 only runs in
-		// loopback (in-process 2-host integration tests + examples).
-		grpc.WithTransportCredentials(insecure.NewCredentials()),
+		grpc.WithTransportCredentials(credentials.NewTLS(meshClientTLSConfig())),
 		grpc.WithKeepaliveParams(keepalive.ClientParameters{
 			Time:                60 * time.Second,
 			Timeout:             20 * time.Second,

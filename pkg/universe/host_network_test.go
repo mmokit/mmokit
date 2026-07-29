@@ -68,6 +68,10 @@ func newIdlePeer(t *testing.T, hostID string) *hostPeer {
 	t.Helper()
 	// Non-routable sentinel address — grpc.NewClient is lazy so this never
 	// actually dials. The idle peer has no sender/receiver goroutines.
+	//
+	// Deliberately still insecure creds: this connection never reaches a
+	// handshake, so giving it the mesh TLS posture would only obscure that
+	// it is a stub. Do not "fix" it to match the production dials.
 	conn, err := grpc.NewClient("localhost:1", grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		t.Fatalf("newIdlePeer grpc.NewClient: %v", err)
@@ -94,11 +98,11 @@ func TestHostNetworkTwoPeersRoundTrip(t *testing.T) {
 	hostA := NewHost("host-a")
 	hostB := NewHost("host-b")
 
-	netA, err := NewHostNetwork(hostA, ":0", testHostNetworkLogger(t), 50*time.Millisecond)
+	netA, err := NewHostNetwork(hostA, ":0", testHostNetworkLogger(t), 50*time.Millisecond, testMeshTLS(t), "")
 	if err != nil {
 		t.Fatalf("NewHostNetwork A: %v", err)
 	}
-	netB, err := NewHostNetwork(hostB, ":0", testHostNetworkLogger(t), 50*time.Millisecond)
+	netB, err := NewHostNetwork(hostB, ":0", testHostNetworkLogger(t), 50*time.Millisecond, testMeshTLS(t), "")
 	if err != nil {
 		t.Fatalf("NewHostNetwork B: %v", err)
 	}
@@ -557,11 +561,11 @@ func TestHostNetworkShutdownIsClean(t *testing.T) {
 	hostA := NewHost("shutdown-a")
 	hostB := NewHost("shutdown-b")
 
-	netA, err := NewHostNetwork(hostA, ":0", testHostNetworkLogger(t), 50*time.Millisecond)
+	netA, err := NewHostNetwork(hostA, ":0", testHostNetworkLogger(t), 50*time.Millisecond, testMeshTLS(t), "")
 	if err != nil {
 		t.Fatalf("NewHostNetwork A: %v", err)
 	}
-	netB, err := NewHostNetwork(hostB, ":0", testHostNetworkLogger(t), 50*time.Millisecond)
+	netB, err := NewHostNetwork(hostB, ":0", testHostNetworkLogger(t), 50*time.Millisecond, testMeshTLS(t), "")
 	if err != nil {
 		t.Fatalf("NewHostNetwork B: %v", err)
 	}

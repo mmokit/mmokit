@@ -31,7 +31,7 @@ import (
 	"time"
 
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/keepalive"
 
 	meshpb "github.com/zenion/mmoserver/gen/go/meshpb"
@@ -134,7 +134,7 @@ func (c *meshGatewayClient) runConnectLoop() {
 // EOF; returns an error on dial failure, stream open failure, or recv error.
 func (c *meshGatewayClient) runConnection() error {
 	conn, err := grpc.NewClient(c.coordAddr,
-		grpc.WithTransportCredentials(insecure.NewCredentials()),
+		grpc.WithTransportCredentials(credentials.NewTLS(meshClientTLSConfig())),
 		grpc.WithKeepaliveParams(keepalive.ClientParameters{
 			Time:                60 * time.Second,
 			Timeout:             20 * time.Second,

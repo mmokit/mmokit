@@ -10,7 +10,7 @@ import (
 	"time"
 
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/keepalive"
 
 	meshpb "github.com/zenion/mmoserver/gen/go/meshpb"
@@ -189,10 +189,7 @@ func (c *meshControlClient) runConnectLoop() {
 // cancelled.
 func (c *meshControlClient) runConnection() error {
 	conn, err := grpc.NewClient(c.coordAddr,
-		// TODO(mTLS): S4+ replaces insecure with mutual TLS once the
-		// cert management layer lands. Acceptable here because S4 only
-		// runs on localhost loopback for testing.
-		grpc.WithTransportCredentials(insecure.NewCredentials()),
+		grpc.WithTransportCredentials(credentials.NewTLS(meshClientTLSConfig())),
 		grpc.WithKeepaliveParams(keepalive.ClientParameters{
 			Time:                60 * time.Second,
 			Timeout:             20 * time.Second,
