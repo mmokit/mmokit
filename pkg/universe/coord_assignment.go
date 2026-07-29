@@ -118,6 +118,18 @@ func (e *assignmentEngine) checkLiveness() {
 		}
 		e.log.Log(CatMeshCell, "coordinator: host %s DEAD (no heartbeat for %s)", host.ID, now.Sub(host.LastHeartbeat).Round(time.Millisecond))
 		e.registry.MarkDead(host.ID)
+		// Kill the stream too, or a host marked Dead whose transport later
+		// recovers becomes a permanent zombie: Touch has no Dead->Live arm and
+		// Remove is only reached on the graceful path, so re-registration is
+		// the sole exit from Dead — and a host whose stream never broke never
+		// re-registers. It would heartbeat forever with State stuck at Dead,
+		// excluded from reassignOrphanedCells' liveIDs and from rebalance.
+		//
+		// Killing the stream converts that into a clean reconnect and is also
+		// what makes registration admission's stream term honest.
+		if e.coord != nil && e.coord.controlServer != nil {
+			e.coord.controlServer.cancelStream(host.ID)
+		}
 		// Service framework: drop the dead host's instances + bus routing
 		// so publishers stop dispatching at a peer that's gone. Idempotent.
 		// reassignOrphanedCells below already triggers a PeerList rebroadcast

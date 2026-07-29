@@ -205,6 +205,16 @@ func (s *meshControlServer) Control(stream meshpb.MeshControl_ControlServer) err
 func (s *meshControlServer) handleHostControl(stream meshpb.MeshControl_ControlServer, reg *meshpb.RegisterHost) error {
 	hostID := reg.HostId
 
+	// Admission runs BEFORE registerHostStream, which unconditionally swaps
+	// the map entry and kills the predecessor. Returning the error closes the
+	// stream so the client's own backoff retries; silently declining to
+	// register would leave it heartbeating into a void for the life of the
+	// process.
+	if err := s.admitHostRegistration(hostID); err != nil {
+		s.log.Log(CatMeshCell, "coordinator: rejecting RegisterHost for %q: %v", hostID, err)
+		return err
+	}
+
 	self := s.registerHostStream(hostID, stream)
 	kill := self.kill
 
@@ -641,6 +651,12 @@ func (s *meshControlServer) handleGracefulLeave(leavingID string) {
 //   - dead cleanup removes sessions from sessionRoutes via RemoveByGateway
 func (s *meshControlServer) handleGatewayControl(stream meshpb.MeshControl_ControlServer, reg *meshpb.RegisterGateway) error {
 	gatewayID := reg.GatewayId
+
+	// See handleHostControl: admission must precede the map swap.
+	if err := s.admitGatewayRegistration(gatewayID); err != nil {
+		s.log.Log(CatMeshCell, "coordinator: rejecting RegisterGateway for %q: %v", gatewayID, err)
+		return err
+	}
 
 	self := s.registerGatewayStream(gatewayID, stream)
 	kill := self.kill
