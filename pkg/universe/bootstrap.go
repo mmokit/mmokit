@@ -85,6 +85,17 @@ func (c *Config) BindFlags() {
 	stringFlag("tls-mode",
 		"TLS mode when no cert/key files are set: \"\" (plaintext) or \"self-signed\" (in-memory dev cert)",
 		"", &c.TLSMode)
+	// Read the env var BEFORE stringFlag so it becomes the flag's default:
+	// stringFlag only applies its engineDefault when the field is still zero,
+	// so an explicit --cluster-secret beats the env, which beats the preset
+	// field. No flag.Visit needed (it is used nowhere in this module).
+	if v := os.Getenv(clusterSecretEnvVar); v != "" {
+		c.ClusterSecret = v
+	}
+	stringFlag("cluster-secret",
+		"shared secret authenticating mesh peers (env: "+clusterSecretEnvVar+"); auto-generated for "+
+			"single-process role sets, required on every process of a distributed cluster",
+		"", &c.ClusterSecret)
 	flag.Func("ws-allowed-origins",
 		"comma-separated WebSocket Origin allowlist (empty = same-origin only)",
 		func(s string) error {

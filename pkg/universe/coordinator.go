@@ -170,6 +170,21 @@ type Config struct {
 	// ::1). Cert/key files always take precedence. Set via --tls-mode.
 	TLSMode string
 
+	// ClusterSecret authenticates mesh peers to each other. It is sent in
+	// gRPC call metadata at stream open on both mesh channels and compared
+	// with crypto/subtle. Precedence is --cluster-secret > MMO_CLUSTER_SECRET
+	// > this field.
+	//
+	// Empty means: auto-generated for a self-contained role set (coordinator
+	// + host, which includes the "all" preset), and unauthenticated with a
+	// one-time warning for every other role set. See Build.
+	//
+	// NEVER include this in any dump, snapshot, admin response or log line.
+	// Config is handed out mutably by Process.Config, and remote hosts install
+	// a MeshControl log forwarder — a logged secret ships over the very
+	// channel it protects. Log clusterSecretFingerprint instead.
+	ClusterSecret string
+
 	// AllowedWSOrigins is the WebSocket Origin allowlist for /ws upgrades.
 	// Empty (default) means same-origin only — EXCEPT it falls back to
 	// CORSOrigins when unset (an origin trusted for credentialed cross-origin
@@ -808,6 +823,14 @@ func New(cfg Config) *Process {
 	// Apply the ingress limits as a zero-value fallback rather than relying on
 	// BindFlags: flag defaults never reach a Config built by a test fixture.
 	cfg.WireLimits = cfg.WireLimits.Normalized()
+
+	// Same reason as WireLimits above, and one more: BindFlags is skipped both
+	// under go test (flag.Parsed is already true) and for any game that calls
+	// flag.Parse itself. An env read placed only in BindFlags is invisible on
+	// both paths, so repeat it here.
+	if cfg.ClusterSecret == "" {
+		cfg.ClusterSecret = os.Getenv(clusterSecretEnvVar)
+	}
 
 	if cfg.CellSize > 0 {
 		coords.SetCellSize(cfg.CellSize)
