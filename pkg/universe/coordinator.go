@@ -947,7 +947,7 @@ func New(cfg Config) *Process {
 		Registry:  c.registry,
 		Resolver:  c.resolver,
 		Transport: c.transport,
-		Audit:     cmdsys.NoopAuditSink{},
+		Audit:     logAuditSink{log: c.Log},
 		Process:   c,
 	})
 

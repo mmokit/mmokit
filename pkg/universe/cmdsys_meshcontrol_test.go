@@ -257,7 +257,7 @@ func TestCmdsys_SchemaVersionMismatch(t *testing.T) {
 		SchemaVersion:     trimCmd.ArgsSchemaHash, // differs from fullArgs hash
 	}
 
-	resp := executeCommandRequest(context.Background(), coord.dispatcher, "host-a", req)
+	resp := executeCommandRequest(context.Background(), coord.dispatcher, "host-a", peerCoordinator, req)
 	if resp.Ok {
 		t.Fatal("expected schema mismatch rejection, got OK")
 	}

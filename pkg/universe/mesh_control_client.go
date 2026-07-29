@@ -963,7 +963,7 @@ func (c *meshControlClient) onCellAssign(assign *meshpb.CellAssign) {
 func (c *meshControlClient) handleInboundCommandRequest(req *meshpb.CommandRequest) {
 	ctx, cancel := context.WithDeadline(
 		context.Background(),
-		timeFromUnixNanos(req.DeadlineUnixNanos),
+		clampRemoteDeadline(req.DeadlineUnixNanos),
 	)
 	defer cancel()
 
@@ -973,7 +973,7 @@ func (c *meshControlClient) handleInboundCommandRequest(req *meshpb.CommandReque
 		hostID = host.ID
 	}
 
-	resp := executeCommandRequest(ctx, c.coord.dispatcher, hostID, req)
+	resp := executeCommandRequest(ctx, c.coord.dispatcher, hostID, peerCoordinator, req)
 	msg := &meshpb.HostMessage{
 		Msg: &meshpb.HostMessage_CommandResponse{CommandResponse: resp},
 	}

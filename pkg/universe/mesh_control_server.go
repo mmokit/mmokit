@@ -515,14 +515,6 @@ func (s *meshControlServer) handleHostControl(stream meshpb.MeshControl_ControlS
 					s.coord.transport.orch.OnResponse(resp)
 				}
 
-			case *meshpb.HostMessage_CommandRequest:
-				// C3: host → coord command (coord-routed verbs). Execute locally
-				// and send response back on this host's stream.
-				req := v.CommandRequest
-				if req != nil && s.coord.dispatcher != nil {
-					go s.handleInboundCommandRequest(hostID, req)
-				}
-
 			case *meshpb.HostMessage_ServiceAnnounce:
 				// Service framework: a remote service-host has spun up an
 				// instance. Validate against the cluster registry and re-
@@ -929,14 +921,6 @@ func (s *meshControlServer) handleGatewayControl(stream meshpb.MeshControl_Contr
 					s.coord.transport.orch.OnResponse(resp)
 				}
 
-			case *meshpb.HostMessage_CommandRequest:
-				// gateway → coord command (coord-routed verbs originating from a
-				// gateway,service process). Execute locally and send response
-				// back on this gateway's stream. Parity with the host-stream path.
-				req := v.CommandRequest
-				if req != nil && s.coord.dispatcher != nil {
-					go s.handleInboundCommandRequestFromGateway(gatewayID, req)
-				}
 
 			default:
 				s.log.Log(CatMeshMsg, "coordinator: gateway %s sent %T", gatewayID, msg.Msg)
@@ -998,46 +982,7 @@ func (s *meshControlServer) handleInboundResolveSpawn(gatewayID string, req *mes
 	}
 }
 
-// handleInboundCommandRequest executes an inbound CommandRequest that arrived
-// from a host on the coordinator's control stream, then sends the response back
-// on that same host's stream. Runs in a goroutine so the recv loop stays live.
-func (s *meshControlServer) handleInboundCommandRequest(hostID string, req *meshpb.CommandRequest) {
-	ctx, cancel := context.WithDeadline(
-		context.Background(),
-		timeFromUnixNanos(req.DeadlineUnixNanos),
-	)
-	defer cancel()
 
-	resp := executeCommandRequest(ctx, s.coord.dispatcher, hostID, req)
-	msg := &meshpb.CoordMessage{
-		CoordEpoch: s.coord.coordEpoch,
-		Msg:        &meshpb.CoordMessage_CommandResponse{CommandResponse: resp},
-	}
-	if err := s.sendCoordMessageToHost(hostID, msg); err != nil {
-		s.log.Log(CatMeshMsg, "coordinator: CommandResponse to host %s failed: %v", hostID, err)
-	}
-}
-
-// handleInboundCommandRequestFromGateway is the gateway-stream parity of
-// handleInboundCommandRequest: executes a CommandRequest that arrived on a
-// gateway,service control stream and replies on that same gateway stream.
-// Runs in a goroutine so the recv loop stays live.
-func (s *meshControlServer) handleInboundCommandRequestFromGateway(gatewayID string, req *meshpb.CommandRequest) {
-	ctx, cancel := context.WithDeadline(
-		context.Background(),
-		timeFromUnixNanos(req.DeadlineUnixNanos),
-	)
-	defer cancel()
-
-	resp := executeCommandRequest(ctx, s.coord.dispatcher, gatewayID, req)
-	msg := &meshpb.CoordMessage{
-		CoordEpoch: s.coord.coordEpoch,
-		Msg:        &meshpb.CoordMessage_CommandResponse{CommandResponse: resp},
-	}
-	if err := s.sendCoordMessageToGateway(gatewayID, msg); err != nil {
-		s.log.Log(CatMeshMsg, "coordinator: CommandResponse to gateway %s failed: %v", gatewayID, err)
-	}
-}
 
 // timeFromUnixNanos converts a deadline expressed as Unix nanoseconds to a
 // time.Time. Returns a time 30s from now when nanos is zero or negative.

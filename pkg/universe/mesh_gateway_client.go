@@ -447,7 +447,7 @@ func (c *meshGatewayClient) dispatch(msg *meshpb.CoordMessage) {
 func (c *meshGatewayClient) handleInboundCommandRequest(req *meshpb.CommandRequest) {
 	ctx, cancel := context.WithDeadline(
 		context.Background(),
-		timeFromUnixNanos(req.DeadlineUnixNanos),
+		clampRemoteDeadline(req.DeadlineUnixNanos),
 	)
 	defer cancel()
 
@@ -456,7 +456,7 @@ func (c *meshGatewayClient) handleInboundCommandRequest(req *meshpb.CommandReque
 	// localServiceHostID) so resp.TargetId stays consistent with the
 	// route the coordinator used to reach us.
 	hostID := c.gw.id
-	resp := executeCommandRequest(ctx, c.gw.process.dispatcher, hostID, req)
+	resp := executeCommandRequest(ctx, c.gw.process.dispatcher, hostID, peerCoordinator, req)
 	msg := &meshpb.HostMessage{
 		Msg: &meshpb.HostMessage_CommandResponse{CommandResponse: resp},
 	}

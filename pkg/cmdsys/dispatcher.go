@@ -112,6 +112,83 @@ func (d *Dispatcher) InvokeLocal(ctx context.Context, caller Caller, verb string
 	return resultJSON, cmd.ResultSchemaHash, nil
 }
 
+// InvokeAsPeer executes verb on behalf of an authenticated mesh peer.
+//
+// Authority here is the PEER RELATION, not caller.Grants. The command arrived
+// on a stream this process authenticated, sent by a coordinator that already
+// ran Check against its own operator store before it resolved targets and
+// fanned out. Re-checking on this side never added security — it re-ran the
+// same test against grants the coordinator had just serialized — and the wire
+// no longer carries grants at all, so Check would now deny everything.
+//
+// caller carries ID and Source for AUDIT ONLY. peerID is the authenticated
+// sender. Callers must pass a peerID they took from the transport, never from
+// the message body.
+//
+// Kept deliberately separate from InvokeLocal rather than adding a "skip RBAC"
+// flag: the two have different trust stories and a boolean would let a future
+// caller opt out of authorization without saying why.
+func (d *Dispatcher) InvokeAsPeer(ctx context.Context, caller Caller, peerID, verb string, argsJSON []byte) ([]byte, uint64, error) {
+	start := time.Now()
+	traceID := newTraceID()
+
+	emitDone := func(ok bool, errCode string, detail string) {
+		d.audit.Emit(AuditRecord{
+			Time:       time.Now(),
+			TraceID:    traceID,
+			Phase:      "done",
+			Verb:       verb,
+			CallerID:   caller.ID,
+			PeerID:     peerID,
+			Source:     caller.Source,
+			OK:         ok,
+			Error:      errCode,
+			Detail:     detail,
+			DurationMS: time.Since(start).Milliseconds(),
+		})
+	}
+
+	d.audit.Emit(AuditRecord{
+		Time:     start,
+		TraceID:  traceID,
+		Phase:    "start",
+		Verb:     verb,
+		CallerID: caller.ID,
+		PeerID:   peerID,
+		Source:   caller.Source,
+		ArgsJSON: argsJSON,
+	})
+
+	cmd, ok := d.registry.Lookup(verb)
+	if !ok {
+		emitDone(false, "unknown_verb", verb)
+		return nil, 0, ErrUnknownVerb
+	}
+	argsVal, err := d.coerceArgs(cmd, argsJSON)
+	if err != nil {
+		emitDone(false, "parse_error", err.Error())
+		return nil, 0, err
+	}
+	env := &Env{
+		Caller:  caller,
+		TraceID: traceID,
+		Local:   &LocalContext{Process: d.process},
+		Logger:  d.log,
+	}
+	res, herr := cmd.Handler(ctx, env, argsVal)
+	if herr != nil {
+		emitDone(false, "handler_error", herr.Error())
+		return nil, cmd.ResultSchemaHash, herr
+	}
+	resultJSON, merr := json.Marshal(res)
+	if merr != nil {
+		emitDone(false, "handler_error", merr.Error())
+		return nil, cmd.ResultSchemaHash, merr
+	}
+	emitDone(true, "", "")
+	return resultJSON, cmd.ResultSchemaHash, nil
+}
+
 // ArgsSchemaHash returns the ArgsSchemaHash for a registered verb, or 0 if not found.
 func (d *Dispatcher) ArgsSchemaHash(verb string) uint64 {
 	cmd, ok := d.registry.Lookup(verb)

@@ -201,11 +201,11 @@ func (t *meshControlTransport) Send(ctx context.Context, target cmdsys.Target, r
 func (t *meshControlTransport) sendLocal(ctx context.Context, _ cmdsys.Target, req *cmdsys.RemoteRequest) (<-chan *cmdsys.RemoteResponse, error) {
 	ch := make(chan *cmdsys.RemoteResponse, 1)
 
-	caller := callerFromProto(&meshpb.Caller{
-		Id:     req.Caller.ID,
-		Source: uint32(req.Caller.Source),
-		Grants: grantsToProto(req.Caller.Grants),
-	})
+	// Colocated dispatch never crosses a wire, so the caller — grants
+	// included — is passed through untouched. Deliberately NOT routed through
+	// callerToProto/callerFromProto: that pair now strips grants by design,
+	// and round-tripping through it here would gut the local console.
+	caller := req.Caller
 
 	go func() {
 		resultJSON, schemaVer, err := t.coord.dispatcher.InvokeLocal(ctx, caller, req.Verb, req.ArgsJSON)
@@ -262,39 +262,26 @@ func commandRequestToProto(req *cmdsys.RemoteRequest) *meshpb.CommandRequest {
 	}
 }
 
+// callerToProto serializes a caller's IDENTITY only. Grants are deliberately
+// not on the wire: see the Caller message's comment in proto/meshpb/mesh.proto.
 func callerToProto(c cmdsys.Caller) *meshpb.Caller {
 	return &meshpb.Caller{
 		Id:     c.ID,
 		Source: uint32(c.Source),
-		Grants: grantsToProto(c.Grants),
 	}
 }
 
-func grantsToProto(gs []cmdsys.Grant) []*meshpb.Grant {
-	if len(gs) == 0 {
-		return nil
-	}
-	out := make([]*meshpb.Grant, len(gs))
-	for i, g := range gs {
-		out[i] = &meshpb.Grant{Pattern: g.Pattern, Allow: g.Allow}
-	}
-	return out
-}
-
+// callerFromProto reconstructs a caller carrying identity for audit and no
+// authority at all. A caller built here can never satisfy cmdsys.Check, which
+// is the point — the receive path must route through Dispatcher.InvokeAsPeer,
+// whose authority is the authenticated peer relation.
 func callerFromProto(pb *meshpb.Caller) cmdsys.Caller {
 	if pb == nil {
 		return cmdsys.Caller{}
 	}
-	grants := make([]cmdsys.Grant, len(pb.Grants))
-	for i, g := range pb.Grants {
-		if g != nil {
-			grants[i] = cmdsys.Grant{Pattern: g.Pattern, Allow: g.Allow}
-		}
-	}
 	return cmdsys.Caller{
 		ID:     pb.Id,
 		Source: cmdsys.CallerSource(pb.Source),
-		Grants: grants,
 	}
 }
 
@@ -316,9 +303,34 @@ func buildCommandResponse(requestID uint64, targetID string, resultJSON []byte, 
 	return resp
 }
 
+// peerCoordinator is the authenticated-peer label for a command that arrived
+// on the stream this process dialed to cfg.CoordinatorAddr. Only the
+// coordinator can be at the far end of that stream, so the relation is
+// structural rather than asserted.
+const peerCoordinator = "coordinator"
+
+// maxRemoteCommandDeadline bounds how far into the future a peer-supplied
+// deadline may sit. timeFromUnixNanos only substitutes a default when the
+// value is <= 0, so an unclamped far-future value pins a goroutine for as long
+// as the sender likes.
+const maxRemoteCommandDeadline = 60 * time.Second
+
+// clampRemoteDeadline resolves a peer-supplied deadline and caps it.
+func clampRemoteDeadline(unixNanos int64) time.Time {
+	t := timeFromUnixNanos(unixNanos)
+	if max := time.Now().Add(maxRemoteCommandDeadline); t.After(max) {
+		return max
+	}
+	return t
+}
+
 // executeCommandRequest handles an inbound CommandRequest on the receiving host,
 // validates the schema version, executes the handler, and returns the response proto.
-func executeCommandRequest(ctx context.Context, d *cmdsys.Dispatcher, hostID string, req *meshpb.CommandRequest) *meshpb.CommandResponse {
+//
+// peerID is the identity of the authenticated stream that delivered req, and
+// it — not anything inside req — is what authorizes execution. Callers must
+// take it from the transport.
+func executeCommandRequest(ctx context.Context, d *cmdsys.Dispatcher, hostID, peerID string, req *meshpb.CommandRequest) *meshpb.CommandResponse {
 	// Schema version check: if the caller's ArgsSchemaHash doesn't match the
 	// local command's hash, reject before executing.
 	if req.SchemaVersion != 0 {
@@ -335,9 +347,10 @@ func executeCommandRequest(ctx context.Context, d *cmdsys.Dispatcher, hostID str
 
 	caller := callerFromProto(req.Caller)
 	// Re-validate caller source: arriving via MeshControl means it's a
-	// MeshControl caller regardless of what the sender claims.
+	// MeshControl caller regardless of what the sender claims. The same
+	// reasoning now covers authority in full — see InvokeAsPeer.
 	caller.Source = cmdsys.SourceMeshControl
 
-	resultJSON, schemaVer, err := d.InvokeLocal(ctx, caller, req.Verb, req.ArgsJson)
+	resultJSON, schemaVer, err := d.InvokeAsPeer(ctx, caller, peerID, req.Verb, req.ArgsJson)
 	return buildCommandResponse(req.RequestId, hostID, resultJSON, schemaVer, err)
 }

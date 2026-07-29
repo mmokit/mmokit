@@ -384,15 +384,19 @@ message CommandCancel {
   string reason     = 2;  // "caller_context_canceled", "deadline_exceeded"
 }
 
+// Caller identifies who originated a routed command. Both fields are carried
+// for AUDIT ONLY and are never inputs to an authorization decision on the
+// receiving side.
+//
+// There is deliberately no grants field. Authority on a mesh receive path is
+// the authenticated peer relation — a process accepts a CommandRequest only
+// from an authenticated coordinator, and executes it because the coordinator
+// already authorized it against its own operator store. Carrying grants on the
+// wire meant Grant{Pattern:"*.*"} executed any registered verb, since
+// InvokeLocal's sole gate was a Check against these very bytes.
 message Caller {
-  string          id     = 1;
-  uint32          source = 2;  // CallerSource enum (Console=0, MeshControl=1, Test=2)
-  repeated Grant  grants = 3;
-}
-
-message Grant {
-  string pattern = 1;
-  bool   allow   = 2;
+  string id     = 1;
+  uint32 source = 2;  // CallerSource enum (Console=0, MeshControl=1, Test=2)
 }
 
 // ═══════════════════════════════════════════════
