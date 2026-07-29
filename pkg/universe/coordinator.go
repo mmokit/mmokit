@@ -1754,6 +1754,13 @@ func (c *Process) Build() {
 	}
 	c.Log.Enable(StartupCategories...)
 
+	// Decide the mesh authentication posture before anything binds a mesh
+	// listener or dials a peer. Must sit after the category enable above:
+	// Logger.Log early-returns on a disabled category, so an earlier call
+	// would silently drop the fingerprint line.
+	c.resolveClusterSecretPosture(&cfg, roles)
+	c.cfg = cfg
+
 	// Console from Config; OnConsoleReady hooks register via Process.OnConsoleReady.
 	// (PlayerRouter has no consumer today — gateway uses topology-based routing —
 	// but the field is kept for forward compat.)

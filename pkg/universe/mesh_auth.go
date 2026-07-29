@@ -2,9 +2,11 @@ package universe
 
 import (
 	"context"
+	"crypto/rand"
 	"crypto/sha256"
 	"crypto/subtle"
 	"encoding/hex"
+	"fmt"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -100,6 +102,56 @@ func peerIDFromContext(ctx context.Context) string {
 // giving flag > env > preset field) and New (because BindFlags is skipped
 // under go test and for any game that calls flag.Parse itself).
 const clusterSecretEnvVar = "MMO_CLUSTER_SECRET"
+
+// resolveClusterSecretPosture decides this process's mesh authentication
+// posture and writes any generated secret into cfg. Call from Build after
+// ParseRoles (the role set is the input) and after the log categories are
+// enabled (Logger.Log early-returns on a disabled category), and before
+// startControlPlane binds the listener.
+//
+// The discriminator is the role set, not a loopback check and not
+// CoordinatorAddr:
+//
+//   - isLoopbackBind returns false for an empty host, so ":9100" — the default
+//     every dev recipe uses — never looks like loopback. Gating on it would
+//     leave `just dev` serving an unauthenticated wildcard listener.
+//   - The distributed coordinator has no CoordinatorAddr either, so gating on
+//     that would auto-generate a secret on it and split the cluster: each of
+//     the five OS processes would draw a different one and no host could join.
+//
+// A coordinator+host process is definitionally a whole game in one process and
+// can never dial out — IsRemoteHost requires a lone host role and
+// isStandaloneGateway requires no coordinator role — so auto-generating for it
+// cannot split anything. Every other role set is a cluster member that has to
+// be told the secret out of band.
+func (c *Process) resolveClusterSecretPosture(cfg *Config, roles Roles) {
+	if cfg.ClusterSecret != "" {
+		return
+	}
+
+	if roles.Has(RoleCoordinator) && roles.Has(RoleHost) {
+		buf := make([]byte, 32)
+		if _, err := rand.Read(buf); err != nil {
+			panic(fmt.Errorf("coordinator: generate cluster secret: %w", err))
+		}
+		cfg.ClusterSecret = hex.EncodeToString(buf)
+		c.meshWarnOnce.Do(func() {
+			c.Log.Log(CatMeshCell,
+				"cluster: no --cluster-secret set; generated an ephemeral one for this process "+
+					"(fingerprint %s). Remote hosts and gateways must pass a matching "+
+					"--cluster-secret to join.",
+				clusterSecretFingerprint(cfg.ClusterSecret))
+		})
+		return
+	}
+
+	c.meshWarnOnce.Do(func() {
+		c.Log.Log(CatMeshCell,
+			"cluster: WARNING no --cluster-secret set on a multi-process role set (%s); mesh peers "+
+				"are UNAUTHENTICATED. Set --cluster-secret or %s on every process of the cluster.",
+			cfg.Mode, clusterSecretEnvVar)
+	})
+}
 
 // clusterSecretFingerprint is the first 4 bytes of SHA-256, hex-encoded. Log
 // this, never the secret itself: remote hosts install a MeshControl log

@@ -287,3 +287,105 @@ func TestMeshAuth_NoSecretDeliversNothingToEnforcingPeer(t *testing.T) {
 	case <-time.After(750 * time.Millisecond):
 	}
 }
+
+// TestBuild_AutoGeneratesSecretForSelfContainedRoles pins criterion 6. The
+// "all" preset must be closed by default — and this must NOT be gated on a
+// loopback check, because --control-listen defaults to ":9100" and
+// isLoopbackBind treats an empty host as all-interfaces, so the heuristic
+// would never fire for the bind every dev recipe actually uses.
+func TestBuild_AutoGeneratesSecretForSelfContainedRoles(t *testing.T) {
+	for _, mode := range []string{"all", "coordinator,host", "coordinator,host,gateway"} {
+		t.Run(mode, func(t *testing.T) {
+			c := New(Config{Mode: mode, ControlListen: "", AdminListen: ""})
+			c.Build()
+
+			if c.cfg.ClusterSecret == "" {
+				t.Fatalf("mode %q left the mesh unauthenticated; criterion 6 requires an auto-generated secret", mode)
+			}
+			if len(c.cfg.ClusterSecret) < 32 {
+				t.Fatalf("generated secret is only %d chars; want 32 bytes of crypto/rand hex", len(c.cfg.ClusterSecret))
+			}
+		})
+	}
+}
+
+// TestBuild_GeneratedSecretsAreUnique guards against a constant or a
+// process-global sneaking in. A package-level sync.Once value would make every
+// in-process fixture agree and look correct here, while breaking every real
+// multi-process deployment — five OS processes would each draw their own.
+func TestBuild_GeneratedSecretsAreUnique(t *testing.T) {
+	a := New(Config{Mode: "all"})
+	a.Build()
+	b := New(Config{Mode: "all"})
+	b.Build()
+
+	if a.cfg.ClusterSecret == b.cfg.ClusterSecret {
+		t.Fatal("two processes generated an identical secret; the value is not per-process crypto/rand")
+	}
+}
+
+// TestClusterSecretPosture_ByRoleSet is the full 6/7 reconciliation matrix.
+//
+// It drives resolveClusterSecretPosture directly rather than Build: the
+// coordinator-bearing modes would each bind a real MeshControl listener on
+// :9100 and collide with one another, and the posture decision is a pure
+// function of the role set anyway. TestBuild_AutoGeneratesSecretForSelfContainedRoles
+// covers the wiring from Build.
+func TestClusterSecretPosture_ByRoleSet(t *testing.T) {
+	cases := []struct {
+		mode         string
+		wantGenerate bool
+	}{
+		// Self-contained: a whole game in one process, which can never dial
+		// out, so generating cannot split anything.
+		{"all", true},
+		{"coordinator,host", true},
+		{"coordinator,host,gateway", true},
+		// Cluster members: generating here would give each OS process a
+		// different secret and no host could ever join.
+		{"coordinator", false},
+		{"coordinator,gateway", false},
+		{"host", false},
+		{"gateway", false},
+		{"service", false},
+		{"gateway,service", false},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.mode, func(t *testing.T) {
+			roles, err := ParseRoles(tc.mode)
+			if err != nil {
+				t.Fatalf("ParseRoles(%q): %v", tc.mode, err)
+			}
+			c := &Process{Log: testHostNetworkLogger(t)}
+			cfg := Config{Mode: tc.mode}
+
+			c.resolveClusterSecretPosture(&cfg, roles)
+
+			if got := cfg.ClusterSecret != ""; got != tc.wantGenerate {
+				t.Fatalf("mode %q generated=%v, want %v", tc.mode, got, tc.wantGenerate)
+			}
+		})
+	}
+}
+
+// TestClusterSecretPosture_ConfiguredSecretIsNeverOverwritten pins that an
+// operator-supplied secret survives on every role set.
+func TestClusterSecretPosture_ConfiguredSecretIsNeverOverwritten(t *testing.T) {
+	for _, mode := range []string{"all", "coordinator", "host"} {
+		t.Run(mode, func(t *testing.T) {
+			roles, err := ParseRoles(mode)
+			if err != nil {
+				t.Fatalf("ParseRoles(%q): %v", mode, err)
+			}
+			c := &Process{Log: testHostNetworkLogger(t)}
+			cfg := Config{Mode: mode, ClusterSecret: "operator-supplied"}
+
+			c.resolveClusterSecretPosture(&cfg, roles)
+
+			if cfg.ClusterSecret != "operator-supplied" {
+				t.Fatalf("mode %q overwrote the configured secret with %q", mode, cfg.ClusterSecret)
+			}
+		})
+	}
+}
