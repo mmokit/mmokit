@@ -14,8 +14,40 @@ import (
 	"github.com/zenion/mmoserver/pkg/coords"
 	"github.com/zenion/mmoserver/pkg/engine"
 	"github.com/zenion/mmoserver/pkg/logger"
+	"github.com/zenion/mmoserver/pkg/metrics"
 	"github.com/zenion/mmoserver/pkg/service"
 )
+
+// bindIdentity reports whether a payload-carried process ID may be acted on,
+// given the identity its stream registered with.
+//
+// The rule is exact match. Every legitimate producer stamps its own ID —
+// verified across mesh_control_client.go (RegisterHost, CellReady, Heartbeat),
+// mesh_gateway_client.go (RegisterGateway, SessionAnnounce),
+// cell_transfer_executor.go (CellTransferReady) and service_runtime.go
+// (ServiceAnnounce, whose localServiceHostID resolves to the very ID the
+// stream registers under) — so a divergence is either a misrouted producer or
+// a peer claiming to be someone else.
+//
+// On mismatch the caller MUST drop the message. Rewriting the claim to the
+// stream's own ID would keep the cluster working while hiding the sender,
+// which is the failure mode this exists to prevent. An empty claim is a
+// mismatch too: no producer omits the field, and accepting "" would let a
+// caller bypass the check by simply not setting it.
+//
+// Callers must additionally act on the stream-bound ID rather than the claim,
+// so a future edit that drops the check cannot silently reintroduce a
+// body-trusted identity.
+func (s *meshControlServer) bindIdentity(streamID, claimed, what string) bool {
+	if claimed == streamID {
+		return true
+	}
+	s.log.Log(CatMeshCell,
+		"coordinator: dropping %s from %q claiming id %q — payload identity does not match the authenticated stream",
+		what, streamID, claimed)
+	metrics.Ingress().RecordRejected(metrics.SurfaceMesh, metrics.ReasonIdentityMismatch)
+	return false
+}
 
 // gracefulLeaveDrainTimeout bounds how long the coordinator spends migrating
 // a leaving host's cells before it gives up and sends CellsDrained anyway.
@@ -39,11 +71,11 @@ type recvResult struct {
 // One instance per coordinator process.
 type meshControlServer struct {
 	meshpb.UnimplementedMeshControlServer // forward-compat
-	coord           *Process
-	log             *logger.Logger
-	registry        *HostRegistry
-	gatewayRegistry *GatewayRegistry
-	engine          *assignmentEngine
+	coord                                 *Process
+	log                                   *logger.Logger
+	registry                              *HostRegistry
+	gatewayRegistry                       *GatewayRegistry
+	engine                                *assignmentEngine
 
 	mu             sync.RWMutex
 	streams        map[string]*controlStream // hostID -> stream record
@@ -343,7 +375,7 @@ func (s *meshControlServer) handleHostControl(stream meshpb.MeshControl_ControlS
 			switch v := msg.Msg.(type) {
 			case *meshpb.HostMessage_CellReady:
 				ready := v.CellReady
-				if ready != nil {
+				if ready != nil && s.bindIdentity(hostID, ready.HostId, "CellReady") {
 					// Ownership arbitration. AssignCell only ADDS to
 					// host.OwnedCells and HostForCell is a map-order linear
 					// scan, so a stale re-announce — reannounceOwnedCells
@@ -358,40 +390,42 @@ func (s *meshControlServer) handleHostControl(stream meshpb.MeshControl_ControlS
 					// and the split/merge/migrate executor never emits
 					// CellReady.
 					if s.registry != nil {
-						if cur := s.registry.HostForCell(MeshCellID(ready.CellId)); cur != "" && cur != ready.HostId {
+						if cur := s.registry.HostForCell(MeshCellID(ready.CellId)); cur != "" && cur != hostID {
 							if h := s.registry.Get(cur); h != nil && h.State != RemoteHostDead {
 								if s.engine != nil {
-									s.engine.dispatchCellRelease(ready.HostId, ready.CellId)
+									s.engine.dispatchCellRelease(hostID, ready.CellId)
 								}
 								s.log.Log(CatMeshCell,
 									"coordinator: rejecting stale CellReady %s from %s — owned by %s, sent CellRelease",
-									ready.CellId, ready.HostId, cur)
+									ready.CellId, hostID, cur)
 								break
 							}
 						}
 						// Wire boundary: ready.CellId is proto string mesh form.
-						_ = s.registry.AssignCell(ready.HostId, MeshCellID(ready.CellId))
+						_ = s.registry.AssignCell(hostID, MeshCellID(ready.CellId))
 					}
-					s.log.Log(CatMeshCell, "coordinator: host %s reports cell %s READY", ready.HostId, ready.CellId)
+					s.log.Log(CatMeshCell, "coordinator: host %s reports cell %s READY", hostID, ready.CellId)
 				}
 
 			case *meshpb.HostMessage_CellStopped:
 				stopped := v.CellStopped
-				if stopped != nil {
+				if stopped != nil && s.bindIdentity(hostID, stopped.HostId, "CellStopped") {
 					if s.registry != nil {
 						// Wire boundary: stopped.CellId is proto string mesh form.
-						s.registry.ReleaseCell(stopped.HostId, MeshCellID(stopped.CellId))
+						s.registry.ReleaseCell(hostID, MeshCellID(stopped.CellId))
 					}
-					s.log.Log(CatMeshCell, "coordinator: host %s reports cell %s STOPPED", stopped.HostId, stopped.CellId)
+					s.log.Log(CatMeshCell, "coordinator: host %s reports cell %s STOPPED", hostID, stopped.CellId)
 				}
 
 			case *meshpb.HostMessage_Heartbeat:
 				hb := v.Heartbeat
-				if hb != nil && s.registry != nil {
-					s.registry.Touch(hb.HostId)
+				if hb != nil && s.registry != nil && s.bindIdentity(hostID, hb.HostId, "Heartbeat") {
+					s.registry.Touch(hostID)
 					// Always call apply — even with zero reports it serves as
 					// the eviction signal that this host now owns no cells.
-					s.coord.applyRemoteCellMetrics(hb.HostId, hb.Metrics)
+					// Poisoning another host's load signal would drive bogus
+					// split/merge decisions, so this is bound too.
+					s.coord.applyRemoteCellMetrics(hostID, hb.Metrics)
 				}
 
 			case *meshpb.HostMessage_LogBatch:
@@ -417,14 +451,20 @@ func (s *meshControlServer) handleHostControl(stream meshpb.MeshControl_ControlS
 
 			case *meshpb.HostMessage_PlayerMigrated:
 				pm := v.PlayerMigrated
-				if pm != nil {
-					s.coord.notifyPlayerMigrated(pm.GatewayId, pm.ConnId, pm.FromHostId, pm.ToHostId, MeshCellID(pm.ToCellId))
+				// Only FromHostId is bindable. GatewayId names the gateway
+				// routing the player and ToHostId the handoff destination —
+				// both legitimately third parties on a host→coord message
+				// (grpc_bridge.go resolves GatewayId out of the VCM). Binding
+				// them would break every cross-host handoff.
+				if pm != nil && s.bindIdentity(hostID, pm.FromHostId, "PlayerMigrated") {
+					s.coord.notifyPlayerMigrated(pm.GatewayId, pm.ConnId, hostID, pm.ToHostId, MeshCellID(pm.ToCellId))
 				}
 
 			case *meshpb.HostMessage_CellTransferReady:
 				ready := v.CellTransferReady
-				if ready != nil && s.coord.orchestrator != nil {
-					s.coord.orchestrator.OnReady(ready.RequestId, MeshCellID(ready.DestCellId), ready.HostId, ready.Ok, ready.Error, ready.AdoptedUsers)
+				if ready != nil && s.coord.orchestrator != nil &&
+					s.bindIdentity(hostID, ready.HostId, "CellTransferReady") {
+					s.coord.orchestrator.OnReady(ready.RequestId, MeshCellID(ready.DestCellId), hostID, ready.Ok, ready.Error, ready.AdoptedUsers)
 				}
 
 			case *meshpb.HostMessage_HostOpAck:
@@ -448,9 +488,14 @@ func (s *meshControlServer) handleHostControl(stream meshpb.MeshControl_ControlS
 					// migration IS the leaving node, and BeginMigrate
 					// dispatches CellTransfer commands back through this
 					// very control stream.
-					leavingID := gl.HostId
-					s.log.Log(CatMeshCell, "coordinator: host %s requested GracefulLeave", leavingID)
-					go s.handleGracefulLeave(leavingID)
+					// Bound to the stream: GracefulLeave{HostId:"victim"} was
+					// a one-message primitive for draining any other host's
+					// cells. A host may only ever drain itself.
+					if !s.bindIdentity(hostID, gl.HostId, "GracefulLeave") {
+						break
+					}
+					s.log.Log(CatMeshCell, "coordinator: host %s requested GracefulLeave", hostID)
+					go s.handleGracefulLeave(hostID)
 				}
 
 			case *meshpb.HostMessage_CommandResponse:
@@ -473,11 +518,15 @@ func (s *meshControlServer) handleHostControl(stream meshpb.MeshControl_ControlS
 				// instance. Validate against the cluster registry and re-
 				// broadcast PeerList so gateways pick up the new routing.
 				ann := v.ServiceAnnounce
-				if ann != nil && s.coord.coordServices != nil {
+				// Bound to the stream: an unbound announce lets any peer
+				// register itself as the auth or chat service and have the
+				// coordinator route real traffic to it.
+				if ann != nil && s.coord.coordServices != nil &&
+					s.bindIdentity(hostID, ann.GetHostId(), "ServiceAnnounce") {
 					inst := service.CoordInstance{
 						Kind:       ann.GetKind(),
 						InstanceID: ann.GetInstanceId(),
-						HostID:     ann.GetHostId(),
+						HostID:     hostID,
 						OpCodes:    append([]uint32(nil), ann.GetOpCodes()...),
 						JoinedAt:   time.Now(),
 					}
@@ -715,8 +764,12 @@ func (s *meshControlServer) handleGatewayControl(stream meshpb.MeshControl_Contr
 
 			case *meshpb.HostMessage_SessionAnnounce:
 				sa := v.SessionAnnounce
-				if sa != nil {
-					key := SessionKey{GatewayID: sa.GatewayId, ConnID: sa.ConnId}
+				// Bound to the stream: an unbound announce lets any gateway
+				// hijack or tombstone a session belonging to another gateway.
+				// TargetHostId/TargetCellId are NOT bound — they name the host
+				// the session is routed to, legitimately a third party.
+				if sa != nil && s.bindIdentity(gatewayID, sa.GatewayId, "SessionAnnounce") {
+					key := SessionKey{GatewayID: gatewayID, ConnID: sa.ConnId}
 					if sa.TargetHostId == "" {
 						// Tombstone: gateway connection closed. The host's
 						// cell still holds a grace-period session for `Username`;
@@ -730,8 +783,8 @@ func (s *meshControlServer) handleGatewayControl(stream meshpb.MeshControl_Contr
 						// the next login for the same uuid replaces the entry.
 						// Real grace-expired removal would require host→coord
 						// signalling on session-removed (deferred).
-						s.log.Log(CatMeshCell, "coordinator: gateway %s session %s:%d user=%s -> grace",
-							gatewayID, sa.GatewayId, sa.ConnId, sa.Username)
+						s.log.Log(CatMeshCell, "coordinator: gateway %s session conn=%d user=%s -> grace",
+							gatewayID, sa.ConnId, sa.Username)
 						s.coord.sessionRoutes.Remove(key)
 						s.gatewayRegistry.RemoveSession(gatewayID, key)
 						if sa.Username != "" {
@@ -746,8 +799,8 @@ func (s *meshControlServer) handleGatewayControl(stream meshpb.MeshControl_Contr
 						}
 					} else {
 						// New session announcement.
-						s.log.Log(CatMeshCell, "coordinator: gateway %s announces session %s:%d user=%s target=%s/%s",
-							gatewayID, sa.GatewayId, sa.ConnId, sa.Username, sa.TargetHostId, sa.TargetCellId)
+						s.log.Log(CatMeshCell, "coordinator: gateway %s announces session conn=%d user=%s target=%s/%s",
+							gatewayID, sa.ConnId, sa.Username, sa.TargetHostId, sa.TargetCellId)
 						// Populate the coordinator's routing table so notifyPlayerMigrated
 						// and the disconnect cleanup path can find the session.
 						s.coord.sessionRoutes.Set(&SessionRoute{
@@ -773,7 +826,7 @@ func (s *meshControlServer) handleGatewayControl(stream meshpb.MeshControl_Contr
 						// standalone mode hops through here.
 						if sa.UserId != "" {
 							if uid, err := uuid.Parse(sa.UserId); err == nil && uid != uuid.Nil {
-								s.coord.registerAuthenticatedSession(uid, sa.Username, sa.GatewayId, sa.ConnId, sa.TargetHostId, MeshCellID(sa.TargetCellId))
+								s.coord.registerAuthenticatedSession(uid, sa.Username, gatewayID, sa.ConnId, sa.TargetHostId, MeshCellID(sa.TargetCellId))
 							}
 						}
 					}
@@ -803,11 +856,16 @@ func (s *meshControlServer) handleGatewayControl(stream meshpb.MeshControl_Contr
 				// Without this, services hosted on standalone-gateway processes
 				// never appear in coordServices and RouteService dispatch fails.
 				ann := v.ServiceAnnounce
-				if ann != nil && s.coord.coordServices != nil {
+				// Same binding as the host-stream case. localServiceHostID
+				// resolves to the gateway's own id for --mode=gateway,service,
+				// which is also the key sendCoordMessageToHost routes back on,
+				// so the authenticated stream id is the correct HostID here.
+				if ann != nil && s.coord.coordServices != nil &&
+					s.bindIdentity(gatewayID, ann.GetHostId(), "ServiceAnnounce") {
 					inst := service.CoordInstance{
 						Kind:       ann.GetKind(),
 						InstanceID: ann.GetInstanceId(),
-						HostID:     ann.GetHostId(),
+						HostID:     gatewayID,
 						OpCodes:    append([]uint32(nil), ann.GetOpCodes()...),
 						JoinedAt:   time.Now(),
 					}
