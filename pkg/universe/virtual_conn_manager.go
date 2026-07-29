@@ -295,17 +295,7 @@ func (v *VirtualConnManager) SendReplication(localID uint32, scope uint64, strea
 	sess.trackReplication(token, scope, streamEpoch, seq)
 	v.mu.RUnlock()
 
-	frame := &meshpb.MeshFrame{
-		DestCellId: replicationReceiptMarker(sourceHostID, token),
-		Msg: &meshpb.MeshFrame_ClientFrame{
-			ClientFrame: &meshpb.ClientFrame{
-				GatewayId: key.GatewayID,
-				ConnId:    key.ConnID,
-				Data:      data,
-				Epoch:     epoch,
-			},
-		},
-	}
+	frame := trackedClientFrame(sourceHostID, key.GatewayID, key.ConnID, epoch, token, data)
 	if err := v.hn.SendOrderedToGateway(key.GatewayID, frame); err != nil {
 		sess.discardPendingReplication(token)
 		v.log.Log(CatMeshMsg, "vcm: SendReplication to gateway %s conn %d: %v", key.GatewayID, key.ConnID, err)

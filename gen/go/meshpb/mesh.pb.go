@@ -3302,6 +3302,7 @@ type MeshFrame struct {
 	//	*MeshFrame_SessionTransfer
 	//	*MeshFrame_SpawnTransfer
 	//	*MeshFrame_ClientDisconnect
+	//	*MeshFrame_ReplicationReceipt
 	//	*MeshFrame_ServiceEvent
 	Msg           isMeshFrame_Msg `protobuf_oneof:"msg"`
 	unknownFields protoimpl.UnknownFields
@@ -3469,6 +3470,15 @@ func (x *MeshFrame) GetClientDisconnect() *ClientDisconnect {
 	return nil
 }
 
+func (x *MeshFrame) GetReplicationReceipt() *ReplicationReceipt {
+	if x != nil {
+		if x, ok := x.Msg.(*MeshFrame_ReplicationReceipt); ok {
+			return x.ReplicationReceipt
+		}
+	}
+	return nil
+}
+
 func (x *MeshFrame) GetServiceEvent() *ServiceEvent {
 	if x != nil {
 		if x, ok := x.Msg.(*MeshFrame_ServiceEvent); ok {
@@ -3534,6 +3544,10 @@ type MeshFrame_ClientDisconnect struct {
 	ClientDisconnect *ClientDisconnect `protobuf:"bytes,13,opt,name=client_disconnect,json=clientDisconnect,proto3,oneof"` // S6: pair with client_input/client_frame — graceful disconnect
 }
 
+type MeshFrame_ReplicationReceipt struct {
+	ReplicationReceipt *ReplicationReceipt `protobuf:"bytes,14,opt,name=replication_receipt,json=replicationReceipt,proto3,oneof"` // gateway -> host delivery-class answer for a tracked ClientFrame
+}
+
 type MeshFrame_ServiceEvent struct {
 	ServiceEvent *ServiceEvent `protobuf:"bytes,50,opt,name=service_event,json=serviceEvent,proto3,oneof"` // services bus: peer-to-peer typed event payload
 }
@@ -3563,6 +3577,8 @@ func (*MeshFrame_SessionTransfer) isMeshFrame_Msg() {}
 func (*MeshFrame_SpawnTransfer) isMeshFrame_Msg() {}
 
 func (*MeshFrame_ClientDisconnect) isMeshFrame_Msg() {}
+
+func (*MeshFrame_ReplicationReceipt) isMeshFrame_Msg() {}
 
 func (*MeshFrame_ServiceEvent) isMeshFrame_Msg() {}
 
@@ -5133,11 +5149,18 @@ func (x *ClientInput) GetChannel() uint32 {
 
 // S6: raw client frame bytes forwarded from host to gateway.
 type ClientFrame struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	ConnId        uint32                 `protobuf:"varint,1,opt,name=conn_id,json=connId,proto3" json:"conn_id,omitempty"`
-	Data          []byte                 `protobuf:"bytes,2,opt,name=data,proto3" json:"data,omitempty"`
-	GatewayId     string                 `protobuf:"bytes,3,opt,name=gateway_id,json=gatewayId,proto3" json:"gateway_id,omitempty"`
-	Epoch         uint64                 `protobuf:"varint,4,opt,name=epoch,proto3" json:"epoch,omitempty"`
+	state     protoimpl.MessageState `protogen:"open.v1"`
+	ConnId    uint32                 `protobuf:"varint,1,opt,name=conn_id,json=connId,proto3" json:"conn_id,omitempty"`
+	Data      []byte                 `protobuf:"bytes,2,opt,name=data,proto3" json:"data,omitempty"`
+	GatewayId string                 `protobuf:"bytes,3,opt,name=gateway_id,json=gatewayId,proto3" json:"gateway_id,omitempty"` // the RECEIVING gateway; producers are always hosts
+	Epoch     uint64                 `protobuf:"varint,4,opt,name=epoch,proto3" json:"epoch,omitempty"`
+	// Delivery tracking. When receipt_token is non-zero the gateway answers with
+	// a ReplicationReceipt naming source_host_id, so the sending host learns the
+	// achieved delivery class. Both were previously smuggled through
+	// dest_cell_id as a "@mmokit/repl-receipt/..." marker — a cell-ID string
+	// field carrying neither a cell nor an ID.
+	SourceHostId  string `protobuf:"bytes,5,opt,name=source_host_id,json=sourceHostId,proto3" json:"source_host_id,omitempty"`
+	ReceiptToken  uint64 `protobuf:"varint,6,opt,name=receipt_token,json=receiptToken,proto3" json:"receipt_token,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -5200,6 +5223,120 @@ func (x *ClientFrame) GetEpoch() uint64 {
 	return 0
 }
 
+func (x *ClientFrame) GetSourceHostId() string {
+	if x != nil {
+		return x.SourceHostId
+	}
+	return ""
+}
+
+func (x *ClientFrame) GetReceiptToken() uint64 {
+	if x != nil {
+		return x.ReceiptToken
+	}
+	return 0
+}
+
+// ReplicationReceipt is the gateway's answer to a tracked ClientFrame: it tells
+// source_host_id what actually happened to the frame carrying receipt_token.
+//
+// This replaces a workaround that rode the ClientInput arm on a reserved
+// ^uint32(0) channel with its identity packed into dest_cell_id. That existed
+// because a proto change felt expensive, and it cost a parse helper, a
+// namespace prefix, and an arm of routeInboundFrame that had to intercept
+// control traffic before game input decoding.
+type ReplicationReceipt struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	SourceHostId  string                 `protobuf:"bytes,1,opt,name=source_host_id,json=sourceHostId,proto3" json:"source_host_id,omitempty"` // the host that sent the tracked frame
+	GatewayId     string                 `protobuf:"bytes,2,opt,name=gateway_id,json=gatewayId,proto3" json:"gateway_id,omitempty"`            // the gateway answering
+	ConnId        uint32                 `protobuf:"varint,3,opt,name=conn_id,json=connId,proto3" json:"conn_id,omitempty"`
+	Epoch         uint64                 `protobuf:"varint,4,opt,name=epoch,proto3" json:"epoch,omitempty"`
+	ReceiptToken  uint64                 `protobuf:"varint,5,opt,name=receipt_token,json=receiptToken,proto3" json:"receipt_token,omitempty"`
+	Disposition   uint32                 `protobuf:"varint,6,opt,name=disposition,proto3" json:"disposition,omitempty"` // pkgnet.SendDisposition
+	Delivery      uint32                 `protobuf:"varint,7,opt,name=delivery,proto3" json:"delivery,omitempty"`       // pkgnet.DeliveryClass
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ReplicationReceipt) Reset() {
+	*x = ReplicationReceipt{}
+	mi := &file_meshpb_mesh_proto_msgTypes[62]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ReplicationReceipt) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ReplicationReceipt) ProtoMessage() {}
+
+func (x *ReplicationReceipt) ProtoReflect() protoreflect.Message {
+	mi := &file_meshpb_mesh_proto_msgTypes[62]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ReplicationReceipt.ProtoReflect.Descriptor instead.
+func (*ReplicationReceipt) Descriptor() ([]byte, []int) {
+	return file_meshpb_mesh_proto_rawDescGZIP(), []int{62}
+}
+
+func (x *ReplicationReceipt) GetSourceHostId() string {
+	if x != nil {
+		return x.SourceHostId
+	}
+	return ""
+}
+
+func (x *ReplicationReceipt) GetGatewayId() string {
+	if x != nil {
+		return x.GatewayId
+	}
+	return ""
+}
+
+func (x *ReplicationReceipt) GetConnId() uint32 {
+	if x != nil {
+		return x.ConnId
+	}
+	return 0
+}
+
+func (x *ReplicationReceipt) GetEpoch() uint64 {
+	if x != nil {
+		return x.Epoch
+	}
+	return 0
+}
+
+func (x *ReplicationReceipt) GetReceiptToken() uint64 {
+	if x != nil {
+		return x.ReceiptToken
+	}
+	return 0
+}
+
+func (x *ReplicationReceipt) GetDisposition() uint32 {
+	if x != nil {
+		return x.Disposition
+	}
+	return 0
+}
+
+func (x *ReplicationReceipt) GetDelivery() uint32 {
+	if x != nil {
+		return x.Delivery
+	}
+	return 0
+}
+
 // S6: client graceful disconnect notification from gateway to host.
 type ClientDisconnect struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
@@ -5212,7 +5349,7 @@ type ClientDisconnect struct {
 
 func (x *ClientDisconnect) Reset() {
 	*x = ClientDisconnect{}
-	mi := &file_meshpb_mesh_proto_msgTypes[62]
+	mi := &file_meshpb_mesh_proto_msgTypes[63]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5224,7 +5361,7 @@ func (x *ClientDisconnect) String() string {
 func (*ClientDisconnect) ProtoMessage() {}
 
 func (x *ClientDisconnect) ProtoReflect() protoreflect.Message {
-	mi := &file_meshpb_mesh_proto_msgTypes[62]
+	mi := &file_meshpb_mesh_proto_msgTypes[63]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5237,7 +5374,7 @@ func (x *ClientDisconnect) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ClientDisconnect.ProtoReflect.Descriptor instead.
 func (*ClientDisconnect) Descriptor() ([]byte, []int) {
-	return file_meshpb_mesh_proto_rawDescGZIP(), []int{62}
+	return file_meshpb_mesh_proto_rawDescGZIP(), []int{63}
 }
 
 func (x *ClientDisconnect) GetGatewayId() string {
@@ -5507,7 +5644,7 @@ const file_meshpb_mesh_proto_rawDesc = "" +
 	"\x06reason\x18\x02 \x01(\tR\x06reason\"0\n" +
 	"\x06Caller\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x16\n" +
-	"\x06source\x18\x02 \x01(\rR\x06source\"\xb6\a\n" +
+	"\x06source\x18\x02 \x01(\rR\x06source\"\x85\b\n" +
 	"\tMeshFrame\x12 \n" +
 	"\fdest_cell_id\x18d \x01(\tR\n" +
 	"destCellId\x128\n" +
@@ -5524,7 +5661,8 @@ const file_meshpb_mesh_proto_rawDesc = "" +
 	" \x01(\v2\x18.meshpb.PlayerAssignmentH\x00R\x10playerAssignment\x12D\n" +
 	"\x10session_transfer\x18\v \x01(\v2\x17.meshpb.SessionTransferH\x00R\x0fsessionTransfer\x12>\n" +
 	"\x0espawn_transfer\x18\f \x01(\v2\x15.meshpb.SpawnTransferH\x00R\rspawnTransfer\x12G\n" +
-	"\x11client_disconnect\x18\r \x01(\v2\x18.meshpb.ClientDisconnectH\x00R\x10clientDisconnect\x12;\n" +
+	"\x11client_disconnect\x18\r \x01(\v2\x18.meshpb.ClientDisconnectH\x00R\x10clientDisconnect\x12M\n" +
+	"\x13replication_receipt\x18\x0e \x01(\v2\x1a.meshpb.ReplicationReceiptH\x00R\x12replicationReceipt\x12;\n" +
 	"\rservice_event\x182 \x01(\v2\x14.meshpb.ServiceEventH\x00R\fserviceEventB\x05\n" +
 	"\x03msg\"C\n" +
 	"\vBorderFrame\x12 \n" +
@@ -5674,13 +5812,24 @@ const file_meshpb_mesh_proto_rawDesc = "" +
 	"\n" +
 	"gateway_id\x18\x03 \x01(\tR\tgatewayId\x12\x14\n" +
 	"\x05epoch\x18\x04 \x01(\x04R\x05epoch\x12\x18\n" +
-	"\achannel\x18\x05 \x01(\rR\achannel\"o\n" +
+	"\achannel\x18\x05 \x01(\rR\achannel\"\xba\x01\n" +
 	"\vClientFrame\x12\x17\n" +
 	"\aconn_id\x18\x01 \x01(\rR\x06connId\x12\x12\n" +
 	"\x04data\x18\x02 \x01(\fR\x04data\x12\x1d\n" +
 	"\n" +
 	"gateway_id\x18\x03 \x01(\tR\tgatewayId\x12\x14\n" +
-	"\x05epoch\x18\x04 \x01(\x04R\x05epoch\"b\n" +
+	"\x05epoch\x18\x04 \x01(\x04R\x05epoch\x12$\n" +
+	"\x0esource_host_id\x18\x05 \x01(\tR\fsourceHostId\x12#\n" +
+	"\rreceipt_token\x18\x06 \x01(\x04R\freceiptToken\"\xeb\x01\n" +
+	"\x12ReplicationReceipt\x12$\n" +
+	"\x0esource_host_id\x18\x01 \x01(\tR\fsourceHostId\x12\x1d\n" +
+	"\n" +
+	"gateway_id\x18\x02 \x01(\tR\tgatewayId\x12\x17\n" +
+	"\aconn_id\x18\x03 \x01(\rR\x06connId\x12\x14\n" +
+	"\x05epoch\x18\x04 \x01(\x04R\x05epoch\x12#\n" +
+	"\rreceipt_token\x18\x05 \x01(\x04R\freceiptToken\x12 \n" +
+	"\vdisposition\x18\x06 \x01(\rR\vdisposition\x12\x1a\n" +
+	"\bdelivery\x18\a \x01(\rR\bdelivery\"b\n" +
 	"\x10ClientDisconnect\x12\x1d\n" +
 	"\n" +
 	"gateway_id\x18\x01 \x01(\tR\tgatewayId\x12\x17\n" +
@@ -5709,7 +5858,7 @@ func file_meshpb_mesh_proto_rawDescGZIP() []byte {
 }
 
 var file_meshpb_mesh_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_meshpb_mesh_proto_msgTypes = make([]protoimpl.MessageInfo, 64)
+var file_meshpb_mesh_proto_msgTypes = make([]protoimpl.MessageInfo, 65)
 var file_meshpb_mesh_proto_goTypes = []any{
 	(CellTransferKind)(0),         // 0: meshpb.CellTransferKind
 	(*HostMessage)(nil),           // 1: meshpb.HostMessage
@@ -5774,8 +5923,9 @@ var file_meshpb_mesh_proto_goTypes = []any{
 	(*CellTransferCommit)(nil),    // 60: meshpb.CellTransferCommit
 	(*ClientInput)(nil),           // 61: meshpb.ClientInput
 	(*ClientFrame)(nil),           // 62: meshpb.ClientFrame
-	(*ClientDisconnect)(nil),      // 63: meshpb.ClientDisconnect
-	nil,                           // 64: meshpb.PeerList.EventRoutingEntry
+	(*ReplicationReceipt)(nil),    // 63: meshpb.ReplicationReceipt
+	(*ClientDisconnect)(nil),      // 64: meshpb.ClientDisconnect
+	nil,                           // 65: meshpb.PeerList.EventRoutingEntry
 }
 var file_meshpb_mesh_proto_depIdxs = []int32{
 	3,  // 0: meshpb.HostMessage.register:type_name -> meshpb.RegisterHost
@@ -5824,7 +5974,7 @@ var file_meshpb_mesh_proto_depIdxs = []int32{
 	23, // 43: meshpb.PeerList.cells:type_name -> meshpb.CellOwnership
 	25, // 44: meshpb.PeerList.gateways:type_name -> meshpb.GatewayRecord
 	26, // 45: meshpb.PeerList.services:type_name -> meshpb.ServiceRecord
-	64, // 46: meshpb.PeerList.event_routing:type_name -> meshpb.PeerList.EventRoutingEntry
+	65, // 46: meshpb.PeerList.event_routing:type_name -> meshpb.PeerList.EventRoutingEntry
 	41, // 47: meshpb.CommandRequest.caller:type_name -> meshpb.Caller
 	43, // 48: meshpb.MeshFrame.border_frame:type_name -> meshpb.BorderFrame
 	44, // 49: meshpb.MeshFrame.handoff:type_name -> meshpb.Handoff
@@ -5838,23 +5988,24 @@ var file_meshpb_mesh_proto_depIdxs = []int32{
 	48, // 57: meshpb.MeshFrame.player_assignment:type_name -> meshpb.PlayerAssignment
 	49, // 58: meshpb.MeshFrame.session_transfer:type_name -> meshpb.SessionTransfer
 	50, // 59: meshpb.MeshFrame.spawn_transfer:type_name -> meshpb.SpawnTransfer
-	63, // 60: meshpb.MeshFrame.client_disconnect:type_name -> meshpb.ClientDisconnect
-	31, // 61: meshpb.MeshFrame.service_event:type_name -> meshpb.ServiceEvent
-	47, // 62: meshpb.PlayerAssignment.spawn_location:type_name -> meshpb.Location
-	47, // 63: meshpb.SpawnTransfer.spawn_location:type_name -> meshpb.Location
-	0,  // 64: meshpb.CellTransfer.kind:type_name -> meshpb.CellTransferKind
-	53, // 65: meshpb.CellTransfer.bounds:type_name -> meshpb.CellBounds
-	51, // 66: meshpb.CellTransfer.context:type_name -> meshpb.BorderContextEntry
-	29, // 67: meshpb.PeerList.EventRoutingEntry.value:type_name -> meshpb.ProcessList
-	1,  // 68: meshpb.MeshControl.Control:input_type -> meshpb.HostMessage
-	42, // 69: meshpb.MeshData.Data:input_type -> meshpb.MeshFrame
-	2,  // 70: meshpb.MeshControl.Control:output_type -> meshpb.CoordMessage
-	42, // 71: meshpb.MeshData.Data:output_type -> meshpb.MeshFrame
-	70, // [70:72] is the sub-list for method output_type
-	68, // [68:70] is the sub-list for method input_type
-	68, // [68:68] is the sub-list for extension type_name
-	68, // [68:68] is the sub-list for extension extendee
-	0,  // [0:68] is the sub-list for field type_name
+	64, // 60: meshpb.MeshFrame.client_disconnect:type_name -> meshpb.ClientDisconnect
+	63, // 61: meshpb.MeshFrame.replication_receipt:type_name -> meshpb.ReplicationReceipt
+	31, // 62: meshpb.MeshFrame.service_event:type_name -> meshpb.ServiceEvent
+	47, // 63: meshpb.PlayerAssignment.spawn_location:type_name -> meshpb.Location
+	47, // 64: meshpb.SpawnTransfer.spawn_location:type_name -> meshpb.Location
+	0,  // 65: meshpb.CellTransfer.kind:type_name -> meshpb.CellTransferKind
+	53, // 66: meshpb.CellTransfer.bounds:type_name -> meshpb.CellBounds
+	51, // 67: meshpb.CellTransfer.context:type_name -> meshpb.BorderContextEntry
+	29, // 68: meshpb.PeerList.EventRoutingEntry.value:type_name -> meshpb.ProcessList
+	1,  // 69: meshpb.MeshControl.Control:input_type -> meshpb.HostMessage
+	42, // 70: meshpb.MeshData.Data:input_type -> meshpb.MeshFrame
+	2,  // 71: meshpb.MeshControl.Control:output_type -> meshpb.CoordMessage
+	42, // 72: meshpb.MeshData.Data:output_type -> meshpb.MeshFrame
+	71, // [71:73] is the sub-list for method output_type
+	69, // [69:71] is the sub-list for method input_type
+	69, // [69:69] is the sub-list for extension type_name
+	69, // [69:69] is the sub-list for extension extendee
+	0,  // [0:69] is the sub-list for field type_name
 }
 
 func init() { file_meshpb_mesh_proto_init() }
@@ -5920,6 +6071,7 @@ func file_meshpb_mesh_proto_init() {
 		(*MeshFrame_SessionTransfer)(nil),
 		(*MeshFrame_SpawnTransfer)(nil),
 		(*MeshFrame_ClientDisconnect)(nil),
+		(*MeshFrame_ReplicationReceipt)(nil),
 		(*MeshFrame_ServiceEvent)(nil),
 	}
 	type x struct{}
@@ -5928,7 +6080,7 @@ func file_meshpb_mesh_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_meshpb_mesh_proto_rawDesc), len(file_meshpb_mesh_proto_rawDesc)),
 			NumEnums:      1,
-			NumMessages:   64,
+			NumMessages:   65,
 			NumExtensions: 0,
 			NumServices:   2,
 		},

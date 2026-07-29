@@ -253,11 +253,11 @@ func TestVCM_SendReplicationUsesOpaqueTokenAndTracksSequence(t *testing.T) {
 	}
 
 	queued := <-peer.outQ
-	hostID, token, ok := parseReplicationReceiptMarker(queued.frame.GetDestCellId())
-	if !ok || token == 0 || hostID != hn.hostID {
-		t.Fatalf("tracked frame marker = %q", queued.frame.GetDestCellId())
-	}
 	cf := queued.frame.GetClientFrame()
+	if cf == nil || cf.GetReceiptToken() == 0 || cf.GetSourceHostId() != hn.hostID {
+		t.Fatalf("tracked frame receipt fields = %+v", cf)
+	}
+	token := cf.GetReceiptToken()
 	if cf == nil || cf.GatewayId != "gw-1" || cf.ConnId != 44 || cf.Epoch != 9 {
 		t.Fatalf("tracked client frame = %+v", cf)
 	}

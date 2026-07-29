@@ -294,12 +294,13 @@ func TestRouteInboundTrackedClientFrameSendsReceiptAfterReliableOrderedEnqueue(t
 
 	const token uint64 = 0x102030405
 	frame := &meshpb.MeshFrame{
-		DestCellId: replicationReceiptMarker("host-1", token),
 		Msg: &meshpb.MeshFrame_ClientFrame{ClientFrame: &meshpb.ClientFrame{
-			GatewayId: "gw-1",
-			ConnId:    connID,
-			Epoch:     7,
-			Data:      []byte{0x01},
+			SourceHostId: "host-1",
+			ReceiptToken: token,
+			GatewayId:    "gw-1",
+			ConnId:       connID,
+			Epoch:        7,
+			Data:         []byte{0x01},
 		}},
 	}
 	if err := n.routeInboundFrame("host-src", frame); err != nil {
@@ -308,7 +309,15 @@ func TestRouteInboundTrackedClientFrameSendsReceiptAfterReliableOrderedEnqueue(t
 
 	select {
 	case queued := <-peer.outQ:
-		gotHostID, gotToken, result, ok := decodeReplicationReceiptFrame(queued.frame)
+		rr := queued.frame.GetReplicationReceipt()
+		ok := rr != nil
+		var gotHostID string
+		var gotToken uint64
+		var result pkgnet.SendResult
+		if ok {
+			gotHostID, gotToken = rr.GetSourceHostId(), rr.GetReceiptToken()
+			result, ok = receiptResult(rr)
+		}
 		if !ok {
 			t.Fatalf("queued frame is not a valid receipt: %+v", queued.frame)
 		}
@@ -321,9 +330,13 @@ func TestRouteInboundTrackedClientFrameSendsReceiptAfterReliableOrderedEnqueue(t
 		if !result.Supports(pkgnet.DeliveryReliableOrdered) {
 			t.Fatalf("receipt result = %+v, want reliable ordered", result)
 		}
-		ci := queued.frame.GetClientInput()
-		if ci.GatewayId != "gw-1" || ci.ConnId != connID || ci.Epoch != 7 {
-			t.Fatalf("receipt route fields = %+v", ci)
+		if rr.GetGatewayId() != "gw-1" || rr.GetConnId() != connID || rr.GetEpoch() != 7 {
+			t.Fatalf("receipt route fields = %+v", rr)
+		}
+		// The receipt must not ride the ClientInput arm any more, or it
+		// reaches game input decoding.
+		if queued.frame.GetClientInput() != nil {
+			t.Fatal("receipt still occupies the ClientInput arm")
 		}
 	default:
 		t.Fatal("gateway did not enqueue a replication receipt")
@@ -348,9 +361,10 @@ func TestRouteInboundTrackedClientFrameDoesNotReceiptRejectedEnqueue(t *testing.
 	}
 
 	frame := &meshpb.MeshFrame{
-		DestCellId: replicationReceiptMarker("host-1", 11),
 		Msg: &meshpb.MeshFrame_ClientFrame{ClientFrame: &meshpb.ClientFrame{
-			GatewayId: "gw-1", ConnId: connID, Epoch: 3,
+			SourceHostId: "host-1",
+			ReceiptToken: 11,
+			GatewayId:    "gw-1", ConnId: connID, Epoch: 3,
 		}},
 	}
 	if err := n.routeInboundFrame("host-src", frame); err != nil {
@@ -401,9 +415,9 @@ func TestRouteInboundTrackedClientFrameReceiptsWeakerDelivery(t *testing.T) {
 			}
 
 			frame := &meshpb.MeshFrame{
-				DestCellId: replicationReceiptMarker("host-1", 12),
 				Msg: &meshpb.MeshFrame_ClientFrame{ClientFrame: &meshpb.ClientFrame{
 					GatewayId: "gw-1", ConnId: connID, Epoch: 3,
+					SourceHostId: "host-1", ReceiptToken: 12,
 				}},
 			}
 			if err := n.routeInboundFrame("host-src", frame); err != nil {
@@ -413,9 +427,13 @@ func TestRouteInboundTrackedClientFrameReceiptsWeakerDelivery(t *testing.T) {
 				t.Fatalf("receipt queue length = %d, want 1", got)
 			}
 			queued := <-peer.outQ
-			_, _, result, ok := decodeReplicationReceiptFrame(queued.frame)
+			rr := queued.frame.GetReplicationReceipt()
+			if rr == nil {
+				t.Fatal("queued frame is not a replication receipt")
+			}
+			result, ok := receiptResult(rr)
 			if !ok {
-				t.Fatal("queued frame is not a decodable replication receipt")
+				t.Fatal("queued receipt carries out-of-range enums")
 			}
 			if result.Delivery != tc.delivery {
 				t.Fatalf("receipt Delivery = %v, want %v — the host latches its ACK mode from this",
@@ -449,9 +467,10 @@ func TestRouteInboundTrackedClientFrameRequiresCurrentEpoch(t *testing.T) {
 	}
 
 	stale := &meshpb.MeshFrame{
-		DestCellId: replicationReceiptMarker("host-new", 13),
 		Msg: &meshpb.MeshFrame_ClientFrame{ClientFrame: &meshpb.ClientFrame{
-			GatewayId: "gw-1", ConnId: connID, Epoch: 5,
+			SourceHostId: "host-new",
+			ReceiptToken: 13,
+			GatewayId:    "gw-1", ConnId: connID, Epoch: 5,
 		}},
 	}
 	if err := n.routeInboundFrame("host-src", stale); err != nil {
@@ -489,9 +508,10 @@ func TestRouteInboundTrackedClientFrameRequiresAuthoritativeHostAtCurrentEpoch(t
 	// the same epoch before the gateway's UpstreamSwitch. Its frame must not
 	// reset client baselines or receive a token that belongs to either host.
 	premature := &meshpb.MeshFrame{
-		DestCellId: replicationReceiptMarker("host-destination", 14),
 		Msg: &meshpb.MeshFrame_ClientFrame{ClientFrame: &meshpb.ClientFrame{
-			GatewayId: "gw-1", ConnId: connID, Epoch: 6,
+			SourceHostId: "host-destination",
+			ReceiptToken: 14,
+			GatewayId:    "gw-1", ConnId: connID, Epoch: 6,
 		}},
 	}
 	if err := n.routeInboundFrame("host-src", premature); err != nil {

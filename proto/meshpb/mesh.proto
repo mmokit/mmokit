@@ -428,6 +428,7 @@ message MeshFrame {
     SessionTransfer   session_transfer    = 11;
     SpawnTransfer     spawn_transfer      = 12;
     ClientDisconnect  client_disconnect   = 13; // S6: pair with client_input/client_frame — graceful disconnect
+    ReplicationReceipt replication_receipt = 14; // gateway -> host delivery-class answer for a tracked ClientFrame
     ServiceEvent      service_event       = 50;  // services bus: peer-to-peer typed event payload
   }
 }
@@ -699,8 +700,34 @@ message ClientInput {
 message ClientFrame {
   uint32 conn_id    = 1;
   bytes  data       = 2;
-  string gateway_id = 3;
+  string gateway_id = 3;  // the RECEIVING gateway; producers are always hosts
   uint64 epoch      = 4;
+
+  // Delivery tracking. When receipt_token is non-zero the gateway answers with
+  // a ReplicationReceipt naming source_host_id, so the sending host learns the
+  // achieved delivery class. Both were previously smuggled through
+  // dest_cell_id as a "@mmokit/repl-receipt/..." marker — a cell-ID string
+  // field carrying neither a cell nor an ID.
+  string source_host_id = 5;
+  uint64 receipt_token  = 6;
+}
+
+// ReplicationReceipt is the gateway's answer to a tracked ClientFrame: it tells
+// source_host_id what actually happened to the frame carrying receipt_token.
+//
+// This replaces a workaround that rode the ClientInput arm on a reserved
+// ^uint32(0) channel with its identity packed into dest_cell_id. That existed
+// because a proto change felt expensive, and it cost a parse helper, a
+// namespace prefix, and an arm of routeInboundFrame that had to intercept
+// control traffic before game input decoding.
+message ReplicationReceipt {
+  string source_host_id = 1;  // the host that sent the tracked frame
+  string gateway_id     = 2;  // the gateway answering
+  uint32 conn_id        = 3;
+  uint64 epoch          = 4;
+  uint64 receipt_token  = 5;
+  uint32 disposition    = 6;  // pkgnet.SendDisposition
+  uint32 delivery       = 7;  // pkgnet.DeliveryClass
 }
 
 // S6: client graceful disconnect notification from gateway to host.

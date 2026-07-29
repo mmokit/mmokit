@@ -791,36 +791,45 @@ func (n *HostNetwork) routeInboundFrame(senderID string, frame *meshpb.MeshFrame
 		}
 	}()
 
+	// ── ReplicationReceipt: gateway answering a tracked ClientFrame ───────
+	// The receipt names the host it is FOR, which must be this one. Note it
+	// is not bound to senderID: the gateway is answering on behalf of a frame
+	// this host sent, so the sender is the gateway and the named host is us.
+	if rr := frame.GetReplicationReceipt(); rr != nil {
+		if n.vcm == nil {
+			n.log.Log(CatMeshMsg, "[%s] ReplicationReceipt received but no VCM configured, dropping", n.hostID)
+			return nil
+		}
+		if rr.GetSourceHostId() != n.hostID {
+			n.log.Log(CatMeshMsg, "[%s] replication receipt targeted host=%s gw=%s conn=%d, dropping",
+				n.hostID, rr.GetSourceHostId(), rr.GetGatewayId(), rr.GetConnId())
+			return nil
+		}
+		result, ok := receiptResult(rr)
+		if !ok {
+			n.log.Log(CatMeshMsg, "[%s] malformed replication receipt gw=%s conn=%d, dropping",
+				n.hostID, rr.GetGatewayId(), rr.GetConnId())
+			metrics.Ingress().RecordRejected(metrics.SurfaceMesh, metrics.ReasonIdentityMismatch)
+			return nil
+		}
+		key := SessionKey{GatewayID: rr.GetGatewayId(), ConnID: rr.GetConnId()}
+		localID, known := n.vcm.LookupByKey(key)
+		if !known {
+			n.log.Log(CatMeshMsg, "[%s] replication receipt for unknown session gw=%s conn=%d, dropping",
+				n.hostID, rr.GetGatewayId(), rr.GetConnId())
+			return nil
+		}
+		if !n.vcm.recordReplicationReceipt(localID, rr.GetEpoch(), rr.GetReceiptToken(), result) {
+			n.log.Log(CatMeshMsg, "[%s] stale or unknown replication receipt gw=%s conn=%d epoch=%d token=%d, dropping",
+				n.hostID, rr.GetGatewayId(), rr.GetConnId(), rr.GetEpoch(), rr.GetReceiptToken())
+		}
+		return nil
+	}
+
 	// ── ClientInput: gateway forwarding client bytes to node ──────────────
 	if ci := frame.GetClientInput(); ci != nil {
 		if n.vcm == nil {
 			n.log.Log(CatMeshMsg, "[%s] ClientInput received but no VCM configured, dropping", n.hostID)
-			return nil
-		}
-		// Replication receipts share the ClientInput variant but occupy a
-		// reserved channel + DestCellId namespace. Intercept them before the
-		// ordinary input queues so malformed control traffic can never reach
-		// game input decoding.
-		isReceipt := ci.Channel == replicationReceiptChannel || hasReplicationReceiptMarker(frame.GetDestCellId())
-		if isReceipt {
-			receiptHostID, token, result, valid := decodeReplicationReceiptFrame(frame)
-			if !valid {
-				n.log.Log(CatMeshMsg, "[%s] malformed replication receipt gw=%s conn=%d, dropping", n.hostID, ci.GatewayId, ci.ConnId)
-				return nil
-			}
-			if receiptHostID != n.hostID {
-				n.log.Log(CatMeshMsg, "[%s] replication receipt targeted host=%s gw=%s conn=%d, dropping", n.hostID, receiptHostID, ci.GatewayId, ci.ConnId)
-				return nil
-			}
-			key := SessionKey{GatewayID: ci.GatewayId, ConnID: ci.ConnId}
-			localID, ok := n.vcm.LookupByKey(key)
-			if !ok {
-				n.log.Log(CatMeshMsg, "[%s] replication receipt for unknown session gw=%s conn=%d, dropping", n.hostID, ci.GatewayId, ci.ConnId)
-				return nil
-			}
-			if !n.vcm.recordReplicationReceipt(localID, ci.Epoch, token, result) {
-				n.log.Log(CatMeshMsg, "[%s] stale or unknown replication receipt gw=%s conn=%d epoch=%d token=%d, dropping", n.hostID, ci.GatewayId, ci.ConnId, ci.Epoch, token)
-			}
 			return nil
 		}
 		// Both producers of an ordinary ClientInput stamp their own gateway id
@@ -849,18 +858,17 @@ func (n *HostNetwork) routeInboundFrame(senderID string, frame *meshpb.MeshFrame
 	// Receiving this on a node: protocol error (log and drop).
 	if cf := frame.GetClientFrame(); cf != nil {
 		if n.gw != nil {
-			marker := frame.GetDestCellId()
-			tracked := hasReplicationReceiptMarker(marker)
-			var sourceHostID string
-			var receiptToken uint64
+			// A tracked frame is one that asks for a receipt: both fields are
+			// typed now rather than packed into DestCellId.
+			sourceHostID := cf.GetSourceHostId()
+			receiptToken := cf.GetReceiptToken()
+			tracked := receiptToken != 0
 			if tracked {
-				var valid bool
-				sourceHostID, receiptToken, valid = parseReplicationReceiptMarker(marker)
-				if !valid {
-					n.log.Log(CatMeshMsg, "[%s] malformed tracked ClientFrame marker for conn=%d, dropping", n.hostID, cf.ConnId)
+				if sourceHostID == "" {
+					n.log.Log(CatMeshMsg, "[%s] tracked ClientFrame with no source host for conn=%d, dropping", n.hostID, cf.ConnId)
 					return nil
 				}
-				if _, valid = n.gw.replicationReceiptHost(cf.ConnId, cf.GatewayId, cf.Epoch, sourceHostID); !valid {
+				if _, valid := n.gw.replicationReceiptHost(cf.ConnId, cf.GatewayId, cf.Epoch, sourceHostID); !valid {
 					n.log.Log(CatMeshMsg, "[%s] tracked ClientFrame route mismatch source=%s gw=%s conn=%d epoch=%d, dropping", n.hostID, sourceHostID, cf.GatewayId, cf.ConnId, cf.Epoch)
 					return nil
 				}
