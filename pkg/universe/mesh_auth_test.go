@@ -10,6 +10,7 @@ import (
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 
@@ -385,6 +386,162 @@ func TestClusterSecretPosture_ConfiguredSecretIsNeverOverwritten(t *testing.T) {
 
 			if cfg.ClusterSecret != "operator-supplied" {
 				t.Fatalf("mode %q overwrote the configured secret with %q", mode, cfg.ClusterSecret)
+			}
+		})
+	}
+}
+
+// TestMeshAuth_UnauthenticatedRegisterHostIsRejected pins criterion 2 on the
+// control plane: a host presenting no cluster secret is refused, and — the
+// half that actually matters — the coordinator's registry is left untouched,
+// so nothing downstream can be fooled into assigning it cells.
+func TestMeshAuth_UnauthenticatedRegisterHostIsRejected(t *testing.T) {
+	coord := New(Config{
+		CellsX: 1, CellsY: 1,
+		Mode:                "coordinator",
+		ControlListen:       "127.0.0.1:0",
+		ClusterSecret:       "coord-cluster-secret",
+		Headless:            true,
+		SettleWindow:        50 * time.Millisecond,
+		ShutdownGracePeriod: 50 * time.Millisecond,
+	})
+	coord.Build()
+	t.Cleanup(coord.Shutdown)
+
+	coordAddr := coord.controlListener.Addr().String()
+
+	// A host with NO secret against a coordinator that requires one.
+	node := New(Config{
+		CellsX: 1, CellsY: 1,
+		Mode:                "host",
+		CoordinatorAddr:     coordAddr,
+		HostID:              "intruder",
+		Headless:            true,
+		ShutdownGracePeriod: 50 * time.Millisecond,
+	})
+	node.Build()
+	t.Cleanup(node.Shutdown)
+
+	// The client retries with backoff, so poll rather than sleeping once:
+	// the assertion is that it never lands, not that it has not landed yet.
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		if h := coord.hostRegistry.Get("intruder"); h != nil {
+			t.Fatalf("an unauthenticated host registered: state=%v addr=%q", h.State, h.GrpcAddr)
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+}
+
+// TestMeshAuth_AuthenticatedRegisterHostSucceeds is the positive control for
+// the test above: the same topology with a matching secret must register, or
+// the negative result proves nothing about authentication.
+func TestMeshAuth_AuthenticatedRegisterHostSucceeds(t *testing.T) {
+	const secret = "coord-cluster-secret"
+
+	coord := New(Config{
+		CellsX: 1, CellsY: 1,
+		Mode:                "coordinator",
+		ControlListen:       "127.0.0.1:0",
+		ClusterSecret:       secret,
+		Headless:            true,
+		SettleWindow:        50 * time.Millisecond,
+		ShutdownGracePeriod: 50 * time.Millisecond,
+	})
+	coord.Build()
+	t.Cleanup(coord.Shutdown)
+
+	node := New(Config{
+		CellsX: 1, CellsY: 1,
+		Mode:                "host",
+		CoordinatorAddr:     coord.controlListener.Addr().String(),
+		HostID:              "member",
+		ClusterSecret:       secret,
+		Headless:            true,
+		ShutdownGracePeriod: 50 * time.Millisecond,
+	})
+	node.Build()
+	t.Cleanup(node.Shutdown)
+
+	deadline := time.Now().Add(3 * time.Second)
+	for time.Now().Before(deadline) {
+		if coord.hostRegistry.Get("member") != nil {
+			return
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+	t.Fatal("an authenticated host never registered; the secret path is broken")
+}
+
+// TestMeshAuth_ListenersAreNonPlaintext pins criterion 5 by dialing each mesh
+// listener with insecure credentials and asserting the RPC cannot complete.
+func TestMeshAuth_ListenersAreNonPlaintext(t *testing.T) {
+	coord := New(Config{
+		CellsX: 1, CellsY: 1,
+		Mode:                "coordinator",
+		ControlListen:       "127.0.0.1:0",
+		Headless:            true,
+		SettleWindow:        50 * time.Millisecond,
+		ShutdownGracePeriod: 50 * time.Millisecond,
+	})
+	coord.Build()
+	t.Cleanup(coord.Shutdown)
+
+	_, netB, _ := meshAuthPair(t, "", "")
+
+	// Each listener is probed with its OWN service client. Probing MeshControl
+	// with a MeshData client would fail as Unimplemented even over a working
+	// TLS channel, and the test would pass for the wrong reason.
+	cases := []struct {
+		name string
+		addr string
+		open func(*grpc.ClientConn, context.Context) error
+	}{
+		{
+			name: "MeshControl",
+			addr: coord.controlListener.Addr().String(),
+			open: func(conn *grpc.ClientConn, ctx context.Context) error {
+				s, err := meshpb.NewMeshControlClient(conn).Control(ctx)
+				if err != nil {
+					return err
+				}
+				_, err = s.Recv()
+				return err
+			},
+		},
+		{
+			name: "MeshData",
+			addr: netB.Addr(),
+			open: func(conn *grpc.ClientConn, ctx context.Context) error {
+				s, err := meshpb.NewMeshDataClient(conn).Data(ctx)
+				if err != nil {
+					return err
+				}
+				_, err = s.Recv()
+				return err
+			},
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			conn, err := grpc.NewClient(tc.addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+			if err != nil {
+				t.Fatalf("grpc.NewClient: %v", err)
+			}
+			defer conn.Close()
+
+			ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+			defer cancel()
+
+			// Opening the stream may succeed lazily; the handshake failure
+			// surfaces on the first Recv.
+			err = tc.open(conn, ctx)
+			if err == nil {
+				t.Fatalf("%s accepted a plaintext client; the listener is not TLS", tc.name)
+			}
+			if got := status.Code(err); got == codes.Unimplemented {
+				t.Fatalf("%s rejected for the wrong reason (%v) — the probe used the wrong service", tc.name, got)
 			}
 		})
 	}
