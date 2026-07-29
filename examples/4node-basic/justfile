@@ -118,24 +118,28 @@ distributed: build
     # (works regardless of pane-base-index). select-layout tiled after
     # each split redistributes space so the next split has room — else
     # tmux rejects "no space for new pane" on small terminals.
-    tmux new-session -d -s basic-dist -c "{{root}}" \
+    # Same cluster secret on every process — see the root justfile's
+    # distributed-space recipe for why this uses tmux -e.
+    secret="${MMO_CLUSTER_SECRET:-dev-cluster-secret}"
+
+    tmux new-session -d -s basic-dist -c "{{root}}" -e "MMO_CLUSTER_SECRET=$secret" \
         "{{bin}} --mode=coordinator --control-listen={{control_listen}} '--postgres-url={{postgres_url}}'"
     tmux pipe-pane -t basic-dist -o "cat > $logdir/coordinator.log"
 
     # UDP goes on the GATEWAY ONLY. Gateways terminate client connections;
     # hosts and the coordinator never see client traffic, and giving them the
     # same flag would just collide on :9000.
-    tmux split-window -t basic-dist -c "{{root}}" \
+    tmux split-window -t basic-dist -c "{{root}}" -e "MMO_CLUSTER_SECRET=$secret" \
         "{{bin}} --mode=gateway,service --services=auth,chat --coordinator-addr={{control_addr}} --gateway-id={{gateway_id}} --port={{gateway_port}} '--postgres-url={{postgres_url}}' --cors-origins=http://localhost:5174 --dev-insecure-cookie --udp-listen=:9000"
     tmux pipe-pane -t basic-dist -o "cat > $logdir/gateway.log"
     tmux select-layout -t basic-dist tiled
 
-    tmux split-window -t basic-dist -c "{{root}}" \
+    tmux split-window -t basic-dist -c "{{root}}" -e "MMO_CLUSTER_SECRET=$secret" \
         "{{bin}} --mode=host --coordinator-addr={{control_addr}} --host-id={{host_a_id}} '--postgres-url={{postgres_url}}'"
     tmux pipe-pane -t basic-dist -o "cat > $logdir/host-a.log"
     tmux select-layout -t basic-dist tiled
 
-    tmux split-window -t basic-dist -c "{{root}}" \
+    tmux split-window -t basic-dist -c "{{root}}" -e "MMO_CLUSTER_SECRET=$secret" \
         "{{bin}} --mode=host --coordinator-addr={{control_addr}} --host-id={{host_b_id}} '--postgres-url={{postgres_url}}'"
     tmux pipe-pane -t basic-dist -o "cat > $logdir/host-b.log"
     tmux select-layout -t basic-dist tiled

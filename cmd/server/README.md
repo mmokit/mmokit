@@ -41,7 +41,15 @@ The same binary can run all roles or a subset selected with `--mode`:
 | `gateway,service` | Opens PostgreSQL for DB-backed services such as auth |
 | Pure `service` | Runs selected registered service kinds and their dependencies |
 
-The root `just distributed-space` recipe builds a five-process development layout: one coordinator, three hosts, one gateway/service process, and a separate static web host.
+The root `just distributed-space` recipe builds a five-process development layout: one coordinator, three hosts, one gateway/service process, and a separate static web host. It passes the same `MMO_CLUSTER_SECRET` to every pane.
+
+**Attaching a remote host to a single-process server needs an explicit secret.** The `all` preset auto-generates one for itself, so a host started against it with only `--mode=host --coordinator-addr=localhost:9100` is rejected with `codes.Unauthenticated`. Pass a matching `--cluster-secret` (any value) to both processes:
+
+```bash
+./bin/server --cluster-secret=dev-secret                     # all preset, control plane on :9100
+./bin/server --mode=host --coordinator-addr=localhost:9100 \
+             --host-id=host-1 --cluster-secret=dev-secret
+```
 
 ## Startup sequence
 
@@ -69,7 +77,8 @@ Universal flags are defined by `mmokit.Config.BindFlags`. Common production-spac
 | `--mode` | Comma-separated `coordinator`, `host`, `gateway`, and `service` roles; default `all` |
 | `--services` | Service kinds to instantiate on a service-role process |
 | `--coordinator-addr` | MeshControl endpoint for standalone hosts, gateways, and services |
-| `--control-listen` | Coordinator MeshControl bind; default `:9100` |
+| `--control-listen` | Coordinator MeshControl bind; default `:9100` (an all-interfaces bind, not loopback) |
+| `--cluster-secret` | Shared secret authenticating mesh peers; env `MMO_CLUSTER_SECRET`. Auto-generated for self-contained role sets (`all`, coordinator+host) and required on **every** process of a multi-process cluster |
 | `--port` | Gateway HTTP port for `/ws`, `/auth`, and related routes; default `8080` |
 | `--udp-listen` | Gateway UDP bind; EXPERIMENTAL and off by default, pass `:9000` to enable |
 | `--admin-listen` | Coordinator admin/metrics bind; default `:9101`, empty to disable |

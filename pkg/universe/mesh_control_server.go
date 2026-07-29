@@ -921,7 +921,6 @@ func (s *meshControlServer) handleGatewayControl(stream meshpb.MeshControl_Contr
 					s.coord.transport.orch.OnResponse(resp)
 				}
 
-
 			default:
 				s.log.Log(CatMeshMsg, "coordinator: gateway %s sent %T", gatewayID, msg.Msg)
 			}
@@ -981,8 +980,6 @@ func (s *meshControlServer) handleInboundResolveSpawn(gatewayID string, req *mes
 		s.log.Log(CatMeshMsg, "coordinator: SpawnResolved to gateway %s failed: %v", gatewayID, err)
 	}
 }
-
-
 
 // timeFromUnixNanos converts a deadline expressed as Unix nanoseconds to a
 // time.Time. Returns a time 30s from now when nanos is zero or negative.

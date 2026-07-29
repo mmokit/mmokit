@@ -113,20 +113,27 @@ distributed-space: build db-up
     # pane by index and uses -l PCT to size the NEW pane as a fraction
     # of the SPLIT target — yielding four ~equal columns up top without
     # needing a window-wide layout that would also resize the bottom.
-    tmux new-session -d -s space-dist -c "$root" \
+    # Every process of a multi-process cluster must present the same cluster
+    # secret. Without it the mesh still forms, but each process warns that its
+    # peers are unauthenticated (CE-006 criterion 7). Exported per-pane via
+    # tmux -e rather than a bare `export`, which does not reliably reach panes
+    # when a tmux server is already running.
+    secret="${MMO_CLUSTER_SECRET:-dev-cluster-secret}"
+
+    tmux new-session -d -s space-dist -c "$root" -e "MMO_CLUSTER_SECRET=$secret" \
         "$bin --mode=coordinator --control-listen=:9100"
     tmux pipe-pane -t space-dist -o "cat > $logdir/coordinator.log"
 
-    tmux split-window -t space-dist -v -b -l 70% -c "$root" \
+    tmux split-window -t space-dist -v -b -l 70% -c "$root" -e "MMO_CLUSTER_SECRET=$secret" \
         "$bin --mode=host --coordinator-addr=$coord_addr --host-id=space-host-0"
     tmux pipe-pane -t space-dist -o "cat > $logdir/host-0.log"
 
     # Top pane now holds host-0; split it into four equal columns.
-    tmux split-window -t space-dist -h -l 75% -c "$root" \
+    tmux split-window -t space-dist -h -l 75% -c "$root" -e "MMO_CLUSTER_SECRET=$secret" \
         "$bin --mode=host --coordinator-addr=$coord_addr --host-id=space-host-1"
     tmux pipe-pane -t space-dist -o "cat > $logdir/host-1.log"
 
-    tmux split-window -t space-dist -h -l 66% -c "$root" \
+    tmux split-window -t space-dist -h -l 66% -c "$root" -e "MMO_CLUSTER_SECRET=$secret" \
         "$bin --mode=host --coordinator-addr=$coord_addr --host-id=space-host-2"
     tmux pipe-pane -t space-dist -o "cat > $logdir/host-2.log"
 
@@ -141,7 +148,7 @@ distributed-space: build db-up
     # over plain HTTP localhost. The URL is single-quoted so zsh (tmux's
     # default-shell on this box) doesn't glob-expand the `?` in
     # `?sslmode=disable` and refuse to launch the binary.
-    tmux split-window -t space-dist -h -l 50% -c "$root" \
+    tmux split-window -t space-dist -h -l 50% -c "$root" -e "MMO_CLUSTER_SECRET=$secret" \
         "$bin --mode=gateway,service --services=auth --coordinator-addr=$coord_addr --gateway-id=space-gw-0 --port=8080 '--postgres-url=postgres://mmo:mmo@localhost:5432/mmo?sslmode=disable' --cors-origins=http://localhost:5174 --dev-insecure-cookie --udp-listen=:9000"
     tmux pipe-pane -t space-dist -o "cat > $logdir/gateway.log"
 

@@ -58,38 +58,42 @@ from a different address. It does **not** close on-path reading or forgery.
 Cryptographic connection identity — an authenticated handshake and AEAD
 framing — is CE-005b Tier 2 and is open.
 
-### 2. Mesh gRPC is unauthenticated plaintext
+### 2. Mesh peers authenticate with one shared secret
 
-The server-internal MeshControl and MeshData channels use
-`insecure.NewCredentials()` at three production sites, verified at this commit:
+The server-internal MeshControl and MeshData channels run over TLS and
+authenticate peers with a single cluster-wide secret, presented in gRPC call
+metadata at stream open and compared with `crypto/subtle`. Certificates are
+generated in memory per process and never written to disk; peers dial with
+`InsecureSkipVerify`, so the encryption defends against a passive eavesdropper,
+not an active on-path attacker.
 
-- [`pkg/universe/host_network.go:233`](pkg/universe/host_network.go)
-- [`pkg/universe/mesh_control_client.go:195`](pkg/universe/mesh_control_client.go)
-- [`pkg/universe/mesh_gateway_client.go:137`](pkg/universe/mesh_gateway_client.go)
+The secret is set with `--cluster-secret` or `MMO_CLUSTER_SECRET`. A
+self-contained role set (`all`, or any coordinator+host combination) generates
+one automatically at startup and logs its fingerprint, so single-process
+deployments are closed by default with no configuration. **A multi-process
+cluster with no secret configured warns loudly and runs unauthenticated** — set
+it on every process.
 
-There is no interceptor, no peer-certificate inspection, and no metadata
-authentication anywhere in the module. Peer identity is read out of the message
-payload and trusted, so any process that can reach a mesh port can act as any
-other process: drain a host's cells, take over cell ownership, hijack player
-sessions, register fake service instances, inject client input, or execute any
-operator command by asserting `*.*` RBAC grants on the wire.
+Two limitations are deliberate and worth stating plainly:
 
-**Treat the mesh ports as a fully trusted internal network.** Do not expose
-`--control-listen` (default `:9100`) or any MeshData port to an untrusted
-network, and do not run a multi-process cluster across a network segment you do
-not control. Note that the single-process `all` preset opens a MeshControl
-listener on `:9100` too — the default bind has an empty host, which is all
-interfaces, not loopback.
+- **The secret is shared, not per-peer.** It excludes outsiders and pins each
+  stream to one claimed identity for its lifetime, but it does not stop one
+  authenticated cluster member from claiming another member's ID. Defending
+  against a compromised member requires per-peer credentials, which is out of
+  scope. Treat every process holding the secret as equally trusted.
+- **No CA, no pinning.** An active MITM on an untrusted network path can
+  intercept. The answer is network isolation, not PKI.
 
-The tracked fix is **CE-006** in [`docs/roadmap.md`](docs/roadmap.md), which
-covers both halves: authentication (is this peer in the cluster) via a shared
-cluster secret plus in-memory TLS, and authorization (is this peer allowed to
-do *this*, as *itself*) via stream-bound identity and locally resolved RBAC.
-Authentication alone would still leave every authenticated peer an unrestricted
-cluster admin.
+**Prefer to keep the mesh ports on a private network regardless.** Do not
+expose `--control-listen` (default `:9100`, an all-interfaces bind) or any
+MeshData port to the public internet.
 
-The June 2026 TLS work in `pkg/universe/tls_config.go` scopes itself to
-client-facing HTTP listeners and does **not** partially close this.
+Within the cluster, authorization no longer depends on anything a peer asserts
+in a message body: control-plane handlers act on the identity the stream
+registered with, payload frames are verified per-arm against the identity the
+stream presented, and RBAC grants are not carried on the wire at all — a
+process executes a routed command because an authenticated coordinator already
+authorized it.
 
 ### 3. Development defaults are development defaults
 
@@ -105,7 +109,8 @@ client-facing HTTP listeners and does **not** partially close this.
 - Vulnerabilities in the reference space game (`internal/`, `cmd/server`,
   `web-pixi/`). It is not part of the distributed framework — see the License
   section of [`README.md`](README.md) — and it is a test bed, not a product.
-- Denial of service that requires access to the mesh ports. Per limitation 2
-  those are trusted-network-only by design today; that is the CE-006 item, not
-  a separate finding.
+- Denial of service that requires holding the cluster secret. Per limitation 2
+  every process holding it is equally trusted by design; impersonation between
+  authenticated members is a known, documented limitation rather than a
+  separate finding.
 - Anything that requires the attacker to already hold operator credentials.

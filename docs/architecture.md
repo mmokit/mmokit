@@ -165,12 +165,12 @@ Hand-authored world content lives in tracked JSON under `world/` and is loaded t
 
 - Gateway HTTP defaults to `:8080` for `/ws`, `/auth`, and gateway metrics/routes.
 - Client UDP is experimental and disabled by default; enable with `--udp-listen=:9000`. Sessions are bound to a source address, but the framing is unauthenticated and unencrypted.
-- MeshControl defaults to `:9100` on the coordinator.
+- MeshControl defaults to `:9100` on the coordinator. Both mesh channels run over in-memory TLS and authenticate peers with a shared cluster secret (`--cluster-secret` / `MMO_CLUSTER_SECRET`), auto-generated for self-contained role sets and required on every process of a multi-process cluster.
 - Coordinator admin/metrics defaults to `:9101`; `/admin/` hosts the operator UI when enabled.
 - Per-cell metrics cover tick timing, entity counts, connections, bytes, and border traffic.
 - Typed `cmdsys` verbs back both the interactive console and admin dashboard.
 
-Use TLS certificate flags or a TLS-terminating proxy in production. Self-signed TLS and insecure auth cookies are development options only.
+Use TLS certificate flags or a TLS-terminating proxy in production. Self-signed TLS and insecure auth cookies are development options only for the client-facing listeners. The mesh channels are a separate posture: they always use an in-memory self-signed certificate and dial with `InsecureSkipVerify`, because peer identity comes from the cluster secret rather than from certificate verification.
 
 ## Package boundaries
 
@@ -192,4 +192,4 @@ Reusable packages must not import `internal/`. Space-game logic uses MMOKIT APIs
 
 ## Known work
 
-[`roadmap.md`](roadmap.md) tracks all active correctness, security, scalability, and protocol work, with each item's status verified against source. In particular, this page should not be read as claiming that mesh authentication or UDP transport security are complete — both are open P0 items, and mesh gRPC still uses insecure credentials.
+[`roadmap.md`](roadmap.md) tracks all active correctness, security, scalability, and protocol work, with each item's status verified against source. In particular, this page should not be read as claiming that UDP transport security is complete — it remains an open P0 item, and the UDP framing is still unauthenticated. Mesh authentication is closed, with one documented limitation: the cluster secret is shared rather than per-peer, so it excludes outsiders but does not prevent one authenticated member from impersonating another.
