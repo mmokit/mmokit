@@ -1161,7 +1161,7 @@ func TestExecutorCellTransferReadyReachesOrchestrator(t *testing.T) {
 			},
 		},
 	}
-	if err := hn.routeInboundFrame(frame); err != nil {
+	if err := hn.routeInboundFrame(host.ID, frame); err != nil {
 		t.Fatalf("routeInboundFrame: %v", err)
 	}
 

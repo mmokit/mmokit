@@ -99,7 +99,13 @@ func (b *grpcBridge) sendViaGrpc(destHostID string, destCellID MeshCellID, msg C
 	// is the whole point of always-proxy) while avoiding a wasted network
 	// round-trip through loopback TCP.
 	if destHostID == b.host.ID {
-		if err := b.host.Network.routeInboundFrame(frame); err != nil {
+		// This path never touches gRPC, so there is no stream to read an
+		// identity from — the sender is provably this host. Passing it
+		// explicitly is why routeInboundFrame takes a parameter rather than
+		// reading a proto field: the compiler demands a value here, whereas a
+		// field would silently arrive empty and force a choice between a
+		// silent drop and a silent bypass.
+		if err := b.host.Network.routeInboundFrame(b.host.ID, frame); err != nil {
 			b.cell.Log.Log(CatMeshGrpc, "[%s] grpc self-route to %s failed: %v", b.cell.MeshID(), destCellID, err)
 			return false
 		}

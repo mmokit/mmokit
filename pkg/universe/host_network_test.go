@@ -202,7 +202,7 @@ func TestRouteInboundClientFrame_BackpressureClosesConnection(t *testing.T) {
 		ClientFrame: &meshpb.ClientFrame{ConnId: connID, Data: []byte{0x01}},
 	}}
 
-	if err := n.routeInboundFrame(frame); err != nil {
+	if err := n.routeInboundFrame("host-src", frame); err != nil {
 		t.Fatalf("routeInboundFrame: %v", err)
 	}
 	if !transport.closed {
@@ -236,7 +236,7 @@ func TestRouteInboundPlayerAssignmentPreservesStreamGenerationAcrossVCMRewrite(t
 		},
 	}
 
-	if err := n.routeInboundFrame(frame); err != nil {
+	if err := n.routeInboundFrame("gateway-a", frame); err != nil {
 		t.Fatalf("routeInboundFrame: %v", err)
 	}
 	select {
@@ -289,7 +289,7 @@ func TestRouteInboundTrackedClientFrameSendsReceiptAfterReliableOrderedEnqueue(t
 			Data:      []byte{0x01},
 		}},
 	}
-	if err := n.routeInboundFrame(frame); err != nil {
+	if err := n.routeInboundFrame("host-src", frame); err != nil {
 		t.Fatalf("routeInboundFrame: %v", err)
 	}
 
@@ -340,7 +340,7 @@ func TestRouteInboundTrackedClientFrameDoesNotReceiptRejectedEnqueue(t *testing.
 			GatewayId: "gw-1", ConnId: connID, Epoch: 3,
 		}},
 	}
-	if err := n.routeInboundFrame(frame); err != nil {
+	if err := n.routeInboundFrame("host-src", frame); err != nil {
 		t.Fatalf("routeInboundFrame: %v", err)
 	}
 	if got := len(peer.outQ); got != 0 {
@@ -393,7 +393,7 @@ func TestRouteInboundTrackedClientFrameReceiptsWeakerDelivery(t *testing.T) {
 					GatewayId: "gw-1", ConnId: connID, Epoch: 3,
 				}},
 			}
-			if err := n.routeInboundFrame(frame); err != nil {
+			if err := n.routeInboundFrame("host-src", frame); err != nil {
 				t.Fatalf("routeInboundFrame: %v", err)
 			}
 			if got := len(peer.outQ); got != 1 {
@@ -441,7 +441,7 @@ func TestRouteInboundTrackedClientFrameRequiresCurrentEpoch(t *testing.T) {
 			GatewayId: "gw-1", ConnId: connID, Epoch: 5,
 		}},
 	}
-	if err := n.routeInboundFrame(stale); err != nil {
+	if err := n.routeInboundFrame("host-src", stale); err != nil {
 		t.Fatalf("routeInboundFrame: %v", err)
 	}
 	if transport.sent != 0 {
@@ -481,7 +481,7 @@ func TestRouteInboundTrackedClientFrameRequiresAuthoritativeHostAtCurrentEpoch(t
 			GatewayId: "gw-1", ConnId: connID, Epoch: 6,
 		}},
 	}
-	if err := n.routeInboundFrame(premature); err != nil {
+	if err := n.routeInboundFrame("host-src", premature); err != nil {
 		t.Fatalf("routeInboundFrame: %v", err)
 	}
 	if transport.sent != 0 {

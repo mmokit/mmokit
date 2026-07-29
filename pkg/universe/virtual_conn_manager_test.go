@@ -307,7 +307,7 @@ func TestRouteInboundReplicationReceiptResolvesTokenAndDrainsByLocalConn(t *test
 	sess.trackReplication(101, scope, 19, 77)
 
 	want := pkgnet.SendResult{Disposition: pkgnet.SendQueued, Delivery: pkgnet.DeliveryReliableOrdered}
-	if err := hn.routeInboundFrame(newReplicationReceiptFrame(hn.hostID, "gw-1", 12, 8, 101, want)); err != nil {
+	if err := hn.routeInboundFrame("gw-1", newReplicationReceiptFrame(hn.hostID, "gw-1", 12, 8, 101, want)); err != nil {
 		t.Fatalf("routeInboundFrame: %v", err)
 	}
 	receipts := vcm.DrainReplicationReceipts(localID, scope)
@@ -338,14 +338,14 @@ func TestRouteInboundReplicationReceiptRejectsStaleEpoch(t *testing.T) {
 	sess.trackReplication(102, scope, 20, 78)
 
 	result := pkgnet.SendResult{Disposition: pkgnet.SendQueued, Delivery: pkgnet.DeliveryReliableOrdered}
-	if err := hn.routeInboundFrame(newReplicationReceiptFrame(hn.hostID, "gw-1", 12, 7, 102, result)); err != nil {
+	if err := hn.routeInboundFrame("gw-1", newReplicationReceiptFrame(hn.hostID, "gw-1", 12, 7, 102, result)); err != nil {
 		t.Fatalf("routeInboundFrame stale receipt: %v", err)
 	}
 	if got := vcm.DrainReplicationReceipts(localID, scope); got != nil {
 		t.Fatalf("stale receipt was recorded: %+v", got)
 	}
 
-	if err := hn.routeInboundFrame(newReplicationReceiptFrame(hn.hostID, "gw-1", 12, 8, 102, result)); err != nil {
+	if err := hn.routeInboundFrame("gw-1", newReplicationReceiptFrame(hn.hostID, "gw-1", 12, 8, 102, result)); err != nil {
 		t.Fatalf("routeInboundFrame current receipt: %v", err)
 	}
 	if got := vcm.DrainReplicationReceipts(localID, scope); len(got) != 1 || got[0].Seq != 78 {
@@ -366,7 +366,7 @@ func TestRouteInboundReplicationReceiptRejectsDifferentTargetHost(t *testing.T) 
 
 	result := pkgnet.SendResult{Disposition: pkgnet.SendQueued, Delivery: pkgnet.DeliveryReliableOrdered}
 	wrongHost := newReplicationReceiptFrame("host-other", "gw-1", 12, 8, 103, result)
-	if err := hn.routeInboundFrame(wrongHost); err != nil {
+	if err := hn.routeInboundFrame("gw-1", wrongHost); err != nil {
 		t.Fatalf("routeInboundFrame wrong-host receipt: %v", err)
 	}
 	if got := vcm.DrainReplicationReceipts(localID, scope); got != nil {
@@ -374,7 +374,7 @@ func TestRouteInboundReplicationReceiptRejectsDifferentTargetHost(t *testing.T) 
 	}
 
 	currentHost := newReplicationReceiptFrame(hn.hostID, "gw-1", 12, 8, 103, result)
-	if err := hn.routeInboundFrame(currentHost); err != nil {
+	if err := hn.routeInboundFrame("gw-1", currentHost); err != nil {
 		t.Fatalf("routeInboundFrame current-host receipt: %v", err)
 	}
 	if got := vcm.DrainReplicationReceipts(localID, scope); len(got) != 1 || got[0].Seq != 79 {

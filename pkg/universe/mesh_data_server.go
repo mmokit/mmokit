@@ -22,6 +22,19 @@ type meshDataServer struct {
 // *client* stream opened via ConnectPeer. Separating the directions
 // keeps the topology a clean full-mesh of client-server pairs.
 func (s *meshDataServer) Data(stream meshpb.MeshData_DataServer) error {
+	// Capture the peer identity ONCE, before the loop. It is constant for the
+	// stream's lifetime by construction, which is the property that kills the
+	// "one stream, many identities" attack: a peer cannot vary who it claims
+	// to be from frame to frame.
+	//
+	// Read straight off the stream context — the cluster-secret interceptor
+	// has already run on this same context, so no extra plumbing is needed.
+	//
+	// Under a single shared cluster secret this is an assertion authenticated
+	// only as "holds the secret", not a proof of identity between members. See
+	// the design spec's criterion 12.
+	senderID := peerIDFromContext(stream.Context())
+
 	for {
 		frame, err := stream.Recv()
 		if err != nil {
@@ -30,7 +43,7 @@ func (s *meshDataServer) Data(stream meshpb.MeshData_DataServer) error {
 			}
 			return err
 		}
-		if err := s.net.routeInboundFrame(frame); err != nil {
+		if err := s.net.routeInboundFrame(senderID, frame); err != nil {
 			s.net.log.Log(CatMeshMsg, "[%s] mesh server recv route error: %v", s.net.hostID, err)
 		}
 	}

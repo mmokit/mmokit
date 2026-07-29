@@ -341,7 +341,11 @@ func (n *HostNetwork) runPeerReceiver(p *hostPeer) {
 			n.peerDied(p, err)
 			return
 		}
-		if err := n.routeInboundFrame(frame); err != nil {
+		// p.hostID is the identity we dialed, so it is known without any
+		// wire assertion. In production the server end of a MeshData stream
+		// never Sends, so this path is frame-free today; pass the correct
+		// value anyway rather than "" so it stays correct if that changes.
+		if err := n.routeInboundFrame(p.hostID, frame); err != nil {
 			n.log.Log(CatMeshMsg, "[%s] peer %s route error: %v", n.hostID, p.hostID, err)
 		}
 	}
@@ -756,7 +760,7 @@ func (n *HostNetwork) Shutdown() error {
 // Recovering does NOT make the frame safe — it makes it survivable. The
 // checked decoder is what makes it safe; this is the barrier that stops one
 // bad frame from being remotely fatal in the meantime.
-func (n *HostNetwork) routeInboundFrame(frame *meshpb.MeshFrame) (err error) {
+func (n *HostNetwork) routeInboundFrame(senderID string, frame *meshpb.MeshFrame) (err error) {
 	defer func() {
 		if r := recover(); r != nil {
 			metrics.Ingress().RecordRejected(metrics.SurfaceMesh, metrics.ReasonPanicRecovered)
