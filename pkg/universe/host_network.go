@@ -760,6 +760,27 @@ func (n *HostNetwork) Shutdown() error {
 // Recovering does NOT make the frame safe — it makes it survivable. The
 // checked decoder is what makes it safe; this is the barrier that stops one
 // bad frame from being remotely fatal in the meantime.
+// bindFrameIdentity reports whether a payload-carried process ID on an inbound
+// MeshData frame may be acted on, given the identity its stream presented.
+//
+// Deliberately NOT applied uniformly across arms — see routeInboundFrame. A
+// blanket "payload identity == sender" rule would drop 100% of replication
+// traffic, because ClientFrame.GatewayId names the RECEIVING gateway and every
+// producer of it is a host.
+//
+// An empty want means the stream presented no identity, which is treated as
+// unattributable rather than as a wildcard: the frame is dropped.
+func (n *HostNetwork) bindFrameIdentity(want, claimed, what string) bool {
+	if want != "" && claimed == want {
+		return true
+	}
+	n.log.Log(CatMeshMsg,
+		"[%s] dropping %s: payload identity %q does not match the authenticated stream %q",
+		n.hostID, what, claimed, want)
+	metrics.Ingress().RecordRejected(metrics.SurfaceMesh, metrics.ReasonIdentityMismatch)
+	return false
+}
+
 func (n *HostNetwork) routeInboundFrame(senderID string, frame *meshpb.MeshFrame) (err error) {
 	defer func() {
 		if r := recover(); r != nil {
@@ -802,10 +823,21 @@ func (n *HostNetwork) routeInboundFrame(senderID string, frame *meshpb.MeshFrame
 			}
 			return nil
 		}
+		// Both producers of an ordinary ClientInput stamp their own gateway id
+		// (gateway.go forwardOpFrame / forwardChannel), so this is bindable —
+		// and it is the client-input INJECTION primitive, so it must be.
+		if !n.bindFrameIdentity(senderID, ci.GatewayId, "ClientInput") {
+			return nil
+		}
 		key := SessionKey{GatewayID: ci.GatewayId, ConnID: ci.ConnId}
 		localID, ok := n.vcm.LookupByKey(key)
 		if !ok {
 			n.log.Log(CatMeshMsg, "[%s] ClientInput for unknown session gw=%s conn=%d, dropping", n.hostID, ci.GatewayId, ci.ConnId)
+			return nil
+		}
+		if ci.Epoch == 0 {
+			n.log.Log(CatMeshMsg, "[%s] ClientInput with zero epoch gw=%s conn=%d, dropping", n.hostID, ci.GatewayId, ci.ConnId)
+			metrics.Ingress().RecordRejected(metrics.SurfaceMesh, metrics.ReasonIdentityMismatch)
 			return nil
 		}
 		n.vcm.InjectChannelInputWithEpoch(localID, ci.Data, ci.Epoch, byte(ci.Channel))
@@ -833,10 +865,36 @@ func (n *HostNetwork) routeInboundFrame(senderID string, frame *meshpb.MeshFrame
 					return nil
 				}
 			}
+			// ClientFrame.GatewayId names the RECEIVING gateway, not the
+			// sender: every producer is a host forwarding world state to the
+			// gateway that owns the session (virtual_conn_manager copies it
+			// straight out of the session key). So this binds against THIS
+			// gateway's own id — a sender check here would drop 100% of
+			// replication traffic, one frame per player per tick.
+			//
+			// The tracked path is exempt because replicationReceiptHost
+			// already enforces a strictly stronger predicate.
+			if !tracked && !n.bindFrameIdentity(n.gw.id, cf.GatewayId, "ClientFrame") {
+				return nil
+			}
 			// Validate authority epoch — drop stale frames from hosts that
 			// have lost authority for this session.
-			if !tracked && cf.Epoch > 0 {
-				if sess := n.gw.lookupSession(cf.ConnId); sess != nil && cf.Epoch < sess.epoch {
+			//
+			// The untracked path previously had three ways past this check
+			// (tracked, Epoch==0 and sess==nil), and reaching connMgr.Send
+			// below is an arbitrary write to any client socket. Only the
+			// tracked bypass is legitimate.
+			if !tracked {
+				sess := n.gw.lookupSession(cf.ConnId)
+				switch {
+				case cf.Epoch == 0:
+					n.log.Log(CatMeshMsg, "[%s] ClientFrame with zero epoch for conn=%d, dropping", n.hostID, cf.ConnId)
+					metrics.Ingress().RecordRejected(metrics.SurfaceMesh, metrics.ReasonIdentityMismatch)
+					return nil
+				case sess == nil:
+					n.log.Log(CatMeshMsg, "[%s] ClientFrame for unknown session conn=%d, dropping", n.hostID, cf.ConnId)
+					return nil
+				case cf.Epoch < sess.epoch:
 					n.log.Log(CatMeshMsg, "[%s] ClientFrame stale epoch %d < %d for conn=%d, dropping", n.hostID, cf.Epoch, sess.epoch, cf.ConnId)
 					return nil
 				}
@@ -891,6 +949,9 @@ func (n *HostNetwork) routeInboundFrame(senderID string, frame *meshpb.MeshFrame
 	// ── ClientDisconnect: graceful disconnect notification from gateway ────
 	// Drop VCM session and route MsgPlayerDisconnected to the owning cell.
 	if cd := frame.GetClientDisconnect(); cd != nil {
+		if !n.bindFrameIdentity(senderID, cd.GatewayId, "ClientDisconnect") {
+			return nil
+		}
 		if n.vcm != nil {
 			key := SessionKey{GatewayID: cd.GatewayId, ConnID: cd.ConnId}
 			localID, cellID, ok := n.vcm.DropSession(key)
@@ -945,29 +1006,20 @@ func (n *HostNetwork) routeInboundFrame(senderID string, frame *meshpb.MeshFrame
 	// MeshData stream (e.g. in the in-process 2-host integration tests). In
 	// production the Ready travels via MeshControl (HostMessage_CellTransferReady).
 	if ctr := frame.GetCellTransferReady(); ctr != nil {
+		if !n.bindFrameIdentity(senderID, ctr.HostId, "CellTransferReady") {
+			return nil
+		}
 		if n.coord != nil && n.coord.orchestrator != nil {
-			n.coord.orchestrator.OnReady(ctr.RequestId, MeshCellID(ctr.DestCellId), ctr.HostId, ctr.Ok, ctr.Error, ctr.AdoptedUsers)
+			n.coord.orchestrator.OnReady(ctr.RequestId, MeshCellID(ctr.DestCellId), senderID, ctr.Ok, ctr.Error, ctr.AdoptedUsers)
 		}
-		return nil
-	}
-
-	// ── CellTransferAbort: orchestrator → target host rollback ────────────
-	if cta := frame.GetCellTransferAbort(); cta != nil {
-		if n.coord == nil {
-			n.log.Log(CatMeshMsg, "[%s] CellTransferAbort received but no coord ref, dropping req=%d", n.hostID, cta.RequestId)
-			return nil
-		}
-		exec := n.coord.localHostExecutor(n.hostID)
-		if exec == nil {
-			n.log.Log(CatMeshMsg, "[%s] CellTransferAbort received but no executor, dropping req=%d", n.hostID, cta.RequestId)
-			return nil
-		}
-		exec.Abort(cta)
 		return nil
 	}
 
 	// ── PlayerAssignment with gateway_id: register VCM session, rewrite connID ─
 	if pa := frame.GetPlayerAssignment(); pa != nil && pa.GatewayId != "" {
+		if !n.bindFrameIdentity(senderID, pa.GatewayId, "PlayerAssignment") {
+			return nil
+		}
 		if n.vcm != nil {
 			key := SessionKey{GatewayID: pa.GatewayId, ConnID: pa.ConnId}
 			epoch := pa.Epoch
@@ -1001,6 +1053,9 @@ func (n *HostNetwork) routeInboundFrame(senderID string, frame *meshpb.MeshFrame
 
 	// ── ServiceEvent: typed event from a remote process's Bus.Publish ────
 	if se := frame.GetServiceEvent(); se != nil {
+		if !n.bindFrameIdentity(senderID, se.GetSourceProcessId(), "ServiceEvent") {
+			return nil
+		}
 		n.deliverServiceEvent(se)
 		return nil
 	}

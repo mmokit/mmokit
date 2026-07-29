@@ -172,13 +172,27 @@ func TestMeshAuth_PeerIDRoundTrip(t *testing.T) {
 	}
 }
 
-// TestMeshAuth_NoSecretAttachesNoMetadata pins that the unauthenticated posture
-// sends nothing rather than an empty credential, so a server that IS enforcing
-// rejects it on the absent-key path.
-func TestMeshAuth_NoSecretAttachesNoMetadata(t *testing.T) {
+// TestMeshAuth_NoSecretStillAttachesPeerID pins the split between the two
+// metadata keys, which is subtle enough to have already caused one outage in
+// development: the secret decides whether a stream may speak at all, the peer
+// ID decides which payload identities its frames may claim.
+//
+// Withholding the ID when no secret is configured makes every bound arm in
+// routeInboundFrame drop, because an empty stream identity is treated as
+// unattributable. That silently killed the service event bus in every
+// secret-less fixture.
+func TestMeshAuth_NoSecretStillAttachesPeerID(t *testing.T) {
 	ctx := outgoingMeshMD(context.Background(), "", "host-a")
-	if md, ok := metadata.FromOutgoingContext(ctx); ok && len(md.Get(clusterSecretMDKey)) > 0 {
+
+	md, ok := metadata.FromOutgoingContext(ctx)
+	if !ok {
+		t.Fatal("no metadata attached at all under the unauthenticated posture")
+	}
+	if len(md.Get(clusterSecretMDKey)) > 0 {
 		t.Fatal("attached a secret despite none being configured")
+	}
+	if got := md.Get(peerIDMDKey); len(got) != 1 || got[0] != "host-a" {
+		t.Fatalf("peer id = %v, want [host-a] even with no secret", got)
 	}
 }
 

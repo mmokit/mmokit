@@ -39,13 +39,22 @@ const peerIDMDKey = "mmokit-peer-id"
 // bidi-stream-only and each peer opens exactly one long-lived stream, so this
 // costs zero per-frame bytes, and it sidesteps grpc-go's insecure-transport
 // validation of credentials that require transport security.
+//
+// The peer ID is attached even when no secret is configured. The two answer
+// different questions — the secret decides whether the stream may speak at
+// all, the ID decides which payload identities its frames may claim — and
+// payload binding must keep working under criterion 7's warn-and-continue
+// posture. Withholding it there would make every bound arm drop, which is how
+// this was first caught: the service event bus went silent in every
+// secret-less fixture.
 func outgoingMeshMD(ctx context.Context, secret, selfID string) context.Context {
-	if secret == "" {
-		return ctx
+	if selfID != "" {
+		ctx = metadata.AppendToOutgoingContext(ctx, peerIDMDKey, selfID)
 	}
-	return metadata.AppendToOutgoingContext(ctx,
-		clusterSecretMDKey, secret,
-		peerIDMDKey, selfID)
+	if secret != "" {
+		ctx = metadata.AppendToOutgoingContext(ctx, clusterSecretMDKey, secret)
+	}
+	return ctx
 }
 
 // clusterSecretStreamInterceptor rejects any stream that does not present a

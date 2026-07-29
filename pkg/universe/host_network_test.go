@@ -197,9 +197,22 @@ func TestRouteInboundClientFrame_BackpressureClosesConnection(t *testing.T) {
 	connID := cm.AddTransport(transport, "")
 
 	n := newManualHostNetwork(t)
-	n.gw = &Gateway{connMgr: cm}
+	// A real ClientFrame always names the receiving gateway and carries a
+	// non-zero authority epoch; production has no path that omits either.
+	n.gw = &Gateway{
+		id:      "gw-1",
+		connMgr: cm,
+		sessions: map[uint32]*localSession{
+			connID: {connID: connID, hostID: "host-src", epoch: 1},
+		},
+	}
 	frame := &meshpb.MeshFrame{Msg: &meshpb.MeshFrame_ClientFrame{
-		ClientFrame: &meshpb.ClientFrame{ConnId: connID, Data: []byte{0x01}},
+		ClientFrame: &meshpb.ClientFrame{
+			GatewayId: "gw-1",
+			ConnId:    connID,
+			Epoch:     1,
+			Data:      []byte{0x01},
+		},
 	}}
 
 	if err := n.routeInboundFrame("host-src", frame); err != nil {
