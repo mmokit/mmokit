@@ -35,9 +35,9 @@ jobs:
     # -race. A hosted runner has fewer cores, so budget generously.
     timeout-minutes: 60
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
           cache: true
@@ -103,14 +103,14 @@ jobs:
     # exists to find new ones.
     continue-on-error: true
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
           cache: true
 
-      - uses: extractions/setup-just@v2
+      - uses: extractions/setup-just@v4
 
       # `just fuzz` defaults to a 20-second smoke budget, which its own comment
       # calls "a smoke run, not a campaign; the real mutation budget belongs to
@@ -145,7 +145,7 @@ jobs:
       # step above to see which entries are actually new.
       - name: upload fuzz corpora
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: fuzz-corpora
           path: "**/testdata/fuzz/**"
