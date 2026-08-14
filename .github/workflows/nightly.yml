@@ -3,9 +3,14 @@
 # Both jobs here are slow enough or noisy enough that putting them in front of a
 # merge would train everyone to ignore them. `ci.yml` is the required set.
 #
-# Neither job is game-coupled in a way that blocks the mmokit-core extraction
-# described in docs/roadmap.md OSS-001: `go test -race ./...` narrows to the
-# published packages on its own, and all six fuzz targets live in pkg/.
+# Both jobs cover the whole repository, examples included. The note that used
+# to sit here described an mmokit-core extraction that was reversed: the space
+# game ships as examples/space/ rather than staying unpublished, so there is no
+# published/unpublished split for these jobs to respect.
+#
+# This is also where the unshortened `go test` lives. ci.yml runs it with
+# -short so examples/4node-basic's suspected-flaky mesh e2e stays off the
+# required path; it runs here, under -race, where a red is investigated.
 #
 # Action versions are pinned to the same majors as ci.yml — see the note there
 # before bumping either file.

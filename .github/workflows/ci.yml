@@ -4,25 +4,14 @@
 # `nightly.yml` and deliberately never run on the PR path.
 #
 # ---------------------------------------------------------------------------
-# GAME-COUPLED JOBS — these do not survive the mmokit-core extraction
+# Scope
 # ---------------------------------------------------------------------------
-# docs/roadmap.md OSS-001 publishes `pkg/ examples/ cmd/sdkgen cmd/csharp-golden
-# proto/ gen/ csharp/ web-admin/ scripts/ docs/` and does NOT publish `internal/
-# cmd/server cmd/botclient web-pixi/ data/ world/ db-init/`. The following steps
-# read the unpublished half and must stay with whichever repository keeps the
-# reference space game:
-#
-#   go job       · `./scripts/no_ark_in_game.sh` — greps internal/game/
-#   go job       · `go build -o /tmp/server ./cmd/server` — the game's
-#                  composition root
-#   frontend job · `just web-test` — the prediction goldens under
-#                  web-pixi/src/__tests__/ and their internal/game/ counterpart
-#   drift-go job · `just shipdyn-golden` — drives the real ShipDynamicsSystem in
-#                  internal/game/ and writes into web-pixi/
-#
-# `just csharp-golden` and everything else here is framework-only and moves with
-# mmokit core. WS-001's ship-dynamics parity gate is the workstream's only
-# continuously-triggered drift risk and has no home in a framework-only repo.
+# This block used to enumerate "game-coupled jobs that do not survive the
+# mmokit-core extraction", because docs/roadmap.md OSS-001 planned to publish
+# the framework and keep the reference space game private. That decision was
+# reversed: the whole repository is published and the space game ships as
+# examples/space/, so there is no unpublished half and CI is not a subset of
+# anything. The steps that read the game are ordinary example coverage.
 #
 # ---------------------------------------------------------------------------
 # Action versions
@@ -34,7 +23,10 @@
 
 name: CI
 
-on: [push, pull_request]
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -50,7 +42,9 @@ jobs:
   go:
     name: go
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    # Above the suite's own `-timeout 900s` so Go's timeout fires first and
+    # yields a goroutine dump. A job-level kill gives you nothing to read.
+    timeout-minutes: 25
     steps:
       # Default shallow checkout. The gofmt step used to diff against a base
       # commit and needed fetch-depth: 0; it is now tree-wide over
@@ -107,16 +101,18 @@ jobs:
           fi
           echo "All tracked Go files are gofmt-clean."
 
-      # GAME-COUPLED. Fails if a non-allowlisted internal/game/ file imports
-      # ark/ecs directly.
+      # Fails if a non-allowlisted file in the space example's game layer
+      # imports ark/ecs directly. The path is explicit: the script exits 2 when
+      # the directory does not exist, so renaming the game layer reddens this
+      # step instead of passing while checking nothing.
       - name: no ark in game layer
-        run: ./scripts/no_ark_in_game.sh
+        run: ./scripts/no_ark_in_game.sh examples/space/internal/game
 
       # ONE test command, not a fast/slow split. ubuntu-latest permits
       # localhost TCP and UDP listeners, which is what docs/roadmap.md §6.7's
       # "Linux integration jobs" gate asks for: pkg/net/server_origin_test.go,
       # pkg/net/udp_server_test.go, pkg/net/udpclient/handshake_race_test.go,
-      # pkg/admin/admin_e2e_test.go, internal/bot/auth_test.go and
+      # pkg/admin/admin_e2e_test.go, examples/space/internal/bot/auth_test.go and
       # pkg/universe/udp_listener_test.go all bind localhost and all run here.
       #
       # `-p 1` is RETAINED INSURANCE, not a proven requirement. It exists
@@ -132,15 +128,31 @@ jobs:
       # pgtest` and report "[no test files]" — their tests are invisible, not
       # skipped. Only `just db-up && just test-pg` runs them, and no job here
       # provides a database.
+      # -short on the merge path. examples/4node-basic's
+      # TestE2EMeshSplitMergeWithBotTraffic skips under testing.Short(), and
+      # docs/roadmap.md records it as "nondeterministic by construction" —
+      # failure-then-pass on byte-identical code. A hosted runner is slower and
+      # noisier than the box its passing runs were measured on, and a
+      # flickering required check trains people to re-run rather than read. The
+      # unshortened suite runs nightly, where a red is investigated rather than
+      # dismissed.
       - name: go test
-        run: go test ./... -count=1 -p 1 -timeout 900s
+        run: go test ./... -short -count=1 -p 1 -timeout 900s
 
-      # GAME-COUPLED. The DB-free compile of the space game's composition root.
-      # Written outside the tree on purpose (AGENTS.md forbids building
-      # binaries into package roots); `just build-go` is the local equivalent
-      # and writes the gitignored bin/server.
-      - name: build cmd/server
-        run: go build -o /tmp/server ./cmd/server
+      # DB-free compile of every example's composition root. Written outside
+      # the tree on purpose (AGENTS.md forbids building binaries into package
+      # roots). This replaces a single `go build ./cmd/server`: two of the
+      # three examples were never built by CI at all.
+      - name: build every example
+        run: |
+          set -euo pipefail
+          for ex in simple 4node-basic space; do
+            echo "building examples/$ex"
+            go build -o "/tmp/example-$ex" "./examples/$ex"
+          done
+          # The space example's load-test bot client lives beside it and
+          # imports its internal packages; nothing else builds it.
+          go build -o /tmp/space-botclient ./examples/space/botclient
 
   frontend:
     name: frontend
@@ -161,18 +173,19 @@ jobs:
           bun-version: "1.3.11"
 
       # No `bun install` before these two. pkg/quantize/ts has no package.json
-      # at all, and the only bare specifier reachable from the web-pixi and
-      # 4node test trees is a type-only `import type { Container } from
-      # "pixi.js"` in web-pixi/src/types.ts, which bun erases before resolution.
+      # at all, and the only bare specifier reachable from the two example web
+      # test trees is a type-only `import type { Container } from "pixi.js"` in
+      # examples/space/web/src/types.ts, which bun erases before resolution.
       # Verified by moving both node_modules trees aside: 53 + 147 tests pass.
-      # The generated SDKs those suites import (web-pixi/sdk,
+      # The generated SDKs those suites import (examples/space/web/sdk and
       # examples/4node-basic/web/sdk, 16 files each) are tracked.
       - name: shared TypeScript codec/interpolation tests
         run: just ts-core-test
 
-      # GAME-COUPLED. Client prediction, reconciliation and interpolation,
-      # including the prediction golden that pairs with just shipdyn-golden.
-      - name: game-client TypeScript suites
+      # Client prediction, reconciliation and interpolation for both example
+      # web clients, including the prediction golden that pairs with the space
+      # example's shipdyn-golden.
+      - name: example web-client TypeScript suites
         run: just web-test
 
       - name: web-admin install
@@ -256,18 +269,21 @@ jobs:
       # Closes docs/roadmap.md §6.7's cross-language golden-vector gate. Both
       # regenerators are pure Go and need no database.
       #
-      # The generated-schema half of that gate is NOT closed here and cannot
-      # be: `just space-sdk` runs cmd/server, which opens PostgreSQL
-      # unconditionally and log.Fatalf's regardless of `--admin-listen=`. That
-      # needs either a service container or a DB-free schema dump path.
+      # The generated-schema half is covered without a database by
+      # examples/space/internal/game/sdk_typeid_parity_test.go, which runs in
+      # the go job: it checks every wire type ID recorded in the committed
+      # TypeScript SDK against the Go type names beside them, and those names
+      # against the live server-event registry. `just client-sdk` still needs
+      # PostgreSQL, so full regeneration remains a local step.
       - name: regenerate the C# wire golden
         run: just csharp-golden
 
-      # GAME-COUPLED. Drives the real ShipDynamicsSystem + PhysicsSystem in
-      # internal/game/ and writes web-pixi/src/__tests__/testdata. This is the
-      # gate that fails when internal/game/system_ship_dynamics.go changes
-      # without web-pixi/src/prediction.ts.
+      # Drives the real ShipDynamicsSystem + PhysicsSystem in the space example
+      # and writes examples/space/web/src/__tests__/testdata. This is the gate
+      # that fails when that game's system_ship_dynamics.go changes without its
+      # client's prediction.ts.
       - name: regenerate the ship-dynamics parity fixture
+        working-directory: examples/space
         run: just shipdyn-golden
 
       # `git diff --exit-code -- <pathspec>` exits 0 when the pathspec matches
@@ -280,7 +296,7 @@ jobs:
           missing=0
           for f in \
             csharp/Mmokit.Sdk.Core.Tests/testdata/delta_golden.json \
-            web-pixi/src/__tests__/testdata/shipdyn_golden.json
+            examples/space/web/src/__tests__/testdata/shipdyn_golden.json
           do
             if [ ! -f "$f" ]; then
               echo "::error::golden fixture missing: $f"
@@ -294,4 +310,4 @@ jobs:
         run: |
           git diff --exit-code -- \
             csharp/Mmokit.Sdk.Core.Tests/testdata \
-            web-pixi/src/__tests__/testdata
+            examples/space/web/src/__tests__/testdata
