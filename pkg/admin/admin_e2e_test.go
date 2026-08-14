@@ -297,4 +297,3 @@ func TestAdminE2E_SplitTriggersTopologyEvent(t *testing.T) {
 		t.Fatalf("timed out waiting for topology event after cell.split")
 	}
 }
-

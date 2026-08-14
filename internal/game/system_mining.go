@@ -152,4 +152,3 @@ func (s *MiningSystem) Update(dt float32) {
 		gw.SpawnLootCrate(j.x, j.y, j.items)
 	}
 }
-

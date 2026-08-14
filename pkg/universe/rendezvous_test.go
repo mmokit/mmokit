@@ -37,8 +37,8 @@ func TestAssignCellToHostDistribution(t *testing.T) {
 	// should be within ±15% of the fair share (250). Rendezvous is
 	// known to produce very even distributions.
 	const (
-		numCells  = 1000
-		numHosts  = 4
+		numCells = 1000
+		numHosts = 4
 	)
 	fairShare := numCells / numHosts
 	toleranceHi := int(float64(fairShare) * 1.15)

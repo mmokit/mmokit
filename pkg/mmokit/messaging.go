@@ -89,4 +89,3 @@ func SendEventToAll[T any](eng *Engine, msg *T) {
 		eng.ConnMgr.SendReliable(sess.ConnID, frame)
 	})
 }
-

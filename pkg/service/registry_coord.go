@@ -14,9 +14,9 @@ import (
 // callers can detect changes for PeerList re-broadcast.
 type CoordRegistry struct {
 	mu        sync.RWMutex
-	instances map[string]CoordInstance       // by InstanceID
-	byKind    map[string][]string            // kind → []instanceID (sorted lex)
-	opToKind  map[uint32]string              // op code → owning kind
+	instances map[string]CoordInstance // by InstanceID
+	byKind    map[string][]string      // kind → []instanceID (sorted lex)
+	opToKind  map[uint32]string        // op code → owning kind
 	epoch     uint64
 }
 

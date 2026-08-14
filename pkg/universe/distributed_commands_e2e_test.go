@@ -61,13 +61,13 @@ type e2eMockPDA struct {
 	y        float32
 }
 
-func (m *e2eMockPDA) GetUsername() string         { return m.username }
-func (m *e2eMockPDA) GetCellX() int32             { return m.cellX }
-func (m *e2eMockPDA) GetCellY() int32             { return m.cellY }
-func (m *e2eMockPDA) GetX() float32               { return m.x }
-func (m *e2eMockPDA) GetY() float32               { return m.y }
-func (m *e2eMockPDA) SetCell(cx, cy int32)        { m.cellX, m.cellY = cx, cy }
-func (m *e2eMockPDA) SetPosition(x, y float32)    { m.x, m.y = x, y }
+func (m *e2eMockPDA) GetUsername() string      { return m.username }
+func (m *e2eMockPDA) GetCellX() int32          { return m.cellX }
+func (m *e2eMockPDA) GetCellY() int32          { return m.cellY }
+func (m *e2eMockPDA) GetX() float32            { return m.x }
+func (m *e2eMockPDA) GetY() float32            { return m.y }
+func (m *e2eMockPDA) SetCell(cx, cy int32)     { m.cellX, m.cellY = cx, cy }
+func (m *e2eMockPDA) SetPosition(x, y float32) { m.x, m.y = x, y }
 
 // TestPlayerTP_OfflineUpdatesDB_E2E drives player.tp end-to-end via the
 // dispatcher: routes RoutePlayerHomeOrOwner to a DB-bearing host, the

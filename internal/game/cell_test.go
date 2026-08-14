@@ -90,4 +90,3 @@ func TestTickTransferCooldowns_Expiry(t *testing.T) {
 		t.Fatal("expected entity to still be alive after cooldown removal")
 	}
 }
-

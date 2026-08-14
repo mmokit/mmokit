@@ -42,7 +42,7 @@ func backendFor(lang string, o backendOpts) (Backend, error) {
 		return tsBackend{
 			coreTS: o.CoreTS, interpTS: o.InterpTS, clockSyncTS: o.ClockSyncTS,
 			interpBufferTS: o.InterpBufferTS, playbackTS: o.PlaybackTS, predictionTS: o.PredictionTS,
-			reconGateTS:    o.ReconGateTS,
+			reconGateTS: o.ReconGateTS,
 		}, nil
 	case "csharp":
 		ns := o.Namespace

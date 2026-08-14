@@ -195,7 +195,7 @@ func (entryPositionBinding) snapshot(_ ecs.Entity, w *quantize.SnapshotWriter, _
 	w.Float32(entry.Y)
 }
 
-func (entryPositionBinding) hasInitial() bool { return false }
+func (entryPositionBinding) hasInitial() bool                                            { return false }
 func (entryPositionBinding) initialHash(ecs.Entity, *Hasher, *ViewerInfo, spatial.Entry) {}
 func (entryPositionBinding) initialData(_ ecs.Entity, _ *ViewerInfo, _ spatial.Entry, buf []byte) []byte {
 	return buf
@@ -259,7 +259,7 @@ func (b *viewerRelativePosBinding) snapshot(entity ecs.Entity, w *quantize.Snaps
 	w.Float32(wy)
 }
 
-func (b *viewerRelativePosBinding) hasInitial() bool { return false }
+func (b *viewerRelativePosBinding) hasInitial() bool                                            { return false }
 func (b *viewerRelativePosBinding) initialHash(ecs.Entity, *Hasher, *ViewerInfo, spatial.Entry) {}
 func (b *viewerRelativePosBinding) initialData(_ ecs.Entity, _ *ViewerInfo, _ spatial.Entry, buf []byte) []byte {
 	return buf
@@ -309,7 +309,7 @@ func (b *qVelocityBinding) snapshot(entity ecs.Entity, w *quantize.SnapshotWrite
 	w.QVel(vel.Y, b.scale)
 }
 
-func (b *qVelocityBinding) hasInitial() bool { return false }
+func (b *qVelocityBinding) hasInitial() bool                                            { return false }
 func (b *qVelocityBinding) initialHash(ecs.Entity, *Hasher, *ViewerInfo, spatial.Entry) {}
 func (b *qVelocityBinding) initialData(_ ecs.Entity, _ *ViewerInfo, _ spatial.Entry, buf []byte) []byte {
 	return buf
@@ -354,7 +354,7 @@ func (b *qAngleBinding) snapshot(entity ecs.Entity, w *quantize.SnapshotWriter, 
 	w.QAngle(rot.Angle)
 }
 
-func (b *qAngleBinding) hasInitial() bool { return false }
+func (b *qAngleBinding) hasInitial() bool                                            { return false }
 func (b *qAngleBinding) initialHash(ecs.Entity, *Hasher, *ViewerInfo, spatial.Entry) {}
 func (b *qAngleBinding) initialData(_ ecs.Entity, _ *ViewerInfo, _ spatial.Entry, buf []byte) []byte {
 	return buf
@@ -407,7 +407,7 @@ func (b *qSizeBinding) snapshot(entity ecs.Entity, w *quantize.SnapshotWriter, _
 	w.QVel(col.Height, b.scale)
 }
 
-func (b *qSizeBinding) hasInitial() bool { return false }
+func (b *qSizeBinding) hasInitial() bool                                            { return false }
 func (b *qSizeBinding) initialHash(ecs.Entity, *Hasher, *ViewerInfo, spatial.Entry) {}
 func (b *qSizeBinding) initialData(_ ecs.Entity, _ *ViewerInfo, _ spatial.Entry, buf []byte) []byte {
 	return buf

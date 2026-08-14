@@ -28,18 +28,18 @@ type Config struct {
 // Server is the admin HTTP handler set. Construct with NewServer; mount onto
 // any net/http mux with Mount.
 type Server struct {
-	view       ClusterView
-	registry   *cmdsys.Registry
-	dispatcher *cmdsys.Dispatcher
-	sessions   SessionStore
-	audit      *AuditLog
-	logRing    *LogRing
-	logPump    *logPump
-	lockout    *Lockout
+	view         ClusterView
+	registry     *cmdsys.Registry
+	dispatcher   *cmdsys.Dispatcher
+	sessions     SessionStore
+	audit        *AuditLog
+	logRing      *LogRing
+	logPump      *logPump
+	lockout      *Lockout
 	operatorRepo persist.AdminOperatorRepository
-	panels     *PanelRegistry
-	bus        *TopicBus
-	logger     *logger.Logger
+	panels       *PanelRegistry
+	bus          *TopicBus
+	logger       *logger.Logger
 
 	cfg Config
 
@@ -102,18 +102,18 @@ func NewServer(opts ServerOpts) *Server {
 		ring = NewLogRing(cfg.LogRingCap)
 	}
 	s := &Server{
-		view:       opts.View,
-		registry:   opts.Registry,
-		dispatcher: opts.Dispatcher,
-		sessions:   opts.SessionStore,
-		audit:      NewAuditLog(cfg.AuditCap),
-		logRing:    ring,
-		lockout:    NewLockout(cfg.LockoutMax, cfg.LockoutWin),
+		view:         opts.View,
+		registry:     opts.Registry,
+		dispatcher:   opts.Dispatcher,
+		sessions:     opts.SessionStore,
+		audit:        NewAuditLog(cfg.AuditCap),
+		logRing:      ring,
+		lockout:      NewLockout(cfg.LockoutMax, cfg.LockoutWin),
 		operatorRepo: opts.OperatorRepo,
-		panels:     opts.Panels,
-		bus:        bus,
-		logger:     opts.Logger,
-		cfg:        cfg,
+		panels:       opts.Panels,
+		bus:          bus,
+		logger:       opts.Logger,
+		cfg:          cfg,
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	s.cancel = cancel

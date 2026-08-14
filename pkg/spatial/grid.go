@@ -72,9 +72,9 @@ func (g *HashGrid) Register(entry Entry) {
 	c := g.getOrCreateBucket(key)
 	c.tracked = append(c.tracked, entry)
 	g.tracked[entry.Entity] = &trackInfo{
-		bucket:  c,
-		key:   key,
-		index: len(c.tracked) - 1,
+		bucket: c,
+		key:    key,
+		index:  len(c.tracked) - 1,
 	}
 }
 

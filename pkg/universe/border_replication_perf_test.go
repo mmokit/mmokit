@@ -76,4 +76,3 @@ func BenchmarkBorderFrame_EncodeDecodeRoundTrip(b *testing.B) {
 	b.ReportMetric(float64(len(wire)), "bytes/frame")
 	b.ReportMetric(float64(len(wire))/float64(n), "bytes/entity")
 }
-

@@ -328,4 +328,3 @@ func RegisterAuthServiceWithMock(p *universe.Process, repo AuthRepository) error
 	opts.Repository = repo
 	return RegisterAuthService(p, opts)
 }
-

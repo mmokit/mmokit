@@ -12,9 +12,9 @@ import (
 	"github.com/zenion/mmoserver/internal/marketplace"
 	gamepersist "github.com/zenion/mmoserver/internal/persist"
 	gamepg "github.com/zenion/mmoserver/internal/persist/postgres"
-	"github.com/zenion/mmoserver/pkg/services/auth"
 	"github.com/zenion/mmoserver/pkg/coords"
 	"github.com/zenion/mmoserver/pkg/mmokit"
+	"github.com/zenion/mmoserver/pkg/services/auth"
 	"github.com/zenion/mmoserver/pkg/world/jsonrepo"
 )
 
@@ -35,9 +35,9 @@ func main() {
 	// and exposed through the ClientInputTypes schema; engine-default
 	// HandleClient[Ping] is installed by universe.New.
 	coordCfg := mmokit.Config{
-		Name:           "space",
-		TickRate:       platformCfg.TickRate,
-		ConnManager:    connMgr,
+		Name:        "space",
+		TickRate:    platformCfg.TickRate,
+		ConnManager: connMgr,
 	}
 	worldDir := flag.String("world-dir", "world", "directory containing world manifest JSON files")
 	coordCfg.BindFlags()

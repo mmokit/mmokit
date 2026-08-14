@@ -24,8 +24,8 @@ import (
 // tick budget and the same Support entity could heal nothing or both
 // pools depending on iteration order.
 func TestPOI_SupportIncreasesTTK(t *testing.T) {
-	tickA := runRosterTTK(t, /*withSupport=*/ false, /*dps=*/ 30)
-	tickB := runRosterTTK(t, /*withSupport=*/ true, /*dps=*/ 30)
+	tickA := runRosterTTK(t /*withSupport=*/, false /*dps=*/, 30)
+	tickB := runRosterTTK(t /*withSupport=*/, true /*dps=*/, 30)
 
 	if tickB <= tickA {
 		t.Fatalf("Support roster TTK %d not greater than control %d", tickB, tickA)

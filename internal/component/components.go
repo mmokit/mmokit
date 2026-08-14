@@ -18,14 +18,14 @@ import (
 // matching TypeScript const block from the same kind registry, so the
 // authoritative source of truth is the RegisterKind call sites.
 const (
-	KindShip           uint8 = iota // 0
-	KindAsteroid                    // 1
-	KindStation                     // 2
-	KindLootCrate                   // 3
-	KindNPC                         // 4
-	KindPOI                         // 5
-	KindAoEMarker                   // 6
-	KindProjectile                  // 7
+	KindShip          uint8 = iota // 0
+	KindAsteroid                   // 1
+	KindStation                    // 2
+	KindLootCrate                  // 3
+	KindNPC                        // 4
+	KindPOI                        // 5
+	KindAoEMarker                  // 6
+	KindProjectile                 // 7
 	KindLineTelegraph              // 8
 	KindDungeon                    // 9
 	KindDungeonWall                // 10
@@ -406,8 +406,8 @@ type Leashing struct{}
 // LastDamageBy fields drive the target-switching rule. All numeric
 // tunables are captured at spawn time from the active GameConfig.
 type NPCAI struct {
-	Archetype            uint8   `net:"initial,u8"`
-	State                uint8   `net:"u8"`
+	Archetype            uint8 `net:"initial,u8"`
+	State                uint8 `net:"u8"`
 	MaxSpeed             float32
 	TurnRate             float32
 	PreferredRange       float32
@@ -437,12 +437,12 @@ type NPCAI struct {
 	// means the lancer is actively dashing in ChargeDirAngle direction.
 	// RecoverRemaining > 0 means the lancer just finished a charge and is
 	// vulnerable. ChargeHit ensures one-shot-per-charge damage application.
-	WindupRemaining     float32
-	ChargeRemaining     float32
-	RecoverRemaining    float32
-	ChargeDirAngle      float32 // radians; locked at windup-end
+	WindupRemaining    float32
+	ChargeRemaining    float32
+	RecoverRemaining   float32
+	ChargeDirAngle     float32 // radians; locked at windup-end
 	LineTelegraphNetID uint32
-	ChargeHit           bool
+	ChargeHit          bool
 
 	// PVE v3: Brawler special-attack state. SpecialCooldown ticks down each
 	// frame between specials; SpecialWindup > 0 means a telegraph is in
@@ -514,7 +514,7 @@ type POI struct {
 	AnchorRadius float32
 	LeashRadius  float32
 	Tier         uint8 `net:"initial"` // 1..3, immutable per POI
-	ClearedAt    int64  // unix nanos (server time, not ClusterClock)
+	ClearedAt    int64 // unix nanos (server time, not ClusterClock)
 	RosterDefIdx uint16
 }
 

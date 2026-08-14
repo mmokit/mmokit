@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/zenion/mmoserver/internal/game"
 	gamecomp "github.com/zenion/mmoserver/internal/component"
+	"github.com/zenion/mmoserver/internal/game"
 	"github.com/zenion/mmoserver/internal/item"
 	"github.com/zenion/mmoserver/pkg/cmdsys"
 	"github.com/zenion/mmoserver/pkg/mmokit"

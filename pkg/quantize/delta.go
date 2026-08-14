@@ -12,7 +12,7 @@ type DeltaEncoder struct {
 	fieldSizes   []int // byte size of each field
 	fixedSize    int   // total fixed portion
 	fieldCount   int
-	bitmaskSize  int // ceil(fieldCount / 8)
+	bitmaskSize  int  // ceil(fieldCount / 8)
 	hasVarTail   bool // last "field" is variable-length
 }
 
@@ -165,4 +165,3 @@ func (d *DeltaEncoder) readVarTail(snap []byte) ([]byte, uint16) {
 	}
 	return snap[start:end], length
 }
-

@@ -135,11 +135,11 @@ func TestCmdsys_RemoteDispatch(t *testing.T) {
 	type result struct{ Ran bool }
 
 	if err := env.RegisterCommand(cmdsys.Command{
-		Verb:        "test.remoteecho",
-		Capability:  "test.remoteecho",
-		Route:       cmdsys.RouteSpecificHost,
-		Args:        args{},
-		Result:      result{},
+		Verb:       "test.remoteecho",
+		Capability: "test.remoteecho",
+		Route:      cmdsys.RouteSpecificHost,
+		Args:       args{},
+		Result:     result{},
 		Handler: func(_ context.Context, _ *cmdsys.Env, _ any) (any, error) {
 			handlerRuns.Add(1)
 			return result{Ran: true}, nil
@@ -183,11 +183,11 @@ func TestCmdsys_PlayerOwnerRouting(t *testing.T) {
 	type tpResult struct{ Teleported bool }
 
 	if err := env.RegisterCommand(cmdsys.Command{
-		Verb:        "test.tp",
-		Capability:  "test.tp",
-		Route:       cmdsys.RoutePlayerOwner,
-		Args:        tpArgs{},
-		Result:      tpResult{},
+		Verb:       "test.tp",
+		Capability: "test.tp",
+		Route:      cmdsys.RoutePlayerOwner,
+		Args:       tpArgs{},
+		Result:     tpResult{},
 		Handler: func(_ context.Context, _ *cmdsys.Env, _ any) (any, error) {
 			return tpResult{Teleported: true}, nil
 		},
@@ -223,11 +223,11 @@ func TestCmdsys_SchemaVersionMismatch(t *testing.T) {
 
 	handlerCalled := false
 	if err := env.RegisterCommand(cmdsys.Command{
-		Verb:        "test.schemacmd",
-		Capability:  "test.schemacmd",
-		Route:       cmdsys.RouteLocal,
-		Args:        fullArgs{},
-		Result:      res{},
+		Verb:       "test.schemacmd",
+		Capability: "test.schemacmd",
+		Route:      cmdsys.RouteLocal,
+		Args:       fullArgs{},
+		Result:     res{},
 		Handler: func(_ context.Context, _ *cmdsys.Env, _ any) (any, error) {
 			handlerCalled = true
 			return res{OK: true}, nil
@@ -239,12 +239,12 @@ func TestCmdsys_SchemaVersionMismatch(t *testing.T) {
 	// Compute the trimArgs schema hash by registering it in a throwaway registry.
 	trimReg := cmdsys.NewRegistry()
 	_ = trimReg.Register(cmdsys.Command{
-		Verb:        "test.schemacmd",
-		Capability:  "test.schemacmd",
-		Route:       cmdsys.RouteLocal,
-		Args:        trimArgs{},
-		Result:      res{},
-		Handler:     func(_ context.Context, _ *cmdsys.Env, _ any) (any, error) { return res{}, nil },
+		Verb:       "test.schemacmd",
+		Capability: "test.schemacmd",
+		Route:      cmdsys.RouteLocal,
+		Args:       trimArgs{},
+		Result:     res{},
+		Handler:    func(_ context.Context, _ *cmdsys.Env, _ any) (any, error) { return res{}, nil },
 	})
 	trimCmd, _ := trimReg.Lookup("test.schemacmd")
 
@@ -283,11 +283,11 @@ func TestCmdsys_CancelMidFlight(t *testing.T) {
 	}
 
 	if err := env.RegisterCommand(cmdsys.Command{
-		Verb:        "test.block",
-		Capability:  "test.block",
-		Route:       cmdsys.RouteSpecificHost,
-		Args:        args{},
-		Result:      nil,
+		Verb:       "test.block",
+		Capability: "test.block",
+		Route:      cmdsys.RouteSpecificHost,
+		Args:       args{},
+		Result:     nil,
 		Handler: func(ctx context.Context, _ *cmdsys.Env, _ any) (any, error) {
 			select {
 			case handlerStarted <- struct{}{}:

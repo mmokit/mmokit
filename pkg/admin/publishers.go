@@ -99,8 +99,8 @@ func isTopologyEvent(ev universe.CommitEvent) bool {
 	}
 	switch ev.Step {
 	case "release-parent-host", // split: parent retired
-		"release-donors",     // merge: donor cells retired
-		"release-src-host",   // migrate: source host released
+		"release-donors",      // merge: donor cells retired
+		"release-src-host",    // migrate: source host released
 		"broadcast-peer-list": // post-finalize: PeerList shipped to all peers
 		return true
 	}

@@ -90,4 +90,3 @@ func rosterIdxForRole(role ChamberRole, rngU64 uint64) uint16 {
 	}
 	return uint16(candidates[int(rngU64%uint64(len(candidates)))])
 }
-

@@ -48,4 +48,3 @@ func (gw *GameWorld) SpawnDungeonWall(x, y, width, height, rotation float32) uin
 	)
 	return e.NetID()
 }
-

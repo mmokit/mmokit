@@ -18,7 +18,7 @@ import (
 type distributedFixture struct {
 	coord *Process
 	hosts map[string]*Process // hostID -> host-role *Process
-	order []string                // declared host order (for HostIDs())
+	order []string            // declared host order (for HostIDs())
 }
 
 func newDistributedFixture(t *testing.T, cfg FixtureConfig) clusterFixture {
@@ -87,7 +87,7 @@ func newDistributedFixture(t *testing.T, cfg FixtureConfig) clusterFixture {
 			ShutdownGracePeriod: 50 * time.Millisecond,
 			ConnManager:         net.NewConnManager(),
 			Logger:              logger.New(),
-			})
+		})
 		host.Build()
 		t.Cleanup(host.Shutdown)
 		hosts[hid] = host
@@ -283,8 +283,8 @@ func waitForCellOnHost(ctx context.Context, hosts map[string]*Process, hostID, c
 	}
 }
 
-func (f *distributedFixture) Coord() *Process { return f.coord }
-func (f *distributedFixture) HostIDs() []string   { return f.order }
+func (f *distributedFixture) Coord() *Process   { return f.coord }
+func (f *distributedFixture) HostIDs() []string { return f.order }
 
 // AnyCell returns the in-process *Cell for cellKey regardless of which
 // host owns it. Equivalent to CellOn(CellOwner(cellKey), cellKey).

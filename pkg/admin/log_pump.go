@@ -9,10 +9,10 @@ import (
 // O(1): append to the ring (locked) and non-blocking-send to the pump
 // channel. The drain goroutine handles bus publication.
 type logPump struct {
-	ring    *LogRing
-	bus     *TopicBus
-	ch      chan LogEntry
-	hostID  string
+	ring   *LogRing
+	bus    *TopicBus
+	ch     chan LogEntry
+	hostID string
 }
 
 // pumpChannelCap is the in-process pump's buffer between Emit and the

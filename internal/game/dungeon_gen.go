@@ -323,7 +323,7 @@ func generateWalls(g *dungeonGraph, cfg *GameConfig) []wallSpec {
 // which sits south of the asteroid in world space. Other entrances
 // spread evenly around the ring.
 func pickEntranceAngles(_ *dungeonGraph, cfg *GameConfig, ringSegments int) []int {
-	base := int(float64(ringSegments) * 0.25) % ringSegments
+	base := int(float64(ringSegments)*0.25) % ringSegments
 	out := []int{base}
 	for i := 1; i < cfg.DungeonEntranceCount; i++ {
 		out = append(out, (base+ringSegments*i/cfg.DungeonEntranceCount)%ringSegments)

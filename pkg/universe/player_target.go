@@ -12,10 +12,10 @@ import (
 // player is unknown to this process.
 type PlayerTarget struct {
 	Username  string
-	Stage     *Stage                // non-nil iff Online != nil
+	Stage     *Stage // non-nil iff Online != nil
 	Online    *engine.PlayerSession
-	Offline   PlayerDataAccessor    // non-nil iff persisted state was found here
-	DirtyMark func()                // call after mutating Offline (no-op when Online or NotFound)
+	Offline   PlayerDataAccessor // non-nil iff persisted state was found here
+	DirtyMark func()             // call after mutating Offline (no-op when Online or NotFound)
 }
 
 // PlayerDataAccessor is the minimal surface ResolvePlayerTarget exposes

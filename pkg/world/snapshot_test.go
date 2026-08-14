@@ -14,9 +14,9 @@ func TestBucketByCell_GroupsByWorldPos(t *testing.T) {
 
 	s := &world.Snapshot{
 		Stations: &world.Stations{Stations: []world.Station{
-			{ID: "a", WorldPos: [2]float32{100, 200}},     // cell (0,0)
-			{ID: "b", WorldPos: [2]float32{9000, 200}},    // cell (1,0)
-			{ID: "c", WorldPos: [2]float32{-100, -100}},   // cell (-1,-1)
+			{ID: "a", WorldPos: [2]float32{100, 200}},   // cell (0,0)
+			{ID: "b", WorldPos: [2]float32{9000, 200}},  // cell (1,0)
+			{ID: "c", WorldPos: [2]float32{-100, -100}}, // cell (-1,-1)
 		}},
 		POIs: &world.POIs{POIs: []world.POI{
 			{ID: "p1", WorldPos: [2]float32{100, 200}, Tier: 1, Roster: "Starter"},

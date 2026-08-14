@@ -49,7 +49,7 @@ type Host struct {
 	netIDAlloc *NetIDAllocator
 	systemDefs []engine.SystemDef
 	executor   *cellTransferExecutor
-	vcm          *VirtualConnManager
+	vcm        *VirtualConnManager
 
 	// Back-reference to the parent Process. Populated during Build()
 	// / buildRemoteHost. Used by localHostOps to route operations through

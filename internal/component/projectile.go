@@ -8,6 +8,7 @@ package component
 //   - if SplashRadius > 0, spawns an AoEMarker with Lifetime=0 at the
 //     impact point (resolves same tick via AoESystem)
 //   - despawns the projectile
+//
 // On lifetime expiry without a hit, despawns silently.
 //
 // Homing: if TargetNetID != 0, ProjectileSystem rotates Velocity toward

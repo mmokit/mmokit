@@ -20,11 +20,11 @@ var (
 // User is the canonical identity record. Mirrors auth.users.
 type User struct {
 	UserID         uuid.UUID
-	Username       string  // always lowercase
-	Email          string  // empty when not provided
+	Username       string // always lowercase
+	Email          string // empty when not provided
 	EmailVerified  bool
 	MFAEnabled     bool
-	Status         string  // "active" | "locked" | "disabled"
+	Status         string // "active" | "locked" | "disabled"
 	FailedAttempts int
 	LockedUntil    time.Time // zero value = not locked
 	LastLoginAt    time.Time
@@ -35,20 +35,20 @@ type User struct {
 // PasswordCredential mirrors auth.passwords (one per user in v1).
 type PasswordCredential struct {
 	UserID        uuid.UUID
-	PasswordHash  string  // argon2id encoded
-	HashAlgorithm string  // 'argon2id'
+	PasswordHash  string // argon2id encoded
+	HashAlgorithm string // 'argon2id'
 	ChangedAt     time.Time
 }
 
 // Session mirrors auth.sessions.
 type Session struct {
-	TokenHash  []byte  // sha256(raw_token)
+	TokenHash  []byte // sha256(raw_token)
 	UserID     uuid.UUID
 	IssuedAt   time.Time
 	ExpiresAt  time.Time
 	LastUsedAt time.Time
-	RevokedAt  time.Time  // zero value = not revoked
-	ClientMeta map[string]string  // ip, ua, gateway_id
+	RevokedAt  time.Time         // zero value = not revoked
+	ClientMeta map[string]string // ip, ua, gateway_id
 }
 
 // Capability is a single granted capability row. Mirrors auth.capabilities.
@@ -57,19 +57,19 @@ type Capability struct {
 	Capability string
 	// GrantedAt is set by the repository at the moment of grant or
 	// re-grant. Caller-supplied values are ignored — set this read-only.
-	GrantedAt  time.Time
+	GrantedAt time.Time
 	// GrantedBy is the user_id that performed the grant. uuid.Nil is the
 	// accepted sentinel for system-originated grants (e.g., bootstrap-admin).
-	GrantedBy  uuid.UUID
-	ExpiresAt  time.Time // zero value = no expiry
+	GrantedBy uuid.UUID
+	ExpiresAt time.Time // zero value = no expiry
 }
 
 // AuditEvent mirrors auth.audit_log row inputs.
 type AuditEvent struct {
 	Event             string
-	UserID            uuid.UUID  // zero value when unknown
+	UserID            uuid.UUID // zero value when unknown
 	UsernameAttempted string
-	IPAddr            netip.Addr  // zero value when unavailable
+	IPAddr            netip.Addr // zero value when unavailable
 	UserAgent         string
 	GatewayID         string
 	Metadata          map[string]any

@@ -17,8 +17,8 @@ import (
 // the editor canvas in sync with on-disk manifest mutations issued from
 // console / other operators.
 type WorldChangeEvent struct {
-	Op     string  `json:"op"`     // "place" | "move" | "update" | "delete" | "reload"
-	Type   string  `json:"type"`   // station|poi|dungeon|belt|decoration
+	Op     string  `json:"op"`   // "place" | "move" | "update" | "delete" | "reload"
+	Type   string  `json:"type"` // station|poi|dungeon|belt|decoration
 	ID     string  `json:"id"`
 	WorldX float32 `json:"world_x,omitempty"`
 	WorldY float32 `json:"world_y,omitempty"`

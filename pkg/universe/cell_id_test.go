@@ -37,8 +37,8 @@ func TestCellID_WorldOrigin(t *testing.T) {
 		{CellID{0, 0, 0}, 0, 0},
 		{CellID{1, 0, 0}, 8192, 0},
 		{CellID{0, 1, 0}, 0, 8192},
-		{CellID{1, 1, 1}, 4096, 4096},   // depth 1, size 4096
-		{CellID{3, 2, 2}, 6144, 4096},   // depth 2, size 2048
+		{CellID{1, 1, 1}, 4096, 4096}, // depth 1, size 4096
+		{CellID{3, 2, 2}, 6144, 4096}, // depth 2, size 2048
 	}
 
 	for _, tt := range tests {
@@ -228,10 +228,10 @@ func TestCellID_LocalBounds(t *testing.T) {
 	base := float32(8192)
 
 	tests := []struct {
-		name                       string
-		cell                       CellID
-		wantMinX, wantMinY         float32
-		wantMaxX, wantMaxY         float32
+		name               string
+		cell               CellID
+		wantMinX, wantMinY float32
+		wantMaxX, wantMaxY float32
 	}{
 		{"depth-0", CellID{0, 0, 0}, 0, 0, 8192, 8192},
 		{"depth-0 offset", CellID{1, 0, 0}, 0, 0, 8192, 8192},
@@ -263,8 +263,8 @@ func TestCellDirection(t *testing.T) {
 	base := float32(8192)
 
 	tests := []struct {
-		name       string
-		from, to   CellID
+		name           string
+		from, to       CellID
 		wantDX, wantDY int32
 	}{
 		// Same-depth, depth 0

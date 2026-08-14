@@ -44,4 +44,3 @@ func (gw *GameWorld) WireTransferPlayer(entity mmokit.EntityHandle, s *mmokit.Pl
 	s.Entity = entity
 	gw.updatePlayerCompletions()
 }
-

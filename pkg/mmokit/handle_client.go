@@ -46,8 +46,8 @@ func HandleClient[M any](world *pkguniverse.Process, fn func(player Entity, msg 
 
 var (
 	ciMu     sync.RWMutex
-	ciSet    = map[reflect.Type]struct{}{}    // T (NOT *T)
-	ciByType = map[uint32]reflect.Type{}      // typeID → reflect.Type for dispatch
+	ciSet    = map[reflect.Type]struct{}{} // T (NOT *T)
+	ciByType = map[uint32]reflect.Type{}   // typeID → reflect.Type for dispatch
 )
 
 // registerClientInputType marks t as a HandleClient-eligible type and

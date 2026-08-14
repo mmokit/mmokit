@@ -55,4 +55,3 @@ func (s *ClickToMoveSystem) Update(dt float32) {
 		b.Vel.Y = (dy / dist) * speed
 	}
 }
-

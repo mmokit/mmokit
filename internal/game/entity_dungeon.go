@@ -135,8 +135,8 @@ func (gw *GameWorld) SpawnDungeonFromGraph(centerX, centerY float32, seed uint64
 		OuterRadius:   gw.Config.DungeonAsteroidRadius,
 		EntranceCount: uint8(gw.Config.DungeonEntranceCount),
 		EntranceX0:    ent[0].X, EntranceY0: ent[0].Y,
-		EntranceX1:    ent[1].X, EntranceY1: ent[1].Y,
-		EntranceX2:    ent[2].X, EntranceY2: ent[2].Y,
+		EntranceX1: ent[1].X, EntranceY1: ent[1].Y,
+		EntranceX2: ent[2].X, EntranceY2: ent[2].Y,
 		Seed: seed,
 	})
 

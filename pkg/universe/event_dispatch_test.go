@@ -77,9 +77,9 @@ func TestDispatchInboundEventFrame_SingleEntry(t *testing.T) {
 	p := dispatchTestProcess(t)
 
 	var fired struct {
-		count   int
-		netID   uint32
-		v, w    int32
+		count int
+		netID uint32
+		v, w  int32
 	}
 	mmokit.HandleClient(p, func(player mmokit.Entity, msg *evDispatchInput) {
 		fired.count++

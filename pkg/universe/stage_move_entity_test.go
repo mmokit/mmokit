@@ -90,8 +90,8 @@ func TestMoveEntityTo_CrossCell_EnqueuesCrossingWithBypass(t *testing.T) {
 	// destination receives the post-TP world position when it deserializes).
 	pos := stage.PositionMap().Get(ent)
 	cellSize := coords.CellSize
-	wantX := farX - 5*cellSize  // dest cellX = 5
-	wantY := farY - 5*cellSize  // dest cellY = 5
+	wantX := farX - 5*cellSize // dest cellX = 5
+	wantY := farY - 5*cellSize // dest cellY = 5
 	if pos.X != wantX || pos.Y != wantY {
 		t.Fatalf("Position not normalized to dest cell: got (%g,%g), want (%g,%g)", pos.X, pos.Y, wantX, wantY)
 	}

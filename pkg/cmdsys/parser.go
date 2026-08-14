@@ -25,7 +25,7 @@ func (p *Parser) Bind(raw string, schema Schema) (map[string]any, error) {
 		return nil, fmt.Errorf("parse: %w", err)
 	}
 
-	named := map[string]string{}  // field name → raw value string
+	named := map[string]string{} // field name → raw value string
 	positional := []string{}
 
 	// boolField reports whether the named field (by Name or lowercase) is

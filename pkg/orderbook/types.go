@@ -12,11 +12,11 @@ const (
 type Order struct {
 	ID         uint64    `json:"id"`
 	Side       OrderSide `json:"side"`
-	Owner      string    `json:"owner"`        // username (lowercase)
+	Owner      string    `json:"owner"`       // username (lowercase)
 	LocationID uint32    `json:"location_id"` // per-location markets
 	ItemID     uint32    `json:"item_id"`
-	Price      int64     `json:"price"`     // price per unit in settlement currency
-	Quantity   int32     `json:"quantity"`  // remaining qty
+	Price      int64     `json:"price"`    // price per unit in settlement currency
+	Quantity   int32     `json:"quantity"` // remaining qty
 	OrigQty    int32     `json:"orig_qty"` // original qty
 	CreatedAt  int64     `json:"created_at"`
 	ExpiresAt  int64     `json:"expires_at"`

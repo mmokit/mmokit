@@ -11,7 +11,7 @@ import (
 // Actual combat damage is hitscan, handled by AbilitySystem via GameWorld.ApplyDamage.
 type CollisionSystem struct {
 	mmokit.SystemBase
-	gw       *GameWorld
+	gw     *GameWorld
 	nearby []mmokit.SpatialEntry // reusable scratch buffer
 }
 

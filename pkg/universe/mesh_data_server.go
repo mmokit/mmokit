@@ -14,7 +14,7 @@ import (
 // client stream owned by HostNetwork.ConnectPeer).
 type meshDataServer struct {
 	meshpb.UnimplementedMeshDataServer // embed for forward compat
-	net *HostNetwork
+	net                                *HostNetwork
 }
 
 // Data is the bidi streaming RPC. Despite being a bidi stream, the

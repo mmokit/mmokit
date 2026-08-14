@@ -38,8 +38,8 @@ func TestUnmarshalCollider(t *testing.T) {
 		0x00, 0x00, 0x80, 0x3F, // radius = 1.0
 		0x00, 0x00, 0x00, 0x40, // width = 2.0
 		0x00, 0x00, 0x40, 0x40, // height = 3.0
-		0x01,                   // layer = 1
-		0x02,                   // shape = 2
+		0x01, // layer = 1
+		0x02, // shape = 2
 	})
 
 	if c.Radius != 1.0 {

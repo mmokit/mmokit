@@ -56,8 +56,8 @@ func (s RemoteGatewayState) String() string {
 // RemoteGateway holds coordinator-side state for one registered gateway process.
 type RemoteGateway struct {
 	ID            string
-	WSAddr        string              // where clients connect (WebSocket)
-	GRPCAddr      string              // for MeshData streams from nodes to this gateway
+	WSAddr        string // where clients connect (WebSocket)
+	GRPCAddr      string // for MeshData streams from nodes to this gateway
 	RegisteredAt  time.Time
 	LastHeartbeat time.Time
 	State         RemoteGatewayState

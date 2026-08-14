@@ -7,8 +7,10 @@ package component
 // each non-owner entity matching FactionMask, and despawns the marker.
 //
 // FactionMask bits:
-//   bit 0 (0x01) — can damage NPCs
-//   bit 1 (0x02) — can damage Players
+//
+//	bit 0 (0x01) — can damage NPCs
+//	bit 1 (0x02) — can damage Players
+//
 // A FactionMask of 0x03 hits both (e.g. Kamikaze blast hitting a
 // neighboring Kamikaze + the player).
 type AoESpec struct {

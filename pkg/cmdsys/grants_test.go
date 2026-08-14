@@ -17,9 +17,9 @@ func TestParse(t *testing.T) {
 		{"cell.split", "cell.split", true, false},
 		{"entity.*", "entity.*", true, false},
 		{"-entity.*", "entity.*", false, false},
-		{"*.*", "", false, true},      // always rejected
-		{"-*.*", "", false, true},     // even deny form
-		{"", "", false, true},         // empty
+		{"*.*", "", false, true},  // always rejected
+		{"-*.*", "", false, true}, // even deny form
+		{"", "", false, true},     // empty
 	}
 	for _, c := range cases {
 		g, err := Parse(c.line)

@@ -51,4 +51,3 @@ type ReplicationTier struct {
 	// neighbor cell, promote now. Defaults to 10.
 	PromoteLookahead int
 }
-

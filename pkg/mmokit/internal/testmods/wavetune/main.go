@@ -23,4 +23,4 @@ func (w *wavetune) Update(ctx *wasmsys.Ctx, dt float32) {
 }
 
 func init() { wasmsys.Register(&wavetune{}) }
-func main()  {}
+func main() {}

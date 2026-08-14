@@ -21,4 +21,4 @@ func (s *st) Update(ctx *wasmsys.Ctx, dt float32) {
 }
 
 func init() { wasmsys.Register(&st{}) }
-func main()  {}
+func main() {}

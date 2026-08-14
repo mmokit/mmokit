@@ -49,4 +49,3 @@ func TestSend_HandlerMutatesMessage(t *testing.T) {
 		t.Fatalf("after Send, msg.Dealt = %v, want 25", msg.Dealt)
 	}
 }
-

@@ -68,10 +68,10 @@ type rebalanceMigrator interface {
 
 // hostLoad is a per-host aggregation view used by the loop.
 type hostLoad struct {
-	HostID        string
-	Load          float64          // sum of CompositeLoad across owned cells
-	CellCount     int              // number of cells assigned to this host
-	Cells         []cellLoadRow    // per-cell breakdown, used for picking the donor cell
+	HostID    string
+	Load      float64       // sum of CompositeLoad across owned cells
+	CellCount int           // number of cells assigned to this host
+	Cells     []cellLoadRow // per-cell breakdown, used for picking the donor cell
 }
 
 // cellLoadRow is one row in a host's cell breakdown.
@@ -90,10 +90,10 @@ type rebalanceLoop struct {
 	clock    rebalanceClock
 	logf     func(format string, args ...any) // optional logger hook
 
-	mu             sync.Mutex
-	firstOverload  map[string]time.Time // hostID -> first time we saw it ≥ threshold
-	lastMigration  time.Time
-	inflight       int
+	mu              sync.Mutex
+	firstOverload   map[string]time.Time // hostID -> first time we saw it ≥ threshold
+	lastMigration   time.Time
+	inflight        int
 	migrationsFired int // test instrumentation: total migrations launched
 }
 

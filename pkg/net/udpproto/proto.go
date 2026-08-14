@@ -22,18 +22,18 @@ const ProtocolID uint32 = 0x47414D45 // "GAME"
 
 // Header sizes (excluding type byte which is always first).
 const (
-	UnreliableHeaderSize = 1 + 4           // type + token
-	ReliableHeaderSize   = 1 + 4 + 2       // type + token + seq
-	ACKSize              = 1 + 4 + 2 + 4   // type + token + ack_seq + ack_bits
-	ConnReqSize          = 1 + 4 + 8       // type + protocol_id + client_salt
-	ConnAcceptSize       = 1 + 4 + 8 + 8   // type + protocol_id + client_salt + server_salt
-	DisconnectSize       = 1 + 4           // type + token
+	UnreliableHeaderSize = 1 + 4         // type + token
+	ReliableHeaderSize   = 1 + 4 + 2     // type + token + seq
+	ACKSize              = 1 + 4 + 2 + 4 // type + token + ack_seq + ack_bits
+	ConnReqSize          = 1 + 4 + 8     // type + protocol_id + client_salt
+	ConnAcceptSize       = 1 + 4 + 8 + 8 // type + protocol_id + client_salt + server_salt
+	DisconnectSize       = 1 + 4         // type + token
 )
 
 var (
-	ErrTooShort       = errors.New("packet too short")
-	ErrBadType        = errors.New("unknown packet type")
-	ErrBadProtocolID  = errors.New("wrong protocol ID")
+	ErrTooShort      = errors.New("packet too short")
+	ErrBadType       = errors.New("unknown packet type")
+	ErrBadProtocolID = errors.New("wrong protocol ID")
 )
 
 // MakeToken computes the connection token from client and server salts.

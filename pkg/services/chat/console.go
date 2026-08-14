@@ -186,7 +186,6 @@ func RegisterConsoleCommands(reg *cmdsys.Registry, getSvc ServiceProvider, getAu
 		return nil
 	}
 
-
 	// --- Read-only commands (no operator-online check needed) ---
 
 	if err := must(reg.Register(cmdsys.Command{

@@ -129,7 +129,7 @@ func TestDrainPendingPromotes_BorderReplicaTip_WorldXCorrect(t *testing.T) {
 	// producedAtMs=0 so hasRecentStamp=false and the extrapolation branch in
 	// drainPendingPromotes is skipped — we are testing position correctness
 	// from the tip capture, not extrapolation.
-	const borderWorldX = srcPosX         // 1030.0
+	const borderWorldX = srcPosX                 // 1030.0
 	const borderLocalX = borderWorldX - cellSize // 6.0
 	// Build a border entry that exercises the scanEntityComponents bug: the
 	// source's BorderDispatcher would append Position.X=1030 in the component
@@ -373,7 +373,8 @@ func TestDrainPendingPromotes_NoReplica_WorldXCorrect(t *testing.T) {
 //
 // After transfer to cell_1_0 (CellX=1), ClickToMove must compute correct
 // direction: dx = (MT.CellX - CC.CellX)*cellSize + MT.LocalX - pos.X
-//            = (1 - 1)*1024 + 476 - posX = 476 - posX > 0 (walk right)
+//
+//	= (1 - 1)*1024 + 476 - posX = 476 - posX > 0 (walk right)
 //
 // If CC.CellX were incorrectly 2, dx = (1-2)*1024 + 476 - posX = -548 - posX < 0
 // (walk LEFT) — matching the user-reported symptom.

@@ -38,7 +38,7 @@ type deeperInner struct {
 }
 
 type sliceArgs struct {
-	Names []string
+	Names  []string
 	Scores []int32
 }
 
@@ -214,7 +214,7 @@ func TestSchemaHashOf_EqualAcrossSameLayout(t *testing.T) {
 }
 
 type differentLayout struct {
-	Name string
+	Name  string
 	Extra int32
 }
 

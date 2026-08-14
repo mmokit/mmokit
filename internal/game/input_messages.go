@@ -26,12 +26,13 @@ type SelectTarget struct {
 // CastAbility — discrete ability press. Slot identifies which equipped
 // ability fired. AimX/AimY carry the cursor world position; meaning
 // depends on the ability's TargetingMode:
-//   Self             — ignored
-//   LockOn           — reads the player's Selection.EntityNetID as the target
-//   CursorPick       — nearest enemy within pickRadius of (AimX, AimY)
-//   SkillshotLine    — direction = (AimX - shipX, AimY - shipY), normalized
-//   SkillshotGround  — drop the AoE at (AimX, AimY), clamped to ability range
-//   SkillshotChannel — initial aim point; updates via ChannelAim while held
+//
+//	Self             — ignored
+//	LockOn           — reads the player's Selection.EntityNetID as the target
+//	CursorPick       — nearest enemy within pickRadius of (AimX, AimY)
+//	SkillshotLine    — direction = (AimX - shipX, AimY - shipY), normalized
+//	SkillshotGround  — drop the AoE at (AimX, AimY), clamped to ability range
+//	SkillshotChannel — initial aim point; updates via ChannelAim while held
 type CastAbility struct {
 	Sequence uint32
 	Slot     uint8
@@ -109,8 +110,10 @@ type LootAll struct {
 
 // ToggleSuperCruise — discrete Z-key press. Server toggles the player's
 // Supercruise.Phase:
-//   Idle      → Channeling (if LockoutRemaining=0, not docked/dead)
-//   Channeling/Active → Idle (manual cancel, no lockout)
+//
+//	Idle      → Channeling (if LockoutRemaining=0, not docked/dead)
+//	Channeling/Active → Idle (manual cancel, no lockout)
+//
 // Buffer drain + combat lockout are owned by the damage hook in
 // verb_damage.go, not by this handler.
 type ToggleSuperCruise struct {

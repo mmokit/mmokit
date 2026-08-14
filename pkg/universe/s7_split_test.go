@@ -455,4 +455,3 @@ func TestS7SplitShutsDownParentCell(t *testing.T) {
 		assertCellGoroutineExited(t, srcCell, 2*time.Second)
 	})
 }
-

@@ -367,7 +367,6 @@ func findFirstLiveNetID(t *testing.T, stage *Stage) uint32 {
 	return 0
 }
 
-
 // ── ComponentAccessors ────────────────────────────────────────────────────────
 
 func TestComponentAccessors_ReturnsLivePointer(t *testing.T) {

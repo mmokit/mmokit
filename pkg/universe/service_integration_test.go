@@ -87,7 +87,7 @@ func TestRegisterService_Duplicate_Error(t *testing.T) {
 // services"; instantiation is gated by the explicit --services= list.
 func TestBuild_RoleService_WithoutServicesList_Allowed(t *testing.T) {
 	p := New(Config{
-		Mode:         "coordinator,host,gateway,service",
+		Mode: "coordinator,host,gateway,service",
 	})
 	p.Build()
 	// Build must succeed; runningServices must be nil/empty.
@@ -155,7 +155,7 @@ func TestBuild_OpCodeOverlap_Rejected(t *testing.T) {
 		}
 	}()
 	p := New(Config{
-		Mode:         "all",
+		Mode: "all",
 	})
 	a, _ := newStubKind("a", 5000)
 	b, _ := newStubKind("b", 5000)
