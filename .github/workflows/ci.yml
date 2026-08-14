@@ -52,11 +52,11 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      # fetch-depth: 0 so the gofmt step can reach the base commit it diffs
-      # against. Nothing else in this job needs history.
+      # Default shallow checkout. The gofmt step used to diff against a base
+      # commit and needed fetch-depth: 0; it is now tree-wide over
+      # `git ls-files`, which reads the index, and nothing else in this job
+      # touches history.
       - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
 
       # go.mod is the single place the Go version is pinned: `go 1.25.1` plus
       # `toolchain go1.26.2`. setup-go@v5 reads only the `go` directive from a
@@ -76,63 +76,36 @@ jobs:
       - name: go vet
         run: go vet ./...
 
-      # Changed files ONLY. `gofmt -l $(git ls-files '*.go')` reports 69 files
-      # at this commit — almost entirely pre-existing Go 1.19+ doc-comment
-      # reflow that AGENTS.md forbids clearing as incidental cleanup. A
-      # tree-wide gate would be red on its first run and would bury every real
-      # finding. See the Formatting section of CONTRIBUTING.md, which owns this
-      # rule.
+      # Tree-wide. This was a changed-files-only gate, justified by a comment
+      # claiming the 67 unformatted files were "almost entirely pre-existing Go
+      # 1.19+ doc-comment reflow". That was measurably false: of the 424 changed
+      # diff lines, 29 were comments and 17 blank — 89% was code (struct field
+      # alignment, composite-literal alignment, and a genuinely misordered
+      # import block in the space game's composition root). The tree was
+      # formatted in the same commit that widened this gate, so it is green.
       #
       # gofmt is taken from `go env GOROOT` rather than PATH: PATH's gofmt
       # belongs to the version setup-go installed (1.25.1), while `go env`
       # re-execs into the pinned toolchain and reports go1.26.2's GOROOT. gofmt
       # output is toolchain-dependent, so the gate must measure what
       # contributors run.
-      - name: gofmt (changed files only)
-        env:
-          EVENT_NAME: ${{ github.event_name }}
-          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
-          PUSH_BEFORE_SHA: ${{ github.event.before }}
+      - name: gofmt
         run: |
           set -euo pipefail
-          if [ "$EVENT_NAME" = "pull_request" ]; then
-            base="$PR_BASE_SHA"
-          else
-            base="$PUSH_BEFORE_SHA"
-          fi
-          # Branch creation and the first push of a repository report an
-          # all-zero before-SHA; a force-push can report one that is no longer
-          # reachable. Fall back to the parent commit, then to checking nothing
-          # (a root commit has no parent).
-          if [ -z "$base" ] || ! git cat-file -e "${base}^{commit}" 2>/dev/null; then
-            base="$(git rev-parse --verify --quiet 'HEAD~1' || true)"
-          fi
-          if [ -z "$base" ]; then
-            echo "No usable base commit to diff against; skipping."
-            exit 0
-          fi
-          # Command substitution rather than process substitution: under
-          # `set -e` a failing `git diff` aborts here, where a failing process
-          # substitution would silently yield an empty list and pass the gate.
-          changed="$(git diff --name-only --diff-filter=ACM "${base}...HEAD" -- '*.go')"
-          if [ -z "$changed" ]; then
-            echo "No Go files added or modified against ${base}."
-            exit 0
-          fi
-          mapfile -t files <<< "$changed"
-          printf 'Checking %d changed Go file(s) against %s\n' "${#files[@]}" "$base"
           gofmt_bin="$(go env GOROOT)/bin/gofmt"
+          mapfile -t files < <(git ls-files '*.go')
+          printf 'Checking %d tracked Go file(s)\n' "${#files[@]}"
           unformatted="$("$gofmt_bin" -l "${files[@]}")"
           if [ -n "$unformatted" ]; then
-            echo "::error::gofmt found unformatted files among the files this change touches:"
+            echo "::error::gofmt found unformatted files:"
             echo "$unformatted"
             echo
             "$gofmt_bin" -d "${files[@]}"
             echo
-            echo "Fix with: gofmt -w \$(git diff --name-only --diff-filter=ACM HEAD -- '*.go')"
+            echo "Fix with: gofmt -w \$(git ls-files '*.go')"
             exit 1
           fi
-          echo "All changed Go files are gofmt-clean."
+          echo "All tracked Go files are gofmt-clean."
 
       # GAME-COUPLED. Fails if a non-allowlisted internal/game/ file imports
       # ark/ecs directly.

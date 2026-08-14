@@ -117,21 +117,25 @@ Green is not the same as complete:
 
 ## Formatting
 
-**Format only the files you touched**, with `gofmt -w`:
+**The tree is gofmt-clean and CI gates on it tree-wide.** Before committing:
 
 ```bash
-gofmt -w $(git diff --name-only --diff-filter=ACM HEAD -- '*.go')
+gofmt -w $(git ls-files '*.go')
 ```
 
-Do not run `gofmt` over the tree, and do not gate on it tree-wide.
-`gofmt -l $(git ls-files '*.go')` reports **69 files** at this commit, almost
-entirely pre-existing Go 1.19+ doc-comment reflow. `AGENTS.md` forbids clearing
-that as incidental cleanup, so a tree-wide format gate would be red on its first
-run and would bury every real finding under a thousand lines of unrelated
-reflow. Gate changed files only.
+This used to be a changed-files-only rule, justified by the claim that the 67
+unformatted files were "almost entirely pre-existing Go 1.19+ doc-comment
+reflow" that `AGENTS.md` forbids clearing as incidental cleanup. That claim was
+measured and found false: of the 424 changed diff lines, 29 were comments and
+17 blank — **89% was code**, including struct-field and composite-literal
+alignment and a misordered import block. It was formatted in one deliberate
+commit, so the tree-wide gate is green and stays green.
 
-The same rule covers the rest of the tree: no repository-wide reformatting or
-regeneration as incidental cleanup, and preserve unrelated worktree changes.
+`AGENTS.md`'s rule still holds for everything else: no repository-wide
+reformatting or regeneration as incidental cleanup, and preserve unrelated
+worktree changes. Formatting is the one exception, because a mechanical,
+verifiable, idempotent transform is exactly what a gate can enforce cheaply —
+and an ungated one accumulates.
 
 `go.mod` pins `toolchain go1.26.2` alongside the `go 1.25.1` language directive,
 so `gofmt` and `vet` results are reproducible rather than a moving target. If
