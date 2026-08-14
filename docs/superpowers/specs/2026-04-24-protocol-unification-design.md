@@ -266,7 +266,7 @@ To populate the InputRouter and OpRouter for schema export, the engine must run 
 
 ### Backward compatibility
 
-Per project policy ([no backward compat](../../../.claude/projects/-home-josh-projects-zenion-mmoserver/memory/feedback_no_backward_compat.md)) — no shims, no aliases. `MakeEvent` deletion happens in Phase 3 once `Send` is the only caller.
+Per project policy (no backward compat) — no shims, no aliases. `MakeEvent` deletion happens in Phase 3 once `Send` is the only caller.
 
 ## Verification
 

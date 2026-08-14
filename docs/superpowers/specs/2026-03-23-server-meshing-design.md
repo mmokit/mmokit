@@ -8,7 +8,7 @@
 
 Phase 0+1 established sector-based coordinates (8192-unit sectors, SectorCoord component, SectorBoundarySystem, player-relative networking). The server currently runs as a single node with one ECS world. This design introduces multiple nodes — each owning a sector with its own ECS world — running concurrently in one process, with entity handoff and border replication for seamless cross-sector gameplay.
 
-A working prototype at `~/projects/scratch/handoff1` (TypeScript) demonstrates the coordinator/shard/gateway pattern. This design adapts those patterns to the Go codebase.
+A working prototype at `./projects/scratch/handoff1` (TypeScript) demonstrates the coordinator/shard/gateway pattern. This design adapts those patterns to the Go codebase.
 
 ## Architecture Overview
 

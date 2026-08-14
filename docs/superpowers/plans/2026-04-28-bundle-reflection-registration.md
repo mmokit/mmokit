@@ -198,7 +198,7 @@ func RegisterComponent[T any](
 }
 ```
 
-If `*ecs.Map1[T]` doesn't expose `World()` and `ID()`, you'll need to dig: ark stores both internally. Check `~/go/pkg/mod/github.com/mlange-42/ark@v0.7.1/ecs/maps_gen.go` for `Map1[T]` accessors, or use `ecs.ComponentID[T](w)` to recover the ID from a separately-passed world.
+If `*ecs.Map1[T]` doesn't expose `World()` and `ID()`, you'll need to dig: ark stores both internally. Check `./go/pkg/mod/github.com/mlange-42/ark@v0.7.1/ecs/maps_gen.go` for `Map1[T]` accessors, or use `ecs.ComponentID[T](w)` to recover the ID from a separately-passed world.
 
 - [ ] **Step 3: Update componentReplicator struct shape**
 

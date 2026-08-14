@@ -141,7 +141,7 @@ Plus tests that exercise these methods directly (`pkg/universe/*_test.go`, `pkg/
 
 ## Backward compatibility
 
-None per project policy ([no backward compat](../../../.claude/projects/-home-josh-projects-zenion-mmoserver/memory/feedback_no_backward_compat.md)). The Process methods are deleted in the same commit as the Config fields are added; every caller migrates atomically.
+None per project policy (no backward compat). The Process methods are deleted in the same commit as the Config fields are added; every caller migrates atomically.
 
 ## Validation
 

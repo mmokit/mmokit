@@ -787,7 +787,7 @@ git commit -m "fix: address remaining Node->Cell rename stragglers found during 
 - [ ] **Step 1: Check memory files for stale Node references**
 
 ```bash
-grep -r "Node" ~/.claude/projects/-home-josh-projects-zenion-mmoserver/memory/ 2>/dev/null | grep -v "NodeHost\|CellNode" || echo "No stale refs"
+grep -r "Node" the maintainer's project notes:  2>/dev/null | grep -v "NodeHost\|CellNode" || echo "No stale refs"
 ```
 
 Update any memory files that reference the old vocabulary.

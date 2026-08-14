@@ -2,7 +2,7 @@
 
 ## What just happened
 
-The web-pixi client was migrated from hand-coded transport/decoder/protocol to the auto-generated `SpaceClient` SDK at `web-pixi/sdk/`. This landed on branch `feature/web-pixi-sdk-modernization` (6 commits, not yet merged to main). The migration plan is at `docs/superpowers/plans/` — see "Web-Pixi Modernization — Adopt Generated SDK" (file `~/.claude/plans/validated-sparking-pike.md`).
+The web-pixi client was migrated from hand-coded transport/decoder/protocol to the auto-generated `SpaceClient` SDK at `web-pixi/sdk/`. This landed on branch `feature/web-pixi-sdk-modernization` (6 commits, not yet merged to main). The migration plan is at `docs/superpowers/plans/` — see "Web-Pixi Modernization — Adopt Generated SDK" (file `./.claude/plans/validated-sparking-pike.md`).
 
 **The SDK is working. Two-player visibility works. Core gameplay (move, login, spawn, damage, mining) functions.** But 5 visual/UX features were intentionally dropped during the Phase 2 wire-protocol simplification. The user wants them restored.
 
