@@ -280,6 +280,26 @@ jobs:
       - name: regenerate the ship-dynamics parity fixture
         run: just shipdyn-golden
 
+      # `git diff --exit-code -- <pathspec>` exits 0 when the pathspec matches
+      # NOTHING, so a renamed or deleted golden directory turns this gate green
+      # while it checks nothing at all. Assert the files exist first: this gate
+      # must fail loudly when its subject moves, not pass quietly.
+      - name: assert the goldens exist
+        run: |
+          set -euo pipefail
+          missing=0
+          for f in \
+            csharp/Mmokit.Sdk.Core.Tests/testdata/delta_golden.json \
+            web-pixi/src/__tests__/testdata/shipdyn_golden.json
+          do
+            if [ ! -f "$f" ]; then
+              echo "::error::golden fixture missing: $f"
+              echo "If it moved, update this step AND the regenerator's output path."
+              missing=1
+            fi
+          done
+          exit "$missing"
+
       - name: assert the goldens were already up to date
         run: |
           git diff --exit-code -- \
