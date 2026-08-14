@@ -2,12 +2,12 @@
 <html>
 <head>
     <title>Space MMO - PixiJS Client</title>
-    <!-- Cinzel: engraved-temple serif used for dungeon names. Loads in
-         parallel with the JS bundle; Pixi text falls back to monospace
-         until the font is available. -->
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;700&family=Major+Mono+Display&display=swap" rel="stylesheet">
+    <!-- No webfont link on purpose: a CDN request would send every player's
+         IP to a third party and fail closed behind an egress filter. Dungeon
+         labels ask for "Cinzel" / "Major Mono Display" (see
+         src/entities/dungeon.ts) and fall back to the serif and monospace
+         faces declared beside them, which is what renders unless a viewer
+         happens to have those families installed locally. -->
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body { background: #000; overflow: hidden; font-family: monospace; }

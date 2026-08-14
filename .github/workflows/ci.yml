@@ -212,6 +212,16 @@ jobs:
 
       - name: assert the embedded admin bundle is up to date
         run: |
+          # Untracked files do not appear in `git diff`, so a newly-hashed
+          # asset that .gitignore swallowed would pass the diff below while
+          # leaving the committed index.html pointing at a file nobody has.
+          # Check for untracked entries FIRST.
+          untracked="$(git status --porcelain --untracked-files=all -- pkg/admin/static/dist)"
+          if [ -n "$untracked" ]; then
+            echo "::error::pkg/admin/static/dist has untracked or modified files — the bundle was rebuilt but not committed, or .gitignore is swallowing an asset:"
+            echo "$untracked"
+            exit 1
+          fi
           if ! git diff --exit-code -- pkg/admin/static/dist; then
             echo "::error::pkg/admin/static/dist is stale. Run 'just admin-build' and commit the result."
             exit 1

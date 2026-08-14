@@ -33,6 +33,14 @@ log/
 web-admin/node_modules/
 web-admin/.vite/
 
+# Re-include the embedded admin bundle, which `**/dist/*` above would
+# otherwise swallow. Without this negation the currently-tracked files stay
+# tracked (git only ignores UNTRACKED paths) but the next SPA change emits a
+# NEW hashed filename that is silently ignored — restoring the exact
+# 404ing-dashboard bug this tracking exists to prevent, invisibly, because an
+# untracked file does not appear in `git diff` either.
+!pkg/admin/static/dist/**
+
 # admin embed: TRACKED, deliberately. pkg/admin/static/dist.go go:embed's this
 # directory, so whatever is committed here is what a `go get` consumer's binary
 # serves. Tracking only index.html — as this file used to — shipped a page

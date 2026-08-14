@@ -1,10 +1,13 @@
 # Attribution
 
-Everything in this repository is original work covered by [`LICENSE`](LICENSE)
-(MIT). There are no bundled third-party assets.
+Almost everything here is original work covered by [`LICENSE`](LICENSE) (MIT).
+The exceptions are listed below, in full.
 
-That is a deliberate property rather than a happy accident, and it is worth
-stating because game repositories usually cannot say it.
+There are no third-party **media** assets — no sampled audio, no images, no
+sprites, no fonts, and no runtime requests to a CDN. There is one piece of
+third-party **code** redistributed in compiled form: the operator dashboard's
+JavaScript bundle, which is committed because it is embedded into the server
+binary. Its dependencies are listed under "Compiled-in dependencies" below.
 
 ## Audio — generated, not sampled
 
@@ -38,16 +41,47 @@ clone.
 There are no image, sprite, or font files either. All game art is drawn
 procedurally with PixiJS `Graphics` (75 call sites across 26 files; zero
 `Assets.load`, zero `Texture.from`). Verified with git's own binary detection
-over every tracked file: the sixteen `.ogg` files above are the only non-source
-assets in the repository.
+over every tracked file: the sixteen `.ogg` files above and the admin
+dashboard's compiled bundle (below) are the only non-source files in the
+repository.
 
-## Dependencies
+## Compiled-in dependencies — `pkg/admin/static/dist/`
+
+`pkg/admin/static/dist.go` embeds this directory into the server binary, so the
+built bundle is committed rather than generated at install time
+([why](pkg/admin/static/dist.go)). That bundle is minified output containing
+third-party code:
+
+| Bundled in | Project | Licence |
+| --- | --- | --- |
+| `assets/index-*.js` | [Svelte](https://svelte.dev) | MIT |
+| `assets/index-*.js` | [Lucide](https://lucide.dev) icons (`@lucide/svelte`) | ISC |
+| `assets/index-*.css` | [Tailwind CSS](https://tailwindcss.com) | MIT |
+
+All three are permissive and MIT-compatible. Minification strips their
+copyright headers, so this table is where that notice lives; both licences
+require the notice to travel with redistributed copies, and a table in the
+repository root is more findable than a comment in a 244 KB minified file.
+
+Regenerate the bundle with `just admin-build`. To rebuild from source instead
+of trusting the committed artifact, `cd web-admin && bun install && bun run
+build` reproduces it byte-identically on the pinned Bun version.
+
+## Fetched, not vendored
 
 Go, JavaScript and C# dependencies are declared in `go.mod`, the `package.json`
-files, and the `.csproj` files, and are fetched rather than vendored — no
-third-party source is copied into this tree.
+files, and the `.csproj` files, and are fetched at build time — no third-party
+source is copied into this tree.
 
 Every Go dependency is MIT, BSD-3-Clause, Apache-2.0 or ISC. The only copyleft
 anywhere in the transitive JavaScript graph is MPL-2.0 `lightningcss`, a
 build-time CSS transformer in the admin dashboard's Tailwind pipeline, which is
 not redistributed.
+
+## No runtime third-party requests
+
+Neither web application contacts a third party at runtime. Both used to load
+webfonts from Google's CDN; that was removed, because the dashboard is embedded
+into the server binary and would have failed closed on an air-gapped
+deployment, and because it sent every operator's and player's IP address to a
+third party on page load. Both now fall back to platform font stacks.
