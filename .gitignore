@@ -33,10 +33,15 @@ log/
 web-admin/node_modules/
 web-admin/.vite/
 
-# admin embed: build output is derived; only the placeholder + .gitkeep are tracked
-pkg/admin/static/dist/*
-!pkg/admin/static/dist/.gitkeep
-!pkg/admin/static/dist/index.html
+# admin embed: TRACKED, deliberately. pkg/admin/static/dist.go go:embed's this
+# directory, so whatever is committed here is what a `go get` consumer's binary
+# serves. Tracking only index.html — as this file used to — shipped a page
+# referencing hashed asset files nobody could obtain: an external consumer who
+# mounted pkg/admin got a 404ing dashboard and an empty <div id="app">, while
+# README advertised the dashboard as a framework feature.
+#
+# The cost is a generated diff on every SPA change. CI rebuilds the bundle and
+# asserts it matches, so a stale commit is caught rather than shipped.
 
 # ---------------------------------------------------------------------------
 # Secrets. Prerequisite for CE-006, which introduces this repository's first

@@ -1,11 +1,11 @@
 <script lang="ts">
   import { onMount } from "svelte";
   import { auth } from "$lib/auth";
-  import { sessionStore, clusterStore, paletteOpen, panelsStore } from "$lib/stores.svelte";
+  import { sessionStore, clusterStore, paletteOpen, panelsStore, commandsStore, hasVerb } from "$lib/stores.svelte";
   import { route } from "$lib/router";
   import { stream } from "$lib/stream";
   import { apiGet } from "$lib/api";
-  import type { ClusterInfo, PanelDef } from "$lib/types";
+  import type { ClusterInfo, PanelDef, CommandEntry } from "$lib/types";
   import PanelHost from "./components/PanelHost.svelte";
   import Login from "./routes/login.svelte";
   import Cluster from "./routes/cluster.svelte";
@@ -43,12 +43,15 @@
 
   async function hydrateCluster() {
     try {
-      const [c, panels] = await Promise.all([
+      const [c, panels, commands] = await Promise.all([
         apiGet<ClusterInfo>("/admin/api/cluster"),
         apiGet<PanelDef[]>("/admin/api/panels"),
+        apiGet<CommandEntry[]>("/admin/api/commands"),
       ]);
       clusterStore.set(c);
       panelsStore.set(panels ?? []);
+      // Capability probe for game-specific UI — see stores.svelte.ts::hasVerb.
+      commandsStore.set(commands ?? []);
     } catch {
       // 401 etc. — auth gate redirects to login
     }
@@ -120,7 +123,18 @@
         {:else if path === "/entities"}
           <Entities />
         {:else if path === "/world-editor"}
-          <WorldEditor />
+          <!-- Backed by world.* verbs, which only a game that ships a
+               hand-authored world manifest registers. Deep-linking here
+               against a game that does not is a 404 in the API, so say so
+               rather than rendering an editor whose every call fails. -->
+          {#if hasVerb("world.list")}
+            <WorldEditor />
+          {:else}
+            <div class="p-8 text-[var(--text-dim)] font-mono text-[12px]">
+              World editor unavailable — this game registers no
+              <code class="text-phosphor-300">world.*</code> commands.
+            </div>
+          {/if}
         {:else if path === "/settings"}
           <Settings />
         {:else if path.startsWith("/panel/")}

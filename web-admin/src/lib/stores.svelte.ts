@@ -8,6 +8,7 @@ import type {
   AuthSession,
   PanelDef,
   MetricsSample,
+  CommandEntry,
 } from "./types";
 
 // A reactive holder backed by Svelte 5 $state. Use directly: cellsStore.value.
@@ -37,6 +38,25 @@ export const eventsStore = new Store<CommitEvent[]>();
 export const alertsStore = new Store<CommitEvent[]>();
 export const clusterStore = new Store<ClusterInfo>();
 export const panelsStore = new Store<PanelDef[]>();
+// Every command verb the connected cluster has registered, fetched once at
+// boot. Used to hide UI whose backing verbs this game does not register —
+// see hasVerb.
+export const commandsStore = new Store<CommandEntry[]>();
+
+// hasVerb reports whether the connected cluster registered `verb`.
+//
+// This is a capability probe, not an authorization check: the server still
+// enforces the command's Capability on every invoke. It exists so the SPA
+// does not offer a control that would fail with "unknown verb" — the admin
+// dashboard ships with the framework and is mounted by every game, but some
+// of its panels are backed by verbs only one game registers.
+export function hasVerb(verb: string): boolean {
+  const cmds = commandsStore.value;
+  // Before the fetch resolves the answer is unknown; report false so a panel
+  // flickers in rather than 404-ing out.
+  if (cmds === null) return false;
+  return cmds.some((c) => c.verb === verb);
+}
 
 // alerts: push-only ring of recent invariant violations / important commits.
 export function pushAlert(e: CommitEvent): void {

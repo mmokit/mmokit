@@ -187,14 +187,31 @@ jobs:
         working-directory: web-admin
         run: bun run test
 
-      # Writes the embedded operator bundle into pkg/admin/static/dist. There is
-      # deliberately no `git diff --exit-code` on that directory: only the
-      # index.html placeholder is tracked (the hashed asset files are ignored),
-      # so such a check would assert almost nothing while breaking on any
-      # cosmetic change to the one file it can see.
+      # Writes the embedded operator bundle into pkg/admin/static/dist, which is
+      # tracked in full — pkg/admin/static/dist.go go:embed's it, so those bytes
+      # are what a `go get` consumer's binary serves. The assert below is the
+      # reason tracking generated output here is safe: a commit that changes the
+      # SPA without rebuilding is caught on the merge path rather than shipping
+      # a dashboard whose script tag points at a file that does not exist.
       - name: web-admin build
         working-directory: web-admin
         run: bun run build
+
+      - name: assert the embedded admin bundle is up to date
+        run: |
+          if ! git diff --exit-code -- pkg/admin/static/dist; then
+            echo "::error::pkg/admin/static/dist is stale. Run 'just admin-build' and commit the result."
+            exit 1
+          fi
+          # Belt and braces: the bundle must not be empty, and index.html must
+          # reference assets that exist. A pathspec that matches nothing makes
+          # the diff above pass vacuously.
+          test -f pkg/admin/static/dist/index.html
+          test -d pkg/admin/static/dist/assets
+          grep -oE '/admin/assets/[^"]+' pkg/admin/static/dist/index.html | while read -r a; do
+            f="pkg/admin/static/dist/${a#/admin/}"
+            test -f "$f" || { echo "::error::index.html references missing asset $f"; exit 1; }
+          done
 
   csharp:
     name: csharp

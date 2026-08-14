@@ -5,7 +5,7 @@
     SlidersHorizontal,
   } from "$lib/icons";
   import { navigate, route } from "$lib/router";
-  import { panelsStore } from "$lib/stores.svelte";
+  import { panelsStore, commandsStore, hasVerb } from "$lib/stores.svelte";
   import type { PanelDef } from "$lib/types";
 
   // lucide-svelte 0.460 components don't conform to Svelte 5's Component<T>
@@ -37,7 +37,6 @@
   const builtinItems: Item[] = [
     { id: "cluster",  label: "Cells",    icon: Globe,       group: "ENGINE",    path: "/cluster",  glyph: "C" },
     { id: "nodes",    label: "Nodes",    icon: Boxes,       group: "ENGINE",    path: "/nodes",    glyph: "N" },
-    { id: "world-editor", label: "World Editor", icon: MapPinned, group: "ENGINE", path: "/world-editor", glyph: "W" },
     { id: "tunables", label: "Tunables", icon: SlidersHorizontal, group: "ENGINE", path: "/tunables", glyph: "T" },
     { id: "entities", label: "Entities", icon: Boxes,       group: "ENGINE",    path: "/entities", glyph: "Y" },
     { id: "players",  label: "Players",  icon: Users,       group: "PEOPLE",    path: "/players",  glyph: "P" },
@@ -46,6 +45,17 @@
     { id: "logs",     label: "Logs",     icon: Scroll,      group: "TELEMETRY", path: "/logs",     glyph: "L" },
     { id: "users",    label: "Admin Users", icon: ShieldCheck, group: "ADMIN",  path: "/users",    glyph: "U" },
     { id: "settings", label: "Settings", icon: Settings,    group: "ADMIN",     path: "/settings", glyph: "S" },
+  ];
+
+  // Panels backed by verbs that only some games register. The admin
+  // dashboard ships with the framework and is mounted by every game, so a
+  // hardcoded entry here would show a permanently-broken tab to every game
+  // that does not register the verb — which is what "world-editor" did.
+  const conditionalItems: { item: Item; verb: string }[] = [
+    {
+      verb: "world.list",
+      item: { id: "world-editor", label: "World Editor", icon: MapPinned, group: "ENGINE", path: "/world-editor", glyph: "W" },
+    },
   ];
 
   let panels = $derived<PanelDef[]>(panelsStore.value ?? []);
@@ -59,7 +69,14 @@
   // the SPA's hand-styled entries win and game-only panels (like "bots")
   // pass through.
   let items = $derived.by<Item[]>(() => {
-    const builtinIDs = new Set(builtinItems.map((b) => b.id));
+    // commandsStore.value is read here (not just inside hasVerb) so the
+    // $derived.by tracks it and the entry appears when the boot fetch lands.
+    void commandsStore.value;
+    const available = [
+      ...builtinItems,
+      ...conditionalItems.filter((c) => hasVerb(c.verb)).map((c) => c.item),
+    ];
+    const builtinIDs = new Set(available.map((b) => b.id));
     const extras: Item[] = [];
     for (const p of panels) {
       if (builtinIDs.has(p.id)) continue;
@@ -72,7 +89,7 @@
         glyph: (p.label[0] ?? "?").toUpperCase(),
       });
     }
-    return [...builtinItems, ...extras];
+    return [...available, ...extras];
   });
 
   let currentPath = $state("/cluster");

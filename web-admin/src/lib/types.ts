@@ -141,6 +141,20 @@ export type AuditEntry = {
   finishedAt: string;
 };
 
+// CommandEntry mirrors the anonymous `entry` struct in
+// pkg/admin/api_commands.go::handleCommandsList — GET /admin/api/commands.
+// The SPA uses the verb set as a capability probe: panels whose verbs are
+// registered only by a particular game hide themselves when that game is not
+// the one running.
+export type CommandEntry = {
+  verb: string;
+  capability: string;
+  description: string;
+  route: string;
+  hidden?: boolean;
+  aliases?: string[];
+};
+
 export type LogCategory = { name: string; enabled: boolean };
 
 export type LogGroup = { name: string; categories: LogCategory[] };
