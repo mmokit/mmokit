@@ -1563,7 +1563,7 @@ Summarize:
 If you're picking this up cold:
 
 - **Branch:** `feat/mmokit-entity-message-api`. Continue on this branch (single ongoing dev branch per the solo-developer convention).
-- **Latest commit before Plan F:** `9f6ddb1` (Plan F spec).
+- **Latest commit before Plan F:** `a511070` (Plan F spec).
 - **What's done before Plan F:** mmokit foundation, Damage/Mining/Status/Killed/KillCredit verbs (typed messages), death observer, ECS-access mechanical sweep complete. `internal/game/` is fully on the mmokit facade.
 - **What you'll need to read first:**
   - `docs/superpowers/specs/2026-05-05-aoi-auto-broadcast-design.md` (Plan F design)

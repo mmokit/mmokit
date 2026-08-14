@@ -1640,7 +1640,7 @@ Each follow-up plan is independently revertible and the codebase stays green bet
 If you're picking this plan up cold, here's the state of the world:
 
 - **Branch:** `feat/mmokit-entity-message-api` (continue on this branch — single ongoing dev branch per the user's solo-developer convention).
-- **Latest commit:** `fb3263b` (spec doc for this plan).
+- **Latest commit:** `d3dd270` (spec doc for this plan).
 - **What's already done:**
   - mmokit foundation: `Entity`, `Get/Has/Set`, `Spawn/Despawn`, `Nearby/NearbyWith`, `Send`/`Handle[M]`, `OnTickEach[B]`, `RawWorld`.
   - Process-level wrappers: `OnStageInit`, `HandleAll[M]`, `OnWorldTickAll`, `OnTickAll[T]`, `OnTickEachAll[B]`.

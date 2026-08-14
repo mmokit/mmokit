@@ -11,29 +11,29 @@ All six regression tasks from the original plan are **implemented and compiled**
 
 | Task | Commit | What it does |
 |---|---|---|
-| 1 | `aef356c` | `VarTailComponent` binding + `KindComponentWithBinding` wrapper in `pkg/system` / `pkg/mmokit` |
-| 2 | `773c859` | sdkgen typed var-tail decoder + `ReplicatorRegistry.Schema()` determinism fix |
-| 3 | `5b9eb90` | `LockedBy` component — being-locked ring on non-local entities |
-| 4 | `67f6ce7` | `ActiveMining` component — other players' mining beams + ability bar highlight |
-| 5 | `bb0977b` | `StatusEffects` var-tail — effect VFX on all entities |
-| 6 | `e1ff6ff` | Loot crate `Inventory` var-tail — preview + popup contents |
+| 1 | `232d633` | `VarTailComponent` binding + `KindComponentWithBinding` wrapper in `pkg/system` / `pkg/mmokit` |
+| 2 | `dd6f741` | sdkgen typed var-tail decoder + `ReplicatorRegistry.Schema()` determinism fix |
+| 3 | `c1e1a3c` | `LockedBy` component — being-locked ring on non-local entities |
+| 4 | `bc0f4dc` | `ActiveMining` component — other players' mining beams + ability bar highlight |
+| 5 | `8617c5d` | `StatusEffects` var-tail — effect VFX on all entities |
+| 6 | `a1937cf` | Loot crate `Inventory` var-tail — preview + popup contents |
 
 **Post-review fixes:**
 
 | Commit | Issue |
 |---|---|
-| `1ea1028` | Status effect hash quantization asymmetry + loot popup signature-based refresh |
-| `01e1280` | **sdkgen was emitting `-1` var-tail marker in the client `FIELD_SIZES` array**, which corrupted `applyDelta`'s `fixedSize`/`totalLogicalFields` math. Latent sdkgen bug surfaced by Task 5 being the first var-tail caller in the space SDK. |
+| `27d2186` | Status effect hash quantization asymmetry + loot popup signature-based refresh |
+| `53456c6` | **sdkgen was emitting `-1` var-tail marker in the client `FIELD_SIZES` array**, which corrupted `applyDelta`'s `fixedSize`/`totalLogicalFields` math. Latent sdkgen bug surfaced by Task 5 being the first var-tail caller in the space SDK. |
 
 **Bugs found and fixed during live playtesting** (all pre-existing, unrelated to regression work, surfaced by the new paths being exercised):
 
 | Commit | Root cause |
 |---|---|
-| `abe806c` | Client was overwriting local player's decoded `worldX`/`worldY` with `update.viewerX`/`viewerY` from the frame header. The header carries the viewer's **cell-local** position but the entity's `worldX` is **world-absolute** — an ~8000-unit mismatch that tripped the rebase detection loop and produced runaway position drift. Leftover from an earlier quantized-position era. |
-| `6eb87f1` | `handlePlayerInput` stored world-absolute `msg.MoveX`/`MoveY` directly into `MoveTarget.X`/`Y` (which are cell-local) and stamped the player's current cell as the destination cell. Click-to-move targets were always ~8192 units out of the cell, so the ship never reached them. Fixed by using `mmokit.SetMoveTarget()` which does the correct conversion. |
-| `49c7a99` then `7880e4a` | Replaced `ShipControlSystem` with `ClickToMoveSystem` + `ShipDynamicsSystem`, then realized `ClickToMoveSystem` is arcade-style and loses drag/turn-rate/inertia. Restored the full thrust-based physics inside `ShipDynamicsSystem` and dropped the generic `ClickToMoveSystem`. |
-| `1f1ae37` | **Ship spawn never added a `Rotation` component.** `ShipDynamicsSystem`'s query requires `Rot *mmokit.Rotation` and silently excluded the player entity. The old `ShipControlSystem` had the same bug but was hidden by the client-side `viewerX/Y` override — users thought movement worked because the client masked the symptom. Fixed by passing `mmokit.WithRotation(0)` in `entity_ship.go`. |
-| `56e32c0` | Debug cleanup + `ShipTurnRate` lowered from `6.0` → `3.0 rad/s` for a more natural feel when starting a turn from rest. |
+| `dfe2248` | Client was overwriting local player's decoded `worldX`/`worldY` with `update.viewerX`/`viewerY` from the frame header. The header carries the viewer's **cell-local** position but the entity's `worldX` is **world-absolute** — an ~8000-unit mismatch that tripped the rebase detection loop and produced runaway position drift. Leftover from an earlier quantized-position era. |
+| `f743509` | `handlePlayerInput` stored world-absolute `msg.MoveX`/`MoveY` directly into `MoveTarget.X`/`Y` (which are cell-local) and stamped the player's current cell as the destination cell. Click-to-move targets were always ~8192 units out of the cell, so the ship never reached them. Fixed by using `mmokit.SetMoveTarget()` which does the correct conversion. |
+| `643e9ae` then `3c3069e` | Replaced `ShipControlSystem` with `ClickToMoveSystem` + `ShipDynamicsSystem`, then realized `ClickToMoveSystem` is arcade-style and loses drag/turn-rate/inertia. Restored the full thrust-based physics inside `ShipDynamicsSystem` and dropped the generic `ClickToMoveSystem`. |
+| `eaf0fc2` | **Ship spawn never added a `Rotation` component.** `ShipDynamicsSystem`'s query requires `Rot *mmokit.Rotation` and silently excluded the player entity. The old `ShipControlSystem` had the same bug but was hidden by the client-side `viewerX/Y` override — users thought movement worked because the client masked the symptom. Fixed by passing `mmokit.WithRotation(0)` in `entity_ship.go`. |
+| `c81a515` | Debug cleanup + `ShipTurnRate` lowered from `6.0` → `3.0 rad/s` for a more natural feel when starting a turn from rest. |
 
 **Direction-vector input mode removed entirely** (per user request): `PlayerInput` struct no longer has `Dir{X,Y,Active}`, `PlayerInputMsg` proto fields `dir_x`/`dir_y`/`dir_active` deleted (renumbered 1-7, no reserved), client `sendInput` no longer sends them, docking system no longer clears them. The client still has unused `moveMode`/`dirTarget` state and UI (see "Dead code" section below).
 
@@ -55,7 +55,7 @@ All six regression tasks from the original plan are **implemented and compiled**
 - Loot crate preview + popup showing item list, popup refreshing after partial loot
 - Cross-node transfer of entities carrying the new components (`LockedBy`, `ActiveMining`, `StatusEffects` var-tail, `Inventory` var-tail, plus `Rotation` now auto-added to ships)
 
-**Known pre-existing test failures** (present on the branch base commit `d37acfc`, not caused by this work):
+**Known pre-existing test failures** (present on the branch base commit `36c122b`, not caused by this work):
 
 - `TestFinishTransferSpawn_Ship` — expects `Shield.Max=0`, and expects `PlayerInput`, `MiningLaser`, `ShipControl`, `TargetLock` to be present after transfer-side spawn
 - `TestFinishTransferSpawn_LootCrate` — expects the `LootCrate` marker component to be present after transfer-side spawn
@@ -94,7 +94,7 @@ All of this should be deleted. The hud mode indicator should either be removed o
 
 ### 4. Pre-existing `TestFinishTransferSpawn_*` failures
 
-- `internal/game/transfer_test.go` — two tests that expect certain components to be present after cross-node transfer-side spawn. Failing on `d37acfc` and on all downstream commits (confirmed via `git checkout HEAD~N -- transfer_test.go` bisect). Likely broken by an earlier spawn-path refactor. Should be a standalone fix branch.
+- `internal/game/transfer_test.go` — two tests that expect certain components to be present after cross-node transfer-side spawn. Failing on `36c122b` and on all downstream commits (confirmed via `git checkout HEAD~N -- transfer_test.go` bisect). Likely broken by an earlier spawn-path refactor. Should be a standalone fix branch.
 
 ### 5. Unit test coverage for the new var-tail bindings
 
@@ -124,7 +124,7 @@ All from the final-review report; all non-blocking:
 
 ### A1. No guarantee that entity kinds carry the components their systems need
 
-The root cause of the "can't move at all" bug in `1f1ae37` was `ShipDynamicsSystem.entities` querying for `Rot *mmokit.Rotation` while the ship entity kind never had Rotation registered. `EnsureEntityKindComponents` only auto-adds components registered via `KindComponent` on the kind def, and `Rotation` was neither in that list nor passed as a spawn option. The query silently returned empty and the symptom was hidden by the client-side `viewerX/Y` override (see `abe806c`).
+The root cause of the "can't move at all" bug in `eaf0fc2` was `ShipDynamicsSystem.entities` querying for `Rot *mmokit.Rotation` while the ship entity kind never had Rotation registered. `EnsureEntityKindComponents` only auto-adds components registered via `KindComponent` on the kind def, and `Rotation` was neither in that list nor passed as a spawn option. The query silently returned empty and the symptom was hidden by the client-side `viewerX/Y` override (see `dfe2248`).
 
 **Option A:** Make `Rotation` part of the default core components that `SpawnEntity` always adds (alongside `Position`, `Velocity`, `NetworkID`, `CellCoord`, `Collider`, `EntityKind`), instead of being opt-in via `WithRotation`. Every entity that moves wants rotation; making it opt-in was a footgun.
 
@@ -136,7 +136,7 @@ Recommendation: **Option A** — rotation is cheap (12 bytes per entity), always
 
 ### A2. Client wire format assumed positions were quantized
 
-The `update.viewerX/Y` override in `network.ts` (removed in `abe806c`) carried a comment explicitly citing "~0.37-unit steps that cause visible camera jitter". That suggests positions used to be quantized to a uint16 `QPos`, and a full-precision override in the frame header was how the camera avoided jitter. Positions are now `ViewerRelativePos` with full f32+f32 — no quantization — so the override is dead weight. It was also encoding a cell-local value as if it were world-absolute.
+The `update.viewerX/Y` override in `network.ts` (removed in `dfe2248`) carried a comment explicitly citing "~0.37-unit steps that cause visible camera jitter". That suggests positions used to be quantized to a uint16 `QPos`, and a full-precision override in the frame header was how the camera avoided jitter. Positions are now `ViewerRelativePos` with full f32+f32 — no quantization — so the override is dead weight. It was also encoding a cell-local value as if it were world-absolute.
 
 **Suggested cleanup:** Review the entire `pkg/quantize` wire format types for other "quantized position era" leftovers. `FrameHeader.ViewerX`/`ViewerY` are still in the binary layout. Consider whether they're still needed at all, or if they can be removed from the header.
 
@@ -154,7 +154,7 @@ Line ~63: `gw.eng.Log.Log(CatPlayerInput, "player=%d abilities=0x%x lock=%d seq=
 
 ### A6. `MoveTarget.X/Y` type signature hides the cell-local contract
 
-The `MoveTarget` component stores `X, Y float32` (cell-local) and `CellX, CellY int32` (the cell the target is in). Whether a caller treats `X/Y` as world-absolute or cell-local is context-dependent and easy to get wrong — exactly the `6eb87f1` bug. Consider:
+The `MoveTarget` component stores `X, Y float32` (cell-local) and `CellX, CellY int32` (the cell the target is in). Whether a caller treats `X/Y` as world-absolute or cell-local is context-dependent and easy to get wrong — exactly the `f743509` bug. Consider:
 
 - Renaming the fields to `LocalX, LocalY` to make the contract visible at every call site
 - Or adding a typed wrapper (`type CellLocal struct { X, Y float32; Cell CellID }`)
@@ -177,7 +177,7 @@ Not caused by this work but a blocker for green `go test ./...`. Tests expect `S
 
 1. **Manual live verification** (section "What's left to do" #1) — blocking for merge confidence.
 2. **Dead client code cleanup** (#2 and #3) — small, mechanical, clears a ~200 LOC delta.
-3. **A1 Rotation auto-inclusion** — small engine change, prevents a recurrence of the `1f1ae37` bug class.
+3. **A1 Rotation auto-inclusion** — small engine change, prevents a recurrence of the `eaf0fc2` bug class.
 4. **Pre-existing test failures** (#4 / A7) — out of scope for this branch but blocks `go test ./...` green.
 5. **Unit tests for var-tail bindings** (#5) — nice-to-have, small.
 6. **Minor code review items** (#6) — polish, can ship without.

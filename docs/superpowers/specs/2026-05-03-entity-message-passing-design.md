@@ -420,7 +420,7 @@ This is a structural rewrite of `internal/game/` against the new `pkg/mmokit` su
 
 ### Foundation deferrals
 
-The Plan A+B final code review (commit `15ffc66`) flagged five issues addressed in-branch (Type.String wire keys, nil-safety in `Send`, race-safety on `tickCallbacks`, NoopBridge logging, dispatcher no-handler logging) and three items deferred to follow-up plans. Plan C resolved (a): `Process.OnStageInit` + `mmokit.HandleAll[M]` / `OnWorldTickAll` / `OnTickAll[T]` / `OnTickEachAll[B]` auto-replay registrations onto stages created by future cell splits. Plan D resolved (b): `pkg/mmokit/tick_integration_test.go::TestOnWorldTickAll_FiresThroughRealLoop` runs `Process.Start(ctx)` in a goroutine and asserts `OnWorldTickAll` callbacks fire through the actual `mergedHooks.PreFlush` wiring at `coordinator.go:2261-2263`. Still deferred: (c) optional `Set`-on-dead-entity debug log.
+The Plan A+B final code review (commit `f227f58`) flagged five issues addressed in-branch (Type.String wire keys, nil-safety in `Send`, race-safety on `tickCallbacks`, NoopBridge logging, dispatcher no-handler logging) and three items deferred to follow-up plans. Plan C resolved (a): `Process.OnStageInit` + `mmokit.HandleAll[M]` / `OnWorldTickAll` / `OnTickAll[T]` / `OnTickEachAll[B]` auto-replay registrations onto stages created by future cell splits. Plan D resolved (b): `pkg/mmokit/tick_integration_test.go::TestOnWorldTickAll_FiresThroughRealLoop` runs `Process.Start(ctx)` in a goroutine and asserts `OnWorldTickAll` callbacks fire through the actual `mergedHooks.PreFlush` wiring at `coordinator.go:2261-2263`. Still deferred: (c) optional `Set`-on-dead-entity debug log.
 
 ## 11. Success criteria
 

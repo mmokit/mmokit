@@ -211,7 +211,7 @@ SupportRetreatDist    float32   // 60u — kite if player closes inside
 
 1. On spawn: pick the highest-HP same-roster member as "anchor"; orbit it at ~80u.
 2. Every tick: if any player is within `SupportRetreatDist`, kite away (move opposite from nearest player). Otherwise, return toward anchor.
-3. Every `SupportHealCooldown` seconds: scan same-roster members within `SupportHealRange`. Pick the one with lowest HP%. If picked target HP < 100%, fire `verb_heal` to that target for `SupportHealAmount` HP. Emit a beam event for client visualization (re-uses beam-clip event infra from commit `375dc31`).
+3. Every `SupportHealCooldown` seconds: scan same-roster members within `SupportHealRange`. Pick the one with lowest HP%. If picked target HP < 100%, fire `verb_heal` to that target for `SupportHealAmount` HP. Emit a beam event for client visualization (re-uses beam-clip event infra from commit `17a080b`).
 
 **`verb_heal`**: new verb file `verb_heal.go`. Mirrors `verb_damage.go` but adds to `Health.Current` (capped at `Health.Max`). Tested in `verb_heal_test.go`.
 
@@ -264,7 +264,7 @@ Schema-runtime invariant (per memory `feedback_wire_format_schema_runtime_match`
 - Tier label text on hover or select.
 - Marker radius scales with roster size (read from existing POI metadata) — small/medium/large visual cue.
 
-Optional debug overlay (Backquote toggle, commit `10308ef`):
+Optional debug overlay (Backquote toggle, commit `e922843`):
 
 - Two semi-transparent circles at radii `tierTable[1].InnerRadius` and `tierTable[2].InnerRadius` from the station's world position.
 - Helps designers verify boundary placement during smoke testing.

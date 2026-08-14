@@ -1456,7 +1456,7 @@ Summarize:
 If you're picking this up cold:
 
 - **Branch:** `feat/mmokit-entity-message-api`. Continue on this branch.
-- **Latest commit before Plan G:** `7bdbce5` (Plan F closeout) → `e2fbe67` (Plan G spec).
+- **Latest commit before Plan G:** `a174c57` (Plan F closeout) → `bd55d05` (Plan G spec).
 - **What's done:** Plans A+B (foundation), C (Damage + Mining + Process-level wrappers), D (StatusEffect + legacy CrossCellAction surface deletion), E (Death/Currency composition + ECS-access full sweep), F (AoI auto-broadcast + sdkgen TS classes for broadcast types). `internal/game/` is fully on the mmokit facade. Spec §5 composition example exists in `verb_death.go`. Spec §4.5 auto-broadcast exists in the framework + sdkgen + TS dispatcher.
 - **What you'll need to read first:**
   - `docs/superpowers/specs/2026-05-05-input-migration-design.md` (Plan G design)

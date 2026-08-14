@@ -8,7 +8,7 @@
 
 ## 1. Summary
 
-The auth service v1 (commits `bef8d7e` → `e2c465e`) shipped session tokens to the web client via a JSON response field, with the client storing the token in `localStorage`. This is the conventional web-app pattern but exposes the token to any JavaScript on the origin — XSS, malicious browser extensions, compromised npm dependencies. None of those threats land a useful attack on a fresh dev build, but the current shape is below industry standard for credential storage and should be fixed before any real users exist.
+The auth service v1 (commits `4955bf1` → `620d874`) shipped session tokens to the web client via a JSON response field, with the client storing the token in `localStorage`. This is the conventional web-app pattern but exposes the token to any JavaScript on the origin — XSS, malicious browser extensions, compromised npm dependencies. None of those threats land a useful attack on a fresh dev build, but the current shape is below industry standard for credential storage and should be fixed before any real users exist.
 
 This spec replaces `localStorage` with **`httpOnly Secure SameSite=Strict` cookies** issued by the auth service and read by the gateway at WebSocket-upgrade time. The token never enters JS scope. Logout clears the cookie; revocation is server-authoritative.
 

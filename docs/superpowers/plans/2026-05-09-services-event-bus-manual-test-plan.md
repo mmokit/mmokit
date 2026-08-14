@@ -89,7 +89,7 @@ This test uses the existing 5-process distributed setup (1 coord + 3 hosts + 1 g
 
 ## Test 4 — Follow-up #1: service-only hosts don't get cell assignments
 
-**Goal:** Confirm the post-review fix (`fe0153c`) — `--mode=service` standalone processes are excluded from the assignment engine.
+**Goal:** Confirm the post-review fix (`1025a51`) — `--mode=service` standalone processes are excluded from the assignment engine.
 
 Continue from Test 3's setup.
 
@@ -111,7 +111,7 @@ Continue from Test 3's setup.
 
 ## Test 5 — Hard Prerequisite #1: wire-eligibility gate keeps SessionToken local
 
-**Goal:** Verify the wire-eligibility opt-in (`dbbcf52`) prevents `AuthLoginSucceededEvent` (which carries `SessionToken`) from federating across processes.
+**Goal:** Verify the wire-eligibility opt-in (`f8f3037`) prevents `AuthLoginSucceededEvent` (which carries `SessionToken`) from federating across processes.
 
 Continue from Test 3+4's setup.
 
@@ -160,7 +160,7 @@ Continue from Test 3+4+5's setup.
   - `coordinator: host svc-extra requested GracefulLeave`
   - (Any service-event-router cleanup log; may or may not be visible depending on log verbosity.)
 - [ ] **7.3** Re-run `host list` in coord console. Confirm `svc-extra` is gone from the listing.
-- [ ] **7.4** Re-run `service bus list` in coord console. Confirm no entries reference `svc-extra` (this is the cleanup path that was bug-fixed in commit `678735e`).
+- [ ] **7.4** Re-run `service bus list` in coord console. Confirm no entries reference `svc-extra` (this is the cleanup path that was bug-fixed in commit `877eefa`).
 - [ ] **7.5** Forceful crash test (optional): re-spawn `svc-extra`, then `kill -9` the process. Wait for liveness watcher to detect it (~3s for hosts). Confirm same cleanup behavior.
 
 **Pass criteria:**

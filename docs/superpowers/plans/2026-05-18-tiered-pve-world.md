@@ -2301,7 +2301,7 @@ git commit -m "client: tier-colored POI markers (green/amber/red) + size scaling
 
 Run: `grep -n "drawCellGrid\|drawCellOverlay\|Backquote" web-pixi/src/ui/dev-overlay.ts | head -10`
 
-Find the function that renders the existing cell debug overlay (toggled by Backquote per commit `10308ef`).
+Find the function that renders the existing cell debug overlay (toggled by Backquote per commit `e922843`).
 
 - [ ] **Step 2: Add tier ring rendering**
 

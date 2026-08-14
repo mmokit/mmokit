@@ -1854,7 +1854,7 @@ Per `user_solo_developer`, merge directly to `main` — no PR.
 
 ## Hard prerequisites surfaced by Phase 2 final review
 
-These were raised in the Phase 2 final review (commit `eb50727` reviewed 2026-05-09). They become **load-bearing** the moment Phase 3 federates auth events across processes. Address before any Phase 3 commit that puts `AuthLoginSucceededEvent` on the wire:
+These were raised in the Phase 2 final review (commit `76e880c` reviewed 2026-05-09). They become **load-bearing** the moment Phase 3 federates auth events across processes. Address before any Phase 3 commit that puts `AuthLoginSucceededEvent` on the wire:
 
 1. **`AuthLoginSucceededEvent.SessionToken` is a bearer credential.** Phase 1 spec §14.4 deferred per-event capability gating. If Phase 3 ships federation without it, every host listening on the bus receives every session token cluster-wide. Two viable resolutions:
    - **Split the event:** declare `AuthLoginSucceededEvent` as **process-local-only** (don't register with the wire codec; reject if received from a peer). Add a separate `AuthLoginAnnounceEvent` with no token field for cross-process distribution. Subscribers needing the token must be colocated with auth.

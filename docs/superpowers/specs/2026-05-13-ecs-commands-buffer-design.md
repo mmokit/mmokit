@@ -6,7 +6,7 @@
 
 ## Problem
 
-Every system that mutates ECS state structurally — adding/removing components, despawning entities — has had to invent its own deferral pattern to avoid ark's "cannot modify a locked world" panic. The codebase has 5+ confirmed incidents of this panic class (commits `6a2a01a`, `7f55080`, `211d7b3`, plus two more during the May 2026 combat work) and the workaround pattern (`PendingDeathMarker` → drain in postFlush, `pendingLeashClears` slice → drain at end of Update, `ecs.NewMap1[T](w)` priming in Init) is now duplicated in 8+ places.
+Every system that mutates ECS state structurally — adding/removing components, despawning entities — has had to invent its own deferral pattern to avoid ark's "cannot modify a locked world" panic. The codebase has 5+ confirmed incidents of this panic class (commits `597bc2e`, `e2b9c22`, `2da85b5`, plus two more during the May 2026 combat work) and the workaround pattern (`PendingDeathMarker` → drain in postFlush, `pendingLeashClears` slice → drain at end of Update, `ecs.NewMap1[T](w)` priming in Init) is now duplicated in 8+ places.
 
 Game code in `internal/game/` imports `github.com/mlange-42/ark/ecs` directly in 28 files. Most use it only as a type alias (`ecs.Entity`); some do raw query construction; two do `Map.Remove` calls that have to be carefully deferred. The pattern is correct each time, but it's not enforced — every new system has to remember.
 

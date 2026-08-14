@@ -14,7 +14,7 @@
 
 The spec was approved before two recent landings on `pve-v2`:
 
-1. The **Selection refactor** (memory: 2026-05-15) replaced parallel-slot `TargetLock` with a single `gamecomp.Selection{EntityNetID uint32}`. The spec's LOS surface #4 ("auto-clear on LOS loss") is implemented against `Selection`, not against `TargetLockSystem`. (Spec already amended in commit `dc9ff04`.)
+1. The **Selection refactor** (memory: 2026-05-15) replaced parallel-slot `TargetLock` with a single `gamecomp.Selection{EntityNetID uint32}`. The spec's LOS surface #4 ("auto-clear on LOS loss") is implemented against `Selection`, not against `TargetLockSystem`. (Spec already amended in commit `79f9523`.)
 2. The current NPC archetype set is **Brawler / Artillery / Lancer** (not Sniper/Swarmer as the older 2026-05-12 combat-POI spec mentioned). The dungeon roster uses these. MotionPolicy currently has only `MotionCharge` + `MotionStationary`; this plan adds `MotionPathfind` (new) and leaves the existing two intact.
 
 All other spec sections apply as written.
@@ -3548,7 +3548,7 @@ If anything was tweaked during smoke (e.g. tuning a default that was obviously w
 
 Already done inline. Key adaptations from spec, all documented in the "Codebase Adaptation Notes" at the top:
 
-- `TargetLockSystem` LOS surface → `Selection` auto-clear (spec amended in commit `dc9ff04`).
+- `TargetLockSystem` LOS surface → `Selection` auto-clear (spec amended in commit `79f9523`).
 - Archetypes are Brawler / Artillery / Lancer (not Sniper / Swarmer).
 - Existing MotionPolicy already has `MotionStationary` — only `MotionPathfind` is new.
 

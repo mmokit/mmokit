@@ -39,7 +39,7 @@ Rationale: a shadow on the destination cell holds the same Position / Velocity /
 
 Two filters now diverge intentionally:
 
-- **Commit-path serializers** (`serializeAllEntities`, `serializeQuadrantEntities` in `cell_transfer_executor.go`): continue to exclude `Shadow`. Shipping shadows in a bulk snapshot would double-materialize handoff-in-flight entities during a split/merge (the bug fixed in commit `9d664d7`).
+- **Commit-path serializers** (`serializeAllEntities`, `serializeQuadrantEntities` in `cell_transfer_executor.go`): continue to exclude `Shadow`. Shipping shadows in a bulk snapshot would double-materialize handoff-in-flight entities during a split/merge (the bug fixed in commit `7b27728`).
 - **Border dispatcher push walk:** includes `Shadow`. This is the new behavior.
 
 ### Change 2: `upsertBorderReplica` updates a Shadow in place
@@ -156,7 +156,7 @@ Implementation: extend `component.Shadow` with a `CreatedTick uint64` field set 
 
 1. **Multi-neighbor choice** — entity near a tri-junction triggers handoffs to multiple neighbors in successive ticks. Only one wins; source emits `MsgHandoffCancel` to the losers (existing behavior). Cancelled destination: `RemoveShadowByNetID` → stops broadcasting → multi-source check on shared neighbors sees only A still pushing → no-op.
 2. **Max-warmup destination watchdog** — covers source death or Commit loss. Destination cleans up the stale shadow and notifies source via `MsgHandoffCancel`. Source's state machine forgets the pair on receive; resumes normal Live simulation.
-3. **Merge drain interaction** — if the source enters `drainingForMerge=true` while a handoff is Promoted, `handoff_driver.Tick` already short-circuits per the State Integrity plan (commit `e4ede97`). The in-flight handoff goes stale; the destination's watchdog eventually cleans it up. The entity gets shipped via the merge executor's serialize/populate flow.
+3. **Merge drain interaction** — if the source enters `drainingForMerge=true` while a handoff is Promoted, `handoff_driver.Tick` already short-circuits per the State Integrity plan (commit `e47bbb6`). The in-flight handoff goes stale; the destination's watchdog eventually cleans it up. The entity gets shipped via the merge executor's serialize/populate flow.
 4. **Cross-host message loss** — MeshData is a reliable bidi stream, so this is defense-in-depth only. Watchdog handles any missed Commit.
 
 ## Client-side changes (web-pixi)

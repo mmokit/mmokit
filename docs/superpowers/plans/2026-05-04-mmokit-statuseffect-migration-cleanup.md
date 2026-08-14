@@ -875,7 +875,7 @@ Each follow-up plan is independently revertible and the codebase remains green b
 If you're picking this plan up cold, here's the state of the world:
 
 - **Branch:** `feat/mmokit-entity-message-api` (continue on this branch — single ongoing dev branch per the user's solo-developer convention).
-- **Latest commit:** `90e2b7c` (spec update marking Plan C done).
+- **Latest commit:** `c9d8cf8` (spec update marking Plan C done).
 - **What's already done:**
   - `mmokit` foundation: `Entity` value type, `Get/Has/Set`, `Spawn/Despawn`, `Nearby/NearbyWith`, `Send`/`Handle[M]` (cross-cell aware), `OnWorldTick`/`OnTick[T]`/`OnTickEach[B]`, `RawWorld` escape hatch.
   - Process-level wrappers: `Process.OnStageInit`, `mmokit.HandleAll[M]`, `OnWorldTickAll`, `OnTickAll[T]`, `OnTickEachAll[B]`.

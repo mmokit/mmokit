@@ -256,7 +256,7 @@ Each of these is a real production bug the harness surfaced. They must be addres
 
 ## Drill result (Task 14)
 
-Reverted commit `e3c538e` (the `snapshotOwnershipLocked` production fix
+Reverted commit `2dbe92d` (the `snapshotOwnershipLocked` production fix
 for migrate/split/merge topology drift) on scratch branch
 `scratch/task14-regression-drill` and ran the migrated
 `TestS7MigrateAcrossHosts` end-to-end:

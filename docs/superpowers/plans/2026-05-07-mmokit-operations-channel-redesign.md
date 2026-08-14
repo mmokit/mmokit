@@ -8,7 +8,7 @@
 
 **Tech Stack:** Go 1.21+ (generics), existing `pkg/universe/reflect_marshal.go` reflection codec (with the `bytes` fast-path codec from Plan 1), `mmokit.TypeIDOf()` FNV-1a 32-bit hash, WebSocket via `coder/websocket`, TypeScript codegen via `cmd/sdkgen` to `web-pixi/sdk/operations.ts` and `examples/4node-basic/web/sdk/operations.ts`.
 
-**Spec:** [docs/superpowers/specs/2026-05-06-events-operations-channel-redesign.md](../specs/2026-05-06-events-operations-channel-redesign.md). This plan implements operations channel typed-bodies migration + login → operation + marketplace/bank ops migration. Plan 1 (events channel + chat decomm) landed at commit `ef81065` on main.
+**Spec:** [docs/superpowers/specs/2026-05-06-events-operations-channel-redesign.md](../specs/2026-05-06-events-operations-channel-redesign.md). This plan implements operations channel typed-bodies migration + login → operation + marketplace/bank ops migration. Plan 1 (events channel + chat decomm) landed at commit `6c7b4f0` on main.
 
 **In scope:**
 - Typed-op codec: `EncodeTypedOpFrame`, `DecodeTypedOpFrame`
@@ -79,7 +79,7 @@
 git checkout main && git status
 ```
 
-Expected: `On branch main`, `nothing to commit, working tree clean`. Plan 1's merge commit `ef81065` should be the most recent commit on main.
+Expected: `On branch main`, `nothing to commit, working tree clean`. Plan 1's merge commit `6c7b4f0` should be the most recent commit on main.
 
 - [ ] **Step 2: Create branch**
 
@@ -1301,7 +1301,7 @@ For each op:
    }
    ```
 
-   Slice support already exists from Plan 1 (commit `6558d3e`). Nested structs work too.
+   Slice support already exists from Plan 1 (commit `9a24dcd`). Nested structs work too.
 
 2. **Update the handler in `internal/marketplace/handler.go`** to use typed structs:
 

@@ -11,8 +11,8 @@
 **Spec:** [docs/superpowers/specs/2026-05-07-entity-kind-sdk-export-design.md](../specs/2026-05-07-entity-kind-sdk-export-design.md)
 
 **Plans this builds on (commits on main):**
-- `c340a79` — Bucket A cleanup (delete enginepb + basicpb + placeholder enums)
-- `3384d69` — Plan 3 merge (protobuf residue cleanup)
+- `142c57b` — Bucket A cleanup (delete enginepb + basicpb + placeholder enums)
+- `eb650b8` — Plan 3 merge (protobuf residue cleanup)
 
 ---
 
@@ -30,7 +30,7 @@ git status
 git log --oneline -3
 ```
 
-Expected: `On branch main`, `nothing to commit, working tree clean`. `c340a79` should be the most recent commit.
+Expected: `On branch main`, `nothing to commit, working tree clean`. `142c57b` should be the most recent commit.
 
 - [ ] **Step 2: Create branch**
 
@@ -658,7 +658,7 @@ Expected: zero output.
 grep -n "@gen" web-pixi/vite.config.ts web-pixi/tsconfig.json
 ```
 
-Expected: each file has one `@gen/game_pb.js` alias entry (other `@gen/*` aliases were dropped in Plan 3 cleanup commit `28cdffc`).
+Expected: each file has one `@gen/game_pb.js` alias entry (other `@gen/*` aliases were dropped in Plan 3 cleanup commit `8806445`).
 
 - [ ] **Step 2: Delete the alias from vite.config.ts**
 

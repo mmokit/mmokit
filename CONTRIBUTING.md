@@ -185,7 +185,7 @@ other.
 
 **The measurement says it is currently unnecessary, and we keep it anyway.** A
 previously recorded "roughly 1 run in 4 with default `-p`" failure rate did not
-reproduce at commit `78dc8334`: one default-`-p` full run passed (48 s), as did
+reproduce at commit `4b1d8965`: one default-`-p` full run passed (48 s), as did
 two `-p 1` runs, and five consecutive `-p 1` full runs plus two full `-race`
 runs passed after the `pkg/admin` race fix. One passing sample cannot refute a
 1-in-4 rate, so `-p 1` stays as insurance rather than as a proven necessity.

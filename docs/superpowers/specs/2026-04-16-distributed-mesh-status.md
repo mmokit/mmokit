@@ -155,30 +155,30 @@ Commits on `feature/distributed-mesh` that shipped the above, most recent first:
 
 | SHA | Description |
 |---|---|
-| `a04507e` | refactor(4node-basic): move DefaultSpawn + DisabledPartitionConfig into Config literal |
-| `80e9940` | feat(universe): player spawn routing via SpawnResolver + DefaultSpawn |
-| `3bdc34f` | fix(replication): exclude self netID from handoff farewell frame |
-| `a97b8d1` | refactor(engine): remove dead ExecOnGameLoop / SetExecFunc / execFunc |
-| `2790f3d` | docs: update CLAUDE.md for cmdsys + RunOnLoop architecture |
-| `d486216` | refactor(engine): split oversized console_cmdsys.go and builtins.go |
-| `55e2d46` | fix(4node-basic): bot handlers use RunOnLoop for ECS access |
-| `f8e1644` | fix(engine): entity + config builtins use RunOnLoop per-handler |
-| `f09643a` | feat(engine): RunOnLoop replaces PendingAdminCmds — eliminates deadlocks |
-| `1365090` | fix(4node-basic): bot command handlers call OnLoop helpers directly |
-| `2998312` | fix(cmdsys): dedupe help + honour sub-verbs for shimless groups |
-| `82522ed` | fix(cmdsys): help walks the Registry directly — all commands now visible |
-| `c4483e7` | fix(cmdsys): make coordinator builtins a fallback after OnConsoleReady |
-| `383d304` | fix(cmdsys): support int / uint32 / uint64 field kinds |
-| `2f1ea8c` | feat(cmdsys): GET /commands introspection endpoint |
-| `d33ac25` | feat(cmdsys): migrate all commands to typed cmdsys + delete legacy shim |
-| `6f8db8c` | feat(cmdsys): cross-process MeshControl transport |
-| `b3ab221` | feat(cmdsys): console adapter + migrate engine builtins |
-| `f8eae06` | refactor(cmdsys): address code quality review |
-| `7cf4599` | fix(cmdsys): required fields default to required (spec alignment) |
-| `af0d164` | fix(cmdsys): spec-compliance corrections from C1 review |
-| `6ce0ed7` | feat(cmdsys): foundation package |
+| `f3b99a6` | refactor(4node-basic): move DefaultSpawn + DisabledPartitionConfig into Config literal |
+| `3d24dcf` | feat(universe): player spawn routing via SpawnResolver + DefaultSpawn |
+| `1812063` | fix(replication): exclude self netID from handoff farewell frame |
+| `de44f0a` | refactor(engine): remove dead ExecOnGameLoop / SetExecFunc / execFunc |
+| `4f369b1` | docs: update CLAUDE.md for cmdsys + RunOnLoop architecture |
+| `ed861c7` | refactor(engine): split oversized console_cmdsys.go and builtins.go |
+| `513bd44` | fix(4node-basic): bot handlers use RunOnLoop for ECS access |
+| `403e332` | fix(engine): entity + config builtins use RunOnLoop per-handler |
+| `cc35c88` | feat(engine): RunOnLoop replaces PendingAdminCmds — eliminates deadlocks |
+| `d1e866c` | fix(4node-basic): bot command handlers call OnLoop helpers directly |
+| `96faae9` | fix(cmdsys): dedupe help + honour sub-verbs for shimless groups |
+| `19683c9` | fix(cmdsys): help walks the Registry directly — all commands now visible |
+| `f019145` | fix(cmdsys): make coordinator builtins a fallback after OnConsoleReady |
+| `04f74c9` | fix(cmdsys): support int / uint32 / uint64 field kinds |
+| `f78f5a5` | feat(cmdsys): GET /commands introspection endpoint |
+| `055c9da` | feat(cmdsys): migrate all commands to typed cmdsys + delete legacy shim |
+| `1171e9a` | feat(cmdsys): cross-process MeshControl transport |
+| `3f465e4` | feat(cmdsys): console adapter + migrate engine builtins |
+| `51e1064` | refactor(cmdsys): address code quality review |
+| `ed78d71` | fix(cmdsys): required fields default to required (spec alignment) |
+| `3ce764d` | fix(cmdsys): spec-compliance corrections from C1 review |
+| `43cf7f8` | feat(cmdsys): foundation package |
 
-Branch tip is `a04507e`, green on `go test ./...` (31s e2e + 47s universe pass).
+Branch tip is `f3b99a6`, green on `go test ./...` (31s e2e + 47s universe pass).
 
 ---
 

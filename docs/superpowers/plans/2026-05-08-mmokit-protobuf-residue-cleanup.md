@@ -17,7 +17,7 @@
 - Plan 2: [docs/superpowers/plans/2026-05-07-mmokit-operations-channel-redesign.md](2026-05-07-mmokit-operations-channel-redesign.md) — ops channel typed; auth+marketplace+bank ops migrated; `pkg/ops.Register` retired
 
 **Plans this is on top of (commits on main):**
-- `054966b` — Plan 2 merge
+- `de3ba6a` — Plan 2 merge
 
 **Out of scope:**
 - Cross-host typed-op routing in distributed mode (flagged in Plan 2 Phase 3.7 as a real gap; needs its own design)
@@ -68,7 +68,7 @@
 git checkout main && git status
 ```
 
-Expected: `On branch main`, `nothing to commit, working tree clean`. Plan 2's merge commit `054966b` should be the most recent commit.
+Expected: `On branch main`, `nothing to commit, working tree clean`. Plan 2's merge commit `de3ba6a` should be the most recent commit.
 
 - [ ] **Step 2: Create branch**
 

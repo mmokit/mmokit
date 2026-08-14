@@ -9,11 +9,11 @@
 **Tech Stack:** Go 1.21+ (generics), pgx/v5 + golang-migrate, google/uuid (UUID v7 for msg_id), reflection codec via `mmokit.RegisterOp` / `RegisterServerEvent`, cmdsys for console commands, argon2id (re-using auth's helper) for custom-channel passwords.
 
 **Plans this builds on (commits on main):**
-- `054966b` — Plan 2 (operations channel) merge
-- `dfac701` — proto retirement (auth + marketplace + ops)
-- `2fa8c3f` — auth migrated to typed-op channel
-- `8ea020e` — echo demo migrated to typed RegisterOp
-- `9b32bc3` — old in-engine chat plumbing decommissioned
+- `de3ba6a` — Plan 2 (operations channel) merge
+- `7debce6` — proto retirement (auth + marketplace + ops)
+- `db5acf0` — auth migrated to typed-op channel
+- `ff16acc` — echo demo migrated to typed RegisterOp
+- `02adc87` — old in-engine chat plumbing decommissioned
 
 **Out of scope** (per spec §2 non-goals):
 - Message persistence, paged history, recent-history-on-join

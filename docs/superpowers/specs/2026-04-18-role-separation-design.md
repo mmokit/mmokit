@@ -427,6 +427,6 @@ Coordinator is gone. Process + ControlPlane + Host + Gateway is the final shape.
 
 Unexpected discoveries surfaced during implementation (resolved in-phase):
 
-- **hostProxy's `localHostRef` needed to be a map** (`localHostsRef`), not a single ref. Surfaced by `TestS7ConcurrentHandoffDuringSplit` after Task 3.4/3.5. Fixed in commit `823ca62` along with the `OnReady` commit-goroutine dispatch that resolved the MeshControl-stream deadlock.
+- **hostProxy's `localHostRef` needed to be a map** (`localHostsRef`), not a single ref. Surfaced by `TestS7ConcurrentHandoffDuringSplit` after Task 3.4/3.5. Fixed in commit `12844a4` along with the `OnReady` commit-goroutine dispatch that resolved the MeshControl-stream deadlock.
 - **Phase 7 rename was consolidated into one commit** rather than three. Cross-package dependencies meant any intermediate state broke `go vet ./...`. 71 files, ±342 lines balanced.
 - **Phase 6 ballooned into 4 sub-tasks (6.2a/6.2b/6.2c/6.3)** to handle the fixture rewrite, bypasser-test migration, 4node-basic e2e migration to multi-process, and final field deletion separately.

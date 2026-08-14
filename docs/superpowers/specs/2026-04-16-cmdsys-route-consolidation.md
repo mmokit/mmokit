@@ -8,7 +8,7 @@ Typing `entity.tp xennion 50 50` at the distributed coordinator console failed w
 
 ## Root cause
 
-The C3 foundation phase (commit `6f8db8c` "feat(cmdsys): cross-process MeshControl transport") shipped the wire format and the args-aware resolver (`meshRouteResolver.ResolveWithArgs`) but **didn't wire it into `Dispatcher.Invoke`**. Instead a parallel entry point, `Coordinator.InvokeCmd` + `invokeCmdTargets`, was added that only the C3 integration tests called. The console adapter calls `Dispatcher.Invoke` directly, which went through `RouteResolver.Resolve(route, verb)` — a method whose signature had no args parameter, so context-sensitive routes returned `ErrNotYetWired`.
+The C3 foundation phase (commit `1171e9a` "feat(cmdsys): cross-process MeshControl transport") shipped the wire format and the args-aware resolver (`meshRouteResolver.ResolveWithArgs`) but **didn't wire it into `Dispatcher.Invoke`**. Instead a parallel entry point, `Coordinator.InvokeCmd` + `invokeCmdTargets`, was added that only the C3 integration tests called. The console adapter calls `Dispatcher.Invoke` directly, which went through `RouteResolver.Resolve(route, verb)` — a method whose signature had no args parameter, so context-sensitive routes returned `ErrNotYetWired`.
 
 The original author's own comment at [coordinator.go:486-503](pkg/universe/coordinator.go#L486-L503) (deleted in this change) documented the bypass as a deliberate workaround to avoid changing the `RouteResolver` interface signature.
 

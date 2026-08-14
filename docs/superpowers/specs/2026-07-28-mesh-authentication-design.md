@@ -11,7 +11,7 @@
 
 Make every mesh channel refuse traffic from processes outside the cluster, encrypt it in transit, and stop the receiving side from believing identity and authority claims made in message bodies — without requiring any configuration for the single-process preset and without a certificate-management story.
 
-## 1. What is broken today, verified at `eb1a34d5`
+## 1. What is broken today, verified at `48d27a71`
 
 | Surface | Defect |
 | --- | --- |
