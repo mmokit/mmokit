@@ -3,9 +3,9 @@ package game
 import (
 	"math/rand/v2"
 
-	gamecomp "github.com/zenion/mmokit/examples/space/internal/component"
-	"github.com/zenion/mmokit/pkg/mmokit"
-	"github.com/zenion/mmokit/pkg/spatial"
+	gamecomp "github.com/mmokit/mmokit/examples/space/internal/component"
+	"github.com/mmokit/mmokit/pkg/mmokit"
+	"github.com/mmokit/mmokit/pkg/spatial"
 )
 
 // NPCBundle is the entity-kind component bundle for NPC enemy ships.

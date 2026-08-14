@@ -1,7 +1,7 @@
 package mmokit
 
 import (
-	pkguniverse "github.com/zenion/mmokit/pkg/universe"
+	pkguniverse "github.com/mmokit/mmokit/pkg/universe"
 )
 
 // OnWorldTickAll registers fn to fire once per simulation tick on every

@@ -8,10 +8,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/zenion/mmokit/pkg/engine"
-	"github.com/zenion/mmokit/pkg/logger"
-	pkgnet "github.com/zenion/mmokit/pkg/net"
-	"github.com/zenion/mmokit/pkg/ops"
+	"github.com/mmokit/mmokit/pkg/engine"
+	"github.com/mmokit/mmokit/pkg/logger"
+	pkgnet "github.com/mmokit/mmokit/pkg/net"
+	"github.com/mmokit/mmokit/pkg/ops"
 )
 
 // captureConnSender records SendReliable bytes per connID. Same shape as

@@ -7,8 +7,8 @@ import (
 
 	"google.golang.org/grpc"
 
-	"github.com/zenion/mmokit/pkg/coords"
-	"github.com/zenion/mmokit/pkg/logger"
+	"github.com/mmokit/mmokit/pkg/coords"
+	"github.com/mmokit/mmokit/pkg/logger"
 )
 
 // ControlPlane holds the state belonging to the RoleCoordinator role.

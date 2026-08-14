@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"time"
 
-	gamepersist "github.com/zenion/mmokit/examples/space/internal/persist"
-	"github.com/zenion/mmokit/pkg/mmokit"
+	gamepersist "github.com/mmokit/mmokit/examples/space/internal/persist"
+	"github.com/mmokit/mmokit/pkg/mmokit"
 )
 
 // logCatMarket is the log category used by the marketplace service.

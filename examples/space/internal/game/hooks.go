@@ -5,8 +5,8 @@ import (
 	"log"
 	"math/rand/v2"
 
-	gamecomp "github.com/zenion/mmokit/examples/space/internal/component"
-	"github.com/zenion/mmokit/pkg/mmokit"
+	gamecomp "github.com/mmokit/mmokit/examples/space/internal/component"
+	"github.com/mmokit/mmokit/pkg/mmokit"
 )
 
 // Hooks returns the engine lifecycle hooks wired to this game world.

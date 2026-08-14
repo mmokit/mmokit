@@ -5,9 +5,9 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/zenion/mmokit/pkg/mmokit"
-	"github.com/zenion/mmokit/pkg/net"
-	pkguniverse "github.com/zenion/mmokit/pkg/universe"
+	"github.com/mmokit/mmokit/pkg/mmokit"
+	"github.com/mmokit/mmokit/pkg/net"
+	pkguniverse "github.com/mmokit/mmokit/pkg/universe"
 )
 
 // clientInputPing is a tiny HandleClient-eligible message used for

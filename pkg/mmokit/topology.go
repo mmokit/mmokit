@@ -1,7 +1,7 @@
 package mmokit
 
 import (
-	"github.com/zenion/mmokit/pkg/coords"
+	"github.com/mmokit/mmokit/pkg/coords"
 )
 
 // topologyView is the minimal interface BuildCellTopology needs from a

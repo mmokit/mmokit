@@ -91,9 +91,9 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	meshpb "github.com/zenion/mmokit/gen/go/meshpb"
-	"github.com/zenion/mmokit/pkg/coords"
-	"github.com/zenion/mmokit/pkg/engine"
+	meshpb "github.com/mmokit/mmokit/gen/go/meshpb"
+	"github.com/mmokit/mmokit/pkg/coords"
+	"github.com/mmokit/mmokit/pkg/engine"
 )
 ```
 
@@ -225,7 +225,7 @@ Find the function starting at line 176. Replace lines 178–188 (the resolver+fa
 Add the `engine` import if not already present:
 
 ```go
-"github.com/zenion/mmokit/pkg/engine"
+"github.com/mmokit/mmokit/pkg/engine"
 ```
 
 - [ ] **Step 6: Update `mesh_control_server.go::handleInboundResolveSpawn`**
@@ -334,7 +334,7 @@ func TestBridge_RequestRespawn(t *testing.T) {
 Add the `engine` import to this test file if missing:
 
 ```go
-"github.com/zenion/mmokit/pkg/engine"
+"github.com/mmokit/mmokit/pkg/engine"
 ```
 
 - [ ] **Step 8: Add two new tests for the resolver / default behavior**

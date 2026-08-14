@@ -5,8 +5,8 @@ import (
 
 	"github.com/mlange-42/ark/ecs"
 
-	"github.com/zenion/mmokit/pkg/component"
-	"github.com/zenion/mmokit/pkg/spatial"
+	"github.com/mmokit/mmokit/pkg/component"
+	"github.com/mmokit/mmokit/pkg/spatial"
 )
 
 func TestRemoveReplicaByNetID_UsesLocalCleanupWithoutTombstone(t *testing.T) {

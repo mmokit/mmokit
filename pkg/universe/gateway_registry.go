@@ -18,7 +18,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/zenion/mmokit/pkg/logger"
+	"github.com/mmokit/mmokit/pkg/logger"
 )
 
 // RemoteGatewayState tracks the lifecycle of a registered remote gateway.

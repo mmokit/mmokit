@@ -3,8 +3,8 @@
 package main
 
 import (
-	"github.com/zenion/mmokit/pkg/mmokit/internal/testmods/podcomp"
-	"github.com/zenion/mmokit/pkg/wasmsys"
+	"github.com/mmokit/mmokit/pkg/mmokit/internal/testmods/podcomp"
+	"github.com/mmokit/mmokit/pkg/wasmsys"
 )
 
 type shieldRegen struct{ ticks uint64 }

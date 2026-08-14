@@ -3,7 +3,7 @@ package universe
 import (
 	"encoding/binary"
 
-	pkgnet "github.com/zenion/mmokit/pkg/net"
+	pkgnet "github.com/mmokit/mmokit/pkg/net"
 )
 
 // EncodeTypedEventFrame produces a single-event 0x00 frame:

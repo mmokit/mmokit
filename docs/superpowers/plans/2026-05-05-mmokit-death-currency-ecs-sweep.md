@@ -159,9 +159,9 @@ Write `internal/game/verb_death.go`:
 package game
 
 import (
-    gamepb "github.com/zenion/mmokit/gen/go/gamepb"
-    gamecomp "github.com/zenion/mmokit/internal/component"
-    "github.com/zenion/mmokit/pkg/mmokit"
+    gamepb "github.com/mmokit/mmokit/gen/go/gamepb"
+    gamecomp "github.com/mmokit/mmokit/internal/component"
+    "github.com/mmokit/mmokit/pkg/mmokit"
 )
 
 // Killed is dispatched by the death observer when an entity's Health.Current
@@ -344,7 +344,7 @@ func (gw *GameWorld) handleNPCKilled(target mmokit.Entity, killer mmokit.Entity)
 **Important imports note:** the `item` package and `NPCDropTables` / `RollDrops` already exist in `internal/game/`. Add the `item` import as needed:
 
 ```go
-import "github.com/zenion/mmokit/internal/item"
+import "github.com/mmokit/mmokit/internal/item"
 ```
 
 The `mmokit.Position` and `mmokit.EntityKind` references work if they're exported from mmokit's facade — verify with `grep -n "Position\|EntityKind" pkg/mmokit/components.go pkg/mmokit/mmokit.go`. If they're not aliased, use `gamecomp.Position` / `gamecomp.EntityKind` (the existing internal/component aliases) — adjust the imports accordingly. Match what the `verb_damage.go` / `verb_status.go` files do today.
@@ -405,8 +405,8 @@ package game
 import (
     "testing"
 
-    gamecomp "github.com/zenion/mmokit/internal/component"
-    "github.com/zenion/mmokit/pkg/mmokit"
+    gamecomp "github.com/mmokit/mmokit/internal/component"
+    "github.com/mmokit/mmokit/pkg/mmokit"
 )
 
 // TestKilled_NPC_NoDropsIsSafe verifies the Killed handler short-circuits
@@ -521,7 +521,7 @@ import (
     "testing"
     "time"
 
-    "github.com/zenion/mmokit/pkg/mmokit"
+    "github.com/mmokit/mmokit/pkg/mmokit"
 )
 
 // killCreditMsg is a stand-in for internal/game.KillCredit — same shape, but
@@ -628,8 +628,8 @@ package game
 import (
     "testing"
 
-    gamecomp "github.com/zenion/mmokit/internal/component"
-    "github.com/zenion/mmokit/pkg/mmokit"
+    gamecomp "github.com/mmokit/mmokit/internal/component"
+    "github.com/mmokit/mmokit/pkg/mmokit"
 )
 
 // TestDeathObserver_FiresOnceWhenHealthZero verifies the observer fires

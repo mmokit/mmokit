@@ -5,17 +5,17 @@ import (
 
 	"github.com/google/uuid"
 
-	gamepersisttest "github.com/zenion/mmokit/examples/space/internal/persist/persisttest"
-	comp "github.com/zenion/mmokit/pkg/component"
-	"github.com/zenion/mmokit/pkg/coords"
-	"github.com/zenion/mmokit/pkg/engine"
-	"github.com/zenion/mmokit/pkg/logger"
-	"github.com/zenion/mmokit/pkg/mmokit"
-	"github.com/zenion/mmokit/pkg/net"
-	"github.com/zenion/mmokit/pkg/ops"
-	"github.com/zenion/mmokit/pkg/persist/persisttest"
-	"github.com/zenion/mmokit/pkg/spatial"
-	pkguniverse "github.com/zenion/mmokit/pkg/universe"
+	gamepersisttest "github.com/mmokit/mmokit/examples/space/internal/persist/persisttest"
+	comp "github.com/mmokit/mmokit/pkg/component"
+	"github.com/mmokit/mmokit/pkg/coords"
+	"github.com/mmokit/mmokit/pkg/engine"
+	"github.com/mmokit/mmokit/pkg/logger"
+	"github.com/mmokit/mmokit/pkg/mmokit"
+	"github.com/mmokit/mmokit/pkg/net"
+	"github.com/mmokit/mmokit/pkg/ops"
+	"github.com/mmokit/mmokit/pkg/persist/persisttest"
+	"github.com/mmokit/mmokit/pkg/spatial"
+	pkguniverse "github.com/mmokit/mmokit/pkg/universe"
 )
 
 // testUserIDNamespace is a fixed UUID namespace used to derive a

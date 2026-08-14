@@ -4,7 +4,7 @@ import (
 	"sync/atomic"
 	"testing"
 
-	"github.com/zenion/mmokit/pkg/service"
+	"github.com/mmokit/mmokit/pkg/service"
 )
 
 type ping struct{ N int }

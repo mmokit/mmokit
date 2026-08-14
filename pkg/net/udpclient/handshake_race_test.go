@@ -4,7 +4,7 @@ import (
 	"net"
 	"testing"
 
-	"github.com/zenion/mmokit/pkg/net/udpproto"
+	"github.com/mmokit/mmokit/pkg/net/udpproto"
 )
 
 // On connect the real server pushes an unsolicited reliable ServerConfig frame

@@ -13,8 +13,8 @@ import (
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/keepalive"
 
-	meshpb "github.com/zenion/mmokit/gen/go/meshpb"
-	"github.com/zenion/mmokit/pkg/logger"
+	meshpb "github.com/mmokit/mmokit/gen/go/meshpb"
+	"github.com/mmokit/mmokit/pkg/logger"
 )
 
 // meshControlClient is the remote-host-side long-lived connection to the

@@ -11,9 +11,9 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	persistpg "github.com/zenion/mmokit/pkg/persist/postgres"
+	persistpg "github.com/mmokit/mmokit/pkg/persist/postgres"
 
-	"github.com/zenion/mmokit/pkg/services/auth"
+	"github.com/mmokit/mmokit/pkg/services/auth"
 )
 
 // openTestRepo opens a Repo backed by the test Postgres instance.

@@ -10,9 +10,9 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/zenion/mmokit/pkg/ops"
-	"github.com/zenion/mmokit/pkg/service"
-	"github.com/zenion/mmokit/pkg/services/auth"
+	"github.com/mmokit/mmokit/pkg/ops"
+	"github.com/mmokit/mmokit/pkg/service"
+	"github.com/mmokit/mmokit/pkg/services/auth"
 )
 
 const logCat = "services:chat"

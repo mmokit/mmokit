@@ -4,7 +4,7 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/zenion/mmokit/pkg/coords"
+	"github.com/mmokit/mmokit/pkg/coords"
 )
 
 func TestPlayerManager_NewSession(t *testing.T) {

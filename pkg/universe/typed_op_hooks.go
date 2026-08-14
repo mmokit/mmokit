@@ -3,7 +3,7 @@ package universe
 import (
 	"reflect"
 
-	"github.com/zenion/mmokit/pkg/ops"
+	"github.com/mmokit/mmokit/pkg/ops"
 )
 
 // TypedOpInfo is one row of the typed-op registry, surfaced through the

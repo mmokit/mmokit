@@ -103,7 +103,7 @@ In `pkg/admin/admin.go`, add to the `Server` struct (alongside `audit *AuditLog`
 logger *logger.Logger
 ```
 
-(Add `"github.com/zenion/mmokit/pkg/logger"` to the import block.)
+(Add `"github.com/mmokit/mmokit/pkg/logger"` to the import block.)
 
 In `ServerOpts`, add:
 
@@ -239,7 +239,7 @@ if !cmdsys.Check(caller, "admin.logs") {
 }
 ```
 
-(And import `"github.com/zenion/mmokit/pkg/cmdsys"` in api_logs.go.)
+(And import `"github.com/mmokit/mmokit/pkg/cmdsys"` in api_logs.go.)
 
 - [ ] **Step 5: Mount the routes**
 
@@ -302,7 +302,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/zenion/mmokit/pkg/logger"
+	"github.com/mmokit/mmokit/pkg/logger"
 )
 
 func TestLogCategories_Empty(t *testing.T) {

@@ -6,7 +6,7 @@ import (
 	"net/netip"
 	"strings"
 
-	"github.com/zenion/mmokit/pkg/ops"
+	"github.com/mmokit/mmokit/pkg/ops"
 )
 
 // RegisterHTTP mounts the auth service's HTTPS endpoints on the given

@@ -108,8 +108,8 @@ func (s *ShieldRegenSystem) Update(dt float32) {
 package main
 
 import (
-    "github.com/zenion/mmokit/pkg/wasmsys"            // authoring SDK, compiled INTO the module
-    gamecomp "github.com/zenion/mmokit/internal/component" // SHARED component structs = frozen ABI
+    "github.com/mmokit/mmokit/pkg/wasmsys"            // authoring SDK, compiled INTO the module
+    gamecomp "github.com/mmokit/mmokit/internal/component" // SHARED component structs = frozen ABI
 )
 
 type ShieldRegen struct{}
@@ -348,7 +348,7 @@ the native loop and the wasm-backed system). Run with `-benchtime=200ms -benchme
 ```
 goos: linux
 goarch: amd64
-pkg: github.com/zenion/mmokit/pkg/mmokit
+pkg: github.com/mmokit/mmokit/pkg/mmokit
 cpu: Intel(R) Core(TM) i9-14900KF
 BenchmarkShield/native/100-32         	  472488	       494.7 ns/op	     185 B/op	       3 allocs/op
 BenchmarkShield/wasm/100-32           	   54862	      3896 ns/op	    2620 B/op	      12 allocs/op

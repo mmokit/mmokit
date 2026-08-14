@@ -4,7 +4,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/zenion/mmokit/pkg/metrics"
+	"github.com/mmokit/mmokit/pkg/metrics"
 )
 
 // WireLimits bounds every attacker-controlled quantity on the client ingress

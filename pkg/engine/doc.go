@@ -3,7 +3,7 @@
 // removal, the loop-job queue, profiling, and the interactive console
 // foundations.
 //
-// Game code should normally use [github.com/zenion/mmokit/pkg/mmokit] instead.
+// Game code should normally use [github.com/mmokit/mmokit/pkg/mmokit] instead.
 // The universe layer constructs and wires one Engine per cell; this package is
 // the machinery underneath that, exported because the framework spans several
 // packages rather than because games are expected to reach for it.

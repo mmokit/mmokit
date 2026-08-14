@@ -3,8 +3,8 @@ package universe
 import (
 	"sync"
 
-	"github.com/zenion/mmokit/pkg/coords"
-	"github.com/zenion/mmokit/pkg/engine"
+	"github.com/mmokit/mmokit/pkg/coords"
+	"github.com/mmokit/mmokit/pkg/engine"
 )
 
 // cellBridge implements Bridge for multi-cell mode.

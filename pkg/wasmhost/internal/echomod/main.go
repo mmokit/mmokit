@@ -2,7 +2,7 @@
 
 package main
 
-import "github.com/zenion/mmokit/pkg/wasmsys"
+import "github.com/mmokit/mmokit/pkg/wasmsys"
 
 // inc adds 1.0 to every float32 in its column each tick, and counts ticks in
 // internal state to exercise snapshot/restore.

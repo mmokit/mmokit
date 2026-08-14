@@ -73,7 +73,7 @@ package universe_test
 
 import (
     "testing"
-    pkguniverse "github.com/zenion/mmokit/pkg/universe"
+    pkguniverse "github.com/mmokit/mmokit/pkg/universe"
 )
 
 func TestOnStageInit_FiresOnEveryStage(t *testing.T) {
@@ -230,8 +230,8 @@ package mmokit_test
 
 import (
     "testing"
-    "github.com/zenion/mmokit/pkg/mmokit"
-    pkguniverse "github.com/zenion/mmokit/pkg/universe"
+    "github.com/mmokit/mmokit/pkg/mmokit"
+    pkguniverse "github.com/mmokit/mmokit/pkg/universe"
 )
 
 type allPing struct{ N int }
@@ -274,7 +274,7 @@ func TestHandleAll_RegistersOnAllStages(t *testing.T) {
 package mmokit
 
 import (
-    pkguniverse "github.com/zenion/mmokit/pkg/universe"
+    pkguniverse "github.com/mmokit/mmokit/pkg/universe"
 )
 
 // HandleAll registers fn as the handler for messages of type M on every
@@ -330,8 +330,8 @@ package mmokit_test
 
 import (
     "testing"
-    "github.com/zenion/mmokit/pkg/mmokit"
-    pkguniverse "github.com/zenion/mmokit/pkg/universe"
+    "github.com/mmokit/mmokit/pkg/mmokit"
+    pkguniverse "github.com/mmokit/mmokit/pkg/universe"
 )
 
 func TestOnWorldTickAll_FiresOnAllStages(t *testing.T) {
@@ -369,7 +369,7 @@ func TestOnWorldTickAll_FiresOnAllStages(t *testing.T) {
 package mmokit
 
 import (
-    pkguniverse "github.com/zenion/mmokit/pkg/universe"
+    pkguniverse "github.com/mmokit/mmokit/pkg/universe"
 )
 
 // OnWorldTickAll registers fn to fire once per simulation tick on every
@@ -450,7 +450,7 @@ git commit -m "docs(mmokit): recommend HandleAll / OnTickEachAll as the default 
 package game
 
 import (
-    "github.com/zenion/mmokit/pkg/mmokit"
+    "github.com/mmokit/mmokit/pkg/mmokit"
 )
 
 // Damage is a typed cross-cell-aware message: deal damage to an entity.
@@ -992,8 +992,8 @@ import (
     "testing"
     "time"
 
-    gamecomp "github.com/zenion/mmokit/internal/component"
-    "github.com/zenion/mmokit/pkg/mmokit"
+    gamecomp "github.com/mmokit/mmokit/internal/component"
+    "github.com/mmokit/mmokit/pkg/mmokit"
 )
 
 func TestDamage_SameCell_AppliesViaSend(t *testing.T) {
@@ -1087,7 +1087,7 @@ The Mining migration follows the same pattern as Damage. Tasks 3.1 through 3.5 m
 package game
 
 import (
-    "github.com/zenion/mmokit/pkg/mmokit"
+    "github.com/mmokit/mmokit/pkg/mmokit"
 )
 
 // MineExtract is a typed cross-cell-aware mining-extract message. Sent from
@@ -1329,8 +1329,8 @@ package game
 
 import (
     "testing"
-    gamecomp "github.com/zenion/mmokit/internal/component"
-    "github.com/zenion/mmokit/pkg/mmokit"
+    gamecomp "github.com/mmokit/mmokit/internal/component"
+    "github.com/mmokit/mmokit/pkg/mmokit"
 )
 
 func TestMineExtract_SameCell_ReducesMinable(t *testing.T) {

@@ -4,11 +4,11 @@ import (
 	"math"
 	"math/rand/v2"
 
-	gamecomp "github.com/zenion/mmokit/examples/space/internal/component"
-	"github.com/zenion/mmokit/examples/space/internal/item"
-	"github.com/zenion/mmokit/pkg/mmokit"
-	"github.com/zenion/mmokit/pkg/pathfinding"
-	"github.com/zenion/mmokit/pkg/spatial"
+	gamecomp "github.com/mmokit/mmokit/examples/space/internal/component"
+	"github.com/mmokit/mmokit/examples/space/internal/item"
+	"github.com/mmokit/mmokit/pkg/mmokit"
+	"github.com/mmokit/mmokit/pkg/pathfinding"
+	"github.com/mmokit/mmokit/pkg/spatial"
 )
 
 // jitterCooldown returns `base * (1 + r)` where r is uniform in

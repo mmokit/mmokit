@@ -3,7 +3,7 @@ package mmokit
 import (
 	"github.com/mlange-42/ark/ecs"
 
-	pkguniverse "github.com/zenion/mmokit/pkg/universe"
+	pkguniverse "github.com/mmokit/mmokit/pkg/universe"
 )
 
 // Any reports whether any entity in the stage carries component T.

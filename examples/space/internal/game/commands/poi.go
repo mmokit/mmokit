@@ -5,10 +5,10 @@ import (
 	"fmt"
 	"time"
 
-	gamecomp "github.com/zenion/mmokit/examples/space/internal/component"
-	"github.com/zenion/mmokit/examples/space/internal/game"
-	"github.com/zenion/mmokit/pkg/cmdsys"
-	"github.com/zenion/mmokit/pkg/mmokit"
+	gamecomp "github.com/mmokit/mmokit/examples/space/internal/component"
+	"github.com/mmokit/mmokit/examples/space/internal/game"
+	"github.com/mmokit/mmokit/pkg/cmdsys"
+	"github.com/mmokit/mmokit/pkg/mmokit"
 )
 
 // ── poi.list ─────────────────────────────────────────────────────────────────

@@ -538,9 +538,9 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/zenion/mmokit/pkg/cmdsys"
-	"github.com/zenion/mmokit/pkg/persist"
-	"github.com/zenion/mmokit/pkg/services/auth"
+	"github.com/mmokit/mmokit/pkg/cmdsys"
+	"github.com/mmokit/mmokit/pkg/persist"
+	"github.com/mmokit/mmokit/pkg/services/auth"
 )
 
 // adminOperatorCreateArgs creates a new admin operator. Password is a
@@ -709,10 +709,10 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/zenion/mmokit/pkg/cmdsys"
-	"github.com/zenion/mmokit/pkg/persist"
-	"github.com/zenion/mmokit/pkg/persist/persisttest"
-	"github.com/zenion/mmokit/pkg/services/auth"
+	"github.com/mmokit/mmokit/pkg/cmdsys"
+	"github.com/mmokit/mmokit/pkg/persist"
+	"github.com/mmokit/mmokit/pkg/persist/persisttest"
+	"github.com/mmokit/mmokit/pkg/services/auth"
 )
 
 func adminOpEnv(callerID string) (*cmdsys.Env, context.Context) {
@@ -1129,7 +1129,7 @@ func TestNewServer_RegistersOperatorCommands(t *testing.T) {
 }
 ```
 
-Add `"github.com/zenion/mmokit/pkg/cmdsys"` to imports if not present.
+Add `"github.com/mmokit/mmokit/pkg/cmdsys"` to imports if not present.
 
 - [ ] **Step 3: Run admin tests**
 

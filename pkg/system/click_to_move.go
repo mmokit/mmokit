@@ -3,10 +3,10 @@ package system
 import (
 	"math"
 
-	"github.com/zenion/mmokit/pkg/component"
-	"github.com/zenion/mmokit/pkg/coords"
-	"github.com/zenion/mmokit/pkg/engine"
-	"github.com/zenion/mmokit/pkg/query"
+	"github.com/mmokit/mmokit/pkg/component"
+	"github.com/mmokit/mmokit/pkg/coords"
+	"github.com/mmokit/mmokit/pkg/engine"
+	"github.com/mmokit/mmokit/pkg/query"
 )
 
 const defaultMaxSpeed float32 = 300

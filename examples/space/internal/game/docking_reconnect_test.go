@@ -3,8 +3,8 @@ package game
 import (
 	"testing"
 
-	"github.com/zenion/mmokit/pkg/coords"
-	pkguniverse "github.com/zenion/mmokit/pkg/universe"
+	"github.com/mmokit/mmokit/pkg/coords"
+	pkguniverse "github.com/mmokit/mmokit/pkg/universe"
 )
 
 // TestDockingProgress_SurvivesReconnect pins the contract: dockingStates is

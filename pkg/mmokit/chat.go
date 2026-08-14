@@ -8,10 +8,10 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"github.com/zenion/mmokit/pkg/services/auth"
-	"github.com/zenion/mmokit/pkg/services/chat"
-	chatpg "github.com/zenion/mmokit/pkg/services/chat/postgres"
-	pkguniverse "github.com/zenion/mmokit/pkg/universe"
+	"github.com/mmokit/mmokit/pkg/services/auth"
+	"github.com/mmokit/mmokit/pkg/services/chat"
+	chatpg "github.com/mmokit/mmokit/pkg/services/chat/postgres"
+	pkguniverse "github.com/mmokit/mmokit/pkg/universe"
 )
 
 // ChatOpts is mmokit's facade type for chat.ServiceOpts.

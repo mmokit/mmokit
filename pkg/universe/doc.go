@@ -22,7 +22,7 @@
 //
 // This package is exported because the framework spans several packages, not
 // because games are expected to assemble it. Import
-// [github.com/zenion/mmokit/pkg/mmokit] instead — Process, Stage, and the
+// [github.com/mmokit/mmokit/pkg/mmokit] instead — Process, Stage, and the
 // registration verbs are all re-exported there with the sharp edges covered.
 //
 // # Locking

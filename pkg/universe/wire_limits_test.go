@@ -4,7 +4,7 @@ import (
 	"flag"
 	"testing"
 
-	pkgnet "github.com/zenion/mmokit/pkg/net"
+	pkgnet "github.com/mmokit/mmokit/pkg/net"
 )
 
 // TestNew_WireLimitsFallBackWithoutBindFlags pins §6.8.4's "flag defaults never

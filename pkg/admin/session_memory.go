@@ -5,7 +5,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/zenion/mmokit/pkg/services/auth"
+	"github.com/mmokit/mmokit/pkg/services/auth"
 )
 
 // MemorySessionStore is the default SessionStore. Keyed by hex-encoded

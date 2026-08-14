@@ -3,7 +3,7 @@ package mmokit
 import (
 	"testing"
 
-	"github.com/zenion/mmokit/pkg/tunable"
+	"github.com/mmokit/mmokit/pkg/tunable"
 )
 
 // Operators type field names however they like; findDef resolves them

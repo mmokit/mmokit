@@ -4,8 +4,8 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/zenion/mmokit/pkg/mmokit"
-	pkguniverse "github.com/zenion/mmokit/pkg/universe"
+	"github.com/mmokit/mmokit/pkg/mmokit"
+	pkguniverse "github.com/mmokit/mmokit/pkg/universe"
 )
 
 // TestAutoBroadcast_SameCell_PostHandler verifies that target.Send(&Damage{...})

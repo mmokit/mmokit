@@ -3,9 +3,9 @@ package game
 import (
 	"math"
 
-	gamecomp "github.com/zenion/mmokit/examples/space/internal/component"
-	"github.com/zenion/mmokit/pkg/mmokit"
-	"github.com/zenion/mmokit/pkg/spatial"
+	gamecomp "github.com/mmokit/mmokit/examples/space/internal/component"
+	"github.com/mmokit/mmokit/pkg/mmokit"
+	"github.com/mmokit/mmokit/pkg/spatial"
 )
 
 // DungeonWallBundle is the entity-kind bundle for a static cave wall.

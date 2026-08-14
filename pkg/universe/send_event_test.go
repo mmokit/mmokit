@@ -5,11 +5,11 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/zenion/mmokit/pkg/engine"
-	"github.com/zenion/mmokit/pkg/logger"
-	"github.com/zenion/mmokit/pkg/mmokit"
-	pkgnet "github.com/zenion/mmokit/pkg/net"
-	pkguniverse "github.com/zenion/mmokit/pkg/universe"
+	"github.com/mmokit/mmokit/pkg/engine"
+	"github.com/mmokit/mmokit/pkg/logger"
+	"github.com/mmokit/mmokit/pkg/mmokit"
+	pkgnet "github.com/mmokit/mmokit/pkg/net"
+	pkguniverse "github.com/mmokit/mmokit/pkg/universe"
 )
 
 // sendEventCaptureConn captures SendReliable bytes per connID so the

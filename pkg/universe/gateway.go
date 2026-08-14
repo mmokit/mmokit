@@ -34,14 +34,14 @@ import (
 
 	"github.com/google/uuid"
 
-	meshpb "github.com/zenion/mmokit/gen/go/meshpb"
-	"github.com/zenion/mmokit/pkg/coords"
-	"github.com/zenion/mmokit/pkg/logger"
-	"github.com/zenion/mmokit/pkg/metrics"
-	"github.com/zenion/mmokit/pkg/net"
-	"github.com/zenion/mmokit/pkg/ops"
-	"github.com/zenion/mmokit/pkg/service"
-	"github.com/zenion/mmokit/pkg/services/auth"
+	meshpb "github.com/mmokit/mmokit/gen/go/meshpb"
+	"github.com/mmokit/mmokit/pkg/coords"
+	"github.com/mmokit/mmokit/pkg/logger"
+	"github.com/mmokit/mmokit/pkg/metrics"
+	"github.com/mmokit/mmokit/pkg/net"
+	"github.com/mmokit/mmokit/pkg/ops"
+	"github.com/mmokit/mmokit/pkg/service"
+	"github.com/mmokit/mmokit/pkg/services/auth"
 )
 
 // Gateway terminates WebSocket connections, gates ops on per-connection

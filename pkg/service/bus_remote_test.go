@@ -5,7 +5,7 @@ import (
 	"sync/atomic"
 	"testing"
 
-	"github.com/zenion/mmokit/pkg/service"
+	"github.com/mmokit/mmokit/pkg/service"
 )
 
 type remoteEvent struct{ Tag int }
@@ -27,7 +27,7 @@ func TestBus_RemotePublishCallback_FiresAfterLocalDispatch(t *testing.T) {
 	})
 
 	b.SetRoutingCache(map[string][]string{
-		"github.com/zenion/mmokit/pkg/service_test.remoteEvent": {"proc-B", "proc-C"},
+		"github.com/mmokit/mmokit/pkg/service_test.remoteEvent": {"proc-B", "proc-C"},
 	})
 
 	service.Publish(b, remoteEvent{Tag: 9})
@@ -41,7 +41,7 @@ func TestBus_RemotePublishCallback_FiresAfterLocalDispatch(t *testing.T) {
 		t.Fatalf("RemotePublish callback called %d times, want 1", len(remoteCalls))
 	}
 	got := remoteCalls[0]
-	if got.TypeName != "github.com/zenion/mmokit/pkg/service_test.remoteEvent" {
+	if got.TypeName != "github.com/mmokit/mmokit/pkg/service_test.remoteEvent" {
 		t.Fatalf("typeName=%q", got.TypeName)
 	}
 	want := map[string]bool{"proc-B": true, "proc-C": true}
@@ -56,7 +56,7 @@ func TestBus_PublishLocal_SkipsRemote(t *testing.T) {
 	var remoteCalled int32
 	b.SetRemotePublish(func(call service.RemotePublishCall) { atomic.AddInt32(&remoteCalled, 1) })
 	b.SetRoutingCache(map[string][]string{
-		"github.com/zenion/mmokit/pkg/service_test.remoteEvent": {"proc-B"},
+		"github.com/mmokit/mmokit/pkg/service_test.remoteEvent": {"proc-B"},
 	})
 	service.PublishLocal(b, remoteEvent{Tag: 1})
 	if atomic.LoadInt32(&remoteCalled) != 0 {
@@ -76,7 +76,7 @@ func TestBus_NonWireEvent_SuppressesRemoteFanout(t *testing.T) {
 	// Routing cache claims proc-B subscribes — but the type is local-only,
 	// so the fan-out must NOT fire.
 	b.SetRoutingCache(map[string][]string{
-		"github.com/zenion/mmokit/pkg/service_test.localOnlyEvent": {"proc-B"},
+		"github.com/mmokit/mmokit/pkg/service_test.localOnlyEvent": {"proc-B"},
 	})
 
 	service.Publish(b, localOnlyEvent{Tag: 1})
@@ -92,7 +92,7 @@ func TestBus_RemotePublish_SelfSkipped(t *testing.T) {
 		calls = append(calls, call)
 	})
 	b.SetRoutingCache(map[string][]string{
-		"github.com/zenion/mmokit/pkg/service_test.remoteEvent": {"proc-A", "proc-B"},
+		"github.com/mmokit/mmokit/pkg/service_test.remoteEvent": {"proc-A", "proc-B"},
 	})
 	service.Publish(b, remoteEvent{Tag: 1})
 	if len(calls) != 1 {

@@ -13,9 +13,9 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 
-	meshpb "github.com/zenion/mmokit/gen/go/meshpb"
-	"github.com/zenion/mmokit/pkg/logger"
-	pkgnet "github.com/zenion/mmokit/pkg/net"
+	meshpb "github.com/mmokit/mmokit/gen/go/meshpb"
+	"github.com/mmokit/mmokit/pkg/logger"
+	pkgnet "github.com/mmokit/mmokit/pkg/net"
 )
 
 type clientFrameTransport struct {

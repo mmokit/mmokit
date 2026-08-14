@@ -6,7 +6,7 @@ import (
 
 	"github.com/google/uuid"
 
-	meshpb "github.com/zenion/mmokit/gen/go/meshpb"
+	meshpb "github.com/mmokit/mmokit/gen/go/meshpb"
 )
 
 func TestMeshFrameRoundTrip(t *testing.T) {

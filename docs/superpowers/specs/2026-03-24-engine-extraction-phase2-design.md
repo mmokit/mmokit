@@ -39,8 +39,8 @@ Four work items, executed in order:
 **Component aliases (~35 files):** Every system file, entity file, and the `Components` struct in `internal/game/components.go` need to import `pkg/component` for generic types. Files that use both generic and game-specific components use aliased imports:
 ```go
 import (
-    comp "github.com/zenion/mmokit/pkg/component"
-    gamecomp "github.com/zenion/mmokit/internal/component"
+    comp "github.com/mmokit/mmokit/pkg/component"
+    gamecomp "github.com/mmokit/mmokit/internal/component"
 )
 ```
 

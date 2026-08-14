@@ -5,8 +5,8 @@ import (
 	"sort"
 	"strconv"
 
-	"github.com/zenion/mmokit/pkg/coords"
-	"github.com/zenion/mmokit/pkg/engine"
+	"github.com/mmokit/mmokit/pkg/coords"
+	"github.com/mmokit/mmokit/pkg/engine"
 )
 
 type debugBroadcaster struct {

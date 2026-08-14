@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/zenion/mmokit/pkg/cmdsys"
+	"github.com/mmokit/mmokit/pkg/cmdsys"
 )
 
 type hostListArgs struct{}

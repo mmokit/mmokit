@@ -3,8 +3,8 @@ package system
 import (
 	"sync/atomic"
 
-	"github.com/zenion/mmokit/pkg/net"
-	"github.com/zenion/mmokit/pkg/quantize"
+	"github.com/mmokit/mmokit/pkg/net"
+	"github.com/mmokit/mmokit/pkg/quantize"
 )
 
 // BinaryFrameWriter sends delta-compressed binary frames wrapped via a
@@ -15,7 +15,7 @@ import (
 // The build closure converts the encoded delta body bytes into a complete
 // channel-prefixed wire frame (typically a typed-event frame around
 // mmokit.WorldDelta). pkg/system can't import pkg/mmokit (cycle), so the
-// wiring lives one layer up — see pkg/mmokit/mmokit.go.
+// wiring lives one layer up — see pkg/mmokit.go.
 type BinaryFrameWriter struct {
 	connMgr               net.ConnSender
 	encoder               *quantize.FrameEncoder

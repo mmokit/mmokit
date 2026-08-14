@@ -3,7 +3,7 @@ package mmokit_test
 import (
 	"testing"
 
-	"github.com/zenion/mmokit/pkg/mmokit"
+	"github.com/mmokit/mmokit/pkg/mmokit"
 )
 
 type pingMsg struct{ Note string }

@@ -5,9 +5,9 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/zenion/mmokit/pkg/ops"
-	"github.com/zenion/mmokit/pkg/services/chat"
-	"github.com/zenion/mmokit/pkg/services/chat/chattest"
+	"github.com/mmokit/mmokit/pkg/ops"
+	"github.com/mmokit/mmokit/pkg/services/chat"
+	"github.com/mmokit/mmokit/pkg/services/chat/chattest"
 )
 
 func TestHandleSendDM_DeliversToOnlineRecipientAndEchoesToSender(t *testing.T) {

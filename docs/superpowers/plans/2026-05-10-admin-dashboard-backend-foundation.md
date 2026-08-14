@@ -283,7 +283,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/zenion/mmokit/pkg/universe"
+	"github.com/mmokit/mmokit/pkg/universe"
 )
 
 func TestLocalClusterView_Cluster(t *testing.T) {
@@ -350,8 +350,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/zenion/mmokit/pkg/metrics"
-	"github.com/zenion/mmokit/pkg/universe"
+	"github.com/mmokit/mmokit/pkg/metrics"
+	"github.com/mmokit/mmokit/pkg/universe"
 )
 
 // LocalClusterView reads cluster state directly from a *universe.Process.
@@ -1113,7 +1113,7 @@ import (
 	"context"
 	"time"
 
-	"github.com/zenion/mmokit/pkg/universe"
+	"github.com/mmokit/mmokit/pkg/universe"
 )
 
 // startPublishers spawns goroutines that fan engine state changes onto the
@@ -1506,7 +1506,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/zenion/mmokit/pkg/services/auth"
+	"github.com/mmokit/mmokit/pkg/services/auth"
 )
 
 // MemorySessionStore is the default SessionStore. Keyed by hex-encoded
@@ -1709,8 +1709,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/zenion/mmokit/pkg/cmdsys"
-	"github.com/zenion/mmokit/pkg/services/auth"
+	"github.com/mmokit/mmokit/pkg/cmdsys"
+	"github.com/mmokit/mmokit/pkg/services/auth"
 )
 
 type ctxKey int
@@ -1835,7 +1835,7 @@ import (
 	"net/netip"
 	"time"
 
-	"github.com/zenion/mmokit/pkg/services/auth"
+	"github.com/mmokit/mmokit/pkg/services/auth"
 )
 
 // Lockout protects the login endpoint from brute force. Wraps the existing
@@ -2010,7 +2010,7 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/zenion/mmokit/pkg/services/auth"
+	"github.com/mmokit/mmokit/pkg/services/auth"
 )
 
 type loginRequest struct {
@@ -2141,7 +2141,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/zenion/mmokit/pkg/services/auth"
+	"github.com/mmokit/mmokit/pkg/services/auth"
 )
 
 func newTestServer(t *testing.T) *Server {
@@ -2259,7 +2259,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/zenion/mmokit/pkg/cmdsys"
+	"github.com/mmokit/mmokit/pkg/cmdsys"
 )
 
 func (s *Server) handleCluster(w http.ResponseWriter, r *http.Request) {
@@ -2434,7 +2434,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/zenion/mmokit/pkg/cmdsys"
+	"github.com/mmokit/mmokit/pkg/cmdsys"
 )
 
 type fakeView struct{}
@@ -2509,7 +2509,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/zenion/mmokit/pkg/cmdsys"
+	"github.com/mmokit/mmokit/pkg/cmdsys"
 )
 
 // handleCommandsList — GET /admin/api/commands
@@ -2688,7 +2688,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/zenion/mmokit/pkg/cmdsys"
+	"github.com/mmokit/mmokit/pkg/cmdsys"
 )
 
 func TestHandleCommandInvoke_Success(t *testing.T) {
@@ -2842,8 +2842,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/zenion/mmokit/pkg/cmdsys"
-	"github.com/zenion/mmokit/pkg/universe"
+	"github.com/mmokit/mmokit/pkg/cmdsys"
+	"github.com/mmokit/mmokit/pkg/universe"
 )
 
 // Logger is the minimal logger surface admin.Server needs. *logger.Logger
@@ -3065,7 +3065,7 @@ In `pkg/admin/admin.go` replace the `embedFallbackFS` stub:
 import (
 	"io/fs"
 
-	"github.com/zenion/mmokit/pkg/admin/static"
+	"github.com/mmokit/mmokit/pkg/admin/static"
 )
 
 var staticDist fs.FS = mustSubFS(static.FS, "dist")
@@ -3147,7 +3147,7 @@ In `Process.New` (or wherever `c.registry` is built), construct the panel regist
 c.panelRegistry = admin.NewPanelRegistry()
 ```
 
-Imports: add `github.com/zenion/mmokit/pkg/admin`.
+Imports: add `github.com/mmokit/mmokit/pkg/admin`.
 
 - [ ] **Step 3: Mount admin in `startAdminHTTPListener`**
 
@@ -3352,7 +3352,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/zenion/mmokit/pkg/services/auth"
+	"github.com/mmokit/mmokit/pkg/services/auth"
 	"golang.org/x/term"
 )
 
@@ -3418,8 +3418,8 @@ Create `pkg/mmokit/admin.go`:
 package mmokit
 
 import (
-	"github.com/zenion/mmokit/pkg/admin"
-	"github.com/zenion/mmokit/pkg/universe"
+	"github.com/mmokit/mmokit/pkg/admin"
+	"github.com/mmokit/mmokit/pkg/universe"
 )
 
 // AdminPanelDef is the mmokit facade alias for admin.PanelDef. Games
@@ -3482,9 +3482,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/zenion/mmokit/pkg/admin"
-	"github.com/zenion/mmokit/pkg/services/auth"
-	"github.com/zenion/mmokit/pkg/universe"
+	"github.com/mmokit/mmokit/pkg/admin"
+	"github.com/mmokit/mmokit/pkg/services/auth"
+	"github.com/mmokit/mmokit/pkg/universe"
 )
 
 func TestAdminE2E_LoginAndSplit(t *testing.T) {

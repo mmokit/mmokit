@@ -1,8 +1,8 @@
 package game
 
 import (
-	gamecomp "github.com/zenion/mmokit/examples/space/internal/component"
-	"github.com/zenion/mmokit/pkg/mmokit"
+	gamecomp "github.com/mmokit/mmokit/examples/space/internal/component"
+	"github.com/mmokit/mmokit/pkg/mmokit"
 )
 
 // BankRequest is the typed-op request for fetching the calling player's

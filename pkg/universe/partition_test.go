@@ -3,9 +3,9 @@ package universe
 import (
 	"testing"
 
-	"github.com/zenion/mmokit/pkg/coords"
-	"github.com/zenion/mmokit/pkg/logger"
-	"github.com/zenion/mmokit/pkg/net"
+	"github.com/mmokit/mmokit/pkg/coords"
+	"github.com/mmokit/mmokit/pkg/logger"
+	"github.com/mmokit/mmokit/pkg/net"
 )
 
 // partitionFixtureConfig returns a FixtureConfig tuned for the partition

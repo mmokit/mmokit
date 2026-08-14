@@ -4,8 +4,8 @@ import (
 	"encoding/binary"
 	"math"
 
-	gamecomp "github.com/zenion/mmokit/examples/space/internal/component"
-	"github.com/zenion/mmokit/pkg/quantize"
+	gamecomp "github.com/mmokit/mmokit/examples/space/internal/component"
+	"github.com/mmokit/mmokit/pkg/quantize"
 )
 
 // Quantization scales — must match server nethandler_shared.go.

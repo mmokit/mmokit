@@ -4,9 +4,9 @@ import (
 	"context"
 	"testing"
 
-	"github.com/zenion/mmokit/pkg/mmokit/internal/testmods/podcomp"
-	"github.com/zenion/mmokit/pkg/wasmabi"
-	"github.com/zenion/mmokit/pkg/wasmhost"
+	"github.com/mmokit/mmokit/pkg/mmokit/internal/testmods/podcomp"
+	"github.com/mmokit/mmokit/pkg/wasmabi"
+	"github.com/mmokit/mmokit/pkg/wasmhost"
 )
 
 // TestShieldModule_LoadsAndDeclaresQuery builds the real ShieldRegen wasm

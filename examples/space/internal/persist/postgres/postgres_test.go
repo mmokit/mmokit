@@ -12,8 +12,8 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	gamepersist "github.com/zenion/mmokit/examples/space/internal/persist"
-	enginepg "github.com/zenion/mmokit/pkg/persist/postgres"
+	gamepersist "github.com/mmokit/mmokit/examples/space/internal/persist"
+	enginepg "github.com/mmokit/mmokit/pkg/persist/postgres"
 )
 
 // openTestStore opens the live Postgres pointed at by POSTGRES_URL,

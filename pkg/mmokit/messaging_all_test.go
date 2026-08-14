@@ -5,8 +5,8 @@ import (
 	"testing"
 
 	"github.com/mlange-42/ark/ecs"
-	"github.com/zenion/mmokit/pkg/mmokit"
-	pkguniverse "github.com/zenion/mmokit/pkg/universe"
+	"github.com/mmokit/mmokit/pkg/mmokit"
+	pkguniverse "github.com/mmokit/mmokit/pkg/universe"
 )
 
 // N is int32, not int: the reflection codec has no arm for a

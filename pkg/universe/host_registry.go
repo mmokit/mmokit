@@ -6,7 +6,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/zenion/mmokit/pkg/logger"
+	"github.com/mmokit/mmokit/pkg/logger"
 )
 
 // RemoteHostState tracks the lifecycle of a registered remote node.

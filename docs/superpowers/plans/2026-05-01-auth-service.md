@@ -52,7 +52,7 @@
 ```proto
 syntax = "proto3";
 package enginepb;
-option go_package = "github.com/zenion/mmokit/gen/go/enginepb";
+option go_package = "github.com/mmokit/mmokit/gen/go/enginepb";
 option csharp_namespace = "Zenion.GameServer.Proto.Engine";
 
 // AuthOpCode are op codes for engine-provided auth operations on the
@@ -503,7 +503,7 @@ import (
     "github.com/jackc/pgx/v5"
     "github.com/jackc/pgx/v5/pgxpool"
 
-    "github.com/zenion/mmokit/pkg/auth"
+    "github.com/mmokit/mmokit/pkg/auth"
 )
 
 //go:embed migrations/*.sql
@@ -797,7 +797,7 @@ import (
 
     "github.com/google/uuid"
 
-    "github.com/zenion/mmokit/pkg/auth"
+    "github.com/mmokit/mmokit/pkg/auth"
 )
 
 func TestCreateUserAndFetch(t *testing.T) {
@@ -905,7 +905,7 @@ import (
 
     "github.com/google/uuid"
 
-    "github.com/zenion/mmokit/pkg/auth"
+    "github.com/mmokit/mmokit/pkg/auth"
 )
 
 type RepoMock struct {
@@ -1533,8 +1533,8 @@ import (
     "io/fs"
     "time"
 
-    enginepb "github.com/zenion/mmokit/gen/go/enginepb"
-    "github.com/zenion/mmokit/pkg/service"
+    enginepb "github.com/mmokit/mmokit/gen/go/enginepb"
+    "github.com/mmokit/mmokit/pkg/service"
 )
 
 // ServiceOpts is the configuration handed to RegisterAuthService.
@@ -1635,8 +1635,8 @@ import (
     "sync"
     "time"
 
-    "github.com/zenion/mmokit/pkg/service"
-    pgrepo "github.com/zenion/mmokit/pkg/auth/postgres"
+    "github.com/mmokit/mmokit/pkg/service"
+    pgrepo "github.com/mmokit/mmokit/pkg/auth/postgres"
 )
 
 const logCat = "services:auth"
@@ -1733,9 +1733,9 @@ In `pkg/auth/service.go` replace the stub:
 ```go
 import (
     // ...
-    "github.com/zenion/mmokit/pkg/ops"
-    enginepb "github.com/zenion/mmokit/gen/go/enginepb"
-    "github.com/zenion/mmokit/pkg/mmokit"
+    "github.com/mmokit/mmokit/pkg/ops"
+    enginepb "github.com/mmokit/mmokit/gen/go/enginepb"
+    "github.com/mmokit/mmokit/pkg/mmokit"
 )
 
 func (s *Service) RegisterOps(router *ops.Router) error {
@@ -1761,8 +1761,8 @@ import (
     "strings"
     "time"
 
-    enginepb "github.com/zenion/mmokit/gen/go/enginepb"
-    "github.com/zenion/mmokit/pkg/ops"
+    enginepb "github.com/mmokit/mmokit/gen/go/enginepb"
+    "github.com/mmokit/mmokit/pkg/ops"
 )
 
 // authError is the typed error the handler returns. The router maps it
@@ -1900,11 +1900,11 @@ import (
     "net/netip"
     "testing"
 
-    enginepb "github.com/zenion/mmokit/gen/go/enginepb"
-    "github.com/zenion/mmokit/pkg/auth/authtest"
-    "github.com/zenion/mmokit/pkg/logger"
-    "github.com/zenion/mmokit/pkg/ops"
-    "github.com/zenion/mmokit/pkg/service"
+    enginepb "github.com/mmokit/mmokit/gen/go/enginepb"
+    "github.com/mmokit/mmokit/pkg/auth/authtest"
+    "github.com/mmokit/mmokit/pkg/logger"
+    "github.com/mmokit/mmokit/pkg/ops"
+    "github.com/mmokit/mmokit/pkg/service"
 )
 
 func newTestService(t *testing.T) (*Service, *authtest.RepoMock) {
@@ -2470,8 +2470,8 @@ import (
 
     "google.golang.org/protobuf/proto"
 
-    enginepb "github.com/zenion/mmokit/gen/go/enginepb"
-    "github.com/zenion/mmokit/pkg/logger"
+    enginepb "github.com/mmokit/mmokit/gen/go/enginepb"
+    "github.com/mmokit/mmokit/pkg/logger"
 )
 
 // GatewayHook lets the gateway extract identity-bind fields from auth
@@ -2542,7 +2542,7 @@ In `pkg/universe/gateway.go`, find the `Gateway` struct definition. Add:
 ```go
 import (
     "github.com/google/uuid"
-    "github.com/zenion/mmokit/pkg/auth"
+    "github.com/mmokit/mmokit/pkg/auth"
 )
 
 // authState is the per-connection auth binding. Cleared on WS close.
@@ -2912,8 +2912,8 @@ package mmokit
 import (
     "fmt"
 
-    "github.com/zenion/mmokit/pkg/auth"
-    "github.com/zenion/mmokit/pkg/universe"
+    "github.com/mmokit/mmokit/pkg/auth"
+    "github.com/mmokit/mmokit/pkg/universe"
 )
 
 // AuthOpts re-exports auth.ServiceOpts for game code.
@@ -2996,9 +2996,9 @@ package mmokit_test
 import (
     "testing"
 
-    "github.com/zenion/mmokit/pkg/auth/authtest"
-    "github.com/zenion/mmokit/pkg/mmokit"
-    "github.com/zenion/mmokit/pkg/universe"
+    "github.com/mmokit/mmokit/pkg/auth/authtest"
+    "github.com/mmokit/mmokit/pkg/mmokit"
+    "github.com/mmokit/mmokit/pkg/universe"
 )
 
 func TestRegisterAuthServiceWithMock(t *testing.T) {
@@ -3045,7 +3045,7 @@ import (
 
     "github.com/google/uuid"
 
-    "github.com/zenion/mmokit/pkg/cmdsys"
+    "github.com/mmokit/mmokit/pkg/cmdsys"
 )
 
 // RegisterConsoleCommands adds the auth.* command group to the cmdsys
@@ -3455,8 +3455,8 @@ import (
     "context"
     "testing"
 
-    "github.com/zenion/mmokit/pkg/auth/authtest"
-    "github.com/zenion/mmokit/pkg/mmokit"
+    "github.com/mmokit/mmokit/pkg/auth/authtest"
+    "github.com/mmokit/mmokit/pkg/mmokit"
 )
 
 func TestAuthE2ERegisterAndSpawn(t *testing.T) {

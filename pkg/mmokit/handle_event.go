@@ -6,7 +6,7 @@ import (
 	"sort"
 	"sync"
 
-	pkguniverse "github.com/zenion/mmokit/pkg/universe"
+	pkguniverse "github.com/mmokit/mmokit/pkg/universe"
 )
 
 var (

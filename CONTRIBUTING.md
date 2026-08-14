@@ -54,7 +54,7 @@ If your employer owns your work, get their sign-off before submitting.
 ```bash
 # 1. Fork on GitHub, then:
 git clone https://github.com/<you>/mmokit && cd mmokit
-git remote add upstream https://github.com/zenion/mmokit
+git remote add upstream https://github.com/mmokit/mmokit
 
 # 2. Branch. Never work on main — it is protected upstream and you will
 #    want to rebase cleanly.
@@ -64,7 +64,7 @@ git checkout -b fix/short-description
 go vet ./... && go test ./... -short -count=1 -p 1
 gofmt -w $(git ls-files '*.go')
 
-# 4. Push to your fork and open a PR against zenion/mmokit main.
+# 4. Push to your fork and open a PR against mmokit/mmokit main.
 git push -u origin fix/short-description
 ```
 

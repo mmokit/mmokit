@@ -6,8 +6,8 @@ import (
 	"time"
 
 	"github.com/mlange-42/ark/ecs"
-	"github.com/zenion/mmokit/pkg/logger"
-	"github.com/zenion/mmokit/pkg/net"
+	"github.com/mmokit/mmokit/pkg/logger"
+	"github.com/mmokit/mmokit/pkg/net"
 )
 
 type mockSystem struct {

@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/zenion/mmokit/pkg/logger"
+	"github.com/mmokit/mmokit/pkg/logger"
 )
 
 func TestLogCategories_Empty(t *testing.T) {

@@ -1,9 +1,9 @@
 package system
 
 import (
-	"github.com/zenion/mmokit/pkg/component"
-	"github.com/zenion/mmokit/pkg/engine"
-	"github.com/zenion/mmokit/pkg/query"
+	"github.com/mmokit/mmokit/pkg/component"
+	"github.com/mmokit/mmokit/pkg/engine"
+	"github.com/mmokit/mmokit/pkg/query"
 )
 
 // LifetimeSystem despawns entities whose Lifetime component has expired.

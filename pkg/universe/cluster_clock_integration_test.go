@@ -4,8 +4,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/zenion/mmokit/gen/go/meshpb"
-	"github.com/zenion/mmokit/pkg/logger"
+	"github.com/mmokit/mmokit/gen/go/meshpb"
+	"github.com/mmokit/mmokit/pkg/logger"
 )
 
 // TestCoordTimeSync_HostObservesClock verifies that a CoordTimeSync

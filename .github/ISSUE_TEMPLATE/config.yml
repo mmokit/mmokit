@@ -1,8 +1,8 @@
 blank_issues_enabled: false
 contact_links:
   - name: Security vulnerability
-    url: https://github.com/zenion/mmokit/security/policy
+    url: https://github.com/mmokit/mmokit/security/policy
     about: Do NOT open an issue. Report privately — see SECURITY.md.
   - name: Question or idea
-    url: https://github.com/zenion/mmokit/discussions
+    url: https://github.com/mmokit/mmokit/discussions
     about: Open a discussion. Issues are for actionable defects and agreed work.

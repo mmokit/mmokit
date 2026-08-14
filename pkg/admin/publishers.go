@@ -4,7 +4,7 @@ import (
 	"context"
 	"time"
 
-	"github.com/zenion/mmokit/pkg/universe"
+	"github.com/mmokit/mmokit/pkg/universe"
 )
 
 // startPublishers spawns goroutines that fan engine state changes onto the

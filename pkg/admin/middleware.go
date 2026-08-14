@@ -7,8 +7,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/zenion/mmokit/pkg/cmdsys"
-	"github.com/zenion/mmokit/pkg/services/auth"
+	"github.com/mmokit/mmokit/pkg/cmdsys"
+	"github.com/mmokit/mmokit/pkg/services/auth"
 )
 
 type ctxKey int

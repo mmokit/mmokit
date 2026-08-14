@@ -1,8 +1,8 @@
 package service
 
 import (
-	"github.com/zenion/mmokit/pkg/logger"
-	"github.com/zenion/mmokit/pkg/persist/postgres"
+	"github.com/mmokit/mmokit/pkg/logger"
+	"github.com/mmokit/mmokit/pkg/persist/postgres"
 )
 
 // Context bundles the runtime dependencies handed to a Service at Init.

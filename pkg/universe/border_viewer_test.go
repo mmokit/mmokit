@@ -3,7 +3,7 @@ package universe
 import (
 	"testing"
 
-	"github.com/zenion/mmokit/pkg/replication"
+	"github.com/mmokit/mmokit/pkg/replication"
 )
 
 func TestCellViewer_SatisfiesInterface(t *testing.T) {

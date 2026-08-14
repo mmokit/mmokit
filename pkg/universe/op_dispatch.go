@@ -4,9 +4,9 @@ import (
 	"fmt"
 	"reflect"
 
-	"github.com/zenion/mmokit/pkg/metrics"
-	pkgnet "github.com/zenion/mmokit/pkg/net"
-	"github.com/zenion/mmokit/pkg/ops"
+	"github.com/mmokit/mmokit/pkg/metrics"
+	pkgnet "github.com/mmokit/mmokit/pkg/net"
+	"github.com/mmokit/mmokit/pkg/ops"
 )
 
 // DispatchTypedOpInbound consumes a 0x01 typed-op payload (channel byte

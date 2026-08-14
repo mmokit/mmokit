@@ -5,8 +5,8 @@ import (
 	"math"
 	"testing"
 
-	gamecomp "github.com/zenion/mmokit/examples/space/internal/component"
-	"github.com/zenion/mmokit/pkg/quantize"
+	gamecomp "github.com/mmokit/mmokit/examples/space/internal/component"
+	"github.com/mmokit/mmokit/pkg/quantize"
 )
 
 func TestDecodeBinaryFrameAcceptsEmptyFrame(t *testing.T) {

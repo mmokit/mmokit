@@ -3,8 +3,8 @@ package mmokit_test
 import (
 	"testing"
 
-	"github.com/zenion/mmokit/pkg/component"
-	"github.com/zenion/mmokit/pkg/mmokit"
+	"github.com/mmokit/mmokit/pkg/component"
+	"github.com/mmokit/mmokit/pkg/mmokit"
 )
 
 func TestGet_ReturnsComponent(t *testing.T) {

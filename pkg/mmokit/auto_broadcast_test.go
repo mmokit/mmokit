@@ -11,7 +11,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/zenion/mmokit/pkg/mmokit"
+	"github.com/mmokit/mmokit/pkg/mmokit"
 )
 
 // abDamage is a broadcast-eligible test message with an Entity anchor field.

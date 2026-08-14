@@ -415,7 +415,7 @@ import (
 	"context"
 
 	"github.com/mlange-42/ark/ecs"
-	"github.com/zenion/mmokit/pkg/mmokit"
+	"github.com/mmokit/mmokit/pkg/mmokit"
 )
 
 // OscillateSystem moves all entities left and right.

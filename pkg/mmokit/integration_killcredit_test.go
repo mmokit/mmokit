@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/zenion/mmokit/pkg/mmokit"
+	"github.com/mmokit/mmokit/pkg/mmokit"
 )
 
 // killCreditMsg stands in for internal/game.KillCredit — same shape and

@@ -13,11 +13,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/zenion/mmokit/pkg/admin"
-	"github.com/zenion/mmokit/pkg/persist"
-	"github.com/zenion/mmokit/pkg/persist/persisttest"
-	"github.com/zenion/mmokit/pkg/services/auth"
-	"github.com/zenion/mmokit/pkg/universe"
+	"github.com/mmokit/mmokit/pkg/admin"
+	"github.com/mmokit/mmokit/pkg/persist"
+	"github.com/mmokit/mmokit/pkg/persist/persisttest"
+	"github.com/mmokit/mmokit/pkg/services/auth"
+	"github.com/mmokit/mmokit/pkg/universe"
 )
 
 // newE2EProcess spins up a minimal headless 2x2 universe.Process suitable

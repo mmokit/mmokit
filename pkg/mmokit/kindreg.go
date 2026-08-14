@@ -14,8 +14,8 @@ import (
 	"reflect"
 
 	"github.com/mlange-42/ark/ecs"
-	"github.com/zenion/mmokit/pkg/system"
-	"github.com/zenion/mmokit/pkg/universe"
+	"github.com/mmokit/mmokit/pkg/system"
+	"github.com/mmokit/mmokit/pkg/universe"
 )
 
 // FieldOption is the unified per-component option type. Aliased to

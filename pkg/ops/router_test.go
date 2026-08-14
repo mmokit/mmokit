@@ -3,7 +3,7 @@ package ops
 import (
 	"testing"
 
-	"github.com/zenion/mmokit/pkg/net"
+	"github.com/mmokit/mmokit/pkg/net"
 )
 
 // smokeTransport is a minimal net.Transport implementation that captures

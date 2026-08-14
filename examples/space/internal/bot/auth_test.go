@@ -8,7 +8,7 @@ import (
 	"sync/atomic"
 	"testing"
 
-	"github.com/zenion/mmokit/pkg/services/auth"
+	"github.com/mmokit/mmokit/pkg/services/auth"
 )
 
 // TestAuthenticate_RegisterSuccess verifies that a 200 from /auth/register

@@ -7,10 +7,10 @@ import (
 	"os"
 	"reflect"
 
-	gamecomp "github.com/zenion/mmokit/examples/space/internal/component"
-	"github.com/zenion/mmokit/examples/space/internal/game"
-	"github.com/zenion/mmokit/pkg/mmokit"
-	pkguniverse "github.com/zenion/mmokit/pkg/universe"
+	gamecomp "github.com/mmokit/mmokit/examples/space/internal/component"
+	"github.com/mmokit/mmokit/examples/space/internal/game"
+	"github.com/mmokit/mmokit/pkg/mmokit"
+	pkguniverse "github.com/mmokit/mmokit/pkg/universe"
 )
 
 // botDebug enables verbose per-frame logging when BOT_DEBUG=1 is set.

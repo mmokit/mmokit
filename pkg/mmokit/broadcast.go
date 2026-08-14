@@ -8,7 +8,7 @@ import (
 	"sync"
 	"unicode"
 
-	pkguniverse "github.com/zenion/mmokit/pkg/universe"
+	pkguniverse "github.com/mmokit/mmokit/pkg/universe"
 )
 
 // BroadcastTypeSchema is a serializable description of a broadcast-eligible

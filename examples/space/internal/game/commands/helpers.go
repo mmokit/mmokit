@@ -1,8 +1,8 @@
 package commands
 
 import (
-	"github.com/zenion/mmokit/examples/space/internal/game"
-	"github.com/zenion/mmokit/pkg/mmokit"
+	"github.com/mmokit/mmokit/examples/space/internal/game"
+	"github.com/mmokit/mmokit/pkg/mmokit"
 )
 
 // gwForStage returns the per-stage *game.GameWorld registered via

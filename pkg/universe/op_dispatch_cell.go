@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"reflect"
 
-	"github.com/zenion/mmokit/pkg/ops"
+	"github.com/mmokit/mmokit/pkg/ops"
 )
 
 // DispatchCellRoutedOp resolves the player's authoritative cell on this

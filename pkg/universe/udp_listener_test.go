@@ -6,9 +6,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/zenion/mmokit/pkg/logger"
-	pkgnet "github.com/zenion/mmokit/pkg/net"
-	"github.com/zenion/mmokit/pkg/net/udpclient"
+	"github.com/mmokit/mmokit/pkg/logger"
+	pkgnet "github.com/mmokit/mmokit/pkg/net"
+	"github.com/mmokit/mmokit/pkg/net/udpclient"
 )
 
 // freeUDPAddr binds an ephemeral UDP port, closes it, and returns the address —

@@ -7,7 +7,7 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/zenion/mmokit/pkg/component"
+	"github.com/mmokit/mmokit/pkg/component"
 )
 
 // TransferFrame is the generic wire format for entity transfers between nodes.

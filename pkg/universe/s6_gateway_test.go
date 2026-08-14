@@ -25,7 +25,7 @@ import (
 	"sync"
 	"testing"
 
-	pkgnet "github.com/zenion/mmokit/pkg/net"
+	pkgnet "github.com/mmokit/mmokit/pkg/net"
 )
 
 // s6MockTransport implements pkgnet.Transport for injecting fake client traffic.

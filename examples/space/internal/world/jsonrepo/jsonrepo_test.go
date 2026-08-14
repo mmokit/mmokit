@@ -6,8 +6,8 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/zenion/mmokit/examples/space/internal/world"
-	"github.com/zenion/mmokit/examples/space/internal/world/jsonrepo"
+	"github.com/mmokit/mmokit/examples/space/internal/world"
+	"github.com/mmokit/mmokit/examples/space/internal/world/jsonrepo"
 )
 
 func TestLoadAll_EmptyDir(t *testing.T) {

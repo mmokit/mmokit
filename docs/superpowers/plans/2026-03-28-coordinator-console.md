@@ -740,7 +740,7 @@ import (
 	"net/http"
 	"os"
 
-	"github.com/zenion/mmokit/pkg/mmokit"
+	"github.com/mmokit/mmokit/pkg/mmokit"
 )
 
 func main() {

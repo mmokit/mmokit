@@ -53,7 +53,7 @@ System files get a `system_` prefix. All other files keep existing names or exis
 
 1. **All moved files**: change `package system` / `package universe` to `package game`
 
-2. **Remove cross-package imports**: delete all `"github.com/zenion/mmokit/internal/system"` and `"github.com/zenion/mmokit/internal/game"` imports from moved files (now same package)
+2. **Remove cross-package imports**: delete all `"github.com/mmokit/mmokit/internal/system"` and `"github.com/mmokit/mmokit/internal/game"` imports from moved files (now same package)
 
 3. **Replace `unwrapGW()`**: add a package-level helper:
    ```go

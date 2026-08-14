@@ -6,7 +6,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/zenion/mmokit/pkg/cmdsys"
+	"github.com/mmokit/mmokit/pkg/cmdsys"
 )
 
 // commandSummary is the JSON shape returned by /commands and /commands/{verb}.

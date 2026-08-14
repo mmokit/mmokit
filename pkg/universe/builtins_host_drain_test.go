@@ -3,7 +3,7 @@ package universe
 import (
 	"testing"
 
-	"github.com/zenion/mmokit/pkg/cmdsys"
+	"github.com/mmokit/mmokit/pkg/cmdsys"
 )
 
 // TestHostDrainRegistration confirms the verb registers with the right

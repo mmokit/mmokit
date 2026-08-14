@@ -4,9 +4,9 @@ import (
 	"testing"
 
 	"github.com/mlange-42/ark/ecs"
-	"github.com/zenion/mmokit/pkg/spatial"
-	"github.com/zenion/mmokit/pkg/system"
-	"github.com/zenion/mmokit/pkg/universe"
+	"github.com/mmokit/mmokit/pkg/spatial"
+	"github.com/mmokit/mmokit/pkg/system"
+	"github.com/mmokit/mmokit/pkg/universe"
 )
 
 // ---------------------------------------------------------------------------

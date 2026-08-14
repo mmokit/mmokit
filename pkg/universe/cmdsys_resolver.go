@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"reflect"
 
-	"github.com/zenion/mmokit/pkg/cmdsys"
+	"github.com/mmokit/mmokit/pkg/cmdsys"
 )
 
 // Resolver-specific sentinel errors.

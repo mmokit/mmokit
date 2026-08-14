@@ -7,7 +7,7 @@ import (
 	"regexp"
 	"testing"
 
-	"github.com/zenion/mmokit/pkg/mmokit"
+	"github.com/mmokit/mmokit/pkg/mmokit"
 )
 
 // sdkTypeIDRe matches the "<pkg>.<Type> (typeID 0x<hex>)" annotation cmd/sdkgen

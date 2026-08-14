@@ -3,11 +3,11 @@ package game
 import (
 	"maps"
 
-	gamecomp "github.com/zenion/mmokit/examples/space/internal/component"
-	"github.com/zenion/mmokit/examples/space/internal/item"
-	"github.com/zenion/mmokit/examples/space/internal/world"
-	"github.com/zenion/mmokit/pkg/mmokit"
-	"github.com/zenion/mmokit/pkg/pathfinding"
+	gamecomp "github.com/mmokit/mmokit/examples/space/internal/component"
+	"github.com/mmokit/mmokit/examples/space/internal/item"
+	"github.com/mmokit/mmokit/examples/space/internal/world"
+	"github.com/mmokit/mmokit/pkg/mmokit"
+	"github.com/mmokit/mmokit/pkg/pathfinding"
 )
 
 // DockingProgress tracks a player's in-progress docking sequence.

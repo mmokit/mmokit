@@ -5,8 +5,8 @@ import (
 	"sync"
 	"time"
 
-	meshpb "github.com/zenion/mmokit/gen/go/meshpb"
-	"github.com/zenion/mmokit/pkg/logger"
+	meshpb "github.com/mmokit/mmokit/gen/go/meshpb"
+	"github.com/mmokit/mmokit/pkg/logger"
 )
 
 // settleWindow is the production default for how long the coordinator

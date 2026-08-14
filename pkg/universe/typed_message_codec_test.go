@@ -4,7 +4,7 @@ import (
 	"reflect"
 	"testing"
 
-	pkguniverse "github.com/zenion/mmokit/pkg/universe"
+	pkguniverse "github.com/mmokit/mmokit/pkg/universe"
 )
 
 type damageWire struct {

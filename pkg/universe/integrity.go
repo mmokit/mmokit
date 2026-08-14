@@ -6,7 +6,7 @@ import (
 	"time"
 
 	"github.com/mlange-42/ark/ecs"
-	"github.com/zenion/mmokit/pkg/component"
+	"github.com/mmokit/mmokit/pkg/component"
 )
 
 // InvariantMode controls how invariant violations are handled.

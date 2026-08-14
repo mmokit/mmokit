@@ -7,9 +7,9 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/zenion/mmokit/pkg/cmdsys"
-	"github.com/zenion/mmokit/pkg/engine"
-	"github.com/zenion/mmokit/pkg/persist"
+	"github.com/mmokit/mmokit/pkg/cmdsys"
+	"github.com/mmokit/mmokit/pkg/engine"
+	"github.com/mmokit/mmokit/pkg/persist"
 )
 
 // ── test fakes ──────────────────────────────────────────────────────────────

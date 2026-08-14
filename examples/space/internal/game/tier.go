@@ -3,8 +3,8 @@ package game
 import (
 	"math"
 
-	"github.com/zenion/mmokit/pkg/coords"
-	"github.com/zenion/mmokit/pkg/mmokit"
+	"github.com/mmokit/mmokit/pkg/coords"
+	"github.com/mmokit/mmokit/pkg/mmokit"
 )
 
 // tierForDist returns the tier of a world-space distance from the

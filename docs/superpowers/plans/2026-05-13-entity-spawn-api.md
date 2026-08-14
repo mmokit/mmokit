@@ -58,10 +58,10 @@ import (
 
 	"github.com/mlange-42/ark/ecs"
 
-	"github.com/zenion/mmokit/pkg/component"
-	"github.com/zenion/mmokit/pkg/engine"
-	"github.com/zenion/mmokit/pkg/logger"
-	"github.com/zenion/mmokit/pkg/net"
+	"github.com/mmokit/mmokit/pkg/component"
+	"github.com/mmokit/mmokit/pkg/engine"
+	"github.com/mmokit/mmokit/pkg/logger"
+	"github.com/mmokit/mmokit/pkg/net"
 )
 
 func newTestStage(t *testing.T) *Stage {
@@ -131,8 +131,8 @@ import (
 
 	"github.com/mlange-42/ark/ecs"
 
-	"github.com/zenion/mmokit/pkg/component"
-	"github.com/zenion/mmokit/pkg/spatial"
+	"github.com/mmokit/mmokit/pkg/component"
+	"github.com/mmokit/mmokit/pkg/spatial"
 )
 
 // componentAttachHandlers caches per-reflect.Type closures that attach a
@@ -264,7 +264,7 @@ func buildAttachFn(t reflect.Type) attachFn {
 ```go
 package mmokit
 
-import "github.com/zenion/mmokit/pkg/universe"
+import "github.com/mmokit/mmokit/pkg/universe"
 
 // Entity is the rich game-facing handle. Value type, cheap to pass.
 // Methods are safe on zero/dead entities — they return zero values, never panic.

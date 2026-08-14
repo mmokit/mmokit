@@ -7,8 +7,8 @@ import (
 	"sync/atomic"
 	"time"
 
-	meshpb "github.com/zenion/mmokit/gen/go/meshpb"
-	"github.com/zenion/mmokit/pkg/cmdsys"
+	meshpb "github.com/mmokit/mmokit/gen/go/meshpb"
+	"github.com/mmokit/mmokit/pkg/cmdsys"
 )
 
 // commandOrchestrator tracks in-flight cross-process command requests.

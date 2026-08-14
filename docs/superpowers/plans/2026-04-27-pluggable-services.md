@@ -268,7 +268,7 @@ package service
 import (
 	"context"
 
-	"github.com/zenion/mmokit/pkg/ops"
+	"github.com/mmokit/mmokit/pkg/ops"
 )
 
 // Service is the runtime interface a kind's instance implements.
@@ -296,9 +296,9 @@ type Service interface {
 package service
 
 import (
-	"github.com/zenion/mmokit/pkg/logger"
-	"github.com/zenion/mmokit/pkg/metrics"
-	"github.com/zenion/mmokit/pkg/persist/postgres"
+	"github.com/mmokit/mmokit/pkg/logger"
+	"github.com/mmokit/mmokit/pkg/metrics"
+	"github.com/mmokit/mmokit/pkg/persist/postgres"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -453,7 +453,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/zenion/mmokit/pkg/ops"
+	"github.com/mmokit/mmokit/pkg/ops"
 )
 
 type stubService struct{}
@@ -1323,7 +1323,7 @@ Then in `service_helpers.go`:
 ```go
 package universe
 
-import "github.com/zenion/mmokit/pkg/ops"
+import "github.com/mmokit/mmokit/pkg/ops"
 
 func snapshotRouterCodes(r *ops.Router) map[uint32]bool {
 	out := map[uint32]bool{}
@@ -1768,8 +1768,8 @@ git commit -m "feat(4node-basic): demo_echo table migration via ExtraMigrations 
 package echo
 
 import (
-	basicpb "github.com/zenion/mmokit/gen/go/basicpb"
-	"github.com/zenion/mmokit/pkg/service"
+	basicpb "github.com/mmokit/mmokit/gen/go/basicpb"
+	"github.com/mmokit/mmokit/pkg/service"
 )
 
 var Kind = service.Kind{
@@ -1797,10 +1797,10 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
-	basicpb "github.com/zenion/mmokit/gen/go/basicpb"
-	"github.com/zenion/mmokit/pkg/mmokit"
-	"github.com/zenion/mmokit/pkg/ops"
-	"github.com/zenion/mmokit/pkg/service"
+	basicpb "github.com/mmokit/mmokit/gen/go/basicpb"
+	"github.com/mmokit/mmokit/pkg/mmokit"
+	"github.com/mmokit/mmokit/pkg/ops"
+	"github.com/mmokit/mmokit/pkg/service"
 )
 
 const logCat = "services:echo"
@@ -1921,8 +1921,8 @@ with imports:
 
 ```go
 import (
-	"github.com/zenion/mmokit/examples/4node-basic/migrations"
-	"github.com/zenion/mmokit/examples/4node-basic/services/echo"
+	"github.com/mmokit/mmokit/examples/4node-basic/migrations"
+	"github.com/mmokit/mmokit/examples/4node-basic/services/echo"
 )
 ```
 

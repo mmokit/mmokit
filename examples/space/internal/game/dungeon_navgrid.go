@@ -3,7 +3,7 @@ package game
 import (
 	"math"
 
-	"github.com/zenion/mmokit/pkg/pathfinding"
+	"github.com/mmokit/mmokit/pkg/pathfinding"
 )
 
 // buildDungeonNavGrid rasterizes the dungeon's walkable area into a

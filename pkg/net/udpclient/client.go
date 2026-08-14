@@ -13,7 +13,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/zenion/mmokit/pkg/net/udpproto"
+	"github.com/mmokit/mmokit/pkg/net/udpproto"
 )
 
 const (

@@ -34,7 +34,7 @@ import (
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/keepalive"
 
-	meshpb "github.com/zenion/mmokit/gen/go/meshpb"
+	meshpb "github.com/mmokit/mmokit/gen/go/meshpb"
 )
 
 // meshGatewayClient connects a standalone gateway process to the coordinator

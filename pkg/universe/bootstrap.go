@@ -13,7 +13,7 @@ import (
 
 	"github.com/google/uuid"
 
-	pkgnet "github.com/zenion/mmokit/pkg/net"
+	pkgnet "github.com/mmokit/mmokit/pkg/net"
 )
 
 // BindFlags registers every engine-universal CLI flag on flag.CommandLine,

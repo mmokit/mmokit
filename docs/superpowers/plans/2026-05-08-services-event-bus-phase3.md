@@ -122,7 +122,7 @@ message ServiceEventSubscribe {
 message ServiceEvent {
   // Process ID of the publisher. Used for self-echo skip + diagnostics.
   string source_process_id = 1;
-  // Fully-qualified Go type name, e.g. "github.com/zenion/mmokit/pkg/service.SessionEnterEvent".
+  // Fully-qualified Go type name, e.g. "github.com/mmokit/mmokit/pkg/service.SessionEnterEvent".
   // Receivers look this up in service.eventTypes (Phase 1 registry) to decode payload.
   string type_name = 2;
   // Reflection-codec encoded payload (universe.ReflectMarshal output).
@@ -181,7 +181,7 @@ import (
 	"sync/atomic"
 	"testing"
 
-	"github.com/zenion/mmokit/pkg/service"
+	"github.com/mmokit/mmokit/pkg/service"
 )
 
 type remoteEvent struct{ Tag int }
@@ -203,7 +203,7 @@ func TestBus_RemotePublishCallback_FiresAfterLocalDispatch(t *testing.T) {
 	})
 
 	b.SetRoutingCache(map[string][]string{
-		"github.com/zenion/mmokit/pkg/service_test.remoteEvent": {"proc-B", "proc-C"},
+		"github.com/mmokit/mmokit/pkg/service_test.remoteEvent": {"proc-B", "proc-C"},
 	})
 
 	service.Publish(b, remoteEvent{Tag: 9})
@@ -217,7 +217,7 @@ func TestBus_RemotePublishCallback_FiresAfterLocalDispatch(t *testing.T) {
 		t.Fatalf("RemotePublish callback called %d times, want 1", len(remoteCalls))
 	}
 	got := remoteCalls[0]
-	if got.TypeName != "github.com/zenion/mmokit/pkg/service_test.remoteEvent" {
+	if got.TypeName != "github.com/mmokit/mmokit/pkg/service_test.remoteEvent" {
 		t.Fatalf("typeName=%q", got.TypeName)
 	}
 	want := map[string]bool{"proc-B": true, "proc-C": true}
@@ -232,7 +232,7 @@ func TestBus_PublishLocal_SkipsRemote(t *testing.T) {
 	var remoteCalled int32
 	b.SetRemotePublish(func(call service.RemotePublishCall) { atomic.AddInt32(&remoteCalled, 1) })
 	b.SetRoutingCache(map[string][]string{
-		"github.com/zenion/mmokit/pkg/service_test.remoteEvent": {"proc-B"},
+		"github.com/mmokit/mmokit/pkg/service_test.remoteEvent": {"proc-B"},
 	})
 	service.PublishLocal(b, remoteEvent{Tag: 1})
 	if atomic.LoadInt32(&remoteCalled) != 0 {
@@ -247,7 +247,7 @@ func TestBus_RemotePublish_SelfSkipped(t *testing.T) {
 		calls = append(calls, call)
 	})
 	b.SetRoutingCache(map[string][]string{
-		"github.com/zenion/mmokit/pkg/service_test.remoteEvent": {"proc-A", "proc-B"},
+		"github.com/mmokit/mmokit/pkg/service_test.remoteEvent": {"proc-A", "proc-B"},
 	})
 	service.Publish(b, remoteEvent{Tag: 1})
 	if len(calls) != 1 {
@@ -989,8 +989,8 @@ package universe
 import (
 	"fmt"
 
-	meshpb "github.com/zenion/mmokit/gen/go/meshpb"
-	"github.com/zenion/mmokit/pkg/service"
+	meshpb "github.com/mmokit/mmokit/gen/go/meshpb"
+	"github.com/mmokit/mmokit/pkg/service"
 )
 
 // installServiceEventDispatch wires the universe-side RemotePublishFunc
@@ -1182,7 +1182,7 @@ Add the imports to `host_network.go` if not already present:
 ```go
 	"reflect"
 
-	"github.com/zenion/mmokit/pkg/service"
+	"github.com/mmokit/mmokit/pkg/service"
 ```
 
 - [ ] **Step 2: Expose `PublishAny` from `pkg/service`**
@@ -1494,8 +1494,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/zenion/mmokit/pkg/service"
-	. "github.com/zenion/mmokit/pkg/universe"
+	"github.com/mmokit/mmokit/pkg/service"
+	. "github.com/mmokit/mmokit/pkg/universe"
 )
 
 // testEvent is a custom event type defined inside the test for routing
@@ -1545,7 +1545,7 @@ func TestServiceEventBus_E2E_SubscribeAndPublish(t *testing.T) {
 	// + one round-trip.
 	if err := waitFor(ctx, 200*time.Millisecond, func() bool {
 		got := coord.SnapshotEventRouting()
-		ids := got["github.com/zenion/mmokit/pkg/universe_test.testEvent"]
+		ids := got["github.com/mmokit/mmokit/pkg/universe_test.testEvent"]
 		for _, id := range ids {
 			if id == "svc-A" {
 				return true

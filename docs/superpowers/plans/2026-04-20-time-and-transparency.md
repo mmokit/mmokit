@@ -319,8 +319,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/zenion/mmokit/pkg/net"
-	"github.com/zenion/mmokit/pkg/quantize"
+	"github.com/mmokit/mmokit/pkg/net"
+	"github.com/mmokit/mmokit/pkg/quantize"
 )
 ```
 
@@ -409,8 +409,8 @@ Open `pkg/system/frame_writer.go`. Near the top, add to the imports:
 import (
 	"time"
 
-	"github.com/zenion/mmokit/pkg/net"
-	"github.com/zenion/mmokit/pkg/quantize"
+	"github.com/mmokit/mmokit/pkg/net"
+	"github.com/mmokit/mmokit/pkg/quantize"
 )
 ```
 
@@ -1334,8 +1334,8 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/zenion/mmokit/pkg/net"
-	"github.com/zenion/mmokit/pkg/quantize"
+	"github.com/mmokit/mmokit/pkg/net"
+	"github.com/mmokit/mmokit/pkg/quantize"
 )
 
 // captureSender wraps a ConnSender and records every outbound frame so

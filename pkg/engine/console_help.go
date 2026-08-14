@@ -5,7 +5,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/zenion/mmokit/pkg/cmdsys"
+	"github.com/mmokit/mmokit/pkg/cmdsys"
 )
 
 // buildHelpText generates categorized top-level help text by walking the

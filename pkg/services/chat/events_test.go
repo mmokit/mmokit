@@ -4,8 +4,8 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/zenion/mmokit/pkg/mmokit"
-	"github.com/zenion/mmokit/pkg/services/chat"
+	"github.com/mmokit/mmokit/pkg/mmokit"
+	"github.com/mmokit/mmokit/pkg/services/chat"
 )
 
 // TestRegisterChatServerEvents_TypeIDsRegistered asserts that, after

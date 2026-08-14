@@ -1,8 +1,8 @@
 package mmokit
 
 import (
-	"github.com/zenion/mmokit/pkg/engine"
-	"github.com/zenion/mmokit/pkg/universe"
+	"github.com/mmokit/mmokit/pkg/engine"
+	"github.com/mmokit/mmokit/pkg/universe"
 )
 
 // SystemBase is the canonical base for all game systems. Embed it to get:

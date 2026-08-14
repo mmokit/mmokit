@@ -32,8 +32,8 @@ package main
 import (
 	"math"
 
-	comp "github.com/zenion/mmokit/pkg/component"
-	"github.com/zenion/mmokit/pkg/wasmsys"
+	comp "github.com/mmokit/mmokit/pkg/component"
+	"github.com/mmokit/mmokit/pkg/wasmsys"
 )
 
 // tint drives comp.Tint from cluster time. Both fields are operator-tunable

@@ -6,7 +6,7 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/zenion/mmokit/pkg/ops"
+	"github.com/mmokit/mmokit/pkg/ops"
 )
 
 // HandleMuteUser mutes a user either globally (req.ChannelID == "" →

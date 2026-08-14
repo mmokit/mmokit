@@ -9,8 +9,8 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/zenion/mmokit/pkg/cmdsys"
-	"github.com/zenion/mmokit/pkg/universe"
+	"github.com/mmokit/mmokit/pkg/cmdsys"
+	"github.com/mmokit/mmokit/pkg/universe"
 )
 
 // wasmRegEntry binds a registered wasm system's artifact path to a type-erased,

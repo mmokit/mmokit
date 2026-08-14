@@ -68,7 +68,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/zenion/mmokit/pkg/engine"
+	"github.com/mmokit/mmokit/pkg/engine"
 )
 
 func TestBuildPerfCellSnapshotPopulatesAllFields(t *testing.T) {
@@ -140,8 +140,8 @@ package universe
 import (
 	"time"
 
-	"github.com/zenion/mmokit/pkg/engine"
-	"github.com/zenion/mmokit/pkg/metrics"
+	"github.com/mmokit/mmokit/pkg/engine"
+	"github.com/mmokit/mmokit/pkg/metrics"
 )
 
 // PerfCellSnapshot is the wire format returned by perf.snapshot for a single
@@ -546,8 +546,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/zenion/mmokit/pkg/cmdsys"
-	"github.com/zenion/mmokit/pkg/engine"
+	"github.com/mmokit/mmokit/pkg/cmdsys"
+	"github.com/mmokit/mmokit/pkg/engine"
 )
 
 // A minimal in-memory coordinator wrapper for handler-level tests.
@@ -1248,8 +1248,8 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/zenion/mmokit/pkg/cmdsys"
-	"github.com/zenion/mmokit/pkg/engine"
+	"github.com/mmokit/mmokit/pkg/cmdsys"
+	"github.com/mmokit/mmokit/pkg/engine"
 )
 
 type loadArgs struct{}
@@ -1350,7 +1350,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/zenion/mmokit/pkg/cmdsys"
+	"github.com/mmokit/mmokit/pkg/cmdsys"
 )
 
 // TestPerfDistributedFanOut verifies that `perf` at the coordinator returns

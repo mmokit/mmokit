@@ -72,8 +72,8 @@ package component
 
 import (
 	"github.com/mlange-42/ark/ecs"
-	gamepb "github.com/zenion/mmokit/gen/go/gamepb"
-	"github.com/zenion/mmokit/internal/item"
+	gamepb "github.com/mmokit/mmokit/gen/go/gamepb"
+	"github.com/mmokit/mmokit/internal/item"
 )
 
 // Collision layers (game-specific assignments)
@@ -101,7 +101,7 @@ package component
 
 import (
 	"github.com/mlange-42/ark/ecs"
-	"github.com/zenion/mmokit/internal/item"
+	"github.com/mmokit/mmokit/internal/item"
 )
 
 // Collision layers (game-specific assignments)
@@ -194,7 +194,7 @@ Read [internal/bot/world.go](internal/bot/world.go) lines 1-20 and 50-80 and 230
 - The `gamepb.EntityType(entityType)` cast at line 238
 
 Edit the file:
-1. Add `gamecomp "github.com/zenion/mmokit/internal/component"` to the import block; remove the `gamepb "github.com/zenion/mmokit/gen/go/gamepb"` import.
+1. Add `gamecomp "github.com/mmokit/mmokit/internal/component"` to the import block; remove the `gamepb "github.com/mmokit/mmokit/gen/go/gamepb"` import.
 2. Delete the `typeShip`/`typeAsteroid`/`typeStation`/`typeLootCrate`/`typeNPC` const block — those were thin re-derivations of the proto enum and are no longer needed; the rest of `world.go` references them, so the rename also applies there.
 3. Replace every `typeShip` / `typeAsteroid` / `typeStation` / `typeLootCrate` / `typeNPC` reference inside `world.go` with `gamecomp.KindShip` / etc.
 4. Change the `EntitySnapshot.Type` field from `gamepb.EntityType` to `uint8`.
@@ -211,10 +211,10 @@ Expected: zero hits.
 Read lines 360-390 to find the `gamepb.EntityType_ENTITY_TYPE_ASTEROID` and `gamepb.EntityType_ENTITY_TYPE_STATION` references (around lines 363 and 386).
 
 Edit:
-1. Drop the `gamepb` import (line 16: `gamepb "github.com/zenion/mmokit/gen/go/gamepb"`).
+1. Drop the `gamepb` import (line 16: `gamepb "github.com/mmokit/mmokit/gen/go/gamepb"`).
 2. Replace `gamepb.EntityType_ENTITY_TYPE_ASTEROID` → `gamecomp.KindAsteroid`.
 3. Replace `gamepb.EntityType_ENTITY_TYPE_STATION` → `gamecomp.KindStation`.
-4. Add `gamecomp "github.com/zenion/mmokit/internal/component"` to the import block (if not already added by world.go's edits — the bot package imports work file-locally).
+4. Add `gamecomp "github.com/mmokit/mmokit/internal/component"` to the import block (if not already added by world.go's edits — the bot package imports work file-locally).
 
 Verify:
 ```bash
@@ -241,7 +241,7 @@ Expected: zero hits.
 
 Find the reference: line 79: `return e.Type == gamepb.EntityType_ENTITY_TYPE_SHIP && e.PilotName != b.Name()`.
 
-Edit: replace `gamepb.EntityType_ENTITY_TYPE_SHIP` → `gamecomp.KindShip`. Add `gamecomp "github.com/zenion/mmokit/internal/component"` import. Drop `gamepb` import.
+Edit: replace `gamepb.EntityType_ENTITY_TYPE_SHIP` → `gamecomp.KindShip`. Add `gamecomp "github.com/mmokit/mmokit/internal/component"` import. Drop `gamepb` import.
 
 - [ ] **Step 5: Update `cmd/botclient/miners.go`**
 

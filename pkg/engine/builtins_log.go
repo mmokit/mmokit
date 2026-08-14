@@ -6,8 +6,8 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/zenion/mmokit/pkg/cmdsys"
-	"github.com/zenion/mmokit/pkg/logger"
+	"github.com/mmokit/mmokit/pkg/cmdsys"
+	"github.com/mmokit/mmokit/pkg/logger"
 )
 
 // ── arg/result types ─────────────────────────────────────────────────────────

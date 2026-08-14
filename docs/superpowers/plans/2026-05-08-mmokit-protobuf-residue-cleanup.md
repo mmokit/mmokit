@@ -792,8 +792,8 @@ import (
     "log"
     "reflect"
 
-    "github.com/zenion/mmokit/pkg/mmokit"
-    "github.com/zenion/mmokit/pkg/universe"
+    "github.com/mmokit/mmokit/pkg/mmokit"
+    "github.com/mmokit/mmokit/pkg/universe"
 )
 
 // typedEventTypeID returns the FNV-1a typeID the server uses to identify the
@@ -1030,7 +1030,7 @@ import (
     "sort"
     "strings"
 
-    "github.com/zenion/mmokit/pkg/mmokit"
+    "github.com/mmokit/mmokit/pkg/mmokit"
 )
 
 func registerServiceBuiltins(c *Process, add func(name, help string, fn ConsoleCommand)) {

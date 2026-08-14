@@ -1,8 +1,8 @@
 package game
 
 import (
-	"github.com/zenion/mmokit/pkg/mmokit"
-	"github.com/zenion/mmokit/pkg/spatial"
+	"github.com/mmokit/mmokit/pkg/mmokit"
+	"github.com/mmokit/mmokit/pkg/spatial"
 )
 
 // vec2 is a local shorthand for converting (x,y) pairs to spatial.Vec2.

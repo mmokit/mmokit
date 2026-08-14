@@ -4,7 +4,7 @@ import (
 	"context"
 	"errors"
 
-	"github.com/zenion/mmokit/pkg/logger"
+	"github.com/mmokit/mmokit/pkg/logger"
 )
 
 // Sentinel errors returned by Dispatcher and related functions.

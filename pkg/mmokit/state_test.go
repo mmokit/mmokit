@@ -3,7 +3,7 @@ package mmokit
 import (
 	"testing"
 
-	"github.com/zenion/mmokit/pkg/universe"
+	"github.com/mmokit/mmokit/pkg/universe"
 )
 
 type stateTestMarket struct{ Orders int }

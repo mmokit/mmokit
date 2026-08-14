@@ -5,10 +5,10 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/zenion/mmokit/pkg/mmokit"
-	pkgnet "github.com/zenion/mmokit/pkg/net"
-	"github.com/zenion/mmokit/pkg/ops"
-	pkguniverse "github.com/zenion/mmokit/pkg/universe"
+	"github.com/mmokit/mmokit/pkg/mmokit"
+	pkgnet "github.com/mmokit/mmokit/pkg/net"
+	"github.com/mmokit/mmokit/pkg/ops"
+	pkguniverse "github.com/mmokit/mmokit/pkg/universe"
 )
 
 // dispReq / dispRes are the test op pair. dispRes carries Y = X * 2 so the

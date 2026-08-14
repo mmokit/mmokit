@@ -1,8 +1,8 @@
 # MMOKIT
 
-[![CI](https://github.com/zenion/mmokit/actions/workflows/ci.yml/badge.svg)](https://github.com/zenion/mmokit/actions/workflows/ci.yml)
-[![Go Reference](https://pkg.go.dev/badge/github.com/zenion/mmokit.svg)](https://pkg.go.dev/github.com/zenion/mmokit)
-[![Go Version](https://img.shields.io/github/go-mod/go-version/zenion/mmokit)](go.mod)
+[![CI](https://github.com/mmokit/mmokit/actions/workflows/ci.yml/badge.svg)](https://github.com/mmokit/mmokit/actions/workflows/ci.yml)
+[![Go Reference](https://pkg.go.dev/badge/github.com/mmokit/mmokit.svg)](https://pkg.go.dev/github.com/mmokit/mmokit)
+[![Go Version](https://img.shields.io/github/go-mod/go-version/mmokit/mmokit)](go.mod)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
 MMOKIT is a server-authoritative multiplayer game framework written in Go, exposed through [`pkg/mmokit`](pkg/mmokit/). The repository ships the framework plus three runnable examples — including a complete space game with a PixiJS client — along with generated client SDK tooling and distributed deployment recipes.

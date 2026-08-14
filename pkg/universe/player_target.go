@@ -3,8 +3,8 @@ package universe
 import (
 	"strings"
 
-	"github.com/zenion/mmokit/pkg/cmdsys"
-	"github.com/zenion/mmokit/pkg/engine"
+	"github.com/mmokit/mmokit/pkg/cmdsys"
+	"github.com/mmokit/mmokit/pkg/engine"
 )
 
 // PlayerTarget is the result of ResolvePlayerTarget. Exactly one of Online

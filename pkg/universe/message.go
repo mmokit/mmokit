@@ -3,7 +3,7 @@ package universe
 import (
 	"github.com/google/uuid"
 
-	"github.com/zenion/mmokit/pkg/coords"
+	"github.com/mmokit/mmokit/pkg/coords"
 )
 
 // MsgType identifies the kind of inter-cell message.

@@ -151,7 +151,7 @@ Create `internal/game/system_util.go`:
 ```go
 package game
 
-import "github.com/zenion/mmokit/pkg/mmokit"
+import "github.com/mmokit/mmokit/pkg/mmokit"
 
 // gwFromSystem extracts a *GameWorld from the mmokit.GameWorld interface
 // returned by SystemBase.GameWorld(). All game systems call this in Init().
@@ -162,7 +162,7 @@ func gwFromSystem(base mmokit.SystemBase) *GameWorld {
 
 - [ ] **Step 2: Fix system files that use unwrapGW() and import game**
 
-For each system file that calls `unwrapGW(s.GameWorld())`, replace with `gwFromSystem(s.SystemBase)`. Also remove the `"github.com/zenion/mmokit/internal/game"` import and drop all `game.` prefixes from type references.
+For each system file that calls `unwrapGW(s.GameWorld())`, replace with `gwFromSystem(s.SystemBase)`. Also remove the `"github.com/mmokit/mmokit/internal/game"` import and drop all `game.` prefixes from type references.
 
 Files to update (all have `unwrapGW` + `game` import):
 - `system_ability.go`: remove game import, `game.GameWorld` -> `GameWorld`, `game.ActionDamage` -> `ActionDamage`, `game.MarshalDamageAction` -> `MarshalDamageAction`, `game.MarshalStatusEffectAction` -> `MarshalStatusEffectAction`, `game.MarshalMiningAction` -> `MarshalMiningAction`, `game.CatCombatAbility` -> `CatCombatAbility`, `game.CatEconomyMining` -> `CatEconomyMining`
@@ -178,7 +178,7 @@ Files to update (all have `unwrapGW` + `game` import):
 - `system_targetlock.go`: remove game import, `game.CatCombatLock` -> `CatCombatLock`
 
 For each file, the mechanical changes are:
-1. Delete the `"github.com/zenion/mmokit/internal/game"` import line
+1. Delete the `"github.com/mmokit/mmokit/internal/game"` import line
 2. Replace `unwrapGW(s.GameWorld())` with `gwFromSystem(s.SystemBase)`
 3. Replace all `game.` prefixed references with the bare type name
 
@@ -218,7 +218,7 @@ done
 
 - [ ] **Step 5: Fix replication_adapters.go**
 
-Has `game.GameWorld` references and imports `"github.com/zenion/mmokit/pkg/system"` for Hasher/ViewerInfo types. Remove game import, keep pkg/system import.
+Has `game.GameWorld` references and imports `"github.com/mmokit/mmokit/pkg/system"` for Hasher/ViewerInfo types. Remove game import, keep pkg/system import.
 
 ```bash
 sed -i '/"github.com\/zenion\/mmoserver\/internal\/game"/d' internal/game/replication_adapters.go
@@ -310,7 +310,7 @@ Update test file imports. Tests that imported `internal/game` and `internal/univ
 
 - [ ] **Step 1: Fix testutil_test.go**
 
-This file imported both `"internal/game"` (aliased or not) and references `game.NewGameWorld`, `game.DefaultGameConfig`, etc. Since it's `package game_test`, it still needs to qualify with `game.` -- but the import path changes to just `"github.com/zenion/mmokit/internal/game"` (which it may already have). Remove any `"internal/universe"` import.
+This file imported both `"internal/game"` (aliased or not) and references `game.NewGameWorld`, `game.DefaultGameConfig`, etc. Since it's `package game_test`, it still needs to qualify with `game.` -- but the import path changes to just `"github.com/mmokit/mmokit/internal/game"` (which it may already have). Remove any `"internal/universe"` import.
 
 For test files in `package game_test`, they access exported symbols via the `game` package name. So `game.NewGameWorld` stays as-is. Only the `universe.` prefixed calls need updating -- `universe.GameSetup` becomes `game.GameSetup`, etc.
 
@@ -333,7 +333,7 @@ The tests may call `universe.UnwrapGameWorld()`. After the merge, this becomes `
 grep -r "UnwrapGameWorld" internal/game/*_test.go
 ```
 
-If found, ensure the import is `"github.com/zenion/mmokit/internal/game"` and the call uses `game.UnwrapGameWorld()`.
+If found, ensure the import is `"github.com/mmokit/mmokit/internal/game"` and the call uses `game.UnwrapGameWorld()`.
 
 - [ ] **Step 3: Run tests**
 
@@ -363,7 +363,7 @@ sed -i '/internaluniverse.*internal\/universe/d' cmd/server/main.go
 sed -i 's/internaluniverse\./game./g' cmd/server/main.go
 ```
 
-The file already imports `"github.com/zenion/mmokit/internal/game"`, so no new import is needed.
+The file already imports `"github.com/mmokit/mmokit/internal/game"`, so no new import is needed.
 
 - [ ] **Step 2: Run go vet on cmd/server**
 

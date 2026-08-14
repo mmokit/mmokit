@@ -12,7 +12,7 @@ import (
 
 	"golang.org/x/term"
 
-	"github.com/zenion/mmokit/pkg/cmdsys"
+	"github.com/mmokit/mmokit/pkg/cmdsys"
 )
 
 // operatorCaller is the Caller used for all interactive console invocations.

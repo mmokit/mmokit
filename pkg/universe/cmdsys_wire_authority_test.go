@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/zenion/mmokit/pkg/cmdsys"
+	"github.com/mmokit/mmokit/pkg/cmdsys"
 )
 
 // TestCallerProto_DropsGrants pins criterion 10's first clause at the

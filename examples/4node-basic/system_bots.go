@@ -3,7 +3,7 @@ package main
 import (
 	"math/rand"
 
-	"github.com/zenion/mmokit/pkg/mmokit"
+	"github.com/mmokit/mmokit/pkg/mmokit"
 )
 
 // BotSystem drives bot entities on whichever cell it runs on. One instance per

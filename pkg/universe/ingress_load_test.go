@@ -8,8 +8,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/zenion/mmokit/pkg/metrics"
-	pkgnet "github.com/zenion/mmokit/pkg/net"
+	"github.com/mmokit/mmokit/pkg/metrics"
+	pkgnet "github.com/mmokit/mmokit/pkg/net"
 )
 
 // loadPing is the typed client-input message the sustained-ingress test floods

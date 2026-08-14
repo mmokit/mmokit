@@ -3,8 +3,8 @@ package mmokit
 import (
 	"github.com/mlange-42/ark/ecs"
 
-	"github.com/zenion/mmokit/pkg/query"
-	pkguniverse "github.com/zenion/mmokit/pkg/universe"
+	"github.com/mmokit/mmokit/pkg/query"
+	pkguniverse "github.com/mmokit/mmokit/pkg/universe"
 )
 
 // OnWorldTick registers fn to fire once per simulation tick on the stage.

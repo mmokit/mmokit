@@ -40,7 +40,7 @@ import (
 	"testing"
 
 	"github.com/mlange-42/ark/ecs"
-	"github.com/zenion/mmokit/pkg/component"
+	"github.com/mmokit/mmokit/pkg/component"
 )
 
 // queryTestSys implements the interface{ ECSWorld() *ecs.World } needed by Query.Init.
@@ -119,7 +119,7 @@ import (
 	"unsafe"
 
 	"github.com/mlange-42/ark/ecs"
-	"github.com/zenion/mmokit/pkg/component"
+	"github.com/mmokit/mmokit/pkg/component"
 )
 
 // fieldMeta stores precomputed info for populating one bundle field.
@@ -533,7 +533,7 @@ package main
 import (
 	"context"
 
-	"github.com/zenion/mmokit/pkg/mmokit"
+	"github.com/mmokit/mmokit/pkg/mmokit"
 )
 
 // OscillateSystem moves all entities left and right.
@@ -603,9 +603,9 @@ git commit -m "refactor: migrate examples/simple to mmokit.Query[T]"
 package system
 
 import (
-	"github.com/zenion/mmokit/pkg/component"
-	"github.com/zenion/mmokit/pkg/engine"
-	"github.com/zenion/mmokit/pkg/mmokit"
+	"github.com/mmokit/mmokit/pkg/component"
+	"github.com/mmokit/mmokit/pkg/engine"
+	"github.com/mmokit/mmokit/pkg/mmokit"
 )
 
 // PhysicsSystem integrates velocity into position each tick.
@@ -637,9 +637,9 @@ func (s *PhysicsSystem) Update(dt float32) {
 package system
 
 import (
-	"github.com/zenion/mmokit/pkg/component"
-	"github.com/zenion/mmokit/pkg/engine"
-	"github.com/zenion/mmokit/pkg/mmokit"
+	"github.com/mmokit/mmokit/pkg/component"
+	"github.com/mmokit/mmokit/pkg/engine"
+	"github.com/mmokit/mmokit/pkg/mmokit"
 )
 
 // LifetimeSystem despawns entities whose Lifetime component has expired.
@@ -698,9 +698,9 @@ package system
 import (
 	"math"
 
-	"github.com/zenion/mmokit/pkg/component"
-	"github.com/zenion/mmokit/pkg/engine"
-	"github.com/zenion/mmokit/pkg/mmokit"
+	"github.com/mmokit/mmokit/pkg/component"
+	"github.com/mmokit/mmokit/pkg/engine"
+	"github.com/mmokit/mmokit/pkg/mmokit"
 )
 
 // DirectionMoveSystem moves entities in the direction of their DirectionInput
@@ -755,10 +755,10 @@ package system
 import (
 	"math"
 
-	"github.com/zenion/mmokit/pkg/component"
-	"github.com/zenion/mmokit/pkg/coords"
-	"github.com/zenion/mmokit/pkg/engine"
-	"github.com/zenion/mmokit/pkg/mmokit"
+	"github.com/mmokit/mmokit/pkg/component"
+	"github.com/mmokit/mmokit/pkg/coords"
+	"github.com/mmokit/mmokit/pkg/engine"
+	"github.com/mmokit/mmokit/pkg/mmokit"
 )
 
 const defaultMaxSpeed float32 = 300
@@ -842,10 +842,10 @@ package system
 import (
 	"github.com/mlange-42/ark/ecs"
 
-	"github.com/zenion/mmokit/pkg/component"
-	"github.com/zenion/mmokit/pkg/engine"
-	"github.com/zenion/mmokit/pkg/mmokit"
-	"github.com/zenion/mmokit/pkg/spatial"
+	"github.com/mmokit/mmokit/pkg/component"
+	"github.com/mmokit/mmokit/pkg/engine"
+	"github.com/mmokit/mmokit/pkg/mmokit"
+	"github.com/mmokit/mmokit/pkg/spatial"
 )
 
 // SpatialHooks provides optional per-tick callbacks for game-specific spatial logic.
@@ -950,9 +950,9 @@ git commit -m "refactor: migrate DirectionMove, ClickToMove, Spatial to Query[T]
 package system
 
 import (
-	"github.com/zenion/mmokit/pkg/component"
-	"github.com/zenion/mmokit/pkg/engine"
-	"github.com/zenion/mmokit/pkg/mmokit"
+	"github.com/mmokit/mmokit/pkg/component"
+	"github.com/mmokit/mmokit/pkg/engine"
+	"github.com/mmokit/mmokit/pkg/mmokit"
 )
 
 // ReplicaDeadReckoningSystem advances replica and ghost entity positions
@@ -1016,7 +1016,7 @@ git commit -m "refactor: migrate ReplicaDeadReckoningSystem to Query[T]"
 package main
 
 import (
-	"github.com/zenion/mmokit/pkg/mmokit"
+	"github.com/mmokit/mmokit/pkg/mmokit"
 )
 
 // DebugInfoSystem updates game-specific debug fields each tick.

@@ -5,8 +5,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/zenion/mmokit/pkg/logger"
-	"github.com/zenion/mmokit/pkg/net"
+	"github.com/mmokit/mmokit/pkg/logger"
+	"github.com/mmokit/mmokit/pkg/net"
 )
 
 // The admission guard added in CE-006 criterion 9 can fail in two directions.

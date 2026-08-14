@@ -9,9 +9,9 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	gamepersist "github.com/zenion/mmokit/examples/space/internal/persist"
-	"github.com/zenion/mmokit/pkg/logger"
-	"github.com/zenion/mmokit/pkg/persist"
+	gamepersist "github.com/mmokit/mmokit/examples/space/internal/persist"
+	"github.com/mmokit/mmokit/pkg/logger"
+	"github.com/mmokit/mmokit/pkg/persist"
 )
 
 // PlayerFlusher owns dirty-tracking + batched upserts spanning engine

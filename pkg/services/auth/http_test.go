@@ -8,8 +8,8 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/zenion/mmokit/pkg/logger"
-	"github.com/zenion/mmokit/pkg/service"
+	"github.com/mmokit/mmokit/pkg/logger"
+	"github.com/mmokit/mmokit/pkg/service"
 )
 
 func newHTTPTestService(t *testing.T) (*Service, *inMemRepo, *http.ServeMux, HTTPOpts) {

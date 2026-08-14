@@ -14,7 +14,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
-	"github.com/zenion/mmokit/pkg/persist"
+	"github.com/mmokit/mmokit/pkg/persist"
 )
 
 // PlayerRepoMock is an in-memory PlayerRepository. Primary index is

@@ -6,7 +6,7 @@ import (
 	"reflect"
 
 	"github.com/mlange-42/ark/ecs"
-	"github.com/zenion/mmokit/pkg/component"
+	"github.com/mmokit/mmokit/pkg/component"
 )
 
 // Entity is the game-facing handle. Value type, cheap to pass.

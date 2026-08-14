@@ -6,9 +6,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/zenion/mmokit/pkg/coords"
-	"github.com/zenion/mmokit/pkg/logger"
-	"github.com/zenion/mmokit/pkg/net"
+	"github.com/mmokit/mmokit/pkg/coords"
+	"github.com/mmokit/mmokit/pkg/logger"
+	"github.com/mmokit/mmokit/pkg/net"
 )
 
 // distributedFixture spins up one coord-role *Process (Mode=coordinator,

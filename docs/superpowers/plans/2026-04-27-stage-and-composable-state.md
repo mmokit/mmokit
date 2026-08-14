@@ -273,7 +273,7 @@ import (
 	"reflect"
 
 	"github.com/mlange-42/ark/ecs"
-	"github.com/zenion/mmokit/pkg/universe"
+	"github.com/mmokit/mmokit/pkg/universe"
 )
 
 // RegisterKind registers an entity kind on the Process. T is a struct of
@@ -540,8 +540,8 @@ package mmokit
 import (
 	"testing"
 
-	"github.com/zenion/mmokit/pkg/component"
-	"github.com/zenion/mmokit/pkg/universe"
+	"github.com/mmokit/mmokit/pkg/component"
+	"github.com/mmokit/mmokit/pkg/universe"
 	"github.com/mlange-42/ark/ecs"
 )
 
@@ -634,7 +634,7 @@ import (
 	"reflect"
 
 	"github.com/mlange-42/ark/ecs"
-	"github.com/zenion/mmokit/pkg/universe"
+	"github.com/mmokit/mmokit/pkg/universe"
 )
 
 // Init is a SpawnOption that populates a typed component bundle after the
@@ -843,7 +843,7 @@ package mmokit
 
 import (
 	"testing"
-	"github.com/zenion/mmokit/pkg/engine"
+	"github.com/mmokit/mmokit/pkg/engine"
 )
 
 func TestOnPlayerJoin_FiresOnStateActive(t *testing.T) {
@@ -913,8 +913,8 @@ In `pkg/mmokit/lifecycle.go`:
 package mmokit
 
 import (
-	"github.com/zenion/mmokit/pkg/engine"
-	"github.com/zenion/mmokit/pkg/universe"
+	"github.com/mmokit/mmokit/pkg/engine"
+	"github.com/mmokit/mmokit/pkg/universe"
 )
 
 // OnPlayerJoin registers a callback fired when a player session enters
@@ -1112,7 +1112,7 @@ import (
 	"fmt"
 	"reflect"
 
-	"github.com/zenion/mmokit/pkg/universe"
+	"github.com/mmokit/mmokit/pkg/universe"
 )
 
 // AddState registers a per-stage state factory. Each Stage instantiates
@@ -1181,7 +1181,7 @@ type BotComponents struct {
 }
 ```
 
-Add the import: `"github.com/zenion/mmokit/pkg/mmokit"`.
+Add the import: `"github.com/mmokit/mmokit/pkg/mmokit"`.
 
 - [ ] **Step 2: Verify compiles**
 

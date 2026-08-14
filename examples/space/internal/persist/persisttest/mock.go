@@ -15,7 +15,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
-	gamepersist "github.com/zenion/mmokit/examples/space/internal/persist"
+	gamepersist "github.com/mmokit/mmokit/examples/space/internal/persist"
 )
 
 // MarketRepoMock is an in-memory MarketRepository. Tracks the

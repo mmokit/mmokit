@@ -74,8 +74,8 @@ The result: `CrossCellAction`, `ActionResult`, and `ActionType` continue to exis
 package game
 
 import (
-    gamecomp "github.com/zenion/mmokit/internal/component"
-    "github.com/zenion/mmokit/pkg/mmokit"
+    gamecomp "github.com/mmokit/mmokit/internal/component"
+    "github.com/mmokit/mmokit/pkg/mmokit"
 )
 
 // Status is a typed cross-cell-aware status-effect application message.
@@ -124,7 +124,7 @@ Append to `verb_status.go`:
 
 ```go
 import (
-    gamepb "github.com/zenion/mmokit/gen/go/gamepb"
+    gamepb "github.com/mmokit/mmokit/gen/go/gamepb"
 )
 
 // statusHandler applies the status effect to the target's StatusEffects
@@ -351,8 +351,8 @@ package game
 import (
     "testing"
 
-    gamecomp "github.com/zenion/mmokit/internal/component"
-    "github.com/zenion/mmokit/pkg/mmokit"
+    gamecomp "github.com/mmokit/mmokit/internal/component"
+    "github.com/mmokit/mmokit/pkg/mmokit"
 )
 
 func TestApplyStatus_SameCell_AddsEffect(t *testing.T) {
@@ -744,8 +744,8 @@ import (
     "testing"
     "time"
 
-    "github.com/zenion/mmokit/pkg/mmokit"
-    pkguniverse "github.com/zenion/mmokit/pkg/universe"
+    "github.com/mmokit/mmokit/pkg/mmokit"
+    pkguniverse "github.com/mmokit/mmokit/pkg/universe"
 )
 
 func TestOnWorldTickAll_FiresThroughRealLoop(t *testing.T) {

@@ -10,8 +10,8 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/zenion/mmokit/examples/space/internal/bot"
-	gamecomp "github.com/zenion/mmokit/examples/space/internal/component"
+	"github.com/mmokit/mmokit/examples/space/internal/bot"
+	gamecomp "github.com/mmokit/mmokit/examples/space/internal/component"
 )
 
 func runDuel(addr string, count int) {

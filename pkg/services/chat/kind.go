@@ -7,8 +7,8 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"github.com/zenion/mmokit/pkg/service"
-	"github.com/zenion/mmokit/pkg/services/auth"
+	"github.com/mmokit/mmokit/pkg/service"
+	"github.com/mmokit/mmokit/pkg/services/auth"
 )
 
 const KindName = "chat"

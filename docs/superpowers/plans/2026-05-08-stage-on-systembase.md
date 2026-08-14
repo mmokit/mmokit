@@ -200,7 +200,7 @@ import (
 	"testing"
 
 	"github.com/mlange-42/ark/ecs"
-	"github.com/zenion/mmokit/pkg/query"
+	"github.com/mmokit/mmokit/pkg/query"
 )
 
 // AutoBindsQueries: Query[T] fields on the outer struct are picked up by
@@ -322,8 +322,8 @@ import (
 	"reflect"
 	"unsafe"
 
-	"github.com/zenion/mmokit/pkg/engine"
-	"github.com/zenion/mmokit/pkg/universe"
+	"github.com/mmokit/mmokit/pkg/engine"
+	"github.com/mmokit/mmokit/pkg/universe"
 )
 
 // SystemBase is the canonical base for all game systems. Embed it to get:
@@ -499,7 +499,7 @@ package mmokit
 import (
 	"testing"
 
-	"github.com/zenion/mmokit/pkg/universe"
+	"github.com/mmokit/mmokit/pkg/universe"
 )
 
 // TestSystemBase_StageInjection: a system embedding mmokit.SystemBase gets
@@ -1089,7 +1089,7 @@ git commit -m "test(universe): migrate off Config.OnInit; add System.Init lifecy
 ```go
 package main
 
-import "github.com/zenion/mmokit/pkg/mmokit"
+import "github.com/mmokit/mmokit/pkg/mmokit"
 
 // FieldSpawnerSystem seeds the demo with a horizontal row of entities at
 // cell startup. Replaces the former Config.OnInit body.
@@ -1404,7 +1404,7 @@ Replace with:
 return mmokit.State[game.GameWorld](cell.Stage)
 ```
 
-(Add `"github.com/zenion/mmokit/pkg/mmokit"` to imports if not already present.)
+(Add `"github.com/mmokit/mmokit/pkg/mmokit"` to imports if not already present.)
 
 - [ ] **Step 6: Update `internal/game/testutil_test.go`**
 

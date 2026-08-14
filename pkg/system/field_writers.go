@@ -5,7 +5,7 @@ import (
 	"reflect"
 	"strconv"
 
-	"github.com/zenion/mmokit/pkg/quantize"
+	"github.com/mmokit/mmokit/pkg/quantize"
 )
 
 // hashWriterFunc writes a Go value into a Hasher for change detection.

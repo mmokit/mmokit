@@ -4,7 +4,7 @@ import (
 	"io/fs"
 	"testing"
 
-	"github.com/zenion/mmokit/pkg/services/chat"
+	"github.com/mmokit/mmokit/pkg/services/chat"
 )
 
 func TestMigrationsFS_Embeds001(t *testing.T) {

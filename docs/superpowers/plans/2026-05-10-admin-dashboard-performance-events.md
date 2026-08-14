@@ -164,7 +164,7 @@ grep -n "type CallerSource\|Source[A-Z][a-zA-Z]*\s*CallerSource" pkg/cmdsys/*.go
 
 Pick the source value that means "internal admin caller" (alternatives: `SourceTest`, `SourceMeshControl`, `SourceConsole`).
 
-The new file imports needed: `context`, `errors`, and `github.com/zenion/mmokit/pkg/cmdsys`. Add them to the existing import block.
+The new file imports needed: `context`, `errors`, and `github.com/mmokit/mmokit/pkg/cmdsys`. Add them to the existing import block.
 
 - [ ] **Step 4: Verify compile**
 

@@ -3,10 +3,10 @@ package mmokit
 import (
 	"github.com/mlange-42/ark/ecs"
 
-	"github.com/zenion/mmokit/pkg/component"
-	"github.com/zenion/mmokit/pkg/query"
-	"github.com/zenion/mmokit/pkg/spatial"
-	"github.com/zenion/mmokit/pkg/universe"
+	"github.com/mmokit/mmokit/pkg/component"
+	"github.com/mmokit/mmokit/pkg/query"
+	"github.com/mmokit/mmokit/pkg/spatial"
+	"github.com/mmokit/mmokit/pkg/universe"
 )
 
 // SpatialHooks provides optional per-tick callbacks for game-specific spatial logic.

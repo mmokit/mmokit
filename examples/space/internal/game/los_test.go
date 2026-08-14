@@ -4,7 +4,7 @@ import (
 	"testing"
 
 	"github.com/mlange-42/ark/ecs"
-	"github.com/zenion/mmokit/pkg/spatial"
+	"github.com/mmokit/mmokit/pkg/spatial"
 )
 
 // hasLOSOnGrid wraps spatial.HashGrid.Raycast with the LayerStatic mask.

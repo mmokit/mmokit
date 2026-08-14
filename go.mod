@@ -1,4 +1,4 @@
-module github.com/zenion/mmokit
+module github.com/mmokit/mmokit
 
 go 1.25.1
 

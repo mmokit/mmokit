@@ -7,8 +7,8 @@ import (
 	"testing"
 	"time"
 
-	meshpb "github.com/zenion/mmokit/gen/go/meshpb"
-	"github.com/zenion/mmokit/pkg/cmdsys"
+	meshpb "github.com/mmokit/mmokit/gen/go/meshpb"
+	"github.com/mmokit/mmokit/pkg/cmdsys"
 )
 
 // ── helpers ───────────────────────────────────────────────────────────────────

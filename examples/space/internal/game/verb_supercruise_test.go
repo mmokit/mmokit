@@ -3,8 +3,8 @@ package game
 import (
 	"testing"
 
-	gamecomp "github.com/zenion/mmokit/examples/space/internal/component"
-	"github.com/zenion/mmokit/pkg/mmokit"
+	gamecomp "github.com/mmokit/mmokit/examples/space/internal/component"
+	"github.com/mmokit/mmokit/pkg/mmokit"
 )
 
 func TestSupercruise_DamageDuringChannelCancelsAndLocksOut(t *testing.T) {

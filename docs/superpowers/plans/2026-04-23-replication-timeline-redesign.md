@@ -635,8 +635,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/zenion/mmokit/gen/go/meshpb"
-	"github.com/zenion/mmokit/pkg/mmokit"
+	"github.com/mmokit/mmokit/gen/go/meshpb"
+	"github.com/mmokit/mmokit/pkg/mmokit"
 )
 
 // TestCoordTimeSync_HostObservesClock verifies that a CoordTimeSync
@@ -678,7 +678,7 @@ In `pkg/universe/mesh_control_client.go`, locate the `type meshControlClient str
 	clusterClock *mmokit.ClusterClock
 ```
 
-(Import `"github.com/zenion/mmokit/pkg/mmokit"` at the top if not already imported.)
+(Import `"github.com/mmokit/mmokit/pkg/mmokit"` at the top if not already imported.)
 
 - [ ] **Step 4: Add the dispatch arm**
 
@@ -2312,7 +2312,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/zenion/mmokit/pkg/mmokit"
+	"github.com/mmokit/mmokit/pkg/mmokit"
 )
 
 // TestHardCut_SameHost_AuthorityFlipsAtCommitTick verifies that an

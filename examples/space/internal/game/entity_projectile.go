@@ -1,8 +1,8 @@
 package game
 
 import (
-	gamecomp "github.com/zenion/mmokit/examples/space/internal/component"
-	"github.com/zenion/mmokit/pkg/mmokit"
+	gamecomp "github.com/mmokit/mmokit/examples/space/internal/component"
+	"github.com/mmokit/mmokit/pkg/mmokit"
 )
 
 // ProjectileBundle declares the components a Projectile carries. The

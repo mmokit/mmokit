@@ -134,7 +134,7 @@ import (
     "reflect"
     "testing"
 
-    enginepb "github.com/zenion/mmokit/gen/go/enginepb"
+    enginepb "github.com/mmokit/mmokit/gen/go/enginepb"
 )
 
 func TestServerEventsRegisterAndSchema(t *testing.T) {
@@ -206,8 +206,8 @@ import (
 
     "google.golang.org/protobuf/proto"
 
-    "github.com/zenion/mmokit/pkg/engine"
-    "github.com/zenion/mmokit/pkg/net"
+    "github.com/mmokit/mmokit/pkg/engine"
+    "github.com/mmokit/mmokit/pkg/net"
 )
 
 // ServerEvents is a typed registry of server→client event codes mapped to
@@ -487,8 +487,8 @@ Note: `Protocol` lives in `pkg/mmokit` and `pkg/universe.Config` lives in `pkg/u
 - [ ] **Step 1: Verify import direction**
 
 ```bash
-go list -deps github.com/zenion/mmokit/pkg/mmokit 2>&1 | grep universe
-go list -deps github.com/zenion/mmokit/pkg/universe 2>&1 | grep mmokit
+go list -deps github.com/mmokit/mmokit/pkg/mmokit 2>&1 | grep universe
+go list -deps github.com/mmokit/mmokit/pkg/universe 2>&1 | grep mmokit
 ```
 
 Expected: `pkg/mmokit` imports `pkg/universe`, NOT vice versa. So we cannot reference `*mmokit.Protocol` from `pkg/universe`.
@@ -772,7 +772,7 @@ cfg.Protocol = mmokit.NewProtocol("basic").
     })
 ```
 
-Add `enginepb "github.com/zenion/mmokit/gen/go/enginepb"` to imports if not already present.
+Add `enginepb "github.com/mmokit/mmokit/gen/go/enginepb"` to imports if not already present.
 
 - [ ] **Step 2: Convert MakeEvent in `examples/4node-basic/world.go`**
 
@@ -903,8 +903,8 @@ import (
 
     "google.golang.org/protobuf/proto"
 
-    gamepb "github.com/zenion/mmokit/gen/go/gamepb"
-    "github.com/zenion/mmokit/pkg/net"
+    gamepb "github.com/mmokit/mmokit/gen/go/gamepb"
+    "github.com/mmokit/mmokit/pkg/net"
 )
 
 func TestRouterTypedRegisterAndSchema(t *testing.T) {
@@ -1203,7 +1203,7 @@ In `pkg/universe/coordinator.go`:
 OpRouter *ops.Router
 ```
 
-Add the import: `"github.com/zenion/mmokit/pkg/ops"` (verify no cycle — `pkg/universe` likely doesn't import `pkg/ops` today; if it does cycle, declare the field as `any` like `Config.Protocol`).
+Add the import: `"github.com/mmokit/mmokit/pkg/ops"` (verify no cycle — `pkg/universe` likely doesn't import `pkg/ops` today; if it does cycle, declare the field as `any` like `Config.Protocol`).
 
 - [ ] **Step 2: Add Process accessors**
 

@@ -10,8 +10,8 @@ import (
 	"time"
 
 	"github.com/chzyer/readline"
-	"github.com/zenion/mmokit/pkg/cmdsys"
-	"github.com/zenion/mmokit/pkg/logger"
+	"github.com/mmokit/mmokit/pkg/cmdsys"
+	"github.com/mmokit/mmokit/pkg/logger"
 )
 
 // Console provides an interactive CLI for the server with readline support.

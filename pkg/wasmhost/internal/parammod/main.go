@@ -4,7 +4,7 @@
 // trivial column, used to exercise the params ABI from the host.
 package main
 
-import "github.com/zenion/mmokit/pkg/wasmsys"
+import "github.com/mmokit/mmokit/pkg/wasmsys"
 
 type sys struct {
 	Gain   float32 `tune:"default=2,min=0,max=10,step=0.5"`

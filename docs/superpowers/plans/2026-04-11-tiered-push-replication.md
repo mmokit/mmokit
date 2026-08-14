@@ -161,7 +161,7 @@ import (
     "fmt"
     "time"
 
-    "github.com/zenion/mmokit/pkg/mmokit"
+    "github.com/mmokit/mmokit/pkg/mmokit"
 )
 
 func main() {
@@ -862,7 +862,7 @@ Expected: PASS.
 ```go
 package system
 
-import "github.com/zenion/mmokit/pkg/replication"
+import "github.com/mmokit/mmokit/pkg/replication"
 
 // AckMode is an alias during the Phase 2/3 transition.
 // pkg/system/replication.go switches to importing from pkg/replication directly in Phase 3.
@@ -887,7 +887,7 @@ package system
 // types have moved to pkg/replication. Phase 3 refactors replication.go
 // to use pkg/replication directly, at which point this file is deleted.
 
-import "github.com/zenion/mmokit/pkg/replication"
+import "github.com/mmokit/mmokit/pkg/replication"
 
 type connectionState = replication.BaselineStore
 
@@ -1573,7 +1573,7 @@ Expected: all green. `pkg/replication/` now has ~6 source files plus tests; noth
 Edit the import block of `pkg/system/replication.go`. Add:
 
 ```go
-"github.com/zenion/mmokit/pkg/replication"
+"github.com/mmokit/mmokit/pkg/replication"
 ```
 
 - [ ] **Step 2: Replace connectionState usages**
@@ -1697,7 +1697,7 @@ package universe
 import (
 	"testing"
 
-	"github.com/zenion/mmokit/pkg/replication"
+	"github.com/mmokit/mmokit/pkg/replication"
 )
 
 func TestNodeViewer_SatisfiesInterface(t *testing.T) {
@@ -1734,7 +1734,7 @@ package universe
 import (
 	"hash/fnv"
 
-	"github.com/zenion/mmokit/pkg/replication"
+	"github.com/mmokit/mmokit/pkg/replication"
 )
 
 // NodeViewer adapts a neighbor Node as a replication.Viewer. The shared
@@ -1858,7 +1858,7 @@ package universe
 import (
 	"iter"
 
-	"github.com/zenion/mmokit/pkg/replication"
+	"github.com/mmokit/mmokit/pkg/replication"
 )
 
 // BorderDispatcher walks local entities near shared cell boundaries
@@ -3576,7 +3576,7 @@ package universe
 import (
 	"testing"
 
-	"github.com/zenion/mmokit/pkg/replication"
+	"github.com/mmokit/mmokit/pkg/replication"
 )
 
 // newTwoNodeMesh is a shared helper used by all correctness tests.

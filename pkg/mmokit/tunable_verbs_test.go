@@ -3,7 +3,7 @@ package mmokit
 import (
 	"testing"
 
-	"github.com/zenion/mmokit/pkg/cmdsys"
+	"github.com/mmokit/mmokit/pkg/cmdsys"
 )
 
 func TestTuneVerbsRegistered(t *testing.T) {

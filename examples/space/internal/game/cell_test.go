@@ -5,10 +5,10 @@ import (
 
 	"github.com/mlange-42/ark/ecs"
 
-	gamecomp "github.com/zenion/mmokit/examples/space/internal/component"
-	comp "github.com/zenion/mmokit/pkg/component"
-	"github.com/zenion/mmokit/pkg/mmokit"
-	pkguniverse "github.com/zenion/mmokit/pkg/universe"
+	gamecomp "github.com/mmokit/mmokit/examples/space/internal/component"
+	comp "github.com/mmokit/mmokit/pkg/component"
+	"github.com/mmokit/mmokit/pkg/mmokit"
+	pkguniverse "github.com/mmokit/mmokit/pkg/universe"
 )
 
 func TestProcessMessage_RespawnTransfer(t *testing.T) {

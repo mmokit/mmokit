@@ -10,11 +10,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/zenion/mmokit/pkg/cmdsys"
-	"github.com/zenion/mmokit/pkg/logger"
-	"github.com/zenion/mmokit/pkg/persist"
-	"github.com/zenion/mmokit/pkg/persist/persisttest"
-	"github.com/zenion/mmokit/pkg/services/auth"
+	"github.com/mmokit/mmokit/pkg/cmdsys"
+	"github.com/mmokit/mmokit/pkg/logger"
+	"github.com/mmokit/mmokit/pkg/persist"
+	"github.com/mmokit/mmokit/pkg/persist/persisttest"
+	"github.com/mmokit/mmokit/pkg/services/auth"
 )
 
 func newTestServer(t *testing.T) *Server {

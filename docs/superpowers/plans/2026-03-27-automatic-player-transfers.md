@@ -253,7 +253,7 @@ type BoundaryWorld interface {
 
 - [ ] **Step 5: Import engine package in boundary_system.go**
 
-Add `"github.com/zenion/mmokit/pkg/engine"` to the imports for `engine.StateTransferring`.
+Add `"github.com/mmokit/mmokit/pkg/engine"` to the imports for `engine.StateTransferring`.
 
 - [ ] **Step 6: Verify compilation**
 

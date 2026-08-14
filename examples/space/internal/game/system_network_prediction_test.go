@@ -6,9 +6,9 @@ import (
 
 	"github.com/mlange-42/ark/ecs"
 
-	gamecomp "github.com/zenion/mmokit/examples/space/internal/component"
-	"github.com/zenion/mmokit/pkg/coords"
-	"github.com/zenion/mmokit/pkg/mmokit"
+	gamecomp "github.com/mmokit/mmokit/examples/space/internal/component"
+	"github.com/mmokit/mmokit/pkg/coords"
+	"github.com/mmokit/mmokit/pkg/mmokit"
 )
 
 type movementSeedClock struct{ stamp uint64 }

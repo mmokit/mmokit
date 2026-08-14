@@ -3,8 +3,8 @@ package mmokit_test
 import (
 	"testing"
 
-	"github.com/zenion/mmokit/pkg/mmokit"
-	pkguniverse "github.com/zenion/mmokit/pkg/universe"
+	"github.com/mmokit/mmokit/pkg/mmokit"
+	pkguniverse "github.com/mmokit/mmokit/pkg/universe"
 )
 
 func TestOnWorldTickAll_FiresOnAllStages(t *testing.T) {

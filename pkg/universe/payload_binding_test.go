@@ -3,9 +3,9 @@ package universe
 import (
 	"testing"
 
-	meshpb "github.com/zenion/mmokit/gen/go/meshpb"
-	"github.com/zenion/mmokit/pkg/metrics"
-	pkgnet "github.com/zenion/mmokit/pkg/net"
+	meshpb "github.com/mmokit/mmokit/gen/go/meshpb"
+	"github.com/mmokit/mmokit/pkg/metrics"
+	pkgnet "github.com/mmokit/mmokit/pkg/net"
 )
 
 // TestPayloadBinding_ClientInputRequiresMatchingGateway pins the arm that

@@ -5,13 +5,13 @@ import (
 
 	"github.com/mlange-42/ark/ecs"
 
-	gamecomp "github.com/zenion/mmokit/examples/space/internal/component"
-	gamepersisttest "github.com/zenion/mmokit/examples/space/internal/persist/persisttest"
-	"github.com/zenion/mmokit/pkg/engine"
-	"github.com/zenion/mmokit/pkg/mmokit"
-	"github.com/zenion/mmokit/pkg/net"
-	"github.com/zenion/mmokit/pkg/persist/persisttest"
-	pkguniverse "github.com/zenion/mmokit/pkg/universe"
+	gamecomp "github.com/mmokit/mmokit/examples/space/internal/component"
+	gamepersisttest "github.com/mmokit/mmokit/examples/space/internal/persist/persisttest"
+	"github.com/mmokit/mmokit/pkg/engine"
+	"github.com/mmokit/mmokit/pkg/mmokit"
+	"github.com/mmokit/mmokit/pkg/net"
+	"github.com/mmokit/mmokit/pkg/persist/persisttest"
+	pkguniverse "github.com/mmokit/mmokit/pkg/universe"
 )
 
 // mockTransport satisfies net.Transport for testing.

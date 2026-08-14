@@ -5,8 +5,8 @@ import (
 	"sync/atomic"
 	"testing"
 
-	meshpb "github.com/zenion/mmokit/gen/go/meshpb"
-	"github.com/zenion/mmokit/pkg/service"
+	meshpb "github.com/mmokit/mmokit/gen/go/meshpb"
+	"github.com/mmokit/mmokit/pkg/service"
 )
 
 func TestServiceEventRouter_UpdateAndSnapshot(t *testing.T) {
@@ -138,7 +138,7 @@ func TestDeliverServiceEvent_DecodesAndRepublishesLocally(t *testing.T) {
 	payload := mustMarshal(t, &tinyDispatchEvent{N: 7})
 	se := &meshpb.ServiceEvent{
 		SourceProcessId: "remote-peer", // not us — must not be self-echo-skipped
-		TypeName:        "github.com/zenion/mmokit/pkg/universe.tinyDispatchEvent",
+		TypeName:        "github.com/mmokit/mmokit/pkg/universe.tinyDispatchEvent",
 		Payload:         payload,
 		Sequence:        1,
 	}

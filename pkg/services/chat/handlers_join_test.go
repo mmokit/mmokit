@@ -7,9 +7,9 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/zenion/mmokit/pkg/ops"
-	"github.com/zenion/mmokit/pkg/services/chat"
-	"github.com/zenion/mmokit/pkg/services/chat/chattest"
+	"github.com/mmokit/mmokit/pkg/ops"
+	"github.com/mmokit/mmokit/pkg/services/chat"
+	"github.com/mmokit/mmokit/pkg/services/chat/chattest"
 )
 
 func TestHandleJoin_HappyPath(t *testing.T) {

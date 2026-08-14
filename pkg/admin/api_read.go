@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/zenion/mmokit/pkg/cmdsys"
+	"github.com/mmokit/mmokit/pkg/cmdsys"
 )
 
 func (s *Server) handleCluster(w http.ResponseWriter, r *http.Request) {

@@ -147,7 +147,7 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/zenion/mmokit/pkg/net"
+	"github.com/mmokit/mmokit/pkg/net"
 )
 
 // --- Test helpers ---
@@ -776,7 +776,7 @@ Add imports for `enginepb` and `proto`:
 
 ```go
 import (
-	enginepb "github.com/zenion/mmokit/gen/go/enginepb"
+	enginepb "github.com/mmokit/mmokit/gen/go/enginepb"
 	"google.golang.org/protobuf/proto"
 )
 ```
@@ -815,11 +815,11 @@ import (
 
 	"google.golang.org/protobuf/proto"
 
-	enginepb "github.com/zenion/mmokit/gen/go/enginepb"
-	gamepb "github.com/zenion/mmokit/gen/go/gamepb"
-	"github.com/zenion/mmokit/internal/game"
-	"github.com/zenion/mmokit/internal/item"
-	"github.com/zenion/mmokit/pkg/mmokit"
+	enginepb "github.com/mmokit/mmokit/gen/go/enginepb"
+	gamepb "github.com/mmokit/mmokit/gen/go/gamepb"
+	"github.com/mmokit/mmokit/internal/game"
+	"github.com/mmokit/mmokit/internal/item"
+	"github.com/mmokit/mmokit/pkg/mmokit"
 )
 
 func handlePlayerInput(gw *game.GameWorld) func(ctx *mmokit.InputContext, msg *gamepb.PlayerInputMsg) {

@@ -8,7 +8,7 @@ import (
 
 // EventTypeName returns the canonical wire identifier for event type T:
 // the package-qualified Go type name (e.g.
-// "github.com/zenion/mmokit/pkg/service.SessionEnterEvent").
+// "github.com/mmokit/mmokit/pkg/service.SessionEnterEvent").
 //
 // Renames break the wire — same convention as the typed-event channel in
 // mmokit. Phase 3 carries this string in MeshFrame.ServiceEvent.type_name;

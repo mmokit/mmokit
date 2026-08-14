@@ -6,7 +6,7 @@ import (
 	"encoding/binary"
 	"unsafe"
 
-	"github.com/zenion/mmokit/pkg/wasmabi"
+	"github.com/mmokit/mmokit/pkg/wasmabi"
 )
 
 var (

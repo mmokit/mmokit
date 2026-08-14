@@ -8,10 +8,10 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"github.com/zenion/mmokit/pkg/service"
-	"github.com/zenion/mmokit/pkg/services/auth"
-	authpg "github.com/zenion/mmokit/pkg/services/auth/postgres"
-	"github.com/zenion/mmokit/pkg/universe"
+	"github.com/mmokit/mmokit/pkg/service"
+	"github.com/mmokit/mmokit/pkg/services/auth"
+	authpg "github.com/mmokit/mmokit/pkg/services/auth/postgres"
+	"github.com/mmokit/mmokit/pkg/universe"
 )
 
 // AuthOpts is mmokit's facade type for auth.ServiceOpts.

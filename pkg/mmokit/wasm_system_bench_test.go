@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/zenion/mmokit/pkg/mmokit"
-	"github.com/zenion/mmokit/pkg/mmokit/internal/testmods/podcomp"
+	"github.com/mmokit/mmokit/pkg/mmokit"
+	"github.com/mmokit/mmokit/pkg/mmokit/internal/testmods/podcomp"
 )
 
 // benchShield runs b.N ticks of either the native ShieldRegen loop or the

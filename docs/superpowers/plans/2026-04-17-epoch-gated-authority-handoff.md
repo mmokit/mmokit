@@ -512,7 +512,7 @@ import (
     "testing"
     "time"
 
-    "github.com/zenion/mmokit/pkg/cmdsys"
+    "github.com/mmokit/mmokit/pkg/cmdsys"
 )
 
 // TestMigrateEpochNoJitter verifies that after a cross-host cell migrate:

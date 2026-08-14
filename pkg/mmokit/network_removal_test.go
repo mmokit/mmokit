@@ -4,8 +4,8 @@ import (
 	"encoding/binary"
 	"testing"
 
-	"github.com/zenion/mmokit/pkg/net"
-	"github.com/zenion/mmokit/pkg/quantize"
+	"github.com/mmokit/mmokit/pkg/net"
+	"github.com/mmokit/mmokit/pkg/quantize"
 )
 
 type networkRemovalTestState struct {

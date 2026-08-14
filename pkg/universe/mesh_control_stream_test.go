@@ -3,7 +3,7 @@ package universe
 import (
 	"testing"
 
-	"github.com/zenion/mmokit/pkg/logger"
+	"github.com/mmokit/mmokit/pkg/logger"
 )
 
 func newStreamFenceServer(t *testing.T) *meshControlServer {

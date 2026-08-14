@@ -7,9 +7,9 @@ import (
 
 	"github.com/google/uuid"
 
-	meshpb "github.com/zenion/mmokit/gen/go/meshpb"
-	"github.com/zenion/mmokit/pkg/persist/postgres"
-	"github.com/zenion/mmokit/pkg/service"
+	meshpb "github.com/mmokit/mmokit/gen/go/meshpb"
+	"github.com/mmokit/mmokit/pkg/persist/postgres"
+	"github.com/mmokit/mmokit/pkg/service"
 )
 
 const (

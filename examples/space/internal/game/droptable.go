@@ -3,8 +3,8 @@ package game
 import (
 	"math/rand/v2"
 
-	"github.com/zenion/mmokit/examples/space/internal/component"
-	"github.com/zenion/mmokit/examples/space/internal/item"
+	"github.com/mmokit/mmokit/examples/space/internal/component"
+	"github.com/mmokit/mmokit/examples/space/internal/item"
 )
 
 // DropEntry defines a single possible drop from an NPC.

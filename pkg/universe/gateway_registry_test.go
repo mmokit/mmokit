@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/zenion/mmokit/pkg/logger"
+	"github.com/mmokit/mmokit/pkg/logger"
 )
 
 func newTestGatewayRegistry(t *testing.T) *GatewayRegistry {

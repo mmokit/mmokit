@@ -5,8 +5,8 @@ import (
 	"encoding/binary"
 	"fmt"
 
+	"github.com/mmokit/mmokit/pkg/wasmabi"
 	"github.com/tetratelabs/wazero/api"
-	"github.com/zenion/mmokit/pkg/wasmabi"
 )
 
 // Module is one instantiated system. Not safe for concurrent use — each cell

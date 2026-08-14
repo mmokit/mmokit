@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/zenion/mmokit/pkg/universe"
+	"github.com/mmokit/mmokit/pkg/universe"
 )
 
 // fakeSub captures topics + payloads delivered by the TopicBus. Implements

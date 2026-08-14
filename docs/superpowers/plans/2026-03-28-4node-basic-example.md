@@ -46,7 +46,7 @@ gen/go/basicpb/          # Generated (buf generate)
 ```protobuf
 syntax = "proto3";
 package basicpb;
-option go_package = "github.com/zenion/mmokit/gen/go/basicpb";
+option go_package = "github.com/mmokit/mmokit/gen/go/basicpb";
 
 // Client → Server
 enum BasicClientEventCode {
@@ -164,11 +164,11 @@ import (
 	"strings"
 
 	"github.com/mlange-42/ark/ecs"
-	enginepb "github.com/zenion/mmokit/gen/go/enginepb"
-	basicpb "github.com/zenion/mmokit/gen/go/basicpb"
-	"github.com/zenion/mmokit/pkg/engine"
-	"github.com/zenion/mmokit/pkg/mmokit"
-	"github.com/zenion/mmokit/pkg/universe"
+	enginepb "github.com/mmokit/mmokit/gen/go/enginepb"
+	basicpb "github.com/mmokit/mmokit/gen/go/basicpb"
+	"github.com/mmokit/mmokit/pkg/engine"
+	"github.com/mmokit/mmokit/pkg/mmokit"
+	"github.com/mmokit/mmokit/pkg/universe"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -389,8 +389,8 @@ git commit -m "feat(4node-basic): add BasicWorld with login, spawn, transfer hoo
 package main
 
 import (
-	basicpb "github.com/zenion/mmokit/gen/go/basicpb"
-	"github.com/zenion/mmokit/pkg/mmokit"
+	basicpb "github.com/mmokit/mmokit/gen/go/basicpb"
+	"github.com/mmokit/mmokit/pkg/mmokit"
 )
 
 func registerInputHandlers(eng *mmokit.Engine, gw *BasicWorld) *mmokit.InputRouter {
@@ -441,7 +441,7 @@ import (
 	"math"
 
 	"github.com/mlange-42/ark/ecs"
-	"github.com/zenion/mmokit/pkg/mmokit"
+	"github.com/mmokit/mmokit/pkg/mmokit"
 )
 
 type MovementSystem struct {
@@ -501,7 +501,7 @@ package main
 
 import (
 	"github.com/mlange-42/ark/ecs"
-	"github.com/zenion/mmokit/pkg/mmokit"
+	"github.com/mmokit/mmokit/pkg/mmokit"
 )
 
 type SpatialSystem struct {
@@ -564,8 +564,8 @@ import (
 	"math"
 
 	"github.com/mlange-42/ark/ecs"
-	enginepb "github.com/zenion/mmokit/gen/go/enginepb"
-	"github.com/zenion/mmokit/pkg/mmokit"
+	enginepb "github.com/mmokit/mmokit/gen/go/enginepb"
+	"github.com/mmokit/mmokit/pkg/mmokit"
 )
 
 // Binary frame layout:
@@ -812,7 +812,7 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/zenion/mmokit/pkg/mmokit"
+	"github.com/mmokit/mmokit/pkg/mmokit"
 )
 
 func main() {

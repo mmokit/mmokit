@@ -5,7 +5,7 @@ import (
 	"math"
 	"math/rand/v2"
 
-	"github.com/zenion/mmokit/examples/space/internal/world"
+	"github.com/mmokit/mmokit/examples/space/internal/world"
 )
 
 // AsteroidBelt defines a cluster of asteroids within a cell. Retained

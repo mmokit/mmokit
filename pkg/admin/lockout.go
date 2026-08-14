@@ -6,7 +6,7 @@ import (
 	"net/netip"
 	"time"
 
-	"github.com/zenion/mmokit/pkg/services/auth"
+	"github.com/mmokit/mmokit/pkg/services/auth"
 )
 
 // Lockout protects the login endpoint from brute force. Wraps the existing

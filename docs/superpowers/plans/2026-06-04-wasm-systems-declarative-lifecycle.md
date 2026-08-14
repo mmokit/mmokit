@@ -165,7 +165,7 @@ import (
 	"strings"
 	"sync"
 
-	pkguniverse "github.com/zenion/mmokit/pkg/universe"
+	pkguniverse "github.com/mmokit/mmokit/pkg/universe"
 )
 
 // wasmRegEntry binds a registered wasm system's artifact path to a type-erased,
@@ -276,8 +276,8 @@ package mmokit_test
 import (
 	"testing"
 
-	gamecomp "github.com/zenion/mmokit/internal/component"
-	"github.com/zenion/mmokit/pkg/mmokit"
+	gamecomp "github.com/mmokit/mmokit/internal/component"
+	"github.com/mmokit/mmokit/pkg/mmokit"
 )
 
 func TestDeriveWasmName(t *testing.T) {
@@ -429,7 +429,7 @@ Add the small helpers `registryEntry(proc, name) (wasmRegEntry, bool)`, `registe
 
 > **IMPORTANT — find the real host-identity accessor.** `proc.IsThisHost(node)` is a placeholder. Grep for how the coordinator exposes the local host id (e.g. `rg -n "HostID|LocalHost|func .*Process.* string" pkg/universe/*.go` and how `host list` marks local hosts). Use the actual accessor to compare against `--node`. If no clean per-host id exists for the all-in-one process, treat `--node` as matching when the id equals the process's host id and document that distributed `--node` targeting relies on it.
 
-> **IMPORTANT — imports.** This file now needs `context` and `github.com/zenion/mmokit/pkg/cmdsys`. `Cell`, `CmdOnLoop`, `WireSystem`, `ParseCellID`, `NewWasmSystem`, `System`, `SwappableSystem` are all in package `mmokit`. Confirm `cmdsys.CommandEnv` is the right env type by checking `builtins_cell.go` (it may be `*cmdsys.CommandEnv` or the mmokit alias `*CommandEnv`). Match the existing example exactly.
+> **IMPORTANT — imports.** This file now needs `context` and `github.com/mmokit/mmokit/pkg/cmdsys`. `Cell`, `CmdOnLoop`, `WireSystem`, `ParseCellID`, `NewWasmSystem`, `System`, `SwappableSystem` are all in package `mmokit`. Confirm `cmdsys.CommandEnv` is the right env type by checking `builtins_cell.go` (it may be `*cmdsys.CommandEnv` or the mmokit alias `*CommandEnv`). Match the existing example exactly.
 
 - [ ] **Step 2: Write verb tests** in `pkg/mmokit/wasm_manager_test.go` — build a single-process Process with 1–4 cells, `AddWasmSystem[gamecomp.Shield](proc, shieldPath)` BEFORE `Build()`, build, then invoke the verbs through `proc.CmdRegistry()`/dispatcher and assert: (a) after build, every cell has the system loaded (boots everywhere); (b) `wasm.unload shieldregen` removes it from all cells (`SystemByName` false); (c) `wasm.load shieldregen` re-adds to all; (d) `wasm.swap shieldregen` preserves the tick counter (snapshot before/after). Use the existing test harness for standing up a small Process (grep `pkg/mmokit/*_test.go` for how Processes are built in tests, e.g. `tick_all_test.go`, `state_test.go`). If invoking via the dispatcher is heavy, call the handler closures’ underlying per-cell helpers directly against each `cell` after `proc.Build()` — but prefer going through `Dispatcher.Invoke` so routing is exercised.
 
@@ -450,7 +450,7 @@ Add the small helpers `registryEntry(proc, name) (wasmRegEntry, bool)`, `registe
 mmokit.AddWasmSystem[gamecomp.Shield](process, "dist/wasmmods/shieldregen.wasm")
 mmokit.AddWasmSystem[mmokit.Collider](process, "dist/wasmmods/pulse.wasm")
 ```
-Add the `gamecomp "github.com/zenion/mmokit/internal/component"` import if not already present. These boot both systems into every cell at startup; they’re swappable at runtime as `shield` and `pulse`.
+Add the `gamecomp "github.com/mmokit/mmokit/internal/component"` import if not already present. These boot both systems into every cell at startup; they’re swappable at runtime as `shield` and `pulse`.
 
 > Decide: booting BOTH at startup means players' circles immediately pulse on launch. If that's undesirable as the default demo, register only `shield` at startup (invisible) and leave `pulse` registered-but-not-booted by using a registry-only variant. SIMPLEST for this task: register both via `AddWasmSystem` (both boot). If you want pulse registered-but-not-auto-loaded, add a `RegisterWasmSystem[T]` (registry only, no AddSystem) variant and use it for pulse — but only do this if trivially clean; otherwise boot both and note it.
 

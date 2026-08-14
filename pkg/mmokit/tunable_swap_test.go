@@ -5,8 +5,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/zenion/mmokit/pkg/cmdsys"
-	"github.com/zenion/mmokit/pkg/universe"
+	"github.com/mmokit/mmokit/pkg/cmdsys"
+	"github.com/mmokit/mmokit/pkg/universe"
 )
 
 // TestTunableSwap_ValuePreservedAcrossWasmSwap is the regression guard for the

@@ -13,10 +13,10 @@ import (
 
 	"github.com/coder/websocket"
 
-	gamecomp "github.com/zenion/mmokit/examples/space/internal/component"
-	"github.com/zenion/mmokit/examples/space/internal/game"
-	"github.com/zenion/mmokit/pkg/mmokit"
-	pkgnet "github.com/zenion/mmokit/pkg/net"
+	gamecomp "github.com/mmokit/mmokit/examples/space/internal/component"
+	"github.com/mmokit/mmokit/examples/space/internal/game"
+	"github.com/mmokit/mmokit/pkg/mmokit"
+	pkgnet "github.com/mmokit/mmokit/pkg/net"
 )
 
 const (

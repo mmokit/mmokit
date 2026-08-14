@@ -14,7 +14,7 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/zenion/mmokit/pkg/persist"
+	"github.com/mmokit/mmokit/pkg/persist"
 )
 
 // openTestStore opens the live Postgres pointed at by POSTGRES_URL.

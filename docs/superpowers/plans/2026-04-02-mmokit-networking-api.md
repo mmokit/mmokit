@@ -331,7 +331,7 @@ import (
 	"fmt"
 	"strconv"
 
-	"github.com/zenion/mmokit/pkg/quantize"
+	"github.com/mmokit/mmokit/pkg/quantize"
 )
 
 // hashWriterFunc writes a Go value into a Hasher for change detection.
@@ -560,9 +560,9 @@ import (
 	"reflect"
 
 	"github.com/mlange-42/ark/ecs"
-	"github.com/zenion/mmokit/pkg/component"
-	"github.com/zenion/mmokit/pkg/quantize"
-	"github.com/zenion/mmokit/pkg/spatial"
+	"github.com/mmokit/mmokit/pkg/component"
+	"github.com/mmokit/mmokit/pkg/quantize"
+	"github.com/mmokit/mmokit/pkg/spatial"
 )
 
 type testHealth struct {
@@ -679,10 +679,10 @@ import (
 	"reflect"
 
 	"github.com/mlange-42/ark/ecs"
-	"github.com/zenion/mmokit/pkg/component"
-	"github.com/zenion/mmokit/pkg/coords"
-	"github.com/zenion/mmokit/pkg/quantize"
-	"github.com/zenion/mmokit/pkg/spatial"
+	"github.com/mmokit/mmokit/pkg/component"
+	"github.com/mmokit/mmokit/pkg/coords"
+	"github.com/mmokit/mmokit/pkg/quantize"
+	"github.com/mmokit/mmokit/pkg/spatial"
 )
 
 // ComponentBinding is an opaque unit that knows how to hash, snapshot, and
@@ -1088,7 +1088,7 @@ git commit -m "feat(system): add reflection-based auto-replicator"
 
 Add to the imports section of `pkg/mmokit/mmokit.go`:
 ```go
-// (already imported: "github.com/zenion/mmokit/pkg/system")
+// (already imported: "github.com/mmokit/mmokit/pkg/system")
 ```
 
 Add to the `var` block of re-exports (after `NewPlayerViewerSource`):
@@ -1166,7 +1166,7 @@ import (
 	"testing"
 
 	"github.com/mlange-42/ark/ecs"
-	"github.com/zenion/mmokit/pkg/component"
+	"github.com/mmokit/mmokit/pkg/component"
 )
 
 func TestClickToMoveBasic(t *testing.T) {
@@ -1305,9 +1305,9 @@ import (
 	"math"
 
 	"github.com/mlange-42/ark/ecs"
-	"github.com/zenion/mmokit/pkg/component"
-	"github.com/zenion/mmokit/pkg/coords"
-	"github.com/zenion/mmokit/pkg/engine"
+	"github.com/mmokit/mmokit/pkg/component"
+	"github.com/mmokit/mmokit/pkg/coords"
+	"github.com/mmokit/mmokit/pkg/engine"
 )
 
 const defaultMaxSpeed float32 = 300
@@ -1442,7 +1442,7 @@ import (
 	"testing"
 
 	"github.com/mlange-42/ark/ecs"
-	"github.com/zenion/mmokit/pkg/component"
+	"github.com/mmokit/mmokit/pkg/component"
 )
 
 func TestDirectionMoveActive(t *testing.T) {
@@ -1539,8 +1539,8 @@ import (
 	"math"
 
 	"github.com/mlange-42/ark/ecs"
-	"github.com/zenion/mmokit/pkg/component"
-	"github.com/zenion/mmokit/pkg/engine"
+	"github.com/mmokit/mmokit/pkg/component"
+	"github.com/mmokit/mmokit/pkg/engine"
 )
 
 // DirectionMoveSystem moves entities in the direction of their DirectionInput
@@ -1684,7 +1684,7 @@ package main
 
 import (
 	"github.com/mlange-42/ark/ecs"
-	"github.com/zenion/mmokit/pkg/mmokit"
+	"github.com/mmokit/mmokit/pkg/mmokit"
 )
 
 func setupReplication(gw *BasicWorld) *mmokit.ReplicatorRegistry {
@@ -1736,9 +1736,9 @@ Create `examples/4node-basic/system_network.go` (replacing the old one):
 package main
 
 import (
-	enginepb "github.com/zenion/mmokit/gen/go/enginepb"
-	"github.com/zenion/mmokit/pkg/mmokit"
-	"github.com/zenion/mmokit/pkg/system"
+	enginepb "github.com/mmokit/mmokit/gen/go/enginepb"
+	"github.com/mmokit/mmokit/pkg/mmokit"
+	"github.com/mmokit/mmokit/pkg/system"
 )
 
 type NetworkSystem struct {
@@ -1793,8 +1793,8 @@ Replace `examples/4node-basic/system_input.go`:
 package main
 
 import (
-	basicpb "github.com/zenion/mmokit/gen/go/basicpb"
-	"github.com/zenion/mmokit/pkg/mmokit"
+	basicpb "github.com/mmokit/mmokit/gen/go/basicpb"
+	"github.com/mmokit/mmokit/pkg/mmokit"
 )
 
 func setupInputHandlers(router *mmokit.InputRouter, gw *BasicWorld) {

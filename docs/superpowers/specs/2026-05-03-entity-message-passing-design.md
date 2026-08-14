@@ -193,7 +193,7 @@ No `mmokit.Query[T]` field, no `.Iter` loop, no `SystemBase` embedding, no syste
 
 ```go
 import "github.com/mlange-42/ark/ecs"
-import "github.com/zenion/mmokit/pkg/query"
+import "github.com/mmokit/mmokit/pkg/query"
 
 // query.Query[Bundle].Iter is still available — explicit choice to use it.
 // Direct ecs.Map1[T] access via mmokit.RawWorld(w) — also explicit.

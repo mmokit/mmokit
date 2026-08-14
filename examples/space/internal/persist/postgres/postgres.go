@@ -8,7 +8,7 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	gamepersist "github.com/zenion/mmokit/examples/space/internal/persist"
+	gamepersist "github.com/mmokit/mmokit/examples/space/internal/persist"
 )
 
 //go:embed migrations/*.sql

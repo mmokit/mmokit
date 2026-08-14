@@ -5,7 +5,7 @@
 // increments each Update and is mirrored into the int32 column.
 package main
 
-import "github.com/zenion/mmokit/pkg/wasmsys"
+import "github.com/mmokit/mmokit/pkg/wasmsys"
 
 type st struct {
 	Count int32 // exported + untagged => auto-snapshot state

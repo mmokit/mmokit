@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/zenion/mmokit/pkg/cmdsys"
+	"github.com/mmokit/mmokit/pkg/cmdsys"
 )
 
 // newTestAdapter creates a cmdsysAdapter with no ExecOnLoop — handlers run

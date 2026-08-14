@@ -5,7 +5,7 @@ import (
 	"math"
 	"math/rand/v2"
 
-	"github.com/zenion/mmokit/pkg/spatial"
+	"github.com/mmokit/mmokit/pkg/spatial"
 )
 
 // dungeonGraph holds the procgen tree of chambers + their adjacency edges.

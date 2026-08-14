@@ -4,7 +4,7 @@ import (
 	"encoding/binary"
 	"math"
 
-	gamecomp "github.com/zenion/mmokit/examples/space/internal/component"
+	gamecomp "github.com/mmokit/mmokit/examples/space/internal/component"
 )
 
 // --- Inventory: has a map field, needs custom marshal/unmarshal ---

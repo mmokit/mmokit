@@ -3,7 +3,7 @@ package universe
 import (
 	"testing"
 
-	"github.com/zenion/mmokit/pkg/cmdsys"
+	"github.com/mmokit/mmokit/pkg/cmdsys"
 )
 
 func TestResolvePlayerTarget_NotFound(t *testing.T) {

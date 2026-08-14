@@ -6,7 +6,7 @@ import (
 	"sort"
 	"sync"
 
-	pkguniverse "github.com/zenion/mmokit/pkg/universe"
+	pkguniverse "github.com/mmokit/mmokit/pkg/universe"
 )
 
 // RouteKind classifies where a typed-op handler runs in the cluster.

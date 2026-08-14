@@ -6,7 +6,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/zenion/mmokit/pkg/metrics"
+	"github.com/mmokit/mmokit/pkg/metrics"
 )
 
 // ═══════════════════════════════════════════════════════════════════════════

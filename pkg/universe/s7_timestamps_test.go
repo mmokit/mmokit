@@ -5,9 +5,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/zenion/mmokit/pkg/net"
-	"github.com/zenion/mmokit/pkg/quantize"
-	"github.com/zenion/mmokit/pkg/system"
+	"github.com/mmokit/mmokit/pkg/net"
+	"github.com/mmokit/mmokit/pkg/quantize"
+	"github.com/mmokit/mmokit/pkg/system"
 )
 
 // captureSender wraps a ConnSender and records every outbound frame so

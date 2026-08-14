@@ -114,7 +114,7 @@ Op codes 1–15 are reserved for engine-tier auth. v1 uses 1–5; OIDC v2 reserv
 ```proto
 syntax = "proto3";
 package enginepb;
-option go_package = "github.com/zenion/mmokit/gen/go/enginepb";
+option go_package = "github.com/mmokit/mmokit/gen/go/enginepb";
 
 enum AuthOpCode {
   AUTH_OPCODE_UNSPECIFIED         = 0;

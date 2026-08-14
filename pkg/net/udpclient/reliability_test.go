@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/zenion/mmokit/pkg/net/udpproto"
+	"github.com/mmokit/mmokit/pkg/net/udpproto"
 )
 
 func newReliabilityTestClient() *Client {

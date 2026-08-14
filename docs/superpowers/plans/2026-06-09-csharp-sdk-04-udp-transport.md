@@ -275,7 +275,7 @@ Add `Udp UdpCases \`json:"udp"\`` to the `Manifest` struct definition. Then, jus
 	m.Udp = u
 ```
 
-Add the import `"github.com/zenion/mmokit/pkg/net/udpproto"` to the file's import block.
+Add the import `"github.com/mmokit/mmokit/pkg/net/udpproto"` to the file's import block.
 
 - [ ] **Step 3: Regenerate the manifest**
 

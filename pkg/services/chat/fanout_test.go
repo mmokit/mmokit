@@ -3,8 +3,8 @@ package chat_test
 import (
 	"testing"
 
-	"github.com/zenion/mmokit/pkg/services/chat"
-	"github.com/zenion/mmokit/pkg/services/chat/chattest"
+	"github.com/mmokit/mmokit/pkg/services/chat"
+	"github.com/mmokit/mmokit/pkg/services/chat/chattest"
 )
 
 func TestFanout_RecordsRecipientsForSystemAll(t *testing.T) {

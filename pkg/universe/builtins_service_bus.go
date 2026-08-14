@@ -22,7 +22,7 @@ import (
 	"fmt"
 	"sort"
 
-	"github.com/zenion/mmokit/pkg/cmdsys"
+	"github.com/mmokit/mmokit/pkg/cmdsys"
 )
 
 type serviceBusListArgs struct {
@@ -55,7 +55,7 @@ func registerServiceBusBuiltins(reg *cmdsys.Registry, coord *Process) error {
 		Description: "snapshot the local service-event routing cache + (on coord) the authoritative router",
 		Examples: []string{
 			"service bus list",
-			"service bus list --type=github.com/zenion/mmokit/pkg/service.SessionEnterEvent",
+			"service bus list --type=github.com/mmokit/mmokit/pkg/service.SessionEnterEvent",
 		},
 		Route:  cmdsys.RouteLocal,
 		Args:   serviceBusListArgs{},

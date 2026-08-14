@@ -4,8 +4,8 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/zenion/mmokit/pkg/logger"
-	pkgnet "github.com/zenion/mmokit/pkg/net"
+	"github.com/mmokit/mmokit/pkg/logger"
+	pkgnet "github.com/mmokit/mmokit/pkg/net"
 )
 
 func testVCMLogger() *logger.Logger {

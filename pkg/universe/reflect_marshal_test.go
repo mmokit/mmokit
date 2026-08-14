@@ -8,8 +8,8 @@ import (
 
 	"github.com/mlange-42/ark/ecs"
 
-	"github.com/zenion/mmokit/pkg/metrics"
-	pkgnet "github.com/zenion/mmokit/pkg/net"
+	"github.com/mmokit/mmokit/pkg/metrics"
+	pkgnet "github.com/mmokit/mmokit/pkg/net"
 )
 
 // mustMarshal is the test-side form of ReflectMarshal for values that are

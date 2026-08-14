@@ -3,9 +3,9 @@ package game
 import (
 	"math"
 
-	gamecomp "github.com/zenion/mmokit/examples/space/internal/component"
-	"github.com/zenion/mmokit/examples/space/internal/item"
-	"github.com/zenion/mmokit/pkg/mmokit"
+	gamecomp "github.com/mmokit/mmokit/examples/space/internal/component"
+	"github.com/mmokit/mmokit/examples/space/internal/item"
+	"github.com/mmokit/mmokit/pkg/mmokit"
 )
 
 // ProjectileSystem moves Projectile entities, performs swept collision

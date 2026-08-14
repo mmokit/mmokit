@@ -258,7 +258,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/zenion/mmokit/pkg/universe"
+	"github.com/mmokit/mmokit/pkg/universe"
 )
 
 // fakeSub captures topics + payloads delivered by the TopicBus. Implements
@@ -1153,7 +1153,7 @@ import (
 	"context"
 	"time"
 
-	"github.com/zenion/mmokit/pkg/mmokit"
+	"github.com/mmokit/mmokit/pkg/mmokit"
 )
 
 // BotRow is one row of the "bots" admin topic. The PanelHost auto-derives

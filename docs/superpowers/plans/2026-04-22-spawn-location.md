@@ -189,7 +189,7 @@ func TestPlayerSession_SpawnLocationField(t *testing.T) {
 }
 ```
 
-Add `"github.com/zenion/mmokit/pkg/coords"` to the test file's imports.
+Add `"github.com/mmokit/mmokit/pkg/coords"` to the test file's imports.
 
 - [ ] **Step 2: Run the test to verify compile failure**
 
@@ -209,7 +209,7 @@ import (
 
 	"github.com/mlange-42/ark/ecs"
 
-	"github.com/zenion/mmokit/pkg/coords"
+	"github.com/mmokit/mmokit/pkg/coords"
 )
 ```
 
@@ -363,8 +363,8 @@ Append to `pkg/universe/world_base_test.go`:
 ```go
 import (
 	// add if not present:
-	// "github.com/zenion/mmokit/pkg/coords"
-	// "github.com/zenion/mmokit/pkg/component"
+	// "github.com/mmokit/mmokit/pkg/coords"
+	// "github.com/mmokit/mmokit/pkg/component"
 )
 
 func TestSpawnAtLocation_ConvertsWorldToLocal(t *testing.T) {
@@ -646,7 +646,7 @@ type PlayerAssignment struct {
 }
 ```
 
-Add `"github.com/zenion/mmokit/pkg/coords"` to `pkg/universe/message.go` imports if missing.
+Add `"github.com/mmokit/mmokit/pkg/coords"` to `pkg/universe/message.go` imports if missing.
 
 - [ ] **Step 2: Verify build**
 
@@ -808,7 +808,7 @@ type localSession struct {
 }
 ```
 
-Add `"github.com/zenion/mmokit/pkg/coords"` to gateway.go imports if missing.
+Add `"github.com/mmokit/mmokit/pkg/coords"` to gateway.go imports if missing.
 
 - [ ] **Step 2: Do NOT wire `spawnLoc` into `processLogin` yet**
 

@@ -4,7 +4,7 @@ import (
 	"context"
 	"time"
 
-	"github.com/zenion/mmokit/pkg/coords"
+	"github.com/mmokit/mmokit/pkg/coords"
 )
 
 // buildSplitPlan translates a SPLIT CellTransferRequest into a data-driven

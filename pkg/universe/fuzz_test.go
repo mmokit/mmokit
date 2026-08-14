@@ -9,10 +9,10 @@ import (
 	"github.com/google/uuid"
 	"google.golang.org/protobuf/proto"
 
-	meshpb "github.com/zenion/mmokit/gen/go/meshpb"
-	"github.com/zenion/mmokit/pkg/component"
-	"github.com/zenion/mmokit/pkg/coords"
-	"github.com/zenion/mmokit/pkg/engine"
+	meshpb "github.com/mmokit/mmokit/gen/go/meshpb"
+	"github.com/mmokit/mmokit/pkg/component"
+	"github.com/mmokit/mmokit/pkg/coords"
+	"github.com/mmokit/mmokit/pkg/engine"
 )
 
 // Fuzz harness for the decoder families docs/roadmap.md §6.7 names: the
@@ -423,7 +423,7 @@ func decodeMeshFrameSeeds(tb testing.TB) []fuzzSeed {
 		DestCellId: "cell_1_0",
 		Msg: &meshpb.MeshFrame_ServiceEvent{ServiceEvent: &meshpb.ServiceEvent{
 			SourceProcessId: "proc-1",
-			TypeName:        "github.com/zenion/mmokit/pkg/service.SessionEnterEvent",
+			TypeName:        "github.com/mmokit/mmokit/pkg/service.SessionEnterEvent",
 			Payload:         []byte{0x01},
 			Sequence:        3,
 		}},

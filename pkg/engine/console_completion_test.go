@@ -6,7 +6,7 @@ import (
 	"sort"
 	"testing"
 
-	"github.com/zenion/mmokit/pkg/cmdsys"
+	"github.com/mmokit/mmokit/pkg/cmdsys"
 )
 
 // newTestConsole builds a minimal *Console suitable for driving the

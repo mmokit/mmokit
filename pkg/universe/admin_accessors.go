@@ -6,9 +6,9 @@ import (
 	"fmt"
 	"time"
 
-	meshpb "github.com/zenion/mmokit/gen/go/meshpb"
-	"github.com/zenion/mmokit/pkg/cmdsys"
-	"github.com/zenion/mmokit/pkg/metrics"
+	meshpb "github.com/mmokit/mmokit/gen/go/meshpb"
+	"github.com/mmokit/mmokit/pkg/cmdsys"
+	"github.com/mmokit/mmokit/pkg/metrics"
 )
 
 // remoteMetricsEntry caches a per-cell LoadSnapshot reported via Heartbeat,

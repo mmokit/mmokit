@@ -4,7 +4,7 @@ import (
 	"sync/atomic"
 	"testing"
 
-	"github.com/zenion/mmokit/pkg/engine"
+	"github.com/mmokit/mmokit/pkg/engine"
 )
 
 // TestSetProtocolStoresValue verifies that SetProtocol stores the supplied

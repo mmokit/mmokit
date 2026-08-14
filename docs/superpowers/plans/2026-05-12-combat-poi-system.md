@@ -481,8 +481,8 @@ import (
 
 	"github.com/mlange-42/ark/ecs"
 
-	gamecomp "github.com/zenion/mmokit/internal/component"
-	"github.com/zenion/mmokit/pkg/mmokit"
+	gamecomp "github.com/mmokit/mmokit/internal/component"
+	"github.com/mmokit/mmokit/pkg/mmokit"
 )
 
 // TargetLockSystem ticks per-slot lock progress and prunes invalid
@@ -875,8 +875,8 @@ package game
 import (
 	"testing"
 
-	gamecomp "github.com/zenion/mmokit/internal/component"
-	"github.com/zenion/mmokit/pkg/mmokit"
+	gamecomp "github.com/mmokit/mmokit/internal/component"
+	"github.com/mmokit/mmokit/pkg/mmokit"
 )
 
 // TestMultiLock_ParallelProgress verifies that locking two targets at
@@ -1048,7 +1048,7 @@ Goal: Implement the three-archetype state machine, leash mechanic, and target sw
 package game
 
 import (
-	gamecomp "github.com/zenion/mmokit/internal/component"
+	gamecomp "github.com/mmokit/mmokit/internal/component"
 )
 
 // NPCArchetype enumerates the v1 enemy archetypes. Values are wire-stable
@@ -1398,8 +1398,8 @@ import (
 
 	"github.com/mlange-42/ark/ecs"
 
-	gamecomp "github.com/zenion/mmokit/internal/component"
-	"github.com/zenion/mmokit/pkg/mmokit"
+	gamecomp "github.com/mmokit/mmokit/internal/component"
+	"github.com/mmokit/mmokit/pkg/mmokit"
 )
 
 // NPCAISystem drives the per-NPC state machine each tick. Acquires
@@ -1868,8 +1868,8 @@ package game
 import (
 	"testing"
 
-	gamecomp "github.com/zenion/mmokit/internal/component"
-	"github.com/zenion/mmokit/pkg/mmokit"
+	gamecomp "github.com/mmokit/mmokit/internal/component"
+	"github.com/mmokit/mmokit/pkg/mmokit"
 )
 
 // TestNPCAI_IdleToAcquireOnTargetInRange verifies Brawler acquires a
@@ -1995,9 +1995,9 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/zenion/mmokit/internal/game"
-	"github.com/zenion/mmokit/pkg/cmdsys"
-	"github.com/zenion/mmokit/pkg/mmokit"
+	"github.com/mmokit/mmokit/internal/game"
+	"github.com/mmokit/mmokit/pkg/cmdsys"
+	"github.com/mmokit/mmokit/pkg/mmokit"
 )
 
 type NPCSpawnArgs struct {
@@ -2220,8 +2220,8 @@ import (
 
 	"github.com/mlange-42/ark/ecs"
 
-	gamecomp "github.com/zenion/mmokit/internal/component"
-	"github.com/zenion/mmokit/pkg/mmokit"
+	gamecomp "github.com/mmokit/mmokit/internal/component"
+	"github.com/mmokit/mmokit/pkg/mmokit"
 )
 
 // POIBundle is the component bundle for a Point-of-Interest entity.
@@ -2387,8 +2387,8 @@ import (
 	"math"
 	"math/rand/v2"
 
-	"github.com/zenion/mmokit/pkg/coords"
-	"github.com/zenion/mmokit/pkg/mmokit"
+	"github.com/mmokit/mmokit/pkg/coords"
+	"github.com/mmokit/mmokit/pkg/mmokit"
 )
 
 // POIDef is the procgen output for a single POI to be spawned in a cell.
@@ -2519,8 +2519,8 @@ package game
 import (
 	"time"
 
-	gamecomp "github.com/zenion/mmokit/internal/component"
-	"github.com/zenion/mmokit/pkg/mmokit"
+	gamecomp "github.com/mmokit/mmokit/internal/component"
+	"github.com/mmokit/mmokit/pkg/mmokit"
 )
 
 // POISystem ticks POI lifecycle each frame: detects fully-cleared
@@ -2666,8 +2666,8 @@ package game
 import (
 	"testing"
 
-	gamecomp "github.com/zenion/mmokit/internal/component"
-	"github.com/zenion/mmokit/pkg/mmokit"
+	gamecomp "github.com/mmokit/mmokit/internal/component"
+	"github.com/mmokit/mmokit/pkg/mmokit"
 )
 
 // TestPOI_ClearSpawnsLootCrate verifies that killing every roster
@@ -2828,8 +2828,8 @@ package game
 import (
 	"testing"
 
-	gamecomp "github.com/zenion/mmokit/internal/component"
-	"github.com/zenion/mmokit/pkg/mmokit"
+	gamecomp "github.com/mmokit/mmokit/internal/component"
+	"github.com/mmokit/mmokit/pkg/mmokit"
 )
 
 // TestPOI_RosterWideLeash verifies that dragging one NPC outside the
@@ -2936,7 +2936,7 @@ package game
 import (
 	"testing"
 
-	"github.com/zenion/mmokit/pkg/mmokit"
+	"github.com/mmokit/mmokit/pkg/mmokit"
 )
 
 // TestPOIGen_Deterministic verifies that the same input produces the
@@ -3018,10 +3018,10 @@ import (
 	"context"
 	"time"
 
-	"github.com/zenion/mmokit/internal/game"
-	gamecomp "github.com/zenion/mmokit/internal/component"
-	"github.com/zenion/mmokit/pkg/cmdsys"
-	"github.com/zenion/mmokit/pkg/mmokit"
+	"github.com/mmokit/mmokit/internal/game"
+	gamecomp "github.com/mmokit/mmokit/internal/component"
+	"github.com/mmokit/mmokit/pkg/cmdsys"
+	"github.com/mmokit/mmokit/pkg/mmokit"
 )
 
 type POIListArgs struct{}

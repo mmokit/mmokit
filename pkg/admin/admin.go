@@ -6,12 +6,12 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/zenion/mmokit/pkg/admin/static"
-	"github.com/zenion/mmokit/pkg/cmdsys"
-	"github.com/zenion/mmokit/pkg/logger"
-	"github.com/zenion/mmokit/pkg/persist"
-	"github.com/zenion/mmokit/pkg/services/auth"
-	"github.com/zenion/mmokit/pkg/universe"
+	"github.com/mmokit/mmokit/pkg/admin/static"
+	"github.com/mmokit/mmokit/pkg/cmdsys"
+	"github.com/mmokit/mmokit/pkg/logger"
+	"github.com/mmokit/mmokit/pkg/persist"
+	"github.com/mmokit/mmokit/pkg/services/auth"
+	"github.com/mmokit/mmokit/pkg/universe"
 )
 
 // Config is the construction-time bundle for NewServer.

@@ -160,7 +160,7 @@ Files and their filter locations:
 
 For `network.go`: Add `Without(ecs.C[component.Ghost]())` to the **playerFilter** only (ghost players shouldn't broadcast). The AoI query via spatial grid already naturally includes replicas.
 
-All systems need `"github.com/zenion/mmokit/internal/component"` imported (most already have it).
+All systems need `"github.com/mmokit/mmokit/internal/component"` imported (most already have it).
 
 - [ ] **Step 2: Build and verify**
 
@@ -343,7 +343,7 @@ Create `internal/universe/message.go` with all inter-node message types:
 ```go
 package universe
 
-import "github.com/zenion/mmokit/internal/component"
+import "github.com/mmokit/mmokit/internal/component"
 
 // MsgType identifies the kind of inter-node message.
 type MsgType uint8
@@ -440,7 +440,7 @@ Create `internal/universe/topology.go`:
 ```go
 package universe
 
-import "github.com/zenion/mmokit/pkg/coords"
+import "github.com/mmokit/mmokit/pkg/coords"
 
 // Topology holds the neighbor relationships between sectors.
 type Topology struct {
@@ -512,8 +512,8 @@ import (
 	"hash/fnv"
 	"math/rand/v2"
 
-	"github.com/zenion/mmokit/internal/component"
-	"github.com/zenion/mmokit/pkg/coords"
+	"github.com/mmokit/mmokit/internal/component"
+	"github.com/mmokit/mmokit/pkg/coords"
 )
 
 // AsteroidBelt defines a cluster of asteroids within a sector.
@@ -657,13 +657,13 @@ package universe
 import (
 	"context"
 
-	"github.com/zenion/mmokit/internal/component"
-	"github.com/zenion/mmokit/internal/game"
-	"github.com/zenion/mmokit/internal/system"
-	"github.com/zenion/mmokit/pkg/coords"
-	"github.com/zenion/mmokit/pkg/engine"
-	"github.com/zenion/mmokit/pkg/net"
-	"github.com/zenion/mmokit/pkg/spatial"
+	"github.com/mmokit/mmokit/internal/component"
+	"github.com/mmokit/mmokit/internal/game"
+	"github.com/mmokit/mmokit/internal/system"
+	"github.com/mmokit/mmokit/pkg/coords"
+	"github.com/mmokit/mmokit/pkg/engine"
+	"github.com/mmokit/mmokit/pkg/net"
+	"github.com/mmokit/mmokit/pkg/spatial"
 )
 
 // Node is a self-contained game simulation owning one sector.
