@@ -42,7 +42,7 @@ The smallest runnable example is [`examples/simple`](examples/simple/). It start
 
 Prerequisites:
 
-- Go 1.25.1
+- Go 1.26 or newer
 - [Just](https://github.com/casey/just)
 - Docker with Compose
 - [Bun](https://bun.sh/)

@@ -376,7 +376,7 @@ Each work item should add the smallest regression test that fails before the fix
 **Two standing blind spots in any `go test ./...` gate**, stated so green is not mistaken for complete:
 
 - **It covers zero PostgreSQL code.** All four `*/postgres` packages are behind `//go:build pgtest` and report `[no test files]`. Their tests are not skipped — they are invisible. Only `just test-pg` runs them.
-- **`gofmt` cannot be gated tree-wide.** `gofmt -l $(git ls-files '*.go')` reports 72 files / 1358 diff lines, almost all pre-existing Go 1.19+ doc-comment reflow, and `AGENTS.md` forbids clearing that as incidental cleanup. Gate changed files only. Relatedly, `go.mod` declares `go 1.25.1` with **no `toolchain` directive** while only go1.26.x is installed, so `vet` and `gofmt` results are toolchain-dependent and CI would measure a moving target until it is pinned.
+- **`gofmt` is gated tree-wide.** ~~Cannot be~~ — this was measured and found false: of the 424 changed diff lines only 29 were comments, so the claim that it was "almost all pre-existing doc-comment reflow" did not hold. The tree was formatted in one commit and the gate is tree-wide. `go.mod` pins `toolchain go1.26.6` alongside `go 1.26.0`, so `vet` and `gofmt` measure a fixed target rather than whatever is installed.
 
 **Race inventory, re-measured at `4b1d8965`:**
 

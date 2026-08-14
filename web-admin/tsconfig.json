@@ -12,7 +12,12 @@
     "noEmit": true,
     "verbatimModuleSyntax": true,
     "lib": ["ES2022", "DOM", "DOM.Iterable"],
-    "types": ["vitest/globals"],
+    // vite/client is required, not optional: an explicit "types" array
+    // REPLACES automatic @types inclusion, so without it the ambient
+    // declarations for side-effect CSS imports and import.meta.env are
+    // out of scope. Older TypeScript let `import "./style.css"` slide;
+    // TypeScript 6 does not.
+    "types": ["vitest/globals", "vite/client"],
     "paths": {
       "$lib/*": ["./src/lib/*"]
     }

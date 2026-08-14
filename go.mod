@@ -1,8 +1,8 @@
 module github.com/mmokit/mmokit
 
-go 1.25.1
+go 1.26.0
 
-toolchain go1.26.2
+toolchain go1.26.6
 
 require (
 	github.com/chzyer/readline v1.5.1

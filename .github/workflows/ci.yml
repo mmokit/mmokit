@@ -52,12 +52,14 @@ jobs:
       # touches history.
       - uses: actions/checkout@v4
 
-      # go.mod is the single place the Go version is pinned: `go 1.25.1` plus
-      # `toolchain go1.26.2`. setup-go@v5 reads only the `go` directive from a
-      # version file, so it installs 1.25.1 and the toolchain directive then
-      # makes every `go` invocation re-exec into go1.26.2 (GOTOOLCHAIN=auto).
-      # The result is the pinned toolchain either way. Do not also hard-code a
-      # `go-version:` string here — it would silently win over the file.
+      # go.mod is the single place the Go version is pinned: `go 1.26.0` plus
+      # `toolchain go1.26.6`. The two say different things and both matter —
+      # `go` is the MINIMUM a consumer needs (any 1.26.x), `toolchain` is what
+      # this repository builds and formats with. setup-go@v5 reads the version
+      # file and the toolchain directive then makes every `go` invocation
+      # re-exec into go1.26.6 under GOTOOLCHAIN=auto, so the pinned toolchain
+      # is what runs either way. Do not also hard-code a `go-version:` string
+      # here — it would silently win over the file.
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
@@ -79,8 +81,8 @@ jobs:
       # formatted in the same commit that widened this gate, so it is green.
       #
       # gofmt is taken from `go env GOROOT` rather than PATH: PATH's gofmt
-      # belongs to the version setup-go installed (1.25.1), while `go env`
-      # re-execs into the pinned toolchain and reports go1.26.2's GOROOT. gofmt
+      # belongs to whatever setup-go installed, while `go env` re-execs into
+      # the pinned toolchain and reports go1.26.6's GOROOT. gofmt
       # output is toolchain-dependent, so the gate must measure what
       # contributors run.
       - name: gofmt

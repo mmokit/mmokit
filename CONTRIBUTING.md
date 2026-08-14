@@ -227,7 +227,7 @@ worktree changes. Formatting is the one exception, because a mechanical,
 verifiable, idempotent transform is exactly what a gate can enforce cheaply —
 and an ungated one accumulates.
 
-`go.mod` pins `toolchain go1.26.2` alongside the `go 1.25.1` language directive,
+`go.mod` pins `toolchain go1.26.6` alongside the `go 1.26.0` language directive,
 so `gofmt` and `vet` results are reproducible rather than a moving target. If
 you configure a Go version anywhere else, read it from `go.mod` rather than
 hard-coding a string, so there is exactly one place to bump.
