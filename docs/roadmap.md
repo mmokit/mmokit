@@ -27,7 +27,7 @@ This section owns the project's scope statement. Other documents link here rathe
 
 ### 2.1 Any game type, not one space game
 
-MMOKIT should host any genre. Today that claim is under-evidenced: the reference game is a 2D space game, and the only structurally different game ever built on the framework lives on the `moita` branch, which predates `SystemBase`, `Stage`, the reflection codec, and pluggable services. Treat multi-genre support as a goal being actively worked toward, not a property already held.
+MMOKIT should host any genre. Today that claim is under-evidenced: all three shipped examples are top-down 2D, and the only structurally different game ever built on the framework was a prototype that predated `SystemBase`, `Stage`, the reflection codec and pluggable services — it was never ported and is not part of this repository. Treat multi-genre support as a goal being actively worked toward, not a property already held. **The honest state is that the multi-genre claim is currently untested.**
 
 ### 2.2 2D and 3D both first-class
 
@@ -333,7 +333,7 @@ These exist in the working tree, in dated plans, or only in git history. They ar
 | WS-008 | Rich network entity identity | Open | Recovered from the retired roadmap. `NetworkID` still carries only ID and epoch. |
 | WS-009 | Auto-rebalance tuning and load-based placement | Open, ships disabled | `AutoRebalance` defaults to false. |
 | WS-010 | Persistence schema-evolution tooling | Open | Migrations run embedded at startup; no rolling-migration story. |
-| WS-011 | Second reference game (`moita` branch) | Stranded on a branch | The only empirical evidence a structurally different genre fits. Either port it as validation of the multi-genre goal or formally retire it. |
+| WS-011 | Second reference game, structurally unlike the space game | **Retired 2026-08-15** | The prototype that carried this was written against a framework four major refactors ago and was dropped at publication rather than ported. Re-open this as *build* a second reference game, not *port* one; §2.1's multi-genre claim stays explicitly untested until then. |
 
 #### WS-001 — Client prediction, reconciliation, and adaptive playback · **Partial**
 
@@ -515,7 +515,7 @@ Phases 0 and 1 are deliberately pure 2D. Front-loading them means any later fail
 
 ### 7.6 Validation
 
-Port or formally retire the `moita` branch. It is the only empirical evidence that a structurally different genre fits this framework, and the multi-genre claim in [section 2.1](#21-any-game-type-not-one-space-game) is untested without it.
+**Retired at publication.** The prototype this described was written against a pre-`SystemBase` framework and was not carried into the public repository. The multi-genre claim in [section 2.1](#21-any-game-type-not-one-space-game) is therefore untested, and says so. Validating it now means building a second reference game against the current API — a larger piece of work than the port this item originally imagined, and one worth doing deliberately rather than by resurrecting dead code.
 
 ### 7.7 Known gameplay-visible change
 
