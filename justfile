@@ -1,33 +1,21 @@
-# build the web-pixi client (vite → web-pixi/dist). Served standalone via
-# `just web-serve`; no longer embedded into the Go binary.
-build-web:
-    cd web-pixi && bun install --frozen-lockfile && bun run build
-
-# build the Go binary only (the web client is no longer embedded — it is
-# served separately via `just web-serve`)
-build-go:
-    go build -o bin/server ./cmd/server
-
 # build all hot-swappable wasm system modules into dist/wasmmods/
 wasm-build:
     mkdir -p dist/wasmmods
     GOOS=wasip1 GOARCH=wasm go build -buildmode=c-shared -o dist/wasmmods/tint.wasm ./examples/4node-basic/wasmmods/tint/
 
-# build TS SDK + web client + server into bin/server
-# space-sdk runs first so the web client picks up any schema changes.
-build: space-sdk build-web admin-build build-go
-
-# build + run
-run: build
-    ./bin/server
+# Framework-wide build. This used to be `space-sdk build-web admin-build
+# build-go` — three-quarters of it belonged to the reference game, and
+# space-sdk needed a live PostgreSQL because the game opens its database
+# before --dump-schema exits. Each example builds itself now:
+#
+#   cd examples/simple      && just run
+#   cd examples/4node-basic && just run
+#   cd examples/space       && just run
+build: admin-build
 
 # regenerate protobuf (buf generate)
 proto:
     buf generate
-
-# build the bot client
-botclient:
-    go build -o bin/botclient ./cmd/botclient
 
 # generate typed TS client SDK (e.g. just client-sdk examples/4node-basic)
 # Passes POSTGRES_URL through so service-kind-bearing example games (auth, echo,
@@ -37,156 +25,9 @@ client-sdk GAME:
         --out {{ GAME }}/web/sdk \
         --core pkg/quantize/ts/delta-decoder-core.ts
 
-# generate typed TS client SDK for the space game → web-pixi/sdk/
-space-sdk:
-    go run ./cmd/server --dump-schema --control-listen= --admin-listen= | go run ./cmd/sdkgen \
-        --out web-pixi/sdk \
-        --core pkg/quantize/ts/delta-decoder-core.ts
-
 # remove bin/
 clean:
     rm -rf bin/
-
-# build + run server & web-pixi vite dev server
-# UDP is off in the SERVER default (CE-005b Tier 1) and deliberately stays
-# that way — packets are unauthenticated and unencrypted. Enabling it here is
-# an explicit local-dev choice on loopback, and does not change the shipped
-# default. Override with a trailing `--udp-listen=:9001`, or disable with
-# `--udp-listen=` (std flag: last occurrence wins).
-#
-# The bind is the WILDCARD ':9000' on purpose: a wildcard bind opens an IPv6
-# socket that accepts IPv4 peers 4-in-6, while '127.0.0.1:9000' rejects them.
-dev *ARGS: build
-    #!/usr/bin/env bash
-    set -euo pipefail
-    tmux kill-session -t space-vite 2>/dev/null || true
-    tmux new-session -d -s space-vite -c "{{ justfile_directory() }}/web-pixi" 'bun run dev'
-    trap 'tmux kill-session -t space-vite 2>/dev/null' INT TERM EXIT
-    ./bin/server --dev-insecure-cookie --udp-listen=:9000 {{ARGS}}
-
-# serve the built web client (web-pixi/dist) as a standalone static host.
-# Run alongside `just run` (server on :8080) for a no-vite build+run setup.
-# Pass the matching origin to the server: --cors-origins=http://localhost:5174
-web-serve port="5174":
-    cd web-pixi && bunx serve dist --single --listen {{port}}
-
-# Tmux session `space-dist` with coord + 3 nodes + gateway panes, each
-# with its own interactive console. Logs mirror to log/distributed-space
-# via tmux pipe-pane (keeps the pane's TTY intact for readline).
-# Gateway serves only /ws + /auth on :8080; the web client (web-pixi/dist) is
-# served on :5174 by a detached `space-web` session this recipe starts, with
-# its config.json auto-pointed at :8080 and the gateway allowlisting :5174 via
-# --cors-origins. Open http://localhost:5174 in a browser.
-
-# run the space game in 5-process distributed mode (tmux)
-distributed-space: build db-up
-    #!/usr/bin/env bash
-    set -euo pipefail
-    command -v tmux >/dev/null 2>&1 || { echo "tmux required: sudo apt install tmux  OR  brew install tmux"; exit 1; }
-    root="{{ justfile_directory() }}"
-    bin="$root/bin/server"
-    coord_addr="localhost:9100"
-    logdir="$root/log/distributed-space"
-    tmux kill-session -t space-dist 2>/dev/null || true
-    mkdir -p "$logdir"
-
-    # Serve the web client standalone on :5174. Point its config.json at the
-    # gateway on :8080 (the built default is same-origin, which would be wrong
-    # here since the page is on :5174). Runs in a detached session so the
-    # 5-pane process layout below stays intact; killed on exit.
-    echo '{ "backendUrl": "http://localhost:8080" }' > "$root/web-pixi/dist/config.json"
-    tmux kill-session -t space-web 2>/dev/null || true
-    tmux new-session -d -s space-web -c "$root/web-pixi/dist" 'bunx serve . --single --listen 5174'
-    trap 'tmux kill-session -t space-web 2>/dev/null' EXIT
-
-    # Layout: coordinator as a wide bottom pane (30% of window height),
-    # workers + gateway as a thin equal-width row above it.
-    #
-    #   +------+------+------+------+
-    #   | h-0  | h-1  | h-2  |  gw  |   70%  (worker row)
-    #   +------+------+------+------+
-    #   |       coordinator         |   30%  (admin + fan-out target)
-    #   +---------------------------+
-    #
-    # Create coordinator first (it becomes the bottom pane via -v -b on
-    # the first split). Each subsequent -h split targets the preceding
-    # pane by index and uses -l PCT to size the NEW pane as a fraction
-    # of the SPLIT target — yielding four ~equal columns up top without
-    # needing a window-wide layout that would also resize the bottom.
-    # Every process of a multi-process cluster must present the same cluster
-    # secret. Without it the mesh still forms, but each process warns that its
-    # peers are unauthenticated (CE-006 criterion 7). Exported per-pane via
-    # tmux -e rather than a bare `export`, which does not reliably reach panes
-    # when a tmux server is already running.
-    secret="${MMO_CLUSTER_SECRET:-dev-cluster-secret}"
-
-    tmux new-session -d -s space-dist -c "$root" -e "MMO_CLUSTER_SECRET=$secret" \
-        "$bin --mode=coordinator --control-listen=:9100"
-    tmux pipe-pane -t space-dist -o "cat > $logdir/coordinator.log"
-
-    tmux split-window -t space-dist -v -b -l 70% -c "$root" -e "MMO_CLUSTER_SECRET=$secret" \
-        "$bin --mode=host --coordinator-addr=$coord_addr --host-id=space-host-0"
-    tmux pipe-pane -t space-dist -o "cat > $logdir/host-0.log"
-
-    # Top pane now holds host-0; split it into four equal columns.
-    tmux split-window -t space-dist -h -l 75% -c "$root" -e "MMO_CLUSTER_SECRET=$secret" \
-        "$bin --mode=host --coordinator-addr=$coord_addr --host-id=space-host-1"
-    tmux pipe-pane -t space-dist -o "cat > $logdir/host-1.log"
-
-    tmux split-window -t space-dist -h -l 66% -c "$root" -e "MMO_CLUSTER_SECRET=$secret" \
-        "$bin --mode=host --coordinator-addr=$coord_addr --host-id=space-host-2"
-    tmux pipe-pane -t space-dist -o "cat > $logdir/host-2.log"
-
-    # UDP goes on the GATEWAY ONLY. Gateways are what terminate client
-    # connections; hosts and the coordinator never see client traffic, and
-    # giving them the same flag would just collide on :9000.
-    #
-    # Gateway also runs the auth service (--mode=gateway,service) so the
-    # /auth/* HTTPS endpoints mount on the gateway's HTTP listener on :8080
-    # (the same listener the client's /ws + /auth requests reach). The auth kind needs Postgres,
-    # hence --postgres-url. --dev-insecure-cookie keeps cookies usable
-    # over plain HTTP localhost. The URL is single-quoted so zsh (tmux's
-    # default-shell on this box) doesn't glob-expand the `?` in
-    # `?sslmode=disable` and refuse to launch the binary.
-    tmux split-window -t space-dist -h -l 50% -c "$root" -e "MMO_CLUSTER_SECRET=$secret" \
-        "$bin --mode=gateway,service --services=auth --coordinator-addr=$coord_addr --gateway-id=space-gw-0 --port=8080 '--postgres-url=postgres://mmo:mmo@localhost:5432/mmo?sslmode=disable' --cors-origins=http://localhost:5174 --dev-insecure-cookie --udp-listen=:9000"
-    tmux pipe-pane -t space-dist -o "cat > $logdir/gateway.log"
-
-    # Focus on the coordinator pane so the user lands at the admin prompt.
-    # Use {bottom-left} (positional) rather than pane index — tmux renumbers
-    # by position after splits, so the first-created pane isn't index 0.
-    tmux select-pane -t 'space-dist.{bottom-left}'
-
-    tmux attach-session -t space-dist
-
-# kill the distributed-space tmux session (all 5 processes) + the web host
-distributed-space-stop:
-    tmux kill-session -t space-dist 2>/dev/null || true
-    tmux kill-session -t space-web 2>/dev/null || true
-
-# tail all distributed-space pane logs
-distributed-space-logs:
-    tail -F {{ justfile_directory() }}/log/distributed-space/*.log
-
-# run the unit-level coverage for the distributed-commands + entity-tp work.
-# Exercises every new entity.* / player.* engine command, the routing layer,
-# and the offline-aware ResolvePlayerTarget helper. End-to-end verification
-# (cross-host TP, distributed list/info) lives in the 4node-basic e2e test
-# and the manual `just distributed-space` console.
-smoke-commands:
-    go test -v ./pkg/universe/ \
-        -run "TestEntity|TestPlayer|TestResolve|TestPickDBHost|TestMoveEntityTo|TestHandoffDriver_AcceptsNonNeighbor|TestHandoffDriver_BypassCooldown"
-    go test -v ./pkg/cmdsys/ -run "TestRouteKindString_PlayerHomeOrOwner|TestLocalContext_AcceptsLocalProcess"
-    go test -v ./pkg/mmokit/ -run "TestMmokitFacade_ExportsMoveEntityAPI"
-    go test -v ./internal/game/ -run "TestPlayerDataAccessor_RoundTrip|TestRepoLocator_HitAndMiss"
-
-# delete game databases
-resetdb:
-    rm -f data/gameserver.db
-    rm -f data/marketplace.db
-
-# reset databases and run dev
-freshdev: resetdb dev
 
 # start prometheus
 prometheus:
@@ -232,31 +73,17 @@ db-reset:
 # -p 1 serializes test packages: every pgtest suite shares one Postgres
 # database and TRUNCATEs the same tables in setup, so parallel package
 # execution would race.
+# Engine and service persistence only. A game's own persistence tests live in
+# its example (`cd examples/space && just test-pg`), against that example's own
+# database — this recipe TRUNCATEs shared tables in the bare `mmo` database.
 test-pg:
     POSTGRES_URL=postgres://mmo:mmo@localhost:5432/mmo?sslmode=disable \
         go test -p 1 -count=1 -tags=pgtest \
-            ./pkg/persist/... ./internal/persist/... ./pkg/services/...
+            ./pkg/persist/... ./pkg/services/...
 
 # build the admin SPA into pkg/admin/static/dist (consumed by //go:embed)
 admin-build:
     cd web-admin && bun install --frozen-lockfile && bun run build
-
-# diagnostic — sample the server's /probe-ws heartbeat endpoint to
-# isolate whether bursty WebSocket delivery is a server / network /
-# browser issue. Requires `just dev` (or any server with the /probe-ws
-# route) to be running. See diagnostics/probe.ts for what's measured.
-#
-# Args are POSITIONAL (just doesn't support name=value on recipe args).
-#
-#   just probe                    # 30s sample at localhost:8080 (defaults)
-#   just probe 60                 # 60s sample at localhost:8080
-#   just probe 30 localhost:8080  # both args explicit
-probe duration="30" host="localhost:8080":
-    bun run diagnostics/probe.ts --host={{host}} --duration={{duration}}
-
-# probe with JSON output — for scripting / CI assertions
-probe-json duration="30" host="localhost:8080":
-    bun run diagnostics/probe.ts --host={{host}} --duration={{duration}} --json
 
 # vite dev server with proxy to a running coordinator's --admin-listen=:9101
 admin-dev:
@@ -270,10 +97,13 @@ admin-test:
 admin-typecheck:
     cd web-admin && bun install --frozen-lockfile && bun run typecheck
 
-# Enforces the no-ark-in-game architectural invariant — fails if any
-# non-exempted file in internal/game/ imports github.com/mlange-42/ark/ecs.
+# Enforces the no-ark-in-game architectural invariant for every example that
+# has a game layer — fails if a non-exempted file imports
+# github.com/mlange-42/ark/ecs directly. The script exits 2 if the directory
+# it is given does not exist, so a renamed game layer fails loudly here rather
+# than passing while checking nothing.
 lint-no-ark:
-    ./scripts/no_ark_in_game.sh
+    ./scripts/no_ark_in_game.sh examples/space/internal/game
 
 # mutate-fuzz every decoder family docs/roadmap.md §6.7 names (CE-002
 # criterion 6). A smoke run, not a campaign; the real mutation budget belongs
@@ -321,17 +151,10 @@ csharp-golden:
 ts-core-test:
     bun test pkg/quantize/ts/
 
-# regenerate the Go->TS ship-dynamics parity fixture by driving the REAL
-# ShipDynamicsSystem + PhysicsSystem. Consumed by
-# web-pixi/src/__tests__/prediction-golden.test.ts, which is what fails when
-# internal/game/system_ship_dynamics.go changes without web-pixi/src/prediction.ts.
-shipdyn-golden:
-    go test ./internal/game/ -run TestShipDynamicsGolden -count=1 -update-shipdyn-golden -v
-
-# run the game-client TS test suites (bun). These are the client-prediction,
+# every example's web-client TS suite (bun). These are the client-prediction,
 # reconciliation and interpolation tests, which ts-core-test does not cover.
 web-test:
-    bun test web-pixi/src/__tests__/ examples/4node-basic/web/src/__tests__/
+    bun test examples/space/web/src/__tests__/ examples/4node-basic/web/src/__tests__/
 
 # every TypeScript suite in the repo
 client-test: ts-core-test web-test

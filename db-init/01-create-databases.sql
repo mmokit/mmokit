@@ -10,3 +10,4 @@
 
 CREATE DATABASE mmo_4node OWNER mmo;
 CREATE DATABASE mmo_simple OWNER mmo;
+CREATE DATABASE mmo_space OWNER mmo;
