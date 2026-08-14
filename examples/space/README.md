@@ -1,33 +1,50 @@
-# Production space server
+# The reference space game
 
-`cmd/server` is the composition root for the space game. It combines the reusable MMOKIT process runtime with PostgreSQL repositories, world-manifest content, auth and marketplace services, space-game state, systems, typed messages, and operator commands.
+A complete 2D space game — combat, mining, NPCs, an economy, a hand-authored world, and a PixiJS client — built entirely on the public MMOKIT framework. It is an example in the sense that it consumes only `pkg/mmokit` and friends, not in the sense of being small: it is the framework's most demanding consumer and its regression bed.
 
-For the framework's role and data-flow model, see the [current architecture](../../docs/architecture.md). This page covers choices specific to the production space-game binary.
+Layout:
 
-## Run locally
+| Path | Purpose |
+| --- | --- |
+| [`main.go`](main.go) | Composition root — wires the process, systems, services, and persistence |
+| [`internal/`](internal/) | Game layer: components, systems, items, marketplace, persistence, commands |
+| [`web/`](web/) | PixiJS browser client and its generated SDK |
+| [`world/`](world/) | Hand-authored world manifest (stations, POIs, dungeons, belts, regions) |
+| [`botclient/`](botclient/) | Headless load-test client |
 
-From the repository root:
+`internal/` is nested here on purpose: Go's compiler makes it unimportable from outside this example, so the framework cannot accidentally depend on the game.
+
+For the framework's role and data-flow model, see the [architecture overview](../../docs/architecture.md).
+
+## Run it
+
+Prerequisites: Go, [just](https://github.com/casey/just), Docker (for PostgreSQL), [Bun](https://bun.sh), and `tmux` for the dev and distributed recipes.
+
+**From this directory**, not the repository root:
 
 ```sh
-just db-up
-just run
+cd examples/space
+just dev
 ```
 
-`just run` builds the generated space SDK, web client, admin UI, and Go binary, then starts the server. The game client is built into `web-pixi/dist` but is served separately:
+That starts PostgreSQL, creates the `mmo_space` database if it is missing, regenerates the typed SDK, builds the web and admin bundles and the server, then runs the game with a Vite dev server. Open <http://localhost:5173>.
+
+For a build-and-run without Vite, use two terminals:
 
 ```sh
-just web-serve
+just run                                    # server: gateway :8080, admin :9101
+just web-serve                              # static client on :5174
 ```
 
-Open `http://localhost:5174`; it connects to the gateway on `http://localhost:8080`. For Vite hot reload, use `just dev` instead.
+`just run` binds the gateway to `:8080` with no extra CORS origin, so the Vite flow (`just dev`) is the path that works out of the box. If you serve the client on `:5174` instead, pass the matching origin:
 
-The default local PostgreSQL URL is:
-
-```text
-postgres://mmo:mmo@localhost:5432/mmo?sslmode=disable
+```sh
+just run --cors-origins=http://localhost:5174
 ```
 
-Override it with `POSTGRES_URL`. An empty admin-operator table is seeded with the development-only `admin` / `admin` operator; rotate or replace it before any non-local deployment.
+The three examples all use ports `:8080`, `:9101` and `:5173`/`:5174`, so **only one can run at a time.**
+
+This example uses its own database, `mmo_space`, so it shares no state with the other examples. Override with `POSTGRES_URL`. An empty admin-operator table is seeded with a development-only `admin` / `admin` operator; rotate it before any non-local deployment.
 
 ## Role-aware composition
 
@@ -41,7 +58,7 @@ The same binary can run all roles or a subset selected with `--mode`:
 | `gateway,service` | Opens PostgreSQL for DB-backed services such as auth |
 | Pure `service` | Runs selected registered service kinds and their dependencies |
 
-The root `just distributed-space` recipe builds a five-process development layout: one coordinator, three hosts, one gateway/service process, and a separate static web host. It passes the same `MMO_CLUSTER_SECRET` to every pane.
+This example's `just distributed` recipe builds a five-process development layout: one coordinator, three hosts, one gateway/service process, and a separate static web host. It passes the same `MMO_CLUSTER_SECRET` to every pane.
 
 **Attaching a remote host to a single-process server needs an explicit secret.** The `all` preset auto-generates one for itself, so a host started against it with only `--mode=host --coordinator-addr=localhost:9100` is rejected with `codes.Unauthenticated`. Pass a matching `--cluster-secret` (any value) to both processes:
 

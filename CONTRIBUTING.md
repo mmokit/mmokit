@@ -1,5 +1,95 @@
 # Contributing
 
+## How this project is governed
+
+**One maintainer decides.** This is a benevolent-dictator project: Josh Stout
+has final say on scope, design, and what gets merged. There is no committee, no
+vote, and no RFC process. That is a deliberate choice for a framework whose
+load-bearing design — authority epochs, phase-ordered execution, the wire
+contract — degrades badly under design-by-consensus.
+
+**Write access is by invitation.** The `main` branch is protected; nobody
+pushes to it directly, including the maintainer. Collaborators are added when
+they have already contributed something substantial and shown they understand
+the invariants in [`AGENTS.md`](AGENTS.md). You do not apply; you get asked.
+
+**Everyone else contributes by fork and pull request.** That path is fully open
+and pull requests from outside are genuinely welcome — the access model is about
+who can merge, not who can propose.
+
+### What this means in practice
+
+- **Open an issue before writing anything substantial.** A PR that arrives
+  unannounced and rewrites a subsystem will usually be declined regardless of
+  quality, because the maintainer has a sequenced plan in
+  [`docs/roadmap.md`](docs/roadmap.md) and unsequenced work costs more to
+  integrate than it saves. Small, obvious fixes need no issue.
+- **Expect slow responses.** One person, spare time. A week of silence is
+  normal and is not a signal about your work.
+- **Expect "no" sometimes, without a long justification.** A declined change is
+  not a judgement of you or your code. The most common reason is scope: the
+  project has explicit non-goals, listed in the roadmap, and they are not
+  re-litigated.
+- **Decisions get recorded, not defended.** When direction changes, the change
+  is written into `docs/roadmap.md` with the reasoning. If you want to know why
+  something is the way it is, that file is the answer more often than not.
+
+### Pre-1.0 means the maintainer will break things
+
+There is no API or wire compatibility promise. If your PR's main argument is
+"this would be a breaking change", that is not by itself an objection here —
+see the Stability section of [`README.md`](README.md).
+
+## Licensing of contributions
+
+By submitting a pull request you agree that your contribution is licensed under
+the [MIT License](LICENSE), the same terms as the rest of the project, and that
+you have the right to license it that way. There is no CLA and no copyright
+assignment — you keep your copyright.
+
+If your employer owns your work, get their sign-off before submitting.
+
+## Submitting a change
+
+```bash
+# 1. Fork on GitHub, then:
+git clone https://github.com/<you>/mmokit && cd mmokit
+git remote add upstream https://github.com/zenion/mmokit
+
+# 2. Branch. Never work on main — it is protected upstream and you will
+#    want to rebase cleanly.
+git checkout -b fix/short-description
+
+# 3. Make the change, then run the checks proportionate to it (see below).
+go vet ./... && go test ./... -short -count=1 -p 1
+gofmt -w $(git ls-files '*.go')
+
+# 4. Push to your fork and open a PR against zenion/mmokit main.
+git push -u origin fix/short-description
+```
+
+What a reviewable PR looks like here:
+
+- **One concern per PR.** A formatting sweep bundled with a behaviour change
+  gets asked to split, because the two need different scrutiny.
+- **The commit body explains *why*.** The diff already shows what. If a change
+  is motivated by a measurement, put the number in the body — a commit message
+  is the only place it survives.
+- **A behaviour change ships with the smallest test that fails before it.**
+  Not full coverage; one test that would have caught the bug.
+- **Green CI.** It runs `go vet`, tree-wide `gofmt`, the ark-boundary gate,
+  `go test -short`, every example's build, both TypeScript suites, the C# SDK
+  tests, and the cross-language goldens. Fix a red before asking for review.
+- **Say what you did not run.** PostgreSQL, .NET, Docker and Bun are not
+  available to everyone; an honest "did not run `just test-pg`" is fine, a
+  claim that the full suite passed when it did not is not.
+
+Things that get declined quickly, so you do not waste the effort: dependency
+additions without a stated reason `pkg/` cannot do it itself; re-exports,
+aliases or compatibility shims (the project deletes and updates callers
+instead); repository-wide reformatting or regeneration as incidental cleanup;
+and anything landing in `pkg/` that only one example needs.
+
 ## Read AGENTS.md first
 
 [`AGENTS.md`](AGENTS.md) is the authoritative repository guidance — architectural

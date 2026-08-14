@@ -1,0 +1,40 @@
+name: Change proposal
+description: Propose a feature or a design change before writing it.
+labels: ["proposal"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Please open this **before** writing a substantial PR. This is a
+        benevolent-dictator project with a sequenced plan in
+        `docs/roadmap.md`; unsequenced work is usually declined regardless of
+        quality. Small obvious fixes need no proposal — just send the PR.
+  - type: textarea
+    id: problem
+    attributes:
+      label: The problem
+      description: What is hard or impossible today. Describe the problem, not your solution.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed change
+      description: What you want to build, and roughly where it would live.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: What you considered and rejected
+    validations:
+      required: true
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Checks
+      options:
+        - label: I have read the non-goals in `docs/roadmap.md` and this is not one of them.
+          required: true
+        - label: This belongs in `pkg/` only if more than one game would need it.
+          required: false

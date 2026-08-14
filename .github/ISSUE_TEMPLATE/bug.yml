@@ -1,0 +1,40 @@
+name: Bug report
+description: Something behaves differently from what the docs or code say it should.
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Pre-1.0 software with no compatibility promise — please confirm you are
+        on a recent `main` or a tagged release before filing.
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you observed, and what you expected instead.
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Smallest reproduction
+      description: >
+        A failing Go test is the most useful form this can take. Otherwise: the
+        exact commands, which example, and which process roles were running.
+      render: shell
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: Tag or commit SHA, plus `go version`.
+    validations:
+      required: true
+  - type: textarea
+    id: env
+    attributes:
+      label: Environment
+      description: >
+        OS (note if WSL), whether PostgreSQL was running, single-process or
+        distributed, and whether the UDP transport was enabled.
