@@ -5,6 +5,7 @@ import (
 
 	gamecomp "github.com/zenion/mmokit/internal/component"
 	"github.com/zenion/mmokit/internal/item"
+	"github.com/zenion/mmokit/internal/world"
 	"github.com/zenion/mmokit/pkg/mmokit"
 	"github.com/zenion/mmokit/pkg/pathfinding"
 )
@@ -97,28 +98,28 @@ type GameWorld struct {
 	// Shared across every GameWorld in a coordinator — same disk-backed
 	// store via jsonrepo. Nil-safe for unit tests that don't load a
 	// manifest.
-	WorldRepo mmokit.WorldRepository
+	WorldRepo world.Repository
 
 	// WorldSnapshot is the in-memory view of the world manifest loaded
 	// at process startup. Bucket-by-cell drives the per-cell bootstrap
 	// spawn pipeline; the snapshot is also consulted for fallback spawn
 	// positions when a player has no saved location.
-	WorldSnapshot *mmokit.WorldSnapshot
+	WorldSnapshot *world.Snapshot
 }
 
 // bucketForRootCell returns the per-cell manifest bucket for this
 // GameWorld's root cell. Returns an empty bucket (never nil) when no
 // snapshot is loaded or the cell has no placed content, so callers can
 // range over the slices without nil-check ceremony.
-func (gw *GameWorld) bucketForRootCell() *mmokit.WorldCellBucket {
+func (gw *GameWorld) bucketForRootCell() *world.CellBucket {
 	if gw.WorldSnapshot == nil {
-		return &mmokit.WorldCellBucket{}
+		return &world.CellBucket{}
 	}
 	buckets := gw.WorldSnapshot.BucketByCell()
-	if b, ok := buckets[mmokit.WorldCellID{X: gw.RootCell.CellX, Y: gw.RootCell.CellY}]; ok {
+	if b, ok := buckets[world.CellID{X: gw.RootCell.CellX, Y: gw.RootCell.CellY}]; ok {
 		return b
 	}
-	return &mmokit.WorldCellBucket{}
+	return &world.CellBucket{}
 }
 
 // GetStage returns the per-cell Stage this GameWorld is wired to. External

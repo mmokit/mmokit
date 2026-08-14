@@ -604,7 +604,7 @@ type OrderSide = orderbook.OrderSide
 // PlayerRepository persists engine-side player identity. See
 // persist.PlayerRepository. Game-specific player state (currencies,
 // cargo, equipment, etc.) is owned by game-side packages — for the
-// space game, see internal/persist.PlayerStateRepository.
+// space game, see its persist.PlayerStateRepository.
 type PlayerRepository = persist.PlayerRepository
 
 // PlayerSnapshot is the engine-side persistence DTO for player

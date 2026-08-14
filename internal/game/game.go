@@ -6,6 +6,7 @@ import (
 
 	gamecomp "github.com/zenion/mmokit/internal/component"
 	"github.com/zenion/mmokit/internal/item"
+	"github.com/zenion/mmokit/internal/world"
 	"github.com/zenion/mmokit/pkg/coords"
 	"github.com/zenion/mmokit/pkg/mmokit"
 	"github.com/zenion/mmokit/pkg/pathfinding"
@@ -32,7 +33,7 @@ const (
 // NewGameWorld creates a new game world backed by the given Stage.
 // The cfg pointer is shared across all GameWorlds in the coordinator so that
 // runtime `config set` mutations propagate to every node at once.
-func NewGameWorld(base *mmokit.Stage, cfg *GameConfig, playerDB *PlayerRepo, cell mmokit.CellCoord, fromSplit bool, worldRepo mmokit.WorldRepository, worldSnap *mmokit.WorldSnapshot) *GameWorld {
+func NewGameWorld(base *mmokit.Stage, cfg *GameConfig, playerDB *PlayerRepo, cell mmokit.CellCoord, fromSplit bool, worldRepo world.Repository, worldSnap *world.Snapshot) *GameWorld {
 	eng := base.Engine()
 	item.Init()
 

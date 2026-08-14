@@ -6,6 +6,7 @@ import (
 	"math/rand/v2"
 
 	gamecomp "github.com/zenion/mmokit/internal/component"
+	"github.com/zenion/mmokit/internal/world"
 	"github.com/zenion/mmokit/pkg/mmokit"
 	"github.com/zenion/mmokit/pkg/spatial"
 )
@@ -30,7 +31,7 @@ type DungeonBundle struct {
 // + every wall + every chamber roster NPC with PlacedID{def.ID} so
 // DespawnPlacedByID sweeps the whole subtree. Returns the dungeon
 // entity's NetID.
-func (gw *GameWorld) SpawnDungeonAt(localX, localY float32, def mmokit.WorldDungeon) uint32 {
+func (gw *GameWorld) SpawnDungeonAt(localX, localY float32, def world.Dungeon) uint32 {
 	seed := uint64(def.Seed)
 	if seed == 0 {
 		seed = fnvDungeon(def.ID)

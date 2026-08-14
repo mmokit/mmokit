@@ -2,6 +2,7 @@ package game
 
 import (
 	gamecomp "github.com/zenion/mmokit/internal/component"
+	"github.com/zenion/mmokit/internal/world"
 	"github.com/zenion/mmokit/pkg/mmokit"
 	"github.com/zenion/mmokit/pkg/spatial"
 )
@@ -23,7 +24,7 @@ type StationBundle struct {
 // manifests can omit the field and still get the sane default. Returns
 // the station entity's NetID so admin verbs that spawn-then-track (e.g.
 // world.place) can locate it post-spawn.
-func (gw *GameWorld) SpawnStation(localX, localY float32, def mmokit.WorldStation) uint32 {
+func (gw *GameWorld) SpawnStation(localX, localY float32, def world.Station) uint32 {
 	radius := def.Radius
 	if radius == 0 {
 		radius = gw.Config.StationRadius

@@ -4,6 +4,7 @@ import (
 	"sync"
 
 	"github.com/zenion/mmokit/internal/game"
+	"github.com/zenion/mmokit/internal/world"
 	"github.com/zenion/mmokit/pkg/mmokit"
 )
 
@@ -17,19 +18,19 @@ import (
 // propagates to every local GameWorld so the cell-bootstrap path stays
 // consistent.
 type worldEditor struct {
-	repo mmokit.WorldRepository
+	repo world.Repository
 	mu   sync.RWMutex
-	snap *mmokit.WorldSnapshot
+	snap *world.Snapshot
 }
 
-func newWorldEditor(repo mmokit.WorldRepository, initial *mmokit.WorldSnapshot) *worldEditor {
+func newWorldEditor(repo world.Repository, initial *world.Snapshot) *worldEditor {
 	return &worldEditor{repo: repo, snap: initial}
 }
 
 // getSnap returns the current in-memory snapshot. The returned pointer is
 // safe to read; if you need to mutate, call reload() afterwards to pick
 // up the new state.
-func (we *worldEditor) getSnap() *mmokit.WorldSnapshot {
+func (we *worldEditor) getSnap() *world.Snapshot {
 	we.mu.RLock()
 	defer we.mu.RUnlock()
 	return we.snap

@@ -5,13 +5,13 @@ import (
 	"math"
 	"math/rand/v2"
 
-	"github.com/zenion/mmokit/pkg/mmokit"
+	"github.com/zenion/mmokit/internal/world"
 )
 
 // AsteroidBelt defines a cluster of asteroids within a cell. Retained
 // as a private helper type — Task 8 will use it as the internal belt
 // description while the world manifest carries the operator-facing
-// definition (mmokit.WorldBelt).
+// definition (world.Belt).
 type AsteroidBelt struct {
 	CenterX, CenterY float32
 	Radius           float32
@@ -38,7 +38,7 @@ const beltBaseAsteroidCount = 12
 // verbs can despawn the whole belt with one DespawnPlacedByID sweep.
 // Belts have no separate marker entity — they ARE their scatter — so
 // the function returns 0 rather than a representative NetID.
-func (gw *GameWorld) SpawnBelt(localX, localY float32, def mmokit.WorldBelt) uint32 {
+func (gw *GameWorld) SpawnBelt(localX, localY float32, def world.Belt) uint32 {
 	if def.Radius <= 0 {
 		gw.eng.Log.Log(CatPlayerSpawn, "world: skip belt id=%s — non-positive radius", def.ID)
 		return 0

@@ -15,7 +15,7 @@ import (
 //
 //   - The MESH profile bounds bodies produced by this cluster's own encoder:
 //     border component blobs, transfer frames, service-event payloads, and the
-//     client-side decode in internal/bot. It is fixed rather than configurable
+//     client-side decode in the reference game's bot client. It is fixed rather than configurable
 //     because it is not a security control — the peer is already trusted at the
 //     transport layer (CE-006 owns making that true) — and it exists only so
 //     the decoder cannot be tripped by the codec's own legitimate output.

@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/zenion/mmokit/internal/game"
+	"github.com/zenion/mmokit/internal/world"
 	"github.com/zenion/mmokit/pkg/cmdsys"
 	"github.com/zenion/mmokit/pkg/mmokit"
 )
@@ -16,7 +17,7 @@ import (
 // handles loaded in cmd/server/main.go. They're held by a worldEditor
 // struct so the world.* verbs work on a pure coordinator process (no
 // local cells, hence no per-cell GameWorld).
-func RegisterAll(reg *cmdsys.Registry, coord *mmokit.Process, playerDB *game.PlayerRepo, cfg *game.GameConfig, worldRepo mmokit.WorldRepository, worldSnap *mmokit.WorldSnapshot) error {
+func RegisterAll(reg *cmdsys.Registry, coord *mmokit.Process, playerDB *game.PlayerRepo, cfg *game.GameConfig, worldRepo world.Repository, worldSnap *world.Snapshot) error {
 	cfgPtr := &cfg
 	we := newWorldEditor(worldRepo, worldSnap)
 	disp := coord.CmdDispatcher()

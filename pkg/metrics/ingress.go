@@ -117,7 +117,7 @@ const (
 	// carrying gateway-forwarded client bytes.
 	SurfaceClient IngressSurface = iota
 	// SurfaceMesh is the intra-cluster path plus the client-SDK decode in
-	// internal/bot: border component blobs, transfer frames, service-event
+	// the reference game's bot client: border component blobs, transfer frames, service-event
 	// payloads, op responses.
 	SurfaceMesh
 

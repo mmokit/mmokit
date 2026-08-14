@@ -5,6 +5,7 @@ import (
 	"math/rand/v2"
 
 	gamecomp "github.com/zenion/mmokit/internal/component"
+	"github.com/zenion/mmokit/internal/world"
 	"github.com/zenion/mmokit/pkg/mmokit"
 )
 
@@ -25,7 +26,7 @@ type POIBundle struct {
 // POI marker entity AND every roster NPC with PlacedID{def.ID} so
 // world.* verbs can sweep the whole subtree with one DespawnPlacedByID
 // call. Returns the POI marker's NetID (0 on validation failure).
-func (gw *GameWorld) SpawnPOI(localX, localY float32, def mmokit.WorldPOI) uint32 {
+func (gw *GameWorld) SpawnPOI(localX, localY float32, def world.POI) uint32 {
 	if def.Tier < 1 || def.Tier > 3 {
 		gw.eng.Log.Log(CatPOI, "world: skip poi id=%s — invalid tier %d", def.ID, def.Tier)
 		return 0

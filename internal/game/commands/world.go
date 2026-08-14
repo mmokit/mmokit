@@ -7,6 +7,7 @@ import (
 
 	gamecomp "github.com/zenion/mmokit/internal/component"
 	"github.com/zenion/mmokit/internal/game"
+	"github.com/zenion/mmokit/internal/world"
 	"github.com/zenion/mmokit/pkg/cmdsys"
 	"github.com/zenion/mmokit/pkg/coords"
 	"github.com/zenion/mmokit/pkg/mmokit"
@@ -196,7 +197,7 @@ func registerWorldPlace(reg *cmdsys.Registry, coord *mmokit.Process, we *worldEd
 			}
 
 			wp := coords.FromFlat(float64(args.WorldX), float64(args.WorldY))
-			cellID := mmokit.WorldCellID{X: wp.CellX, Y: wp.CellY}
+			cellID := world.CellID{X: wp.CellX, Y: wp.CellY}
 
 			id := args.ID
 			if id == "" {
@@ -205,7 +206,7 @@ func registerWorldPlace(reg *cmdsys.Registry, coord *mmokit.Process, we *worldEd
 
 			switch args.Type {
 			case "station":
-				def := mmokit.WorldStation{
+				def := world.Station{
 					ID: id, Name: args.Name,
 					WorldPos: [2]float32{args.WorldX, args.WorldY},
 					Radius:   args.Radius,
@@ -220,7 +221,7 @@ func registerWorldPlace(reg *cmdsys.Registry, coord *mmokit.Process, we *worldEd
 				if args.Roster == "" {
 					return nil, fmt.Errorf("roster required for POI")
 				}
-				def := mmokit.WorldPOI{
+				def := world.POI{
 					ID: id, WorldPos: [2]float32{args.WorldX, args.WorldY},
 					Type: "combat", Tier: args.Tier, Roster: args.Roster,
 				}
@@ -228,7 +229,7 @@ func registerWorldPlace(reg *cmdsys.Registry, coord *mmokit.Process, we *worldEd
 					return nil, err
 				}
 			case "dungeon":
-				def := mmokit.WorldDungeon{
+				def := world.Dungeon{
 					ID: id, Name: args.Name,
 					WorldPos: [2]float32{args.WorldX, args.WorldY},
 				}
@@ -243,7 +244,7 @@ func registerWorldPlace(reg *cmdsys.Registry, coord *mmokit.Process, we *worldEd
 				if density == 0 {
 					density = 1.0
 				}
-				def := mmokit.WorldBelt{
+				def := world.Belt{
 					ID: id, WorldPos: [2]float32{args.WorldX, args.WorldY},
 					Radius: args.Radius, Density: density,
 				}
@@ -251,7 +252,7 @@ func registerWorldPlace(reg *cmdsys.Registry, coord *mmokit.Process, we *worldEd
 					return nil, err
 				}
 			case "decoration":
-				def := mmokit.WorldDecoration{
+				def := world.Decoration{
 					ID: id, WorldPos: [2]float32{args.WorldX, args.WorldY},
 					Kind: args.Kind, Variant: args.Variant,
 				}
@@ -276,7 +277,7 @@ func registerWorldPlace(reg *cmdsys.Registry, coord *mmokit.Process, we *worldEd
 				if len(verts) < 3 {
 					return nil, fmt.Errorf("region polygon needs at least 3 vertices, got %d", len(verts))
 				}
-				def := mmokit.WorldRegion{
+				def := world.Region{
 					ID:       id,
 					Name:     args.Name,
 					Kind:     args.Kind,
@@ -400,7 +401,7 @@ func registerWorldUpdate(reg *cmdsys.Registry, coord *mmokit.Process, we *worldE
 			// Mutate the manifest in place.
 			switch args.Type {
 			case "station":
-				if err := we.repo.UpdateStation(args.ID, func(s *mmokit.WorldStation) {
+				if err := we.repo.UpdateStation(args.ID, func(s *world.Station) {
 					if args.Name != "" {
 						s.Name = args.Name
 					}
@@ -411,7 +412,7 @@ func registerWorldUpdate(reg *cmdsys.Registry, coord *mmokit.Process, we *worldE
 					return nil, err
 				}
 			case "poi":
-				if err := we.repo.UpdatePOI(args.ID, func(p *mmokit.WorldPOI) {
+				if err := we.repo.UpdatePOI(args.ID, func(p *world.POI) {
 					if args.Tier != 0 {
 						p.Tier = args.Tier
 					}
@@ -422,7 +423,7 @@ func registerWorldUpdate(reg *cmdsys.Registry, coord *mmokit.Process, we *worldE
 					return nil, err
 				}
 			case "dungeon":
-				if err := we.repo.UpdateDungeon(args.ID, func(d *mmokit.WorldDungeon) {
+				if err := we.repo.UpdateDungeon(args.ID, func(d *world.Dungeon) {
 					if args.Name != "" {
 						d.Name = args.Name
 					}
@@ -430,7 +431,7 @@ func registerWorldUpdate(reg *cmdsys.Registry, coord *mmokit.Process, we *worldE
 					return nil, err
 				}
 			case "belt":
-				if err := we.repo.UpdateBelt(args.ID, func(b *mmokit.WorldBelt) {
+				if err := we.repo.UpdateBelt(args.ID, func(b *world.Belt) {
 					if args.Radius != 0 {
 						b.Radius = args.Radius
 					}
@@ -441,7 +442,7 @@ func registerWorldUpdate(reg *cmdsys.Registry, coord *mmokit.Process, we *worldE
 					return nil, err
 				}
 			case "decoration":
-				if err := we.repo.UpdateDecoration(args.ID, func(d *mmokit.WorldDecoration) {
+				if err := we.repo.UpdateDecoration(args.ID, func(d *world.Decoration) {
 					if args.Kind != "" {
 						d.Kind = args.Kind
 					}
@@ -452,7 +453,7 @@ func registerWorldUpdate(reg *cmdsys.Registry, coord *mmokit.Process, we *worldE
 					return nil, err
 				}
 			case "region":
-				if err := we.repo.UpdateRegion(args.ID, func(r *mmokit.WorldRegion) {
+				if err := we.repo.UpdateRegion(args.ID, func(r *world.Region) {
 					if args.Name != "" {
 						r.Name = args.Name
 					}
@@ -635,7 +636,7 @@ func registerWorldReload(reg *cmdsys.Registry, coord *mmokit.Process, we *worldE
 					}
 					// 2. Re-spawn from the new snapshot's bucket for this cell.
 					gwLocal.WorldSnapshot = newSnap
-					bucket, ok := newSnap.BucketByCell()[mmokit.WorldCellID{
+					bucket, ok := newSnap.BucketByCell()[world.CellID{
 						X: gwLocal.RootCell.CellX, Y: gwLocal.RootCell.CellY,
 					}]
 					if ok && bucket != nil {
@@ -761,7 +762,7 @@ func fanOutReload(ctx context.Context, env *cmdsys.Env, disp *cmdsys.Dispatcher,
 
 // lookupWorldPos returns the manifest world_pos for (type, id) from the
 // given snapshot, or false if not found.
-func lookupWorldPos(snap *mmokit.WorldSnapshot, typ, id string) ([2]float32, bool) {
+func lookupWorldPos(snap *world.Snapshot, typ, id string) ([2]float32, bool) {
 	if snap == nil {
 		return [2]float32{}, false
 	}
@@ -812,18 +813,18 @@ func lookupWorldPos(snap *mmokit.WorldSnapshot, typ, id string) ([2]float32, boo
 
 // mutateWorldPos updates the persisted world_pos for (type, id) in the
 // repo. Returns whatever error the repo surfaces (typically not-found).
-func mutateWorldPos(repo mmokit.WorldRepository, typ, id string, newWP [2]float32) error {
+func mutateWorldPos(repo world.Repository, typ, id string, newWP [2]float32) error {
 	switch typ {
 	case "station":
-		return repo.UpdateStation(id, func(s *mmokit.WorldStation) { s.WorldPos = newWP })
+		return repo.UpdateStation(id, func(s *world.Station) { s.WorldPos = newWP })
 	case "poi":
-		return repo.UpdatePOI(id, func(p *mmokit.WorldPOI) { p.WorldPos = newWP })
+		return repo.UpdatePOI(id, func(p *world.POI) { p.WorldPos = newWP })
 	case "dungeon":
-		return repo.UpdateDungeon(id, func(d *mmokit.WorldDungeon) { d.WorldPos = newWP })
+		return repo.UpdateDungeon(id, func(d *world.Dungeon) { d.WorldPos = newWP })
 	case "belt":
-		return repo.UpdateBelt(id, func(b *mmokit.WorldBelt) { b.WorldPos = newWP })
+		return repo.UpdateBelt(id, func(b *world.Belt) { b.WorldPos = newWP })
 	case "decoration":
-		return repo.UpdateDecoration(id, func(d *mmokit.WorldDecoration) { d.WorldPos = newWP })
+		return repo.UpdateDecoration(id, func(d *world.Decoration) { d.WorldPos = newWP })
 	}
 	return fmt.Errorf("unknown type %q", typ)
 }
@@ -831,7 +832,7 @@ func mutateWorldPos(repo mmokit.WorldRepository, typ, id string, newWP [2]float3
 // autoID generates a stable id for a newly-placed entity from the
 // (cell, type, ordinal) tuple. Probes the existing snapshot to avoid
 // collisions.
-func autoID(typ string, c mmokit.WorldCellID, snap *mmokit.WorldSnapshot) string {
+func autoID(typ string, c world.CellID, snap *world.Snapshot) string {
 	seen := map[string]bool{}
 	if snap != nil {
 		switch typ {

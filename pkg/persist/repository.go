@@ -4,7 +4,7 @@
 // position, debug flags, login timestamps). Game-specific player
 // state — currencies, cargo, bank, equipment, marketplace, game
 // config — lives in a separate game-owned package (e.g.
-// internal/persist for the space game).
+// the reference game's own persist package for the space game).
 //
 // Implementation: pkg/persist/postgres targeting the `engine` schema.
 package persist
@@ -19,7 +19,7 @@ import (
 
 // PlayerRepository persists engine-side player identity. The
 // repository is a thin storage abstraction — translation between the
-// in-memory game type (internal/game.PlayerData) and PlayerSnapshot
+// in-memory game type (the reference game's game.PlayerData) and PlayerSnapshot
 // happens in the game-domain layer. This separation lets storage
 // representation evolve independently from the runtime type.
 //
@@ -77,7 +77,7 @@ type PlayerRepository interface {
 // PlayerSnapshot is the engine-side persistence DTO for player
 // identity. Game-specific state (currencies, cargo, bank, equipment,
 // etc.) lives in a separate game-owned table joined by user_id; see
-// internal/persist for the space game's PlayerStateSnapshot.
+// the reference game's persist package for its PlayerStateSnapshot.
 type PlayerSnapshot struct {
 	UserID    uuid.UUID
 	Username  string

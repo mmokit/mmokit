@@ -9,7 +9,7 @@ import (
 	"path/filepath"
 	"sync"
 
-	"github.com/zenion/mmokit/pkg/world"
+	"github.com/zenion/mmokit/internal/world"
 )
 
 type Repo struct {

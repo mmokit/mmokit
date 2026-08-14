@@ -12,10 +12,10 @@ import (
 	"github.com/zenion/mmokit/internal/marketplace"
 	gamepersist "github.com/zenion/mmokit/internal/persist"
 	gamepg "github.com/zenion/mmokit/internal/persist/postgres"
+	"github.com/zenion/mmokit/internal/world/jsonrepo"
 	"github.com/zenion/mmokit/pkg/coords"
 	"github.com/zenion/mmokit/pkg/mmokit"
 	"github.com/zenion/mmokit/pkg/services/auth"
-	"github.com/zenion/mmokit/pkg/world/jsonrepo"
 )
 
 func main() {

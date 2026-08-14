@@ -1,6 +1,7 @@
 package game
 
 import (
+	"github.com/zenion/mmokit/internal/world"
 	"github.com/zenion/mmokit/pkg/mmokit"
 )
 
@@ -11,8 +12,8 @@ func NewGameWorldStateFactory(
 	gameCfg *GameConfig,
 	playerDB *PlayerRepo,
 	playerSessions *mmokit.PlayerSessions,
-	worldRepo mmokit.WorldRepository,
-	worldSnap *mmokit.WorldSnapshot,
+	worldRepo world.Repository,
+	worldSnap *world.Snapshot,
 ) func(base *mmokit.Stage) *GameWorld {
 	return func(base *mmokit.Stage) *GameWorld {
 		cell := base.Cell()

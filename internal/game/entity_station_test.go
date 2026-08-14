@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	gamecomp "github.com/zenion/mmokit/internal/component"
+	"github.com/zenion/mmokit/internal/world"
 	"github.com/zenion/mmokit/pkg/mmokit"
 	"github.com/zenion/mmokit/pkg/spatial"
 )
@@ -17,7 +18,7 @@ import (
 func TestStation_HasLayerStatic(t *testing.T) {
 	gw, _ := newTestGameWorld()
 
-	gw.SpawnStation(8100, 8100, mmokit.WorldStation{
+	gw.SpawnStation(8100, 8100, world.Station{
 		ID:     "test-station",
 		Name:   "TEST",
 		Radius: gw.Config.StationRadius,

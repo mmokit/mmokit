@@ -2,6 +2,7 @@ package game
 
 import (
 	gamecomp "github.com/zenion/mmokit/internal/component"
+	"github.com/zenion/mmokit/internal/world"
 	"github.com/zenion/mmokit/pkg/mmokit"
 	"github.com/zenion/mmokit/pkg/spatial"
 )
@@ -21,7 +22,7 @@ type DecorationBundle struct {
 // inside the current cell. Decorations have no gameplay impact — they
 // exist for client rendering only — so Collider.Layer is LayerNone.
 // Returns the decoration entity's NetID.
-func (gw *GameWorld) SpawnDecoration(localX, localY float32, def mmokit.WorldDecoration) uint32 {
+func (gw *GameWorld) SpawnDecoration(localX, localY float32, def world.Decoration) uint32 {
 	e := gw.stage.Spawn(
 		mmokit.Position{X: localX, Y: localY},
 		mmokit.EntityKind{Type: gamecomp.KindDecoration},

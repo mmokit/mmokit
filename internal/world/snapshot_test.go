@@ -3,8 +3,8 @@ package world_test
 import (
 	"testing"
 
+	"github.com/zenion/mmokit/internal/world"
 	"github.com/zenion/mmokit/pkg/coords"
-	"github.com/zenion/mmokit/pkg/world"
 )
 
 func TestBucketByCell_GroupsByWorldPos(t *testing.T) {
