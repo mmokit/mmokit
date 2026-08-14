@@ -11,7 +11,7 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"github.com/zenion/mmoserver/pkg/services/chat"
+	"github.com/zenion/mmokit/pkg/services/chat"
 )
 
 type pgRepo struct{ pool *pgxpool.Pool }

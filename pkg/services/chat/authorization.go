@@ -5,7 +5,7 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/zenion/mmoserver/pkg/ops"
+	"github.com/zenion/mmokit/pkg/ops"
 )
 
 // SystemCallerID is the sentinel UUID returned by callerFromOpCtx when

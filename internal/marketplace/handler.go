@@ -1,7 +1,7 @@
 package marketplace
 
 import (
-	"github.com/zenion/mmoserver/pkg/mmokit"
+	"github.com/zenion/mmokit/pkg/mmokit"
 )
 
 // RegisterHandlers registers all marketplace operation handlers. Each

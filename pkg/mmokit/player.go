@@ -3,9 +3,9 @@ package mmokit
 import (
 	"github.com/mlange-42/ark/ecs"
 
-	"github.com/zenion/mmoserver/pkg/component"
-	"github.com/zenion/mmoserver/pkg/engine"
-	"github.com/zenion/mmoserver/pkg/universe"
+	"github.com/zenion/mmokit/pkg/component"
+	"github.com/zenion/mmokit/pkg/engine"
+	"github.com/zenion/mmokit/pkg/universe"
 )
 
 // Player is the friendly facade that input handlers receive. It wraps a

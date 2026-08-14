@@ -3,8 +3,8 @@ package component_test
 import (
 	"testing"
 
-	"github.com/zenion/mmoserver/pkg/component"
-	"github.com/zenion/mmoserver/pkg/coords"
+	"github.com/zenion/mmokit/pkg/component"
+	"github.com/zenion/mmokit/pkg/coords"
 )
 
 // TestReplicaComponent_HasProducedAtMsField is a sentinel: it fails at

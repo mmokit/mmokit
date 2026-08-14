@@ -5,10 +5,10 @@ import (
 
 	ecs "github.com/mlange-42/ark/ecs"
 
-	gamecomp "github.com/zenion/mmoserver/internal/component"
-	"github.com/zenion/mmoserver/internal/item"
-	"github.com/zenion/mmoserver/pkg/mmokit"
-	"github.com/zenion/mmoserver/pkg/spatial"
+	gamecomp "github.com/zenion/mmokit/internal/component"
+	"github.com/zenion/mmokit/internal/item"
+	"github.com/zenion/mmokit/pkg/mmokit"
+	"github.com/zenion/mmokit/pkg/spatial"
 )
 
 // wireAbilitySystem constructs a freshly-wired AbilitySystem against

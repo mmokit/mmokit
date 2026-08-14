@@ -169,7 +169,7 @@ Remove unused imports: `gamepb` from `replication_adapters.go`, `gamecomp` if no
 Frame: &gameFrameWriter{gw: gw, encoder: quantize.NewFrameEncoder(8192)},
 ```
 
-Add `"github.com/zenion/mmoserver/pkg/quantize"` import to `network.go`.
+Add `"github.com/zenion/mmokit/pkg/quantize"` import to `network.go`.
 
 - [ ] **Step 4: Set `FullRefreshInterval` to 20 (keyframe every second)**
 

@@ -195,7 +195,7 @@ package mmokit
 import (
     "testing"
 
-    enginepb "github.com/zenion/mmoserver/gen/go/enginepb"
+    enginepb "github.com/zenion/mmokit/gen/go/enginepb"
 )
 
 // TestSender_TypeSafe_Compiles asserts at compile time that Sender[T].Send
@@ -263,9 +263,9 @@ Create `internal/game/senders.go`:
 package game
 
 import (
-    enginepb "github.com/zenion/mmoserver/gen/go/enginepb"
-    gamepb "github.com/zenion/mmoserver/gen/go/gamepb"
-    "github.com/zenion/mmoserver/pkg/mmokit"
+    enginepb "github.com/zenion/mmokit/gen/go/enginepb"
+    gamepb "github.com/zenion/mmokit/gen/go/gamepb"
+    "github.com/zenion/mmokit/pkg/mmokit"
 )
 
 // SpaceSenders holds typed Sender handles for every server→client event

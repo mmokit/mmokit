@@ -251,8 +251,8 @@ Imports needed at top of the test file (add if not present):
 ```go
 import (
     "testing"
-    gamecomp "github.com/zenion/mmoserver/internal/component"
-    "github.com/zenion/mmoserver/internal/game"
+    gamecomp "github.com/zenion/mmokit/internal/component"
+    "github.com/zenion/mmokit/internal/game"
 )
 ```
 
@@ -318,9 +318,9 @@ package game
 import (
     "testing"
 
-    gamecomp "github.com/zenion/mmoserver/internal/component"
-    "github.com/zenion/mmoserver/pkg/mmokit"
-    pkguniverse "github.com/zenion/mmoserver/pkg/universe"
+    gamecomp "github.com/zenion/mmokit/internal/component"
+    "github.com/zenion/mmokit/pkg/mmokit"
+    pkguniverse "github.com/zenion/mmokit/pkg/universe"
 )
 
 // newSupercruiseTest builds a single-cell GameWorld with one ship entity
@@ -401,8 +401,8 @@ package game
 import (
     "math"
 
-    gamecomp "github.com/zenion/mmoserver/internal/component"
-    "github.com/zenion/mmoserver/pkg/mmokit"
+    gamecomp "github.com/zenion/mmokit/internal/component"
+    "github.com/zenion/mmokit/pkg/mmokit"
 )
 
 // SupercruiseSystem ticks the Z-bound travel-mode state machine.
@@ -767,8 +767,8 @@ package game
 import (
     "testing"
 
-    gamecomp "github.com/zenion/mmoserver/internal/component"
-    "github.com/zenion/mmoserver/pkg/mmokit"
+    gamecomp "github.com/zenion/mmokit/internal/component"
+    "github.com/zenion/mmokit/pkg/mmokit"
 )
 
 func TestSupercruise_DamageDuringChannelCancelsAndLocksOut(t *testing.T) {

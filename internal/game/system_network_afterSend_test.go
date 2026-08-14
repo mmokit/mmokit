@@ -5,8 +5,8 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/zenion/mmoserver/pkg/mmokit"
-	pkgnet "github.com/zenion/mmoserver/pkg/net"
+	"github.com/zenion/mmokit/pkg/mmokit"
+	pkgnet "github.com/zenion/mmokit/pkg/net"
 )
 
 // wireNetworkSystemForTest constructs a NetworkSystem and runs only the

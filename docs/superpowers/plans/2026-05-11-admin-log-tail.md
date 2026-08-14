@@ -813,7 +813,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/zenion/mmoserver/gen/go/meshpb"
+	"github.com/zenion/mmokit/gen/go/meshpb"
 )
 
 const (
@@ -1219,8 +1219,8 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/zenion/mmoserver/pkg/cmdsys"
-	"github.com/zenion/mmoserver/pkg/logger"
+	"github.com/zenion/mmokit/pkg/cmdsys"
+	"github.com/zenion/mmokit/pkg/logger"
 )
 
 type logSetArgs struct {

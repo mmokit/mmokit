@@ -5,8 +5,8 @@ import (
 
 	"github.com/mlange-42/ark/ecs"
 
-	"github.com/zenion/mmoserver/pkg/component"
-	"github.com/zenion/mmoserver/pkg/engine"
+	"github.com/zenion/mmokit/pkg/component"
+	"github.com/zenion/mmokit/pkg/engine"
 )
 
 func TestPlayer_Identity(t *testing.T) {

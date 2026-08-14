@@ -906,8 +906,8 @@ Add the bundle struct at the top of `internal/game/entity_ship.go` (alongside `S
 package game
 
 import (
-    gamecomp "github.com/zenion/mmoserver/internal/component"
-    "github.com/zenion/mmoserver/pkg/mmokit"
+    gamecomp "github.com/zenion/mmokit/internal/component"
+    "github.com/zenion/mmokit/pkg/mmokit"
 )
 
 type ShipBundle struct {

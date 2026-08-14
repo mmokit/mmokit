@@ -3,10 +3,10 @@ package universe
 import (
 	"github.com/mlange-42/ark/ecs"
 
-	"github.com/zenion/mmoserver/pkg/component"
-	"github.com/zenion/mmoserver/pkg/coords"
-	"github.com/zenion/mmoserver/pkg/engine"
-	"github.com/zenion/mmoserver/pkg/query"
+	"github.com/zenion/mmokit/pkg/component"
+	"github.com/zenion/mmokit/pkg/coords"
+	"github.com/zenion/mmokit/pkg/engine"
+	"github.com/zenion/mmokit/pkg/query"
 )
 
 // edgeMargin is the minimum distance from the cell edge when clamping

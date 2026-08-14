@@ -418,7 +418,7 @@ import (
     "reflect"
     "sync"
 
-    pkguniverse "github.com/zenion/mmoserver/pkg/universe"
+    pkguniverse "github.com/zenion/mmokit/pkg/universe"
 )
 
 // ServerOnly is the marker interface that opts a typed message OUT of
@@ -510,7 +510,7 @@ package mmokit_test
 import (
     "reflect"
     "testing"
-    "github.com/zenion/mmoserver/pkg/mmokit"
+    "github.com/zenion/mmokit/pkg/mmokit"
 )
 
 type testBroadcastableMsg struct {
@@ -922,9 +922,9 @@ package game
 import (
     "testing"
 
-    gamecomp "github.com/zenion/mmoserver/internal/component"
-    "github.com/zenion/mmoserver/pkg/mmokit"
-    pkguniverse "github.com/zenion/mmoserver/pkg/universe"
+    gamecomp "github.com/zenion/mmokit/internal/component"
+    "github.com/zenion/mmokit/pkg/mmokit"
+    pkguniverse "github.com/zenion/mmokit/pkg/universe"
 )
 
 // TestAutoBroadcast_SameCell_PostHandler verifies that target.Send(&Damage{...})

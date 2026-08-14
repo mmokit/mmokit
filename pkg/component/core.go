@@ -7,7 +7,7 @@ package component
 import (
 	"math"
 
-	"github.com/zenion/mmoserver/pkg/coords"
+	"github.com/zenion/mmokit/pkg/coords"
 )
 
 // Position in world space.

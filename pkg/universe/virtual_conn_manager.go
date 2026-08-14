@@ -17,10 +17,10 @@ import (
 	"sync/atomic"
 	"time"
 
-	meshpb "github.com/zenion/mmoserver/gen/go/meshpb"
-	"github.com/zenion/mmoserver/pkg/logger"
-	"github.com/zenion/mmoserver/pkg/metrics"
-	pkgnet "github.com/zenion/mmoserver/pkg/net"
+	meshpb "github.com/zenion/mmokit/gen/go/meshpb"
+	"github.com/zenion/mmokit/pkg/logger"
+	"github.com/zenion/mmokit/pkg/metrics"
+	pkgnet "github.com/zenion/mmokit/pkg/net"
 )
 
 // Compile-time assertion: VirtualConnManager must satisfy pkgnet.ConnSender.

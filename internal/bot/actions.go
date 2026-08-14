@@ -5,10 +5,10 @@ import (
 	"log"
 	"reflect"
 
-	"github.com/zenion/mmoserver/internal/game"
-	"github.com/zenion/mmoserver/pkg/mmokit"
-	pkgnet "github.com/zenion/mmoserver/pkg/net"
-	pkguniverse "github.com/zenion/mmoserver/pkg/universe"
+	"github.com/zenion/mmokit/internal/game"
+	"github.com/zenion/mmokit/pkg/mmokit"
+	pkgnet "github.com/zenion/mmokit/pkg/net"
+	pkguniverse "github.com/zenion/mmokit/pkg/universe"
 )
 
 // Ability slot constants.

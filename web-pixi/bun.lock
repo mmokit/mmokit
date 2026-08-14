@@ -3,7 +3,7 @@
   "configVersion": 1,
   "workspaces": {
     "": {
-      "name": "mmoserver-webclient-pixi",
+      "name": "mmokit-space-webclient",
       "dependencies": {
         "@bufbuild/protobuf": "2",
         "howler": "^2.2.4",

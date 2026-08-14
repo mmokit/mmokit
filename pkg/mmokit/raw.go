@@ -7,7 +7,7 @@ package mmokit
 
 import (
 	"github.com/mlange-42/ark/ecs"
-	pkguniverse "github.com/zenion/mmoserver/pkg/universe"
+	pkguniverse "github.com/zenion/mmokit/pkg/universe"
 )
 
 // RawWorld returns the underlying ark ECS world for the given stage.

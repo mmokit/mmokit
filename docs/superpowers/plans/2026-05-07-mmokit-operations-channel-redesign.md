@@ -230,7 +230,7 @@ import (
 	"encoding/binary"
 	"errors"
 
-	pkgnet "github.com/zenion/mmoserver/pkg/net"
+	pkgnet "github.com/zenion/mmokit/pkg/net"
 )
 
 // EncodeTypedOpFrame produces a single-op 0x01 frame:
@@ -306,7 +306,7 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/zenion/mmoserver/pkg/mmokit"
+	"github.com/zenion/mmokit/pkg/mmokit"
 )
 
 func TestRouteKind_StringNames(t *testing.T) {
@@ -625,8 +625,8 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/zenion/mmoserver/pkg/mmokit"
-	pkguniverse "github.com/zenion/mmoserver/pkg/universe"
+	"github.com/zenion/mmokit/pkg/mmokit"
+	pkguniverse "github.com/zenion/mmokit/pkg/universe"
 )
 
 type dispOpReq struct{ X uint32 }
@@ -730,7 +730,7 @@ import (
 	"fmt"
 	"reflect"
 
-	"github.com/zenion/mmoserver/pkg/mmokit"
+	"github.com/zenion/mmokit/pkg/mmokit"
 )
 
 // DispatchTypedOpInbound consumes a 0x01 typed-op payload (channel byte

@@ -6,7 +6,7 @@ import (
 	"fmt"
 
 	"github.com/tetratelabs/wazero/api"
-	"github.com/zenion/mmoserver/pkg/wasmabi"
+	"github.com/zenion/mmokit/pkg/wasmabi"
 )
 
 // Module is one instantiated system. Not safe for concurrent use — each cell

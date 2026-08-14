@@ -3,9 +3,9 @@ package mmokit_test
 import (
 	"testing"
 
-	"github.com/zenion/mmoserver/pkg/mmokit"
-	"github.com/zenion/mmoserver/pkg/services/auth/authtest"
-	"github.com/zenion/mmoserver/pkg/universe"
+	"github.com/zenion/mmokit/pkg/mmokit"
+	"github.com/zenion/mmokit/pkg/services/auth/authtest"
+	"github.com/zenion/mmokit/pkg/universe"
 )
 
 func TestRegisterAuthServiceWithMock(t *testing.T) {

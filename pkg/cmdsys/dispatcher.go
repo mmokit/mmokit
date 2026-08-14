@@ -8,7 +8,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/zenion/mmoserver/pkg/logger"
+	"github.com/zenion/mmokit/pkg/logger"
 )
 
 // Dispatcher ties together the registry, resolver, transport, audit, and

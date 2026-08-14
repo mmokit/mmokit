@@ -12,7 +12,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/zenion/mmoserver/pkg/cmdsys"
+	"github.com/zenion/mmokit/pkg/cmdsys"
 )
 
 type gatewayListArgs struct{}

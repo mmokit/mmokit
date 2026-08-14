@@ -3,8 +3,8 @@ package commands
 import (
 	"sync"
 
-	"github.com/zenion/mmoserver/internal/game"
-	"github.com/zenion/mmoserver/pkg/mmokit"
+	"github.com/zenion/mmokit/internal/game"
+	"github.com/zenion/mmokit/pkg/mmokit"
 )
 
 // worldEditor holds the coord-level WorldRepo + cached Snapshot for the

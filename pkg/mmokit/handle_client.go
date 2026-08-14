@@ -5,7 +5,7 @@ import (
 	"sort"
 	"sync"
 
-	pkguniverse "github.com/zenion/mmoserver/pkg/universe"
+	pkguniverse "github.com/zenion/mmokit/pkg/universe"
 )
 
 // HandleClient registers fn as the handler for client-originated typed

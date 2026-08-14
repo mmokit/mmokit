@@ -5,7 +5,7 @@ import (
 	"testing"
 
 	"github.com/mlange-42/ark/ecs"
-	"github.com/zenion/mmoserver/pkg/component"
+	"github.com/zenion/mmokit/pkg/component"
 )
 
 func TestClickToMoveBasic(t *testing.T) {

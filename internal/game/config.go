@@ -10,8 +10,8 @@ import (
 	"strconv"
 	"strings"
 
-	gamepersist "github.com/zenion/mmoserver/internal/persist"
-	"github.com/zenion/mmoserver/pkg/mmokit"
+	gamepersist "github.com/zenion/mmokit/internal/persist"
+	"github.com/zenion/mmokit/pkg/mmokit"
 )
 
 // ConfigVersion tracks breaking config changes. Bump this when defaults change

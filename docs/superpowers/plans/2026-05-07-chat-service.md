@@ -128,8 +128,8 @@ git mv pkg/auth pkg/services/auth
 - [ ] **Step 3: Update import paths repo-wide**
 
 ```bash
-grep -rl '"github.com/zenion/mmoserver/pkg/auth' --include='*.go' | \
-  xargs sed -i 's|"github.com/zenion/mmoserver/pkg/auth|"github.com/zenion/mmoserver/pkg/services/auth|g'
+grep -rl '"github.com/zenion/mmokit/pkg/auth' --include='*.go' | \
+  xargs sed -i 's|"github.com/zenion/mmokit/pkg/auth|"github.com/zenion/mmokit/pkg/services/auth|g'
 ```
 
 This rewrites every `import` line plus any string occurrences of the path. Verify a sample:
@@ -187,7 +187,7 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/zenion/mmoserver/pkg/services/auth"
+	"github.com/zenion/mmokit/pkg/services/auth"
 )
 
 func TestErrCapabilityNotFound_Defined(t *testing.T) {
@@ -550,7 +550,7 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/zenion/mmoserver/pkg/services/auth"
+	"github.com/zenion/mmokit/pkg/services/auth"
 )
 
 type counterRepo struct {
@@ -1323,8 +1323,8 @@ package chat_test
 import (
 	"testing"
 
-	"github.com/zenion/mmoserver/pkg/mmokit"
-	"github.com/zenion/mmoserver/pkg/services/chat"
+	"github.com/zenion/mmokit/pkg/mmokit"
+	"github.com/zenion/mmokit/pkg/services/chat"
 )
 
 func TestRegisterChatServerEvents_TypeIDsRegistered(t *testing.T) {
@@ -1370,7 +1370,7 @@ package chat
 import (
 	"sync"
 
-	"github.com/zenion/mmoserver/pkg/mmokit"
+	"github.com/zenion/mmokit/pkg/mmokit"
 )
 
 var registerChatServerEventsOnce sync.Once
@@ -1646,7 +1646,7 @@ import (
 	"io/fs"
 	"testing"
 
-	"github.com/zenion/mmoserver/pkg/services/chat"
+	"github.com/zenion/mmokit/pkg/services/chat"
 )
 
 func TestMigrationsFS_Embeds001(t *testing.T) {
@@ -1704,7 +1704,7 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/zenion/mmoserver/pkg/services/chat"
+	"github.com/zenion/mmokit/pkg/services/chat"
 )
 
 type RepoMock struct {
@@ -1964,8 +1964,8 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/zenion/mmoserver/pkg/services/chat"
-	"github.com/zenion/mmoserver/pkg/services/chat/chattest"
+	"github.com/zenion/mmokit/pkg/services/chat"
+	"github.com/zenion/mmokit/pkg/services/chat/chattest"
 )
 
 func TestRepoMock_UpsertAndGetChannel(t *testing.T) {
@@ -2037,7 +2037,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"github.com/zenion/mmoserver/pkg/services/chat"
+	"github.com/zenion/mmokit/pkg/services/chat"
 )
 
 type pgRepo struct{ pool *pgxpool.Pool }
@@ -2309,9 +2309,9 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"github.com/zenion/mmoserver/pkg/persist/postgres" // for migrate helper
-	"github.com/zenion/mmoserver/pkg/services/chat"
-	chatpg "github.com/zenion/mmoserver/pkg/services/chat/postgres"
+	"github.com/zenion/mmokit/pkg/persist/postgres" // for migrate helper
+	"github.com/zenion/mmokit/pkg/services/chat"
+	chatpg "github.com/zenion/mmokit/pkg/services/chat/postgres"
 )
 
 func newTestRepo(t *testing.T) (chat.Repository, func()) {
@@ -2419,8 +2419,8 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"github.com/zenion/mmoserver/pkg/service"
-	"github.com/zenion/mmoserver/pkg/services/auth"
+	"github.com/zenion/mmokit/pkg/service"
+	"github.com/zenion/mmokit/pkg/services/auth"
 )
 
 const KindName = "chat"
@@ -2547,9 +2547,9 @@ import (
 	"context"
 	"testing"
 
-	"github.com/zenion/mmoserver/pkg/service"
-	"github.com/zenion/mmoserver/pkg/services/chat"
-	"github.com/zenion/mmoserver/pkg/services/chat/chattest"
+	"github.com/zenion/mmokit/pkg/service"
+	"github.com/zenion/mmokit/pkg/services/chat"
+	"github.com/zenion/mmokit/pkg/services/chat/chattest"
 )
 
 func TestService_InitWithMockRepo(t *testing.T) {
@@ -2606,9 +2606,9 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/zenion/mmoserver/pkg/ops"
-	"github.com/zenion/mmoserver/pkg/service"
-	"github.com/zenion/mmoserver/pkg/services/auth"
+	"github.com/zenion/mmokit/pkg/ops"
+	"github.com/zenion/mmokit/pkg/service"
+	"github.com/zenion/mmokit/pkg/services/auth"
 )
 
 const logCat = "services:chat"
@@ -2965,7 +2965,7 @@ package chat_test
 import (
 	"testing"
 
-	"github.com/zenion/mmoserver/pkg/services/chat"
+	"github.com/zenion/mmokit/pkg/services/chat"
 )
 
 func TestFanout_RecordsRecipientsForSystemAll(t *testing.T) {
@@ -3013,9 +3013,9 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/zenion/mmoserver/pkg/logger"
-	"github.com/zenion/mmoserver/pkg/service"
-	"github.com/zenion/mmoserver/pkg/services/chat/chattest"
+	"github.com/zenion/mmokit/pkg/logger"
+	"github.com/zenion/mmokit/pkg/service"
+	"github.com/zenion/mmokit/pkg/services/chat/chattest"
 )
 
 // TestService wraps *Service with helpers for unit tests. Not part of
@@ -3178,8 +3178,8 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/zenion/mmoserver/pkg/ops"
-	"github.com/zenion/mmoserver/pkg/services/chat"
+	"github.com/zenion/mmokit/pkg/ops"
+	"github.com/zenion/mmokit/pkg/services/chat"
 )
 
 func TestHandleSend_FansOutToAllOnlineForSystemAll(t *testing.T) {
@@ -3239,7 +3239,7 @@ package chat
 import (
 	"github.com/google/uuid"
 
-	"github.com/zenion/mmoserver/pkg/ops"
+	"github.com/zenion/mmokit/pkg/ops"
 )
 
 // HandleSend handles CHAT_OP_SEND_MESSAGE. Fans out a ChatMessageEvent
@@ -3626,8 +3626,8 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/zenion/mmoserver/pkg/ops"
-	"github.com/zenion/mmoserver/pkg/services/chat"
+	"github.com/zenion/mmokit/pkg/ops"
+	"github.com/zenion/mmokit/pkg/services/chat"
 )
 
 func TestHandleSendDM_DeliversToOnlineRecipientAndEchoesToSender(t *testing.T) {
@@ -3694,8 +3694,8 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/zenion/mmoserver/pkg/services/auth"
-	"github.com/zenion/mmoserver/pkg/services/chat"
+	"github.com/zenion/mmokit/pkg/services/auth"
+	"github.com/zenion/mmokit/pkg/services/chat"
 )
 
 func TestCanModerate_GlobalAdminAlwaysWins(t *testing.T) {

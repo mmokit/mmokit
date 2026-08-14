@@ -6,7 +6,7 @@
 
 **Architecture:** A new `*service.Bus` is owned by each `Process` and threaded into every service through `service.Context.Bus`. Services subscribe to typed events at `Init` time via `service.Subscribe[T](ctx.Bus, handler)`. The gateway publishes framework events (`SessionEnterEvent`, `SessionLeaveEvent`) at the existing call sites via `service.Publish[T]`. No wire-protocol changes — Phase 1 fan-out is process-local synchronous. The cluster-wide peer-mesh delivery layer is **Phase 3** (separate plan).
 
-**Tech Stack:** Go 1.22+ generics, existing `pkg/universe.ReflectMarshal` codec (only the type-name registry is exercised in Phase 1), `github.com/zenion/mmoserver/pkg/service` framework, `github.com/zenion/mmoserver/pkg/services/chat` consumer.
+**Tech Stack:** Go 1.22+ generics, existing `pkg/universe.ReflectMarshal` codec (only the type-name registry is exercised in Phase 1), `github.com/zenion/mmokit/pkg/service` framework, `github.com/zenion/mmokit/pkg/services/chat` consumer.
 
 **Reference spec:** [docs/superpowers/specs/2026-05-08-services-event-bus-design.md](../specs/2026-05-08-services-event-bus-design.md) §1–§9, §12 Phase 1.
 
@@ -60,7 +60,7 @@ import (
 	"sync/atomic"
 	"testing"
 
-	"github.com/zenion/mmoserver/pkg/service"
+	"github.com/zenion/mmokit/pkg/service"
 )
 
 type ping struct{ N int }
@@ -300,7 +300,7 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/zenion/mmoserver/pkg/service"
+	"github.com/zenion/mmokit/pkg/service"
 )
 
 type fooEvent struct{ N int }
@@ -550,13 +550,13 @@ Add to `pkg/service/event_codec_test.go`:
 ```go
 func TestEventCodec_FrameworkEventsRegistered(t *testing.T) {
 	for _, name := range []string{
-		"github.com/zenion/mmoserver/pkg/service.SessionEnterEvent",
-		"github.com/zenion/mmoserver/pkg/service.SessionLeaveEvent",
-		"github.com/zenion/mmoserver/pkg/service.AuthLoginSucceededEvent",
-		"github.com/zenion/mmoserver/pkg/service.AuthLogoutEvent",
-		"github.com/zenion/mmoserver/pkg/service.AuthRegisteredEvent",
-		"github.com/zenion/mmoserver/pkg/service.PlayerSpawnedEvent",
-		"github.com/zenion/mmoserver/pkg/service.PlayerDespawnedEvent",
+		"github.com/zenion/mmokit/pkg/service.SessionEnterEvent",
+		"github.com/zenion/mmokit/pkg/service.SessionLeaveEvent",
+		"github.com/zenion/mmokit/pkg/service.AuthLoginSucceededEvent",
+		"github.com/zenion/mmokit/pkg/service.AuthLogoutEvent",
+		"github.com/zenion/mmokit/pkg/service.AuthRegisteredEvent",
+		"github.com/zenion/mmokit/pkg/service.PlayerSpawnedEvent",
+		"github.com/zenion/mmokit/pkg/service.PlayerDespawnedEvent",
 	} {
 		if _, ok := service.LookupEventType(name); !ok {
 			t.Errorf("framework event %s not registered", name)
@@ -845,7 +845,7 @@ Replace with:
 	}
 ```
 
-Add the import to the file's import block (gateway.go has many imports — add `"github.com/zenion/mmoserver/pkg/service"` alphabetically).
+Add the import to the file's import block (gateway.go has many imports — add `"github.com/zenion/mmokit/pkg/service"` alphabetically).
 
 - [ ] **Step 2: Replace the `OnSessionLeave` call**
 
@@ -959,7 +959,7 @@ Drop the `fakeChatHook` struct (lines 21-46) and the `chatHookAdapter` struct (l
 Add the `service` import:
 
 ```go
-import "github.com/zenion/mmoserver/pkg/service"
+import "github.com/zenion/mmokit/pkg/service"
 ```
 
 - [ ] **Step 4: Run the rewritten tests**

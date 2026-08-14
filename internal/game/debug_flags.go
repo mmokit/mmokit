@@ -1,6 +1,6 @@
 package game
 
-import "github.com/zenion/mmoserver/pkg/engine"
+import "github.com/zenion/mmokit/pkg/engine"
 
 // Game-range debug flags. The engine reserves bits 0-15; games reserve 16-31
 // (see pkg/engine/debug_flags.go). Grant them per session from the console.

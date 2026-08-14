@@ -6,7 +6,7 @@ import (
 	"math"
 	"testing"
 
-	"github.com/zenion/mmoserver/pkg/wasmabi"
+	"github.com/zenion/mmokit/pkg/wasmabi"
 )
 
 func f32sToBytes(v []float32) []byte {

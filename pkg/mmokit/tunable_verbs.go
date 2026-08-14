@@ -6,9 +6,9 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/zenion/mmoserver/pkg/cmdsys"
-	"github.com/zenion/mmoserver/pkg/tunable"
-	"github.com/zenion/mmoserver/pkg/universe"
+	"github.com/zenion/mmokit/pkg/cmdsys"
+	"github.com/zenion/mmokit/pkg/tunable"
+	"github.com/zenion/mmokit/pkg/universe"
 )
 
 const catTune = "tune"

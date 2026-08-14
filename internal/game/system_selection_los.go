@@ -1,9 +1,9 @@
 package game
 
 import (
-	gamecomp "github.com/zenion/mmoserver/internal/component"
-	"github.com/zenion/mmoserver/pkg/mmokit"
-	"github.com/zenion/mmoserver/pkg/spatial"
+	gamecomp "github.com/zenion/mmokit/internal/component"
+	"github.com/zenion/mmokit/pkg/mmokit"
+	"github.com/zenion/mmokit/pkg/spatial"
 )
 
 // SelectionLOSSystem clears a player's Selection when LOS to the selected

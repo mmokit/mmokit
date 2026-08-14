@@ -1,6 +1,6 @@
 package universe
 
-import meshpb "github.com/zenion/mmoserver/gen/go/meshpb"
+import meshpb "github.com/zenion/mmokit/gen/go/meshpb"
 
 // grpcBridge is a Bridge implementation for multi-host coordinators.
 // It wraps a local *cellBridge (which still handles colocated-cell

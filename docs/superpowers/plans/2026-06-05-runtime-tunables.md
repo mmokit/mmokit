@@ -786,7 +786,7 @@ git commit -m "feat(wasmabi): param schema + float64 value-block codec"
 
 - [ ] **Step 1: Add guest param plumbing to `pkg/wasmsys/sdk.go`**
 
-Add imports `reflect` and keep `github.com/zenion/mmoserver/pkg/tunable` + `github.com/zenion/mmoserver/pkg/wasmabi`. Append:
+Add imports `reflect` and keep `github.com/zenion/mmokit/pkg/tunable` + `github.com/zenion/mmokit/pkg/wasmabi`. Append:
 
 ```go
 // paramField binds a guest struct field to its tunable kind for the params ABI.
@@ -979,7 +979,7 @@ git commit -m "feat(wasmsys): guest param schema build + default-apply + params_
 // trivial column, used to exercise the params ABI from the host.
 package main
 
-import "github.com/zenion/mmoserver/pkg/wasmsys"
+import "github.com/zenion/mmokit/pkg/wasmsys"
 
 type sys struct {
 	Gain   float32 `tune:"default=2,min=0,max=10,step=0.5"`
@@ -1228,7 +1228,7 @@ func (s *wasmSystem[T]) pushBlock() error {
 }
 ```
 
-Add imports `github.com/zenion/mmoserver/pkg/tunable` and ensure `wasmabi` is imported. Add the compile-time assertion:
+Add imports `github.com/zenion/mmokit/pkg/tunable` and ensure `wasmabi` is imported. Add the compile-time assertion:
 
 ```go
 var _ tunable.Source = (*wasmSystem[struct{}])(nil)
@@ -1372,9 +1372,9 @@ import (
 	"sort"
 	"sync"
 
-	"github.com/zenion/mmoserver/pkg/engine"
-	"github.com/zenion/mmoserver/pkg/tunable"
-	"github.com/zenion/mmoserver/pkg/universe"
+	"github.com/zenion/mmokit/pkg/engine"
+	"github.com/zenion/mmokit/pkg/tunable"
+	"github.com/zenion/mmokit/pkg/universe"
 )
 
 // tunableSourceFor resolves a system to a tunable.Source: the wasm adapter
@@ -1559,7 +1559,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/zenion/mmoserver/pkg/cmdsys"
+	"github.com/zenion/mmokit/pkg/cmdsys"
 )
 
 func TestTuneVerbsRegistered(t *testing.T) {
@@ -1590,9 +1590,9 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/zenion/mmoserver/pkg/cmdsys"
-	"github.com/zenion/mmoserver/pkg/tunable"
-	"github.com/zenion/mmoserver/pkg/universe"
+	"github.com/zenion/mmokit/pkg/cmdsys"
+	"github.com/zenion/mmokit/pkg/tunable"
+	"github.com/zenion/mmokit/pkg/universe"
 )
 
 const catTune = "tune"
@@ -1948,8 +1948,8 @@ git commit -m "feat(universe): OnCellSystemsReady hook → apply registry tunabl
 package main
 
 import (
-	comp "github.com/zenion/mmoserver/pkg/component"
-	"github.com/zenion/mmoserver/pkg/wasmsys"
+	comp "github.com/zenion/mmokit/pkg/component"
+	"github.com/zenion/mmokit/pkg/wasmsys"
 )
 
 type wavetune struct {

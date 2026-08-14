@@ -791,7 +791,7 @@ import (
 	"context"
 	"time"
 
-	"github.com/zenion/mmoserver/pkg/coords"
+	"github.com/zenion/mmokit/pkg/coords"
 )
 
 func buildSplitPlan(c *Process, req *CellTransferRequest) *CommitPlan {
@@ -1114,7 +1114,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/zenion/mmoserver/pkg/logger"
+	"github.com/zenion/mmokit/pkg/logger"
 )
 
 // EventKind identifies the shape of a CommitEvent. Derived from the
@@ -1606,7 +1606,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/zenion/mmoserver/pkg/cmdsys"
+	"github.com/zenion/mmokit/pkg/cmdsys"
 )
 
 // registerCommitLogCommands wires `commit log ...` into the dispatcher
@@ -2300,7 +2300,7 @@ Add imports at top of `integrity.go`:
 ```go
 import (
 	"github.com/mlange-42/ark/ecs"
-	"github.com/zenion/mmoserver/pkg/component"
+	"github.com/zenion/mmokit/pkg/component"
 )
 ```
 

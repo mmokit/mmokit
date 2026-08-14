@@ -5,9 +5,9 @@ import (
 
 	"github.com/mlange-42/ark/ecs"
 
-	gamecomp "github.com/zenion/mmoserver/internal/component"
-	"github.com/zenion/mmoserver/pkg/quantize"
-	"github.com/zenion/mmoserver/pkg/system"
+	gamecomp "github.com/zenion/mmokit/internal/component"
+	"github.com/zenion/mmokit/pkg/quantize"
+	"github.com/zenion/mmokit/pkg/system"
 )
 
 // StatusEffectDurationScale is the [0, StatusEffectDurationScale] range used

@@ -7,10 +7,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/zenion/mmoserver/pkg/cmdsys"
-	"github.com/zenion/mmoserver/pkg/persist"
-	"github.com/zenion/mmoserver/pkg/persist/persisttest"
-	"github.com/zenion/mmoserver/pkg/services/auth"
+	"github.com/zenion/mmokit/pkg/cmdsys"
+	"github.com/zenion/mmokit/pkg/persist"
+	"github.com/zenion/mmokit/pkg/persist/persisttest"
+	"github.com/zenion/mmokit/pkg/services/auth"
 )
 
 // adminOpEnv builds a synthetic cmdsys.Env for direct handler invocation in

@@ -4,9 +4,9 @@ import (
 	"fmt"
 	"sync"
 
-	meshpb "github.com/zenion/mmoserver/gen/go/meshpb"
-	"github.com/zenion/mmoserver/pkg/engine"
-	"github.com/zenion/mmoserver/pkg/logger"
+	meshpb "github.com/zenion/mmokit/gen/go/meshpb"
+	"github.com/zenion/mmokit/pkg/engine"
+	"github.com/zenion/mmokit/pkg/logger"
 )
 
 // Host is a process-level container that owns N Cells. In a distributed

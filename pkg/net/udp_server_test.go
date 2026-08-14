@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/zenion/mmoserver/pkg/net/udpproto"
+	"github.com/zenion/mmokit/pkg/net/udpproto"
 )
 
 // newTestUDPServer starts a server on loopback with small caps so capacity

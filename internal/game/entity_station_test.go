@@ -3,9 +3,9 @@ package game
 import (
 	"testing"
 
-	gamecomp "github.com/zenion/mmoserver/internal/component"
-	"github.com/zenion/mmoserver/pkg/mmokit"
-	"github.com/zenion/mmoserver/pkg/spatial"
+	gamecomp "github.com/zenion/mmokit/internal/component"
+	"github.com/zenion/mmokit/pkg/mmokit"
+	"github.com/zenion/mmokit/pkg/spatial"
 )
 
 // TestStation_HasLayerStatic ensures SpawnStation assigns the correct

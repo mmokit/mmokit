@@ -1,7 +1,7 @@
 services:
   postgres:
     image: postgres:17-alpine
-    container_name: mmoserver-postgres
+    container_name: mmokit-postgres
     environment:
       POSTGRES_USER: mmo
       POSTGRES_PASSWORD: mmo

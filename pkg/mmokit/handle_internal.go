@@ -1,7 +1,7 @@
 package mmokit
 
 import (
-	pkguniverse "github.com/zenion/mmoserver/pkg/universe"
+	pkguniverse "github.com/zenion/mmokit/pkg/universe"
 )
 
 // HandleAllInternal registers fn as the handler for messages of type M on

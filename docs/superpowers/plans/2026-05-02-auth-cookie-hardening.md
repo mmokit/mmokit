@@ -298,7 +298,7 @@ import (
 	"net/netip"
 	"strings"
 
-	enginepb "github.com/zenion/mmoserver/gen/go/enginepb"
+	enginepb "github.com/zenion/mmokit/gen/go/enginepb"
 )
 
 // RegisterHTTP mounts the auth service's HTTPS endpoints on the given
@@ -428,7 +428,7 @@ Append to `pkg/auth/http.go`:
 
 ```go
 import (
-	"github.com/zenion/mmoserver/pkg/ops"
+	"github.com/zenion/mmokit/pkg/ops"
 )
 
 // newHTTPOpCtx builds an OpContext for the HTTP path. ConnID is 0 (no
@@ -786,9 +786,9 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/zenion/mmoserver/pkg/auth/authtest"
-	"github.com/zenion/mmoserver/pkg/logger"
-	"github.com/zenion/mmoserver/pkg/service"
+	"github.com/zenion/mmokit/pkg/auth/authtest"
+	"github.com/zenion/mmokit/pkg/logger"
+	"github.com/zenion/mmokit/pkg/service"
 )
 
 func newHTTPTestService(t *testing.T) (*Service, *authtest.RepoMock, *http.ServeMux, HTTPOpts) {
@@ -1013,7 +1013,7 @@ In `pkg/universe/coordinator.go` Config struct (alongside the other auth-related
 	AuthResolver auth.Resolver
 ```
 
-(Add `"github.com/zenion/mmoserver/pkg/auth"` to imports if not already there.)
+(Add `"github.com/zenion/mmokit/pkg/auth"` to imports if not already there.)
 
 - [ ] **Step 3: Update `mmokit.RegisterAuthService` to wire HTTP + Resolver**
 
@@ -1355,8 +1355,8 @@ import (
 
 	"github.com/coder/websocket"
 
-	"github.com/zenion/mmoserver/pkg/auth/authtest"
-	"github.com/zenion/mmoserver/pkg/mmokit"
+	"github.com/zenion/mmokit/pkg/auth/authtest"
+	"github.com/zenion/mmokit/pkg/mmokit"
 )
 
 // TestAuthCookieFullFlow verifies: HTTPS register sets cookie → fresh

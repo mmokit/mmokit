@@ -1,6 +1,6 @@
 package world
 
-import "github.com/zenion/mmoserver/pkg/coords"
+import "github.com/zenion/mmokit/pkg/coords"
 
 // CellBucket is the cell-local view of a snapshot — every entity in the
 // snapshot whose world position falls inside a single cell, with its

@@ -3,8 +3,8 @@ package system
 import (
 	"github.com/mlange-42/ark/ecs"
 
-	"github.com/zenion/mmoserver/pkg/component"
-	"github.com/zenion/mmoserver/pkg/engine"
+	"github.com/zenion/mmokit/pkg/component"
+	"github.com/zenion/mmokit/pkg/engine"
 )
 
 // PlayerViewerSource provides active players as viewers for replication.

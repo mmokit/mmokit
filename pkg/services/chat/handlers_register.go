@@ -6,7 +6,7 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/zenion/mmoserver/pkg/ops"
+	"github.com/zenion/mmokit/pkg/ops"
 )
 
 // HandleRegisterChannel registers a new SYSTEM_ALL or SYSTEM_PREDICATE

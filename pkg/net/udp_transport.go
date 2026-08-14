@@ -8,8 +8,8 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/zenion/mmoserver/pkg/metrics"
-	"github.com/zenion/mmoserver/pkg/net/udpproto"
+	"github.com/zenion/mmokit/pkg/metrics"
+	"github.com/zenion/mmokit/pkg/net/udpproto"
 )
 
 const (

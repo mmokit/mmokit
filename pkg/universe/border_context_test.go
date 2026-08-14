@@ -5,9 +5,9 @@ import (
 
 	"github.com/mlange-42/ark/ecs"
 
-	meshpb "github.com/zenion/mmoserver/gen/go/meshpb"
-	"github.com/zenion/mmoserver/pkg/component"
-	"github.com/zenion/mmoserver/pkg/coords"
+	meshpb "github.com/zenion/mmokit/gen/go/meshpb"
+	"github.com/zenion/mmokit/pkg/component"
+	"github.com/zenion/mmokit/pkg/coords"
 )
 
 // TestUpsertBorderReplicaFromTransfer_SeedsReplica confirms a TransferFrame

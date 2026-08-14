@@ -3,7 +3,7 @@ package mmokit
 import (
 	"reflect"
 
-	pkguniverse "github.com/zenion/mmoserver/pkg/universe"
+	pkguniverse "github.com/zenion/mmokit/pkg/universe"
 )
 
 // Handle registers fn as the handler for messages of type M on the given

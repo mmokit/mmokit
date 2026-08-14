@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/zenion/mmoserver/pkg/coords"
+	"github.com/zenion/mmokit/pkg/coords"
 )
 
 // ═══════════════════════════════════════════════════════════════════════════

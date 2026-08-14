@@ -45,7 +45,7 @@ proto/basicpb/
 ```protobuf
 syntax = "proto3";
 package basicpb;
-option go_package = "github.com/zenion/mmoserver/gen/go/basicpb";
+option go_package = "github.com/zenion/mmokit/gen/go/basicpb";
 
 // Client → Server
 enum BasicClientEventCode {

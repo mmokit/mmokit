@@ -5,11 +5,11 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/zenion/mmoserver/pkg/mmokit"
-	"github.com/zenion/mmoserver/pkg/net"
-	"github.com/zenion/mmoserver/pkg/replication"
-	"github.com/zenion/mmoserver/pkg/spatial"
-	pkguniverse "github.com/zenion/mmoserver/pkg/universe"
+	"github.com/zenion/mmokit/pkg/mmokit"
+	"github.com/zenion/mmokit/pkg/net"
+	"github.com/zenion/mmokit/pkg/replication"
+	"github.com/zenion/mmokit/pkg/spatial"
+	pkguniverse "github.com/zenion/mmokit/pkg/universe"
 )
 
 // bestEffortInputTransport is fakeInputTransport that additionally reports a

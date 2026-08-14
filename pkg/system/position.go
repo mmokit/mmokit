@@ -3,9 +3,9 @@ package system
 import (
 	"github.com/mlange-42/ark/ecs"
 
-	"github.com/zenion/mmoserver/pkg/component"
-	"github.com/zenion/mmoserver/pkg/coords"
-	"github.com/zenion/mmoserver/pkg/spatial"
+	"github.com/zenion/mmokit/pkg/component"
+	"github.com/zenion/mmokit/pkg/coords"
+	"github.com/zenion/mmokit/pkg/spatial"
 )
 
 // CellRelativePos computes an entity's position relative to the viewer's cell origin.

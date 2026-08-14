@@ -5,7 +5,7 @@ import (
 	"slices"
 	"testing"
 
-	"github.com/zenion/mmoserver/pkg/mmokit"
+	"github.com/zenion/mmokit/pkg/mmokit"
 )
 
 // testBroadcastableMsg is a typed message used for broadcast-registry tests.

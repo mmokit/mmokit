@@ -436,7 +436,7 @@ package universe
 import (
 	"testing"
 
-	"github.com/zenion/mmoserver/pkg/component"
+	"github.com/zenion/mmokit/pkg/component"
 )
 
 // TestUpsertBorderReplicaFromTransfer_SeedsReplica confirms that a

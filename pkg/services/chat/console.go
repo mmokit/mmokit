@@ -10,9 +10,9 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/zenion/mmoserver/pkg/cmdsys"
-	"github.com/zenion/mmoserver/pkg/ops"
-	"github.com/zenion/mmoserver/pkg/services/auth"
+	"github.com/zenion/mmokit/pkg/cmdsys"
+	"github.com/zenion/mmokit/pkg/ops"
+	"github.com/zenion/mmokit/pkg/services/auth"
 )
 
 // ServiceProvider returns the live *Service or nil before Service.Init has

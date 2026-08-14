@@ -515,7 +515,7 @@ package universe
 import (
 	"testing"
 
-	"github.com/zenion/mmoserver/pkg/component"
+	"github.com/zenion/mmokit/pkg/component"
 )
 
 func TestTransferFrame_DebugFlagsRoundtrip(t *testing.T) {
@@ -941,7 +941,7 @@ package mmokit
 import (
 	"testing"
 
-	enginepb "github.com/zenion/mmoserver/gen/go/enginepb"
+	enginepb "github.com/zenion/mmokit/gen/go/enginepb"
 )
 
 func TestDebugBroadcaster_BuildPayload_TopologyOnly(t *testing.T) {
@@ -1044,9 +1044,9 @@ import (
 	"sort"
 	"strconv"
 
-	"github.com/zenion/mmoserver/gen/go/enginepb"
-	"github.com/zenion/mmoserver/pkg/coords"
-	"github.com/zenion/mmoserver/pkg/engine"
+	"github.com/zenion/mmokit/gen/go/enginepb"
+	"github.com/zenion/mmokit/pkg/coords"
+	"github.com/zenion/mmokit/pkg/engine"
 )
 
 // debugBroadcasterWorld is the minimal interface debugBroadcaster
@@ -1275,8 +1275,8 @@ import (
 	"context"
 	"testing"
 
-	"github.com/zenion/mmoserver/pkg/cmdsys"
-	"github.com/zenion/mmoserver/pkg/engine"
+	"github.com/zenion/mmokit/pkg/cmdsys"
+	"github.com/zenion/mmokit/pkg/engine"
 )
 
 func TestDebugConsole_GrantAddsFlag(t *testing.T) {
@@ -1346,10 +1346,10 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/zenion/mmoserver/gen/go/enginepb"
-	"github.com/zenion/mmoserver/pkg/cmdsys"
-	"github.com/zenion/mmoserver/pkg/engine"
-	"github.com/zenion/mmoserver/pkg/persist"
+	"github.com/zenion/mmokit/gen/go/enginepb"
+	"github.com/zenion/mmokit/pkg/cmdsys"
+	"github.com/zenion/mmokit/pkg/engine"
+	"github.com/zenion/mmokit/pkg/persist"
 )
 
 var ErrUnknownDebugFlag = errors.New("unknown debug flag")

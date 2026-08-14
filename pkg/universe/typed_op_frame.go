@@ -4,7 +4,7 @@ import (
 	"encoding/binary"
 	"errors"
 
-	pkgnet "github.com/zenion/mmoserver/pkg/net"
+	pkgnet "github.com/zenion/mmokit/pkg/net"
 )
 
 // EncodeTypedOpFrame produces a single-op 0x01 frame:

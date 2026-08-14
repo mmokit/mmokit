@@ -6,8 +6,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/zenion/mmoserver/pkg/cmdsys"
-	"github.com/zenion/mmoserver/pkg/engine"
+	"github.com/zenion/mmokit/pkg/cmdsys"
+	"github.com/zenion/mmokit/pkg/engine"
 )
 
 // newTestCoordWithCell creates a minimal *Process containing one cell

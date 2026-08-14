@@ -6,9 +6,9 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/zenion/mmoserver/pkg/ops"
-	"github.com/zenion/mmoserver/pkg/services/chat"
-	"github.com/zenion/mmoserver/pkg/services/chat/chattest"
+	"github.com/zenion/mmokit/pkg/ops"
+	"github.com/zenion/mmokit/pkg/services/chat"
+	"github.com/zenion/mmokit/pkg/services/chat/chattest"
 )
 
 func TestHandleLeave_HappyPath(t *testing.T) {

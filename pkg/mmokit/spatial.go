@@ -3,7 +3,7 @@ package mmokit
 import (
 	"iter"
 
-	pkguniverse "github.com/zenion/mmoserver/pkg/universe"
+	pkguniverse "github.com/zenion/mmokit/pkg/universe"
 )
 
 // Nearby yields every entity within radius r of (x, y) on the stage's

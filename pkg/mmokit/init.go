@@ -4,8 +4,8 @@ import (
 	"reflect"
 	"time"
 
-	"github.com/zenion/mmoserver/pkg/component"
-	pkguniverse "github.com/zenion/mmoserver/pkg/universe"
+	"github.com/zenion/mmokit/pkg/component"
+	pkguniverse "github.com/zenion/mmokit/pkg/universe"
 )
 
 // init wires:

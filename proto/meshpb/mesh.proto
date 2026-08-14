@@ -1,6 +1,6 @@
 syntax = "proto3";
 package meshpb;
-option go_package = "github.com/zenion/mmoserver/gen/go/meshpb";
+option go_package = "github.com/zenion/mmokit/gen/go/meshpb";
 option csharp_namespace = "Zenion.GameServer.Proto.Mesh";
 
 // ═══════════════════════════════════════════════
@@ -294,7 +294,7 @@ message ServiceEventSubscribe {
 message ServiceEvent {
   // Process ID of the publisher. Used for self-echo skip + diagnostics.
   string source_process_id = 1;
-  // Fully-qualified Go type name, e.g. "github.com/zenion/mmoserver/pkg/service.SessionEnterEvent".
+  // Fully-qualified Go type name, e.g. "github.com/zenion/mmokit/pkg/service.SessionEnterEvent".
   // Receivers look this up in service.eventTypes (Phase 1 registry) to decode payload.
   string type_name = 2;
   // Reflection-codec encoded payload (universe.ReflectMarshal output).

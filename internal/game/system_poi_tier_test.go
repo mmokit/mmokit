@@ -5,9 +5,9 @@ import (
 
 	"github.com/mlange-42/ark/ecs"
 
-	gamecomp "github.com/zenion/mmoserver/internal/component"
-	"github.com/zenion/mmoserver/internal/item"
-	"github.com/zenion/mmoserver/pkg/mmokit"
+	gamecomp "github.com/zenion/mmokit/internal/component"
+	"github.com/zenion/mmokit/internal/item"
+	"github.com/zenion/mmokit/pkg/mmokit"
 )
 
 // TestPOIClear_T1RewardUnscaled verifies that clearing a tier-1 POI

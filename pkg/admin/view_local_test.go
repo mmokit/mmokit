@@ -3,7 +3,7 @@ package admin
 import (
 	"testing"
 
-	"github.com/zenion/mmoserver/pkg/universe"
+	"github.com/zenion/mmokit/pkg/universe"
 )
 
 func TestLocalClusterView_Cluster(t *testing.T) {

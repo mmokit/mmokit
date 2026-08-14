@@ -10,12 +10,12 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	meshpb "github.com/zenion/mmoserver/gen/go/meshpb"
-	"github.com/zenion/mmoserver/pkg/coords"
-	"github.com/zenion/mmoserver/pkg/engine"
-	"github.com/zenion/mmoserver/pkg/logger"
-	"github.com/zenion/mmoserver/pkg/metrics"
-	"github.com/zenion/mmoserver/pkg/service"
+	meshpb "github.com/zenion/mmokit/gen/go/meshpb"
+	"github.com/zenion/mmokit/pkg/coords"
+	"github.com/zenion/mmokit/pkg/engine"
+	"github.com/zenion/mmokit/pkg/logger"
+	"github.com/zenion/mmokit/pkg/metrics"
+	"github.com/zenion/mmokit/pkg/service"
 )
 
 // bindIdentity reports whether a payload-carried process ID may be acted on,

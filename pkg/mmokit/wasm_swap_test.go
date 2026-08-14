@@ -4,9 +4,9 @@ import (
 	"encoding/binary"
 	"testing"
 
-	"github.com/zenion/mmoserver/pkg/mmokit"
-	"github.com/zenion/mmoserver/pkg/mmokit/internal/testmods/podcomp"
-	pkguniverse "github.com/zenion/mmoserver/pkg/universe"
+	"github.com/zenion/mmokit/pkg/mmokit"
+	"github.com/zenion/mmokit/pkg/mmokit/internal/testmods/podcomp"
+	pkguniverse "github.com/zenion/mmokit/pkg/universe"
 )
 
 func decodeTicks(b []byte) uint64 {

@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/zenion/mmoserver/pkg/services/auth"
+	"github.com/zenion/mmokit/pkg/services/auth"
 )
 
 type loginRequest struct {

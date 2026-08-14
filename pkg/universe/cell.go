@@ -9,11 +9,11 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/zenion/mmoserver/pkg/engine"
-	"github.com/zenion/mmoserver/pkg/logger"
-	"github.com/zenion/mmoserver/pkg/metrics"
-	"github.com/zenion/mmoserver/pkg/net"
-	"github.com/zenion/mmoserver/pkg/replication"
+	"github.com/zenion/mmokit/pkg/engine"
+	"github.com/zenion/mmokit/pkg/logger"
+	"github.com/zenion/mmokit/pkg/metrics"
+	"github.com/zenion/mmokit/pkg/net"
+	"github.com/zenion/mmokit/pkg/replication"
 )
 
 // pendingPromote is a destination-side promote queued for a specific

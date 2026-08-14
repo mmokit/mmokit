@@ -9,7 +9,7 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/zenion/mmoserver/pkg/services/chat"
+	"github.com/zenion/mmokit/pkg/services/chat"
 )
 
 type RepoMock struct {

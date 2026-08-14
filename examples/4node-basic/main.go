@@ -4,9 +4,9 @@ import (
 	"context"
 	"log"
 
-	"github.com/zenion/mmoserver/pkg/mmokit"
+	"github.com/zenion/mmokit/pkg/mmokit"
 
-	"github.com/zenion/mmoserver/examples/4node-basic/services/echo"
+	"github.com/zenion/mmokit/examples/4node-basic/services/echo"
 )
 
 func main() {

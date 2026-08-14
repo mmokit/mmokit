@@ -443,8 +443,8 @@ import (
 	"testing"
 
 	"github.com/mlange-42/ark/ecs"
-	enginepb "github.com/zenion/mmoserver/gen/go/enginepb"
-	"github.com/zenion/mmoserver/pkg/component"
+	enginepb "github.com/zenion/mmokit/gen/go/enginepb"
+	"github.com/zenion/mmokit/pkg/component"
 )
 
 // debugInfoWriterFixture wires up the smallest harness that can
@@ -589,8 +589,8 @@ package system
 
 import (
 	"github.com/mlange-42/ark/ecs"
-	enginepb "github.com/zenion/mmoserver/gen/go/enginepb"
-	"github.com/zenion/mmoserver/pkg/component"
+	enginepb "github.com/zenion/mmokit/gen/go/enginepb"
+	"github.com/zenion/mmokit/pkg/component"
 )
 
 // DebugInfoWriter walks every entity with *component.DebugInfo each
@@ -805,8 +805,8 @@ package universe
 import (
 	"github.com/mlange-42/ark/ecs"
 
-	"github.com/zenion/mmoserver/pkg/engine"
-	"github.com/zenion/mmoserver/pkg/system"
+	"github.com/zenion/mmokit/pkg/engine"
+	"github.com/zenion/mmokit/pkg/system"
 )
 
 // debugInfoWriterShim wraps a system.DebugInfoWriter as an

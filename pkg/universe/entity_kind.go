@@ -5,7 +5,7 @@ import (
 
 	"github.com/mlange-42/ark/ecs"
 
-	"github.com/zenion/mmoserver/pkg/system"
+	"github.com/zenion/mmokit/pkg/system"
 )
 
 // KindComponentMode classifies a bundle field's registration semantics.

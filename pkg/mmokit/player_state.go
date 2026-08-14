@@ -1,7 +1,7 @@
 package mmokit
 
 import (
-	"github.com/zenion/mmoserver/pkg/component"
+	"github.com/zenion/mmokit/pkg/component"
 )
 
 // PlayerStateOf returns the current PlayerState for the given Entity,

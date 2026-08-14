@@ -64,7 +64,7 @@ package mmokit_test
 
 import (
     "testing"
-    "github.com/zenion/mmoserver/pkg/mmokit"
+    "github.com/zenion/mmokit/pkg/mmokit"
 )
 
 func TestEntity_ZeroValueIsNotAlive(t *testing.T) {
@@ -91,7 +91,7 @@ package mmokit
 
 import (
     "github.com/mlange-42/ark/ecs"
-    pkguniverse "github.com/zenion/mmoserver/pkg/universe"
+    pkguniverse "github.com/zenion/mmokit/pkg/universe"
 )
 
 // Entity is the game-facing handle. Value type, cheap to pass.
@@ -303,13 +303,13 @@ import (
     "testing"
 
     "github.com/mlange-42/ark/ecs"
-    pkguniverse "github.com/zenion/mmoserver/pkg/universe"
-    "github.com/zenion/mmoserver/pkg/component"
-    "github.com/zenion/mmoserver/pkg/coords"
-    "github.com/zenion/mmoserver/pkg/engine"
-    "github.com/zenion/mmoserver/pkg/logger"
-    "github.com/zenion/mmoserver/pkg/net"
-    "github.com/zenion/mmoserver/pkg/spatial"
+    pkguniverse "github.com/zenion/mmokit/pkg/universe"
+    "github.com/zenion/mmokit/pkg/component"
+    "github.com/zenion/mmokit/pkg/coords"
+    "github.com/zenion/mmokit/pkg/engine"
+    "github.com/zenion/mmokit/pkg/logger"
+    "github.com/zenion/mmokit/pkg/net"
+    "github.com/zenion/mmokit/pkg/spatial"
 )
 
 // newTestStage spins up a single-cell Stage with the minimum wiring needed
@@ -486,8 +486,8 @@ package mmokit_test
 
 import (
     "testing"
-    "github.com/zenion/mmoserver/pkg/mmokit"
-    "github.com/zenion/mmoserver/pkg/component"
+    "github.com/zenion/mmokit/pkg/mmokit"
+    "github.com/zenion/mmokit/pkg/component"
 )
 
 func TestGet_ReturnsComponent(t *testing.T) {
@@ -634,8 +634,8 @@ package mmokit_test
 
 import (
     "testing"
-    "github.com/zenion/mmoserver/pkg/mmokit"
-    "github.com/zenion/mmoserver/pkg/component"
+    "github.com/zenion/mmokit/pkg/mmokit"
+    "github.com/zenion/mmokit/pkg/component"
 )
 
 type testKindHealth struct{ Current, Max int }
@@ -709,8 +709,8 @@ import (
     "unsafe"
 
     "github.com/mlange-42/ark/ecs"
-    "github.com/zenion/mmoserver/pkg/component"
-    pkguniverse "github.com/zenion/mmoserver/pkg/universe"
+    "github.com/zenion/mmokit/pkg/component"
+    pkguniverse "github.com/zenion/mmokit/pkg/universe"
 )
 
 // KindID identifies an entity kind registered with the stage.
@@ -843,8 +843,8 @@ package mmokit_test
 
 import (
     "testing"
-    "github.com/zenion/mmoserver/pkg/mmokit"
-    "github.com/zenion/mmoserver/pkg/component"
+    "github.com/zenion/mmokit/pkg/mmokit"
+    "github.com/zenion/mmokit/pkg/component"
 )
 
 func TestNearby_ReturnsEntitiesInRadius(t *testing.T) {
@@ -884,7 +884,7 @@ package mmokit
 
 import (
     "iter"
-    pkguniverse "github.com/zenion/mmoserver/pkg/universe"
+    pkguniverse "github.com/zenion/mmokit/pkg/universe"
 )
 
 // Nearby yields every entity within radius r of (x, y) on the stage's
@@ -1077,7 +1077,7 @@ package mmokit_test
 
 import (
     "testing"
-    "github.com/zenion/mmoserver/pkg/mmokit"
+    "github.com/zenion/mmokit/pkg/mmokit"
 )
 
 type pingMsg struct{ Note string }
@@ -1118,7 +1118,7 @@ package mmokit
 
 import (
     "reflect"
-    pkguniverse "github.com/zenion/mmoserver/pkg/universe"
+    pkguniverse "github.com/zenion/mmokit/pkg/universe"
 )
 
 // Handle registers fn as the global handler for messages of type M on the
@@ -1240,7 +1240,7 @@ package universe_test
 import (
     "reflect"
     "testing"
-    pkguniverse "github.com/zenion/mmoserver/pkg/universe"
+    pkguniverse "github.com/zenion/mmokit/pkg/universe"
 )
 
 type damageWire struct {
@@ -1501,8 +1501,8 @@ import (
     "testing"
     "time"
 
-    "github.com/zenion/mmoserver/pkg/mmokit"
-    pkguniverse "github.com/zenion/mmoserver/pkg/universe"
+    "github.com/zenion/mmokit/pkg/mmokit"
+    pkguniverse "github.com/zenion/mmokit/pkg/universe"
 )
 
 type crossDamage struct {
@@ -1595,7 +1595,7 @@ package mmokit_test
 
 import (
     "testing"
-    "github.com/zenion/mmoserver/pkg/mmokit"
+    "github.com/zenion/mmokit/pkg/mmokit"
 )
 
 func TestOnWorldTick_FiresOncePerTick(t *testing.T) {
@@ -1622,7 +1622,7 @@ func TestOnWorldTick_FiresOncePerTick(t *testing.T) {
 // pkg/mmokit/tick.go
 package mmokit
 
-import pkguniverse "github.com/zenion/mmoserver/pkg/universe"
+import pkguniverse "github.com/zenion/mmokit/pkg/universe"
 
 // OnWorldTick registers fn to fire once per simulation tick on the stage.
 // Fires before per-entity callbacks (OnTick / OnTickEach). Use for
@@ -1721,7 +1721,7 @@ Append to `pkg/mmokit/tick.go`. We delegate to `pkg/query.NewQuery` rather than 
 
 ```go
 import (
-    "github.com/zenion/mmoserver/pkg/query"
+    "github.com/zenion/mmokit/pkg/query"
 )
 
 // OnTick registers fn to fire once per tick for every entity with component
@@ -1805,7 +1805,7 @@ func TestOnTickEach_BundleAccess(t *testing.T) {
 - [ ] **Step 2: Implement**
 
 ```go
-import "github.com/zenion/mmoserver/pkg/query"
+import "github.com/zenion/mmokit/pkg/query"
 
 // OnTickEach registers fn to fire once per tick for every entity that
 // matches the bundle B. B must be a struct whose exported fields are all
@@ -1859,7 +1859,7 @@ package mmokit_test
 
 import (
     "testing"
-    "github.com/zenion/mmoserver/pkg/mmokit"
+    "github.com/zenion/mmokit/pkg/mmokit"
 )
 
 func TestRawWorld_ReturnsECSWorld(t *testing.T) {
@@ -1887,7 +1887,7 @@ package mmokit
 
 import (
     "github.com/mlange-42/ark/ecs"
-    pkguniverse "github.com/zenion/mmoserver/pkg/universe"
+    pkguniverse "github.com/zenion/mmokit/pkg/universe"
 )
 
 func RawWorld(stage *pkguniverse.Stage) *ecs.World {
@@ -1988,7 +1988,7 @@ package mmokit_test
 import (
     "testing"
     "time"
-    "github.com/zenion/mmoserver/pkg/mmokit"
+    "github.com/zenion/mmokit/pkg/mmokit"
 )
 
 type intHealth struct{ Current, Max float32 }

@@ -3,7 +3,7 @@ package game
 import (
 	"testing"
 
-	"github.com/zenion/mmoserver/pkg/mmokit"
+	"github.com/zenion/mmokit/pkg/mmokit"
 )
 
 func TestRegistry_RegisterAndGet(t *testing.T) {

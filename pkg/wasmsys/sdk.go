@@ -15,8 +15,8 @@ import (
 	"reflect"
 	"unsafe"
 
-	"github.com/zenion/mmoserver/pkg/tunable"
-	"github.com/zenion/mmoserver/pkg/wasmabi"
+	"github.com/zenion/mmokit/pkg/tunable"
+	"github.com/zenion/mmokit/pkg/wasmabi"
 )
 
 // System is the contract a hot-swappable system implements.

@@ -5,8 +5,8 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/zenion/mmoserver/pkg/mmokit"
-	pkguniverse "github.com/zenion/mmoserver/pkg/universe"
+	"github.com/zenion/mmokit/pkg/mmokit"
+	pkguniverse "github.com/zenion/mmokit/pkg/universe"
 )
 
 // mustMarshal is the external-test-package form of ReflectMarshal for values

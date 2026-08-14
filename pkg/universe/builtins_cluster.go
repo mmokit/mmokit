@@ -14,8 +14,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/zenion/mmoserver/pkg/cmdsys"
-	"github.com/zenion/mmoserver/pkg/engine"
+	"github.com/zenion/mmokit/pkg/cmdsys"
+	"github.com/zenion/mmokit/pkg/engine"
 )
 
 type clusterOverviewArgs struct{}

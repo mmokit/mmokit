@@ -4,7 +4,7 @@ import (
 	"encoding/binary"
 	"reflect"
 
-	"github.com/zenion/mmoserver/pkg/metrics"
+	"github.com/zenion/mmokit/pkg/metrics"
 )
 
 // DispatchInboundEventFrame consumes a payload (frame body, channel byte

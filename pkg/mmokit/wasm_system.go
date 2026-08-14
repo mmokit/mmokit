@@ -7,10 +7,10 @@ import (
 	"path/filepath"
 	"unsafe"
 
-	"github.com/zenion/mmoserver/pkg/engine"
-	"github.com/zenion/mmoserver/pkg/tunable"
-	"github.com/zenion/mmoserver/pkg/wasmabi"
-	"github.com/zenion/mmoserver/pkg/wasmhost"
+	"github.com/zenion/mmokit/pkg/engine"
+	"github.com/zenion/mmokit/pkg/tunable"
+	"github.com/zenion/mmokit/pkg/wasmabi"
+	"github.com/zenion/mmokit/pkg/wasmhost"
 )
 
 // catWasmSystem is the log category for wasm-system runtime errors. Registered

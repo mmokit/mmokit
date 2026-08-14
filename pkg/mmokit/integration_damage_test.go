@@ -10,8 +10,8 @@ import (
 	"time"
 
 	"github.com/mlange-42/ark/ecs"
-	"github.com/zenion/mmoserver/pkg/mmokit"
-	pkguniverse "github.com/zenion/mmoserver/pkg/universe"
+	"github.com/zenion/mmokit/pkg/mmokit"
+	pkguniverse "github.com/zenion/mmokit/pkg/universe"
 )
 
 type intHealth struct {

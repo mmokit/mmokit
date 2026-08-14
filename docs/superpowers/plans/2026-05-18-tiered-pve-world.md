@@ -63,8 +63,8 @@ package game
 import (
 	"testing"
 
-	"github.com/zenion/mmoserver/pkg/coords"
-	"github.com/zenion/mmoserver/pkg/mmokit"
+	"github.com/zenion/mmokit/pkg/coords"
+	"github.com/zenion/mmokit/pkg/mmokit"
 )
 
 func TestTierForDist_Boundaries(t *testing.T) {
@@ -194,8 +194,8 @@ package game
 import (
 	"math"
 
-	"github.com/zenion/mmoserver/pkg/coords"
-	"github.com/zenion/mmoserver/pkg/mmokit"
+	"github.com/zenion/mmokit/pkg/coords"
+	"github.com/zenion/mmokit/pkg/mmokit"
 )
 
 // tierForDist returns the tier of a world-space distance from the
@@ -396,8 +396,8 @@ package game
 import (
 	"testing"
 
-	gamecomp "github.com/zenion/mmoserver/internal/component"
-	"github.com/zenion/mmoserver/pkg/mmokit"
+	gamecomp "github.com/zenion/mmokit/internal/component"
+	"github.com/zenion/mmokit/pkg/mmokit"
 )
 
 func TestSpawnNPC_StatMultipliersScaleHP(t *testing.T) {
@@ -818,9 +818,9 @@ package game
 import (
 	"testing"
 
-	gamecomp "github.com/zenion/mmoserver/internal/component"
-	"github.com/zenion/mmoserver/internal/item"
-	"github.com/zenion/mmoserver/pkg/mmokit"
+	gamecomp "github.com/zenion/mmokit/internal/component"
+	"github.com/zenion/mmokit/internal/item"
+	"github.com/zenion/mmokit/pkg/mmokit"
 )
 
 func TestPOIClear_T1RewardUnscaled(t *testing.T) {
@@ -1206,8 +1206,8 @@ package game
 import (
 	"testing"
 
-	gamecomp "github.com/zenion/mmoserver/internal/component"
-	"github.com/zenion/mmoserver/pkg/mmokit"
+	gamecomp "github.com/zenion/mmokit/internal/component"
+	"github.com/zenion/mmokit/pkg/mmokit"
 )
 
 func TestHeal_RestoresHP(t *testing.T) {
@@ -1272,8 +1272,8 @@ Expected: COMPILE ERROR (`gw.Heal` undefined).
 package game
 
 import (
-	gamecomp "github.com/zenion/mmoserver/internal/component"
-	"github.com/zenion/mmoserver/pkg/mmokit"
+	gamecomp "github.com/zenion/mmokit/internal/component"
+	"github.com/zenion/mmokit/pkg/mmokit"
 )
 
 // Heal is a typed cross-cell-aware healing message. Applied to a target
@@ -1444,8 +1444,8 @@ package game
 import (
 	"testing"
 
-	gamecomp "github.com/zenion/mmoserver/internal/component"
-	"github.com/zenion/mmoserver/pkg/mmokit"
+	gamecomp "github.com/zenion/mmokit/internal/component"
+	"github.com/zenion/mmokit/pkg/mmokit"
 )
 
 func TestSupport_HealsLowestHPRosterAlly(t *testing.T) {
@@ -1936,8 +1936,8 @@ package game
 import (
 	"testing"
 
-	gamecomp "github.com/zenion/mmoserver/internal/component"
-	"github.com/zenion/mmoserver/pkg/mmokit"
+	gamecomp "github.com/zenion/mmokit/internal/component"
+	"github.com/zenion/mmokit/pkg/mmokit"
 )
 
 func TestDisruptor_DebuffAppliesSlowAndSilence(t *testing.T) {
@@ -2355,8 +2355,8 @@ package game
 import (
 	"testing"
 
-	gamecomp "github.com/zenion/mmoserver/internal/component"
-	"github.com/zenion/mmoserver/pkg/mmokit"
+	gamecomp "github.com/zenion/mmokit/internal/component"
+	"github.com/zenion/mmokit/pkg/mmokit"
 )
 
 // TestPOI_SupportIncreasesTTK spawns two T1 POIs side-by-side: one with

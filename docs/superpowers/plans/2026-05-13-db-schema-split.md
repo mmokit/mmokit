@@ -303,7 +303,7 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	gamepersist "github.com/zenion/mmoserver/internal/persist"
+	gamepersist "github.com/zenion/mmokit/internal/persist"
 )
 
 //go:embed migrations/*.sql
@@ -366,7 +366,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	gamepersist "github.com/zenion/mmoserver/internal/persist"
+	gamepersist "github.com/zenion/mmokit/internal/persist"
 )
 
 type playerStateRepo struct {
@@ -516,7 +516,7 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	gamepersist "github.com/zenion/mmoserver/internal/persist"
+	gamepersist "github.com/zenion/mmokit/internal/persist"
 )
 
 type marketRepo struct {
@@ -632,7 +632,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	gamepersist "github.com/zenion/mmoserver/internal/persist"
+	gamepersist "github.com/zenion/mmokit/internal/persist"
 )
 
 type configRepo struct {
@@ -807,7 +807,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"github.com/zenion/mmoserver/pkg/persist"
+	"github.com/zenion/mmokit/pkg/persist"
 )
 
 type playerRepo struct {
@@ -1352,7 +1352,7 @@ Replace with:
 ```go
 import (
     // existing imports...
-    gamepg "github.com/zenion/mmoserver/internal/persist/postgres"
+    gamepg "github.com/zenion/mmokit/internal/persist/postgres"
 )
 
 // ...
@@ -1414,11 +1414,11 @@ Run: `grep -rn "persist\.MarketRepository\|persist\.OrderRecord\|persist\.TradeR
 
 Replace:
 ```go
-import "github.com/zenion/mmoserver/pkg/persist"
+import "github.com/zenion/mmokit/pkg/persist"
 ```
 with:
 ```go
-import gamepersist "github.com/zenion/mmoserver/internal/persist"
+import gamepersist "github.com/zenion/mmokit/internal/persist"
 ```
 
 And in the code, replace `persist.MarketRepository` → `gamepersist.MarketRepository`, same for `OrderRecord`, `TradeRecord`.
@@ -1645,7 +1645,7 @@ func gamePlayerStateSnapshot(pd *PlayerData) *gamepersist.PlayerStateSnapshot {
 
 Add the import:
 ```go
-import gamepersist "github.com/zenion/mmoserver/internal/persist"
+import gamepersist "github.com/zenion/mmokit/internal/persist"
 ```
 
 - [ ] **Step 3: Update the corresponding `snapshotToPlayerData` to take both snapshots**
@@ -1731,9 +1731,9 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	gamepersist "github.com/zenion/mmoserver/internal/persist"
-	"github.com/zenion/mmoserver/pkg/logger"
-	"github.com/zenion/mmoserver/pkg/persist"
+	gamepersist "github.com/zenion/mmokit/internal/persist"
+	"github.com/zenion/mmokit/pkg/logger"
+	"github.com/zenion/mmokit/pkg/persist"
 )
 
 // PlayerFlusher owns dirty-tracking + batched upserts spanning the
@@ -1950,9 +1950,9 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	enginepg "github.com/zenion/mmoserver/pkg/persist/postgres"
-	gamepersist "github.com/zenion/mmoserver/internal/persist"
-	gamepg "github.com/zenion/mmoserver/internal/persist/postgres"
+	enginepg "github.com/zenion/mmokit/pkg/persist/postgres"
+	gamepersist "github.com/zenion/mmokit/internal/persist"
+	gamepg "github.com/zenion/mmokit/internal/persist/postgres"
 )
 
 func openTestStore(t *testing.T) (*gamepg.Store, *pgxpool.Pool, func()) {

@@ -4,7 +4,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/zenion/mmoserver/pkg/logger"
+	"github.com/zenion/mmokit/pkg/logger"
 )
 
 // EventKind identifies the shape of a CommitEvent. Derived from the

@@ -3,13 +3,13 @@ package game
 import (
 	"testing"
 
-	gamepersisttest "github.com/zenion/mmoserver/internal/persist/persisttest"
-	"github.com/zenion/mmoserver/pkg/logger"
-	"github.com/zenion/mmoserver/pkg/mmokit"
-	"github.com/zenion/mmoserver/pkg/net"
-	"github.com/zenion/mmoserver/pkg/ops"
-	"github.com/zenion/mmoserver/pkg/persist/persisttest"
-	pkguniverse "github.com/zenion/mmoserver/pkg/universe"
+	gamepersisttest "github.com/zenion/mmokit/internal/persist/persisttest"
+	"github.com/zenion/mmokit/pkg/logger"
+	"github.com/zenion/mmokit/pkg/mmokit"
+	"github.com/zenion/mmokit/pkg/net"
+	"github.com/zenion/mmokit/pkg/ops"
+	"github.com/zenion/mmokit/pkg/persist/persisttest"
+	pkguniverse "github.com/zenion/mmokit/pkg/universe"
 )
 
 func newTestCoordinator() *pkguniverse.Process {

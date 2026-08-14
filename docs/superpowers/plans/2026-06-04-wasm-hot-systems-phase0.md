@@ -311,7 +311,7 @@ package wasmsys
 import (
 	"unsafe"
 
-	"github.com/zenion/mmoserver/pkg/wasmabi"
+	"github.com/zenion/mmokit/pkg/wasmabi"
 )
 
 // System is the contract a hot-swappable system implements.
@@ -375,7 +375,7 @@ import (
 	"encoding/binary"
 	"unsafe"
 
-	"github.com/zenion/mmoserver/pkg/wasmabi"
+	"github.com/zenion/mmokit/pkg/wasmabi"
 )
 
 var (
@@ -492,7 +492,7 @@ Create `pkg/wasmhost/internal/echomod/main.go`:
 
 package main
 
-import "github.com/zenion/mmoserver/pkg/wasmsys"
+import "github.com/zenion/mmokit/pkg/wasmsys"
 
 // inc adds 1.0 to every float32 in its column each tick, and counts ticks in
 // internal state to exercise snapshot/restore.
@@ -625,7 +625,7 @@ import (
 	"fmt"
 
 	"github.com/tetratelabs/wazero/api"
-	"github.com/zenion/mmoserver/pkg/wasmabi"
+	"github.com/zenion/mmokit/pkg/wasmabi"
 )
 
 // Module is one instantiated system. Not safe for concurrent use — each cell
@@ -785,7 +785,7 @@ package mmokit_test
 import (
 	"testing"
 
-	"github.com/zenion/mmoserver/pkg/mmokit"
+	"github.com/zenion/mmokit/pkg/mmokit"
 )
 
 // PodVal is a minimal POD component for the adapter test.
@@ -833,9 +833,9 @@ import (
 	"os"
 	"unsafe"
 
-	"github.com/zenion/mmoserver/pkg/engine"
-	"github.com/zenion/mmoserver/pkg/wasmabi"
-	"github.com/zenion/mmoserver/pkg/wasmhost"
+	"github.com/zenion/mmokit/pkg/engine"
+	"github.com/zenion/mmokit/pkg/wasmabi"
+	"github.com/zenion/mmokit/pkg/wasmhost"
 )
 
 // wasmRuntime is a process-wide runtime shared by all wasm systems; module
@@ -967,8 +967,8 @@ Create `examples/4node-basic/wasmmods/shieldregen/main.go`:
 package main
 
 import (
-	gamecomp "github.com/zenion/mmoserver/internal/component"
-	"github.com/zenion/mmoserver/pkg/wasmsys"
+	gamecomp "github.com/zenion/mmokit/internal/component"
+	"github.com/zenion/mmokit/pkg/wasmsys"
 )
 
 // shieldRegen mirrors internal/game/system_shieldregen.go, but as a
@@ -1154,8 +1154,8 @@ package mmokit_test
 import (
 	"testing"
 
-	gamecomp "github.com/zenion/mmoserver/internal/component"
-	"github.com/zenion/mmoserver/pkg/mmokit"
+	gamecomp "github.com/zenion/mmokit/internal/component"
+	"github.com/zenion/mmokit/pkg/mmokit"
 )
 
 func TestWasmSwap_PreservesStateAndBehavior(t *testing.T) {
@@ -1224,8 +1224,8 @@ import (
 	"fmt"
 	"testing"
 
-	gamecomp "github.com/zenion/mmoserver/internal/component"
-	"github.com/zenion/mmoserver/pkg/mmokit"
+	gamecomp "github.com/zenion/mmokit/internal/component"
+	"github.com/zenion/mmokit/pkg/mmokit"
 )
 
 func benchShield(b *testing.B, n int, wasm bool) {

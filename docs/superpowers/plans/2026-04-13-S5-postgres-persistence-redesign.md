@@ -749,7 +749,7 @@ import (
 
     "github.com/jackc/pgx/v5/pgxpool"
 
-    "github.com/zenion/mmoserver/pkg/persist"
+    "github.com/zenion/mmokit/pkg/persist"
 )
 
 const (
@@ -1207,7 +1207,7 @@ import (
     "sort"
     "sync"
 
-    "github.com/zenion/mmoserver/pkg/persist"
+    "github.com/zenion/mmokit/pkg/persist"
 )
 
 // PlayerRepoMock is an in-memory PlayerRepository for game-domain tests.

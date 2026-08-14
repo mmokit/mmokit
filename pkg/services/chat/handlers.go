@@ -8,7 +8,7 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/zenion/mmoserver/pkg/ops"
+	"github.com/zenion/mmokit/pkg/ops"
 )
 
 // HandleSend handles CHAT_OP_SEND_MESSAGE. Fans out a ChatMessageEvent

@@ -5,9 +5,9 @@ import (
 	"sort"
 	"sync"
 
-	"github.com/zenion/mmoserver/pkg/engine"
-	"github.com/zenion/mmoserver/pkg/tunable"
-	"github.com/zenion/mmoserver/pkg/universe"
+	"github.com/zenion/mmokit/pkg/engine"
+	"github.com/zenion/mmokit/pkg/tunable"
+	"github.com/zenion/mmokit/pkg/universe"
 )
 
 func init() {

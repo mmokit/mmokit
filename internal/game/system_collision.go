@@ -3,8 +3,8 @@ package game
 import (
 	"math"
 
-	"github.com/zenion/mmoserver/pkg/mmokit"
-	"github.com/zenion/mmoserver/pkg/spatial"
+	"github.com/zenion/mmokit/pkg/mmokit"
+	"github.com/zenion/mmokit/pkg/spatial"
 )
 
 // CollisionSystem handles terrain bounce (player-vs-asteroid).

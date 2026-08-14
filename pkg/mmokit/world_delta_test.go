@@ -5,7 +5,7 @@ import (
 	"encoding/binary"
 	"testing"
 
-	"github.com/zenion/mmoserver/pkg/system"
+	"github.com/zenion/mmokit/pkg/system"
 )
 
 func TestMakeWorldDeltaFrameCarriesStreamEpochOutsideDeltaBody(t *testing.T) {

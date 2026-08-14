@@ -12,8 +12,8 @@ import (
 
 	"github.com/coder/websocket"
 
-	"github.com/zenion/mmoserver/pkg/mmokit"
-	"github.com/zenion/mmoserver/pkg/services/auth/authtest"
+	"github.com/zenion/mmokit/pkg/mmokit"
+	"github.com/zenion/mmokit/pkg/services/auth/authtest"
 )
 
 // TestAuthCookieFullFlow verifies: HTTPS register sets cookie → fresh

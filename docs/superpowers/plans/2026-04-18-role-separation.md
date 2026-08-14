@@ -66,7 +66,7 @@ package universe
 import (
 	stdnet "net"
 
-	"github.com/zenion/mmoserver/pkg/logger"
+	"github.com/zenion/mmokit/pkg/logger"
 )
 
 // ControlPlane holds the state belonging to the RoleCoordinator role.
@@ -111,7 +111,7 @@ import (
 
 	"google.golang.org/grpc"
 
-	"github.com/zenion/mmoserver/pkg/logger"
+	"github.com/zenion/mmokit/pkg/logger"
 )
 
 // ControlPlane holds the state belonging to the RoleCoordinator role.
@@ -227,7 +227,7 @@ In `pkg/universe/host.go`, find the `Host` struct (grep `^type Host struct`). Ad
 	vcm           *VirtualConnManager
 ```
 
-Add `"github.com/zenion/mmoserver/pkg/engine"` to the import list if not already present.
+Add `"github.com/zenion/mmokit/pkg/engine"` to the import list if not already present.
 
 - [ ] **Step 2: Populate during Build()**
 
@@ -1044,7 +1044,7 @@ func (r *remoteHostOps) RenameCell(ctx context.Context, from, to string) error {
 }
 ```
 
-Add imports for `meshpb "github.com/zenion/mmoserver/gen/go/meshpb"` if not present.
+Add imports for `meshpb "github.com/zenion/mmokit/gen/go/meshpb"` if not present.
 
 - [ ] **Step 2: Add coordEpoch method on ControlPlane**
 
@@ -1432,7 +1432,7 @@ func (c *Coordinator) renameCellOnNode(from, to string) error {
 }
 ```
 
-Ensure imports include `"context"`, `"time"`, `"github.com/zenion/mmoserver/pkg/coords"`.
+Ensure imports include `"context"`, `"time"`, `"github.com/zenion/mmokit/pkg/coords"`.
 
 - [ ] **Step 2: Wire dispatch on host side**
 
@@ -1884,7 +1884,7 @@ func (c *ControlPlane) rebuildTopologyForCell(cellKey string) {
 }
 ```
 
-Add import for `"github.com/zenion/mmoserver/pkg/coords"`.
+Add import for `"github.com/zenion/mmokit/pkg/coords"`.
 
 - [ ] **Step 4: Test the distributed topology skip**
 

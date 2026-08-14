@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/zenion/mmoserver/pkg/service"
+	"github.com/zenion/mmokit/pkg/service"
 )
 
 // stubServiceImpl satisfies service.Service for tests that don't need real

@@ -3,7 +3,7 @@ package game
 import (
 	"testing"
 
-	"github.com/zenion/mmoserver/pkg/pathfinding"
+	"github.com/zenion/mmokit/pkg/pathfinding"
 )
 
 // TestDungeonNavGrid_BuildsGrid ensures the rasterizer produces a

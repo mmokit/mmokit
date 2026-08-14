@@ -3,8 +3,8 @@ package game
 import (
 	"testing"
 
-	"github.com/zenion/mmoserver/pkg/coords"
-	pkguniverse "github.com/zenion/mmoserver/pkg/universe"
+	"github.com/zenion/mmokit/pkg/coords"
+	pkguniverse "github.com/zenion/mmokit/pkg/universe"
 )
 
 func makeGrid3x3() []pkguniverse.CellID {

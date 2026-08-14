@@ -1122,7 +1122,7 @@ package game
 import (
     "testing"
 
-    "github.com/zenion/mmoserver/pkg/spatial"
+    "github.com/zenion/mmokit/pkg/spatial"
 )
 
 // hasLOS uses the stage's spatial grid to test sight between two world points.
@@ -1161,7 +1161,7 @@ Expected: FAIL.
 // internal/game/los.go
 package game
 
-import "github.com/zenion/mmoserver/pkg/spatial"
+import "github.com/zenion/mmokit/pkg/spatial"
 
 // vec2 is a local shorthand for converting (x,y) pairs to spatial.Vec2.
 func vec2(x, y float32) spatial.Vec2 { return spatial.Vec2{X: x, Y: y} }
@@ -1417,9 +1417,9 @@ Expected: FAIL.
 package game
 
 import (
-    "github.com/zenion/mmoserver/internal/component"
-    "github.com/zenion/mmoserver/pkg/mmokit"
-    "github.com/zenion/mmoserver/pkg/spatial"
+    "github.com/zenion/mmokit/internal/component"
+    "github.com/zenion/mmokit/pkg/mmokit"
+    "github.com/zenion/mmokit/pkg/spatial"
 )
 
 // SelectionLOSSystem clears a player's Selection when LOS to the
@@ -1696,8 +1696,8 @@ git commit -m "feat(component): add Dungeon + DungeonWall components and kinds"
 package game
 
 import (
-    gamecomp "github.com/zenion/mmoserver/internal/component"
-    "github.com/zenion/mmoserver/pkg/mmokit"
+    gamecomp "github.com/zenion/mmokit/internal/component"
+    "github.com/zenion/mmokit/pkg/mmokit"
 )
 
 // DungeonBundle is the entity-kind bundle for a dungeon POI.
@@ -1733,10 +1733,10 @@ import (
 
     "github.com/mlange-42/ark/ecs"
 
-    gamecomp "github.com/zenion/mmoserver/internal/component"
-    "github.com/zenion/mmoserver/pkg/mmokit"
-    "github.com/zenion/mmoserver/pkg/spatial"
-    "github.com/zenion/mmoserver/pkg/system"
+    gamecomp "github.com/zenion/mmokit/internal/component"
+    "github.com/zenion/mmokit/pkg/mmokit"
+    "github.com/zenion/mmokit/pkg/spatial"
+    "github.com/zenion/mmokit/pkg/system"
 )
 
 // DungeonWallBundle is the entity-kind bundle for a static cave wall.
@@ -1945,7 +1945,7 @@ git commit -m "feat(config): add dungeon + LOS + pathfinding tunables"
 // internal/game/dungeon_chamber.go
 package game
 
-import "github.com/zenion/mmoserver/pkg/spatial"
+import "github.com/zenion/mmokit/pkg/spatial"
 
 // ChamberRole describes a chamber's content tier.
 type ChamberRole uint8
@@ -1987,7 +1987,7 @@ type ChamberState struct {
 // internal/game/dungeon_config.go
 package game
 
-import "github.com/zenion/mmoserver/pkg/spatial"
+import "github.com/zenion/mmokit/pkg/spatial"
 
 // DungeonRosterDef is the roster template for one chamber, indexed
 // from dungeon_config.go::dungeonRosters.
@@ -2217,7 +2217,7 @@ import (
     "math"
     "math/rand/v2"
 
-    "github.com/zenion/mmoserver/pkg/spatial"
+    "github.com/zenion/mmokit/pkg/spatial"
 )
 
 // dungeonGraph holds the procgen tree of chambers + their adjacency edges.
@@ -2800,8 +2800,8 @@ package game
 import (
     "time"
 
-    "github.com/zenion/mmoserver/internal/component"
-    "github.com/zenion/mmoserver/pkg/mmokit"
+    "github.com/zenion/mmokit/internal/component"
+    "github.com/zenion/mmokit/pkg/mmokit"
 )
 
 // DungeonChamberSystem drives per-chamber lifecycle: Active → Cleared
@@ -2973,8 +2973,8 @@ package game
 import (
     "math"
 
-    "github.com/zenion/mmoserver/pkg/pathfinding"
-    "github.com/zenion/mmoserver/pkg/spatial"
+    "github.com/zenion/mmokit/pkg/pathfinding"
+    "github.com/zenion/mmokit/pkg/spatial"
 )
 
 // buildDungeonNavGrid rasterizes the dungeon's walkable area into a NavGrid.

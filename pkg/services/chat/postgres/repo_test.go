@@ -11,9 +11,9 @@ import (
 
 	"github.com/google/uuid"
 
-	persistpg "github.com/zenion/mmoserver/pkg/persist/postgres"
-	"github.com/zenion/mmoserver/pkg/services/chat"
-	chatpg "github.com/zenion/mmoserver/pkg/services/chat/postgres"
+	persistpg "github.com/zenion/mmokit/pkg/persist/postgres"
+	"github.com/zenion/mmokit/pkg/services/chat"
+	chatpg "github.com/zenion/mmokit/pkg/services/chat/postgres"
 )
 
 // openTestRepo opens a chat.Repository backed by the test Postgres instance.

@@ -9,7 +9,7 @@ import (
 
 	"github.com/coder/websocket"
 
-	"github.com/zenion/mmoserver/pkg/metrics"
+	"github.com/zenion/mmokit/pkg/metrics"
 )
 
 const (

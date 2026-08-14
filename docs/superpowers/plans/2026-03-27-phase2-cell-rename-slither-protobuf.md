@@ -669,7 +669,7 @@ Files that import `internal/netutil`:
 - `cmd/server/main.go`
 
 For each file:
-1. Replace import `"github.com/zenion/mmoserver/internal/netutil"` with `"github.com/zenion/mmoserver/pkg/mmokit"` (if not already imported)
+1. Replace import `"github.com/zenion/mmokit/internal/netutil"` with `"github.com/zenion/mmokit/pkg/mmokit"` (if not already imported)
 2. Replace `netutil.MakeEvent(` with `mmokit.MakeEvent(`
 3. Replace `netutil.MakeOpResponse(` with `mmokit.MakeOpResponse(`
 4. Remove `netutil` import if no longer used
@@ -810,9 +810,9 @@ git commit -m "feat(slither): add server→client proto messages (world update, 
 
 ```go
 import (
-    enginepb "github.com/zenion/mmoserver/gen/go/enginepb"
-    slitherpb "github.com/zenion/mmoserver/gen/go/slitherpb"
-    "github.com/zenion/mmoserver/pkg/mmokit"
+    enginepb "github.com/zenion/mmokit/gen/go/enginepb"
+    slitherpb "github.com/zenion/mmokit/gen/go/slitherpb"
+    "github.com/zenion/mmokit/pkg/mmokit"
 )
 ```
 

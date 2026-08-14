@@ -245,7 +245,7 @@ Three consequences that follow from this and are easy to miss:
 
 - **Audio provenance stops being a blocker.** The 16 tracked `.ogg` files with no attribution anywhere in the tree live under `web-pixi/public/audio/`, which is not published. No archaeology required.
 - **Several validation recipes are game-coupled and cannot run in the public repo.** `just lint-no-ark` targets `internal/game/`; `just shipdyn-golden` and the `just web-test` prediction goldens span `internal/game/` **and** `web-pixi/`; `just space-sdk` runs `cmd/server`. The public repo's CI is necessarily a subset of this repo's, and WS-001's ship-dynamics parity gate — the workstream's only continuously-triggered drift risk — has no home there at all. Whichever repo keeps the game must keep that gate.
-- **The extraction mechanism is an open decision**, not covered by this item's estimate: a `git subtree` split, a fresh repo with the game as a downstream consumer of a tagged module, or publishing this repo with the game removed. The first two keep `go.mod:1`'s `github.com/zenion/mmoserver` path stable for consumers; the third does not.
+- **The extraction mechanism is an open decision**, not covered by this item's estimate: a `git subtree` split, a fresh repo with the game as a downstream consumer of a tagged module, or publishing this repo with the game removed. The first two keep `go.mod:1`'s `github.com/zenion/mmokit` path stable for consumers; the third does not.
 
 The CI half and the publication half are separable and the phase in [§6.8](#68-next-phase--p0-closure) closes the CI half completely.
 

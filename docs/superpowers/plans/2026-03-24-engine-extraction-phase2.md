@@ -37,15 +37,15 @@ Delete `internal/game/tickqueue.go` and `internal/game/tickqueue_test.go` (tests
 
 - [ ] **Step 2: Update `internal/game/game.go`**
 
-Change `Queue: NewTickQueue()` → `Queue: engine.NewTickQueue()`. The `Queue` field type is already `*engine.TickQueue` (same type via alias). Add `"github.com/zenion/mmoserver/pkg/engine"` import if not present.
+Change `Queue: NewTickQueue()` → `Queue: engine.NewTickQueue()`. The `Queue` field type is already `*engine.TickQueue` (same type via alias). Add `"github.com/zenion/mmokit/pkg/engine"` import if not present.
 
 - [ ] **Step 3: Update `internal/game/lifecycle.go`**
 
-Replace all `Drain[` calls from `game.Drain[` → `engine.Drain[`. Add `engine` import alias if needed (file already imports `game` package for other things — lifecycle.go IS in the game package, so these are unqualified `Drain[...]` calls). Since lifecycle.go is IN the `game` package, the calls are just `Drain[T](gw.Queue)`. After deleting the shim, these won't compile. Change to `engine.Drain[T](gw.Queue)` with import `"github.com/zenion/mmoserver/pkg/engine"`.
+Replace all `Drain[` calls from `game.Drain[` → `engine.Drain[`. Add `engine` import alias if needed (file already imports `game` package for other things — lifecycle.go IS in the game package, so these are unqualified `Drain[...]` calls). Since lifecycle.go is IN the `game` package, the calls are just `Drain[T](gw.Queue)`. After deleting the shim, these won't compile. Change to `engine.Drain[T](gw.Queue)` with import `"github.com/zenion/mmokit/pkg/engine"`.
 
 - [ ] **Step 4: Update all system files**
 
-For each system file (`input.go`, `ability.go`, `docking.go`, `economy.go`, `equipment.go`, `network.go`): replace `game.Enqueue[` → `engine.Enqueue[` and `game.Drain[` → `engine.Drain[`. Add `"github.com/zenion/mmoserver/pkg/engine"` import.
+For each system file (`input.go`, `ability.go`, `docking.go`, `economy.go`, `equipment.go`, `network.go`): replace `game.Enqueue[` → `engine.Enqueue[` and `game.Drain[` → `engine.Drain[`. Add `"github.com/zenion/mmokit/pkg/engine"` import.
 
 - [ ] **Step 5: Update `internal/universe/node.go`**
 
@@ -86,7 +86,7 @@ Delete `internal/game/registry.go`.
 
 - [ ] **Step 2: Update all callers in `internal/game/`**
 
-All files are within the `game` package, so they used unqualified `EntityDef`, `EntityRegistry`, `NewEntityRegistry`. Replace with `engine.EntityDef`, `engine.EntityRegistry`, `engine.NewEntityRegistry`. Add `"github.com/zenion/mmoserver/pkg/engine"` import to each file.
+All files are within the `game` package, so they used unqualified `EntityDef`, `EntityRegistry`, `NewEntityRegistry`. Replace with `engine.EntityDef`, `engine.EntityRegistry`, `engine.NewEntityRegistry`. Add `"github.com/zenion/mmokit/pkg/engine"` import to each file.
 
 - [ ] **Step 3: Update registry_test.go**
 
@@ -122,7 +122,7 @@ For each of the 37 files, determine which components it uses:
 
 - [ ] **Step 2: Update `internal/component/components.go`**
 
-Remove all 16 type alias lines and the `pkgcomp` import. Keep game-specific type definitions. The file still imports `"github.com/mlange-42/ark/ecs"` (for MiningLaser.Target field), `gamepb` (for entity/resource type constants), and `"github.com/zenion/mmoserver/internal/item"` (for Inventory.TotalMass).
+Remove all 16 type alias lines and the `pkgcomp` import. Keep game-specific type definitions. The file still imports `"github.com/mlange-42/ark/ecs"` (for MiningLaser.Target field), `gamepb` (for entity/resource type constants), and `"github.com/zenion/mmokit/internal/item"` (for Inventory.TotalMass).
 
 - [ ] **Step 3: Update `internal/game/components.go`**
 
@@ -130,8 +130,8 @@ The `Components` struct has mappers for both generic and game-specific component
 ```go
 import (
     "github.com/mlange-42/ark/ecs"
-    comp "github.com/zenion/mmoserver/pkg/component"
-    gamecomp "github.com/zenion/mmoserver/internal/component"
+    comp "github.com/zenion/mmokit/pkg/component"
+    gamecomp "github.com/zenion/mmokit/internal/component"
 )
 ```
 Update each mapper's type parameter: `component.Position` → `comp.Position` for generic, `component.ShipControl` → `gamecomp.ShipControl` for game-specific.
@@ -192,8 +192,8 @@ Remove all re-exported type aliases and constants. Keep only:
 package universe
 
 import (
-    "github.com/zenion/mmoserver/internal/game"
-    pkguniverse "github.com/zenion/mmoserver/pkg/universe"
+    "github.com/zenion/mmokit/internal/game"
+    pkguniverse "github.com/zenion/mmokit/pkg/universe"
 )
 
 type NodeMessage struct {
@@ -225,7 +225,7 @@ Update `internal/game/nodebridge.go`: rename `RespawnTransfer` method → `Reque
 - `internal/universe/node.go` — update message dispatch (MsgRespawnTransfer → MsgSpawnTransfer, Respawn → Spawn)
 - `internal/game/lifecycle.go` — update bridge calls
 - `internal/system/input.go` — update ChatRelay → RelayChatToOtherNodes calls
-- `internal/universe/coordinator.go` — add `pkguniverse "github.com/zenion/mmoserver/pkg/universe"` import, use for ComputeTopology, SectorID
+- `internal/universe/coordinator.go` — add `pkguniverse "github.com/zenion/mmokit/pkg/universe"` import, use for ComputeTopology, SectorID
 - Test files: update accordingly
 
 - [ ] **Step 6: Build and test**
@@ -275,7 +275,7 @@ Delete `book.go`, `types.go`, `config.go`, `persist.go`, `book_test.go` from `in
 
 - [ ] **Step 5: Update `internal/marketplace/service.go` imports**
 
-Add `"github.com/zenion/mmoserver/pkg/orderbook"` import. Types like `Order`, `OrderBook`, `Config`, `PlaceResult`, `bookKey` now come from `orderbook` package. Prefix references: `orderbook.Order`, `orderbook.OrderBook`, etc.
+Add `"github.com/zenion/mmokit/pkg/orderbook"` import. Types like `Order`, `OrderBook`, `Config`, `PlaceResult`, `bookKey` now come from `orderbook` package. Prefix references: `orderbook.Order`, `orderbook.OrderBook`, etc.
 
 - [ ] **Step 6: Update `internal/marketplace/handler.go` imports**
 
@@ -283,7 +283,7 @@ Add orderbook import for types like `PlaceResult`, `SideBuy`.
 
 - [ ] **Step 7: Update `cmd/server/main.go`**
 
-Change `marketplace.Config{...}` → `orderbook.Config{...}`. Add `"github.com/zenion/mmoserver/pkg/orderbook"` import.
+Change `marketplace.Config{...}` → `orderbook.Config{...}`. Add `"github.com/zenion/mmokit/pkg/orderbook"` import.
 
 - [ ] **Step 8: Build and test**
 
@@ -489,7 +489,7 @@ type GameWorld interface {
 ```go
 package universe
 
-import "github.com/zenion/mmoserver/pkg/coords"
+import "github.com/zenion/mmokit/pkg/coords"
 
 type NodeBridge interface {
     PreTick()
@@ -612,7 +612,7 @@ Delete: `internal/game/nodebridge.go`.
 
 - [ ] **Step 11: Update `internal/game/world.go`**
 
-Change Bridge field type from `game.NodeBridge` to `universe.NodeBridge`. Add `pkguniverse "github.com/zenion/mmoserver/pkg/universe"` import.
+Change Bridge field type from `game.NodeBridge` to `universe.NodeBridge`. Add `pkguniverse "github.com/zenion/mmokit/pkg/universe"` import.
 
 - [ ] **Step 12: Update `cmd/server/main.go`**
 
@@ -717,9 +717,9 @@ Update all Go imports from `gamepb` to split between `enginepb` and `gamepb`.
 
 **Files:**
 - Modify: All Go files importing `gen/go` (~20+ files)
-- The import path changes from `gamepb "github.com/zenion/mmoserver/gen/go"` to:
-  - `enginepb "github.com/zenion/mmoserver/gen/go/engine"`
-  - `gamepb "github.com/zenion/mmoserver/gen/go/game"` (for game-specific types)
+- The import path changes from `gamepb "github.com/zenion/mmokit/gen/go"` to:
+  - `enginepb "github.com/zenion/mmokit/gen/go/engine"`
+  - `gamepb "github.com/zenion/mmokit/gen/go/game"` (for game-specific types)
 
 - [ ] **Step 1: Update imports in all Go files**
 
@@ -778,8 +778,8 @@ git add -A && git commit -m "refactor: update web client imports for split proto
 - [ ] **Step 1: Verify no internal/gen imports in pkg/**
 
 ```bash
-grep -r '"github.com/zenion/mmoserver/internal/' pkg/ && echo "FAIL: internal imports found" || echo "PASS"
-grep -r '"github.com/zenion/mmoserver/gen/' pkg/ && echo "FAIL: gen imports found" || echo "PASS"
+grep -r '"github.com/zenion/mmokit/internal/' pkg/ && echo "FAIL: internal imports found" || echo "PASS"
+grep -r '"github.com/zenion/mmokit/gen/' pkg/ && echo "FAIL: gen imports found" || echo "PASS"
 ```
 
 - [ ] **Step 2: Full build and test**

@@ -13,7 +13,7 @@ with `examples/simple` and `examples/4node-basic`.
 ```go
 package main
 
-import "github.com/zenion/mmoserver/pkg/mmokit"
+import "github.com/zenion/mmokit/pkg/mmokit"
 
 func main() {
     process := mmokit.New(mmokit.Config{

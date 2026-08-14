@@ -606,7 +606,7 @@ Create `pkg/universe/host.go`:
 ```go
 package universe
 
-import "github.com/zenion/mmoserver/pkg/logger"
+import "github.com/zenion/mmokit/pkg/logger"
 
 // Host is a process-level container that owns N Cells. In a distributed
 // mesh, each OS process runs one Host with one or more Cells. In the

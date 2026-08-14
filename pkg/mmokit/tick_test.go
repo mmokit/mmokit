@@ -3,7 +3,7 @@ package mmokit_test
 import (
 	"testing"
 
-	"github.com/zenion/mmoserver/pkg/mmokit"
+	"github.com/zenion/mmokit/pkg/mmokit"
 )
 
 func TestOnWorldTick_FiresOncePerTick(t *testing.T) {

@@ -2,7 +2,7 @@ package mmokit
 
 import (
 	"github.com/mlange-42/ark/ecs"
-	"github.com/zenion/mmoserver/pkg/query"
+	"github.com/zenion/mmokit/pkg/query"
 )
 
 // Query is a bundle-based ECS query. T must be a struct whose exported fields

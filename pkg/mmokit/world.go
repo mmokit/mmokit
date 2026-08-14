@@ -1,6 +1,6 @@
 package mmokit
 
-import "github.com/zenion/mmoserver/pkg/world"
+import "github.com/zenion/mmokit/pkg/world"
 
 // World data layer re-exports — game code imports mmokit, never pkg/world directly.
 

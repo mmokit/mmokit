@@ -5,17 +5,17 @@ import (
 
 	"github.com/google/uuid"
 
-	gamepersisttest "github.com/zenion/mmoserver/internal/persist/persisttest"
-	comp "github.com/zenion/mmoserver/pkg/component"
-	"github.com/zenion/mmoserver/pkg/coords"
-	"github.com/zenion/mmoserver/pkg/engine"
-	"github.com/zenion/mmoserver/pkg/logger"
-	"github.com/zenion/mmoserver/pkg/mmokit"
-	"github.com/zenion/mmoserver/pkg/net"
-	"github.com/zenion/mmoserver/pkg/ops"
-	"github.com/zenion/mmoserver/pkg/persist/persisttest"
-	"github.com/zenion/mmoserver/pkg/spatial"
-	pkguniverse "github.com/zenion/mmoserver/pkg/universe"
+	gamepersisttest "github.com/zenion/mmokit/internal/persist/persisttest"
+	comp "github.com/zenion/mmokit/pkg/component"
+	"github.com/zenion/mmokit/pkg/coords"
+	"github.com/zenion/mmokit/pkg/engine"
+	"github.com/zenion/mmokit/pkg/logger"
+	"github.com/zenion/mmokit/pkg/mmokit"
+	"github.com/zenion/mmokit/pkg/net"
+	"github.com/zenion/mmokit/pkg/ops"
+	"github.com/zenion/mmokit/pkg/persist/persisttest"
+	"github.com/zenion/mmokit/pkg/spatial"
+	pkguniverse "github.com/zenion/mmokit/pkg/universe"
 )
 
 // testUserIDNamespace is a fixed UUID namespace used to derive a

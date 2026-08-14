@@ -139,7 +139,7 @@ namespace Mmokit.Sdk.Core
 }
 ```
 
-- [ ] **Step 2: Extend the golden generator** — in `cmd/csharp-golden/main.go`: add `"github.com/zenion/mmoserver/pkg/universe"` to imports; add `Reflect ReflectCase \`json:"reflect"\`` to the `Manifest` struct; add the DTO:
+- [ ] **Step 2: Extend the golden generator** — in `cmd/csharp-golden/main.go`: add `"github.com/zenion/mmokit/pkg/universe"` to imports; add `Reflect ReflectCase \`json:"reflect"\`` to the `Manifest` struct; add the DTO:
 
 ```go
 type ReflectCase struct {

@@ -5,8 +5,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/zenion/mmoserver/pkg/admin"
-	"github.com/zenion/mmoserver/pkg/universe"
+	"github.com/zenion/mmokit/pkg/admin"
+	"github.com/zenion/mmokit/pkg/universe"
 )
 
 // catAdmin tags engine-side admin plumbing logs (topic forward drops, etc.).

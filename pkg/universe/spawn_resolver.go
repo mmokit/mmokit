@@ -8,9 +8,9 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	meshpb "github.com/zenion/mmoserver/gen/go/meshpb"
-	"github.com/zenion/mmoserver/pkg/coords"
-	"github.com/zenion/mmoserver/pkg/engine"
+	meshpb "github.com/zenion/mmokit/gen/go/meshpb"
+	"github.com/zenion/mmokit/pkg/coords"
+	"github.com/zenion/mmokit/pkg/engine"
 )
 
 // SpawnResolver decides the world-space spawn location for a player session

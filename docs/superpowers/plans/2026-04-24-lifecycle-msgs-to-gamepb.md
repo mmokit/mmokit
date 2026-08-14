@@ -405,7 +405,7 @@ b.sendEvent(uint32(gamepb.GameClientEventCode_GCE_RESPAWN), &gamepb.RespawnReque
 Check imports at the top of `internal/bot/actions.go`. If `gamepb` is not already imported, add:
 
 ```go
-gamepb "github.com/zenion/mmoserver/gen/go/gamepb"
+gamepb "github.com/zenion/mmokit/gen/go/gamepb"
 ```
 
 to the import block alongside the existing `enginepb` import.
@@ -435,7 +435,7 @@ case uint32(gamepb.GameServerEventCode_GSE_PLAYER_DIED):
 Check imports at the top of `internal/bot/bot.go`. `gamepb` likely is already imported (the bot consumes game events too — `gamepb.PlayerOwnStateMsg` is right next to this case). If not, add:
 
 ```go
-gamepb "github.com/zenion/mmoserver/gen/go/gamepb"
+gamepb "github.com/zenion/mmokit/gen/go/gamepb"
 ```
 
 - [ ] **Step 7: Run `go vet ./...`**

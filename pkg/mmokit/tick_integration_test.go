@@ -11,8 +11,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/zenion/mmoserver/pkg/mmokit"
-	pkguniverse "github.com/zenion/mmoserver/pkg/universe"
+	"github.com/zenion/mmokit/pkg/mmokit"
+	pkguniverse "github.com/zenion/mmokit/pkg/universe"
 )
 
 func TestOnWorldTickAll_FiresThroughRealLoop(t *testing.T) {

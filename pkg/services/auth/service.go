@@ -6,8 +6,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/zenion/mmoserver/pkg/ops"
-	"github.com/zenion/mmoserver/pkg/service"
+	"github.com/zenion/mmokit/pkg/ops"
+	"github.com/zenion/mmokit/pkg/service"
 )
 
 const logCat = "services:auth"

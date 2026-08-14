@@ -352,7 +352,7 @@ import (
 	"math/rand"
 
 	"github.com/mlange-42/ark/ecs"
-	"github.com/zenion/mmoserver/pkg/mmokit"
+	"github.com/zenion/mmokit/pkg/mmokit"
 )
 
 // BotSystem drives AI-controlled snakes using priority-based behaviors.

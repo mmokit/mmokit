@@ -3,9 +3,9 @@ package system
 import (
 	"math"
 
-	"github.com/zenion/mmoserver/pkg/component"
-	"github.com/zenion/mmoserver/pkg/engine"
-	"github.com/zenion/mmoserver/pkg/query"
+	"github.com/zenion/mmokit/pkg/component"
+	"github.com/zenion/mmokit/pkg/engine"
+	"github.com/zenion/mmokit/pkg/query"
 )
 
 // DirectionMoveSystem moves entities in the direction of their DirectionInput

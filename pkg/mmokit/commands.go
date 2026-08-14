@@ -3,7 +3,7 @@ package mmokit
 import (
 	"github.com/mlange-42/ark/ecs"
 
-	pkguniverse "github.com/zenion/mmoserver/pkg/universe"
+	pkguniverse "github.com/zenion/mmokit/pkg/universe"
 )
 
 // Commands is the per-stage deferred-mutation buffer. Aliased from

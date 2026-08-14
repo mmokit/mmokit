@@ -333,7 +333,7 @@ import (
 
 	"github.com/mlange-42/ark/ecs"
 
-	"github.com/zenion/mmoserver/pkg/component"
+	"github.com/zenion/mmokit/pkg/component"
 )
 
 // TestAddComponent_AppliesAtFlush verifies that AddComponent queues
@@ -446,7 +446,7 @@ package mmokit
 import (
 	"github.com/mlange-42/ark/ecs"
 
-	pkguniverse "github.com/zenion/mmoserver/pkg/universe"
+	pkguniverse "github.com/zenion/mmokit/pkg/universe"
 )
 
 // Commands is the per-stage deferred-mutation buffer. Aliased from
@@ -826,7 +826,7 @@ import (
 
 	"github.com/mlange-42/ark/ecs"
 
-	"github.com/zenion/mmoserver/pkg/component"
+	"github.com/zenion/mmokit/pkg/component"
 )
 
 // TestAny_True returns true when an entity with T exists.
@@ -941,7 +941,7 @@ package mmokit
 import (
 	"github.com/mlange-42/ark/ecs"
 
-	pkguniverse "github.com/zenion/mmoserver/pkg/universe"
+	pkguniverse "github.com/zenion/mmokit/pkg/universe"
 )
 
 // Any reports whether any entity in the stage carries component T.

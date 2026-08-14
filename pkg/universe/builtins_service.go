@@ -8,8 +8,8 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/zenion/mmoserver/pkg/cmdsys"
-	"github.com/zenion/mmoserver/pkg/ops"
+	"github.com/zenion/mmokit/pkg/cmdsys"
+	"github.com/zenion/mmokit/pkg/ops"
 )
 
 // ── service list (service kinds, aggregated) ────────────────────────────────

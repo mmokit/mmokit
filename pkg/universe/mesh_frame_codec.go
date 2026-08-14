@@ -5,8 +5,8 @@ import (
 
 	"github.com/google/uuid"
 
-	meshpb "github.com/zenion/mmoserver/gen/go/meshpb"
-	"github.com/zenion/mmoserver/pkg/coords"
+	meshpb "github.com/zenion/mmokit/gen/go/meshpb"
+	"github.com/zenion/mmokit/pkg/coords"
 )
 
 // locationToProto converts a coords.Location to its meshpb wire form.

@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	meshpb "github.com/zenion/mmoserver/gen/go/meshpb"
+	meshpb "github.com/zenion/mmokit/gen/go/meshpb"
 )
 
 // hostOps is the topology-abstract operation API used by commit paths.

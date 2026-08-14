@@ -5,9 +5,9 @@ import (
 
 	"github.com/mlange-42/ark/ecs"
 
-	"github.com/zenion/mmoserver/pkg/quantize"
-	"github.com/zenion/mmoserver/pkg/replication"
-	"github.com/zenion/mmoserver/pkg/spatial"
+	"github.com/zenion/mmokit/pkg/quantize"
+	"github.com/zenion/mmokit/pkg/replication"
+	"github.com/zenion/mmokit/pkg/spatial"
 )
 
 type livenessViewerSource struct {

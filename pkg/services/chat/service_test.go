@@ -6,10 +6,10 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/zenion/mmoserver/pkg/logger"
-	"github.com/zenion/mmoserver/pkg/service"
-	"github.com/zenion/mmoserver/pkg/services/chat"
-	"github.com/zenion/mmoserver/pkg/services/chat/chattest"
+	"github.com/zenion/mmokit/pkg/logger"
+	"github.com/zenion/mmokit/pkg/service"
+	"github.com/zenion/mmokit/pkg/services/chat"
+	"github.com/zenion/mmokit/pkg/services/chat/chattest"
 )
 
 func newTestCtx() *service.Context {

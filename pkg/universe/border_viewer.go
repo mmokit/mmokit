@@ -3,8 +3,8 @@ package universe
 import (
 	"hash/fnv"
 
-	"github.com/zenion/mmoserver/pkg/coords"
-	"github.com/zenion/mmoserver/pkg/replication"
+	"github.com/zenion/mmokit/pkg/coords"
+	"github.com/zenion/mmokit/pkg/replication"
 )
 
 // CellViewer adapts a neighbor Cell as a replication.Viewer so the

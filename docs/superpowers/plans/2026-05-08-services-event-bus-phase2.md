@@ -243,7 +243,7 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/zenion/mmoserver/pkg/service"
+	"github.com/zenion/mmokit/pkg/service"
 )
 
 func TestGateway_SubscribeToAuthEvents_PopulatesAuthState(t *testing.T) {
@@ -397,7 +397,7 @@ For `handleLogout` (around line 146):
 			})
 ```
 
-Add the import `"github.com/zenion/mmoserver/pkg/service"` to `pkg/mmokit/auth.go` if not present.
+Add the import `"github.com/zenion/mmokit/pkg/service"` to `pkg/mmokit/auth.go` if not present.
 
 - [ ] **Step 2: Verify compile**
 
@@ -414,7 +414,7 @@ package mmokit
 import (
 	"testing"
 
-	"github.com/zenion/mmoserver/pkg/service"
+	"github.com/zenion/mmokit/pkg/service"
 )
 
 func TestAuthFacade_HandlerPublishesAuthLoginSucceededEvent(t *testing.T) {

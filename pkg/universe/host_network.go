@@ -17,11 +17,11 @@ import (
 	"google.golang.org/grpc/keepalive"
 	"google.golang.org/grpc/status"
 
-	meshpb "github.com/zenion/mmoserver/gen/go/meshpb"
-	"github.com/zenion/mmoserver/pkg/logger"
-	"github.com/zenion/mmoserver/pkg/metrics"
-	pkgnet "github.com/zenion/mmoserver/pkg/net"
-	"github.com/zenion/mmoserver/pkg/service"
+	meshpb "github.com/zenion/mmokit/gen/go/meshpb"
+	"github.com/zenion/mmokit/pkg/logger"
+	"github.com/zenion/mmokit/pkg/metrics"
+	pkgnet "github.com/zenion/mmokit/pkg/net"
+	"github.com/zenion/mmokit/pkg/service"
 )
 
 // Tunables — exported as package-level constants so tests can reference

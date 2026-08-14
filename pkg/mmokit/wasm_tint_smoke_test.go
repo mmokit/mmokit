@@ -4,9 +4,9 @@ import (
 	"context"
 	"testing"
 
-	"github.com/zenion/mmoserver/pkg/mmokit"
-	"github.com/zenion/mmoserver/pkg/wasmabi"
-	"github.com/zenion/mmoserver/pkg/wasmhost"
+	"github.com/zenion/mmokit/pkg/mmokit"
+	"github.com/zenion/mmokit/pkg/wasmabi"
+	"github.com/zenion/mmokit/pkg/wasmhost"
 )
 
 // TestTintModule_LoadsAndDeclaresQuery builds the visible Tint demo module

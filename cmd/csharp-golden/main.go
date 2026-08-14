@@ -14,9 +14,9 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/zenion/mmoserver/pkg/net/udpproto"
-	"github.com/zenion/mmoserver/pkg/quantize"
-	"github.com/zenion/mmoserver/pkg/universe"
+	"github.com/zenion/mmokit/pkg/net/udpproto"
+	"github.com/zenion/mmokit/pkg/quantize"
+	"github.com/zenion/mmokit/pkg/universe"
 )
 
 // Manifest mirrors the C# GoldenModel DTOs (csharp/.../GoldenModel.cs).

@@ -3,9 +3,9 @@ package universe
 import (
 	"testing"
 
-	"github.com/zenion/mmoserver/pkg/cmdsys"
-	"github.com/zenion/mmoserver/pkg/logger"
-	"github.com/zenion/mmoserver/pkg/service"
+	"github.com/zenion/mmokit/pkg/cmdsys"
+	"github.com/zenion/mmokit/pkg/logger"
+	"github.com/zenion/mmokit/pkg/service"
 )
 
 func TestProcess_ImplementsLocalProcess(t *testing.T) {

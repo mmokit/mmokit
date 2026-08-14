@@ -1,9 +1,9 @@
 package game
 
 import (
-	gamecomp "github.com/zenion/mmoserver/internal/component"
-	"github.com/zenion/mmoserver/internal/item"
-	"github.com/zenion/mmoserver/pkg/mmokit"
+	gamecomp "github.com/zenion/mmokit/internal/component"
+	"github.com/zenion/mmokit/internal/item"
+	"github.com/zenion/mmokit/pkg/mmokit"
 )
 
 // Bank transfers, LootItem, and LootAll all dispatch via Commands.Defer

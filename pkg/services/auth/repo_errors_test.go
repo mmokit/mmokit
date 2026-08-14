@@ -4,7 +4,7 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/zenion/mmoserver/pkg/services/auth"
+	"github.com/zenion/mmokit/pkg/services/auth"
 )
 
 func TestErrCapabilityNotFound_Defined(t *testing.T) {

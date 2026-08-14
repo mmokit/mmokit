@@ -5,7 +5,7 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/zenion/mmoserver/internal/item"
+	"github.com/zenion/mmokit/internal/item"
 )
 
 // EquipmentSave holds the item IDs of equipped gear for persistence.

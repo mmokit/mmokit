@@ -5,7 +5,7 @@ import (
 	"sort"
 	"testing"
 
-	"github.com/zenion/mmoserver/pkg/logger"
+	"github.com/zenion/mmokit/pkg/logger"
 )
 
 // newAssignmentEngineForTest builds a minimal assignmentEngine suitable

@@ -3,9 +3,9 @@ package game
 import (
 	"testing"
 
-	gamecomp "github.com/zenion/mmoserver/internal/component"
-	"github.com/zenion/mmoserver/pkg/quantize"
-	"github.com/zenion/mmoserver/pkg/system"
+	gamecomp "github.com/zenion/mmokit/internal/component"
+	"github.com/zenion/mmokit/pkg/quantize"
+	"github.com/zenion/mmokit/pkg/system"
 )
 
 // TestWriteStatusEffects_ByteLayout verifies the serialized layout and the

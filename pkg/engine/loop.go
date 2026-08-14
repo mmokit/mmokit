@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/zenion/mmoserver/pkg/net"
+	"github.com/zenion/mmokit/pkg/net"
 )
 
 // Hooks allows the game to inject behavior into the engine's tick loop.

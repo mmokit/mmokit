@@ -8,15 +8,15 @@ import (
 	"testing"
 	"time"
 
-	"github.com/zenion/mmoserver/pkg/cmdsys"
-	"github.com/zenion/mmoserver/pkg/coords"
-	"github.com/zenion/mmoserver/pkg/engine"
-	"github.com/zenion/mmoserver/pkg/logger"
-	"github.com/zenion/mmoserver/pkg/net"
-	"github.com/zenion/mmoserver/pkg/spatial"
-	"github.com/zenion/mmoserver/pkg/universe"
+	"github.com/zenion/mmokit/pkg/cmdsys"
+	"github.com/zenion/mmokit/pkg/coords"
+	"github.com/zenion/mmokit/pkg/engine"
+	"github.com/zenion/mmokit/pkg/logger"
+	"github.com/zenion/mmokit/pkg/net"
+	"github.com/zenion/mmokit/pkg/spatial"
+	"github.com/zenion/mmokit/pkg/universe"
 
-	"github.com/zenion/mmoserver/pkg/mmokit/internal/testmods/podcomp"
+	"github.com/zenion/mmokit/pkg/mmokit/internal/testmods/podcomp"
 )
 
 // buildShieldWasmForTest compiles the shieldregen example module to a wasip1

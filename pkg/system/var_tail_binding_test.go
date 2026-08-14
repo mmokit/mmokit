@@ -6,8 +6,8 @@ import (
 
 	"github.com/mlange-42/ark/ecs"
 
-	"github.com/zenion/mmoserver/pkg/quantize"
-	"github.com/zenion/mmoserver/pkg/spatial"
+	"github.com/zenion/mmokit/pkg/quantize"
+	"github.com/zenion/mmokit/pkg/spatial"
 )
 
 // fakeItem is a test-only item in a var-tail component.

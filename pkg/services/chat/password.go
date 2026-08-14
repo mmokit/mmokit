@@ -5,7 +5,7 @@
 package chat
 
 import (
-	"github.com/zenion/mmoserver/pkg/services/auth"
+	"github.com/zenion/mmokit/pkg/services/auth"
 )
 
 // channelArgonParams: the lighter argon2id parameters used for chat

@@ -3,9 +3,9 @@ package game
 import (
 	"testing"
 
-	"github.com/zenion/mmoserver/internal/component"
-	"github.com/zenion/mmoserver/internal/item"
-	"github.com/zenion/mmoserver/pkg/mmokit"
+	"github.com/zenion/mmokit/internal/component"
+	"github.com/zenion/mmokit/internal/item"
+	"github.com/zenion/mmokit/pkg/mmokit"
 )
 
 // TestKillCredit_FullChain exercises the death observer → Killed handler →

@@ -8,8 +8,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/zenion/mmoserver/pkg/metrics"
-	pkgnet "github.com/zenion/mmoserver/pkg/net"
+	"github.com/zenion/mmokit/pkg/metrics"
+	pkgnet "github.com/zenion/mmokit/pkg/net"
 )
 
 // Configured-ceiling table for the checked decoder — CE-002 criterion 3.

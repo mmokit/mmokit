@@ -5,8 +5,8 @@ import (
 	"io"
 
 	"github.com/mlange-42/ark/ecs"
-	"github.com/zenion/mmoserver/pkg/system"
-	"github.com/zenion/mmoserver/pkg/universe"
+	"github.com/zenion/mmokit/pkg/system"
+	"github.com/zenion/mmokit/pkg/universe"
 )
 
 // ---------------------------------------------------------------------------

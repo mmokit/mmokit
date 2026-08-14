@@ -6,7 +6,7 @@ import (
 
 	"github.com/mlange-42/ark/ecs"
 
-	"github.com/zenion/mmoserver/pkg/component"
+	"github.com/zenion/mmokit/pkg/component"
 )
 
 // spawnCrossingEntity spawns a Live entity on base and queues a crossing for

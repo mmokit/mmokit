@@ -1,8 +1,8 @@
 package universe
 
 import (
-	"github.com/zenion/mmoserver/pkg/cmdsys"
-	"github.com/zenion/mmoserver/pkg/logger"
+	"github.com/zenion/mmokit/pkg/cmdsys"
+	"github.com/zenion/mmokit/pkg/logger"
 )
 
 // logAuditSink routes cmdsys audit records through the process logger under

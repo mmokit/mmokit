@@ -6,8 +6,8 @@
 package main
 
 import (
-	comp "github.com/zenion/mmoserver/pkg/component"
-	"github.com/zenion/mmoserver/pkg/wasmsys"
+	comp "github.com/zenion/mmokit/pkg/component"
+	"github.com/zenion/mmokit/pkg/wasmsys"
 )
 
 type wavetune struct {

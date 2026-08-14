@@ -3,8 +3,8 @@ package system
 import (
 	"sync/atomic"
 
-	"github.com/zenion/mmoserver/pkg/net"
-	"github.com/zenion/mmoserver/pkg/quantize"
+	"github.com/zenion/mmokit/pkg/net"
+	"github.com/zenion/mmokit/pkg/quantize"
 )
 
 // BinaryFrameWriter sends delta-compressed binary frames wrapped via a

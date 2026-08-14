@@ -8,11 +8,11 @@ import (
 
 	"github.com/mlange-42/ark/ecs"
 
-	"github.com/zenion/mmoserver/pkg/engine"
-	"github.com/zenion/mmoserver/pkg/logger"
-	pkgnet "github.com/zenion/mmoserver/pkg/net"
-	"github.com/zenion/mmoserver/pkg/ops"
-	"github.com/zenion/mmoserver/pkg/replication"
+	"github.com/zenion/mmokit/pkg/engine"
+	"github.com/zenion/mmokit/pkg/logger"
+	pkgnet "github.com/zenion/mmokit/pkg/net"
+	"github.com/zenion/mmokit/pkg/ops"
+	"github.com/zenion/mmokit/pkg/replication"
 )
 
 // ── Virtual connection queues ────────────────────────────────────────────────

@@ -24,9 +24,9 @@ import (
 	"fmt"
 	"sort"
 
-	"github.com/zenion/mmoserver/pkg/cmdsys"
-	"github.com/zenion/mmoserver/pkg/engine"
-	"github.com/zenion/mmoserver/pkg/persist"
+	"github.com/zenion/mmokit/pkg/cmdsys"
+	"github.com/zenion/mmokit/pkg/engine"
+	"github.com/zenion/mmokit/pkg/persist"
 )
 
 // ErrUnknownDebugFlag is returned by grant/revoke when the supplied

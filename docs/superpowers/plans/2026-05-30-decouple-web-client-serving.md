@@ -174,7 +174,7 @@ Remove `"io/fs"` (line 8). (`coordinator.go` still uses `fs.FS` for `ExtraMigrat
 Remove the import (line 18):
 
 ```go
-	webpixi "github.com/zenion/mmoserver/web-pixi"
+	webpixi "github.com/zenion/mmokit/web-pixi"
 ```
 
 In the `mmokit.Config{...}` literal, remove these two lines (41-42):

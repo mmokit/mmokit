@@ -14,7 +14,7 @@ import (
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 
-	meshpb "github.com/zenion/mmoserver/gen/go/meshpb"
+	meshpb "github.com/zenion/mmokit/gen/go/meshpb"
 )
 
 // TestNew_ClusterSecretFallsBackWithoutBindFlags pins the same §6.8.4 trap

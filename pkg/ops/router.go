@@ -7,8 +7,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/zenion/mmoserver/pkg/metrics"
-	pkgnet "github.com/zenion/mmoserver/pkg/net"
+	"github.com/zenion/mmokit/pkg/metrics"
+	pkgnet "github.com/zenion/mmokit/pkg/net"
 )
 
 // EventCode is any integer type usable as an op code (proto enums are int32).

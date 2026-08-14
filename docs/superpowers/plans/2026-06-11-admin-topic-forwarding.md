@@ -213,7 +213,7 @@ package universe
 import (
 	"fmt"
 
-	meshpb "github.com/zenion/mmoserver/gen/go/meshpb"
+	meshpb "github.com/zenion/mmokit/gen/go/meshpb"
 )
 
 // ForwardsAdminTopics reports whether this process should ship admin topic

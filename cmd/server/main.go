@@ -7,15 +7,15 @@ import (
 	"os"
 	"time"
 
-	"github.com/zenion/mmoserver/internal/game"
-	gamecommands "github.com/zenion/mmoserver/internal/game/commands"
-	"github.com/zenion/mmoserver/internal/marketplace"
-	gamepersist "github.com/zenion/mmoserver/internal/persist"
-	gamepg "github.com/zenion/mmoserver/internal/persist/postgres"
-	"github.com/zenion/mmoserver/pkg/coords"
-	"github.com/zenion/mmoserver/pkg/mmokit"
-	"github.com/zenion/mmoserver/pkg/services/auth"
-	"github.com/zenion/mmoserver/pkg/world/jsonrepo"
+	"github.com/zenion/mmokit/internal/game"
+	gamecommands "github.com/zenion/mmokit/internal/game/commands"
+	"github.com/zenion/mmokit/internal/marketplace"
+	gamepersist "github.com/zenion/mmokit/internal/persist"
+	gamepg "github.com/zenion/mmokit/internal/persist/postgres"
+	"github.com/zenion/mmokit/pkg/coords"
+	"github.com/zenion/mmokit/pkg/mmokit"
+	"github.com/zenion/mmokit/pkg/services/auth"
+	"github.com/zenion/mmokit/pkg/world/jsonrepo"
 )
 
 func main() {

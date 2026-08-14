@@ -3,8 +3,8 @@ package universe
 import (
 	"time"
 
-	"github.com/zenion/mmoserver/pkg/engine"
-	"github.com/zenion/mmoserver/pkg/metrics"
+	"github.com/zenion/mmokit/pkg/engine"
+	"github.com/zenion/mmokit/pkg/metrics"
 )
 
 // PerfCellSnapshot is the wire format returned by perf.snapshot for a single

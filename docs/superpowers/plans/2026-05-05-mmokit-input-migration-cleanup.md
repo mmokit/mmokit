@@ -116,7 +116,7 @@
 package mmokit
 
 import (
-    pkguniverse "github.com/zenion/mmoserver/pkg/universe"
+    pkguniverse "github.com/zenion/mmokit/pkg/universe"
 )
 
 // HandleAllInternal registers fn as the handler for messages of type M on
@@ -321,7 +321,7 @@ import (
     "reflect"
     "sync"
 
-    pkguniverse "github.com/zenion/mmoserver/pkg/universe"
+    pkguniverse "github.com/zenion/mmokit/pkg/universe"
 )
 
 // HandleClient registers fn as the handler for client-originated typed
@@ -461,8 +461,8 @@ All three handlers share the (target Entity, msg *T) signature."
 package mmokit
 
 import (
-    gamecomp "github.com/zenion/mmoserver/internal/component"
-    pkguniverse "github.com/zenion/mmoserver/pkg/universe"
+    gamecomp "github.com/zenion/mmokit/internal/component"
+    pkguniverse "github.com/zenion/mmokit/pkg/universe"
 )
 
 // PlayerStateOf returns the current PlayerState for the given Entity,
@@ -553,7 +553,7 @@ Handlers use as a first-line state filter:
 // internal/game/input_messages.go
 package game
 
-import "github.com/zenion/mmoserver/pkg/mmokit"
+import "github.com/zenion/mmokit/pkg/mmokit"
 
 // SetMoveTarget — continuous-state click-to-move target. Active=false clears.
 type SetMoveTarget struct {
@@ -1257,7 +1257,7 @@ Catches use-after-free patterns in dev. Single log line at category
 // internal/game/verb_beam_toggle.go
 package game
 
-import "github.com/zenion/mmoserver/pkg/mmokit"
+import "github.com/zenion/mmokit/pkg/mmokit"
 
 // BeamToggle is dispatched when a mining beam toggles on/off. The payload
 // is purely visual — server-side state is on the MiningLaser component.

@@ -3,8 +3,8 @@ package game
 import (
 	"testing"
 
-	gamecomp "github.com/zenion/mmoserver/internal/component"
-	"github.com/zenion/mmoserver/pkg/mmokit"
+	gamecomp "github.com/zenion/mmokit/internal/component"
+	"github.com/zenion/mmokit/pkg/mmokit"
 )
 
 // TestStarterArenaEncounter — sanity check that spawning the v2 Starter

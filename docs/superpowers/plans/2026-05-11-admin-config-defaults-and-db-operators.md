@@ -188,7 +188,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"github.com/zenion/mmoserver/pkg/persist"
+	"github.com/zenion/mmokit/pkg/persist"
 )
 
 type adminOperatorRepo struct {
@@ -852,7 +852,7 @@ func seedDefaultOperator(ctx context.Context, repo persist.AdminOperatorReposito
 }
 ```
 
-(g) Update the `pkg/admin/admin.go` imports. Add `"github.com/zenion/mmoserver/pkg/persist"` and `"github.com/zenion/mmoserver/pkg/services/auth"`. Remove `"strings"` (no longer used since the operators-map went away).
+(g) Update the `pkg/admin/admin.go` imports. Add `"github.com/zenion/mmokit/pkg/persist"` and `"github.com/zenion/mmokit/pkg/services/auth"`. Remove `"strings"` (no longer used since the operators-map went away).
 
 The final import block should be:
 
@@ -863,12 +863,12 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/zenion/mmoserver/pkg/admin/static"
-	"github.com/zenion/mmoserver/pkg/cmdsys"
-	"github.com/zenion/mmoserver/pkg/logger"
-	"github.com/zenion/mmoserver/pkg/persist"
-	"github.com/zenion/mmoserver/pkg/services/auth"
-	"github.com/zenion/mmoserver/pkg/universe"
+	"github.com/zenion/mmokit/pkg/admin/static"
+	"github.com/zenion/mmokit/pkg/cmdsys"
+	"github.com/zenion/mmokit/pkg/logger"
+	"github.com/zenion/mmokit/pkg/persist"
+	"github.com/zenion/mmokit/pkg/services/auth"
+	"github.com/zenion/mmokit/pkg/universe"
 )
 ```
 
@@ -966,8 +966,8 @@ Add to `pkg/admin/api_auth_test.go` imports:
 ```go
 	"context"
 
-	"github.com/zenion/mmoserver/pkg/persist"
-	"github.com/zenion/mmoserver/pkg/persist/persisttest"
+	"github.com/zenion/mmokit/pkg/persist"
+	"github.com/zenion/mmokit/pkg/persist/persisttest"
 ```
 
 - [ ] **Step 2: Update `mountE2EAdmin` in `admin_e2e_test.go`**
@@ -1025,8 +1025,8 @@ with:
 Add to `pkg/admin/admin_e2e_test.go` imports:
 
 ```go
-	"github.com/zenion/mmoserver/pkg/persist"
-	"github.com/zenion/mmoserver/pkg/persist/persisttest"
+	"github.com/zenion/mmokit/pkg/persist"
+	"github.com/zenion/mmokit/pkg/persist/persisttest"
 ```
 
 - [ ] **Step 3: Add a new test that exercises the auto-seeding path**

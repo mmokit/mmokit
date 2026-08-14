@@ -7,11 +7,11 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/zenion/mmoserver/pkg/mmokit"
-	"github.com/zenion/mmoserver/pkg/service"
-	"github.com/zenion/mmoserver/pkg/services/auth/authtest"
-	"github.com/zenion/mmoserver/pkg/services/chat"
-	"github.com/zenion/mmoserver/pkg/services/chat/chattest"
+	"github.com/zenion/mmokit/pkg/mmokit"
+	"github.com/zenion/mmokit/pkg/service"
+	"github.com/zenion/mmokit/pkg/services/auth/authtest"
+	"github.com/zenion/mmokit/pkg/services/chat"
+	"github.com/zenion/mmokit/pkg/services/chat/chattest"
 )
 
 // TestChat_RegisterChatService_RegistersTypedEvents verifies that

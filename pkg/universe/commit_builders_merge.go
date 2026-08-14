@@ -4,7 +4,7 @@ import (
 	"context"
 	"time"
 
-	"github.com/zenion/mmoserver/pkg/coords"
+	"github.com/zenion/mmokit/pkg/coords"
 )
 
 // mergeNoInvariants is a sentinel Invariant slice that disables

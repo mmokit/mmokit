@@ -5,8 +5,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/zenion/mmoserver/pkg/coords"
-	"github.com/zenion/mmoserver/pkg/metrics"
+	"github.com/zenion/mmokit/pkg/coords"
+	"github.com/zenion/mmokit/pkg/metrics"
 )
 
 // PartitionConfig configures dynamic cell partitioning behavior.

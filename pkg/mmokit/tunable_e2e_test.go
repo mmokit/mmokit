@@ -8,8 +8,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/zenion/mmoserver/pkg/cmdsys"
-	"github.com/zenion/mmoserver/pkg/universe"
+	"github.com/zenion/mmokit/pkg/cmdsys"
+	"github.com/zenion/mmokit/pkg/universe"
 )
 
 // buildWavetuneWasm compiles the wavetune test fixture to a wasip1 reactor

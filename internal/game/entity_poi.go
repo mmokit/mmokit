@@ -4,8 +4,8 @@ import (
 	"math"
 	"math/rand/v2"
 
-	gamecomp "github.com/zenion/mmoserver/internal/component"
-	"github.com/zenion/mmoserver/pkg/mmokit"
+	gamecomp "github.com/zenion/mmokit/internal/component"
+	"github.com/zenion/mmokit/pkg/mmokit"
 )
 
 // POIBundle is the component bundle for a Point-of-Interest entity.

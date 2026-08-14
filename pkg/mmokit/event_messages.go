@@ -104,7 +104,7 @@ type PlayerEntityAssigned struct {
 
 // CellChange — informs the client that its authoritative entity has
 // migrated to a different cell. Reserved framework hint; emitted by games
-// that expose cell-coordinate state to clients. The mmoserver examples no
+// that expose cell-coordinate state to clients. The MMOKIT examples no
 // longer emit this event — the topology-transparent protocol handles
 // cross-cell handoffs without a dedicated client-visible message — but
 // the type stays available for games that want to surface cell

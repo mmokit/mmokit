@@ -3,8 +3,8 @@ package game
 import (
 	"math"
 
-	gamecomp "github.com/zenion/mmoserver/internal/component"
-	"github.com/zenion/mmoserver/pkg/mmokit"
+	gamecomp "github.com/zenion/mmokit/internal/component"
+	"github.com/zenion/mmokit/pkg/mmokit"
 )
 
 // stationInfo is a tiny snapshot of a station entity used by startDockingFor.

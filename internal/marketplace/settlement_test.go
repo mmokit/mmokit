@@ -4,8 +4,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/zenion/mmoserver/internal/persist/persisttest"
-	"github.com/zenion/mmoserver/pkg/mmokit"
+	"github.com/zenion/mmokit/internal/persist/persisttest"
+	"github.com/zenion/mmokit/pkg/mmokit"
 )
 
 // ---------------------------------------------------------------------------

@@ -1,6 +1,6 @@
-# MMOServer
+# MMOKIT
 
-MMOServer is a server-authoritative multiplayer game framework and reference space game written in Go. The reusable framework is exposed through [`pkg/mmokit`](pkg/mmokit/); the repository also contains a complete game, browser clients, generated client SDK tooling, and distributed deployment examples.
+MMOKIT is a server-authoritative multiplayer game framework and reference space game written in Go. The reusable framework is exposed through [`pkg/mmokit`](pkg/mmokit/); the repository also contains a complete game, browser clients, generated client SDK tooling, and distributed deployment examples.
 
 The goal is a framework that can host any genre, with 2D and 3D both first-class. The implementation is 2D today; see [`docs/roadmap.md`](docs/roadmap.md) for the full vision, non-goals, and sequenced plan.
 

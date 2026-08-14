@@ -1,5 +1,5 @@
 {
-  "name": "mmoserver-webclient-pixi",
+  "name": "mmokit-space-webclient",
   "private": true,
   "type": "module",
   "scripts": {

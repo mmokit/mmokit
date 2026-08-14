@@ -5,7 +5,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/zenion/mmoserver/gen/go/meshpb"
+	"github.com/zenion/mmokit/gen/go/meshpb"
 )
 
 const (

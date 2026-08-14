@@ -4,8 +4,8 @@ import (
 	"math"
 	"math/rand"
 
-	gamecomp "github.com/zenion/mmoserver/internal/component"
-	"github.com/zenion/mmoserver/pkg/mmokit"
+	gamecomp "github.com/zenion/mmokit/internal/component"
+	"github.com/zenion/mmokit/pkg/mmokit"
 )
 
 // normalizeAngle wraps an angle to [-pi, pi].

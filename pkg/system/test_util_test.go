@@ -2,7 +2,7 @@ package system
 
 import (
 	"github.com/mlange-42/ark/ecs"
-	"github.com/zenion/mmoserver/pkg/engine"
+	"github.com/zenion/mmokit/pkg/engine"
 )
 
 // wireSystem is a test-only helper that runs the framework's full system

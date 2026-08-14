@@ -4,7 +4,7 @@ import (
 	"sort"
 	"testing"
 
-	"github.com/zenion/mmoserver/pkg/net"
+	"github.com/zenion/mmokit/pkg/net"
 )
 
 // Router.poll is the 0x01 drain for the single-process `all` preset — the one

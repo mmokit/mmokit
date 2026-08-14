@@ -445,8 +445,8 @@ package system
 
 import (
 	"github.com/mlange-42/ark/ecs"
-	"github.com/zenion/mmoserver/pkg/component"
-	"github.com/zenion/mmoserver/pkg/engine"
+	"github.com/zenion/mmokit/pkg/component"
+	"github.com/zenion/mmokit/pkg/engine"
 )
 
 // PhysicsSystem integrates velocity into position each tick.
@@ -478,8 +478,8 @@ package system
 
 import (
 	"github.com/mlange-42/ark/ecs"
-	"github.com/zenion/mmoserver/pkg/component"
-	"github.com/zenion/mmoserver/pkg/engine"
+	"github.com/zenion/mmokit/pkg/component"
+	"github.com/zenion/mmokit/pkg/engine"
 )
 
 // LifetimeSystem despawns entities whose Lifetime component has expired.
@@ -515,8 +515,8 @@ package system
 
 import (
 	"github.com/mlange-42/ark/ecs"
-	"github.com/zenion/mmoserver/pkg/component"
-	"github.com/zenion/mmoserver/pkg/engine"
+	"github.com/zenion/mmokit/pkg/component"
+	"github.com/zenion/mmokit/pkg/engine"
 )
 
 type ReplicaDeadReckoningSystem struct {

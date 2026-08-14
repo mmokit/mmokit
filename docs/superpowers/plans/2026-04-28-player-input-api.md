@@ -168,8 +168,8 @@ Add a new file `pkg/system/init.go`:
 package system
 
 import (
-    "github.com/zenion/mmoserver/pkg/component"
-    "github.com/zenion/mmoserver/pkg/coords"
+    "github.com/zenion/mmokit/pkg/component"
+    "github.com/zenion/mmokit/pkg/coords"
 )
 
 func init() {
@@ -326,7 +326,7 @@ import (
     "testing"
 
     "github.com/mlange-42/ark/ecs"
-    "github.com/zenion/mmoserver/pkg/engine"
+    "github.com/zenion/mmokit/pkg/engine"
 )
 
 func TestPlayer_Identity(t *testing.T) {
@@ -377,9 +377,9 @@ import (
     "github.com/mlange-42/ark/ecs"
     "google.golang.org/protobuf/proto"
 
-    "github.com/zenion/mmoserver/pkg/component"
-    "github.com/zenion/mmoserver/pkg/engine"
-    "github.com/zenion/mmoserver/pkg/universe"
+    "github.com/zenion/mmokit/pkg/component"
+    "github.com/zenion/mmokit/pkg/engine"
+    "github.com/zenion/mmokit/pkg/universe"
 )
 
 // Player is the friendly facade that input handlers receive. It wraps a
@@ -517,7 +517,7 @@ EOF
 Append to `pkg/mmokit/player_test.go`:
 
 ```go
-import "github.com/zenion/mmoserver/pkg/component" // add to existing import block
+import "github.com/zenion/mmokit/pkg/component" // add to existing import block
 
 func TestPlayer_GetComponent(t *testing.T) {
     world := ecs.NewWorld()
@@ -1393,9 +1393,9 @@ package mmokit
 import (
     "testing"
 
-    enginepb "github.com/zenion/mmoserver/gen/go/enginepb"
-    "github.com/zenion/mmoserver/pkg/engine"
-    "github.com/zenion/mmoserver/pkg/universe"
+    enginepb "github.com/zenion/mmokit/gen/go/enginepb"
+    "github.com/zenion/mmokit/pkg/engine"
+    "github.com/zenion/mmokit/pkg/universe"
 )
 
 func TestOnInput_RegistersInProcess(t *testing.T) {
@@ -1503,8 +1503,8 @@ import (
 
     "google.golang.org/protobuf/proto"
 
-    "github.com/zenion/mmoserver/pkg/engine"
-    "github.com/zenion/mmoserver/pkg/universe"
+    "github.com/zenion/mmokit/pkg/engine"
+    "github.com/zenion/mmokit/pkg/universe"
 )
 
 // OnInput registers a wire→handler binding without component injection.
@@ -1833,7 +1833,7 @@ package universe
 import (
     "sync"
 
-    "github.com/zenion/mmoserver/pkg/engine"
+    "github.com/zenion/mmokit/pkg/engine"
 )
 
 // sessionResolver maps a PlayerSession to its owning cell. Populated by
@@ -2415,10 +2415,10 @@ package game
 import (
     "strings"
 
-    enginepb "github.com/zenion/mmoserver/gen/go/enginepb"
-    gamepb "github.com/zenion/mmoserver/gen/go/gamepb"
-    "github.com/zenion/mmoserver/internal/item"
-    "github.com/zenion/mmoserver/pkg/mmokit"
+    enginepb "github.com/zenion/mmokit/gen/go/enginepb"
+    gamepb "github.com/zenion/mmokit/gen/go/gamepb"
+    "github.com/zenion/mmokit/internal/item"
+    "github.com/zenion/mmokit/pkg/mmokit"
 )
 
 // PlayerInputDeps is the deps struct for the high-frequency CE_PLAYER_INPUT
@@ -2583,7 +2583,7 @@ grep -n "type PlayerInput\b\|gamecomp\.PlayerInput\|\"PlayerInput\"" internal/ga
 If the component lives in `internal/component` as `component.PlayerInput`, replace the alias trick with a direct import:
 
 ```go
-import gamecomp "github.com/zenion/mmoserver/internal/component"
+import gamecomp "github.com/zenion/mmokit/internal/component"
 
 type PlayerInputDeps struct {
     Input      *gamecomp.PlayerInput

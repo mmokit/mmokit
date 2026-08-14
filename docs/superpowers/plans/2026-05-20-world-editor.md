@@ -94,8 +94,8 @@ package world_test
 import (
 	"testing"
 
-	"github.com/zenion/mmoserver/pkg/coords"
-	"github.com/zenion/mmoserver/pkg/world"
+	"github.com/zenion/mmokit/pkg/coords"
+	"github.com/zenion/mmokit/pkg/world"
 )
 
 func TestBucketByCell_GroupsByWorldPos(t *testing.T) {
@@ -263,7 +263,7 @@ Create `pkg/world/snapshot.go`:
 ```go
 package world
 
-import "github.com/zenion/mmoserver/pkg/coords"
+import "github.com/zenion/mmokit/pkg/coords"
 
 // CellBucket is the cell-local view of a snapshot — every entity in the
 // snapshot whose world position falls inside a single cell, with its
@@ -441,8 +441,8 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/zenion/mmoserver/pkg/world"
-	"github.com/zenion/mmoserver/pkg/world/jsonrepo"
+	"github.com/zenion/mmokit/pkg/world"
+	"github.com/zenion/mmokit/pkg/world/jsonrepo"
 )
 
 func TestLoadAll_EmptyDir(t *testing.T) {
@@ -574,7 +574,7 @@ import (
 	"path/filepath"
 	"sync"
 
-	"github.com/zenion/mmoserver/pkg/world"
+	"github.com/zenion/mmokit/pkg/world"
 )
 
 type Repo struct {
@@ -1036,7 +1036,7 @@ Create `pkg/mmokit/world.go`:
 ```go
 package mmokit
 
-import "github.com/zenion/mmoserver/pkg/world"
+import "github.com/zenion/mmokit/pkg/world"
 
 // World data layer re-exports — game code imports mmokit, never pkg/world directly.
 
@@ -1095,8 +1095,8 @@ After flags are parsed and before the `Process` is built (i.e. before any cell i
 ```go
 import (
     // ... existing imports ...
-    "github.com/zenion/mmoserver/pkg/world"
-    "github.com/zenion/mmoserver/pkg/world/jsonrepo"
+    "github.com/zenion/mmokit/pkg/world"
+    "github.com/zenion/mmokit/pkg/world/jsonrepo"
 )
 
 // ...inside main(), after flag.Parse():
@@ -1275,9 +1275,9 @@ Replace the whole content of `internal/game/entity_station.go` with:
 package game
 
 import (
-	gamecomp "github.com/zenion/mmoserver/internal/component"
-	"github.com/zenion/mmoserver/pkg/mmokit"
-	"github.com/zenion/mmoserver/pkg/spatial"
+	gamecomp "github.com/zenion/mmokit/internal/component"
+	"github.com/zenion/mmokit/pkg/mmokit"
+	"github.com/zenion/mmokit/pkg/spatial"
 )
 
 // StationBundle is the entity-kind component bundle for trade stations.
@@ -1548,9 +1548,9 @@ import (
     "hash/fnv"
     "math/rand/v2"
 
-    gamecomp "github.com/zenion/mmoserver/internal/component"
-    "github.com/zenion/mmoserver/pkg/mmokit"
-    "github.com/zenion/mmoserver/pkg/spatial"
+    gamecomp "github.com/zenion/mmokit/internal/component"
+    "github.com/zenion/mmokit/pkg/mmokit"
+    "github.com/zenion/mmokit/pkg/spatial"
 )
 
 // SpawnBelt places an asteroid-belt marker entity at (localX, localY) and
@@ -1651,7 +1651,7 @@ func (gw *GameWorld) SpawnDungeonAt(localX, localY float32, def mmokit.WorldDung
 }
 ```
 
-Add `import "github.com/zenion/mmoserver/pkg/mmokit"` if not already imported.
+Add `import "github.com/zenion/mmokit/pkg/mmokit"` if not already imported.
 
 - [ ] **Step 2: Verify no other callers spawn dungeons**
 
@@ -1730,9 +1730,9 @@ Create `internal/game/entity_decoration.go`:
 package game
 
 import (
-    gamecomp "github.com/zenion/mmoserver/internal/component"
-    "github.com/zenion/mmoserver/pkg/mmokit"
-    "github.com/zenion/mmoserver/pkg/spatial"
+    gamecomp "github.com/zenion/mmokit/internal/component"
+    "github.com/zenion/mmokit/pkg/mmokit"
+    "github.com/zenion/mmokit/pkg/spatial"
 )
 
 func (gw *GameWorld) SpawnDecoration(localX, localY float32, def mmokit.WorldDecoration) {
@@ -1841,10 +1841,10 @@ import (
     "context"
     "fmt"
 
-    "github.com/zenion/mmoserver/internal/game"
-    "github.com/zenion/mmoserver/pkg/cmdsys"
-    "github.com/zenion/mmoserver/pkg/coords"
-    "github.com/zenion/mmoserver/pkg/mmokit"
+    "github.com/zenion/mmokit/internal/game"
+    "github.com/zenion/mmokit/pkg/cmdsys"
+    "github.com/zenion/mmokit/pkg/coords"
+    "github.com/zenion/mmokit/pkg/mmokit"
 )
 
 // ── world.list ─────────────────────────────────────────────────────────────

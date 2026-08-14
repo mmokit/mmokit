@@ -146,7 +146,7 @@ Header:
 ```protobuf
 syntax = "proto3";
 package meshpb;
-option go_package = "github.com/zenion/mmoserver/gen/go/meshpb";
+option go_package = "github.com/zenion/mmokit/gen/go/meshpb";
 ```
 
 S3 only requires the `MeshData` messages and service to be fully wired — `MeshControl` message bodies can be defined with the minimum fields the spec describes, but the server/client stubs are generated and not used until S4.

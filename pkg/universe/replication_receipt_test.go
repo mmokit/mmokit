@@ -3,8 +3,8 @@ package universe
 import (
 	"testing"
 
-	meshpb "github.com/zenion/mmoserver/gen/go/meshpb"
-	pkgnet "github.com/zenion/mmoserver/pkg/net"
+	meshpb "github.com/zenion/mmokit/gen/go/meshpb"
+	pkgnet "github.com/zenion/mmokit/pkg/net"
 )
 
 // TestReplicationReceiptFrameRoundTrip pins the return leg's typed fields.

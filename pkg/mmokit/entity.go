@@ -1,6 +1,6 @@
 package mmokit
 
-import "github.com/zenion/mmoserver/pkg/universe"
+import "github.com/zenion/mmokit/pkg/universe"
 
 // Entity is the rich game-facing handle. Value type, cheap to pass.
 // Methods are safe on zero/dead entities — they return zero values, never panic.

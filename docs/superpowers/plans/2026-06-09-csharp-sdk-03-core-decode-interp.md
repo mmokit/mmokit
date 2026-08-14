@@ -462,7 +462,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/zenion/mmoserver/pkg/quantize"
+	"github.com/zenion/mmokit/pkg/quantize"
 )
 
 // Manifest mirrors the C# GoldenModel DTOs (csharp/.../GoldenModel.cs).

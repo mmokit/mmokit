@@ -4,9 +4,9 @@ import (
 	"sync/atomic"
 
 	"github.com/mlange-42/ark/ecs"
-	"github.com/zenion/mmoserver/pkg/logger"
-	"github.com/zenion/mmoserver/pkg/metrics"
-	"github.com/zenion/mmoserver/pkg/net"
+	"github.com/zenion/mmokit/pkg/logger"
+	"github.com/zenion/mmokit/pkg/metrics"
+	"github.com/zenion/mmokit/pkg/net"
 )
 
 // Engine holds platform state that any game needs.

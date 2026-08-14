@@ -4,7 +4,7 @@ import (
 	"errors"
 	"io"
 
-	meshpb "github.com/zenion/mmoserver/gen/go/meshpb"
+	meshpb "github.com/zenion/mmokit/gen/go/meshpb"
 )
 
 // meshDataServer is the server-side implementation of the MeshData gRPC

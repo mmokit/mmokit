@@ -7,10 +7,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/zenion/mmoserver/pkg/logger"
-	"github.com/zenion/mmoserver/pkg/net"
-	"github.com/zenion/mmoserver/pkg/service"
-	. "github.com/zenion/mmoserver/pkg/universe"
+	"github.com/zenion/mmokit/pkg/logger"
+	"github.com/zenion/mmokit/pkg/net"
+	"github.com/zenion/mmokit/pkg/service"
+	. "github.com/zenion/mmokit/pkg/universe"
 )
 
 // e2eBusEvent is the wire-eligible event type used by the multi-process
@@ -116,7 +116,7 @@ func TestServiceEventBus_E2E_SubscribeAndPublish(t *testing.T) {
 	// router and back into coord's own bus.routingCache via the PeerList
 	// re-broadcast. The TypeName uses the canonical PkgPath.Name form:
 	// for an external-package test type, that's the _test package.
-	wantTypeName := "github.com/zenion/mmoserver/pkg/universe_test.e2eBusEvent"
+	wantTypeName := "github.com/zenion/mmokit/pkg/universe_test.e2eBusEvent"
 	if err := waitFor(ctx, 2*time.Second, func() bool {
 		got := coord.Bus().RoutingCacheSnapshot()
 		for _, id := range got[wantTypeName] {

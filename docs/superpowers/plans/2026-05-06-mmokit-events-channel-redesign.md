@@ -177,7 +177,7 @@ Expected: FAIL — `EncodeTypedEventFrame undefined`, `EncodeBatchedTypedEventFr
 package universe
 
 import (
-	pkgnet "github.com/zenion/mmoserver/pkg/net"
+	pkgnet "github.com/zenion/mmokit/pkg/net"
 )
 
 // EncodeTypedEventFrame produces a single-event 0x00 frame:
@@ -262,7 +262,7 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/zenion/mmoserver/pkg/mmokit"
+	"github.com/zenion/mmokit/pkg/mmokit"
 )
 
 type testServerEventA struct {
@@ -437,8 +437,8 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/zenion/mmoserver/pkg/mmokit"
-	"github.com/zenion/mmoserver/pkg/universe"
+	"github.com/zenion/mmokit/pkg/mmokit"
+	"github.com/zenion/mmokit/pkg/universe"
 )
 
 type sendEventTestMsg struct {
@@ -520,7 +520,7 @@ Imports needed at top of `stage.go` (verify they're already imported, add if not
 import (
     "fmt"
     "reflect"
-    "github.com/zenion/mmoserver/pkg/mmokit"
+    "github.com/zenion/mmokit/pkg/mmokit"
 )
 ```
 
@@ -615,8 +615,8 @@ import (
 	"bytes"
 	"testing"
 
-	"github.com/zenion/mmoserver/pkg/mmokit"
-	"github.com/zenion/mmoserver/pkg/universe"
+	"github.com/zenion/mmokit/pkg/mmokit"
+	"github.com/zenion/mmokit/pkg/universe"
 )
 
 type evDispatchTestInput struct {
@@ -671,7 +671,7 @@ import (
 	"encoding/binary"
 	"reflect"
 
-	"github.com/zenion/mmoserver/pkg/mmokit"
+	"github.com/zenion/mmokit/pkg/mmokit"
 )
 
 // DispatchInboundEventFrame consumes a payload (frame body, channel byte
@@ -787,8 +787,8 @@ import (
 	"encoding/binary"
 	"testing"
 
-	"github.com/zenion/mmoserver/pkg/mmokit"
-	"github.com/zenion/mmoserver/pkg/universe"
+	"github.com/zenion/mmokit/pkg/mmokit"
+	"github.com/zenion/mmokit/pkg/universe"
 )
 
 func TestAfterSend_WritesBatchedTypedEventFrame(t *testing.T) {

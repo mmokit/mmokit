@@ -10,7 +10,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	gamepersist "github.com/zenion/mmoserver/internal/persist"
+	gamepersist "github.com/zenion/mmokit/internal/persist"
 )
 
 type playerStateRepo struct {

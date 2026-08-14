@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/zenion/mmoserver/pkg/engine"
+	"github.com/zenion/mmokit/pkg/engine"
 )
 
 func TestBuildPerfCellSnapshotPopulatesAllFields(t *testing.T) {

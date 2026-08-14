@@ -3,7 +3,7 @@ package mmokit
 import (
 	"testing"
 
-	"github.com/zenion/mmoserver/pkg/engine"
+	"github.com/zenion/mmokit/pkg/engine"
 )
 
 func TestDebugBroadcaster_BuildPayload_TopologyOnly(t *testing.T) {

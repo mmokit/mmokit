@@ -1,8 +1,8 @@
 package universe
 
 import (
-	meshpb "github.com/zenion/mmoserver/gen/go/meshpb"
-	pkgnet "github.com/zenion/mmoserver/pkg/net"
+	meshpb "github.com/zenion/mmokit/gen/go/meshpb"
+	pkgnet "github.com/zenion/mmokit/pkg/net"
 )
 
 // Replication receipts are the gateway's answer to a tracked ClientFrame,

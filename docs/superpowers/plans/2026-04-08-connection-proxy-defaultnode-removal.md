@@ -26,7 +26,7 @@ import (
 	"errors"
 	"time"
 
-	"github.com/zenion/mmoserver/pkg/net"
+	"github.com/zenion/mmokit/pkg/net"
 )
 
 // LoginHandler parses login messages and returns the username.
@@ -150,8 +150,8 @@ import (
 	"errors"
 	"time"
 
-	"github.com/zenion/mmoserver/pkg/engine"
-	"github.com/zenion/mmoserver/pkg/net"
+	"github.com/zenion/mmokit/pkg/engine"
+	"github.com/zenion/mmokit/pkg/net"
 )
 
 // ErrLoginPending re-exports the engine's ErrLoginPending for use in LoginHandler implementations.
@@ -736,7 +736,7 @@ func (c *Coordinator) routeAuthenticatedPlayer(connID uint32, username string) {
 
 - [ ] **Step 4: Add net import**
 
-Add `"github.com/zenion/mmoserver/pkg/net"` to coordinator.go imports if not present (needed for `net.PlayerEvent`).
+Add `"github.com/zenion/mmokit/pkg/net"` to coordinator.go imports if not present (needed for `net.PlayerEvent`).
 
 - [ ] **Step 5: Verify it compiles**
 
@@ -1197,7 +1197,7 @@ After `game.GameSetup(...)` (line 135), add:
 	})
 ```
 
-Add `"github.com/zenion/mmoserver/pkg/coords"` and `"strings"` to main.go imports.
+Add `"github.com/zenion/mmokit/pkg/coords"` and `"strings"` to main.go imports.
 
 - [ ] **Step 3: Remove login handler from game.go**
 

@@ -6,8 +6,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/zenion/mmoserver/pkg/mmokit"
-	"github.com/zenion/mmoserver/pkg/mmokit/internal/testmods/podcomp"
+	"github.com/zenion/mmokit/pkg/mmokit"
+	"github.com/zenion/mmokit/pkg/mmokit/internal/testmods/podcomp"
 )
 
 // fnv32aOf is the wire-ID hash restated independently of the implementation,

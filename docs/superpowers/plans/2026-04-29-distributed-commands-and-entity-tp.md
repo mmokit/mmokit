@@ -240,7 +240,7 @@ package universe
 import (
 	"testing"
 
-	"github.com/zenion/mmoserver/pkg/cmdsys"
+	"github.com/zenion/mmokit/pkg/cmdsys"
 )
 
 func TestProcess_ImplementsLocalProcess(t *testing.T) {
@@ -711,7 +711,7 @@ package universe
 import (
 	"testing"
 
-	"github.com/zenion/mmoserver/pkg/cmdsys"
+	"github.com/zenion/mmokit/pkg/cmdsys"
 )
 
 func TestResolvePlayerTarget_NotFound(t *testing.T) {
@@ -753,8 +753,8 @@ package universe
 import (
 	"strings"
 
-	"github.com/zenion/mmoserver/pkg/cmdsys"
-	"github.com/zenion/mmoserver/pkg/engine"
+	"github.com/zenion/mmokit/pkg/cmdsys"
+	"github.com/zenion/mmokit/pkg/engine"
 )
 
 // PlayerTarget is the result of ResolvePlayerTarget. Exactly one of
@@ -964,7 +964,7 @@ grep -n "pkg/universe" internal/game/playerdb.go
 If yes, reshape to:
 
 ```go
-import "github.com/zenion/mmoserver/pkg/universe"
+import "github.com/zenion/mmokit/pkg/universe"
 
 func (r *PlayerRepo) Locator() universe.PlayerDataLocator {
 	return repoLocator{repo: r}
@@ -1155,7 +1155,7 @@ package universe
 import (
 	"testing"
 
-	"github.com/zenion/mmoserver/pkg/coords"
+	"github.com/zenion/mmokit/pkg/coords"
 )
 
 func TestMoveEntityTo_SameCell_UpdatesPositionInline(t *testing.T) {
@@ -1217,8 +1217,8 @@ import (
 
 	"github.com/mlange-42/ark/ecs"
 
-	"github.com/zenion/mmoserver/pkg/component"
-	"github.com/zenion/mmoserver/pkg/coords"
+	"github.com/zenion/mmokit/pkg/component"
+	"github.com/zenion/mmokit/pkg/coords"
 )
 
 // MoveOpt configures a MoveEntityTo call.
@@ -1493,7 +1493,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/zenion/mmoserver/pkg/cmdsys"
+	"github.com/zenion/mmokit/pkg/cmdsys"
 )
 
 func TestEntitySpawn_RoutesToCellOwningWorldPos(t *testing.T) {
@@ -1539,8 +1539,8 @@ import (
 	"math"
 	"math/rand"
 
-	"github.com/zenion/mmoserver/pkg/cmdsys"
-	"github.com/zenion/mmoserver/pkg/coords"
+	"github.com/zenion/mmokit/pkg/cmdsys"
+	"github.com/zenion/mmokit/pkg/coords"
 )
 
 type entitySpawnArgs struct {
@@ -2115,7 +2115,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/zenion/mmoserver/pkg/coords"
+	"github.com/zenion/mmokit/pkg/coords"
 )
 
 func TestPlayerTp_Online_CrossCell(t *testing.T) {
@@ -2186,8 +2186,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/zenion/mmoserver/pkg/cmdsys"
-	"github.com/zenion/mmoserver/pkg/coords"
+	"github.com/zenion/mmokit/pkg/cmdsys"
+	"github.com/zenion/mmokit/pkg/coords"
 )
 
 type playerTpArgs struct {
@@ -2987,9 +2987,9 @@ package commands
 import (
 	"fmt"
 
-	"github.com/zenion/mmoserver/internal/game"
-	"github.com/zenion/mmoserver/pkg/cmdsys"
-	"github.com/zenion/mmoserver/pkg/mmokit"
+	"github.com/zenion/mmokit/internal/game"
+	"github.com/zenion/mmokit/pkg/cmdsys"
+	"github.com/zenion/mmokit/pkg/mmokit"
 )
 
 // RegisterAll registers space-game admin commands. Generic
@@ -3041,8 +3041,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/zenion/mmoserver/pkg/cmdsys"
-	"github.com/zenion/mmoserver/pkg/mmokit"
+	"github.com/zenion/mmokit/pkg/cmdsys"
+	"github.com/zenion/mmokit/pkg/mmokit"
 )
 
 type DamageArgs struct {
@@ -3107,9 +3107,9 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/zenion/mmoserver/internal/game"
-	"github.com/zenion/mmoserver/pkg/cmdsys"
-	"github.com/zenion/mmoserver/pkg/mmokit"
+	"github.com/zenion/mmokit/internal/game"
+	"github.com/zenion/mmokit/pkg/cmdsys"
+	"github.com/zenion/mmokit/pkg/mmokit"
 )
 
 type HealArgs struct {
@@ -3167,9 +3167,9 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/zenion/mmoserver/internal/game"
-	"github.com/zenion/mmoserver/pkg/cmdsys"
-	"github.com/zenion/mmoserver/pkg/mmokit"
+	"github.com/zenion/mmokit/internal/game"
+	"github.com/zenion/mmokit/pkg/cmdsys"
+	"github.com/zenion/mmokit/pkg/mmokit"
 )
 
 type KillArgs struct {
@@ -3235,10 +3235,10 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/zenion/mmoserver/internal/game"
-	"github.com/zenion/mmoserver/internal/item"
-	"github.com/zenion/mmoserver/pkg/cmdsys"
-	"github.com/zenion/mmoserver/pkg/mmokit"
+	"github.com/zenion/mmokit/internal/game"
+	"github.com/zenion/mmokit/internal/item"
+	"github.com/zenion/mmokit/pkg/cmdsys"
+	"github.com/zenion/mmokit/pkg/mmokit"
 )
 
 type GiveArgs struct {
@@ -3339,10 +3339,10 @@ import (
 	"fmt"
 	"strings"
 
-	gamepb "github.com/zenion/mmoserver/gen/go/gamepb"
-	"github.com/zenion/mmoserver/internal/game"
-	"github.com/zenion/mmoserver/pkg/cmdsys"
-	"github.com/zenion/mmoserver/pkg/mmokit"
+	gamepb "github.com/zenion/mmokit/gen/go/gamepb"
+	"github.com/zenion/mmokit/internal/game"
+	"github.com/zenion/mmokit/pkg/cmdsys"
+	"github.com/zenion/mmokit/pkg/mmokit"
 )
 
 type CurrencyArgs struct {

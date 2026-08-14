@@ -2,7 +2,7 @@ package component
 
 import (
 	"github.com/mlange-42/ark/ecs"
-	"github.com/zenion/mmoserver/internal/item"
+	"github.com/zenion/mmokit/internal/item"
 )
 
 // Collision layer constants live in pkg/spatial — use spatial.LayerStatic /

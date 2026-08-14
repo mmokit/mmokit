@@ -1,7 +1,7 @@
 package universe
 
 import (
-	pkgnet "github.com/zenion/mmoserver/pkg/net"
+	pkgnet "github.com/zenion/mmokit/pkg/net"
 )
 
 // The reflection decoder runs on two surfaces with genuinely different threat

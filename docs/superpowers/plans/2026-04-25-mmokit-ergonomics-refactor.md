@@ -95,7 +95,7 @@ After deletion, search for other uses:
 grep -n "engine\." examples/4node-basic/world.go
 ```
 
-If only the now-deleted `engine.Hooks` referenced it, also remove `"github.com/zenion/mmoserver/pkg/engine"` from the import block.
+If only the now-deleted `engine.Hooks` referenced it, also remove `"github.com/zenion/mmokit/pkg/engine"` from the import block.
 
 - [ ] **Step 4: Build + vet**
 
@@ -275,7 +275,7 @@ EOF
 - [ ] **Step 1: Confirm pkg/system does not import pkg/universe**
 
 ```bash
-grep -rn "\"github.com/zenion/mmoserver/pkg/universe\"" pkg/system/ | grep -v _test.go
+grep -rn "\"github.com/zenion/mmokit/pkg/universe\"" pkg/system/ | grep -v _test.go
 ```
 
 Expected: empty output. (Test files don't count — they don't affect production cycle.)
@@ -283,7 +283,7 @@ Expected: empty output. (Test files don't count — they don't affect production
 - [ ] **Step 2: Confirm pkg/universe imports pkg/system in test only today**
 
 ```bash
-grep -rn "\"github.com/zenion/mmoserver/pkg/system\"" pkg/universe/ | grep -v _test.go
+grep -rn "\"github.com/zenion/mmokit/pkg/system\"" pkg/universe/ | grep -v _test.go
 ```
 
 Expected: empty output. After Phase 2, `pkg/universe/entity_kind.go` will be the first production importer.
@@ -303,7 +303,7 @@ package universe
 import (
 	"github.com/mlange-42/ark/ecs"
 
-	"github.com/zenion/mmoserver/pkg/system"
+	"github.com/zenion/mmokit/pkg/system"
 )
 
 // EntityKindDef describes an entity kind's components for transfer replication,
@@ -626,7 +626,7 @@ package mmokit
 import (
 	"testing"
 
-	"github.com/zenion/mmoserver/pkg/universe"
+	"github.com/zenion/mmokit/pkg/universe"
 )
 
 type fakeSystem struct {
@@ -938,7 +938,7 @@ package mmokit
 import (
 	"testing"
 
-	enginepb "github.com/zenion/mmoserver/gen/go/enginepb"
+	enginepb "github.com/zenion/mmokit/gen/go/enginepb"
 )
 
 // fakeTopoWorld implements just enough for BuildCellTopologyMsg.
@@ -1009,8 +1009,8 @@ Create `pkg/mmokit/topology.go`:
 package mmokit
 
 import (
-	enginepb "github.com/zenion/mmoserver/gen/go/enginepb"
-	"github.com/zenion/mmoserver/pkg/coords"
+	enginepb "github.com/zenion/mmokit/gen/go/enginepb"
+	"github.com/zenion/mmokit/pkg/coords"
 )
 
 // topologyView is the minimal interface BuildCellTopologyMsg needs from a
@@ -1189,7 +1189,7 @@ Replace `examples/4node-basic/system_debug_info.go` with:
 ```go
 package main
 
-import "github.com/zenion/mmoserver/pkg/mmokit"
+import "github.com/zenion/mmokit/pkg/mmokit"
 
 // DebugInfoSystem stamps the current AoI radius on every entity each tick
 // so the client debug overlay can render it. The cluster-topology push is

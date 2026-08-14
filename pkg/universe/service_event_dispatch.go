@@ -18,8 +18,8 @@ import (
 	"sync"
 	"time"
 
-	meshpb "github.com/zenion/mmoserver/gen/go/meshpb"
-	"github.com/zenion/mmoserver/pkg/service"
+	meshpb "github.com/zenion/mmokit/gen/go/meshpb"
+	"github.com/zenion/mmokit/pkg/service"
 )
 
 // installServiceEventDispatch wires the universe-side RemotePublishFunc

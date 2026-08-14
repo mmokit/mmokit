@@ -1,6 +1,6 @@
 package game
 
-import "github.com/zenion/mmoserver/pkg/spatial"
+import "github.com/zenion/mmokit/pkg/spatial"
 
 // ChamberRole describes a chamber's content tier.
 type ChamberRole uint8

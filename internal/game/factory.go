@@ -1,7 +1,7 @@
 package game
 
 import (
-	"github.com/zenion/mmoserver/pkg/mmokit"
+	"github.com/zenion/mmokit/pkg/mmokit"
 )
 
 // NewGameWorldStateFactory returns the factory passed to mmokit.AddState[GameWorld].

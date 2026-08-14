@@ -6,8 +6,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/zenion/mmoserver/pkg/metrics"
-	"github.com/zenion/mmoserver/pkg/universe"
+	"github.com/zenion/mmokit/pkg/metrics"
+	"github.com/zenion/mmokit/pkg/universe"
 )
 
 // LocalClusterView reads cluster state directly from a *universe.Process.

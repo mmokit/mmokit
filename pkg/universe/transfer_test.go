@@ -9,7 +9,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/mlange-42/ark/ecs"
 
-	"github.com/zenion/mmoserver/pkg/component"
+	"github.com/zenion/mmokit/pkg/component"
 )
 
 // TestTransferFrame_EpochRoundtrip locks down the wire-format guarantee that

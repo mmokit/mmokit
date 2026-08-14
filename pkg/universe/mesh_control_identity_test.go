@@ -3,8 +3,8 @@ package universe
 import (
 	"testing"
 
-	"github.com/zenion/mmoserver/pkg/logger"
-	"github.com/zenion/mmoserver/pkg/metrics"
+	"github.com/zenion/mmokit/pkg/logger"
+	"github.com/zenion/mmokit/pkg/metrics"
 )
 
 // TestBindIdentity_ExactMatchOnly pins the rule every one of the twelve

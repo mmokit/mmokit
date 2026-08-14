@@ -11,11 +11,11 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	gamepersist "github.com/zenion/mmoserver/internal/persist"
-	"github.com/zenion/mmoserver/pkg/engine"
-	"github.com/zenion/mmoserver/pkg/logger"
-	"github.com/zenion/mmoserver/pkg/persist"
-	pkguniverse "github.com/zenion/mmoserver/pkg/universe"
+	gamepersist "github.com/zenion/mmokit/internal/persist"
+	"github.com/zenion/mmokit/pkg/engine"
+	"github.com/zenion/mmokit/pkg/logger"
+	"github.com/zenion/mmokit/pkg/persist"
+	pkguniverse "github.com/zenion/mmokit/pkg/universe"
 )
 
 // PlayerRepo is an in-memory player database with async persistence
