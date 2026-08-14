@@ -395,7 +395,13 @@ type Config struct {
 // from a higher layer (mmokit.DefaultAdminServerFactory) without
 // introducing an import cycle.
 type AdminConfig struct {
-	Enabled            bool          // default true (only honored on RoleCoordinator processes with non-empty AdminListen)
+	Enabled bool // default true (only honored on RoleCoordinator processes with non-empty AdminListen)
+	// EnabledExplicit records that an operator named --admin-enabled on the
+	// command line, as opposed to inheriting the default. It only changes what
+	// happens when no database is configured: a default-on dashboard downgrades
+	// to a log line, an explicitly requested one is an error. Set by BindFlags;
+	// callers constructing Config directly can leave it false.
+	EnabledExplicit    bool
 	SessionTTL         time.Duration // default 8h
 	LockoutMaxAttempts int           // default 5
 	LockoutWindow      time.Duration // default 15m
@@ -1697,6 +1703,9 @@ func (c *Process) Build() {
 	// coord, so host/gateway-only processes inherit the default
 	// :9101 from BindFlags but skip the wiring (and the Postgres
 	// requirement) here.
+	// Set when the admin dashboard is turned off for want of a database, so
+	// the explanation can be logged after categories are enabled below.
+	adminDisabledNoDB := false
 	if cfg.AdminListen != "" && cfg.Admin.Enabled && roles.Has(RoleCoordinator) {
 		if cfg.Admin.SessionTTL == 0 {
 			cfg.Admin.SessionTTL = 8 * time.Hour
@@ -1711,7 +1720,33 @@ func (c *Process) Build() {
 			cfg.Admin.AuditCap = 4096
 		}
 		if cfg.DBStore == nil {
-			panic(fmt.Errorf("coordinator: Admin.Enabled requires a database — set --postgres-url"))
+			// Admin is default-ON (bootstrap.go binds --admin-enabled=true and
+			// --admin-listen=:9101), so this panic fired for the smallest
+			// possible program — the one pkg/mmokit/README.md puts at the top
+			// of the page:
+			//
+			//	mmokit.New(mmokit.Config{Name: "x", AnonymousAuth: true}).Start()
+			//
+			// Nobody asked for a dashboard there. Every recipe in this
+			// repository passes a database, which is the only reason it was
+			// never noticed. Degrade instead: serve the operational endpoints
+			// and say why the UI is absent.
+			//
+			// An operator who typed --admin-enabled explicitly is asking for
+			// something this process cannot provide, and still gets an error.
+			if cfg.Admin.EnabledExplicit || adminEnabledExplicitly() {
+				panic(fmt.Errorf("coordinator: --admin-enabled requires a database — set --postgres-url, or drop the flag to run without the dashboard"))
+			}
+			// Clear the flag and fall through. Build() still has to register
+			// debug commands, select service kinds and create the coordinator
+			// service registry below; returning here would skip all of it.
+			//
+			// The message is deferred rather than logged here: log categories
+			// are not enabled until further down this function, and
+			// Logger.Log early-returns on a disabled category — the same trap
+			// the comment above that enable call describes.
+			cfg.Admin.Enabled = false
+			adminDisabledNoDB = true
 		}
 		c.cfg = cfg
 	}
@@ -1753,6 +1788,10 @@ func (c *Process) Build() {
 		c.Log.EnableFromFlag(c.cfg.LogCategories)
 	}
 	c.Log.Enable(StartupCategories...)
+
+	if adminDisabledNoDB {
+		c.Log.Log(CatMeshCell, "admin: dashboard disabled — no database configured (set --postgres-url to enable); /metrics, /commands and /events are still served on %s", c.cfg.AdminListen)
+	}
 
 	// Decide the mesh authentication posture before anything binds a mesh
 	// listener or dials a peer. Must sit after the category enable above:

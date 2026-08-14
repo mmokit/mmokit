@@ -31,6 +31,24 @@ import (
 //	coord := mmokit.New(cfg)
 //
 // Games never name the engine flags themselves.
+// adminEnabledExplicitly reports whether --admin-enabled was named on the
+// command line, as opposed to inheriting BindFlags' default of true.
+//
+// flag.Visit walks only the flags that were actually set, so this is false
+// when nothing parsed flags at all — which is every test, since universe.New's
+// `if !flag.Parsed()` guard skips BindFlags under `go test`. That is the right
+// answer there: a fixture that did not ask for a dashboard should not be
+// required to configure a database for one.
+func adminEnabledExplicitly() bool {
+	explicit := false
+	flag.Visit(func(f *flag.Flag) {
+		if f.Name == "admin-enabled" {
+			explicit = true
+		}
+	})
+	return explicit
+}
+
 func (c *Config) BindFlags() {
 	stringFlag := func(name, help, engineDefault string, field *string) {
 		def := *field
