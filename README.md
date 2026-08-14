@@ -169,7 +169,7 @@ Current source, tests, and [`justfile`](justfile) recipes are authoritative when
 
 MIT — see [`LICENSE`](LICENSE). It covers the whole repository: framework, examples, tooling, and docs alike.
 
-There are no bundled third-party assets: the space example's audio is synthesised by a committed script and its art is drawn procedurally with PixiJS `Graphics`. See [`ATTRIBUTION.md`](ATTRIBUTION.md).
+There are no third-party **media** assets — the space example's audio is synthesised by a committed script and its art is drawn procedurally with PixiJS `Graphics`. One piece of third-party **code** is redistributed in compiled form: the operator dashboard's bundle, which is committed because it is embedded into the server binary. Its dependencies and their licences are listed in [`ATTRIBUTION.md`](ATTRIBUTION.md).
 
 **The framework does not depend on any example.** `pkg/` imports nothing from `examples/`, and Go enforces it rather than convention doing so: each example's game code sits under its own `internal/` directory, which the compiler makes unimportable from outside that example. You can depend on `pkg/mmokit` without pulling in a line of game code.
 
