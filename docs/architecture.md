@@ -2,7 +2,7 @@
 
 **Last verified:** 2026-07-13
 
-MMOKIT is a server-authoritative multiplayer game framework; this repository also contains a reference space-game implementation. The reusable engine lives under `pkg/`; the space game composes it from `internal/` and `cmd/server/`. Games normally import the `pkg/mmokit` facade rather than assembling engine packages directly.
+MMOKIT is a server-authoritative multiplayer game framework. The reusable engine lives under `pkg/`; three examples under `examples/` consume it, the largest being a reference space game. Games normally import the `pkg/mmokit` facade rather than assembling engine packages directly.
 
 The current implementation is 2D throughout. For project scope, goals, and planned direction — including first-class 3D support — see [`roadmap.md`](roadmap.md).
 
@@ -55,7 +55,7 @@ The coordinator is a control plane. Per-tick gameplay, replication payloads, and
 | Standalone gateway | `--mode=gateway --coordinator-addr=HOST:9100` | Owns client listeners but no cells |
 | Service process | `--mode=service --services=auth,chat --coordinator-addr=HOST:9100` | Runs selected registered service kinds |
 
-The production space-game recipe and distributed example demonstrate concrete multi-process layouts:
+The space example's distributed recipe and `examples/4node-basic` demonstrate concrete multi-process layouts:
 
 - `just distributed-space`
 - `cd examples/4node-basic && just distributed`
@@ -71,7 +71,7 @@ The normal game setup sequence is:
 5. Register optional services, admin panels, and WASM systems.
 6. Call `Process.Start`; explicit `Build` is only needed when callers must finish route/schema setup before listeners start.
 
-See [`examples/simple/main.go`](../examples/simple/main.go) for the smallest composition and [`internal/game/factory.go`](../internal/game/factory.go) for the production space-game system order.
+See [`examples/simple/main.go`](../examples/simple/main.go) for the smallest composition and [`examples/space/internal/game/factory.go`](../examples/space/internal/game/factory.go) for the space game's system order.
 
 ## Per-cell simulation
 
@@ -154,12 +154,12 @@ The `All` registration variants replay handlers onto cells created later by spli
 PostgreSQL is split by ownership:
 
 - `pkg/persist` owns framework identity, sessions, admin operators, and shared engine migrations.
-- `internal/persist` owns space-game configuration, player state, marketplace state, and game migrations.
+- An example's own persist package owns its game configuration, player state, and game migrations; the space example's is `examples/space/internal/persist`.
 - Service packages can contribute their own migrations.
 
-The production space binary opens one shared pool and constructs typed repositories around it. Its pure standalone gateways skip game persistence, while coordinator and host roles load the game configuration/state they need. In the generic framework, a service requires PostgreSQL only when its kind declares `RequiresDB`.
+The space example opens one shared pool and constructs typed repositories around it. Its pure standalone gateways skip game persistence, while coordinator and host roles load the game configuration/state they need. In the generic framework, a service requires PostgreSQL only when its kind declares `RequiresDB`.
 
-Hand-authored world content lives in tracked JSON under `world/` and is loaded through `pkg/world/jsonrepo`. Runtime editor mutations use the world repository and command path so live state and disk remain synchronized.
+The space example's hand-authored world content lives in tracked JSON under `examples/space/world/` and is loaded through its own `internal/world/jsonrepo`. Runtime editor mutations use the world repository and command path so live state and disk remain synchronized.
 
 ## Observability and administration
 
@@ -185,10 +185,10 @@ Use TLS certificate flags or a TLS-terminating proxy in production. Self-signed 
 | `csharp/Mmokit.Sdk.Core` | Hand-ported C# counterparts of those cores, copied into generated SDKs by `cmd/sdkgen` |
 | `pkg/cmdsys`, `pkg/admin` | Routed operator commands and dashboard backend |
 | `pkg/service`, `pkg/services` | Service runtime and built-in service kinds |
-| `internal/game`, `internal/component` | Space-game systems, entities, rules, and components |
-| `cmd/server` | Production space-game composition root |
+| `examples/space/internal/{game,component}` | Space-game systems, entities, rules, and components |
+| `examples/space/main.go` | Space-game composition root |
 
-Reusable packages must not import `internal/`. Space-game logic uses MMOKIT APIs and keeps direct Ark ECS access in framework/binding glue.
+Reusable packages must not import an example. Each example keeps its game code under its own `internal/` directory, so the compiler rejects such an import rather than a convention forbidding it. Game logic uses MMOKIT APIs and keeps direct Ark ECS access in framework/binding glue.
 
 ## Known work
 

@@ -1,6 +1,6 @@
 # MMOKIT
 
-MMOKIT is a server-authoritative multiplayer game framework and reference space game written in Go. The reusable framework is exposed through [`pkg/mmokit`](pkg/mmokit/); the repository also contains a complete game, browser clients, generated client SDK tooling, and distributed deployment examples.
+MMOKIT is a server-authoritative multiplayer game framework written in Go, exposed through [`pkg/mmokit`](pkg/mmokit/). The repository ships the framework plus three runnable examples — including a complete space game with a PixiJS client — along with generated client SDK tooling and distributed deployment recipes.
 
 The goal is a framework that can host any genre, with 2D and 3D both first-class. The implementation is 2D today; see [`docs/roadmap.md`](docs/roadmap.md) for the full vision, non-goals, and sequenced plan.
 
@@ -49,16 +49,16 @@ An empty development database seeds the admin dashboard with `admin` / `admin`. 
 
 ## Run the reference space game
 
-The production composition root is [`cmd/server`](cmd/server/), with game code under [`internal`](internal/) and the PixiJS client under [`web-pixi`](web-pixi/).
+[`examples/space`](examples/space/) is the framework's most demanding consumer and its regression bed: a complete 2D space game with combat, mining, NPCs, an economy, and a PixiJS client. It is an example in the sense that it consumes only the public framework — not in the sense of being small.
 
 ```bash
-just db-up
+cd examples/space
 just dev
 ```
 
 Open the Vite client at <http://localhost:5173>. The gateway listens on port 8080 and the admin dashboard on port 9101.
 
-`just dev` is a long-running workflow. It builds the space SDK, both web applications, and `bin/server`, then runs the game and Vite client together.
+`just dev` is a long-running workflow. It starts PostgreSQL, regenerates the typed SDK, builds both web applications and the server, then runs the game and Vite client together.
 
 ## Run a distributed mesh
 
@@ -72,7 +72,7 @@ just distributed
 
 This opens a tmux layout with a coordinator, two hosts, a gateway/service process, and a static browser client. Use `just distributed-stop` from the example directory to stop a detached session.
 
-For the full space game, run `just distributed-space` from the repository root.
+For the full space game, run `just distributed` from [`examples/space`](examples/space/).
 
 ## Repository map
 
@@ -85,32 +85,44 @@ For the full space game, run `just distributed-space` from the repository root.
 | [`pkg/net`](pkg/net/) | WebSocket and UDP transports plus connection management |
 | [`pkg/cmdsys`](pkg/cmdsys/) | Typed and routable operator commands |
 | [`pkg/service`](pkg/service/) and [`pkg/services`](pkg/services/) | Service framework and built-in services |
-| [`internal`](internal/) | Reference space-game components, systems, persistence, and marketplace logic |
-| [`cmd/server`](cmd/server/) | Reference space-game composition root |
+| [`examples/simple`](examples/simple/) | Smallest runnable game — start here |
+| [`examples/4node-basic`](examples/4node-basic/) | Distributed roles, services, WASM systems, generated SDK |
+| [`examples/space`](examples/space/) | Reference space game: composition root, game layer, PixiJS client, world manifest |
 | [`cmd/sdkgen`](cmd/sdkgen/) | TypeScript and C# client SDK generator |
-| [`web-pixi`](web-pixi/) | PixiJS space-game client |
-| [`web-admin`](web-admin/) | Svelte 5 operator dashboard |
+| [`cmd/csharp-golden`](cmd/csharp-golden/) | Regenerates the C# wire golden from Go |
+| [`web-admin`](web-admin/) | Svelte 5 operator dashboard, embedded into `pkg/admin` |
 | [`csharp`](csharp/) | Shared C# SDK runtime and golden tests |
 | [`proto/meshpb`](proto/meshpb/) | Server-internal protobuf schema |
-| [`world`](world/) | Tracked world-manifest content |
+| [`scripts`](scripts/) | Architectural-invariant checks run by CI |
+| [`db-init`](db-init/) | Per-example PostgreSQL database creation |
+| [`diagnostics`](diagnostics/) | Delivery-timing probe for a running gateway |
 
 ## Common development commands
 
-| Command | Result |
+Recipes split by scope: the repository root owns framework-wide tooling, and each example owns its own build and run.
+
+| Root command | Result |
 | --- | --- |
-| `just build-go` | Compile the server to `bin/server` without running database-backed schema generation |
-| `just build` | Generate the space SDK, build both web applications, and compile `bin/server` |
-| `just run` | Run the fully built reference game |
+| `just db-up` | Start PostgreSQL via Docker Compose |
 | `just proto` | Regenerate `gen/go/meshpb` from the internal mesh schema |
-| `just space-sdk` | Regenerate the PixiJS game's typed SDK |
-| `just client-sdk examples/4node-basic` | Regenerate the example's typed TypeScript SDK |
-| `just admin-typecheck` / `just admin-test` | Check the admin application |
+| `just client-sdk examples/space` | Regenerate any example's typed TypeScript SDK |
+| `just admin-typecheck` / `just admin-test` / `just admin-build` | Check and build the operator dashboard |
 | `just csharp-test` | Run the shared C# SDK tests |
 | `just ts-core-test` | Run the shared TypeScript codec/interpolation tests |
+| `just web-test` | Run every example web client's prediction/interpolation suites |
 | `just lint-no-ark` | Enforce the game/framework ECS boundary |
-| `go test ./...` | Run Go tests; localhost socket tests require a normal network-enabled environment |
+| `just fuzz` | Mutate-fuzz every decoder family (smoke budget) |
+| `go vet ./...` | Compile check and lint. `go build ./...` is forbidden — it writes binaries into package directories |
+| `go test ./... -short` | Run Go tests; localhost socket tests need a network-enabled environment |
 
-`just build` does not regenerate protobuf or WASM modules. Run `just proto` or `just wasm-build` when those sources change. `just db-reset` removes the PostgreSQL volume and is destructive.
+| Example command (from `examples/<name>`) | Result |
+| --- | --- |
+| `just build` | SDK, web client, admin bundle, and server binary |
+| `just run` | Build and run |
+| `just dev` | Build and run with a Vite dev server |
+| `just distributed` | Multi-process cluster in tmux (`space`, `4node-basic`) |
+
+`just db-reset` removes the PostgreSQL volume and is destructive. Neither build regenerates protobuf or WASM modules; run `just proto` or `just wasm-build` when those sources change.
 
 ## Client protocol and SDKs
 
@@ -132,6 +144,7 @@ The SDK generator assembles those registries after the process builds. Wire type
 - [`pkg/mmokit/README.md`](pkg/mmokit/README.md) — game-facing framework guide
 - [`examples/simple/README.md`](examples/simple/README.md) — minimal runnable example
 - [`examples/4node-basic/README.md`](examples/4node-basic/README.md) — distributed example and SDK workflow
+- [`examples/space/README.md`](examples/space/README.md) — the reference space game
 - [`AGENTS.md`](AGENTS.md) — authoritative repository guidance for coding agents and contributors
 - [`CLAUDE.md`](CLAUDE.md) — concise Claude Code working notes
 
@@ -139,12 +152,10 @@ Current source, tests, and [`justfile`](justfile) recipes are authoritative when
 
 ## License
 
-MIT — see [`LICENSE`](LICENSE).
+MIT — see [`LICENSE`](LICENSE). It covers the whole repository: framework, examples, tooling, and docs alike.
 
-The licence covers **MMOKIT core**: `pkg/`, `examples/`, `cmd/sdkgen`, `cmd/csharp-golden`, `proto/`, `gen/`, `csharp/`, `web-admin/`, `scripts/`, and `docs/`.
+Bundled non-source assets are listed in [`ATTRIBUTION.md`](ATTRIBUTION.md) with their sources and licences. **The audio under `examples/space/web/public/audio/` is currently unresolved and is not covered by the MIT grant** — see that file. Everything else is original work under the grant above.
 
-The reference space game is **not part of the distributed framework**. That is `internal/`, `cmd/server`, `cmd/botclient`, `web-pixi/`, `data/`, and `world/`. It lives here as a worked example and as the framework's most demanding test, but it is not published as part of MMOKIT and its assets carry no licence grant — in particular the audio under `web-pixi/public/audio/` has no attribution recorded and is not covered.
-
-`pkg/` and `examples/` contain zero imports of `internal/`, and both examples ship their own `main.go`, so the framework is usable without any of the game code. See [`docs/roadmap.md`](docs/roadmap.md) (OSS-001) for the published/not-published boundary and the open extraction decision.
+**The framework does not depend on any example.** `pkg/` imports nothing from `examples/`, and Go enforces it rather than convention doing so: each example's game code sits under its own `internal/` directory, which the compiler makes unimportable from outside that example. You can depend on `pkg/mmokit` without pulling in a line of game code.
 
 Contributing guidance is in [`CONTRIBUTING.md`](CONTRIBUTING.md); vulnerability reporting is in [`SECURITY.md`](SECURITY.md).

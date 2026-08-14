@@ -11,7 +11,7 @@ This directory separates current documentation from historical design material. 
 - [MMOKIT guide](../pkg/mmokit/README.md) — game-facing API and composition model
 - [Simple example](../examples/simple/README.md) — smallest runnable game
 - [Distributed example](../examples/4node-basic/README.md) — roles, meshing, generated SDK, services, and WASM
-- [Space server composition](../cmd/server/README.md) — production game entry point
+- [Space game](../examples/space/README.md) — the reference game's composition root and layout
 
 `roadmap.md` describes where the project is going and holds all active tracking; `architecture.md` describes what exists today. Neither restates the other.
 
@@ -21,8 +21,8 @@ This directory separates current documentation from historical design material. 
 - [Networking](../pkg/net/README.md)
 - [Spatial index](../pkg/spatial/README.md)
 - [Logging](../pkg/logger/README.md)
-- [Space-game internals](../internal/game/README.md)
-- [Space-game components](../internal/component/README.md)
+- [Space-game internals](../examples/space/internal/game/README.md)
+- [Space-game components](../examples/space/internal/component/README.md)
 
 ## Historical design records
 

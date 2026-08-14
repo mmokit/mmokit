@@ -20,22 +20,22 @@ This is a server-authoritative multiplayer game framework and space-game impleme
 - `pkg/system/`, `pkg/replication/`, `pkg/quantize/`, `pkg/net/`: generic systems, replication, codecs, WebSocket, and UDP transport.
 - `pkg/cmdsys/`, `pkg/service/`, `pkg/services/`: distributed commands and pluggable services such as auth and chat.
 - `pkg/admin/` and `web-admin/`: Go admin backend plus the Svelte 5 operator UI embedded in the server binary.
-- `pkg/world/` and `world/`: world-manifest model/repository and tracked space-game content.
+
 - `pkg/wasmabi/`, `pkg/wasmhost/`, `pkg/wasmsys/`: hot-swappable WASM systems.
-- `internal/`: space-game components, systems, items, persistence, and marketplace behavior.
-- `cmd/server/`: production space-game composition root. `cmd/sdkgen/` generates typed client SDKs.
+- `examples/`: three runnable games. `examples/space/` is the reference space game — composition root at its root, game layer under `examples/space/internal/`, PixiJS client under `examples/space/web/`, world manifest under `examples/space/world/`.
+- `cmd/sdkgen/` generates typed client SDKs; `cmd/csharp-golden/` regenerates the C# wire golden.
 - `examples/simple/`: smallest current MMOKIT example with a custom Go system.
 - `examples/4node-basic/`: distributed mesh/auth/chat/admin example with a generated TypeScript client.
-- `web-pixi/`: PixiJS space-game client. `csharp/`: shared C# SDK core and golden tests.
+- `csharp/`: shared C# SDK core and golden tests.
 - `proto/meshpb/`: the only protobuf schema. It is for server-internal MeshControl/MeshData traffic, not the client protocol.
 
 ## Architectural boundaries
 
-- `pkg/` is reusable engine code and must never import `internal/`.
-- Generic components live in `pkg/component`; space-game components live in `internal/component`. When both are needed, use clear aliases such as `comp` and `gamecomp`.
-- Production files under `internal/game/` must not import Ark ECS directly, except the existing glue files `entity_kinds.go` and `var_tail_bindings.go`. Tests are exempt. Run `just lint-no-ark` after game-layer changes; do not expand the allowlist casually.
+- `pkg/` is reusable engine code and must never import an example. Each example's game code lives under its own `internal/` directory, so this is a compile error rather than a convention.
+- Generic components live in `pkg/component`; a game's components live in its own `internal/component`. When both are needed, use clear aliases such as `comp` and `gamecomp`.
+- Production files under an example's `internal/game/` must not import Ark ECS directly, except the existing glue files `entity_kinds.go` and `var_tail_bindings.go`. Tests are exempt. Run `just lint-no-ark` after game-layer changes; do not expand the allowlist casually. The script takes the game directory as an argument and exits 2 if it does not exist — a renamed game layer fails loudly rather than passing silently.
 - Game code should use MMOKIT wrappers. Raw Ark access belongs in framework code or explicit binding glue.
-- System registration order is semantic. Preserve the order in `internal/game/factory.go`; in particular, Ability precedes Projectile, Lifetime precedes AoE, Spatial precedes Collision, and Network remains last.
+- System registration order is semantic. Preserve the order in `examples/space/internal/game/factory.go`; in particular, Ability precedes Projectile, Lifetime precedes AoE, Spatial precedes Collision, and Network remains last.
 
 ## Current MMOKIT and ECS patterns
 
@@ -43,9 +43,9 @@ This is a server-authoritative multiplayer game framework and space-game impleme
 
 - Custom systems embed the non-generic `mmokit.SystemBase` and are registered with `process.AddSystem(mmokit.NewSystem(&MySystem{}))`.
 - The pointer passed to `NewSystem` supplies type information only. A fresh zero value is constructed per cell, so initialize state in `Init`. Use a real `SystemDef` factory when constructor arguments or captured dependencies are required.
-- Register typed per-cell state with `mmokit.AddState[T](process, factory)` and retrieve it with `mmokit.State[T](s.Stage())`, normally once in a system's `Init`. `internal/game.GameWorld` does not embed `Stage`.
+- Register typed per-cell state with `mmokit.AddState[T](process, factory)` and retrieve it with `mmokit.State[T](s.Stage())`, normally once in a system's `Init`. the space example's `game.GameWorld` does not embed `Stage`.
 - Register player spawn/reconnect behavior with `Process.OnPlayerJoin`; do not overwrite the player manager's active-state callback.
-- Custom player-state constants in `internal/game/game.go` start at `StateBuiltinEnd`. Their declaration order must match the per-cell `RegisterState` call order.
+- Custom player-state constants in `examples/space/internal/game/game.go` start at `StateBuiltinEnd`. Their declaration order must match the per-cell `RegisterState` call order.
 
 ### Queries and mutation
 
@@ -84,8 +84,8 @@ This is a server-authoritative multiplayer game framework and space-game impleme
 
 - Implement every operator action as a typed cmdsys verb first. The console and admin HTTP surface should share that verb so routing, RBAC, and audit logging remain intact; do not add an ad-hoc admin mutation route.
 - In `web-admin`, stores using Svelte runes outside components use a `.svelte.ts` suffix. Never use `window.alert`, `window.confirm`, or `window.prompt`; use the existing dialog/modal components.
-- Runtime world mutations use `pkg/world/jsonrepo` and the `world.*` command path so disk writes and live cell state remain synchronized.
-- `pkg/persist` owns engine identity/admin storage; `internal/persist` owns `space.*` game tables. Keep migration ownership and ordering stable.
+- Runtime world mutations in the space example use its `internal/world/jsonrepo` and the `world.*` command path so disk writes and live cell state remain synchronized. Those verbs are game-registered: the admin dashboard hides the World Editor when they are absent.
+- `pkg/persist` owns engine identity/admin storage; an example's own persist package owns its game tables (`space.*` for the space example). Keep migration ownership and ordering stable.
 - Keep secure cookies, WebSocket origin checks, CORS allowlists, and TLS behavior intact. `--dev-insecure-cookie` and self-signed TLS are local-development options, not production defaults.
 - The default local admin is seeded only for an empty database. Never hard-code those development credentials into production configuration.
 
@@ -94,7 +94,7 @@ This is a server-authoritative multiplayer game framework and space-game impleme
 Do not hand-edit generated or build output. Change the source and regenerate:
 
 - `proto/meshpb/*.proto` -> `just proto` -> `gen/go/meshpb/` (Buf remote plugins may need network).
-- Space-game schema -> `just space-sdk` -> `web-pixi/sdk/`.
+- Any example's schema -> `just client-sdk examples/<name>` -> `examples/<name>/web/sdk/`.
 - 4node schema -> `just client-sdk examples/4node-basic` -> `examples/4node-basic/web/sdk/`.
 - Admin source -> `just admin-build` -> `pkg/admin/static/dist/`.
 - WASM source -> `just wasm-build` -> ignored `dist/` artifacts.
@@ -120,10 +120,10 @@ Run the smallest relevant checks first, then broaden in proportion to the change
 | --- | --- |
 | Go package | Targeted `go test ./path -run TestName`, then `go vet ./...` |
 | Broad Go/runtime behavior | `go test ./... -count=1 -timeout 300s` in an environment that permits localhost TCP/UDP |
-| `internal/game` | Go checks plus `just lint-no-ark` |
+| An example's game layer | Go checks plus that example's `just lint-no-ark` |
 | Go compile only | `just build-go` |
 | `web-admin` | `just admin-typecheck`, `just admin-test`, and `just admin-build` when the embedded bundle must change |
-| `web-pixi` | `cd web-pixi && bun run typecheck && bun test && bun run build` |
+| An example web client | `cd examples/<name>/web && bun run typecheck && bun test && bun run build` |
 | 4node web | `cd examples/4node-basic/web && bun run typecheck && bun test && bun run build` |
 | Shared TypeScript codec/interpolation | `just ts-core-test` |
 | Protobuf | `just proto`, inspect generated diff, then affected Go checks |

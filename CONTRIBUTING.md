@@ -32,15 +32,14 @@ change. This table is transcribed from `AGENTS.md`, which owns it.
 | --- | --- |
 | Go package | Targeted `go test ./path -run TestName`, then `go vet ./...` |
 | Broad Go/runtime behavior | `go test ./... -count=1 -timeout 300s` in an environment that permits localhost TCP/UDP |
-| `internal/game` | Go checks plus `just lint-no-ark` |
-| Go compile only | `just build-go` |
+| An example's game layer | Go checks plus that example's `just lint-no-ark` |
+| Go compile only | `go vet ./...`, or an example's `just build-go` |
 | `web-admin` | `just admin-typecheck`, `just admin-test`, and `just admin-build` when the embedded bundle must change |
-| `web-pixi` | `cd web-pixi && bun run typecheck && bun test && bun run build` |
-| 4node web | `cd examples/4node-basic/web && bun run typecheck && bun test && bun run build` |
+| An example web client | `cd examples/<name>/web && bun run typecheck && bun test && bun run build` |
 | Shared TypeScript codec/interpolation | `just ts-core-test` |
 | Protobuf | `just proto`, inspect generated diff, then affected Go checks |
 | Entity/event/input/op schema | Regenerate each affected SDK, inspect the diff, then run the corresponding frontend checks |
-| Persistence, migrations, or DB services | Standard Go checks plus `just db-up && just test-pg`; the pgtest packages intentionally run serially and mutate a shared test DB |
+| Persistence, migrations, or DB services | Standard Go checks plus `just db-up && just test-pg` (root for engine and services, the example's own for game persistence); the pgtest packages run serially and TRUNCATE shared tables |
 | C# core/generator | `just csharp-test`; generator changes also run `just csharp-compile-test`; regenerate goldens when wire bytes intentionally change |
 | Markdown | Check commands/links and run `markdownlint-cli2 <changed files>` when available |
 
@@ -55,8 +54,8 @@ the DB-free server build.
 ## Continuous integration
 
 `.github/workflows/ci.yml` runs on every push and pull request: a Go job
-(`go vet`, changed-file `gofmt`, `just lint-no-ark`'s script, the full
-`go test`, and a `cmd/server` build), a frontend job (`just ts-core-test`,
+(`go vet`, tree-wide `gofmt`, `just lint-no-ark`'s script, `go test -short`,
+and a build of every example), a frontend job (`just ts-core-test`,
 `just web-test`, and web-admin typecheck/test/build), a C# job pinned to
 `csharp/Mmokit.Sdk.slnx`, and a drift job that regenerates the C# wire golden
 and the ship-dynamics parity fixture and fails if either moved.
@@ -65,13 +64,14 @@ and the ship-dynamics parity fixture and fails if either moved.
 five-minutes-per-target fuzz campaign. Neither is on the pull-request path.
 
 **CI is not a superset of local validation.** It provisions no PostgreSQL, so
-`just test-pg` and every `//go:build pgtest` package are unrun, and the
-generated-schema drift check is absent because `just space-sdk` runs
-`cmd/server`, which requires a database. Run those locally when you touch
-persistence or a client schema.
+`just test-pg` and every `//go:build pgtest` package are unrun. Full SDK
+regeneration is also local-only, because `just client-sdk` runs the example,
+which opens its database. SDK *staleness* is covered without a database by
+`sdk_typeid_parity_test.go`. Run the rest locally when you touch persistence or
+a client schema.
 
-The workflows deliberately encode the rules below — changed-file-only `gofmt`,
-`-p 1`, and never `go build ./...`. If you change one, change both, and treat
+The workflows deliberately encode the rules below — tree-wide `gofmt`, `-p 1`,
+`-short` on the merge path, and never `go build ./...`. If you change one, change both, and treat
 this file as the explanation and the workflow as the mechanism.
 
 ## Test-run conventions
@@ -158,16 +158,21 @@ commit message is the only place it survives.
 
 ## Scope of this repository
 
-The published framework is MMOKIT core. The reference space game under
-`internal/`, `cmd/server`, `cmd/botclient` and `web-pixi/` is not part of the
-distributed framework — see the License section of [`README.md`](README.md).
+Everything here is published under one MIT grant: the framework in `pkg/`, the
+three examples in `examples/`, the tooling, and the docs.
 
-That boundary has a practical consequence for contributions: `pkg/` must never
-import `internal/`, and it currently does not. Several validation recipes are
-game-coupled and cannot run against the framework alone — `just lint-no-ark`
-targets `internal/game/`, `just shipdyn-golden` and the `just web-test`
-prediction goldens span `internal/game/` **and** `web-pixi/`, and
-`just space-sdk` runs `cmd/server` and requires PostgreSQL.
+The boundary that matters for contributions runs the other way. **`pkg/` must
+never depend on an example.** Go enforces this rather than convention: each
+example keeps its game code under its own `internal/` directory, so a `pkg/`
+file that imports one fails to compile with "use of internal package not
+allowed". If you find yourself wanting that import, the thing you want belongs
+in `pkg/` — propose promoting it.
+
+Recipes follow the same split. The repository root owns framework-wide tooling
+(`proto`, `fuzz`, `admin-*`, `csharp-*`, `ts-core-test`, `db-*`); each example
+owns its own `build`, `run`, `dev`, and any gate specific to it. `just
+lint-no-ark`, `just shipdyn-golden` and `just test-pg` exist at both levels
+with different targets — run the example's copy when you change an example.
 
 ## Security
 

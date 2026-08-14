@@ -43,9 +43,9 @@ empty string in [`pkg/universe/bootstrap.go`](pkg/universe/bootstrap.go), and
 enabling it logs an explicit experimental warning that escalates for a
 non-loopback bind.
 
-It is **not off in local development**. Both `just dev` (`justfile:65`) and
-`just distributed-space` (`justfile:145`) pass `--udp-listen=:9000`, which is a
-**wildcard bind**, not loopback. Every developer process therefore carries the
+It is **not off in local development**. Both `just dev` and `just distributed`
+in `examples/space/justfile` pass `--udp-listen=:9000`, which is a **wildcard
+bind**, not loopback. Every developer process therefore carries the
 exposure. This is deliberate — the transport needs exercising — but do not
 assume a dev box is closed just because the shipped default is.
 
@@ -103,12 +103,19 @@ authorized it.
 - `--dev-insecure-cookie` disables cookie security attributes so the admin
   dashboard works over plain HTTP locally. It has no production use.
 - Self-signed TLS generation is a local-development convenience.
+- The multi-process dev recipes default `MMO_CLUSTER_SECRET` to the literal
+  string `dev-cluster-secret` (`examples/space/justfile`,
+  `examples/4node-basic/justfile`). Any process holding it is fully trusted per
+  limitation 2, so treat a cluster started from a dev recipe as open to anyone
+  who has read this repository. Set a real secret for anything else.
 
 ## Out of scope
 
-- Vulnerabilities in the reference space game (`internal/`, `cmd/server`,
-  `web-pixi/`). It is not part of the distributed framework — see the License
-  section of [`README.md`](README.md) — and it is a test bed, not a product.
+- Game logic in the examples (`examples/simple`, `examples/4node-basic`,
+  `examples/space`). They are test beds and demonstrations, not products, and
+  they are not hardened: expect missing rate limits, trusting handlers, and
+  debug affordances. A vulnerability in `pkg/` that an example merely happens
+  to expose IS in scope — report it against the framework.
 - Denial of service that requires holding the cluster secret. Per limitation 2
   every process holding it is equally trusted by design; impersonation between
   authenticated members is a known, documented limitation rather than a

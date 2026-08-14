@@ -12,11 +12,12 @@ MMOKIT is a reusable, server-authoritative, horizontally-partitioned multiplayer
 
 It is for developers building persistent multiplayer worlds who want those concerns solved beneath them rather than re-implemented as game features.
 
-The repository ships a reference game (`internal/`, `cmd/server/`, `web-pixi/`) that exercises the framework end to end, plus two examples. Start with:
+The repository ships three examples, the largest of which is a reference space game that exercises the framework end to end. Start with:
 
 - [`pkg/mmokit/README.md`](../pkg/mmokit/README.md) — what building on MMOKIT actually feels like
 - [`examples/simple/README.md`](../examples/simple/README.md) — the smallest runnable game
 - [`examples/4node-basic/README.md`](../examples/4node-basic/README.md) — distributed roles, generated SDKs, services, WASM
+- [`examples/space/README.md`](../examples/space/README.md) — the reference space game
 
 This section owns the project's scope statement. Other documents link here rather than restating it.
 
@@ -46,7 +47,7 @@ This covers all vectors, collision, orientation, raycast, movement, area-of-inte
 
 ### 2.3 The reference game stays 2D
 
-Making 3D first-class does not mean converting the space game. `internal/` and `web-pixi/` remain the 2D proof; a separate 3D example proves the other profile.
+Making 3D first-class does not mean converting the space game. `examples/space/` remains the 2D proof; a separate 3D example proves the other profile.
 
 ---
 
@@ -136,7 +137,7 @@ Note the slice bound is payload-**derived** rather than a configured knob — st
 - **Criterion 1's "consumed bytes" is satisfied by argument, not by a public signature.** `decodeState` carries `(int, error)` internally and `ReflectUnmarshalStrict` enforces exact consumption; no public `ReflectUnmarshalN` was added. Revisit if a caller ever needs the count.
 - **`ReflectCodec.Decode` failures are counted as `truncated`.** A registered codec gets exactly `Size()` bytes so it cannot over-read — it refused the *value*. A 13th enum arm nothing would alert on was judged worse than the approximation.
 - **The mesh profile widens `MaxTotalAllocBytes` to 16 MiB.** Defensible while the gRPC streams are already configured for 16 MiB messages, but it is [CE-006](#ce-006--mesh-authentication-and-authorization--done-1212) landing mesh authentication that actually makes that number safe.
-- **`pkg/quantize`'s `FrameDecoder`, `SnapshotReader` and `DeltaEncoder.Decode` are left unchecked on purpose.** They are the most flagrantly unchecked decoders in the repo and have **zero** server-side inbound callers — the only production callers are in `internal/bot`, behind a recover. Anyone grepping for unchecked decoders finds these first; spending CE-002 budget there buys nothing.
+- **`pkg/quantize`'s `FrameDecoder`, `SnapshotReader` and `DeltaEncoder.Decode` are left unchecked on purpose.** They are the most flagrantly unchecked decoders in the repo and have **zero** server-side inbound callers — the only production callers are in `examples/space/internal/bot`, behind a recover. Anyone grepping for unchecked decoders finds these first; spending CE-002 budget there buys nothing.
 
 **Fixed along the way, not in the original scope:** `ConnManager.AddTransport` never recorded a peer address for UDP connections, so `RemoteAddrString` returned `""` for every UDP conn — every UDP-originated login in the cluster shared one `IPRateLimiter` bucket and every UDP audit row recorded a null IP. Separately, both `ComponentReplicator` registrars decoded straight into live world storage, so a refused body left a **torn component** (leading fields peer-supplied, trailing fields stale) on the border and handoff paths; both now stage into a scratch and commit only on success.
 
@@ -226,28 +227,32 @@ Both mesh channels now run over TLS and authenticate peers with a shared cluster
 
 **Fixed along the way, not in the original scope:** `outgoingMeshMD` initially attached no metadata at all when no secret was configured, which left `senderID` empty in every secret-less fixture and made each bound arm drop — the service event bus went silent. The secret and the peer ID answer different questions, so the ID is now attached unconditionally. The three stale-epoch bypasses on the untracked `ClientFrame` path were closed (the entry named one; there were three), the peer-supplied command deadline is clamped, and the `CellTransferAbort` arm was deleted outright as it had zero constructions repo-wide.
 
-#### OSS-001 — Open-source readiness and CI · **Open** · cheap, and blocking
+#### OSS-001 — Open-source readiness and CI · **Done**
 
-**The CI half is closed.** `LICENSE` (MIT), `CONTRIBUTING.md`, `SECURITY.md` and `.gitignore` secret hardening landed in `25998982`; `.github/workflows/ci.yml` (go, frontend, csharp, drift-go) and `nightly.yml` (race, fuzz) landed in `41e1d062`, after `3b8bcdd4` made `-race` green. Every job's commands were executed directly before the workflows were written; the GitHub Actions harness itself is necessarily unverified until a real run.
+> **Reversed 2026-08-15.** This item used to say the licence covered *mmokit core only* and that the reference space game would not be published. That decision is reversed: **the whole repository is published under one MIT grant, and the space game ships as `examples/space/`.** The paragraphs below record what actually happened; the superseded text is in this file's history.
+>
+> Two things the old entry got wrong even on its own terms, worth recording because both were used as evidence: `data/` had **zero** tracked files, and `db-init/` creates only `mmo_4node` and `mmo_simple` — shared example infrastructure, never space-game content. Both were listed as game-owned.
 
-The **publication half remains open**, which is why this item is Partial rather than Done. See the remainder below.
+**The CI half** landed first: `LICENSE` (MIT), `CONTRIBUTING.md`, `SECURITY.md` and `.gitignore` secret hardening in `25998982`; `ci.yml` and `nightly.yml` in `41e1d062`, after `3b8bcdd4` made `-race` green.
 
-**The licence is MIT**, and it covers **mmokit core only**. The reference space game is not part of the open-source distribution.
+**The publication half** is the move itself. There was no extraction mechanism to choose in the end — the third option, publishing this repository whole, is what happened, so `go.mod`'s import path stays valid for consumers by construction. Sequence and outcomes:
 
-**The public boundary, verified.** `pkg/` and `examples/` contain **zero** imports of `internal/` — the only importers of `internal/` are `cmd/server`, `cmd/botclient` and `internal/` itself — and both `examples/simple` and `examples/4node-basic` ship their own `main.go`, so the public repo has runnable entry points without `cmd/server`. The split is therefore structurally clean today rather than something to be engineered.
+- **Two fail-open gates were closed first.** `scripts/no_ark_in_game.sh` printed `OK` and exited **0** when its target directory was absent (`grep -r` on a missing path writes to stderr and exits 2; the pipeline swallowed both), and `git diff --exit-code` on a pathspec matching nothing exits 0. Both would have gone green *because of* the move.
+- **The module was renamed to `github.com/zenion/mmokit`** before publication froze the path. Two files could not be sed'd: the generated protobuf embeds the path inside a length-prefixed descriptor, and a fuzz seed embeds it twice-length-prefixed. Both were regenerated from source.
+- **`pkg/world` and the 21 `mmokit.World*` aliases were extracted.** A space-game content schema — Station, POI, Dungeon, Belt, Decoration, Region — was sitting in framework core and re-exported through the public facade. `pkg/mmokit`'s exported surface went 313 → 292.
+- **The move itself was wire-neutral**, which is why it cost a day rather than a protocol break. See the correction to [non-goal 4](#3-non-goals).
+- **The framework/example boundary is now compiler-enforced.** Each example's game code lives under its own `internal/`, so `pkg/` importing one is a build error. At the repository root, `internal/` was importable by every package in the module and the rule was convention plus a line in `AGENTS.md`.
 
-| | |
+**What the reversal re-opened, and how it was closed:**
+
+| Old claim | Now |
 | --- | --- |
-| **Published** | `pkg/` · `examples/` · `cmd/sdkgen` · `cmd/csharp-golden` · `proto/` · `gen/` · `csharp/` · `web-admin/` · `scripts/` · `docs/` |
-| **Not published** | `internal/` · `cmd/server` · `cmd/botclient` · `web-pixi/` · `data/` · `world/` · `db-init/` |
+| "Audio provenance stops being a blocker" — the 16 unattributed `.ogg` files were in the unpublished half | **Un-mooted.** They are inside the MIT grant, and provenance is a hard gate. Resolved by replacement plus `ATTRIBUTION.md`. |
+| "Several validation recipes are game-coupled and cannot run in the public repo" | **False now.** They live in `examples/space/justfile` and run on the merge path. WS-001's ship-dynamics parity gate has a home. |
+| "The public repo's CI is necessarily a subset of this repo's" | **False now.** There is no other repo. CI additionally gained an all-examples build and a database-free SDK-staleness gate. |
+| "The extraction mechanism is an open decision" | **Resolved:** publish whole. Verified the game introduces zero module dependencies the framework did not already require. |
 
-Three consequences that follow from this and are easy to miss:
-
-- **Audio provenance stops being a blocker.** The 16 tracked `.ogg` files with no attribution anywhere in the tree live under `web-pixi/public/audio/`, which is not published. No archaeology required.
-- **Several validation recipes are game-coupled and cannot run in the public repo.** `just lint-no-ark` targets `internal/game/`; `just shipdyn-golden` and the `just web-test` prediction goldens span `internal/game/` **and** `web-pixi/`; `just space-sdk` runs `cmd/server`. The public repo's CI is necessarily a subset of this repo's, and WS-001's ship-dynamics parity gate — the workstream's only continuously-triggered drift risk — has no home there at all. Whichever repo keeps the game must keep that gate.
-- **The extraction mechanism is an open decision**, not covered by this item's estimate: a `git subtree` split, a fresh repo with the game as a downstream consumer of a tagged module, or publishing this repo with the game removed. The first two keep `go.mod:1`'s `github.com/zenion/mmokit` path stable for consumers; the third does not.
-
-The CI half and the publication half are separable and the phase in [§6.8](#68-next-phase--p0-closure) closes the CI half completely.
+**Still open at publication**, tracked here rather than silently dropped: no semver tag, no `CHANGELOG.md`, no stability statement; ten public packages have no package doc comment; the repository has **zero** runnable `func Example` functions; and `.git` carries roughly 87 MB of accidentally-committed Go binaries from early history.
 
 ### 6.4 P1 — quality and protocol
 
@@ -276,7 +281,7 @@ For a UDP client that meant `SendUnreliable` → `DeliveryBestEffort` → neithe
 What shipped:
 
 - **Per-connection ACK mode latched from the transport's static class.** `net.DeliveryClassProvider` (implemented by `WSTransport` → `DeliveryReliableOrdered`, `UDPTransport` → `DeliveryBestEffort`), `ConnManager.DeliveryClassFor`, `ReplicationConfig.AckModeFor`, and a `mode` field on `connState` resolved once in `getConn` and preserved across stream resets. It cannot be a single scalar: one `ConnManager` holds a mixed map of WebSocket and UDP transports, so two viewers of the same cell legitimately differ. It is deliberately driven from the transport TYPE, never from a `SendResult` or any mutable state, so the generated wire schema stays constant.
-- **The ACK wire type and its routing.** `mmokit.ReplicationAck{StreamEpoch, Seq}`, registered as a client input by the engine-default `HandleClient` block in `pkg/mmokit/init.go` exactly the way `mmokit.Ping` is. Routing goes through a per-cell sink on `engine.Engine` (`SetReplicationAck` / `AckReplicationFrame`) that `NewReplicationSystem` installs via `ReplicationConfig.RegisterAck` — so `internal/game` and every other construction site pick it up with **zero** game-code changes. The typed-client-input phase runs before the system loop, so an ACK arriving before tick N commits before tick N's frame is built: zero added latency.
+- **The ACK wire type and its routing.** `mmokit.ReplicationAck{StreamEpoch, Seq}`, registered as a client input by the engine-default `HandleClient` block in `pkg/mmokit/init.go` exactly the way `mmokit.Ping` is. Routing goes through a per-cell sink on `engine.Engine` (`SetReplicationAck` / `AckReplicationFrame`) that `NewReplicationSystem` installs via `ReplicationConfig.RegisterAck` — so the space example's game layer and every other construction site pick it up with **zero** game-code changes. The typed-client-input phase runs before the system loop, so an ACK arriving before tick N commits before tick N's frame is built: zero added latency.
 - **Deterministic loss/reorder/duplicate harness** in `pkg/system/lossy_link_test.go` + `replication_lossy_test.go`. `pkg/universe/loopback_bridge.go` was evaluated and is unsuitable: wrong domain (it routes `CellMessage`, with no path from a frame writer into it), an import cycle (`pkg/universe` imports `pkg/system`), one constant latency so it can never reorder, no duplicate injection, and unjoinable wall-clock goroutines. The new link encodes real `quantize` wire bytes, returns exactly what `UDPTransport.SendUnreliable` returns, and drives a reference client decoder mirroring the generated TS/C# accept gate. Seven end-to-end properties plus a mixed-transport per-connection latch test.
 - `SentHistoryDepth` default 32 → 4. Under the one-attempt-in-flight invariant the ring never holds more than one live entry, while `GetOrCreateBaseline` eagerly allocates `ringDepth * sizeof(SentSnapshot)` per entity per viewer.
 - **Distributed completion.** On a host, `eng.ConnMgr` is a `VirtualConnManager` that cannot see the client's transport, so the connection starts reliable. `host_network.go` now emits a mesh replication receipt for every *successful* enqueue rather than only reliable-ordered ones — the payload already carried the achieved `DeliveryClass`, so this needed no meshpb change — and `drainFrameReceipts` latches the connection to `AckExplicit` on the first receipt reporting a class below reliable-ordered, replacing the whole `connState` (the `BaselineStore` is constructed from the mode) and forcing one fresh frame. Previously a UDP client behind a separate gateway process got no receipt at all, so the host's attempt timed out every `PendingReceiptTimeoutTicks`: a full snapshot every third tick with two dead ticks between. Degrades safely against an old gateway — it simply stays on today's behaviour.
@@ -334,20 +339,20 @@ These exist in the working tree, in dated plans, or only in git history. They ar
 
 Server-authoritative local movement prediction for the reference game's ship, with cumulative input acknowledgement and an adaptive interpolation timeline. Implemented and committed; the closed loop is:
 
-`web-pixi/src/input.ts` (sequence + buffer the command) → `internal/game/input_handlers.go` (`consumeMoveTargetInput` marks a non-zero sequence PROCESSED even when it rejects the target, so a client can retire a poison command instead of retrying forever) → `internal/game/system_network.go` (`ProcessedInputSeq` reads the authoritative `MoveTarget.Sequence`) → `pkg/system/replication.go` (attaches it to the frame) → `pkg/quantize/wireformat.go` (`FrameFlagInputAck` plus a four-byte trailer) → generated SDK decoders → `web-pixi/src/movement-reconciliation.ts` (pairs the owner seed with its accepted frame) → `web-pixi/src/main.ts` (prediction runs AFTER interpolation and overrides only `renderX/renderY/renderRot`).
+`examples/space/web/src/input.ts` (sequence + buffer the command) → `examples/space/internal/game/input_handlers.go` (`consumeMoveTargetInput` marks a non-zero sequence PROCESSED even when it rejects the target, so a client can retire a poison command instead of retrying forever) → `examples/space/internal/game/system_network.go` (`ProcessedInputSeq` reads the authoritative `MoveTarget.Sequence`) → `pkg/system/replication.go` (attaches it to the frame) → `pkg/quantize/wireformat.go` (`FrameFlagInputAck` plus a four-byte trailer) → generated SDK decoders → `examples/space/web/src/movement-reconciliation.ts` (pairs the owner seed with its accepted frame) → `examples/space/web/src/main.ts` (prediction runs AFTER interpolation and overrides only `renderX/renderY/renderRot`).
 
 Shipped, and now enforced rather than asserted:
 
-- **Go↔TS ship-dynamics parity.** `just shipdyn-golden` drives the REAL `ShipDynamicsSystem` + `PhysicsSystem` through a real Stage over six scenarios for eight fixed ticks, and `web-pixi/src/__tests__/prediction-golden.test.ts` replays each tick through `projectShipPrediction`. This is the workstream's only continuously-triggered drift risk — ship dynamics get tuned routinely, and divergence used to surface in production as constant rubber-banding rather than as a failing build.
+- **Go↔TS ship-dynamics parity.** `just shipdyn-golden` drives the REAL `ShipDynamicsSystem` + `PhysicsSystem` through a real Stage over six scenarios for eight fixed ticks, and `examples/space/web/src/__tests__/prediction-golden.test.ts` replays each tick through `projectShipPrediction`. This is the workstream's only continuously-triggered drift risk — ship dynamics get tuned routinely, and divergence used to surface in production as constant rubber-banding rather than as a failing build.
 - **Cross-language goldens** for `AdaptivePlaybackController`, `PredictionBuffer`, and the `FrameFlagInputAck` trailer, replayed from one Go-produced manifest by both `pkg/quantize/ts/playback-golden.test.ts` and `csharp/Mmokit.Sdk.Core.Tests/PlaybackGoldenTests.cs`. Closes the "cross-language golden vectors" gate in §6.7 for these cores.
-- **The reconciliation gate is shared, not game-specific.** `pkg/quantize/ts/reconciliation-gate.ts` and `csharp/Mmokit.Sdk.Core/ReconciliationGate.cs`, both in sdkgen's CoreFiles; `web-pixi`'s class is a game-typed alias. A Unity client no longer has to reinvent the most race-prone part of reconciliation. The C# port carries explicit insertion-order lists because `Dictionary` does not reproduce the JS `Map` ordering the TS reference relies on for oldest-first eviction — covered by an explicit eviction-order test on both sides.
+- **The reconciliation gate is shared, not game-specific.** `pkg/quantize/ts/reconciliation-gate.ts` and `csharp/Mmokit.Sdk.Core/ReconciliationGate.cs`, both in sdkgen's CoreFiles; `examples/space/web`'s class is a game-typed alias. A Unity client no longer has to reinvent the most race-prone part of reconciliation. The C# port carries explicit insertion-order lists because `Dictionary` does not reproduce the JS `Map` ordering the TS reference relies on for oldest-first eviction — covered by an explicit eviction-order test on both sides.
 - **PredictionBuffer surface parity in both directions**, so the two SDK cores are one contract a consumer can follow line for line.
 - **Observability and an operator knob.** Movement commands the server did not apply are logged behind the new game-range `input` debug flag; `buildMovementState` says so once per entity when a missing component silently disables prediction; two unlabelled `CellMetrics` counters cover the ACK loop. `GameConfig.MovementPredictionHorizonMs` replaces a hard const, with 0 meaning prediction disabled.
-- **The TS suites are actually run.** `just web-test` and `just client-test` cover `web-pixi/src/__tests__/` and `examples/4node-basic/web/src/__tests__/`, which no recipe ran before — the largest body of WS-001 tests was invisible to the standard validation sweep.
+- **The TS suites are actually run.** `just web-test` and `just client-test` cover `examples/space/web/src/__tests__/` and `examples/4node-basic/web/src/__tests__/`, which no recipe ran before — the largest body of WS-001 tests was invisible to the standard validation sweep.
 
 Known and deliberate:
 
-- **The rotation feedback path is real but unreachable for the predicted entity.** `entityRotation` falls back to the live `renderRot` for an entity with no `angle` field that is not moving, so a predicted rotation could in principle re-enter the interpolation ring. It cannot for the local ship, because `ShipEntity` declares `angle` and prediction only ever writes `state.myEntityId`. `web-pixi/src/__tests__/interpolation.test.ts` pins both halves, so dropping `angle` from the ship schema fails there instead of shipping geometric convergence into the interpolator.
+- **The rotation feedback path is real but unreachable for the predicted entity.** `entityRotation` falls back to the live `renderRot` for an entity with no `angle` field that is not moving, so a predicted rotation could in principle re-enter the interpolation ring. It cannot for the local ship, because `ShipEntity` declares `angle` and prediction only ever writes `state.myEntityId`. `examples/space/web/src/__tests__/interpolation.test.ts` pins both halves, so dropping `angle` from the ship schema fails there instead of shipping geometric convergence into the interpolator.
 - **The input-ack trailer costs 4 bytes per frame** to every player with a non-zero `MoveTarget.Sequence`, ungated by change detection — about 80 B/s/player at 20 Hz. Negligible now; it interacts with CE-007 and should not be optimized independently of it.
 
 Open, and the reason this is Partial rather than Done:
@@ -363,8 +368,8 @@ Each work item should add the smallest regression test that fails before the fix
 - [x] Race-enabled tests for engine scheduling, transports, connection teardown, and mesh reconnects — `nightly.yml` `race` job. It classifies its own failures: a `WARNING: DATA RACE` fails hard as a concurrency bug, a zero-race failure is labelled a flaky test. That split exists because the two known flakes below would otherwise cost a log-archaeology session per red
 - [ ] Fuzz targets with retained corpora for reflection codecs, operation and input frames, and mesh frame decoders — **half closed.** Six targets and 40 committed seeds landed with CE-002, and `nightly.yml` runs a 5 min/target mutation campaign. What is still missing is *retention*: a discovered crasher is a 14-day artifact, not a committed corpus entry, and nothing auto-files it. *(Original note: Note the gate names **three** decoder families: the reflection codec, the operation **and input** frame decoders, and the mesh frame decoder. `UnmarshalTransferFrame` is a payload decoder reached from inside `decodeMeshFrame`, not the frame decoder itself — covering it does not cover the third family)*
 - [x] Deterministic simulated loss/reorder/duplicate harnesses — landed as `pkg/system/lossy_link_test.go`. **Do not** build on `pkg/universe/loopback_bridge.go` as previously recommended here: it routes `CellMessage` (no path from a frame writer into it), `pkg/universe` imports `pkg/system` so the import cycle forbids it, it applies one constant latency so it can never reorder, and it has no duplicate injection
-- [x] Linux integration jobs that permit localhost TCP and UDP listeners — closed by the `go` job on `ubuntu-latest`, which runs the six binding test files named in `ci.yml`. **not blocked on anything but the CI file itself.** The tests already exist and already bind localhost: `pkg/net/server_origin_test.go`, `pkg/net/udp_server_test.go`, `pkg/net/udpclient/handshake_race_test.go`, `pkg/admin/admin_e2e_test.go`, `internal/bot/auth_test.go`, `pkg/universe/udp_listener_test.go`. Any `go test ./...` job on `ubuntu-latest` satisfies this; tick it by naming that coverage, not by building something new
-- [ ] Generated-schema diff checks *(blocked on CI **and** on Postgres: `just space-sdk` is not DB-free — `cmd/server/main.go:126-137` opens Postgres unconditionally and `log.Fatalf`s regardless of `--admin-listen=`)*
+- [x] Linux integration jobs that permit localhost TCP and UDP listeners — closed by the `go` job on `ubuntu-latest`, which runs the six binding test files named in `ci.yml`. **not blocked on anything but the CI file itself.** The tests already exist and already bind localhost: `pkg/net/server_origin_test.go`, `pkg/net/udp_server_test.go`, `pkg/net/udpclient/handshake_race_test.go`, `pkg/admin/admin_e2e_test.go`, `examples/space/internal/bot/auth_test.go`, `pkg/universe/udp_listener_test.go`. Any `go test ./...` job on `ubuntu-latest` satisfies this; tick it by naming that coverage, not by building something new
+- [x] Generated-schema diff checks — **closed without a database.** Full regeneration still needs Postgres (`just client-sdk` runs the example, which opens its DB), but staleness does not: `examples/space/internal/game/sdk_typeid_parity_test.go` checks every wire type ID in the committed SDK against the Go type names beside them, and those names against the live registry, from tracked files alone.
 - [x] Cross-language Go/TypeScript/C# golden vectors — `drift-go` job regenerates both manifests and `git diff --exit-code`s them
 - [x] Load tests asserting bounded memory, queue depth, tick work, and recovery after backpressure — landed as `TestIngress_SustainedLoadBoundedAndRecovers` (pkg/universe). Four assertions, one per clause; each was verified by neutering the cap it guards
 
@@ -389,7 +394,7 @@ Also note: `pkg/universe` intermittently reports `executor: serialize timeout on
 
 ### 6.8 Next phase — P0 closure
 
-**Approximately 35 engineer-days.** This is the active phase. It takes CE-002, CE-006 and OSS-001's CI half to their full acceptance criteria. It is recorded here and nowhere else — no `docs/superpowers/` spec or plan is written for it — so this section is the deliverable, and [§4 principle 4](#4-design-principles) applies to it: **status is derived from source, not from these headings.**
+**Approximately 35 engineer-days.** This phase is complete; OSS-001's publication half followed it. It takes CE-002, CE-006 and OSS-001's CI half to their full acceptance criteria. It is recorded here and nowhere else — no `docs/superpowers/` spec or plan is written for it — so this section is the deliverable, and [§4 principle 4](#4-design-principles) applies to it: **status is derived from source, not from these headings.**
 
 #### 6.8.1 What it does and does not close
 
@@ -397,7 +402,7 @@ Also note: `pkg/universe` intermittently reports `executor: serialize timeout on
 | --- | --- |
 | CE-002 | **Done (8/8)** — landed, see [§6.3](#ce-002--bounded-decoding-and-ingress-budgets--done-88) |
 | CE-006 | **Done (12/12)**, including the `MeshData` payload binding — closed with a stream-captured peer ID rather than the `sender_id` field this table previously anticipated, for the reasons in [§6.3](#ce-006--mesh-authentication-and-authorization--done-1212). The one proto change that did land is the replication-receipt oneof arm, with `just proto` + `just fuzz-corpus` and a lockstep cluster redeploy |
-| OSS-001 | **Partial.** CI half closed completely; publication half is the mmokit-core extraction, which carries an open mechanism decision |
+| OSS-001 | **Done.** CI half closed in this phase; publication half closed 2026-08-15 by publishing the repository whole and moving the reference game to `examples/space/` — see the reversal note in [§6.3](#oss-001--open-source-readiness-and-ci--done) |
 | CE-005b Tier 2 | **Still open** — see below |
 
 **§7.1's gate does not lift when this phase ends.** [§7.1](#71-sequencing-rule) gates the entire 104-day 2D/3D program on *every* P0 item, and CE-005b Tier 2 sits in [§6.3](#63-p0--must-close-before-the-2d3d-program-begins). The successor phase is CE-005b Tier 2 at roughly 12.5 days, after which it does. This is stated plainly here because the phase name invites the opposite reading.
@@ -418,7 +423,7 @@ Four units have no dependencies and can start together: the roadmap of record, p
 
 #### 6.8.3 Units
 
-CE-002's seven units and OSS-001's CI half are **done**. Status is derived from the commits, not from this table — re-verify against source. What remains is OSS-001's publication half and all of CE-006.
+CE-002's seven units, OSS-001 (both halves) and CE-006 are **done**. Status is derived from the commits, not from this table — re-verify against source.
 
 | # | Unit | Item | Days | Risk | After | Status |
 | --- | --- | --- | ---: | --- | --- | --- |
@@ -453,7 +458,7 @@ Each of these was found by verifying a plausible plan against source and finding
 - **Criteria 3 and 12 cannot be tested against the `all` preset.** It never assigns `Host.Network`, so `newBridgeForCell` returns a plain `cellBridge` and `routeInboundFrame` is structurally unreachable — a test written there is a false pass. Use `newDistributedFixture` or a raw `NewHostNetwork` pair. Criterion 6's test belongs on `all`; criterion 7's on `coordinator` + `host`.
 - **Do not stamp a per-frame identity in the send path.** `service_event_dispatch` builds one frame and fans it to N peers, each with its own sender goroutine, so a write there is a concurrent mutation against in-flight marshaling and a guaranteed `-race` failure. This is one of several reasons the payload-plane identity is a parameter rather than a proto field.
 - **The peer ID and the cluster secret are separate concerns.** They answer different questions — may this stream speak at all, versus which payload identities may its frames claim — so the ID must be attached even when no secret is configured. Withholding it makes every bound arm drop under the criterion-7 posture; the symptom is the service event bus going silent in every secret-less fixture, not an authentication error.
-- **Do not gate the auto-generated cluster secret on a loopback check.** `--control-listen` defaults to `":9100"` and `isLoopbackBind` treats an empty host as all-interfaces, so the heuristic never fires for the bind every dev recipe uses. `just dev` opens an unauthenticated wildcard `MeshControl` listener today.
+- **Do not gate the auto-generated cluster secret on a loopback check.** `--control-listen` defaults to `":9100"` and `isLoopbackBind` treats an empty host as all-interfaces, so the heuristic never fires for the bind every dev recipe uses. `just dev` *used to* open an unauthenticated wildcard `MeshControl` listener; CE-006 closed it by auto-generating a secret for self-contained role sets.
 - **Do not reuse `Process.httpTLSConfig` for mesh TLS.** It `sync.Once`-memoizes the client-facing posture and falls back to plaintext on error; a mesh cert is required even when client TLS is plaintext, which is the default. Reuse `generateDevCert` unchanged instead, and do not "fix" its localhost-only SANs — peers dial with `InsecureSkipVerify`, so changing them would imply a verification that does not happen.
 - **Flag defaults never reach tests.** `universe.New`'s `if !flag.Parsed()` guard is always false under `go test`, so `BindFlags` is skipped entirely. Defaults must be applied as a zero-value fallback in `New()`, and roughly twenty fixture sites must set `Config.ClusterSecret` directly.
 - **A corrupt component blob must skip that component, not the entity.** Aborting the transfer turns a malformed blob into an entity-loss bug on the handoff path. The trade — an entity carrying a stale or absent component instead of a clean failure — is an authority-boundary decision and belongs in the roadmap entry, not only a code comment.
@@ -530,7 +535,7 @@ Recorded so the next reader does not resurrect dead work.
 | **World editor** | **Delivered** and live in the admin dashboard. |
 | **CE-006's cluster-CA mTLS mechanism** | **Superseded** by the shared-secret plus ephemeral-TLS decision. The risk stays open; the mechanism is replaced. The two surviving `TODO(mTLS)`/`TODO(S4)` comments in `host_network.go` and `mesh_control_client.go` must be **deleted, not implemented** — and `host_network.go`'s claim that "S3 only runs in loopback" is false: all four production callers pass `":0"`, a wildcard ephemeral bind. |
 | **Certificate pinning by fingerprint for mesh TLS** | **Declined**, out of scope. Peers dial with `InsecureSkipVerify`; the residual is an active on-path MITM on an untrusted network, answered by network isolation rather than by PKI. |
-| **Audio-asset provenance as an OSS blocker** | **Moot.** The 16 unattributed `.ogg` files live under `web-pixi/`, which is not part of the mmokit open-source distribution. |
+| **Audio-asset provenance as an OSS blocker** | **Moot.** The 16 unattributed `.ogg` files live under `examples/space/web/`, which is not part of the mmokit open-source distribution. |
 | **ChaCha20-Poly1305 for UDP AEAD** | **Superseded** by AES-GCM. `Mmokit.Sdk.Core` targets `netstandard2.1`, where `ChaCha20Poly1305` does not exist and `AesGcm` does. `netstandard2.1` also has no `HKDF` class. |
 | **Auth over the op channel (C# client)** | **Superseded** by the 2026-06-12 umbrella's HTTPS-then-UDP decision. The 2026-06-06 Unity SDK spec chose the op channel specifically to avoid that split; the newer decision wins. |
 | **Volumetric cell partitioning** | **Declined** — see [non-goal 1](#3-non-goals). |
@@ -549,7 +554,7 @@ Recorded so the next reader does not resurrect dead work.
 | [`AGENTS.md`](../AGENTS.md) | Authoritative contributor and agent rules |
 | [`pkg/net/README.md`](../pkg/net/README.md) | Client channel bytes, transports, delivery classes |
 | [`pkg/mmokit/README.md`](../pkg/mmokit/README.md) | ECS query and command-buffer rules, `Stage.Spawn` contract |
-| [`internal/game/factory.go`](../internal/game/factory.go) | System registration order |
+| [`examples/space/internal/game/factory.go`](../examples/space/internal/game/factory.go) | System registration order |
 
 `docs/superpowers/` holds dated plans, specs, and audits owned by an external workflow. They explain how a feature was designed at a point in time. They are **not** proof of current behaviour and are not edited during ordinary documentation maintenance.
 

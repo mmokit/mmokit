@@ -19,8 +19,8 @@ This repository contains a reusable server-authoritative multiplayer game framew
 - `pkg/system/`, `pkg/replication/`, `pkg/quantize/`, and `pkg/net/` implement generic simulation and networking.
 - `pkg/cmdsys/`, `pkg/service/`, and `pkg/services/` implement routed commands and pluggable services.
 - `pkg/admin/` and `web-admin/` implement the admin backend and embedded Svelte dashboard.
-- `internal/` is the reference space game. Its composition root is `cmd/server/`; its browser client is `web-pixi/`.
-- `examples/simple/` is the smallest current API example. `examples/4node-basic/` exercises distributed roles and client SDK generation.
+- `examples/space/` is the reference space game: composition root at `main.go`, game layer under `internal/`, browser client under `web/`, world manifest under `world/`.
+- `examples/simple/` is the smallest current API example. `examples/4node-basic/` exercises distributed roles and client SDK generation. `examples/space/` is the largest and the framework's regression bed.
 - `proto/meshpb/` is the only protobuf schema. It is server-internal; client frames do not use protobuf.
 
 Processes can contain any valid set of the built-in roles:
@@ -78,10 +78,10 @@ Do not revive removed APIs found in historical documents, including:
 
 ## ECS and concurrency rules
 
-- `pkg/` is reusable and must not import `internal/`.
-- Generic components live in `pkg/component`; space-game components live in `internal/component`.
-- Production files in `internal/game/` must not import Ark directly except the existing binding glue allowlist. Run `just lint-no-ark` after game-layer changes.
-- System registration order is semantic. Preserve the order in `internal/game/factory.go`; Network stays last.
+- `pkg/` is reusable and must not import an example. Each example's game code sits under its own `internal/`, so this is a compile error, not a convention.
+- Generic components live in `pkg/component`; a game's components live in its own `internal/component`.
+- Production files in an example's `internal/game/` must not import Ark directly except the existing binding glue allowlist. Run `just lint-no-ark` after game-layer changes; it takes the game directory as an argument and exits 2 if that directory is missing.
+- System registration order is semantic. Preserve the order in `examples/space/internal/game/factory.go`; Network stays last.
 - ECS structural changes are illegal while a query holds the world lock. Queue them through `s.Commands()` or `stage.Commands()`.
 - The engine flushes deferred commands after each system, so system N's changes are visible to system N+1 in the same tick.
 - ECS state belongs to the owning cell-loop goroutine. Route admin, service, and other off-loop work through `RunOnLoop` or cmdsys helpers.
@@ -91,7 +91,7 @@ Do not revive removed APIs found in historical documents, including:
 ## Wire and mesh invariants
 
 - Client channel `0x00` carries typed events/input; channel `0x01` carries typed operations. Both use the reflection codec.
-- Package-qualified Go type names determine wire type IDs. Registered type moves and renames are breaking changes.
+- Wire type IDs are `fnv32a(reflect.Type.String())`, which qualifies by package *name*, not import path. Renaming a registered type or its package is breaking; moving its package between directories is not.
 - Regenerate affected SDKs after changing entity bundles, replication tags, client input, events, broadcasts, or operations.
 - Clients remain topology-agnostic and receive absolute world coordinates.
 - Preserve cluster-clock timestamps, commit-tick authority handoff, and fresh destination snapshots.
@@ -102,7 +102,7 @@ Do not revive removed APIs found in historical documents, including:
 ## Admin, persistence, and generated files
 
 - Implement operator mutations as typed cmdsys verbs first. The console and HTTP admin UI must share the same command, RBAC, and audit path.
-- Engine persistence belongs to `pkg/persist`; game persistence belongs to `internal/persist`.
+- Engine persistence belongs to `pkg/persist`; game persistence belongs to the example's own `internal/persist`.
 - PostgreSQL-backed builds and schema dumps require a running database. Use `just db-up`; never run destructive `just db-reset` without explicit intent.
 - Do not hand-edit generated Go protobuf, SDK, admin bundle, or wire-golden output. Change the source and run the relevant `just` recipe.
 - Do not weaken secure cookies, origin checks, CORS, or TLS defaults. `--dev-insecure-cookie` is only for local HTTP development.
