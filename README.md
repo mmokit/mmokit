@@ -154,7 +154,7 @@ Current source, tests, and [`justfile`](justfile) recipes are authoritative when
 
 MIT — see [`LICENSE`](LICENSE). It covers the whole repository: framework, examples, tooling, and docs alike.
 
-Bundled non-source assets are listed in [`ATTRIBUTION.md`](ATTRIBUTION.md) with their sources and licences. **The audio under `examples/space/web/public/audio/` is currently unresolved and is not covered by the MIT grant** — see that file. Everything else is original work under the grant above.
+There are no bundled third-party assets: the space example's audio is synthesised by a committed script and its art is drawn procedurally with PixiJS `Graphics`. See [`ATTRIBUTION.md`](ATTRIBUTION.md).
 
 **The framework does not depend on any example.** `pkg/` imports nothing from `examples/`, and Go enforces it rather than convention doing so: each example's game code sits under its own `internal/` directory, which the compiler makes unimportable from outside that example. You can depend on `pkg/mmokit` without pulling in a line of game code.
 
