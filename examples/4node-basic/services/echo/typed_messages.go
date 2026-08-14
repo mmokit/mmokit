@@ -7,7 +7,7 @@
 // generated TypeScript SDK exposes them as lowerCamelCase
 // (`EchoPingRequest{Msg}` → `client.echoPing({msg})`).
 //
-// Wire-stable typeIDs are derived from the package-qualified type name
+// Wire-stable typeIDs are derived from the package-NAME-qualified type name
 // (`echo.EchoPingRequest` etc.), so renames are wire-breaking.
 
 package echo

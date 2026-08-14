@@ -71,7 +71,7 @@ This is a server-authoritative multiplayer game framework and space-game impleme
 ## Wire and distributed invariants
 
 - Client traffic uses the reflection-based typed codec: channel `0x00` for typed events/input and channel `0x01` for operations. Never introduce client-facing protobuf messages.
-- Wire type IDs derive from package-qualified Go type names. Renaming/moving registered event, input, broadcast, or operation types is wire-breaking. Stable enum values and replicated field layouts are protocol contracts.
+- Wire type IDs are `fnv32a(reflect.Type.String())`, which qualifies by package *name*, not import path. Renaming a registered event, input, broadcast, or operation type — or its package — is wire-breaking; moving its package to another directory is not. `pkg/service.EventTypeName` is the exception: it keys the server-internal service event bus by `PkgPath()+"."+Name()` and is path-sensitive. Stable enum values and replicated field layouts are protocol contracts.
 - Go registries are the client-schema source of truth. Regenerate and review affected SDKs after changing entity bundles, replication tags, typed inputs/events, broadcasts, or operations.
 - Built-in process roles are `coordinator`, `host`, `gateway`, and `service`; the default `all` preset includes all four. A service role starts only the selected/auto-added service kinds.
 - The coordinator is the control plane and must not become a per-tick, per-action, or service-event payload hop. Data flows directly between gateways, hosts, and services over MeshData.

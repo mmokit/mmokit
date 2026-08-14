@@ -121,7 +121,7 @@ Go registrations are the client schema source of truth:
 - `mmokit.HandleClient` declares client-to-server typed input.
 - `mmokit.RegisterOp` declares typed request/response operations.
 
-The SDK generator assembles those registries after the process builds. Wire type IDs derive from package-qualified Go type names, so moving or renaming a registered type is a protocol-breaking change.
+The SDK generator assembles those registries after the process builds. Wire type IDs are `fnv32a(reflect.Type.String())`, which qualifies by package *name* rather than import path, so renaming a registered type or its package is a protocol-breaking change. Relocating a package between directories is not.
 
 ## Documentation
 

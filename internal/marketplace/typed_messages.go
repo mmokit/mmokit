@@ -7,8 +7,9 @@
 // generated TypeScript SDK exposes them as lowerCamelCase
 // (`MarketBrowseRequest{ItemID}` → `client.marketBrowse({itemID})`).
 //
-// Wire-stable typeIDs are derived from the package-qualified type name
+// Wire-stable typeIDs are derived from the package-NAME-qualified type name
 // (`marketplace.MarketBrowseRequest` etc.), so renames are wire-breaking.
+// Relocating this package to another directory is not — see mmokit.TypeIDOf.
 
 package marketplace
 
