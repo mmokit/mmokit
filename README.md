@@ -1,5 +1,10 @@
 # MMOKIT
 
+[![CI](https://github.com/zenion/mmokit/actions/workflows/ci.yml/badge.svg)](https://github.com/zenion/mmokit/actions/workflows/ci.yml)
+[![Go Reference](https://pkg.go.dev/badge/github.com/zenion/mmokit.svg)](https://pkg.go.dev/github.com/zenion/mmokit)
+[![Go Version](https://img.shields.io/github/go-mod/go-version/zenion/mmokit)](go.mod)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+
 MMOKIT is a server-authoritative multiplayer game framework written in Go, exposed through [`pkg/mmokit`](pkg/mmokit/). The repository ships the framework plus three runnable examples — including a complete space game with a PixiJS client — along with generated client SDK tooling and distributed deployment recipes.
 
 The goal is a framework that can host any genre, with 2D and 3D both first-class. The implementation is 2D today; see [`docs/roadmap.md`](docs/roadmap.md) for the full vision, non-goals, and sequenced plan.
@@ -20,6 +25,16 @@ Clients send typed input and render authoritative world-space updates. Cell owne
 - Hot-swappable Go/WASM game systems
 
 The client protocol uses MMOKIT's reflection-based codec. Protobuf and gRPC are used only for server-internal MeshControl and MeshData traffic.
+
+## Stability
+
+**Pre-1.0. There is no compatibility promise, and that is deliberate rather than an oversight.**
+
+- **No API compatibility across minor versions.** Go module semantics already say this for `v0`, and the project uses it: the preferred fix for a bad API is to change it, not to add a second one beside it.
+- **No wire compatibility across any two commits.** Client wire IDs are `fnv32a(reflect.Type.String())`, so renaming a registered type or its package changes its identity. **Build client and server from the same tag.** A version mismatch is not currently detected — a client decodes a frame it does not recognise and skips it silently. Making that mismatch *detectable* is tracked as CE-009 in [`docs/roadmap.md`](docs/roadmap.md).
+- **Upgrading can mean a lockstep redeploy** of every process in a cluster. See non-goal 4 in the roadmap.
+
+If you are running this somewhere that matters, pin a commit and carry your own patches. [`SECURITY.md`](SECURITY.md) lists the known, tracked, unfixed limitations — read it before exposing anything to a network.
 
 ## Quick start
 

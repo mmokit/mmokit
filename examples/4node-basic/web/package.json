@@ -1,5 +1,6 @@
 {
   "name": "4node-basic-web",
+  "license": "MIT",
   "private": true,
   "type": "module",
   "scripts": {

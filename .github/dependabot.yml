@@ -1,0 +1,34 @@
+# Dependency updates. Grouped and monthly on purpose: this is a
+# single-maintainer project, and a PR queue nobody reads is worse than no
+# automation. Security advisories are separate and are not rate-limited by
+# this schedule.
+version: 2
+updates:
+  - package-ecosystem: gomod
+    directory: /
+    schedule:
+      interval: monthly
+    groups:
+      go-dependencies:
+        patterns: ["*"]
+
+  # Pinned to majors in both workflows; see the note at the top of ci.yml
+  # before accepting a bump.
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+    groups:
+      actions:
+        patterns: ["*"]
+
+  - package-ecosystem: npm
+    directories:
+      - /web-admin
+      - /examples/space/web
+      - /examples/4node-basic/web
+    schedule:
+      interval: monthly
+    groups:
+      frontend:
+        patterns: ["*"]

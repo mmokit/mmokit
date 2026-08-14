@@ -1,5 +1,6 @@
 {
   "name": "mmokit-admin",
+  "license": "MIT",
   "private": true,
   "type": "module",
   "scripts": {

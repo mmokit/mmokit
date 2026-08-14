@@ -1,5 +1,6 @@
 {
   "name": "mmokit-space-webclient",
+  "license": "MIT",
   "private": true,
   "type": "module",
   "scripts": {
