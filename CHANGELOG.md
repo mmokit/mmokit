@@ -1,7 +1,41 @@
 # Changelog
 
-Notable changes per release. This project is pre-1.0: see the Stability section
-of [`README.md`](README.md) for what that means for API and wire compatibility.
+Notable changes per release. This project is pre-1.0: see the Status section
+of [`README.md`](README.md#status) for what that means for API and wire compatibility.
+
+## Unreleased
+
+### Breaking
+
+- **The facade moved to the module root.** Games now import
+  `github.com/mmokit/mmokit` instead of `github.com/mmokit/mmokit/pkg/mmokit`.
+  Update the import path; no other change is required, because the package is
+  still named `mmokit` and every exported symbol kept its name.
+
+  **The wire format is unchanged.** Client wire IDs hash
+  `reflect.Type.String()`, which qualifies by package *name*, not import path —
+  so moving the package between directories is not a protocol change. Verified
+  by byte-diffing the `--dump-schema` output of all three examples before and
+  after: identical. A client built against v0.1.0 still talks to a server built
+  from this commit, subject to the same-commit rule in
+  [`README.md`](README.md#status).
+
+- **`mmokit.SyncCellTunables` was removed.** It had no callers and was only
+  ever reached through the `universe.OnCellSystemsReady` hook — internal wiring
+  that had leaked into the exported surface. It now lives at
+  `tunectl.SyncCellTunables`, inside `internal/`.
+
+### Changed
+
+- `SystemBase`, `WireSystem` and `Any` / `FindOne` / `ForEach{1,2,3}` are now
+  implemented in `pkg/universe` and re-exported from the facade — `SystemBase`
+  as a type alias, the rest as forwarders. Game code sees no difference.
+- The admin topic bus moved to `pkg/admin` (`admin.BusFor`,
+  `admin.PublishTopic`). `mmokit.PublishAdminTopic` is unchanged for callers.
+  The new `admin.ForgetBus` releases a process's cached bus, which previously
+  pinned every `*universe.Process` for the life of the program.
+- New `universe.Process.CellsMatching(node, cell)` implements the `--node` /
+  `--cell` operator filters that the built-in `wasm.*` and `tune.*` verbs share.
 
 ## v0.1.0 — first public release
 

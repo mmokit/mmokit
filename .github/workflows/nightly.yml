@@ -87,7 +87,7 @@ jobs:
             echo "::warning::suite failed with ZERO data races — a failing or flaky test, not a concurrency bug"
             grep -E '^--- FAIL|^FAIL' /tmp/race.log | head -40
             echo "Known flaky under load, both pre-existing and tracked in docs/roadmap.md 6.7:"
-            echo "  - mmokit TestTintSystem_PhaseFollowsClusterTimeNotCell"
+            echo "  - internal/facadetest TestTintSystem_PhaseFollowsClusterTimeNotCell"
             echo "  - examples/4node-basic TestE2EMeshSplitMergeWithBotTraffic"
             echo "If the failure is one of those, it still needs fixing — do not re-run it away."
           fi
