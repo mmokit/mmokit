@@ -1,5 +1,10 @@
 {
   "default": true,
   // Allow line length flexibility
-  "MD013": false
+  "MD013": false,
+  // Hard tabs are correct inside fenced code blocks: every Go sample in this
+  // repository is gofmt output, and gofmt indents with tabs. Enforcing spaces
+  // there would mean shipping samples that do not match the code they are
+  // copied from. Tabs in prose are still flagged.
+  "MD010": { "code_blocks": false }
 }

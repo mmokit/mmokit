@@ -113,6 +113,73 @@ Treat `docs/superpowers/{plans,specs}/` as dated design history. It is not proof
 of current behaviour, and several documents there describe removed APIs. Verify
 identifiers against source with `rg` before writing code.
 
+## Repository layout
+
+| Path | Purpose |
+| --- | --- |
+| [`pkg/mmokit`](pkg/mmokit/) | Public, single-import game-facing facade |
+| [`pkg/engine`](pkg/engine/) | ECS loop, systems, player lifecycle, loop jobs, console foundations |
+| [`pkg/universe`](pkg/universe/) | Processes, cells, topology, mesh control/data, handoffs, integrity checks |
+| [`pkg/system`](pkg/system/) | Generic physics, spatial, lifetime, movement, replication systems |
+| [`pkg/net`](pkg/net/) | WebSocket and UDP transports plus connection management |
+| [`pkg/cmdsys`](pkg/cmdsys/) | Typed and routable operator commands |
+| [`pkg/service`](pkg/service/), [`pkg/services`](pkg/services/) | Service framework and built-in services |
+| [`examples/simple`](examples/simple/) | Smallest runnable game |
+| [`examples/4node-basic`](examples/4node-basic/) | Distributed roles, services, WASM systems, generated SDK |
+| [`examples/space`](examples/space/) | Reference space game: composition root, game layer, PixiJS client, world manifest |
+| [`cmd/sdkgen`](cmd/sdkgen/) | TypeScript and C# client SDK generator |
+| [`cmd/csharp-golden`](cmd/csharp-golden/) | Regenerates the C# wire golden from Go |
+| [`web-admin`](web-admin/) | Svelte 5 operator dashboard, embedded into `pkg/admin` |
+| [`csharp`](csharp/) | Shared C# SDK runtime and golden tests |
+| [`proto/meshpb`](proto/meshpb/) | Server-internal protobuf schema |
+| [`scripts`](scripts/) | Architectural-invariant checks run by CI |
+| [`db-init`](db-init/) | Per-example PostgreSQL database creation |
+| [`diagnostics`](diagnostics/) | Delivery-timing probe for a running gateway |
+
+## Recipes
+
+Recipes split by scope: the repository root owns framework-wide tooling, and each
+example owns its own build and run.
+
+| Root command | Result |
+| --- | --- |
+| `just db-up` | Start PostgreSQL via Docker Compose |
+| `just proto` | Regenerate `gen/go/meshpb` from the internal mesh schema |
+| `just client-sdk examples/space` | Regenerate any example's typed TypeScript SDK |
+| `just admin-typecheck` / `just admin-test` / `just admin-build` | Check and build the operator dashboard |
+| `just csharp-test` | Run the shared C# SDK tests |
+| `just ts-core-test` | Run the shared TypeScript codec/interpolation tests |
+| `just web-test` | Run every example web client's prediction/interpolation suites |
+| `just lint-no-ark` | Enforce the game/framework ECS boundary |
+| `just fuzz` | Mutate-fuzz every decoder family (smoke budget) |
+| `go vet ./...` | Compile check and lint. `go build ./...` is forbidden — it writes binaries into package directories |
+| `go test ./... -short` | Run Go tests; localhost socket tests need a network-enabled environment |
+
+| Example command (from `examples/<name>`) | Result |
+| --- | --- |
+| `just build` | SDK, web client, admin bundle, and server binary |
+| `just run` | Build and run |
+| `just dev` | Build and run with a Vite dev server |
+| `just distributed` | Multi-process cluster in tmux (`space`, `4node-basic`) |
+
+`just db-reset` removes the PostgreSQL volume and is destructive. Neither build
+regenerates protobuf or WASM modules; run `just proto` or `just wasm-build` when
+those sources change.
+
+## Client protocol and SDKs
+
+Go registrations are the client schema source of truth:
+
+- `mmokit.RegisterKind` declares entity component bundles.
+- `mmokit.RegisterEvent` declares server-to-client typed events.
+- `mmokit.HandleClient` declares client-to-server typed input.
+- `mmokit.RegisterOp` declares typed request/response operations.
+
+The SDK generator assembles those registries after the process builds. Wire type
+IDs are `fnv32a(reflect.Type.String())`, which qualifies by package *name* rather
+than import path, so renaming a registered type or its package is a
+protocol-breaking change. Relocating a package between directories is not.
+
 ## Which checks to run
 
 Run the smallest relevant checks first, then broaden in proportion to the
