@@ -9,6 +9,8 @@ import (
 
 	"github.com/mlange-42/ark/ecs"
 
+	"github.com/mmokit/mmokit/internal/tunectl"
+	"github.com/mmokit/mmokit/internal/wasmctl"
 	"github.com/mmokit/mmokit/pkg/cmdsys"
 	"github.com/mmokit/mmokit/pkg/component"
 	"github.com/mmokit/mmokit/pkg/coords"
@@ -837,11 +839,11 @@ func New(cfg Config) *Process {
 	}
 	proc := universe.New(cfg)
 	proc.SetProtocol(NewProtocol(cfg.Name))
-	if err := registerWasmVerbs(proc); err != nil {
+	if err := wasmctl.RegisterVerbs(proc); err != nil {
 		panic(fmt.Sprintf("mmokit.New: register wasm verbs: %v", err))
 	}
-	if err := registerTuneVerbs(proc); err != nil {
-		panic(fmt.Sprintf("mmokit.New: registerTuneVerbs: %v", err))
+	if err := tunectl.RegisterVerbs(proc); err != nil {
+		panic(fmt.Sprintf("mmokit.New: register tune verbs: %v", err))
 	}
 	proc.Log.RegisterCategories(catAdmin)
 	return proc
@@ -1294,30 +1296,4 @@ func CountRealEntities(w *ecs.World) int {
 // applicable), BindQueries, Init, BuildQueries — in one call. Use in tests
 // where you want a fully-initialized system without spinning up a coordinator.
 // Pass stage=nil for engine-only systems that don't embed mmokit.SystemBase.
-func WireSystem(sys engine.System, ecsWorld *ecs.World, eng *engine.Engine, stage *universe.Stage) {
-	type depsInjectable interface {
-		SetDeps(w *ecs.World, eng *engine.Engine)
-	}
-	type stageInjectable interface {
-		InitStage(s *universe.Stage)
-	}
-	type queryBinder interface{ BindQueries(outer any) }
-	type initializable interface{ Init() }
-	type queryBuilder interface{ BuildQueries() }
-
-	if di, ok := sys.(depsInjectable); ok {
-		di.SetDeps(ecsWorld, eng)
-	}
-	if si, ok := sys.(stageInjectable); ok && stage != nil {
-		si.InitStage(stage)
-	}
-	if qb, ok := sys.(queryBinder); ok {
-		qb.BindQueries(sys)
-	}
-	if i, ok := sys.(initializable); ok {
-		i.Init()
-	}
-	if qb, ok := sys.(queryBuilder); ok {
-		qb.BuildQueries()
-	}
-}
+var WireSystem = universe.WireSystem

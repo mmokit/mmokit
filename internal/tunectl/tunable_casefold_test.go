@@ -1,4 +1,4 @@
-package mmokit
+package tunectl
 
 import (
 	"testing"

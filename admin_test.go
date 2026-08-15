@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/mmokit/mmokit/pkg/admin"
 	"github.com/mmokit/mmokit/pkg/universe"
 )
 
@@ -58,16 +59,12 @@ func (f *fakeSub) wait(t *testing.T, n int, timeout time.Duration) {
 
 func TestPublishAdminTopic_RoutesToBus(t *testing.T) {
 	t.Parallel()
-	// Use a non-nil pointer key — adminBus only needs *Process for map
+	// Use a non-nil pointer key — BusFor only needs *Process for map
 	// identity, not for any field access.
 	proc := &universe.Process{}
-	t.Cleanup(func() {
-		adminBusMu.Lock()
-		delete(adminBusMap, proc)
-		adminBusMu.Unlock()
-	})
+	t.Cleanup(func() { admin.ForgetBus(proc) })
 
-	bus := adminBus(proc)
+	bus := admin.BusFor(proc)
 	sub := &fakeSub{topics: []string{"bots"}, notify: make(chan struct{}, 8)}
 	bus.Subscribe(sub, sub.topics...)
 	t.Cleanup(func() { bus.Unsubscribe(sub) })
@@ -95,19 +92,17 @@ func TestAdminBus_PerProcessIsolation(t *testing.T) {
 	procA := &universe.Process{}
 	procB := &universe.Process{}
 	t.Cleanup(func() {
-		adminBusMu.Lock()
-		delete(adminBusMap, procA)
-		delete(adminBusMap, procB)
-		adminBusMu.Unlock()
+		admin.ForgetBus(procA)
+		admin.ForgetBus(procB)
 	})
 
 	subA := &fakeSub{topics: []string{"T"}, notify: make(chan struct{}, 8)}
 	subB := &fakeSub{topics: []string{"T"}, notify: make(chan struct{}, 8)}
-	adminBus(procA).Subscribe(subA, "T")
-	adminBus(procB).Subscribe(subB, "T")
+	admin.BusFor(procA).Subscribe(subA, "T")
+	admin.BusFor(procB).Subscribe(subB, "T")
 	t.Cleanup(func() {
-		adminBus(procA).Unsubscribe(subA)
-		adminBus(procB).Unsubscribe(subB)
+		admin.BusFor(procA).Unsubscribe(subA)
+		admin.BusFor(procB).Unsubscribe(subB)
 	})
 
 	PublishAdminTopic(procA, "T", "A-only")
@@ -126,13 +121,9 @@ func TestAdminBus_PerProcessIsolation(t *testing.T) {
 func TestRemoteAdminTopicBridge_PublishesRawJSON(t *testing.T) {
 	t.Parallel()
 	proc := &universe.Process{}
-	t.Cleanup(func() {
-		adminBusMu.Lock()
-		delete(adminBusMap, proc)
-		adminBusMu.Unlock()
-	})
+	t.Cleanup(func() { admin.ForgetBus(proc) })
 
-	bus := adminBus(proc)
+	bus := admin.BusFor(proc)
 	sub := &fakeSub{topics: []string{"tunables"}, notify: make(chan struct{}, 1)}
 	bus.Subscribe(sub, sub.topics...)
 	t.Cleanup(func() { bus.Unsubscribe(sub) })

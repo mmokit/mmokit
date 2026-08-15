@@ -1,4 +1,4 @@
-package mmokit
+package tunectl
 
 import (
 	"context"
@@ -6,6 +6,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/mmokit/mmokit/pkg/admin"
 	"github.com/mmokit/mmokit/pkg/cmdsys"
 	"github.com/mmokit/mmokit/pkg/tunable"
 	"github.com/mmokit/mmokit/pkg/universe"
@@ -13,7 +14,7 @@ import (
 
 const catTune = "tune"
 
-type tuneSetArgs struct {
+type SetArgs struct {
 	System string `cmd:"help=system name"`
 	Field  string `cmd:"help=tunable field name"`
 	Value  string `cmd:"help=new value"`
@@ -61,30 +62,30 @@ type tuneGetResult struct {
 
 // publishTunables pushes a system's current tunable rows on the admin "tunables"
 // SSE topic so open /tunables dashboards update live when any operator changes a
-// value. No-op when no admin subscribers are listening (PublishAdminTopic guards
+// value. No-op when no admin subscribers are listening (admin.PublishTopic guards
 // that). Called after tune.set / tune.reset mutate the registry.
 func publishTunables(p *universe.Process, system string) {
-	PublishAdminTopic(p, "tunables", map[string]any{
+	admin.PublishTopic(p, "tunables", map[string]any{
 		"system": system,
-		"rows":   rowsFor(tuneRegistryFor(p), system),
+		"rows":   rowsFor(RegistryFor(p), system),
 	})
 }
 
-// registerTuneVerbs registers tune.list/get/set/reset on the process registry.
+// RegisterVerbs registers tune.list/get/set/reset on the process registry.
 // All RouteAllHosts: fan out to every host, each iterating its local cells.
-func registerTuneVerbs(proc *universe.Process) error {
+func RegisterVerbs(proc *universe.Process) error {
 	reg := proc.CmdRegistry()
 	proc.Log.RegisterCategories(catTune)
 
 	applySet := func(ctx context.Context, system, field, value string, node, cell string) error {
-		for _, c := range cellsMatching(proc, node, cell) {
+		for _, c := range proc.CellsMatching(node, cell) {
 			cc := c
-			if _, err := CmdOnLoop(ctx, cc.Engine, func() (struct{}, error) {
+			if _, err := cmdsys.OnLoop(ctx, cc.Engine, func() (struct{}, error) {
 				sys, ok := cc.Loop.SystemByName(system)
 				if !ok {
 					return struct{}{}, nil
 				}
-				src, ok := tunableSourceFor(sys)
+				src, ok := SourceFor(sys)
 				if !ok {
 					return struct{}{}, nil
 				}
@@ -103,10 +104,10 @@ func registerTuneVerbs(proc *universe.Process) error {
 		Verb: "tune.set", Capability: "tune.set",
 		Description: "set a system tunable at runtime (default: all cells/all nodes)",
 		Examples:    []string{"tune set Field amplitude 420", "tune set Field amplitude 300 --cell 0_0"},
-		Route:       cmdsys.RouteAllHosts, Args: tuneSetArgs{}, Result: tuneResult{},
+		Route:       cmdsys.RouteAllHosts, Args: SetArgs{}, Result: tuneResult{},
 		Handler: func(ctx context.Context, env *cmdsys.Env, raw any) (any, error) {
-			a := raw.(tuneSetArgs)
-			reg := tuneRegistryFor(proc)
+			a := raw.(SetArgs)
+			reg := RegistryFor(proc)
 			defs := reg.defs(a.System)
 			d, ok := findDef(defs, a.Field)
 			if !ok {
@@ -146,7 +147,7 @@ func registerTuneVerbs(proc *universe.Process) error {
 		Route:       cmdsys.RouteAllHosts, Args: tuneGetArgs{}, Result: tuneGetResult{},
 		Handler: func(ctx context.Context, env *cmdsys.Env, raw any) (any, error) {
 			a := raw.(tuneGetArgs)
-			reg := tuneRegistryFor(proc)
+			reg := RegistryFor(proc)
 			d, ok := findDef(reg.defs(a.System), a.Field)
 			if !ok {
 				return nil, fmt.Errorf("no tunable %s.%s", a.System, a.Field)
@@ -165,7 +166,7 @@ func registerTuneVerbs(proc *universe.Process) error {
 		Route:       cmdsys.RouteAllHosts, Args: tuneResetArgs{}, Result: tuneResult{},
 		Handler: func(ctx context.Context, env *cmdsys.Env, raw any) (any, error) {
 			a := raw.(tuneResetArgs)
-			reg := tuneRegistryFor(proc)
+			reg := RegistryFor(proc)
 			for _, d := range reg.defs(a.System) {
 				if a.Field != "" && !strings.EqualFold(d.Name, a.Field) {
 					continue
@@ -197,7 +198,7 @@ func registerTuneVerbs(proc *universe.Process) error {
 		Route:       cmdsys.RouteAllHosts, Args: tuneListArgs{}, Result: tuneResult{},
 		Handler: func(ctx context.Context, env *cmdsys.Env, raw any) (any, error) {
 			a := raw.(tuneListArgs)
-			reg := tuneRegistryFor(proc)
+			reg := RegistryFor(proc)
 			names := reg.systemNames()
 			if a.System != "" {
 				names = []string{a.System}
@@ -215,7 +216,7 @@ func registerTuneVerbs(proc *universe.Process) error {
 	return nil
 }
 
-func rowsFor(reg *tuneRegistry, system string) []tuneRow {
+func rowsFor(reg *Registry, system string) []tuneRow {
 	defs := reg.defs(system)
 	rows := make([]tuneRow, 0, len(defs))
 	for _, d := range defs {

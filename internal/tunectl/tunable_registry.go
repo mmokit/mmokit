@@ -1,4 +1,4 @@
-package mmokit
+package tunectl
 
 import (
 	"maps"
@@ -16,10 +16,10 @@ func init() {
 	}
 }
 
-// tunableSourceFor resolves a system to a tunable.Source: the wasm adapter
+// SourceFor resolves a system to a tunable.Source: the wasm adapter
 // implements Source directly; a native struct with tune-tagged fields is
 // wrapped via reflection; anything else reports false.
-func tunableSourceFor(sys engine.System) (tunable.Source, bool) {
+func SourceFor(sys engine.System) (tunable.Source, bool) {
 	if s, ok := sys.(tunable.Source); ok {
 		return s, true
 	}
@@ -35,19 +35,19 @@ type tuneSystem struct {
 	values map[string]string // field → current intended value
 }
 
-// tuneRegistry is the per-Process source of truth for intended tunable values.
-type tuneRegistry struct {
+// Registry is the per-Process source of truth for intended tunable values.
+type Registry struct {
 	mu      sync.Mutex
 	systems map[string]*tuneSystem
 }
 
-func newTuneRegistry() *tuneRegistry {
-	return &tuneRegistry{systems: map[string]*tuneSystem{}}
+func newRegistry() *Registry {
+	return &Registry{systems: map[string]*tuneSystem{}}
 }
 
 // harvest records descriptors for a system the first time it is seen, seeding
 // intended values from each descriptor's current Value.
-func (r *tuneRegistry) harvest(name string, defs []tunable.Def) {
+func (r *Registry) harvest(name string, defs []tunable.Def) {
 	if len(defs) == 0 {
 		return
 	}
@@ -64,7 +64,7 @@ func (r *tuneRegistry) harvest(name string, defs []tunable.Def) {
 	r.systems[name] = ts
 }
 
-func (r *tuneRegistry) setValue(name, field, value string) {
+func (r *Registry) setValue(name, field, value string) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	if ts, ok := r.systems[name]; ok {
@@ -72,7 +72,7 @@ func (r *tuneRegistry) setValue(name, field, value string) {
 	}
 }
 
-func (r *tuneRegistry) value(name, field string) (string, bool) {
+func (r *Registry) value(name, field string) (string, bool) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	ts, ok := r.systems[name]
@@ -85,7 +85,7 @@ func (r *tuneRegistry) value(name, field string) (string, bool) {
 
 // defs returns descriptor copies with Value set to the registry's current
 // intended value.
-func (r *tuneRegistry) defs(name string) []tunable.Def {
+func (r *Registry) defs(name string) []tunable.Def {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	ts, ok := r.systems[name]
@@ -101,7 +101,7 @@ func (r *tuneRegistry) defs(name string) []tunable.Def {
 }
 
 // systemNames returns the sorted set of registered tunable system names.
-func (r *tuneRegistry) systemNames() []string {
+func (r *Registry) systemNames() []string {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	names := make([]string, 0, len(r.systems))
@@ -113,7 +113,7 @@ func (r *tuneRegistry) systemNames() []string {
 }
 
 // snapshotValues returns a copy of a system's intended values.
-func (r *tuneRegistry) snapshotValues(name string) map[string]string {
+func (r *Registry) snapshotValues(name string) map[string]string {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	ts, ok := r.systems[name]
@@ -129,27 +129,27 @@ func (r *tuneRegistry) snapshotValues(name string) map[string]string {
 
 var (
 	tuneRegMu  sync.Mutex
-	tuneRegMap = map[*universe.Process]*tuneRegistry{}
+	tuneRegMap = map[*universe.Process]*Registry{}
 )
 
-func tuneRegistryFor(p *universe.Process) *tuneRegistry {
+func RegistryFor(p *universe.Process) *Registry {
 	tuneRegMu.Lock()
 	defer tuneRegMu.Unlock()
 	r, ok := tuneRegMap[p]
 	if !ok {
-		r = newTuneRegistry()
+		r = newRegistry()
 		tuneRegMap[p] = r
 	}
 	return r
 }
 
-// syncSource brings one resolved tunable source into agreement with the
+// SyncSource brings one resolved tunable source into agreement with the
 // registry: it applies tag defaults to the live instance (native sources only —
 // the wasm adapter seeds defaults from the guest), harvests its descriptors
 // into the registry on first sight, then writes the registry's intended values
 // back onto the instance. Applying defaults BEFORE harvest ensures a native
 // system's tag defaults (not its Go zero values) become the registry baseline.
-func syncSource(reg *tuneRegistry, name string, src tunable.Source) {
+func SyncSource(reg *Registry, name string, src tunable.Source) {
 	if ad, ok := src.(interface{ ApplyDefaults() }); ok {
 		ad.ApplyDefaults()
 	}
@@ -164,10 +164,10 @@ func syncSource(reg *tuneRegistry, name string, src tunable.Source) {
 // to each live instance. Runs on the cell's loop goroutine — call inside
 // RunOnLoop or from a loop-safe context (cell bootstrap / post-set).
 func SyncCellTunables(p *universe.Process, cell *universe.Cell) {
-	reg := tuneRegistryFor(p)
+	reg := RegistryFor(p)
 	cell.Loop.EachSystem(func(name string, sys engine.System) {
-		if src, ok := tunableSourceFor(sys); ok {
-			syncSource(reg, name, src)
+		if src, ok := SourceFor(sys); ok {
+			SyncSource(reg, name, src)
 		}
 	})
 }

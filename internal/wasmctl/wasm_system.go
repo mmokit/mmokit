@@ -1,4 +1,4 @@
-package mmokit
+package wasmctl
 
 import (
 	"context"
@@ -9,6 +9,7 @@ import (
 
 	"github.com/mmokit/mmokit/pkg/engine"
 	"github.com/mmokit/mmokit/pkg/tunable"
+	"github.com/mmokit/mmokit/pkg/universe"
 	"github.com/mmokit/mmokit/pkg/wasmabi"
 	"github.com/mmokit/mmokit/pkg/wasmhost"
 )
@@ -21,7 +22,7 @@ const catWasmSystem = "wasm:system"
 // instances are per-cell and independent.
 var wasmRuntime = wasmhost.New(context.Background())
 
-// NewWasmSystem builds a SystemDef whose per-cell instances run a hot-loadable
+// NewWasmSystem builds a engine.SystemDef whose per-cell instances run a hot-loadable
 // WASM module over the POD component T. T must be a value-type (no pointers/
 // slices/maps) — its in-memory layout is memcpy'd across the boundary.
 //
@@ -37,7 +38,7 @@ var wasmRuntime = wasmhost.New(context.Background())
 // panics here instead of silently corrupting memory via a misaligned scatter.
 // A same-size-but-different-meaning type (e.g. a 4-byte PodVal over a float32
 // column) still passes validation and remains the caller's responsibility.
-func NewWasmSystem[T any](modulePath string) SystemDef {
+func NewWasmSystem[T any](modulePath string) engine.SystemDef {
 	wasm, err := os.ReadFile(modulePath)
 	if err != nil {
 		panic(fmt.Sprintf("mmokit.NewWasmSystem: %v", err))
@@ -59,9 +60,9 @@ func NewWasmSystem[T any](modulePath string) SystemDef {
 	}
 	probe.Close(context.Background())
 
-	return SystemDef{
+	return engine.SystemDef{
 		Name: "Wasm:" + filepath.Base(modulePath),
-		Factory: func() System {
+		Factory: func() engine.System {
 			// TODO(phase1): wazero recompiles the wasm bytes on every Load;
 			// precompile once via wazero.CompileModule at registration and
 			// instantiate per cell.
@@ -75,7 +76,7 @@ func NewWasmSystem[T any](modulePath string) SystemDef {
 }
 
 type wasmSystem[T any] struct {
-	SystemBase
+	universe.SystemBase
 	mod       *wasmhost.Module
 	readWrite bool
 	col       []T // reused gather buffer
@@ -183,7 +184,7 @@ func (s *wasmSystem[T]) pushBlock() error {
 func (s *wasmSystem[T]) Update(dt float32) {
 	stage := s.Stage()
 	s.col = s.col[:0]
-	ForEach1(stage, func(_ Entity, c *T) { s.col = append(s.col, *c) })
+	universe.ForEach1(stage, func(_ universe.Entity, c *T) { s.col = append(s.col, *c) })
 	n := len(s.col)
 	if n == 0 {
 		return
@@ -204,10 +205,10 @@ func (s *wasmSystem[T]) Update(dt float32) {
 	}
 	res := unsafe.Slice((*T)(unsafe.Pointer(&out[0])), n)
 	i := 0
-	ForEach1(stage, func(_ Entity, c *T) { *c = res[i]; i++ })
+	universe.ForEach1(stage, func(_ universe.Entity, c *T) { *c = res[i]; i++ })
 }
 
-// Compile-time assertion that wasmSystem satisfies the engine System contract.
+// Compile-time assertion that wasmSystem satisfies the engine engine.System contract.
 var _ engine.System = (*wasmSystem[struct{}])(nil)
 var _ SwappableSystem = (*wasmSystem[struct{}])(nil)
 var _ tunable.Source = (*wasmSystem[struct{}])(nil)

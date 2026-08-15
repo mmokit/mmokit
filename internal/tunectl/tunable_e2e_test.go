@@ -1,10 +1,12 @@
-package mmokit
+package tunectl_test
 
 import (
 	"context"
 	"testing"
 	"time"
 
+	"github.com/mmokit/mmokit"
+	"github.com/mmokit/mmokit/internal/tunectl"
 	"github.com/mmokit/mmokit/internal/wasmfixtures"
 	"github.com/mmokit/mmokit/pkg/cmdsys"
 	"github.com/mmokit/mmokit/pkg/universe"
@@ -24,7 +26,7 @@ func readSingleY(t *testing.T, cell *universe.Cell) float32 {
 	t.Helper()
 	var y float32
 	if err := cell.Engine.RunOnLoop(context.Background(), func() error {
-		ForEach1(cell.Stage, func(_ Entity, p *Position) { y = p.Y })
+		mmokit.ForEach1(cell.Stage, func(_ mmokit.Entity, p *mmokit.Position) { y = p.Y })
 		return nil
 	}); err != nil {
 		t.Fatalf("read Position.Y on loop: %v", err)
@@ -65,14 +67,14 @@ func TestTunableEndToEnd_WasmViaTuneSet(t *testing.T) {
 	wasmPath := buildWavetuneWasm(t)
 
 	// Full Process build so the C5 hook fires and tune.* verbs are registered.
-	proc := New(Config{
+	proc := mmokit.New(mmokit.Config{
 		CellsX: 1, CellsY: 1, CellSize: 1000, TickRate: 20, AoIRadius: 100,
 		Headless: true,
 	})
 	// Register the wasm system BEFORE Build so it boots into the cell AND is
 	// recorded for the tune verbs. The logical name derives from the filename:
 	// "wavetune.wasm" -> "wavetune".
-	AddWasmSystem[Position](proc, wasmPath)
+	mmokit.AddWasmSystem[mmokit.Position](proc, wasmPath)
 	proc.Build()
 	t.Cleanup(proc.Shutdown)
 
@@ -86,7 +88,7 @@ func TestTunableEndToEnd_WasmViaTuneSet(t *testing.T) {
 		t.Fatal("no cells after Build")
 	}
 
-	// Start the cell's game loop live. tune.set routes through CmdOnLoop →
+	// Start the cell's game loop live. tune.set routes through cmdsys.OnLoop →
 	// RunOnLoop, which blocks until the loop drains the queue — so the loop must
 	// actually be ticking. Stopped via Cleanup.
 	loopCtx, cancel := context.WithCancel(context.Background())
@@ -102,7 +104,7 @@ func TestTunableEndToEnd_WasmViaTuneSet(t *testing.T) {
 
 	// Spawn ONE entity at Y=0 on the loop goroutine.
 	if err := cell.Engine.RunOnLoop(context.Background(), func() error {
-		cell.Stage.Spawn(Position{X: 0, Y: 0})
+		cell.Stage.Spawn(mmokit.Position{X: 0, Y: 0})
 		return nil
 	}); err != nil {
 		t.Fatalf("spawn entity: %v", err)
@@ -121,7 +123,7 @@ func TestTunableEndToEnd_WasmViaTuneSet(t *testing.T) {
 	ctx, cancelCtx := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancelCtx()
 	caller := cmdsys.NewOperatorIdentity("test-op")
-	res, err := proc.CmdDispatcher().Invoke(ctx, caller, "tune.set", tuneSetArgs{
+	res, err := proc.CmdDispatcher().Invoke(ctx, caller, "tune.set", tunectl.SetArgs{
 		System: "wavetune",
 		Field:  "Offset",
 		Value:  "50",

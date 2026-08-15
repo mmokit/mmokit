@@ -176,7 +176,9 @@ Use TLS certificate flags or a TLS-terminating proxy in production. Self-signed 
 
 | Area | Responsibility |
 | --- | --- |
-| `mmokit` | Public game-facing facade and high-level registration helpers |
+| `mmokit` (module root) | Public game-facing facade and high-level registration helpers. Imported as `github.com/mmokit/mmokit` |
+| `internal/wasmctl`, `internal/tunectl` | Built-in operator-verb subsystems (`wasm.*`, `tune.*`) and the wasm guest adapter. They sit below the facade rather than in it because `mmokit.New` registers their verbs, so living at the root would make the facade depend on its own callees |
+| `internal/facadetest`, `internal/wasmfixtures` | The facade's black-box test suite, and the wasm guest fixtures plus the module-root-anchored helper that builds them |
 | `pkg/universe` | Process roles, cells/stages, topology, handoff, mesh, services, integrity checks. A cell's `(MeshID, CellID)` identity is immutable behind an atomic swap — read it via `Cell.MeshID()` / `Cell.CellID()`, or `Cell.Identity()` when both halves must agree |
 | `pkg/engine` | ECS loop, systems, players, loop jobs, console foundations |
 | `pkg/system` | Reusable physics, lifetime, spatial, replication, and debug systems |

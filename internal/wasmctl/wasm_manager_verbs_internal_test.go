@@ -1,4 +1,4 @@
-package mmokit
+package wasmctl
 
 import (
 	"context"
@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/mmokit/mmokit/pkg/cmdsys"
+	"github.com/mmokit/mmokit/pkg/component"
 	"github.com/mmokit/mmokit/pkg/coords"
 	"github.com/mmokit/mmokit/pkg/engine"
 	"github.com/mmokit/mmokit/pkg/logger"
@@ -24,7 +25,7 @@ func buildShieldWasmForTest(t *testing.T) string {
 	return wasmfixtures.Build(t, "internal/wasmfixtures/shieldregen")
 }
 
-// newVerbCell builds one cell with a real Stage + Engine and a running
+// newVerbCell builds one cell with a real universe.Stage + Engine and a running
 // GameLoop. The verbs schedule work via CmdOnLoop → engine.RunOnLoop, which
 // blocks until the loop goroutine drains the queue — so the loop must actually
 // tick. The loop is stopped via t.Cleanup when the test ends.
@@ -71,8 +72,8 @@ func TestWasmVerbs_LoadListUnload(t *testing.T) {
 	// never Built, so AddWasmSystem records the entry without auto-loading it
 	// into any cell — load is driven entirely by the verb below.
 	AddWasmSystem[podcomp.Shield](proc, shieldPath)
-	if err := registerWasmVerbs(proc); err != nil {
-		t.Fatalf("registerWasmVerbs: %v", err)
+	if err := RegisterVerbs(proc); err != nil {
+		t.Fatalf("RegisterVerbs: %v", err)
 	}
 	reg := proc.CmdRegistry()
 
@@ -97,7 +98,7 @@ func TestWasmVerbs_LoadListUnload(t *testing.T) {
 	}
 
 	// load → present on the loop.
-	if got := call("wasm.load", wasmNameArgs{Name: "shieldregen"}); len(got.Rows) != 1 || got.Rows[0].Status != "loaded" {
+	if got := call("wasm.load", NameArgs{Name: "shieldregen"}); len(got.Rows) != 1 || got.Rows[0].Status != "loaded" {
 		t.Fatalf("load rows=%+v", got.Rows)
 	}
 	if _, ok := c0.Loop.SystemByName("shieldregen"); !ok {
@@ -105,7 +106,7 @@ func TestWasmVerbs_LoadListUnload(t *testing.T) {
 	}
 
 	// idempotent load → already-loaded, no duplicate on the loop.
-	if got := call("wasm.load", wasmNameArgs{Name: "shieldregen"}); got.Rows[0].Status != "already-loaded" {
+	if got := call("wasm.load", NameArgs{Name: "shieldregen"}); got.Rows[0].Status != "already-loaded" {
 		t.Fatalf("second load rows=%+v", got.Rows)
 	}
 
@@ -116,13 +117,13 @@ func TestWasmVerbs_LoadListUnload(t *testing.T) {
 
 	// unknown-name load → clear error.
 	if cmd, _ := reg.Lookup("wasm.load"); true {
-		if _, err := cmd.Handler(context.Background(), &cmdsys.Env{}, wasmNameArgs{Name: "nope"}); err == nil {
+		if _, err := cmd.Handler(context.Background(), &cmdsys.Env{}, NameArgs{Name: "nope"}); err == nil {
 			t.Fatal("expected error loading unknown wasm system")
 		}
 	}
 
 	// unload → gone from the loop.
-	if got := call("wasm.unload", wasmNameArgs{Name: "shieldregen"}); got.Rows[0].Status != "unloaded" {
+	if got := call("wasm.unload", NameArgs{Name: "shieldregen"}); got.Rows[0].Status != "unloaded" {
 		t.Fatalf("unload rows=%+v", got.Rows)
 	}
 	if _, ok := c0.Loop.SystemByName("shieldregen"); ok {
@@ -130,7 +131,7 @@ func TestWasmVerbs_LoadListUnload(t *testing.T) {
 	}
 
 	// unload again → not-loaded.
-	if got := call("wasm.unload", wasmNameArgs{Name: "shieldregen"}); got.Rows[0].Status != "not-loaded" {
+	if got := call("wasm.unload", NameArgs{Name: "shieldregen"}); got.Rows[0].Status != "not-loaded" {
 		t.Fatalf("second unload rows=%+v", got.Rows)
 	}
 }
@@ -149,8 +150,8 @@ func TestWasmVerbs_Swap_PreservesState(t *testing.T) {
 	proc.Cells = map[universe.MeshCellID]*universe.Cell{"cell_0_0": c0}
 
 	AddWasmSystem[podcomp.Shield](proc, shieldPath)
-	if err := registerWasmVerbs(proc); err != nil {
-		t.Fatalf("registerWasmVerbs: %v", err)
+	if err := RegisterVerbs(proc); err != nil {
+		t.Fatalf("RegisterVerbs: %v", err)
 	}
 	reg := proc.CmdRegistry()
 	call := func(verb string, args any) wasmOpResult {
@@ -169,13 +170,13 @@ func TestWasmVerbs_Swap_PreservesState(t *testing.T) {
 	// tick. The adapter skips the module call when zero entities match T, which
 	// would otherwise freeze the module's internal tick counter at 0.
 	if err := c0.Engine.RunOnLoop(context.Background(), func() error {
-		c0.Stage.Spawn(Position{}, podcomp.Shield{Current: 0, Max: 1e9, RegenRate: 1})
+		c0.Stage.Spawn(component.Position{}, podcomp.Shield{Current: 0, Max: 1e9, RegenRate: 1})
 		return nil
 	}); err != nil {
 		t.Fatalf("spawn shield: %v", err)
 	}
 
-	if got := call("wasm.load", wasmNameArgs{Name: "shieldregen"}); got.Rows[0].Status != "loaded" {
+	if got := call("wasm.load", NameArgs{Name: "shieldregen"}); got.Rows[0].Status != "loaded" {
 		t.Fatalf("load rows=%+v", got.Rows)
 	}
 
@@ -200,7 +201,7 @@ func TestWasmVerbs_Swap_PreservesState(t *testing.T) {
 
 	// Swap. The returned Ticks is the snapshot captured at swap time (on-loop),
 	// so it must be >= threshold.
-	swapRow := call("wasm.swap", wasmNameArgs{Name: "shieldregen"}).Rows[0]
+	swapRow := call("wasm.swap", NameArgs{Name: "shieldregen"}).Rows[0]
 	if swapRow.Status != "swapped" {
 		t.Fatalf("swap status=%q want swapped", swapRow.Status)
 	}

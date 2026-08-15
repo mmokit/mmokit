@@ -1,4 +1,4 @@
-package mmokit
+package wasmctl
 
 import (
 	"context"
@@ -9,7 +9,9 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/mmokit/mmokit/internal/tunectl"
 	"github.com/mmokit/mmokit/pkg/cmdsys"
+	"github.com/mmokit/mmokit/pkg/engine"
 	"github.com/mmokit/mmokit/pkg/universe"
 )
 
@@ -17,7 +19,7 @@ import (
 // panic-guarded builder (the POD component T is captured at AddWasmSystem time).
 type wasmRegEntry struct {
 	path  string
-	build func(path string) (System, error) // fresh per-cell instance, or error
+	build func(path string) (engine.System, error) // fresh per-cell instance, or error
 }
 
 type wasmRegistry struct {
@@ -64,7 +66,7 @@ func AddWasmSystemNamed[T any](p *universe.Process, name, path string) {
 	reg.mu.Lock()
 	reg.entries[name] = wasmRegEntry{
 		path:  path,
-		build: func(pth string) (System, error) { return buildWasmSystemInstance[T](pth) },
+		build: func(pth string) (engine.System, error) { return buildWasmSystemInstance[T](pth) },
 	}
 	reg.mu.Unlock()
 
@@ -76,7 +78,7 @@ func AddWasmSystemNamed[T any](p *universe.Process, name, path string) {
 // buildWasmSystemInstance creates one fresh per-cell wasm instance, converting
 // NewWasmSystem/Factory panics (bad path/ABI) into errors so a runtime load
 // can't crash a tick.
-func buildWasmSystemInstance[T any](path string) (sys System, err error) {
+func buildWasmSystemInstance[T any](path string) (sys engine.System, err error) {
 	if _, statErr := os.Stat(path); statErr != nil {
 		return nil, fmt.Errorf("wasm module not found at %s (run `just wasm-build` first): %w", path, statErr)
 	}
@@ -90,9 +92,9 @@ func buildWasmSystemInstance[T any](path string) (sys System, err error) {
 
 // ── runtime cmdsys verbs: wasm.list / load / unload / swap ──────────────────
 
-// wasmNameArgs is the shared argument shape for load/unload/swap: a required
+// NameArgs is the shared argument shape for load/unload/swap: a required
 // registered-system name plus optional --node / --cell filters.
-type wasmNameArgs struct {
+type NameArgs struct {
 	Name string `cmd:"help=registered wasm system name"`
 	Node string `cmd:"optional,name=node,help=limit to one host id,complete=hosts"`
 	Cell string `cmd:"optional,name=cell,help=limit to one cell id,complete=cells"`
@@ -132,7 +134,7 @@ func decodeTicks8(b []byte) uint64 {
 
 // snapshotIfSwappable returns the system's serialized state if it implements
 // SwappableSystem, else nil.
-func snapshotIfSwappable(s System) []byte {
+func snapshotIfSwappable(s engine.System) []byte {
 	if sw, ok := s.(SwappableSystem); ok {
 		b, _ := sw.Snapshot()
 		return b
@@ -142,7 +144,7 @@ func snapshotIfSwappable(s System) []byte {
 
 // restoreIfSwappable restores state onto a SwappableSystem when both the
 // system supports it and state is non-empty.
-func restoreIfSwappable(s System, state []byte) error {
+func restoreIfSwappable(s engine.System, state []byte) error {
 	if sw, ok := s.(SwappableSystem); ok && len(state) > 0 {
 		return sw.Restore(state)
 	}
@@ -151,7 +153,7 @@ func restoreIfSwappable(s System, state []byte) error {
 
 // closeIfCloser releases a system's resources if it exposes Close() error
 // (the wasm adapter does — frees its instance/runtime).
-func closeIfCloser(s System) {
+func closeIfCloser(s engine.System) {
 	if c, ok := s.(interface{ Close() error }); ok {
 		_ = c.Close()
 	}
@@ -179,37 +181,12 @@ func registeredNames(p *universe.Process) []string {
 	return names
 }
 
-// cellsMatching returns the process's local cells matching the optional
-// node / cell filters. An empty filter matches everything. The cell filter
-// accepts either a canonical mesh id or a short form (e.g. "0_0").
-func cellsMatching(proc *universe.Process, node, cell string) []*universe.Cell {
-	var wantCell string
-	if cell != "" {
-		if canon, err := ParseCellID(cell); err == nil {
-			wantCell = string(canon.MeshID())
-		} else {
-			wantCell = cell
-		}
-	}
-	var out []*universe.Cell
-	for id, c := range proc.Cells {
-		if node != "" && proc.HostIDForCell(c) != node {
-			continue
-		}
-		if cell != "" && string(id) != wantCell {
-			continue
-		}
-		out = append(out, c)
-	}
-	return out
-}
-
-// registerWasmVerbs registers the wasm.list/load/unload/swap verbs on the
+// RegisterVerbs registers the wasm.list/load/unload/swap verbs on the
 // process command registry. All four are RouteAllHosts: in distributed mode
 // they fan out to every host, which iterates its own local cells. Handlers
 // close over proc and resolve cells live at invocation time. Safe to call
 // once per process (Register errors on a duplicate verb).
-func registerWasmVerbs(proc *universe.Process) error {
+func RegisterVerbs(proc *universe.Process) error {
 	reg := proc.CmdRegistry()
 
 	// wasm.load — instantiate a registered wasm system onto matching cells.
@@ -217,29 +194,29 @@ func registerWasmVerbs(proc *universe.Process) error {
 		Verb: "wasm.load", Capability: "wasm.load",
 		Description: "load a registered wasm system onto cells (default: all cells on all nodes)",
 		Examples:    []string{"wasm load tint", "wasm load tint --cell 0_0"},
-		Route:       cmdsys.RouteAllHosts, Args: wasmNameArgs{}, Result: wasmOpResult{},
+		Route:       cmdsys.RouteAllHosts, Args: NameArgs{}, Result: wasmOpResult{},
 		Handler: func(ctx context.Context, env *cmdsys.Env, raw any) (any, error) {
-			args := raw.(wasmNameArgs)
+			args := raw.(NameArgs)
 			entry, ok := registryEntry(proc, args.Name)
 			if !ok {
 				return nil, fmt.Errorf("unknown wasm system %q (registered: %s)", args.Name, strings.Join(registeredNames(proc), ", "))
 			}
 			var rows []wasmOpRow
-			for _, cell := range cellsMatching(proc, args.Node, args.Cell) {
+			for _, cell := range proc.CellsMatching(args.Node, args.Cell) {
 				newSys, err := entry.build(entry.path)
 				if err != nil {
 					return nil, err
 				}
-				row, err := CmdOnLoop(ctx, cell.Engine, func() (wasmOpRow, error) {
+				row, err := cmdsys.OnLoop(ctx, cell.Engine, func() (wasmOpRow, error) {
 					key := string(cell.MeshID())
 					if _, present := cell.Loop.SystemByName(args.Name); present {
 						closeIfCloser(newSys)
 						return wasmOpRow{Cell: key, Name: args.Name, Status: "already-loaded"}, nil
 					}
-					WireSystem(newSys, cell.Stage.ECSWorld(), cell.Engine, cell.Stage)
+					universe.WireSystem(newSys, cell.Stage.ECSWorld(), cell.Engine, cell.Stage)
 					cell.Loop.AddSystemLive(args.Name, newSys)
-					if src, ok := tunableSourceFor(newSys); ok {
-						syncSource(tuneRegistryFor(proc), args.Name, src)
+					if src, ok := tunectl.SourceFor(newSys); ok {
+						tunectl.SyncSource(tunectl.RegistryFor(proc), args.Name, src)
 					}
 					return wasmOpRow{Cell: key, Name: args.Name, Status: "loaded"}, nil
 				})
@@ -260,12 +237,12 @@ func registerWasmVerbs(proc *universe.Process) error {
 		Verb: "wasm.unload", Capability: "wasm.unload",
 		Description: "unload a wasm system from cells (default: all cells on all nodes)",
 		Examples:    []string{"wasm unload tint"},
-		Route:       cmdsys.RouteAllHosts, Args: wasmNameArgs{}, Result: wasmOpResult{},
+		Route:       cmdsys.RouteAllHosts, Args: NameArgs{}, Result: wasmOpResult{},
 		Handler: func(ctx context.Context, env *cmdsys.Env, raw any) (any, error) {
-			args := raw.(wasmNameArgs)
+			args := raw.(NameArgs)
 			var rows []wasmOpRow
-			for _, cell := range cellsMatching(proc, args.Node, args.Cell) {
-				row, err := CmdOnLoop(ctx, cell.Engine, func() (wasmOpRow, error) {
+			for _, cell := range proc.CellsMatching(args.Node, args.Cell) {
+				row, err := cmdsys.OnLoop(ctx, cell.Engine, func() (wasmOpRow, error) {
 					key := string(cell.MeshID())
 					old, ok := cell.Loop.SystemByName(args.Name)
 					if !ok {
@@ -292,27 +269,27 @@ func registerWasmVerbs(proc *universe.Process) error {
 		Verb: "wasm.swap", Capability: "wasm.swap",
 		Description: "rebuild a registered wasm system from disk and hot-swap in place, preserving state (default: all cells/all nodes)",
 		Examples:    []string{"wasm swap tint", "wasm swap tint --node host-b"},
-		Route:       cmdsys.RouteAllHosts, Args: wasmNameArgs{}, Result: wasmOpResult{},
+		Route:       cmdsys.RouteAllHosts, Args: NameArgs{}, Result: wasmOpResult{},
 		Handler: func(ctx context.Context, env *cmdsys.Env, raw any) (any, error) {
-			args := raw.(wasmNameArgs)
+			args := raw.(NameArgs)
 			entry, ok := registryEntry(proc, args.Name)
 			if !ok {
 				return nil, fmt.Errorf("unknown wasm system %q (registered: %s)", args.Name, strings.Join(registeredNames(proc), ", "))
 			}
 			var rows []wasmOpRow
-			for _, cell := range cellsMatching(proc, args.Node, args.Cell) {
+			for _, cell := range proc.CellsMatching(args.Node, args.Cell) {
 				newSys, err := entry.build(entry.path)
 				if err != nil {
 					return nil, err
 				}
-				row, err := CmdOnLoop(ctx, cell.Engine, func() (wasmOpRow, error) {
+				row, err := cmdsys.OnLoop(ctx, cell.Engine, func() (wasmOpRow, error) {
 					key := string(cell.MeshID())
 					old, ok := cell.Loop.SystemByName(args.Name)
 					if !ok {
-						WireSystem(newSys, cell.Stage.ECSWorld(), cell.Engine, cell.Stage)
+						universe.WireSystem(newSys, cell.Stage.ECSWorld(), cell.Engine, cell.Stage)
 						cell.Loop.AddSystemLive(args.Name, newSys)
-						if src, ok := tunableSourceFor(newSys); ok {
-							syncSource(tuneRegistryFor(proc), args.Name, src)
+						if src, ok := tunectl.SourceFor(newSys); ok {
+							tunectl.SyncSource(tunectl.RegistryFor(proc), args.Name, src)
 						}
 						return wasmOpRow{Cell: key, Name: args.Name, Status: "loaded"}, nil
 					}
@@ -320,10 +297,10 @@ func registerWasmVerbs(proc *universe.Process) error {
 					if err := restoreIfSwappable(newSys, state); err != nil {
 						return wasmOpRow{}, fmt.Errorf("restore: %w", err)
 					}
-					WireSystem(newSys, cell.Stage.ECSWorld(), cell.Engine, cell.Stage)
+					universe.WireSystem(newSys, cell.Stage.ECSWorld(), cell.Engine, cell.Stage)
 					cell.Loop.ReplaceSystemLive(args.Name, newSys)
-					if src, ok := tunableSourceFor(newSys); ok {
-						syncSource(tuneRegistryFor(proc), args.Name, src)
+					if src, ok := tunectl.SourceFor(newSys); ok {
+						tunectl.SyncSource(tunectl.RegistryFor(proc), args.Name, src)
 					}
 					closeIfCloser(old)
 					return wasmOpRow{Cell: key, Name: args.Name, Status: "swapped", Ticks: decodeTicks8(state)}, nil
@@ -350,9 +327,9 @@ func registerWasmVerbs(proc *universe.Process) error {
 			args := raw.(wasmListArgs)
 			names := registeredNames(proc)
 			var rows []wasmOpRow
-			for _, cell := range cellsMatching(proc, args.Node, args.Cell) {
+			for _, cell := range proc.CellsMatching(args.Node, args.Cell) {
 				for _, name := range names {
-					row, _ := CmdOnLoop(ctx, cell.Engine, func() (wasmOpRow, error) {
+					row, _ := cmdsys.OnLoop(ctx, cell.Engine, func() (wasmOpRow, error) {
 						key := string(cell.MeshID())
 						sys, ok := cell.Loop.SystemByName(name)
 						if !ok {

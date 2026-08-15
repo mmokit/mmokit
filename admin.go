@@ -64,26 +64,6 @@ func adminPanelRegistry(c *universe.Process) *admin.PanelRegistry {
 	return r
 }
 
-// adminBusMap caches the *admin.TopicBus per *universe.Process so game-side
-// code can publish to admin topics before the admin Server is constructed.
-// DefaultAdminServerFactory pulls the same bus into ServerOpts so the
-// SSE multiplexer fans payloads out to subscribers.
-var (
-	adminBusMu  sync.Mutex
-	adminBusMap = map[*universe.Process]*admin.TopicBus{}
-)
-
-func adminBus(c *universe.Process) *admin.TopicBus {
-	adminBusMu.Lock()
-	defer adminBusMu.Unlock()
-	b, ok := adminBusMap[c]
-	if !ok {
-		b = admin.NewTopicBus(0)
-		adminBusMap[c] = b
-	}
-	return b
-}
-
 // adminLogRingMap caches the *admin.LogRing per *universe.Process so the
 // in-process log pump and the remote-log callback both append to the
 // same ring (and the admin Server reads from that same ring).
@@ -116,18 +96,7 @@ func adminLogRing(c *universe.Process, cap int) *admin.LogRing {
 // Best-effort: dropped (with a catAdmin log line) when the control
 // stream is down. Callers need no changes either way.
 func PublishAdminTopic(coord *universe.Process, topic string, payload any) {
-	if coord.ForwardsAdminTopics() {
-		b, err := json.Marshal(payload)
-		if err != nil {
-			coord.Log.Log(catAdmin, "PublishAdminTopic: marshal topic %q: %v", topic, err)
-			return
-		}
-		if err := coord.ForwardAdminTopic(topic, b); err != nil {
-			coord.Log.Log(catAdmin, "PublishAdminTopic: topic %q dropped: %v", topic, err)
-		}
-		return
-	}
-	adminBus(coord).Publish(topic, payload)
+	admin.PublishTopic(coord, topic, payload)
 }
 
 // remoteAdminTopicBridge returns the OnRemoteAdminTopic callback that
@@ -136,7 +105,7 @@ func PublishAdminTopic(coord *universe.Process, topic string, payload any) {
 // verbatim when the SSE writer marshals, so dashboard subscribers see the
 // same shape as a local publish.
 func remoteAdminTopicBridge(c *universe.Process) func(topic string, payload []byte) {
-	bus := adminBus(c)
+	bus := admin.BusFor(c)
 	return func(topic string, payload []byte) {
 		bus.Publish(topic, json.RawMessage(payload))
 	}
@@ -172,7 +141,7 @@ func DefaultAdminServerFactory() func(*universe.Process) universe.AdminServer {
 		// the dereference here is safe.
 		operatorRepo := cfg.DBStore.AdminOperators()
 		ring := adminLogRing(c, 0)
-		bus := adminBus(c)
+		bus := admin.BusFor(c)
 		server := admin.NewServer(admin.ServerOpts{
 			View:         view,
 			Registry:     c.CmdRegistry(),
