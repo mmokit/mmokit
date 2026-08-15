@@ -8,10 +8,20 @@ vote, and no RFC process. That is a deliberate choice for a framework whose
 load-bearing design — authority epochs, phase-ordered execution, the wire
 contract — degrades badly under design-by-consensus.
 
-**Write access is by invitation.** The `main` branch is protected; nobody
-pushes to it directly, including the maintainer. Collaborators are added when
-they have already contributed something substantial and shown they understand
-the invariants in [`AGENTS.md`](AGENTS.md). You do not apply; you get asked.
+**Write access is by invitation.** `main` is protected: pull requests require
+all four CI jobs green plus a maintainer approval, history stays linear, and
+force-pushes and deletions are refused. Collaborators are added when they have
+already contributed something substantial and shown they understand the
+invariants in [`AGENTS.md`](AGENTS.md). You do not apply; you get asked.
+
+Admins are exempt from those rules, which in practice means the maintainer
+sometimes pushes small changes straight to `main`. This is stated rather than
+hidden because you will see it in the history and it would otherwise look like
+the rules are decorative. It is a deliberate trade: the alternative is a sole
+maintainer opening pull requests they are also the only person able to approve,
+which is ceremony rather than review. Every rule above applies in full to
+everyone else, and CI runs on direct pushes too — the gate that catches real
+breakage is not the one being skipped.
 
 **Everyone else contributes by fork and pull request.** That path is fully open
 and pull requests from outside are genuinely welcome — the access model is about
@@ -56,8 +66,9 @@ If your employer owns your work, get their sign-off before submitting.
 git clone https://github.com/<you>/mmokit && cd mmokit
 git remote add upstream https://github.com/mmokit/mmokit
 
-# 2. Branch. Never work on main — it is protected upstream and you will
-#    want to rebase cleanly.
+# 2. Branch. Work on a branch, not main — you will want to rebase cleanly,
+#    and pull requests cannot be opened from a fork's default branch
+#    without friction.
 git checkout -b fix/short-description
 
 # 3. Make the change, then run the checks proportionate to it (see below).
