@@ -663,6 +663,13 @@ type Process struct {
 	// the listener is unobservable.
 	udpServer atomic.Pointer[net.UDPServer]
 
+	// udpKeys holds the UDP session keys issued by POST /auth/udp-key and
+	// resolved by the UDP handshake (CE-005b Tier 2). Created lazily via
+	// udpKeyRegistry() because the HTTP listener and the UDP listener start
+	// independently and either may reach it first.
+	udpKeysOnce sync.Once
+	udpKeys     *net.UDPKeyRegistry
+
 	// tlsOnce memoizes the resolved client-facing TLS config so both HTTP
 	// listeners present the same certificate. Resolved lazily via
 	// httpTLSConfig(); nil tlsConfig means serve plaintext.

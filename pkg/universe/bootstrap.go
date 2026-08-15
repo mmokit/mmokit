@@ -274,6 +274,11 @@ func (c *Process) startHTTPListener() {
 	// in-browser overlay can reach them without any extra config.
 	mux.HandleFunc("/probe-ws", pkgnet.HandleProbeWS)
 	mux.HandleFunc("/debug/conn-stats", c.ConnMgr.HandleConnStats)
+	// UDP session-key issuance (CE-005b Tier 2). Mounted here rather than in
+	// the auth service so it uses the gateway's own AuthResolver: the process
+	// that hands out the key is then always the process that terminates the
+	// UDP session, and no key crosses a process boundary in distributed mode.
+	mux.HandleFunc("POST /auth/udp-key", c.handleUDPKeyIssue)
 	mux.Handle("/metrics", c.MetricsHandler())
 	mux.Handle("/commands", handleCommandList(c.registry))
 	mux.Handle("/commands/", handleCommandDescribe(c.registry))
