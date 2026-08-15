@@ -50,17 +50,15 @@ jobs:
       # commit and needed fetch-depth: 0; it is now tree-wide over
       # `git ls-files`, which reads the index, and nothing else in this job
       # touches history.
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      # go.mod is the single place the Go version is pinned: `go 1.26.0` plus
-      # `toolchain go1.26.6`. The two say different things and both matter —
-      # `go` is the MINIMUM a consumer needs (any 1.26.x), `toolchain` is what
-      # this repository builds and formats with. setup-go@v5 reads the version
-      # file and the toolchain directive then makes every `go` invocation
-      # re-exec into go1.26.6 under GOTOOLCHAIN=auto, so the pinned toolchain
-      # is what runs either way. Do not also hard-code a `go-version:` string
-      # here — it would silently win over the file.
-      - uses: actions/setup-go@v5
+      # go.mod is the single place the Go version is pinned: `go 1.25.1` plus
+      # `toolchain go1.26.2`. setup-go@v5 reads only the `go` directive from a
+      # version file, so it installs 1.25.1 and the toolchain directive then
+      # makes every `go` invocation re-exec into go1.26.2 (GOTOOLCHAIN=auto).
+      # The result is the pinned toolchain either way. Do not also hard-code a
+      # `go-version:` string here — it would silently win over the file.
+      - uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
           cache: true
@@ -161,9 +159,9 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: extractions/setup-just@v2
+      - uses: extractions/setup-just@v4
 
       # HARD-PINNED to local dev's version. None of the three package.json
       # files declares an `engines` field or a `packageManager` field, and the
@@ -243,9 +241,9 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-dotnet@v4
+      - uses: actions/setup-dotnet@v6
         with:
           dotnet-version: "10.0.x"
 
@@ -267,16 +265,16 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
           cache: true
 
       # This job invokes just recipes, so it needs just. Installing it only in
       # the frontend job is the obvious mistake here.
-      - uses: extractions/setup-just@v2
+      - uses: extractions/setup-just@v4
 
       # Closes docs/roadmap.md §6.7's cross-language golden-vector gate. Both
       # regenerators are pure Go and need no database.
