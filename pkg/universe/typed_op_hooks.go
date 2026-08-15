@@ -21,10 +21,10 @@ type TypedOpInfo struct {
 
 // TypedOpHooks is the import-cycle indirection that lets the gateway-side
 // inbound 0x01 dispatch consult the mmokit-owned typed-op registry without
-// importing pkg/mmokit (which would be a circular dependency — pkg/mmokit
+// importing mmokit (which would be a circular dependency — mmokit
 // already depends on pkg/universe).
 //
-// pkg/mmokit populates these callbacks in its init(). When the hooks are
+// mmokit populates these callbacks in its init(). When the hooks are
 // nil (e.g. tests that build a Process standalone without importing mmokit)
 // the dispatcher returns an "unknown typeID" OperationError for every
 // inbound typed-op frame — handlers can't possibly be registered without
@@ -59,7 +59,7 @@ var TypedOpHooks struct {
 
 	// RouteGatewayLocal is the kind value for gateway-local routing,
 	// mirrored on the universe side as a uint8 to keep the hooks
-	// dependency-free (the enum lives in pkg/mmokit).
+	// dependency-free (the enum lives in mmokit).
 	RouteGatewayLocal uint8
 }
 

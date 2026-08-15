@@ -90,7 +90,7 @@ smoke-commands:
     cd {{root}} && go test -v ./pkg/universe/ \
         -run "TestEntity|TestPlayer|TestResolve|TestPickDBHost|TestMoveEntityTo|TestHandoffDriver_AcceptsNonNeighbor|TestHandoffDriver_BypassCooldown"
     cd {{root}} && go test -v ./pkg/cmdsys/ -run "TestRouteKindString_PlayerHomeOrOwner|TestLocalContext_AcceptsLocalProcess"
-    cd {{root}} && go test -v ./pkg/mmokit/ -run "TestMmokitFacade_ExportsMoveEntityAPI"
+    cd {{root}} && go test -v . -run "TestMmokitFacade_ExportsMoveEntityAPI"
     cd {{root}} && go test -v ./examples/space/internal/game/ -run "TestPlayerDataAccessor_RoundTrip|TestRepoLocator_HitAndMiss"
 
 # diagnostic — sample the server's /probe-ws heartbeat endpoint to isolate

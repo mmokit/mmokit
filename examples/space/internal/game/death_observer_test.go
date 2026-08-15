@@ -3,8 +3,8 @@ package game
 import (
 	"testing"
 
+	"github.com/mmokit/mmokit"
 	gamecomp "github.com/mmokit/mmokit/examples/space/internal/component"
-	"github.com/mmokit/mmokit/pkg/mmokit"
 	pkguniverse "github.com/mmokit/mmokit/pkg/universe"
 )
 
@@ -66,7 +66,7 @@ func TestHealth_DeathFiredAndKillerSurviveTransferCodec(t *testing.T) {
 }
 
 // runTickCallbacks drives the registered tick callbacks N times manually.
-// Mirrors pkg/mmokit/testutil_test.go::runTicks; defined locally because the
+// Mirrors internal/facadetest/testutil_test.go::runTicks; defined locally because the
 // mmokit-side helper is package-private to mmokit_test.
 func runTickCallbacks(t *testing.T, stage *mmokit.Stage, n int) {
 	t.Helper()

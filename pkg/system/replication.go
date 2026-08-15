@@ -22,7 +22,7 @@ import (
 // cluster-coherent wall clock. pkg/universe.ClusterClock satisfies this
 // structurally. Declared here (not imported from pkg/universe) because
 // pkg/system cannot import pkg/universe without creating a cycle
-// through pkg/mmokit.
+// through mmokit.
 type ClusterClock interface {
 	// Now returns the current cluster-coherent wall-clock in milliseconds.
 	// Used for diagnostics and non-replication timing (e.g. cooldowns).

@@ -251,7 +251,7 @@ func (s *Service) Init(ctx *service.Context) error {
 	go s.reapLoop()
 
 	// Server-event types are registered by mmokit.RegisterChatService
-	// at facade time (before Build) — see pkg/mmokit/chat.go's
+	// at facade time (before Build) — see chat.go's
 	// registerChatServerEvents helper. By the time Init runs, the
 	// codec already knows every chat-emitted event type.
 

@@ -3,8 +3,8 @@ package game
 import (
 	"testing"
 
+	"github.com/mmokit/mmokit"
 	gamecomp "github.com/mmokit/mmokit/examples/space/internal/component"
-	"github.com/mmokit/mmokit/pkg/mmokit"
 )
 
 // TestPOI_SupportIncreasesTTK is the crown integration test for the

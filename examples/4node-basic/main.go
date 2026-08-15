@@ -4,7 +4,7 @@ import (
 	"context"
 	"log"
 
-	"github.com/mmokit/mmokit/pkg/mmokit"
+	"github.com/mmokit/mmokit"
 
 	"github.com/mmokit/mmokit/examples/4node-basic/services/echo"
 )

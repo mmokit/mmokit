@@ -4,10 +4,10 @@ import "reflect"
 
 // BroadcastHooks is the import-cycle indirection that lets Stage.maybeBroadcast
 // consult mmokit-side data (eligibility, typeID, anchor extraction) without
-// importing pkg/mmokit (which would be a circular dependency — pkg/mmokit
+// importing mmokit (which would be a circular dependency — mmokit
 // already depends on pkg/universe).
 //
-// pkg/mmokit populates these callbacks in its init(). When the hooks are nil
+// mmokit populates these callbacks in its init(). When the hooks are nil
 // (e.g. tests that build a Stage standalone without importing mmokit) the
 // auto-broadcast path is a silent no-op.
 //

@@ -1,7 +1,7 @@
 package main
 
 import (
-	"github.com/mmokit/mmokit/pkg/mmokit"
+	"github.com/mmokit/mmokit"
 )
 
 func main() {

@@ -3,9 +3,9 @@ package game
 import (
 	"testing"
 
+	"github.com/mmokit/mmokit"
 	gamepersisttest "github.com/mmokit/mmokit/examples/space/internal/persist/persisttest"
 	"github.com/mmokit/mmokit/pkg/logger"
-	"github.com/mmokit/mmokit/pkg/mmokit"
 	"github.com/mmokit/mmokit/pkg/net"
 	"github.com/mmokit/mmokit/pkg/ops"
 	"github.com/mmokit/mmokit/pkg/persist/persisttest"

@@ -3,10 +3,10 @@ package commands
 import (
 	"fmt"
 
+	"github.com/mmokit/mmokit"
 	"github.com/mmokit/mmokit/examples/space/internal/game"
 	"github.com/mmokit/mmokit/examples/space/internal/world"
 	"github.com/mmokit/mmokit/pkg/cmdsys"
-	"github.com/mmokit/mmokit/pkg/mmokit"
 )
 
 // RegisterAll registers space-game admin commands. Generic

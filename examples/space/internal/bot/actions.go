@@ -5,8 +5,8 @@ import (
 	"log"
 	"reflect"
 
+	"github.com/mmokit/mmokit"
 	"github.com/mmokit/mmokit/examples/space/internal/game"
-	"github.com/mmokit/mmokit/pkg/mmokit"
 	pkgnet "github.com/mmokit/mmokit/pkg/net"
 	pkguniverse "github.com/mmokit/mmokit/pkg/universe"
 )

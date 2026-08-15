@@ -4,9 +4,9 @@ import (
 	"math"
 	"math/rand/v2"
 
+	"github.com/mmokit/mmokit"
 	gamecomp "github.com/mmokit/mmokit/examples/space/internal/component"
 	"github.com/mmokit/mmokit/examples/space/internal/world"
-	"github.com/mmokit/mmokit/pkg/mmokit"
 )
 
 // POIBundle is the component bundle for a Point-of-Interest entity.

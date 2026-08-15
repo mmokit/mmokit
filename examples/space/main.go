@@ -7,6 +7,7 @@ import (
 	"os"
 	"time"
 
+	"github.com/mmokit/mmokit"
 	"github.com/mmokit/mmokit/examples/space/internal/game"
 	gamecommands "github.com/mmokit/mmokit/examples/space/internal/game/commands"
 	"github.com/mmokit/mmokit/examples/space/internal/marketplace"
@@ -14,7 +15,6 @@ import (
 	gamepg "github.com/mmokit/mmokit/examples/space/internal/persist/postgres"
 	"github.com/mmokit/mmokit/examples/space/internal/world/jsonrepo"
 	"github.com/mmokit/mmokit/pkg/coords"
-	"github.com/mmokit/mmokit/pkg/mmokit"
 	"github.com/mmokit/mmokit/pkg/services/auth"
 )
 

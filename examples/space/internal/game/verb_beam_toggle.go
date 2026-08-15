@@ -1,6 +1,6 @@
 package game
 
-import "github.com/mmokit/mmokit/pkg/mmokit"
+import "github.com/mmokit/mmokit"
 
 // BeamToggle is dispatched when a mining beam toggles on/off. The payload
 // is purely visual — server-side state lives on the MiningLaser component.

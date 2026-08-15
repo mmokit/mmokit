@@ -3,7 +3,7 @@ package game
 import (
 	"testing"
 
-	"github.com/mmokit/mmokit/pkg/mmokit"
+	"github.com/mmokit/mmokit"
 )
 
 func TestNetworkSystemDeadSessionRemainsViewer(t *testing.T) {

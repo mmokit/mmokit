@@ -123,7 +123,7 @@ func broadcastClassName(goName string) string {
 }
 
 // broadcastFieldTSType returns the TS type string for a field schema.
-// Mirrors the encodings emitted by pkg/mmokit.schemaForType — keep in sync.
+// Mirrors the encodings emitted by mmokit.schemaForType — keep in sync.
 //
 // For nested structs and slice items the type expands recursively into an
 // inline interface or anonymous-typed array (e.g. `{ id: number; name: string }[]`).

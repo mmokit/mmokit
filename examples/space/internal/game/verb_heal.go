@@ -1,8 +1,8 @@
 package game
 
 import (
+	"github.com/mmokit/mmokit"
 	gamecomp "github.com/mmokit/mmokit/examples/space/internal/component"
-	"github.com/mmokit/mmokit/pkg/mmokit"
 )
 
 // Heal is a typed cross-cell-aware healing message. Applied to a target

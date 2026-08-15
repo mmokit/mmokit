@@ -3,9 +3,9 @@ package game
 import (
 	"testing"
 
+	"github.com/mmokit/mmokit"
 	gamecomp "github.com/mmokit/mmokit/examples/space/internal/component"
 	"github.com/mmokit/mmokit/examples/space/internal/item"
-	"github.com/mmokit/mmokit/pkg/mmokit"
 )
 
 // TestDisruptor_DebuffAppliesSlowAndSilence — a Disruptor NPC in Engage,

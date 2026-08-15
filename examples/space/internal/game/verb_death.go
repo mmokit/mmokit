@@ -1,9 +1,9 @@
 package game
 
 import (
+	"github.com/mmokit/mmokit"
 	gamecomp "github.com/mmokit/mmokit/examples/space/internal/component"
 	"github.com/mmokit/mmokit/examples/space/internal/item"
-	"github.com/mmokit/mmokit/pkg/mmokit"
 )
 
 // Killed is dispatched by the death observer (factory.GameSetup, see Phase 3)

@@ -43,7 +43,7 @@ type VarTailAccessor[T any] struct {
 // The binding advertises a layout of []int{-1} so DeltaEncoder treats it as
 // the single var-tail field. Because of that, a VarTailComponent binding MUST
 // be the last binding in an AutoReplicator's binding list. BuildReplicators in
-// pkg/mmokit auto-hoists var-tail bindings to the end so games don't need to
+// mmokit auto-hoists var-tail bindings to the end so games don't need to
 // worry about ordering manually.
 func VarTailComponent[T any](ecsMap *ecs.Map1[T], acc VarTailAccessor[T]) ComponentBinding {
 	if acc.Count == nil || acc.WriteItems == nil || acc.HashItems == nil {

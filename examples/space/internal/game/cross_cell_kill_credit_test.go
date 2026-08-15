@@ -3,9 +3,9 @@ package game
 import (
 	"testing"
 
+	"github.com/mmokit/mmokit"
 	"github.com/mmokit/mmokit/examples/space/internal/component"
 	"github.com/mmokit/mmokit/examples/space/internal/item"
-	"github.com/mmokit/mmokit/pkg/mmokit"
 )
 
 // TestKillCredit_FullChain exercises the death observer → Killed handler →

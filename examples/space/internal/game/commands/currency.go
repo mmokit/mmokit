@@ -5,9 +5,9 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/mmokit/mmokit"
 	"github.com/mmokit/mmokit/examples/space/internal/game"
 	"github.com/mmokit/mmokit/pkg/cmdsys"
-	"github.com/mmokit/mmokit/pkg/mmokit"
 )
 
 type CurrencyArgs struct {

@@ -3,8 +3,8 @@ package game
 import (
 	"math"
 
+	"github.com/mmokit/mmokit"
 	gamecomp "github.com/mmokit/mmokit/examples/space/internal/component"
-	"github.com/mmokit/mmokit/pkg/mmokit"
 )
 
 // stationInfo is a tiny snapshot of a station entity used by startDockingFor.

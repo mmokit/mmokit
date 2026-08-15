@@ -4,11 +4,11 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/mmokit/mmokit"
 	gamecomp "github.com/mmokit/mmokit/examples/space/internal/component"
 	"github.com/mmokit/mmokit/examples/space/internal/item"
 	"github.com/mmokit/mmokit/examples/space/internal/world"
 	"github.com/mmokit/mmokit/pkg/coords"
-	"github.com/mmokit/mmokit/pkg/mmokit"
 	"github.com/mmokit/mmokit/pkg/pathfinding"
 )
 

@@ -77,7 +77,7 @@ func (c *Process) clientWireLimits() pkgnet.WireLimits {
 
 // clientWireLimits returns the owning Process's client ingress profile, or the
 // defaults for a Stage built without one. Fixtures across pkg/universe and
-// pkg/mmokit construct a bare Stage, and a zero WireLimits would otherwise
+// mmokit construct a bare Stage, and a zero WireLimits would otherwise
 // reject every body.
 func (b *Stage) clientWireLimits() pkgnet.WireLimits {
 	if b == nil || b.coord == nil {

@@ -1,8 +1,8 @@
 package game
 
 import (
+	"github.com/mmokit/mmokit"
 	gamecomp "github.com/mmokit/mmokit/examples/space/internal/component"
-	"github.com/mmokit/mmokit/pkg/mmokit"
 )
 
 // FactionMask bits (game-defined; passed to AoESpec.FactionMask).

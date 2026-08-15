@@ -235,7 +235,7 @@ type cellOpStrReq struct {
 }
 
 // opErrorRecorder captures what encodeOpErrorViaHooks was asked to encode.
-// pkg/universe cannot import pkg/mmokit (import cycle), so swapping the hook is
+// pkg/universe cannot import mmokit (import cycle), so swapping the hook is
 // how an in-package test reads an OperationError's code and message.
 type opErrorRecorder struct {
 	mu       sync.Mutex

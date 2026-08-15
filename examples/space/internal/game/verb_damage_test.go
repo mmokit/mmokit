@@ -5,15 +5,15 @@ import (
 
 	"github.com/mlange-42/ark/ecs"
 
+	"github.com/mmokit/mmokit"
 	gamecomp "github.com/mmokit/mmokit/examples/space/internal/component"
-	"github.com/mmokit/mmokit/pkg/mmokit"
 )
 
 // TestDamage_SameCell_AppliesViaSend exercises the gw.Damage entry point
 // against a same-cell target. Same-cell dispatch is synchronous: by the
 // time gw.Damage returns, the registered handler has run and Health is
 // updated. The cross-cell variant is covered by
-// pkg/mmokit/integration_damage_test.go (TestIntegration_Damage_CrossCell)
+// internal/facadetest/integration_damage_test.go (TestIntegration_Damage_CrossCell)
 // against an isolated message type — proving the routing path works without
 // requiring two-stage GameWorld plumbing here.
 func TestDamage_SameCell_AppliesViaSend(t *testing.T) {

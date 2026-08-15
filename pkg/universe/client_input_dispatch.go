@@ -78,7 +78,7 @@ func (s *Stage) DispatchClientInput() {
 		return
 	}
 	if ClientInputHooks.TypeOfTypeID == nil {
-		// pkg/mmokit not imported (tests built standalone): no handlers
+		// mmokit not imported (tests built standalone): no handlers
 		// can possibly be registered, so dropping is the correct silent
 		// behavior.
 		return

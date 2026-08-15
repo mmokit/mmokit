@@ -5,10 +5,10 @@ import (
 
 	"github.com/mlange-42/ark/ecs"
 
+	"github.com/mmokit/mmokit"
 	gamecomp "github.com/mmokit/mmokit/examples/space/internal/component"
 	gamepersisttest "github.com/mmokit/mmokit/examples/space/internal/persist/persisttest"
 	"github.com/mmokit/mmokit/pkg/engine"
-	"github.com/mmokit/mmokit/pkg/mmokit"
 	"github.com/mmokit/mmokit/pkg/net"
 	"github.com/mmokit/mmokit/pkg/persist/persisttest"
 	pkguniverse "github.com/mmokit/mmokit/pkg/universe"

@@ -1,6 +1,6 @@
 # The reference space game
 
-A complete 2D space game — combat, mining, NPCs, an economy, a hand-authored world, and a PixiJS client — built entirely on the public MMOKIT framework. It is an example in the sense that it consumes only `pkg/mmokit` and friends, not in the sense of being small: it is the framework's most demanding consumer and its regression bed.
+A complete 2D space game — combat, mining, NPCs, an economy, a hand-authored world, and a PixiJS client — built entirely on the public MMOKIT framework. It is an example in the sense that it consumes only `mmokit` and friends, not in the sense of being small: it is the framework's most demanding consumer and its regression bed.
 
 Layout:
 

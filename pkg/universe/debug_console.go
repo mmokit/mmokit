@@ -287,7 +287,7 @@ func debugRevokeHandler(ctx context.Context, repo debugRepo, resolver debugSessi
 		}
 		sess.DebugFlags = newBits
 		// Revoke-to-zero clear is sent by the per-tick debug broadcaster
-		// when it observes the transition (see pkg/mmokit/debug_broadcaster.go).
+		// when it observes the transition (see debug_broadcaster.go).
 	}
 	return nil
 }
@@ -377,7 +377,7 @@ func sliceEqual(a, b []string) bool {
 // processDebugResolver is the production debugSessionResolver
 // implementation that walks the Process's cells to find live sessions.
 // Revoke-to-zero overlay clears are sent reactively by the per-tick
-// debug broadcaster (pkg/mmokit/debug_broadcaster.go) — no per-event
+// debug broadcaster (debug_broadcaster.go) — no per-event
 // sentinel push needed here.
 type processDebugResolver struct {
 	coord *Process

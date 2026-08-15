@@ -4,7 +4,7 @@ Low-level ECS runtime shared by every cell. It owns the Ark world, player
 sessions, fixed-timestep loop, deferred entity removal, loop-job queue,
 profiling, and interactive console foundations.
 
-Game code should normally use the `pkg/mmokit` facade. The universe layer
+Game code should normally use the `mmokit` facade. The universe layer
 constructs and wires engines for cells.
 
 ## Engine state
@@ -126,7 +126,7 @@ that touch a cell route their work through `Engine.RunOnLoop`.
 
 ## Related packages
 
-- `pkg/mmokit`: game-facing facade and system helpers
+- `mmokit`: game-facing facade and system helpers
 - `pkg/universe`: process, cell, stage, mesh, and engine wiring
 - `pkg/query`: bundle-based Ark queries
 - `pkg/cmdsys`: typed commands, routing, RBAC, and audit plumbing

@@ -5,7 +5,7 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/mmokit/mmokit/pkg/mmokit"
+	"github.com/mmokit/mmokit"
 	pkgnet "github.com/mmokit/mmokit/pkg/net"
 )
 

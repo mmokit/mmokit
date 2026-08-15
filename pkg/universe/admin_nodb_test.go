@@ -38,7 +38,7 @@ func (h *capturingHook) contains(sub string) bool {
 // --admin-listen to ":9101". So a program that never mentions admin still
 // enters the admin branch of Build, and before this it panicked there with
 // "Admin.Enabled requires a database". That is the exact program at the top of
-// pkg/mmokit/README.md, and the only reason nobody hit it is that every recipe
+// docs/mmokit-guide.md, and the only reason nobody hit it is that every recipe
 // in this repository passes --postgres-url.
 //
 // Degrading rather than panicking is the whole fix; the assertion that Build

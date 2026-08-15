@@ -13,7 +13,7 @@ Read [`AGENTS.md`](AGENTS.md) before making changes. It is the authoritative, co
 
 This repository contains a reusable server-authoritative multiplayer game framework and a reference space game. The implementation is 2D today; first-class 3D is planned (see `docs/roadmap.md`).
 
-- `pkg/mmokit/` is the public game-facing facade. Games and examples should normally import it instead of several lower-level packages.
+- The module root (`package mmokit`, imported as `github.com/mmokit/mmokit`) is the public game-facing facade. Games and examples should normally import it instead of several lower-level packages.
 - `pkg/engine/` owns the ECS loop, system lifecycle, players, loop jobs, and console foundations.
 - `pkg/universe/` owns processes, cells, roles, topology, host assignment, handoff, split/merge/migrate, and cluster integrity.
 - `pkg/system/`, `pkg/replication/`, `pkg/quantize/`, and `pkg/net/` implement generic simulation and networking.

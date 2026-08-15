@@ -446,7 +446,7 @@
       "isDeleted": false,
       "boundElements": [],
       "updated": 1783900800000,
-      "link": "./pkg/mmokit/kindreg.go",
+      "link": "./kindreg.go",
       "locked": false
     },
     {
@@ -550,7 +550,7 @@
       "isDeleted": false,
       "boundElements": [],
       "updated": 1783900800000,
-      "link": "./pkg/mmokit/add_system.go",
+      "link": "./add_system.go",
       "locked": false
     },
     {
@@ -654,7 +654,7 @@
       "isDeleted": false,
       "boundElements": [],
       "updated": 1783900800000,
-      "link": "./pkg/mmokit/state.go",
+      "link": "./state.go",
       "locked": false
     },
     {
@@ -3231,7 +3231,7 @@
       "isDeleted": false,
       "boundElements": [],
       "updated": 1783900800000,
-      "link": "./pkg/mmokit/kindreg.go",
+      "link": "./kindreg.go",
       "locked": false
     },
     {
@@ -5028,8 +5028,8 @@
       "updated": 1783900800000,
       "link": null,
       "locked": false,
-      "text": "Source-traced against pkg/mmokit, pkg/universe, pkg/engine, pkg/query, and examples/4node-basic  •  editable Excalidraw source",
-      "originalText": "Source-traced against pkg/mmokit, pkg/universe, pkg/engine, pkg/query, and examples/4node-basic  •  editable Excalidraw source",
+      "text": "Source-traced against mmokit, pkg/universe, pkg/engine, pkg/query, and examples/4node-basic  •  editable Excalidraw source",
+      "originalText": "Source-traced against mmokit, pkg/universe, pkg/engine, pkg/query, and examples/4node-basic  •  editable Excalidraw source",
       "fontSize": 14,
       "fontFamily": 3,
       "textAlign": "center",

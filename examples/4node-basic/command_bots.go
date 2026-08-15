@@ -11,7 +11,7 @@ import (
 
 	"github.com/mlange-42/ark/ecs"
 
-	"github.com/mmokit/mmokit/pkg/mmokit"
+	"github.com/mmokit/mmokit"
 )
 
 // registerBotCommands wires the `bot` typed commands onto the coordinator's

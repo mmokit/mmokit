@@ -4,10 +4,10 @@ import "reflect"
 
 // ServerEventHooks is the import-cycle indirection that lets
 // SendEventTyped consult the mmokit-owned server-event registry without
-// importing pkg/mmokit (which would be a circular dependency — pkg/mmokit
+// importing mmokit (which would be a circular dependency — mmokit
 // already depends on pkg/universe).
 //
-// pkg/mmokit populates these callbacks in its init(). When the hooks are
+// mmokit populates these callbacks in its init(). When the hooks are
 // nil (e.g. tests that build a Stage standalone without importing mmokit)
 // SendEventTyped panics with a message pointing at the missing
 // registration — same failure mode as forgetting to call
@@ -24,7 +24,7 @@ var ServerEventHooks struct {
 }
 
 // EngineDefaultFrameHooks lets pkg/universe and pkg/engine emit the
-// engine-default typed events without importing pkg/mmokit. The mmokit
+// engine-default typed events without importing mmokit. The mmokit
 // init() populates each builder with a closure that constructs the typed
 // Go struct, registers the type via RegisterEvent at package init, and
 // returns the encoded channel-0x00 typed-event frame ready for ConnMgr.Send.
@@ -46,7 +46,7 @@ var EngineDefaultFrameHooks struct {
 
 // EngineDefaultClientHandlers is the import-cycle indirection that lets
 // universe.New register engine-default HandleClient handlers (e.g. Ping →
-// Pong) without importing pkg/mmokit. pkg/mmokit's init() populates this
+// Pong) without importing mmokit. mmokit's init() populates this
 // callback; the closure calls mmokit.HandleClient[Ping] and similar
 // engine-default registrations against the given Process.
 //

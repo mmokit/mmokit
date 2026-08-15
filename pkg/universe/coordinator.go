@@ -523,7 +523,7 @@ type Process struct {
 
 	// protocol is the schema dumper synthesized by mmokit.New from
 	// cfg.Name. Typed as any so pkg/universe stays import-free of
-	// pkg/mmokit; dumpSchemaAndExit type-asserts to the schema interface.
+	// mmokit; dumpSchemaAndExit type-asserts to the schema interface.
 	protocol any
 
 	// invariantMode controls how invariant-check violations are handled.
@@ -1722,7 +1722,7 @@ func (c *Process) Build() {
 		if cfg.DBStore == nil {
 			// Admin is default-ON (bootstrap.go binds --admin-enabled=true and
 			// --admin-listen=:9101), so this panic fired for the smallest
-			// possible program — the one pkg/mmokit/README.md puts at the top
+			// possible program — the one docs/mmokit-guide.md puts at the top
 			// of the page:
 			//
 			//	mmokit.New(mmokit.Config{Name: "x", AnonymousAuth: true}).Start()

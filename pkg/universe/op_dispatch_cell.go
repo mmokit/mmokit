@@ -84,7 +84,7 @@ func (p *Process) DispatchCellRoutedOp(
 	// Stash the cell's Stage on the OpContext bag so handlers can reach
 	// it via OpContextStage(ctx) without threading another argument
 	// through the typed-op signature. See pkg/universe/op_dispatch_cell.go
-	// (this file) for the contract; pkg/mmokit re-exports the helper.
+	// (this file) for the contract; mmokit re-exports the helper.
 	ctx.Bag().Store(opContextStageKey, cell.Stage)
 
 	queued := eng.SubmitLoopJob(func() error {

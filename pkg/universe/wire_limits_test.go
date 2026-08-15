@@ -119,7 +119,7 @@ func TestMeshProfileIsWiderThanTheClientProfile(t *testing.T) {
 }
 
 // TestStageClientWireLimits_NilProcessFallsBackToDefaults covers the fixtures.
-// Both pkg/universe and pkg/mmokit build bare Stages with no owning Process,
+// Both pkg/universe and mmokit build bare Stages with no owning Process,
 // and a zero WireLimits reaching decodeState would reject every body — the
 // failure would look like a codec bug rather than a wiring one.
 func TestStageClientWireLimits_NilProcessFallsBackToDefaults(t *testing.T) {

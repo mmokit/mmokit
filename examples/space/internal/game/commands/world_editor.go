@@ -3,9 +3,9 @@ package commands
 import (
 	"sync"
 
+	"github.com/mmokit/mmokit"
 	"github.com/mmokit/mmokit/examples/space/internal/game"
 	"github.com/mmokit/mmokit/examples/space/internal/world"
-	"github.com/mmokit/mmokit/pkg/mmokit"
 )
 
 // worldEditor holds the coord-level WorldRepo + cached Snapshot for the

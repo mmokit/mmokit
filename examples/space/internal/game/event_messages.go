@@ -3,8 +3,8 @@ package game
 import (
 	"sync"
 
+	"github.com/mmokit/mmokit"
 	"github.com/mmokit/mmokit/examples/space/internal/marketplace"
-	"github.com/mmokit/mmokit/pkg/mmokit"
 )
 
 // Typed server→client event messages — registered via mmokit.RegisterEvent[T]

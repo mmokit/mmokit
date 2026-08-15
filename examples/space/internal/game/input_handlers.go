@@ -3,10 +3,10 @@ package game
 import (
 	"math"
 
+	"github.com/mmokit/mmokit"
 	gamecomp "github.com/mmokit/mmokit/examples/space/internal/component"
 	"github.com/mmokit/mmokit/examples/space/internal/item"
 	"github.com/mmokit/mmokit/pkg/coords"
-	"github.com/mmokit/mmokit/pkg/mmokit"
 )
 
 // inputSequenceAfter compares uint32 sequence numbers in serial-number space.

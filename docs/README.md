@@ -8,7 +8,7 @@ This directory separates current documentation from historical design material. 
 - [Roadmap and vision](roadmap.md) — what MMOKIT is for, where it is going, and what it will not do
 - [Current architecture](architecture.md) — process roles, cell runtime, networking, replication, and persistence
 - [Editable architecture diagram](../architecture.excalidraw) — Excalidraw overview of runtime roles, per-cell execution, and SDK generation
-- [MMOKIT guide](../pkg/mmokit/README.md) — game-facing API and composition model
+- [MMOKIT guide](mmokit-guide.md) — game-facing API and composition model
 - [Simple example](../examples/simple/README.md) — smallest runnable game
 - [Distributed example](../examples/4node-basic/README.md) — roles, meshing, generated SDK, services, and WASM
 - [Space game](../examples/space/README.md) — the reference game's composition root and layout

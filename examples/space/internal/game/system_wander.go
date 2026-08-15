@@ -4,8 +4,8 @@ import (
 	"math"
 	"math/rand"
 
+	"github.com/mmokit/mmokit"
 	gamecomp "github.com/mmokit/mmokit/examples/space/internal/component"
-	"github.com/mmokit/mmokit/pkg/mmokit"
 )
 
 // normalizeAngle wraps an angle to [-pi, pi].

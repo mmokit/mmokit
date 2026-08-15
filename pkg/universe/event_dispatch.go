@@ -57,7 +57,7 @@ func DispatchInboundEventFrame(stage *Stage, playerNetID uint32, payload []byte)
 		off += int(bodyLen)
 
 		// Universe cannot import mmokit — go through the pre-wired
-		// ClientInputHooks indirection populated in pkg/mmokit/init.go.
+		// ClientInputHooks indirection populated in init.go.
 		if ClientInputHooks.TypeOfTypeID == nil {
 			if stage.eng != nil {
 				stage.eng.Log.Log(CatClientInput,

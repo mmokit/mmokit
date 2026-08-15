@@ -4,8 +4,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/mmokit/mmokit"
 	"github.com/mmokit/mmokit/examples/space/internal/persist/persisttest"
-	"github.com/mmokit/mmokit/pkg/mmokit"
 )
 
 // ---------------------------------------------------------------------------

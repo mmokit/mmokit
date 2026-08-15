@@ -18,7 +18,7 @@ noticing, and sending each player only what they can actually see.
 ```go
 package main
 
-import "github.com/mmokit/mmokit/pkg/mmokit"
+import "github.com/mmokit/mmokit"
 
 // A system is a plain struct. Declare the components you care about and the
 // framework hands you every matching entity, every tick, on every machine.
@@ -125,7 +125,7 @@ If you run this somewhere that matters, pin a commit.
 
 ## Documentation
 
-- [**pkg/mmokit**](pkg/mmokit/README.md) — the API you actually use, and what
+- [**mmokit**](docs/mmokit-guide.md) — the API you actually use, and what
   building on it feels like
 - [**Architecture**](docs/architecture.md) — how the pieces fit together today
 - [**Roadmap**](docs/roadmap.md) — where it is going, what it will never do, and
@@ -163,4 +163,4 @@ listed in [ATTRIBUTION.md](ATTRIBUTION.md).
 **The framework does not depend on any example.** `pkg/` imports nothing from
 `examples/`, and the Go compiler enforces that rather than convention: each
 example keeps its game code under its own `internal/`. You can depend on
-`pkg/mmokit` without pulling in a line of game code.
+`mmokit` without pulling in a line of game code.

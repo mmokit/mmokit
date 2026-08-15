@@ -71,7 +71,7 @@ func (s *Service) Init(ctx *service.Context) error {
 
 // HandleLogin / HandleRegister / HandleValidateToken / HandleLogout /
 // HandleChangePassword expose the typed handlers to the mmokit facade
-// (pkg/mmokit/auth.go) so it can wire them into the typed-op registry
+// (auth.go) so it can wire them into the typed-op registry
 // without depending on auth-internal symbol visibility. The handler
 // bodies live unchanged in handlers.go.
 func (s *Service) HandleLogin(opCtx *ops.OpContext, req *AuthLoginRequest) (*AuthLoginResponse, error) {

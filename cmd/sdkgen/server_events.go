@@ -37,7 +37,7 @@ import (
 //
 // Reuses writeBroadcastClass from broadcasts.go: the schema shapes are
 // identical (both ServerEventTypeSchema and BroadcastTypeSchema alias
-// BroadcastTypeSchema in pkg/mmokit) and the on-wire encoding is identical.
+// BroadcastTypeSchema in mmokit) and the on-wire encoding is identical.
 // Emitted into broadcasts.ts so callers import everything typed-event-related
 // from one file and so the file is unified with the broadcast-dispatcher
 // machinery.

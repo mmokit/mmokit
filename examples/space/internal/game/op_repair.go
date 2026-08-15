@@ -4,9 +4,9 @@ import (
 	"fmt"
 	"math"
 
+	"github.com/mmokit/mmokit"
 	gamecomp "github.com/mmokit/mmokit/examples/space/internal/component"
 	"github.com/mmokit/mmokit/examples/space/internal/item"
-	"github.com/mmokit/mmokit/pkg/mmokit"
 )
 
 // RepairRequest is the typed-op the client sends from the docked station UI

@@ -1,7 +1,7 @@
 package game
 
 import (
-	"github.com/mmokit/mmokit/pkg/mmokit"
+	"github.com/mmokit/mmokit"
 	"github.com/mmokit/mmokit/pkg/spatial"
 )
 

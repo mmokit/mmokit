@@ -14,8 +14,8 @@ import (
 //
 // The build closure converts the encoded delta body bytes into a complete
 // channel-prefixed wire frame (typically a typed-event frame around
-// mmokit.WorldDelta). pkg/system can't import pkg/mmokit (cycle), so the
-// wiring lives one layer up — see pkg/mmokit.go.
+// mmokit.WorldDelta). pkg/system can't import mmokit (cycle), so the
+// wiring lives one layer up — see mmokit.go.
 type BinaryFrameWriter struct {
 	connMgr               net.ConnSender
 	encoder               *quantize.FrameEncoder

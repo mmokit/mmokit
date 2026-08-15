@@ -7,9 +7,9 @@ import (
 	"os"
 	"reflect"
 
+	"github.com/mmokit/mmokit"
 	gamecomp "github.com/mmokit/mmokit/examples/space/internal/component"
 	"github.com/mmokit/mmokit/examples/space/internal/game"
-	"github.com/mmokit/mmokit/pkg/mmokit"
 	pkguniverse "github.com/mmokit/mmokit/pkg/universe"
 )
 

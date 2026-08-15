@@ -36,7 +36,7 @@ import (
 // accepted and falls back to the defaults, which is what a fixture that never
 // calls BindFlags gets.
 //
-// Universe cannot import pkg/mmokit (circular dep) — the typed-op
+// Universe cannot import mmokit (circular dep) — the typed-op
 // registry, RouteKind enum, and OperationError encoder are reached via
 // the TypedOpHooks indirection populated by mmokit's init().
 func DispatchTypedOpInbound(payload []byte, ctx *ops.OpContext, router CellOpRouter, lim pkgnet.WireLimits) []byte {
@@ -119,7 +119,7 @@ func DispatchTypedOpInbound(payload []byte, ctx *ops.OpContext, router CellOpRou
 // Mirror constants for the OperationError code values defined on the
 // mmokit side. Kept in sync manually — they are wire-stable identifiers,
 // not implementation details. Values must match
-// pkg/mmokit/handle_op.go's OpError* constants.
+// handle_op.go's OpError* constants.
 const (
 	opErrorUnknownTypeID uint32 = 1
 	opErrorHandlerFailed uint32 = 2

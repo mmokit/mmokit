@@ -1,9 +1,9 @@
 package game
 
 import (
+	"github.com/mmokit/mmokit"
 	"github.com/mmokit/mmokit/examples/space/internal/component"
 	"github.com/mmokit/mmokit/examples/space/internal/item"
-	"github.com/mmokit/mmokit/pkg/mmokit"
 )
 
 // Equip/unequip is a set of GameWorld methods dispatched directly from

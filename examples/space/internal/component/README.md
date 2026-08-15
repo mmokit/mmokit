@@ -4,7 +4,7 @@ This package owns ECS state that is specific to the space game. Framework
 components such as `Position`, `Velocity`, `NetworkID`, `EntityKind`,
 `Collider`, `PlayerConn`, `CellCoord`, `Ghost`, and `Replica` live in
 [`pkg/component`](../../../../pkg/component/) and are normally consumed through
-`pkg/mmokit`.
+`mmokit`.
 
 The component declarations are the source of truth. This README documents the
 rules for changing them rather than duplicating every field.

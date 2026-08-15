@@ -14,7 +14,7 @@ This file applies to the entire repository. Keep it focused on durable rules; pu
 
 This is a server-authoritative multiplayer game framework and space-game implementation. The Go module requires Go 1.26 or newer and builds with the go1.26.6 toolchain pinned in `go.mod`. Each cell has a 20 Hz ECS loop; clients send typed input and render absolute world-space updates without knowing the mesh topology. The implementation is 2D today; first-class 3D support is planned and scoped in `docs/roadmap.md`.
 
-- `pkg/mmokit/`: public game-facing facade. Prefer this single import in games and examples.
+- Module root (`package mmokit`, imported as `github.com/mmokit/mmokit`): public game-facing facade. Prefer this single import in games and examples.
 - `pkg/universe/`: processes, roles, cells, gateways, meshing, transfers, integrity checks, and cluster coordination.
 - `pkg/engine/`: ECS loop, player lifecycle, systems, loop jobs, and console foundations.
 - `pkg/system/`, `pkg/replication/`, `pkg/quantize/`, `pkg/net/`: generic systems, replication, codecs, WebSocket, and UDP transport.

@@ -1998,7 +1998,7 @@ func (s *Stage) HandleEngineAction(action *CrossCellAction) bool {
 //
 // Called twice for cross-cell sends (source pre-handler + dest post-handler);
 // once for same-cell sends. Hooks into the mmokit-side registry via the
-// BroadcastHooks indirection (init-populated by pkg/mmokit).
+// BroadcastHooks indirection (init-populated by mmokit).
 func (s *Stage) maybeBroadcast(targetNetID uint32, msgPtr any) {
 	if BroadcastHooks.Eligible == nil ||
 		BroadcastHooks.TypeIDOf == nil ||

@@ -7,7 +7,7 @@ import (
 	"regexp"
 	"testing"
 
-	"github.com/mmokit/mmokit/pkg/mmokit"
+	"github.com/mmokit/mmokit"
 )
 
 // sdkTypeIDRe matches the "<pkg>.<Type> (typeID 0x<hex>)" annotation cmd/sdkgen
@@ -40,7 +40,7 @@ func fnv32aOf(s string) uint32 {
 // wire-neutral: mmokit.TypeIDOf hashes reflect.Type.String(), which qualifies
 // by package NAME. Every ID here derives from "game.Damage" and friends with
 // no import path anywhere, so moving the package could not rotate one. See
-// TestTypeIDOf_IgnoresImportPath in pkg/mmokit for the mechanism itself.
+// TestTypeIDOf_IgnoresImportPath in mmokit for the mechanism itself.
 //
 // Scope, stated so a pass is not over-read: this checks the SDK against
 // ITSELF — each recorded ID against the name recorded beside it. It catches a

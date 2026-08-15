@@ -5,9 +5,9 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/mmokit/mmokit"
 	"github.com/mmokit/mmokit/pkg/engine"
 	"github.com/mmokit/mmokit/pkg/logger"
-	"github.com/mmokit/mmokit/pkg/mmokit"
 	pkgnet "github.com/mmokit/mmokit/pkg/net"
 	pkguniverse "github.com/mmokit/mmokit/pkg/universe"
 )

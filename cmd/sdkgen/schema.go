@@ -32,7 +32,7 @@ type EntitySchema struct {
 }
 
 // BroadcastFieldSchema describes one field on a broadcast-eligible type.
-// JSON shape mirrors pkg/mmokit.BroadcastFieldSchema exactly.
+// JSON shape mirrors mmokit.BroadcastFieldSchema exactly.
 //
 // For encoding == "struct": Fields lists the inner fields in source order.
 // For encoding == "slice":  Item describes the element schema.
@@ -45,7 +45,7 @@ type BroadcastFieldSchema struct {
 }
 
 // BroadcastTypeSchema describes a broadcast-eligible Go type for sdkgen.
-// JSON shape mirrors pkg/mmokit.BroadcastTypeSchema exactly.
+// JSON shape mirrors mmokit.BroadcastTypeSchema exactly.
 type BroadcastTypeSchema struct {
 	Name   string                 `json:"name"`
 	TypeID uint32                 `json:"type_id"`
@@ -53,19 +53,19 @@ type BroadcastTypeSchema struct {
 }
 
 // ClientInputTypeSchema describes a HandleClient-eligible Go type for sdkgen.
-// JSON shape mirrors pkg/mmokit.ClientInputTypeSchema (= BroadcastTypeSchema)
+// JSON shape mirrors mmokit.ClientInputTypeSchema (= BroadcastTypeSchema)
 // exactly — same wire codec, different direction (client → server). Sdkgen
 // emits a TS class with an encode() instance method per entry.
 type ClientInputTypeSchema = BroadcastTypeSchema
 
 // ServerEventTypeSchema describes a RegisterEvent[T]-registered Go type for
-// sdkgen. JSON shape mirrors pkg/mmokit.ServerEventTypeSchema (= BroadcastTypeSchema)
+// sdkgen. JSON shape mirrors mmokit.ServerEventTypeSchema (= BroadcastTypeSchema)
 // exactly — same wire codec, different dispatch path. Sdkgen emits a TS class
 // with a static decode(buf) method + a client.onXxx(handler) wrapper.
 type ServerEventTypeSchema = BroadcastTypeSchema
 
 // OperationSchema describes one RegisterOp[Req, Res any] registration.
-// JSON shape mirrors pkg/mmokit.OperationSchema exactly. Both halves
+// JSON shape mirrors mmokit.OperationSchema exactly. Both halves
 // reuse BroadcastFieldSchema (same reflect-codec wire layout as broadcasts/
 // server-events/client-inputs).
 type OperationSchema struct {

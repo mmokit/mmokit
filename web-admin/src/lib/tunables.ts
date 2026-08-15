@@ -15,7 +15,7 @@
 
 import { apiPost } from "$lib/api";
 
-// Mirrors pkg/mmokit/tunable_verbs.go::tuneRow. All values are strings; empty
+// Mirrors tunable_verbs.go::tuneRow. All values are strings; empty
 // Min/Max mean "unbounded". Kind ∈ "int" | "uint" | "float" | "bool".
 export type TuneRow = {
   System: string;

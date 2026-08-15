@@ -1,6 +1,6 @@
 package main
 
-import "github.com/mmokit/mmokit/pkg/mmokit"
+import "github.com/mmokit/mmokit"
 
 type PlayerName struct {
 	Name string `net:"initial"`

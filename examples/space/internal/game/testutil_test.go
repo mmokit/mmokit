@@ -5,12 +5,12 @@ import (
 
 	"github.com/google/uuid"
 
+	"github.com/mmokit/mmokit"
 	gamepersisttest "github.com/mmokit/mmokit/examples/space/internal/persist/persisttest"
 	comp "github.com/mmokit/mmokit/pkg/component"
 	"github.com/mmokit/mmokit/pkg/coords"
 	"github.com/mmokit/mmokit/pkg/engine"
 	"github.com/mmokit/mmokit/pkg/logger"
-	"github.com/mmokit/mmokit/pkg/mmokit"
 	"github.com/mmokit/mmokit/pkg/net"
 	"github.com/mmokit/mmokit/pkg/ops"
 	"github.com/mmokit/mmokit/pkg/persist/persisttest"

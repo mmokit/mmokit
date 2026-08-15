@@ -2,7 +2,7 @@
 
 **Last verified:** 2026-07-13
 
-MMOKIT is a server-authoritative multiplayer game framework. The reusable engine lives under `pkg/`; three examples under `examples/` consume it, the largest being a reference space game. Games normally import the `pkg/mmokit` facade rather than assembling engine packages directly.
+MMOKIT is a server-authoritative multiplayer game framework. The reusable engine lives under `pkg/`; three examples under `examples/` consume it, the largest being a reference space game. Games normally import the `mmokit` facade rather than assembling engine packages directly.
 
 The current implementation is 2D throughout. For project scope, goals, and planned direction — including first-class 3D support — see [`roadmap.md`](roadmap.md).
 
@@ -176,7 +176,7 @@ Use TLS certificate flags or a TLS-terminating proxy in production. Self-signed 
 
 | Area | Responsibility |
 | --- | --- |
-| `pkg/mmokit` | Public game-facing facade and high-level registration helpers |
+| `mmokit` | Public game-facing facade and high-level registration helpers |
 | `pkg/universe` | Process roles, cells/stages, topology, handoff, mesh, services, integrity checks. A cell's `(MeshID, CellID)` identity is immutable behind an atomic swap — read it via `Cell.MeshID()` / `Cell.CellID()`, or `Cell.Identity()` when both halves must agree |
 | `pkg/engine` | ECS loop, systems, players, loop jobs, console foundations |
 | `pkg/system` | Reusable physics, lifetime, spatial, replication, and debug systems |

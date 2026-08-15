@@ -4,10 +4,10 @@ import "reflect"
 
 // ClientInputHooks is the import-cycle indirection that lets the gateway-
 // side per-tick dispatch consult the mmokit-owned client-input registry
-// (mmokit.HandleClient) without importing pkg/mmokit (which would be a
-// circular dependency — pkg/mmokit already depends on pkg/universe).
+// (mmokit.HandleClient) without importing mmokit (which would be a
+// circular dependency — mmokit already depends on pkg/universe).
 //
-// pkg/mmokit populates these callbacks in its init(). When the hooks are
+// mmokit populates these callbacks in its init(). When the hooks are
 // nil (e.g. tests that build a Stage standalone without importing mmokit)
 // the dispatchClientInput phase is a silent no-op.
 //

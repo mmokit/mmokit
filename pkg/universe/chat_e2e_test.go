@@ -7,7 +7,7 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/mmokit/mmokit/pkg/mmokit"
+	"github.com/mmokit/mmokit"
 	"github.com/mmokit/mmokit/pkg/service"
 	"github.com/mmokit/mmokit/pkg/services/auth/authtest"
 	"github.com/mmokit/mmokit/pkg/services/chat"

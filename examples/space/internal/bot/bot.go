@@ -13,9 +13,9 @@ import (
 
 	"github.com/coder/websocket"
 
+	"github.com/mmokit/mmokit"
 	gamecomp "github.com/mmokit/mmokit/examples/space/internal/component"
 	"github.com/mmokit/mmokit/examples/space/internal/game"
-	"github.com/mmokit/mmokit/pkg/mmokit"
 	pkgnet "github.com/mmokit/mmokit/pkg/net"
 )
 

@@ -3,7 +3,7 @@ package main
 import (
 	"math"
 
-	"github.com/mmokit/mmokit/pkg/mmokit"
+	"github.com/mmokit/mmokit"
 )
 
 type WavePos struct {

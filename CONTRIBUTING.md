@@ -128,7 +128,7 @@ identifiers against source with `rg` before writing code.
 
 | Path | Purpose |
 | --- | --- |
-| [`pkg/mmokit`](pkg/mmokit/) | Public, single-import game-facing facade |
+| [`mmokit`](./) | Public, single-import game-facing facade |
 | [`pkg/engine`](pkg/engine/) | ECS loop, systems, player lifecycle, loop jobs, console foundations |
 | [`pkg/universe`](pkg/universe/) | Processes, cells, topology, mesh control/data, handoffs, integrity checks |
 | [`pkg/system`](pkg/system/) | Generic physics, spatial, lifetime, movement, replication systems |
