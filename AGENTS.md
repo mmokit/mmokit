@@ -33,7 +33,7 @@ This is a server-authoritative multiplayer game framework and space-game impleme
 
 - `pkg/` is reusable engine code and must never import an example. Each example's game code lives under its own `internal/` directory, so this is a compile error rather than a convention.
 - Generic components live in `pkg/component`; a game's components live in its own `internal/component`. When both are needed, use clear aliases such as `comp` and `gamecomp`.
-- Production files under an example's `internal/game/` must not import Ark ECS directly, except the existing glue files `entity_kinds.go` and `var_tail_bindings.go`. Tests are exempt. Run `just lint-no-ark` after game-layer changes; do not expand the allowlist casually. The script takes the game directory as an argument and exits 2 if it does not exist — a renamed game layer fails loudly rather than passing silently.
+- Production files under an example's `internal/game/` must not import Ark ECS directly, except the existing glue files `entity_kinds.go` and `var_tail_bindings.go`. Tests are exempt. Run `just lint-no-ark` after game-layer changes; do not expand the allowlist casually. The recipe takes no arguments and checks `examples/space/internal/game`; the underlying `scripts/no_ark_in_game.sh` accepts an optional game directory and exits 2 if it does not exist — a renamed game layer fails loudly rather than passing while checking nothing.
 - Game code should use MMOKIT wrappers. Raw Ark access belongs in framework code or explicit binding glue.
 - System registration order is semantic. Preserve the order in `examples/space/internal/game/factory.go`; in particular, Ability precedes Projectile, Lifetime precedes AoE, Spatial precedes Collision, and Network remains last.
 
@@ -105,10 +105,10 @@ Keep generated diffs only when the corresponding source/schema changed.
 ## Build and run rules
 
 - `justfile` is the canonical task runner; there is no Makefile. CI is GitHub Actions: `.github/workflows/ci.yml` on every push and pull request, and `.github/workflows/nightly.yml` on a schedule for `-race` and fuzz mutation. The workflows invoke `just` recipes and the same commands listed under Validation below — keep them in step when you change a recipe name.
-- Never build binaries into the repository or package roots, and do not use `go build ./...`. Use `just build-go` for a DB-free server compile or an explicit `go build -o bin/<name> <package>` recipe.
-- `just build` generates the space SDK, builds both web applications, and writes `bin/server`. It does not run protobuf or WASM generation.
-- Full root builds and SDK dumps require PostgreSQL. Start it first with `just db-up`; this requires Docker. Most build/run recipes do not declare `db-up` as a dependency.
-- `just run`, `just dev`, `web-serve`, distributed recipes, probes, and smoke clients are long-running/manual workflows. Run them only when useful and stop any tmux/server sessions you start.
+- Never build binaries into the repository or package roots, and do not use `go build ./...`. For a DB-free compile check use `go vet ./...`, which type-checks every package without emitting binaries; to produce a binary use an example's `just build-go` or an explicit `go build -o bin/<name> <package>`.
+- Builds are per-example. The root `just build` only builds the admin SPA into `pkg/admin/static/dist`. Each example builds itself: `cd examples/<name> && just build` (or `just run`), with `build-go`, `build-web`, `sdk` and `admin-build` available individually. There is no root `build-go`. Neither path runs protobuf or WASM generation — those are `just proto` and `just wasm-build`.
+- Example builds and SDK dumps require PostgreSQL, because a game opens its database before `--dump-schema` exits. Start it first with `just db-up`; this requires Docker. Most build/run recipes do not declare `db-up` as a dependency.
+- An example's `just run`, `just dev`, `just distributed`, `just web-serve` and (space only) `just botclient`, plus the root `just admin-dev`, `just csharp-smoke` and the prometheus recipes, are long-running/manual workflows. Run them only when useful and stop any tmux/server sessions you start.
 - Treat `just db-reset` as destructive: it removes the PostgreSQL volume. Do not run it without explicit intent. `resetdb` only removes obsolete SQLite files and is not a PostgreSQL reset.
 - Common local ports are gateway HTTP 8080, UDP 9000, control 9100, admin 9101, Vite 5173, and static web 5174. Avoid launching conflicting listeners during tests.
 
@@ -121,7 +121,7 @@ Run the smallest relevant checks first, then broaden in proportion to the change
 | Go package | Targeted `go test ./path -run TestName`, then `go vet ./...` |
 | Broad Go/runtime behavior | `go test ./... -count=1 -timeout 300s` in an environment that permits localhost TCP/UDP |
 | An example's game layer | Go checks plus that example's `just lint-no-ark` |
-| Go compile only | `just build-go` |
+| Go compile only | `go vet ./...` (whole module, no binaries); an example's `just build-go` when you need the binary |
 | `web-admin` | `just admin-typecheck`, `just admin-test`, and `just admin-build` when the embedded bundle must change |
 | An example web client | `cd examples/<name>/web && bun run typecheck && bun test && bun run build` |
 | 4node web | `cd examples/4node-basic/web && bun run typecheck && bun test && bun run build` |

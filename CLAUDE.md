@@ -80,7 +80,7 @@ Do not revive removed APIs found in historical documents, including:
 
 - `pkg/` is reusable and must not import an example. Each example's game code sits under its own `internal/`, so this is a compile error, not a convention.
 - Generic components live in `pkg/component`; a game's components live in its own `internal/component`.
-- Production files in an example's `internal/game/` must not import Ark directly except the existing binding glue allowlist. Run `just lint-no-ark` after game-layer changes; it takes the game directory as an argument and exits 2 if that directory is missing.
+- Production files in an example's `internal/game/` must not import Ark directly except the existing binding glue allowlist. Run `just lint-no-ark` after game-layer changes. The recipe takes no arguments and checks `examples/space/internal/game`; the underlying `scripts/no_ark_in_game.sh` accepts an optional game directory and exits 2 if it does not exist, so a renamed game layer fails loudly instead of passing while checking nothing.
 - System registration order is semantic. Preserve the order in `examples/space/internal/game/factory.go`; Network stays last.
 - ECS structural changes are illegal while a query holds the world lock. Queue them through `s.Commands()` or `stage.Commands()`.
 - The engine flushes deferred commands after each system, so system N's changes are visible to system N+1 in the same tick.
@@ -112,13 +112,15 @@ Do not revive removed APIs found in historical documents, including:
 Do not run `go build ./...` or write binaries into package directories. Use:
 
 ```bash
-just build-go
-just build
-go vet ./...
+go vet ./...                             # DB-free type check of the whole module
 go test ./... -count=1 -timeout 300s
+just build                               # admin SPA bundle only
+cd examples/space && just build          # that example: SDK + web + admin + bin/space
 ```
 
-`just build-go` is the DB-free compile check. `just build` generates the space SDK, builds both web applications, and writes `bin/server`; it needs the frontend toolchain and a running PostgreSQL instance. It does not regenerate protobuf or WASM modules.
+`go vet ./...` is the DB-free compile check — it type-checks every package without emitting binaries. There is no root `build-go` recipe.
+
+Builds are per-example. The root `just build` only builds the admin SPA into `pkg/admin/static/dist`. Each example builds itself with `cd examples/<name> && just build` (or `just run`), and each exposes `build-go` for its Go binary alone. The space build needs the frontend toolchain and a running PostgreSQL instance, because its schema dump opens the database before exiting. Neither regenerates protobuf or WASM modules — those are `just proto` and `just wasm-build`.
 
 Run the smallest relevant validation first, then broaden according to [`AGENTS.md`](AGENTS.md). Common focused checks include:
 
