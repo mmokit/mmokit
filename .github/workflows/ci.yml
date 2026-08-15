@@ -79,8 +79,8 @@ jobs:
       # formatted in the same commit that widened this gate, so it is green.
       #
       # gofmt is taken from `go env GOROOT` rather than PATH: PATH's gofmt
-      # belongs to the version setup-go installed (1.25.1), while `go env`
-      # re-execs into the pinned toolchain and reports go1.26.2's GOROOT. gofmt
+      # belongs to whatever setup-go installed, while `go env` re-execs into
+      # the pinned toolchain and reports go1.26.6's GOROOT. gofmt
       # output is toolchain-dependent, so the gate must measure what
       # contributors run.
       - name: gofmt

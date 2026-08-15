@@ -75,8 +75,15 @@ export class Transport {
    * byte. Used by the typed-op Promise correlator in <Game>Client, which
    * builds the full [0x01][typeID][requestID][bodyLen][body] frame in one
    * allocation rather than two.
+   *
+   * The parameter is Uint8Array<ArrayBuffer> rather than a bare Uint8Array
+   * because this is the only send path taking a caller-supplied array. Since
+   * TypeScript 5.7 the bare form widens to Uint8Array<ArrayBufferLike>, which
+   * admits SharedArrayBuffer-backed views that WebSocket.send cannot accept —
+   * TypeScript 6 rejects it outright. Any normally allocated array satisfies
+   * this; the sibling methods allocate their own frames and infer it.
    */
-  sendRaw(frame: Uint8Array): void {
+  sendRaw(frame: Uint8Array<ArrayBuffer>): void {
     if (!this.ws || this.ws.readyState !== WebSocket.OPEN) return;
     this.ws.send(frame);
   }
