@@ -127,6 +127,8 @@ lint-no-ark:
 #   just fuzz 5m   # a longer local pass
 fuzz seconds="20s":
     go test ./pkg/net/udpproto -run '^$' -fuzz FuzzUDPProtoDecode -fuzztime {{seconds}}
+    go test ./pkg/net/udpcrypto -run '^$' -fuzz FuzzSessionOpen -fuzztime {{seconds}}
+    go test ./pkg/net/udpcrypto -run '^$' -fuzz FuzzReplayWindow -fuzztime {{seconds}}
     go test ./pkg/universe -run '^$' -fuzz FuzzUnmarshalTransferFrame -fuzztime {{seconds}}
     go test ./pkg/universe -run '^$' -fuzz FuzzDecodeTypedOpFrame -fuzztime {{seconds}}
     go test ./pkg/universe -run '^$' -fuzz FuzzDispatchInboundEventFrame -fuzztime {{seconds}}
