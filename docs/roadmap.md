@@ -170,12 +170,12 @@ Tier 1 landed. [`pkg/net/udp_server.go`](../pkg/net/udp_server.go) now routes ev
 
 Connection requests no longer allocate. An unauthenticated request now records only a `pendingHandshake`; the transport and its goroutine are created only when a data packet arrives carrying the token for that same source address, which proves return routability. Both the pending table and the session table are bounded, and drop counters exist with rate-limited logging so the log itself cannot be used for amplification.
 
-Two Tier 1 claims are weaker than previously recorded, both measured:
+Two Tier 1 claims were weaker than previously recorded. One is now closed, one is still live — re-verified against source 2026-08-15:
 
-- **The drop counters are unreadable in production.** [`Process.startUDPListener`](../pkg/universe/bootstrap.go) at `bootstrap.go:271-291` discards the `*UDPServer` — `go udpServer.Run(ctx)` is the last use of the handle — so `SetLimits`, `SourceMismatchDrops`, `CapacityDrops` and `PendingFullDrops` have **zero** production callers. Their only callers are in `pkg/net/udp_server_test.go`. The configured limits never reach the running server either.
-- **Pending entries expire only under table pressure, never on a timer.** `sweepPendingLocked` is called from exactly one place, [`pkg/net/udp_server.go:335-337`](../pkg/net/udp_server.go), guarded by `if len(s.pending) >= s.maxPending`. So 1024 spoofed source addresses deny new connections for up to `pendingTTL` (15 s). Bounded and self-healing, but not the timer-based expiry the entry implied.
+- **The drop counters were unreadable in production — now fixed, do not redo it.** `Process.startUDPListener` used to discard the `*UDPServer`, leaving `SetLimits` and every drop-counter accessor with zero production callers. It now stores the handle ([`bootstrap.go:341-342`](../pkg/universe/bootstrap.go)) and applies `SetWireLimits`, and all three counters are scraped at [`pkg/metrics/http.go:133-135`](../pkg/metrics/http.go) as `mmokit_udp_packets_dropped_total{reason}`. Closed during the P0 closure phase.
+- **Pending entries expire only under table pressure, never on a timer — still live.** `sweepPendingLocked` still has exactly one caller, [`pkg/net/udp_server.go:352-353`](../pkg/net/udp_server.go), guarded by `if len(s.pending) >= s.maxPending`. So 1024 spoofed source addresses deny new connections for up to `pendingTTL` (15 s). Bounded and self-healing, but not the timer-based expiry the entry implied.
 
-Both are fixed inside the P0 closure phase ([§6.8](#68-next-phase--p0-closure)).
+The first was fixed inside the P0 closure phase ([§6.8](#68-next-phase--p0-closure)). The second was not, and it is subsumed rather than scheduled separately: Tier 2 replaces the pending table with a stateless HMAC handshake cookie, which removes the table the sweep exists to bound.
 
 **UDP is off in the shipped binary default:** `--udp-listen` defaults to empty ([`bootstrap.go:73-75`](../pkg/universe/bootstrap.go)) and logs an explicit experimental warning when enabled, escalated for a non-loopback bind. Note this is *not* true of local development — `just dev` (`justfile:65`) and `just distributed-space` (`justfile:145`) both pass `--udp-listen=:9000`, a wildcard bind, deliberately as of `37d4d00`. Every dev process carries the exposure. Nine regression tests in `pkg/net/udp_server_test.go` cover spoofed data, spoofed disconnect, foreign-token promotion, handshake idempotence, and both caps; the package is race-clean.
 
@@ -462,6 +462,54 @@ Each of these was found by verifying a plausible plan against source and finding
 - **Do not reuse `Process.httpTLSConfig` for mesh TLS.** It `sync.Once`-memoizes the client-facing posture and falls back to plaintext on error; a mesh cert is required even when client TLS is plaintext, which is the default. Reuse `generateDevCert` unchanged instead, and do not "fix" its localhost-only SANs — peers dial with `InsecureSkipVerify`, so changing them would imply a verification that does not happen.
 - **Flag defaults never reach tests.** `universe.New`'s `if !flag.Parsed()` guard is always false under `go test`, so `BindFlags` is skipped entirely. Defaults must be applied as a zero-value fallback in `New()`, and roughly twenty fixture sites must set `Config.ClusterSecret` directly.
 - **A corrupt component blob must skip that component, not the entity.** Aborting the transfer turns a malformed blob into an entity-loss bug on the handoff path. The trade — an entity carrying a stale or absent component instead of a clean failure — is an authority-boundary decision and belongs in the roadmap entry, not only a code comment.
+
+### 6.9 Next phase — CE-005b Tier 2
+
+**Approximately 15 engineer-days**, against the ~12.5 the [CE-005b entry](#ce-005b--udp-security-and-gating--tier-1-done-tier-2-open) prices. The difference is not new scope: it is a crypto-primitives unit and a close-out unit that the 12.5 folds into its four chunks. They are priced here because the first one carries the phase's highest risk.
+
+This phase closes the last open P0 item, so **[§7.1](#71-sequencing-rule)'s gate lifts when it ends** and the 104-day 2D/3D program may begin. Status is derived from source, not from this table.
+
+#### 6.9.1 What it closes
+
+| Item | At phase end |
+| --- | --- |
+| CE-005b Tier 2 | **Closed** — authenticated handshake, AEAD framing, replay enforcement, C# parity, op-channel auth retired |
+| CE-009 | **Partially advanced** — the UDP header version byte only, bundled per §7.1. The schema fingerprint and the two unguarded registries (`registerClientInputType`, `RegisterBroadcastType`) remain open |
+| CE-005b Tier 1 residual | **Closed as a side effect** — the pending-handshake table disappears, taking `sweepPendingLocked` and the 1024-spoofed-address denial window with it |
+
+#### 6.9.2 Design decisions, locked
+
+Recorded here because each was measured and each is expensive to re-derive wrongly.
+
+- **AES-256-GCM, not ChaCha20-Poly1305.** `Mmokit.Sdk.Core.csproj` targets `netstandard2.1`, which has `AesGcm` and not `ChaCha20Poly1305`.
+- **HKDF-SHA256, hand-rolled on the C# side.** Go gets `x/crypto/hkdf`; `netstandard2.1` has no `HKDF` class, so C# needs roughly twenty lines over `HMACSHA256`, golden-tested against the Go output rather than assumed equivalent.
+- **Separate send and receive keys per direction.** One key in both directions is a nonce-reuse trap that no test reliably catches.
+- **The nonce is explicit in the packet.** The unreliable channel drops and reorders by design, so an implicit counter desynchronises on the first loss. This costs header bytes and is not optional.
+- **Replay is a per-direction sliding-window bitmap.** The reliable channel's existing `seq` is a delivery mechanism, not a security one, and cannot be reused for this.
+- **The token stops being a credential.** After this phase it is a session index; the MAC is the credential. Tier 1's source-address binding stays as defence in depth.
+
+Header cost: the unreliable header goes from 5 bytes to roughly 29 (explicit counter plus a 16-byte tag) plus the CE-009 version byte. At 20 Hz that is under 500 B/s per client per direction — irrelevant for bandwidth, relevant for MTU, so the framing unit owes a packet-budget check rather than an assumption.
+
+#### 6.9.3 Units
+
+| # | Unit | Item | Days | Risk | After |
+| --- | --- | ---: | --- | --- | --- |
+| 1 | Crypto primitives and the IL2CPP `AesGcm` spike: HKDF wrapper, seal/open, nonce ownership, replay window, fuzz. No wire change | CE-005b | 1.5 | **high** | — |
+| 2 | `POST /auth/udp-key`, process-level key registry, UDP analogue of `Gateway.onAuthSuccess` | CE-005b | 2.5 | med | 1 |
+| 3 | Stateless HMAC handshake cookie replacing `pendingHandshake` | CE-005b | 1.5 | med | 1 |
+| 4 | AEAD framing across `udpproto` / `udp_server` / `udp_transport` / `udpclient`, replay enforcement, CE-009 version byte, corpus regeneration | CE-005b, CE-009 | 3.5 | **high** | 1, 2, 3 |
+| 5 | C# parity and AEAD golden vectors in `cmd/csharp-golden` | CE-005b | 3 | med | 4 |
+| 6 | Retire op-channel auth in the C# client | CE-005b | 2.5 | med | 5 |
+| 7 | Close-out: status written back here, CHANGELOG, confirm §7.1 lifts | all | 0.5 | low | 1–6 |
+
+#### 6.9.4 Traps this phase must not fall into
+
+- **Run the IL2CPP spike before anything else.** The cipher correction above is derived from the *TFM*, and `netstandard2.1` having `AesGcm` is not the same claim as IL2CPP having a working backend for it on every Unity target. If that answer is no, units 4, 5 and 6 all rebuild on a different primitive. It is a half-day to answer now and a phase to absorb later.
+- **Nonce uniqueness must be structural, not tested.** A repeated nonce under GCM leaks the authentication key, not merely one plaintext. Give the counter a single owner that hands out values; do not let two call sites both be able to construct a nonce.
+- **Do not reuse the reliable channel's `seq` as the nonce.** It is 16-bit, it wraps, and retransmits deliberately reuse it — every one of those properties is fatal here.
+- **Client wire type IDs are not affected and the schema dump must prove it.** UDP framing is not the reflection codec. `--dump-schema` output for all three examples must be byte-identical across this phase; if it moves, something reached into the codec that should not have. This is the same guard the module-root refactor used.
+- **`just dev` and `just distributed` pass `--udp-listen=:9000` on a wildcard bind.** Every development process currently carries the unauthenticated exposure. Unit 4 closes it; until then, do not treat the shipped-binary default as describing the dev posture.
+- **One wire break, not two.** CE-009's header version byte lands in unit 4. Splitting it costs a second lockstep redeploy and a second golden regeneration for one byte.
 
 ---
 
