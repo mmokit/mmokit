@@ -13,12 +13,10 @@ namespace Mmokit.Sdk.Core.Tests
     /// authoritative, so a C# bug must show up as a failure here rather than as
     /// two implementations agreeing on the wrong answer.
     ///
-    /// SCOPE LIMIT, deliberately recorded: this test project targets net10.0,
-    /// so it exercises .NET 10's AesGcm. Passing here proves the algorithm and
-    /// the derivation match Go, and the library compiling proves the API exists
-    /// on netstandard2.1 — it does NOT prove Unity's IL2CPP backend can service
-    /// AesGcm on every target platform. That answer needs a device build; see
-    /// roadmap §6.9.4.
+    /// The runtime-availability caveat that used to sit here is gone with the
+    /// cipher it applied to. ChaCha20-Poly1305 is implemented in managed C# in
+    /// this assembly, so there is no platform backend to be missing: what runs
+    /// under net10.0 here is the same code that runs under IL2CPP.
     /// </summary>
     public class UdpCryptoGoldenTests
     {
@@ -56,10 +54,10 @@ namespace Mmokit.Sdk.Core.Tests
 
         [Theory]
         // counter, plaintext, expected ciphertext||tag — all from Go.
-        [InlineData(1UL, "", "93db92a123ec1237afc1447e67d4f645")]
-        [InlineData(2UL, "hello", "05418a3ef8ec10232e049185d204ff7293ebee4879")]
+        [InlineData(1UL, "", "7f0557263d6343535481ad5537e1060b")]
+        [InlineData(2UL, "hello", "7ee59228932ce5332e8db65574c5a3ee000dd0cfd7")]
         [InlineData(3UL, "client to server",
-            "af843dbe9e24682405c94dec79d6045e0469ebf674ee0436d2211284b72e07be")]
+            "83ba29e957b1e780c2a99e4658f93b5ba82283e21129bd3baee9edef1a81bcdf")]
         public void SealMatchesGo(ulong counter, string plaintext, string expectedHex)
         {
             var key = UdpCrypto.DeriveKey(Hex(MasterHex), Hex(SaltHex), UdpCrypto.LabelC2S);
@@ -68,10 +66,10 @@ namespace Mmokit.Sdk.Core.Tests
         }
 
         [Theory]
-        [InlineData(1UL, "", "93db92a123ec1237afc1447e67d4f645")]
-        [InlineData(2UL, "hello", "05418a3ef8ec10232e049185d204ff7293ebee4879")]
+        [InlineData(1UL, "", "7f0557263d6343535481ad5537e1060b")]
+        [InlineData(2UL, "hello", "7ee59228932ce5332e8db65574c5a3ee000dd0cfd7")]
         [InlineData(3UL, "client to server",
-            "af843dbe9e24682405c94dec79d6045e0469ebf674ee0436d2211284b72e07be")]
+            "83ba29e957b1e780c2a99e4658f93b5ba82283e21129bd3baee9edef1a81bcdf")]
         public void OpenRoundTripsGoCiphertext(ulong counter, string plaintext, string sealedHex)
         {
             var key = UdpCrypto.DeriveKey(Hex(MasterHex), Hex(SaltHex), UdpCrypto.LabelC2S);
@@ -92,7 +90,7 @@ namespace Mmokit.Sdk.Core.Tests
         public void WrongCounterFailsToOpen()
         {
             var key = UdpCrypto.DeriveKey(Hex(MasterHex), Hex(SaltHex), UdpCrypto.LabelC2S);
-            var sealedBytes = Hex("05418a3ef8ec10232e049185d204ff7293ebee4879");
+            var sealedBytes = Hex("7ee59228932ce5332e8db65574c5a3ee000dd0cfd7");
             Assert.Null(UdpCrypto.Open(key, 3, sealedBytes, Hex(AadHex)));
         }
 
@@ -100,7 +98,7 @@ namespace Mmokit.Sdk.Core.Tests
         public void WrongAadFailsToOpen()
         {
             var key = UdpCrypto.DeriveKey(Hex(MasterHex), Hex(SaltHex), UdpCrypto.LabelC2S);
-            var sealedBytes = Hex("05418a3ef8ec10232e049185d204ff7293ebee4879");
+            var sealedBytes = Hex("7ee59228932ce5332e8db65574c5a3ee000dd0cfd7");
             Assert.Null(UdpCrypto.Open(key, 2, sealedBytes, Hex("0002deadbeef")));
         }
 
@@ -109,7 +107,7 @@ namespace Mmokit.Sdk.Core.Tests
         {
             // A client-sealed packet must not open under the server-send key.
             var s2c = UdpCrypto.DeriveKey(Hex(MasterHex), Hex(SaltHex), UdpCrypto.LabelS2C);
-            var sealedBytes = Hex("05418a3ef8ec10232e049185d204ff7293ebee4879");
+            var sealedBytes = Hex("7ee59228932ce5332e8db65574c5a3ee000dd0cfd7");
             Assert.Null(UdpCrypto.Open(s2c, 2, sealedBytes, Hex(AadHex)));
         }
 
@@ -117,7 +115,7 @@ namespace Mmokit.Sdk.Core.Tests
         public void TamperedCiphertextFailsToOpen()
         {
             var key = UdpCrypto.DeriveKey(Hex(MasterHex), Hex(SaltHex), UdpCrypto.LabelC2S);
-            var sealedBytes = Hex("05418a3ef8ec10232e049185d204ff7293ebee4879");
+            var sealedBytes = Hex("7ee59228932ce5332e8db65574c5a3ee000dd0cfd7");
             for (int i = 0; i < sealedBytes.Length; i++)
             {
                 var bad = (byte[])sealedBytes.Clone();

@@ -10,10 +10,14 @@ namespace Mmokit.Sdk.Core
     /// UdpCryptoGoldenTests are generated from the Go implementation, not from
     /// this one.
     ///
-    /// AES-256-GCM, not ChaCha20-Poly1305: this assembly targets netstandard2.1,
-    /// the TFM Unity consumes, which ships AesGcm and does not ship
-    /// ChaCha20Poly1305. netstandard2.1 also has no HKDF class, so Hkdf below is
-    /// hand-rolled over HMACSHA256 and pinned to Go's output by golden test.
+    /// ChaCha20-Poly1305 (RFC 8439), implemented in ChaCha20Poly1305.cs. An
+    /// earlier revision used AesGcm on the grounds that netstandard2.1 declares
+    /// it; that checked the reference assembly rather than the runtime. Mono
+    /// stubs AesGcm to throw PlatformNotSupportedException (mono/mono#19285) and
+    /// Unity 6.5 still ships the Mono class library, which IL2CPP inherits.
+    ///
+    /// netstandard2.1 also has no HKDF class, so Hkdf below is hand-rolled over
+    /// HMACSHA256 and pinned to Go's output by golden test.
     /// </summary>
     public static class UdpCrypto
     {
@@ -81,7 +85,7 @@ namespace Mmokit.Sdk.Core
         }
 
         /// <summary>
-        /// Builds the GCM nonce for a packet counter. Leading four bytes are
+        /// Builds the AEAD nonce for a packet counter. Leading four bytes are
         /// zero; the counter is big-endian in the trailing eight. The two
         /// directions use different keys, so the same counter value in each is
         /// safe.
@@ -102,17 +106,7 @@ namespace Mmokit.Sdk.Core
         /// </summary>
         public static byte[] Seal(byte[] key, ulong counter, byte[] plaintext, byte[] aad)
         {
-            var nonce = NonceFor(counter);
-            var ct = new byte[plaintext.Length];
-            var tag = new byte[TagSize];
-            using (var gcm = NewGcm(key))
-            {
-                gcm.Encrypt(nonce, plaintext, ct, tag, aad);
-            }
-            var outBuf = new byte[ct.Length + TagSize];
-            Buffer.BlockCopy(ct, 0, outBuf, 0, ct.Length);
-            Buffer.BlockCopy(tag, 0, outBuf, ct.Length, TagSize);
-            return outBuf;
+            return ChaCha20Poly1305.Seal(key, NonceFor(counter), plaintext, aad);
         }
 
         /// <summary>
@@ -120,45 +114,10 @@ namespace Mmokit.Sdk.Core
         /// must not distinguish authentication failure from a length problem,
         /// since that distinction is an oracle.
         /// </summary>
-        public static byte[]? Open(byte[] key, ulong counter, byte[] sealed_, byte[] aad)
+        public static byte[]? Open(byte[] key, ulong counter, byte[]? sealed_, byte[]? aad)
         {
-            if (sealed_ == null || sealed_.Length < TagSize) return null;
-            var nonce = NonceFor(counter);
-            int ctLen = sealed_.Length - TagSize;
-            var ct = new byte[ctLen];
-            var tag = new byte[TagSize];
-            Buffer.BlockCopy(sealed_, 0, ct, 0, ctLen);
-            Buffer.BlockCopy(sealed_, ctLen, tag, 0, TagSize);
-
-            var pt = new byte[ctLen];
-            try
-            {
-                using (var gcm = NewGcm(key))
-                {
-                    gcm.Decrypt(nonce, ct, tag, pt, aad);
-                }
-            }
-            catch (CryptographicException)
-            {
-                return null;
-            }
-            return pt;
+            return ChaCha20Poly1305.Open(key, NonceFor(counter), sealed_, aad);
         }
 
-        /// <summary>
-        /// Constructs an AesGcm instance. Isolated here because this is the one
-        /// call whose availability differs across runtimes: netstandard2.1
-        /// exposes only AesGcm(byte[]), while .NET 8+ obsoletes it in favour of
-        /// AesGcm(byte[], int tagSizeInBytes). If Unity's IL2CPP backend cannot
-        /// service this, it is the single line the whole cipher choice turns on.
-        /// </summary>
-        private static AesGcm NewGcm(byte[] key)
-        {
-#if NET8_0_OR_GREATER
-            return new AesGcm(key, TagSize);
-#else
-            return new AesGcm(key);
-#endif
-        }
     }
 }

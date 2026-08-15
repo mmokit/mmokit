@@ -3,10 +3,21 @@
 //
 // # Cipher choice
 //
-// AES-256-GCM, not ChaCha20-Poly1305. The C# SDK targets netstandard2.1 — the
-// TFM Unity consumes — which ships AesGcm and does not ship ChaCha20Poly1305.
-// The umbrella security spec named ChaCha20; that decision is reversed here and
-// in roadmap §6.9.2.
+// ChaCha20-Poly1305 (RFC 8439), matching the umbrella security spec.
+//
+// An earlier revision of roadmap §6.9.2 reversed this to AES-256-GCM on the
+// grounds that netstandard2.1 — the TFM Unity consumes — ships AesGcm and not
+// ChaCha20Poly1305. That reasoning checked the reference assembly rather than
+// the runtime: Mono deliberately does not implement AesGcm and stubs it to
+// throw PlatformNotSupportedException (mono/mono#19285), and Unity 6.5 still
+// ships the Mono class library, which IL2CPP inherits. CoreCLR and its working
+// .NET 10 BCL do not arrive until Unity 6.7/6.8.
+//
+// ChaCha20-Poly1305 is also the better primitive for a managed client
+// independent of availability. The C# side must implement whichever cipher we
+// pick in pure managed code, and a managed AES uses table lookups and so has
+// cache-timing side channels. ChaCha20 is add-rotate-xor and is designed to be
+// constant-time in software with no hardware support.
 //
 // # What this package does and does not do
 //
@@ -17,8 +28,9 @@
 //
 // # Nonce uniqueness is structural
 //
-// A repeated nonce under GCM does not leak one plaintext — it leaks the
-// authentication key, and every packet in both directions becomes forgeable.
+// A repeated nonce under any Poly1305-based AEAD does not leak one plaintext —
+// it leaks the one-time MAC key, and every packet in both directions becomes
+// forgeable.
 // So Session is the only thing that can produce a nonce: Seal allocates the
 // counter itself from an atomic, and no exported function accepts a
 // caller-supplied nonce. Send and receive use keys derived under different
@@ -27,7 +39,6 @@
 package udpcrypto
 
 import (
-	"crypto/aes"
 	"crypto/cipher"
 	"crypto/hkdf"
 	"crypto/sha256"
@@ -36,15 +47,18 @@ import (
 	"fmt"
 	"sync"
 	"sync/atomic"
+
+	"golang.org/x/crypto/chacha20poly1305"
 )
 
 const (
 	// KeySize is the master key length issued by POST /auth/udp-key, and also
 	// the derived per-direction key length (AES-256).
 	KeySize = 32
-	// NonceSize is GCM's standard nonce width.
-	NonceSize = 12
-	// TagSize is GCM's authentication tag width. Callers budget this per packet.
+	// NonceSize is the RFC 8439 nonce width.
+	NonceSize = chacha20poly1305.NonceSize
+	// TagSize is the Poly1305 authentication tag width. Callers budget this per
+	// packet.
 	TagSize = 16
 	// CounterSize is the width of the explicit per-packet counter on the wire.
 	//
@@ -139,11 +153,11 @@ func NewSession(master Key, role Role, salt []byte) (*Session, error) {
 	if role == RoleServer {
 		sendKey, recvKey = s2c, c2s
 	}
-	sendAEAD, err := newGCM(sendKey)
+	sendAEAD, err := newAEAD(sendKey)
 	if err != nil {
 		return nil, err
 	}
-	recvAEAD, err := newGCM(recvKey)
+	recvAEAD, err := newAEAD(recvKey)
 	if err != nil {
 		return nil, err
 	}
@@ -158,14 +172,10 @@ func deriveKey(master Key, salt []byte, label string) ([]byte, error) {
 	return k, nil
 }
 
-func newGCM(key []byte) (cipher.AEAD, error) {
-	block, err := aes.NewCipher(key)
+func newAEAD(key []byte) (cipher.AEAD, error) {
+	aead, err := chacha20poly1305.New(key)
 	if err != nil {
-		return nil, fmt.Errorf("udpcrypto: aes: %w", err)
-	}
-	aead, err := cipher.NewGCM(block)
-	if err != nil {
-		return nil, fmt.Errorf("udpcrypto: gcm: %w", err)
+		return nil, fmt.Errorf("udpcrypto: chacha20poly1305: %w", err)
 	}
 	return aead, nil
 }
@@ -233,7 +243,7 @@ func (s *Session) Stats() (accepted, replayed, authFailed uint64) {
 // SendCounter reports the last counter handed out. Test and metrics use only.
 func (s *Session) SendCounter() uint64 { return s.sendCtr.Load() }
 
-// nonceFor maps a counter to a GCM nonce. The leading four bytes are zero:
+// nonceFor maps a counter to an AEAD nonce. The leading four bytes are zero:
 // the counter alone is unique per key, and the two directions use different
 // keys, so no direction or session field is needed to separate them.
 func nonceFor(ctr uint64) [NonceSize]byte {

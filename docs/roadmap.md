@@ -185,7 +185,7 @@ Scope, roughly **12.5 engineer-days**: `POST /auth/udp-key` plus a process-level
 
 Two corrections for whoever picks this up:
 
-- **The cipher must be reversed.** The umbrella spec names ChaCha20-Poly1305. `Mmokit.Sdk.Core.csproj` targets `netstandard2.1` — the TFM Unity consumes — where `ChaCha20Poly1305` does not exist and `AesGcm` does. `netstandard2.1` also has no `HKDF` class.
+- **The cipher is ChaCha20-Poly1305, as the umbrella spec always said.** A previous revision of this bullet reversed it to AES-256-GCM because `Mmokit.Sdk.Core.csproj` targets `netstandard2.1` — the TFM Unity consumes — which declares `AesGcm` and not `ChaCha20Poly1305`. That checked the *reference assembly*, not the runtime. Mono deliberately does not implement `AesGcm` and stubs it to throw `PlatformNotSupportedException` ([mono/mono#19285](https://github.com/mono/mono/issues/19285)); Unity 6.5 still ships the Mono class library and IL2CPP inherits it, with CoreCLR and its working .NET 10 BCL not arriving until Unity 6.7/6.8. Either cipher therefore has to be implemented in managed C#, and ChaCha20 is the one that is *safe* to implement that way: it is add-rotate-xor with no table lookups, where a managed AES is table-driven and cache-timing observable. `netstandard2.1` also has no `HKDF` class.
 - **OIDC does not gate this.** WS-003's real dependency is one route plus a key registry. OIDC is a single unused SQL table (`auth.identities`) with zero Go readers or writers.
 
 Also note the two approved specs contradict each other: `2026-06-06-csharp-sdk-unity-design.md` chose auth-over-op-channel specifically to *avoid* the split HTTPS-then-UDP design that the 2026-06-12 umbrella then locked in. The newer decision wins; the older spec section is superseded.
@@ -465,7 +465,7 @@ Each of these was found by verifying a plausible plan against source and finding
 
 ### 6.9 Next phase — CE-005b Tier 2
 
-**Approximately 15 engineer-days**, against the ~12.5 the [CE-005b entry](#ce-005b--udp-security-and-gating--tier-1-done-tier-2-open) prices. The difference is not new scope: it is a crypto-primitives unit and a close-out unit that the 12.5 folds into its four chunks. They are priced here because the first one carries the phase's highest risk.
+**Approximately 16 engineer-days**, against the ~12.5 the [CE-005b entry](#ce-005b--udp-security-and-gating--tier-1-done-tier-2-open) prices. The difference is not new scope: it is a crypto-primitives unit and a close-out unit that the 12.5 folds into its four chunks. They are priced here because the first one carries the phase's highest risk.
 
 This phase closes the last open P0 item, so **[§7.1](#71-sequencing-rule)'s gate lifts when it ends** and the 104-day 2D/3D program may begin. Status is derived from source, not from this table.
 
@@ -481,7 +481,7 @@ This phase closes the last open P0 item, so **[§7.1](#71-sequencing-rule)'s gat
 
 Recorded here because each was measured and each is expensive to re-derive wrongly.
 
-- **AES-256-GCM, not ChaCha20-Poly1305.** `Mmokit.Sdk.Core.csproj` targets `netstandard2.1`, which has `AesGcm` and not `ChaCha20Poly1305`.
+- **ChaCha20-Poly1305 (RFC 8439), implemented in managed C# on the client.** See the CE-005b entry for why the earlier AES-GCM reversal was wrong. The practical consequence is that the client depends on no platform crypto backend at all, so there is no per-platform availability question to answer and no BouncyCastle dependency to carry.
 - **HKDF-SHA256, hand-rolled on the C# side.** Go gets `x/crypto/hkdf`; `netstandard2.1` has no `HKDF` class, so C# needs roughly twenty lines over `HMACSHA256`, golden-tested against the Go output rather than assumed equivalent.
 - **Separate send and receive keys per direction.** One key in both directions is a nonce-reuse trap that no test reliably catches.
 - **The nonce is explicit in the packet.** The unreliable channel drops and reorders by design, so an implicit counter desynchronises on the first loss. This costs header bytes and is not optional.
@@ -494,7 +494,7 @@ Header cost: the unreliable header goes from 5 bytes to roughly 29 (explicit cou
 
 | # | Unit | Item | Days | Risk | After |
 | --- | --- | ---: | --- | --- | --- |
-| 1 | Crypto primitives and the IL2CPP `AesGcm` spike: HKDF wrapper, seal/open, nonce ownership, replay window, fuzz. No wire change | CE-005b | 1.5 | **high** | — |
+| 1 | Crypto primitives: HKDF wrapper, seal/open, nonce ownership, replay window, fuzz, and the managed ChaCha20-Poly1305 the client needs. No wire change | CE-005b | 2.5 | med | — |
 | 2 | `POST /auth/udp-key`, process-level key registry, UDP analogue of `Gateway.onAuthSuccess` | CE-005b | 2.5 | med | 1 |
 | 3 | Stateless HMAC handshake cookie replacing `pendingHandshake` | CE-005b | 1.5 | med | 1 |
 | 4 | AEAD framing across `udpproto` / `udp_server` / `udp_transport` / `udpclient`, replay enforcement, CE-009 version byte, corpus regeneration | CE-005b, CE-009 | 3.5 | **high** | 1, 2, 3 |
@@ -504,7 +504,7 @@ Header cost: the unreliable header goes from 5 bytes to roughly 29 (explicit cou
 
 #### 6.9.4 Traps this phase must not fall into
 
-- **Run the IL2CPP spike before anything else.** The cipher correction above is derived from the *TFM*, and `netstandard2.1` having `AesGcm` is not the same claim as IL2CPP having a working backend for it on every Unity target. If that answer is no, units 4, 5 and 6 all rebuild on a different primitive. It is a half-day to answer now and a phase to absorb later.
+- **A TFM declaring an API is not the runtime implementing it.** This phase already lost its locked cipher to that confusion once: `netstandard2.1` declares `AesGcm`, and the decision was taken on that basis, but Mono stubs it to throw and Unity 6.5 ships Mono. The spike that caught it was scheduled precisely because compiling proves less than running. Apply the same suspicion to anything else the client is assumed to have — the question is always what Unity's *class library* implements, not what the reference assembly declares.
 - **Nonce uniqueness must be structural, not tested.** A repeated nonce under GCM leaks the authentication key, not merely one plaintext. Give the counter a single owner that hands out values; do not let two call sites both be able to construct a nonce.
 - **Do not reuse the reliable channel's `seq` as the nonce.** It is 16-bit, it wraps, and retransmits deliberately reuse it — every one of those properties is fatal here.
 - **Client wire type IDs are not affected and the schema dump must prove it.** UDP framing is not the reflection codec. `--dump-schema` output for all three examples must be byte-identical across this phase; if it moves, something reached into the codec that should not have. This is the same guard the module-root refactor used.
