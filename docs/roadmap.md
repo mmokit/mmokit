@@ -511,6 +511,32 @@ Header cost: the unreliable header goes from 5 bytes to roughly 29 (explicit cou
 - **`just dev` and `just distributed` pass `--udp-listen=:9000` on a wildcard bind.** Every development process currently carries the unauthenticated exposure. Unit 4 closes it; until then, do not treat the shipped-binary default as describing the dev posture.
 - **One wire break, not two.** CE-009's header version byte lands in unit 4. Splitting it costs a second lockstep redeploy and a second golden regeneration for one byte.
 
+#### 6.9.5 The v2 wire format, as designed
+
+Unit 4's format was designed and prototyped ahead of implementation, then set
+down here rather than left in a branch, because the design is the expensive part
+and re-deriving it is how the two halves of a wire break drift apart. Sizes count
+every byte on the wire.
+
+| Packet | Layout | Size |
+| --- | --- | ---: |
+| ConnReq `0x03` | type(1) ver(1) protocolID(4) clientSalt(8) | 14 |
+| ConnAccept `0x04` | type(1) ver(1) protocolID(4) clientSalt(8) serverSalt(8) cookie(16) | 38 |
+| ConnConfirm `0x06` | type(1) ver(1) keyID(8) clientSalt(8) serverSalt(8) cookie(16) | 42 |
+| Unreliable `0x00` | type(1) ver(1) token(4) counter(8) ‖ sealed(n+16) | 14+n+16 |
+| Reliable `0x01` | type(1) ver(1) token(4) seq(2) counter(8) ‖ sealed(n+16) | 16+n+16 |
+| ACK `0x02` | type(1) ver(1) token(4) counter(8) ‖ sealed(6+16) | 36 |
+| Disconnect `0x05` | type(1) ver(1) token(4) counter(8) ‖ sealed(0+16) | 30 |
+
+- **The version byte is on every packet, not just the handshake** ([CE-009](#ce-009--protocol-version-and-schema-fingerprint--open--hard-prerequisite-for-3d)). It costs one byte per packet and lets any peer disagreement be rejected at the first datagram rather than misparsed into the wrong shape.
+- **`ConnConfirm` is new and is what makes the handshake stateless.** The server cannot decrypt a data packet until it knows which key to use, so something must carry the `keyID` before a session exists. Putting it in every data packet would cost 8 bytes forever; putting it in one confirm step costs it once. ConnConfirm also echoes the cookie, so it is the packet that proves return routability, and the pending table disappears with it.
+- **Cleartext headers are all fed to the AEAD as additional authenticated data.** The server must read `token` to find the session before it can decrypt, so those bytes cannot be encrypted — but they must not be malleable either, or a valid body could be moved onto another session or another packet type.
+- **ACKs are sealed.** A forged ACK breaks reliable delivery exactly as effectively as a dropped one: it retires a frame the peer never received. v1 sent them in the clear.
+- **Disconnect seals an empty body**, so the 16-byte tag alone proves the sender holds the session key. In v1 anyone who learned a token could tear a session down; Tier 1 narrowed that to anyone at the bound address, and v2 closes it.
+- **`MakeToken` and `SeqGreaterThan` survive unchanged.** The token stops being a credential and becomes a session index; the sequence helper is delivery logic and is unrelated to the security change.
+
+**Do not land this format one file at a time.** The blast radius is roughly 4,000 lines across thirteen files that must change together — `udpproto`, `udp_server`, `udp_transport`, `udpclient` and their tests, `cmd/csharp-golden`, and the C# `UdpProto`/`UdpTransport` — because a partially-migrated tree cannot complete a handshake against itself. The unit is sized at 3.5 days for that reason, and a first attempt that began with `udpproto` alone left the repository unbuildable in nine files, which is the evidence for this instruction rather than a prediction of it.
+
 ---
 
 ## 7. The 2D/3D and multi-genre program
