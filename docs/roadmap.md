@@ -566,13 +566,22 @@ One correction of substance sits underneath this. **A version byte cannot detect
 
 | # | Unit | Item | Days | Risk | After | Status |
 | --- | --- | ---: | --- | --- | --- | --- |
-| 1 | Registry and framing hardening: panic on duplicate client-input IDs, make broadcast collisions detectable at all, and reconcile the two transports' unknown-channel-byte fallback | CE-009 | 1 | low | — | **open** |
-| 2 | Extend the byte-level wire goldens: TS delta assertions first, then the fixed-offset frame codecs, nested struct / slice-of-struct, and a snapshot from real bindings | §7 phase 0 | 4 | med | 1 | **open** |
+| 1 | Registry and framing hardening: panic on duplicate client-input IDs, make broadcast collisions detectable at all, and reconcile the two transports' unknown-channel-byte fallback | CE-009 | 1 | low | — | **done** `8677252d` |
+| 2 | Extend the byte-level wire goldens: TS delta assertions first, then the fixed-offset frame codecs, nested struct / slice-of-struct, and a snapshot from real bindings | §7 phase 0 | 4 | med | 1 | **mostly done** `357bd61c`, `0fe980ce`, `90bb0a66` — see below |
 | 3 | CE-010 part A — cell geometry becomes injected: delete `coords.CellSize` and its setter, converge ~75 read sites on a process-owned accessor | CE-010 | 5 | med | — | **open** |
 | 4 | CE-010 part B — the registries, the five package-global hook structs, and the three package-level `sync.Once` guards become process-owned | CE-010 | 6 | **high** | 2, 3 | **open** |
 | 5 | CE-009 — structural schema fingerprint, carried at connection setup on both transports, with rejection semantics | CE-009 | 4 | med | 4 | **open** |
 
 Unit 1 is deliberately first and deliberately tiny: it is the only unit that changes client framing behaviour, and it must land before anything else adds a byte to a client frame.
+
+**What unit 2 landed, and what it deliberately did not.** Landed: TypeScript delta-frame byte assertions (closing the Go↔C#-only asymmetry, so the browser decoder is now pinned to Go's bytes like the Unity one); byte goldens with independent encode and decode assertions for `pkg/replication`'s frame and `pkg/universe`'s cell-transfer frame; and a `reflectNested` golden covering nested-struct and slice-of-struct with a trailing scalar. Every codec was already correct — the goldens found no bug, which is the right outcome on the day a parity test is written and the wrong outcome to skip writing it over.
+
+Two pieces remain and are carried into whoever starts the codec collapse rather than marked done:
+
+- **The TypeScript reflect codec is not pinned.** It is emitted per-example into `examples/*/web/sdk/` rather than living in a shared core, so covering it needs a generated SDK the way `just csharp-compile-test` does, not a unit test.
+- **No golden takes its snapshot bytes from real `auto_replicator` bindings.** The frame goldens use literal payloads, so the binding walker's output shape is still unpinned — and that walker is precisely what the collapse rewrites.
+
+Two assertions in unit 2 are worth knowing about before editing near them, because both look like padding and are not. `TestTransferFrame_FixedHeaderSizeIsStill87` derives the header size from the golden bytes rather than from the constant, so adding a field and updating two of the three copies of the hand-summed sum fails there — nothing checked that before. And the `reflectNested` fixture's trailing scalar is what catches a nested walker consuming the wrong byte count: nested structs are inlined with no envelope, so a miscount produces no local error, only a cursor misaligned for everything after it.
 
 #### 6.10.3 Traps
 
