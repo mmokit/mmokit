@@ -345,6 +345,9 @@ func (c *Process) startUDPListener(ctx context.Context) {
 	// the *UDPServer on the floor here is what left SetWireLimits and every
 	// drop-counter accessor without a production caller.
 	udpServer.SetWireLimits(c.cfg.WireLimits)
+	// Without this the listener cannot resolve the key IDs clients present in
+	// ConnConfirm, and refuses every handshake.
+	udpServer.SetKeyRegistry(c.udpKeyRegistry())
 	c.udpServer.Store(udpServer)
 	c.Log.Log(CatMeshCell, "udp: listening on %s (roles=%s, maxFrameBytes=%d)",
 		c.cfg.UDPListen, c.roles, c.cfg.WireLimits.MaxFrameBytes)
@@ -357,8 +360,11 @@ func (c *Process) startUDPListener(ctx context.Context) {
 type UDPServerStats struct {
 	SourceMismatchDrops uint64
 	CapacityDrops       uint64
-	PendingFullDrops    uint64
-	PendingCount        int
+	// HandshakeRejectDrops counts ConnConfirms refused because the stateless
+	// cookie failed, the named key did not resolve, or no key registry is
+	// configured. It replaces the old PendingFullDrops/PendingCount pair, which
+	// described a pending-handshake table that no longer exists.
+	HandshakeRejectDrops uint64
 }
 
 // UDPStats reports the client UDP listener's refusal counters, and whether a
@@ -370,10 +376,9 @@ func (c *Process) UDPStats() (stats UDPServerStats, ok bool) {
 		return UDPServerStats{}, false
 	}
 	return UDPServerStats{
-		SourceMismatchDrops: s.SourceMismatchDrops(),
-		CapacityDrops:       s.CapacityDrops(),
-		PendingFullDrops:    s.PendingFullDrops(),
-		PendingCount:        s.PendingCount(),
+		SourceMismatchDrops:  s.SourceMismatchDrops(),
+		CapacityDrops:        s.CapacityDrops(),
+		HandshakeRejectDrops: s.HandshakeRejectDrops(),
 	}, true
 }
 

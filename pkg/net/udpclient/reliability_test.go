@@ -9,13 +9,30 @@ import (
 	"testing"
 	"time"
 
+	"github.com/mmokit/mmokit/pkg/net/udpcrypto"
 	"github.com/mmokit/mmokit/pkg/net/udpproto"
 )
 
+// testClientSessions returns the client-role session a test Client sends under
+// and the matching server-role session a test uses to seal packets it will
+// accept. Inbound handling authenticates now, so a test cannot inject plaintext.
+func testClientSessions() (client, server *udpcrypto.Session) {
+	var key udpcrypto.Key
+	for i := range key {
+		key[i] = byte(i * 3)
+	}
+	salt := udpproto.SessionSalt(0xCCCC, 0xDDDD)
+	cli, _ := udpcrypto.NewSession(key, udpcrypto.RoleClient, salt)
+	srv, _ := udpcrypto.NewSession(key, udpcrypto.RoleServer, salt)
+	return cli, srv
+}
+
 func newReliabilityTestClient() *Client {
+	cli, _ := testClientSessions()
 	c := &Client{
 		conn:    &net.UDPConn{},
 		token:   0xABCD1234,
+		crypto:  cli,
 		inbound: make([][]byte, 0, 32),
 		done:    make(chan struct{}),
 	}
@@ -91,23 +108,45 @@ func TestClient_RetransmitUsesExactWrappedSequence(t *testing.T) {
 	c := newReliabilityTestClient()
 	entry := &reliableEntry{seq: 300, payload: []byte("wrapped"), used: true}
 
-	_, seq, payload, err := udpproto.DecodeReliable(c.encodeReliableEntry(entry))
+	pkt := c.encodeReliableEntry(entry)
+	_, seq, counter, aad, sealed, err := udpproto.DecodeReliable(pkt)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if seq != entry.seq || string(payload) != "wrapped" {
-		t.Fatalf("encoded retransmit = (seq=%d payload=%q), want (300, wrapped)", seq, payload)
+	if seq != entry.seq {
+		t.Fatalf("encoded retransmit seq = %d, want 300", seq)
+	}
+	// Open it with the peer's view of the session: a retransmit must be a
+	// freshly sealed packet, not a replay of the original bytes, or the peer's
+	// replay window would discard every retransmission.
+	_, srv := testClientSessions()
+	payload, err := srv.Open(nil, counter, sealed, aad)
+	if err != nil {
+		t.Fatalf("retransmit did not authenticate: %v", err)
+	}
+	if string(payload) != "wrapped" {
+		t.Fatalf("retransmit payload = %q, want wrapped", payload)
 	}
 }
 
 func TestClient_ReliableReceiveDeduplicatesAndAcceptsUnseenOutOfOrder(t *testing.T) {
 	c := newReliabilityTestClient()
 
-	c.handlePacket(udpproto.EncodeReliable(c.token, 10, []byte{10}))
-	c.handlePacket(udpproto.EncodeReliable(c.token, 12, []byte{12}))
-	c.handlePacket(udpproto.EncodeReliable(c.token, 10, []byte{10}))
-	c.handlePacket(udpproto.EncodeReliable(c.token, 11, []byte{11}))
-	c.handlePacket(udpproto.EncodeReliable(c.token, 11, []byte{11}))
+	_, srv := testClientSessions()
+	feed := func(seq uint16, body []byte) {
+		hdr, sealed, err := srv.SealWithHeader(body, func(ctr uint64) []byte {
+			return udpproto.EncodeReliableHeader(c.token, seq, ctr)
+		})
+		if err != nil {
+			t.Fatalf("seal: %v", err)
+		}
+		c.handlePacket(append(append([]byte{}, hdr...), sealed...))
+	}
+	feed(10, []byte{10})
+	feed(12, []byte{12})
+	feed(10, []byte{10})
+	feed(11, []byte{11})
+	feed(11, []byte{11})
 
 	events := drainReliabilityTestInbound(c)
 	want := [][]byte{{10}, {12}, {11}}
@@ -118,7 +157,17 @@ func TestClient_ReliableReceiveDeduplicatesAndAcceptsUnseenOutOfOrder(t *testing
 
 func TestClient_ConcurrentDuplicateReliableDeliveredOnce(t *testing.T) {
 	c := newReliabilityTestClient()
-	packet := udpproto.EncodeReliable(c.token, 0, []byte{0xCC})
+	_, srv := testClientSessions()
+	// One sealed packet delivered 32 times concurrently. Sequence-level dedup
+	// still has to hold, and the replay window now backstops it: a duplicate
+	// carries the counter it was sealed with, so only the first can open.
+	hdr, sealed, err := srv.SealWithHeader([]byte{0xCC}, func(ctr uint64) []byte {
+		return udpproto.EncodeReliableHeader(c.token, 0, ctr)
+	})
+	if err != nil {
+		t.Fatalf("seal: %v", err)
+	}
+	packet := append(append([]byte{}, hdr...), sealed...)
 	const callers = 32
 	start := make(chan struct{})
 	var wg sync.WaitGroup
@@ -274,11 +323,23 @@ func TestClient_ConcurrentHandlersMaintenanceAndClose(t *testing.T) {
 		}()
 	}
 
+	_, peer := testClientSessions()
+	seal := func(build func(ctr uint64) []byte) []byte {
+		hdr, sealed, err := peer.SealWithHeader(nil, build)
+		if err != nil {
+			return nil
+		}
+		return append(append([]byte{}, hdr...), sealed...)
+	}
 	run(func(i int) {
-		c.handlePacket(udpproto.EncodeReliable(c.token, uint16(i), nil))
+		c.handlePacket(seal(func(ctr uint64) []byte {
+			return udpproto.EncodeReliableHeader(c.token, uint16(i), ctr)
+		}))
 	})
 	run(func(int) {
-		c.handlePacket(udpproto.EncodeUnreliable(c.token, nil))
+		c.handlePacket(seal(func(ctr uint64) []byte {
+			return udpproto.EncodeUnreliableHeader(c.token, ctr)
+		}))
 	})
 	run(func(i int) { c.processACK(uint16(i), uint32(i)) })
 	run(func(int) {

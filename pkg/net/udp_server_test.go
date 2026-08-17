@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/mmokit/mmokit/pkg/net/udpcrypto"
 	"github.com/mmokit/mmokit/pkg/net/udpproto"
 )
 
@@ -18,7 +19,7 @@ func newTestUDPServer(t *testing.T) (*UDPServer, *ConnManager, string, context.C
 	if err != nil {
 		t.Fatalf("NewUDPServer: %v", err)
 	}
-	srv.SetLimits(2, 2, 50*time.Millisecond)
+	srv.SetMaxConnections(2)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	go srv.Run(ctx)
@@ -40,8 +41,26 @@ func dialUDP(t *testing.T, serverAddr string) *net.UDPConn {
 	return c
 }
 
-// handshake performs a connection request and returns the negotiated token.
-func handshake(t *testing.T, c *net.UDPConn, clientSalt uint64) uint32 {
+// testKeyRegistry installs a registry holding one known key and returns the
+// key ID plus the key, so a test can complete a real authenticated handshake.
+func testKeyRegistry(t *testing.T, s *UDPServer) (UDPKeyID, udpcrypto.Key) {
+	t.Helper()
+	reg := NewUDPKeyRegistry(0, time.Minute)
+	id, entry, err := reg.Issue("test-user", "tester", time.Now())
+	if err != nil {
+		t.Fatalf("issue udp key: %v", err)
+	}
+	s.SetKeyRegistry(reg)
+	return id, entry.Key
+}
+
+// handshake performs the full v2 handshake — ConnReq, ConnAccept, ConnConfirm —
+// and returns the negotiated token plus the client-side crypto session.
+//
+// There is no shortcut past ConnConfirm any more: a session exists only once the
+// stateless cookie has been echoed from this source address AND a key ID has
+// resolved.
+func handshake(t *testing.T, c *net.UDPConn, clientSalt uint64, keyID UDPKeyID, key udpcrypto.Key) (uint32, *udpcrypto.Session) {
 	t.Helper()
 	if _, err := c.Write(udpproto.EncodeConnReq(clientSalt)); err != nil {
 		t.Fatalf("write ConnReq: %v", err)
@@ -52,14 +71,46 @@ func handshake(t *testing.T, c *net.UDPConn, clientSalt uint64) uint32 {
 	if err != nil {
 		t.Fatalf("read ConnAccept: %v", err)
 	}
-	gotClient, serverSalt, err := udpproto.DecodeConnAccept(buf[:n])
+	gotClient, serverSalt, cookie, err := udpproto.DecodeConnAccept(buf[:n])
 	if err != nil {
 		t.Fatalf("DecodeConnAccept: %v", err)
 	}
 	if gotClient != clientSalt {
 		t.Fatalf("ConnAccept clientSalt=%d, want %d", gotClient, clientSalt)
 	}
-	return udpproto.MakeToken(clientSalt, serverSalt)
+	if _, err := c.Write(udpproto.EncodeConnConfirm(uint64(keyID), clientSalt, serverSalt, cookie)); err != nil {
+		t.Fatalf("write ConnConfirm: %v", err)
+	}
+	sess, err := udpcrypto.NewSession(key, udpcrypto.RoleClient,
+		udpproto.SessionSalt(clientSalt, serverSalt))
+	if err != nil {
+		t.Fatalf("client session: %v", err)
+	}
+	return udpproto.MakeToken(clientSalt, serverSalt), sess
+}
+
+// sealedUnreliable builds a v2 unreliable packet under sess.
+func sealedUnreliable(t *testing.T, sess *udpcrypto.Session, token uint32, payload []byte) []byte {
+	t.Helper()
+	hdr, sealed, err := sess.SealWithHeader(payload, func(ctr uint64) []byte {
+		return udpproto.EncodeUnreliableHeader(token, ctr)
+	})
+	if err != nil {
+		t.Fatalf("seal: %v", err)
+	}
+	return append(append([]byte{}, hdr...), sealed...)
+}
+
+// sealedDisconnect builds a v2 disconnect packet under sess.
+func sealedDisconnect(t *testing.T, sess *udpcrypto.Session, token uint32) []byte {
+	t.Helper()
+	hdr, sealed, err := sess.SealWithHeader(nil, func(ctr uint64) []byte {
+		return udpproto.EncodeDisconnectHeader(token, ctr)
+	})
+	if err != nil {
+		t.Fatalf("seal disconnect: %v", err)
+	}
+	return append(append([]byte{}, hdr...), sealed...)
 }
 
 // waitFor polls until cond holds or the deadline passes.
@@ -83,14 +134,16 @@ func (s *UDPServer) sessionCount() int {
 
 // A connection request is unauthenticated and trivially spoofable, so it must
 // not allocate a transport, a goroutine, or a ConnManager registration.
-func TestUDPServer_ConnReqDoesNotAllocateSession(t *testing.T) {
+func TestUDPServer_ConnReqAllocatesNothing(t *testing.T) {
 	srv, cm, addr, cancel := newTestUDPServer(t)
 	defer cancel()
+	testKeyRegistry(t, srv)
 
 	c := dialUDP(t, addr)
-	handshake(t, c, 0x1111)
-
-	waitFor(t, "pending handshake recorded", func() bool { return srv.PendingCount() == 1 })
+	if _, err := c.Write(udpproto.EncodeConnReq(0x1111)); err != nil {
+		t.Fatalf("write ConnReq: %v", err)
+	}
+	time.Sleep(50 * time.Millisecond)
 
 	if got := srv.sessionCount(); got != 0 {
 		t.Fatalf("sessions after ConnReq = %d, want 0", got)
@@ -100,26 +153,173 @@ func TestUDPServer_ConnReqDoesNotAllocateSession(t *testing.T) {
 	}
 }
 
-// Sending a data packet from the same address proves return routability and
-// is what promotes the handshake into a real session.
-func TestUDPServer_DataPacketPromotesPending(t *testing.T) {
+// The property that replaced the bounded pending table: an unauthenticated
+// request flood leaves NO state behind at all, so there is nothing to size, to
+// sweep, or to exhaust. This is the last Tier 1 residual, closed.
+func TestUDPServer_HandshakeFloodAllocatesNothing(t *testing.T) {
 	srv, cm, addr, cancel := newTestUDPServer(t)
 	defer cancel()
+	testKeyRegistry(t, srv)
 
 	c := dialUDP(t, addr)
-	token := handshake(t, c, 0x2222)
-	waitFor(t, "pending handshake recorded", func() bool { return srv.PendingCount() == 1 })
+	for i := range 500 {
+		if _, err := c.Write(udpproto.EncodeConnReq(uint64(i))); err != nil {
+			t.Fatalf("flood write %d: %v", i, err)
+		}
+	}
+	time.Sleep(100 * time.Millisecond)
 
-	if _, err := c.Write(udpproto.EncodeUnreliable(token, []byte{0x00, 'h', 'i'})); err != nil {
+	if got := srv.sessionCount(); got != 0 {
+		t.Fatalf("500 connection requests created %d sessions, want 0", got)
+	}
+	if ids := cm.ActiveConnIDs(); len(ids) != 0 {
+		t.Fatalf("500 connection requests created %d registrations, want 0", len(ids))
+	}
+}
+
+// A completed handshake — ConnReq, ConnAccept, ConnConfirm — is what creates a
+// session. Data packets no longer promote anything.
+func TestUDPServer_ConnConfirmEstablishesSession(t *testing.T) {
+	srv, cm, addr, cancel := newTestUDPServer(t)
+	defer cancel()
+	keyID, key := testKeyRegistry(t, srv)
+
+	c := dialUDP(t, addr)
+	token, sess := handshake(t, c, 0x2222, keyID, key)
+	waitFor(t, "session established", func() bool { return srv.sessionCount() == 1 })
+
+	if _, err := c.Write(sealedUnreliable(t, sess, token, []byte{0x00, 'h', 'i'})); err != nil {
 		t.Fatalf("write unreliable: %v", err)
 	}
+	waitFor(t, "registered with ConnManager", func() bool { return len(cm.ActiveConnIDs()) == 1 })
 
-	waitFor(t, "session promoted", func() bool { return srv.sessionCount() == 1 })
-	if got := srv.PendingCount(); got != 0 {
-		t.Fatalf("pending after promotion = %d, want 0", got)
+	ids := cm.ActiveConnIDs()
+	waitFor(t, "payload delivered", func() bool { return len(cm.DrainInput(ids[0])) > 0 })
+}
+
+// Data packets are inert before a ConnConfirm: without one there is no session
+// to route to, whatever token they carry.
+func TestUDPServer_DataPacketDoesNotPromote(t *testing.T) {
+	srv, _, addr, cancel := newTestUDPServer(t)
+	defer cancel()
+	testKeyRegistry(t, srv)
+
+	c := dialUDP(t, addr)
+	if _, err := c.Write(udpproto.EncodeConnReq(0x3333)); err != nil {
+		t.Fatalf("ConnReq: %v", err)
 	}
-	if ids := cm.ActiveConnIDs(); len(ids) != 1 {
-		t.Fatalf("ConnManager registrations after promotion = %d, want 1", len(ids))
+	buf := make([]byte, maxUDPPacket)
+	c.SetReadDeadline(time.Now().Add(2 * time.Second))
+	n, err := c.Read(buf)
+	if err != nil {
+		t.Fatalf("read accept: %v", err)
+	}
+	_, serverSalt, _, err := udpproto.DecodeConnAccept(buf[:n])
+	if err != nil {
+		t.Fatalf("decode accept: %v", err)
+	}
+	token := udpproto.MakeToken(0x3333, serverSalt)
+
+	// Skip ConnConfirm entirely and send data.
+	hdr := udpproto.EncodeUnreliableHeader(token, 1)
+	pkt := append(append([]byte{}, hdr...), make([]byte, udpproto.TagSize)...)
+	if _, err := c.Write(pkt); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+	time.Sleep(50 * time.Millisecond)
+
+	if got := srv.sessionCount(); got != 0 {
+		t.Fatalf("data packet created a session without ConnConfirm: %d", got)
+	}
+}
+
+// A cookie is bound to the address it was minted for, so one peer cannot use
+// another's — and a fabricated cookie proves nothing.
+func TestUDPServer_ForgedCookieRejected(t *testing.T) {
+	srv, _, addr, cancel := newTestUDPServer(t)
+	defer cancel()
+	keyID, _ := testKeyRegistry(t, srv)
+
+	c := dialUDP(t, addr)
+	if _, err := c.Write(udpproto.EncodeConnReq(0x4444)); err != nil {
+		t.Fatalf("ConnReq: %v", err)
+	}
+	buf := make([]byte, maxUDPPacket)
+	c.SetReadDeadline(time.Now().Add(2 * time.Second))
+	n, err := c.Read(buf)
+	if err != nil {
+		t.Fatalf("read accept: %v", err)
+	}
+	_, serverSalt, cookie, err := udpproto.DecodeConnAccept(buf[:n])
+	if err != nil {
+		t.Fatalf("decode accept: %v", err)
+	}
+
+	bad := append([]byte{}, cookie...)
+	bad[0] ^= 0x01
+	if _, err := c.Write(udpproto.EncodeConnConfirm(uint64(keyID), 0x4444, serverSalt, bad)); err != nil {
+		t.Fatalf("write confirm: %v", err)
+	}
+	waitFor(t, "forged cookie counted", func() bool { return srv.HandshakeRejectDrops() >= 1 })
+
+	if got := srv.sessionCount(); got != 0 {
+		t.Fatalf("forged cookie established a session: %d", got)
+	}
+}
+
+// A cookie proves return routability, not identity. Without a key that resolves,
+// the handshake still fails.
+func TestUDPServer_UnknownKeyRejected(t *testing.T) {
+	srv, _, addr, cancel := newTestUDPServer(t)
+	defer cancel()
+	testKeyRegistry(t, srv)
+
+	c := dialUDP(t, addr)
+	if _, err := c.Write(udpproto.EncodeConnReq(0x5555)); err != nil {
+		t.Fatalf("ConnReq: %v", err)
+	}
+	buf := make([]byte, maxUDPPacket)
+	c.SetReadDeadline(time.Now().Add(2 * time.Second))
+	n, _ := c.Read(buf)
+	_, serverSalt, cookie, err := udpproto.DecodeConnAccept(buf[:n])
+	if err != nil {
+		t.Fatalf("decode accept: %v", err)
+	}
+
+	if _, err := c.Write(udpproto.EncodeConnConfirm(0xDEADBEEF, 0x5555, serverSalt, cookie)); err != nil {
+		t.Fatalf("write confirm: %v", err)
+	}
+	waitFor(t, "unknown key counted", func() bool { return srv.HandshakeRejectDrops() >= 1 })
+
+	if got := srv.sessionCount(); got != 0 {
+		t.Fatalf("unknown key established a session: %d", got)
+	}
+}
+
+// A listener with no key registry cannot authenticate anyone, and must refuse
+// rather than fall back to an anonymous session.
+func TestUDPServer_NoKeyRegistryRefuses(t *testing.T) {
+	srv, _, addr, cancel := newTestUDPServer(t)
+	defer cancel() // deliberately no SetKeyRegistry
+
+	c := dialUDP(t, addr)
+	if _, err := c.Write(udpproto.EncodeConnReq(0x6666)); err != nil {
+		t.Fatalf("ConnReq: %v", err)
+	}
+	buf := make([]byte, maxUDPPacket)
+	c.SetReadDeadline(time.Now().Add(2 * time.Second))
+	n, _ := c.Read(buf)
+	_, serverSalt, cookie, err := udpproto.DecodeConnAccept(buf[:n])
+	if err != nil {
+		t.Fatalf("decode accept: %v", err)
+	}
+	if _, err := c.Write(udpproto.EncodeConnConfirm(1, 0x6666, serverSalt, cookie)); err != nil {
+		t.Fatalf("write confirm: %v", err)
+	}
+	waitFor(t, "refusal counted", func() bool { return srv.HandshakeRejectDrops() >= 1 })
+
+	if got := srv.sessionCount(); got != 0 {
+		t.Fatalf("session created without a key registry: %d", got)
 	}
 }
 
@@ -128,29 +328,27 @@ func TestUDPServer_DataPacketPromotesPending(t *testing.T) {
 func TestUDPServer_RejectsValidTokenFromForeignAddress(t *testing.T) {
 	srv, cm, addr, cancel := newTestUDPServer(t)
 	defer cancel()
+	keyID, key := testKeyRegistry(t, srv)
 
 	victim := dialUDP(t, addr)
-	token := handshake(t, victim, 0x3333)
-	if _, err := victim.Write(udpproto.EncodeUnreliable(token, []byte{0x00, 'o', 'k'})); err != nil {
+	token, sess := handshake(t, victim, 0x3333, keyID, key)
+	waitFor(t, "victim session established", func() bool { return srv.sessionCount() == 1 })
+	if _, err := victim.Write(sealedUnreliable(t, sess, token, []byte{0x00, 'o', 'k'})); err != nil {
 		t.Fatalf("victim write: %v", err)
 	}
-	waitFor(t, "victim session promoted", func() bool { return srv.sessionCount() == 1 })
 
 	connIDs := cm.ActiveConnIDs()
 	if len(connIDs) != 1 {
 		t.Fatalf("expected 1 connection, got %d", len(connIDs))
 	}
-	// Drain whatever the victim legitimately sent.
 	waitFor(t, "victim payload delivered", func() bool {
 		return len(cm.DrainInput(connIDs[0])) > 0
 	})
 
-	// A different socket replays the victim's token.
 	attacker := dialUDP(t, addr)
-	if _, err := attacker.Write(udpproto.EncodeUnreliable(token, []byte{0x00, 'e', 'v', 'i', 'l'})); err != nil {
+	if _, err := attacker.Write(sealedUnreliable(t, sess, token, []byte{0x00, 'e', 'v', 'i', 'l'})); err != nil {
 		t.Fatalf("attacker write: %v", err)
 	}
-
 	waitFor(t, "spoofed packet counted", func() bool { return srv.SourceMismatchDrops() >= 1 })
 
 	if msgs := cm.DrainInput(connIDs[0]); len(msgs) != 0 {
@@ -161,136 +359,95 @@ func TestUDPServer_RejectsValidTokenFromForeignAddress(t *testing.T) {
 	}
 }
 
-// A spoofed Disconnect must not be a session-kill primitive.
-func TestUDPServer_RejectsDisconnectFromForeignAddress(t *testing.T) {
-	srv, _, addr, cancel := newTestUDPServer(t)
+// Even from the RIGHT address, a packet that does not authenticate must not be
+// delivered. This is what the token stopped being able to prove.
+func TestUDPServer_ForgedPayloadRejected(t *testing.T) {
+	srv, cm, addr, cancel := newTestUDPServer(t)
 	defer cancel()
-
-	victim := dialUDP(t, addr)
-	token := handshake(t, victim, 0x4444)
-	if _, err := victim.Write(udpproto.EncodeUnreliable(token, []byte{0x00, 'x'})); err != nil {
-		t.Fatalf("victim write: %v", err)
-	}
-	waitFor(t, "victim session promoted", func() bool { return srv.sessionCount() == 1 })
-
-	attacker := dialUDP(t, addr)
-	if _, err := attacker.Write(udpproto.EncodeDisconnect(token)); err != nil {
-		t.Fatalf("attacker disconnect: %v", err)
-	}
-	waitFor(t, "spoofed disconnect counted", func() bool { return srv.SourceMismatchDrops() >= 1 })
-
-	if got := srv.sessionCount(); got != 1 {
-		t.Fatalf("session killed by spoofed disconnect: count=%d, want 1", got)
-	}
-}
-
-// A token that does not match the pending entry for its own source address
-// proves nothing and must not promote.
-func TestUDPServer_ForeignTokenDoesNotPromote(t *testing.T) {
-	srv, _, addr, cancel := newTestUDPServer(t)
-	defer cancel()
-
-	a := dialUDP(t, addr)
-	tokenA := handshake(t, a, 0x5555)
-	waitFor(t, "first pending", func() bool { return srv.PendingCount() == 1 })
-
-	b := dialUDP(t, addr)
-	handshake(t, b, 0x6666)
-	waitFor(t, "second pending", func() bool { return srv.PendingCount() == 2 })
-
-	// b sends a's token from b's address.
-	if _, err := b.Write(udpproto.EncodeUnreliable(tokenA, []byte{0x00, 'n', 'o'})); err != nil {
-		t.Fatalf("write: %v", err)
-	}
-	time.Sleep(50 * time.Millisecond)
-
-	if got := srv.sessionCount(); got != 0 {
-		t.Fatalf("foreign token promoted a session: count=%d, want 0", got)
-	}
-}
-
-// Retrying a connection request must resend the original salts, or the peer
-// would derive a different token than the server recorded.
-func TestUDPServer_ConnReqRetryIsIdempotent(t *testing.T) {
-	srv, _, addr, cancel := newTestUDPServer(t)
-	defer cancel()
+	keyID, key := testKeyRegistry(t, srv)
 
 	c := dialUDP(t, addr)
-	first := handshake(t, c, 0x7777)
-	second := handshake(t, c, 0x7777)
-
-	if first != second {
-		t.Fatalf("retry minted a new token: %08x then %08x", first, second)
-	}
-	if got := srv.PendingCount(); got != 1 {
-		t.Fatalf("pending after retry = %d, want 1", got)
-	}
-}
-
-// The unproven-handshake table is bounded, so a spoofed request flood cannot
-// grow server memory without limit.
-func TestUDPServer_PendingTableIsBounded(t *testing.T) {
-	srv, _, addr, cancel := newTestUDPServer(t)
-	defer cancel()
-	srv.SetLimits(0, 0, time.Hour) // keep entries alive so the cap is what bites
-
-	for i := range 2 {
-		c := dialUDP(t, addr)
-		handshake(t, c, uint64(0x8000+i))
-	}
-	waitFor(t, "pending table full", func() bool { return srv.PendingCount() == 2 })
-
-	overflow := dialUDP(t, addr)
-	if _, err := overflow.Write(udpproto.EncodeConnReq(0x9999)); err != nil {
-		t.Fatalf("overflow write: %v", err)
-	}
-	waitFor(t, "overflow refused", func() bool { return srv.PendingFullDrops() >= 1 })
-
-	if got := srv.PendingCount(); got > 2 {
-		t.Fatalf("pending exceeded cap: %d, want <= 2", got)
-	}
-}
-
-// Expired handshakes are swept so a bounded table cannot be wedged shut by a
-// burst of requests that never complete.
-func TestUDPServer_PendingEntriesExpire(t *testing.T) {
-	srv, _, addr, cancel := newTestUDPServer(t)
-	defer cancel()
-
-	for i := range 2 {
-		c := dialUDP(t, addr)
-		handshake(t, c, uint64(0xA000+i))
-	}
-	waitFor(t, "pending table full", func() bool { return srv.PendingCount() == 2 })
-
-	time.Sleep(70 * time.Millisecond) // > PendingTTL set in newTestUDPServer
-
-	fresh := dialUDP(t, addr)
-	token := handshake(t, fresh, 0xB000)
-	if _, err := fresh.Write(udpproto.EncodeUnreliable(token, []byte{0x00, 'k'})); err != nil {
+	token, sess := handshake(t, c, 0x7A7A, keyID, key)
+	waitFor(t, "session established", func() bool { return srv.sessionCount() == 1 })
+	if _, err := c.Write(sealedUnreliable(t, sess, token, []byte{0x00, 'o', 'k'})); err != nil {
 		t.Fatalf("write: %v", err)
 	}
-	waitFor(t, "fresh handshake promoted after sweep", func() bool { return srv.sessionCount() == 1 })
+	waitFor(t, "registered", func() bool { return len(cm.ActiveConnIDs()) == 1 })
+	ids := cm.ActiveConnIDs()
+	waitFor(t, "real payload delivered", func() bool { return len(cm.DrainInput(ids[0])) > 0 })
+
+	// Correct header, garbage body: the tag cannot verify.
+	hdr := udpproto.EncodeUnreliableHeader(token, 9999)
+	forged := append(append([]byte{}, hdr...), make([]byte, udpproto.TagSize+4)...)
+	if _, err := c.Write(forged); err != nil {
+		t.Fatalf("forged write: %v", err)
+	}
+	time.Sleep(80 * time.Millisecond)
+
+	if msgs := cm.DrainInput(ids[0]); len(msgs) != 0 {
+		t.Fatalf("unauthenticated payload was delivered: %q", msgs)
+	}
+	if got := srv.sessionCount(); got != 1 {
+		t.Fatalf("forged packet disturbed the session: %d", got)
+	}
+}
+
+// A Disconnect must authenticate. In v1 a token was enough to kill a session.
+func TestUDPServer_RejectsUnauthenticatedDisconnect(t *testing.T) {
+	srv, _, addr, cancel := newTestUDPServer(t)
+	defer cancel()
+	keyID, key := testKeyRegistry(t, srv)
+
+	victim := dialUDP(t, addr)
+	token, _ := handshake(t, victim, 0x4444, keyID, key)
+	waitFor(t, "victim session established", func() bool { return srv.sessionCount() == 1 })
+
+	// Right token, right address, but a body that cannot authenticate.
+	hdr := udpproto.EncodeDisconnectHeader(token, 1)
+	forged := append(append([]byte{}, hdr...), make([]byte, udpproto.TagSize)...)
+	if _, err := victim.Write(forged); err != nil {
+		t.Fatalf("write forged disconnect: %v", err)
+	}
+	time.Sleep(80 * time.Millisecond)
+
+	if got := srv.sessionCount(); got != 1 {
+		t.Fatalf("session killed by an unauthenticated disconnect: %d, want 1", got)
+	}
+}
+
+// Retrying a connection request while established must resend the original
+// salts, or the peer would derive a different token than its session uses.
+func TestUDPServer_ConnReqRetryIsIdempotentWhenEstablished(t *testing.T) {
+	srv, _, addr, cancel := newTestUDPServer(t)
+	defer cancel()
+	keyID, key := testKeyRegistry(t, srv)
+
+	c := dialUDP(t, addr)
+	first, _ := handshake(t, c, 0x7777, keyID, key)
+	waitFor(t, "session established", func() bool { return srv.sessionCount() == 1 })
+
+	second, _ := handshake(t, c, 0x7777, keyID, key)
+	if first != second {
+		t.Fatalf("retry minted a new token for an established session: %08x then %08x", first, second)
+	}
+	if got := srv.sessionCount(); got != 1 {
+		t.Fatalf("retry created a second session: %d", got)
+	}
 }
 
 // Promotion respects the session cap.
 func TestUDPServer_ConnectionCapEnforced(t *testing.T) {
 	srv, _, addr, cancel := newTestUDPServer(t)
 	defer cancel()
-	srv.SetLimits(1, 8, time.Hour)
+	keyID, key := testKeyRegistry(t, srv)
+	srv.SetMaxConnections(1)
 
 	first := dialUDP(t, addr)
-	t1 := handshake(t, first, 0xC001)
-	if _, err := first.Write(udpproto.EncodeUnreliable(t1, []byte{0x00, '1'})); err != nil {
-		t.Fatalf("write: %v", err)
-	}
-	waitFor(t, "first session promoted", func() bool { return srv.sessionCount() == 1 })
+	handshake(t, first, 0xC001, keyID, key)
+	waitFor(t, "first session established", func() bool { return srv.sessionCount() == 1 })
 
 	second := dialUDP(t, addr)
-	t2 := handshake(t, second, 0xC002)
-	if _, err := second.Write(udpproto.EncodeUnreliable(t2, []byte{0x00, '2'})); err != nil {
-		t.Fatalf("write: %v", err)
-	}
+	handshake(t, second, 0xC002, keyID, key)
 	waitFor(t, "second promotion refused", func() bool { return srv.CapacityDrops() >= 1 })
 
 	if got := srv.sessionCount(); got != 1 {

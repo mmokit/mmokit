@@ -1,6 +1,7 @@
 package net
 
 import (
+	"errors"
 	"io"
 	"log"
 	"net/netip"
@@ -9,6 +10,7 @@ import (
 	"time"
 
 	"github.com/mmokit/mmokit/pkg/metrics"
+	"github.com/mmokit/mmokit/pkg/net/udpcrypto"
 	"github.com/mmokit/mmokit/pkg/net/udpproto"
 )
 
@@ -62,6 +64,11 @@ type UDPTransport struct {
 	clientSalt uint64
 	serverSalt uint64
 
+	// crypto owns this session's traffic keys, its send counter and its replay
+	// window. Every outbound packet body is sealed through it and every inbound
+	// one opened through it, so the token on the wire is only a session index.
+	crypto *udpcrypto.Session
+
 	// Outbound reliability
 	sendMu  sync.Mutex
 	sendSeq uint16
@@ -94,6 +101,8 @@ type UDPTransport struct {
 	inboundDrops   atomic.Uint64
 	opInboundDrops atomic.Uint64
 	oversizeDrops  atomic.Uint64
+	authFailures   atomic.Uint64
+	replayDrops    atomic.Uint64
 	dropLog        dropThrottle
 
 	lastRecvTick atomic.Int64
@@ -106,13 +115,14 @@ type UDPTransport struct {
 	bytesRecv atomic.Uint64
 }
 
-func newUDPTransport(server *UDPServer, addr netip.AddrPort, token uint32, clientSalt, serverSalt uint64, limits WireLimits) *UDPTransport {
+func newUDPTransport(server *UDPServer, addr netip.AddrPort, token uint32, clientSalt, serverSalt uint64, limits WireLimits, sess *udpcrypto.Session) *UDPTransport {
 	t := &UDPTransport{
 		server:     server,
 		addr:       addr,
 		token:      token,
 		clientSalt: clientSalt,
 		serverSalt: serverSalt,
+		crypto:     sess,
 		inbound:    make([][]byte, 0, 32),
 		done:       make(chan struct{}),
 		limits:     limits.Normalized(),
@@ -122,6 +132,38 @@ func newUDPTransport(server *UDPServer, addr netip.AddrPort, token uint32, clien
 	t.lastSendTick.Store(now)
 	go t.tickLoop()
 	return t
+}
+
+// sealSend seals body and writes header||sealed.
+//
+// buildHeader receives the counter allocated by udpcrypto.Session, because the
+// counter lives in the header and the header is the AEAD's additional
+// authenticated data. Routing every send through here is what keeps nonce
+// allocation in one place.
+func (t *UDPTransport) sealSend(body []byte, buildHeader func(counter uint64) []byte) SendResult {
+	hdr, sealed, err := t.crypto.SealWithHeader(body, buildHeader)
+	if err != nil {
+		return SendResult{Disposition: SendFailed, Err: err}
+	}
+	pkt := make([]byte, 0, len(hdr)+len(sealed))
+	pkt = append(pkt, hdr...)
+	pkt = append(pkt, sealed...)
+	return t.sendRaw(pkt)
+}
+
+// openInbound authenticates a sealed body, counting the two failure modes
+// separately so a replay storm and a forgery attempt are distinguishable.
+func (t *UDPTransport) openInbound(counter uint64, aad, sealed []byte) ([]byte, bool) {
+	body, err := t.crypto.Open(nil, counter, sealed, aad)
+	if err != nil {
+		if errors.Is(err, udpcrypto.ErrReplay) || errors.Is(err, udpcrypto.ErrZeroCounter) {
+			t.noteInboundDrop(&t.replayDrops, "replayed packet")
+		} else {
+			t.noteInboundDrop(&t.authFailures, "authentication failed")
+		}
+		return nil, false
+	}
+	return body, true
 }
 
 // SendReliable submits a message to the experimental UDP reliability layer.
@@ -163,8 +205,9 @@ func (t *UDPTransport) SendReliable(data []byte) SendResult {
 		used:        true,
 	}
 
-	pkt := udpproto.EncodeReliable(t.token, seq, payload)
-	result := t.sendRaw(pkt)
+	result := t.sealSend(payload, func(ctr uint64) []byte {
+		return udpproto.EncodeReliableHeader(t.token, seq, ctr)
+	})
 	if !result.Queued() {
 		// A failed/closed initial write did not accept ownership. Keep the
 		// returned disposition definitive by preventing a later tick from
@@ -176,8 +219,9 @@ func (t *UDPTransport) SendReliable(data []byte) SendResult {
 
 // SendUnreliable sends a message with no delivery guarantee.
 func (t *UDPTransport) SendUnreliable(data []byte) SendResult {
-	pkt := udpproto.EncodeUnreliable(t.token, data)
-	return t.sendRaw(pkt)
+	return t.sealSend(data, func(ctr uint64) []byte {
+		return udpproto.EncodeUnreliableHeader(t.token, ctr)
+	})
 }
 
 // lim returns this transport's ingress limits, normalizing the zero value so a
@@ -249,6 +293,12 @@ func (t *UDPTransport) noteInboundDrop(counter *atomic.Uint64, reason string) {
 // InboundDrops returns the number of channel-0x00 payloads refused at the queue cap.
 func (t *UDPTransport) InboundDrops() uint64 { return t.inboundDrops.Load() }
 
+// AuthFailures counts inbound packets that failed AEAD authentication.
+func (t *UDPTransport) AuthFailures() uint64 { return t.authFailures.Load() }
+
+// ReplayDrops counts inbound packets rejected by the replay window.
+func (t *UDPTransport) ReplayDrops() uint64 { return t.replayDrops.Load() }
+
 // OpInboundDrops returns the number of channel-0x01 payloads refused at the queue cap.
 func (t *UDPTransport) OpInboundDrops() uint64 { return t.opInboundDrops.Load() }
 
@@ -289,8 +339,19 @@ func (t *UDPTransport) Close() {
 	clear(t.sendBuf[:])
 	t.sendMu.Unlock()
 
-	// Send disconnect packet (best effort)
-	pkt := udpproto.EncodeDisconnect(t.token)
+	// Send disconnect (best effort). Sealed with an empty body, so the tag
+	// alone proves we hold the session key — the peer will not act on a
+	// teardown it cannot authenticate. Written directly rather than through
+	// sealSend because sendRaw refuses once closed is set, and it is set above.
+	hdr, sealed, err := t.crypto.SealWithHeader(nil, func(ctr uint64) []byte {
+		return udpproto.EncodeDisconnectHeader(t.token, ctr)
+	})
+	if err != nil {
+		return
+	}
+	pkt := make([]byte, 0, len(hdr)+len(sealed))
+	pkt = append(pkt, hdr...)
+	pkt = append(pkt, sealed...)
 	t.server.conn.WriteToUDPAddrPort(pkt, t.addr)
 }
 
@@ -300,7 +361,13 @@ func (t *UDPTransport) Close() {
 // opInbound (typed ops). Any other leading byte routes to inbound with the
 // bytes left intact (legacy compat for pre-Plan-G senders that omit the
 // channel prefix). See routePayload.
-func (t *UDPTransport) handleUnreliable(payload []byte) {
+func (t *UDPTransport) handleUnreliable(counter uint64, aad, sealed []byte) {
+	payload, ok := t.openInbound(counter, aad, sealed)
+	if !ok {
+		// Deliberately BEFORE the liveness stamp: an unauthenticated packet
+		// must not keep a dead session alive.
+		return
+	}
 	advanceUDPClock(&t.lastRecvTick, udpClockStamp(time.Now()))
 	t.bytesRecv.Add(uint64(len(payload)))
 	if len(payload) == 0 {
@@ -362,7 +429,11 @@ func (t *UDPTransport) appendInbound(body []byte, limits WireLimits) {
 }
 
 // handleReliable processes an inbound reliable message.
-func (t *UDPTransport) handleReliable(seq uint16, payload []byte) {
+func (t *UDPTransport) handleReliable(seq uint16, counter uint64, aad, sealed []byte) {
+	payload, ok := t.openInbound(counter, aad, sealed)
+	if !ok {
+		return
+	}
 	advanceUDPClock(&t.lastRecvTick, udpClockStamp(time.Now()))
 	t.bytesRecv.Add(uint64(len(payload)))
 
@@ -408,7 +479,15 @@ func (t *UDPTransport) handleReliable(seq uint16, payload []byte) {
 }
 
 // handleACK processes an inbound ACK packet.
-func (t *UDPTransport) handleACK(ackSeq uint16, ackBits uint32) {
+func (t *UDPTransport) handleACK(counter uint64, aad, sealed []byte) {
+	body, ok := t.openInbound(counter, aad, sealed)
+	if !ok {
+		return
+	}
+	ackSeq, ackBits, err := udpproto.DecodeACKBody(body)
+	if err != nil {
+		return
+	}
 	advanceUDPClock(&t.lastRecvTick, udpClockStamp(time.Now()))
 
 	t.sendMu.Lock()
@@ -462,8 +541,9 @@ func (t *UDPTransport) sendACK() {
 		return
 	}
 
-	pkt := udpproto.EncodeACK(t.token, ackSeq, ackBits)
-	result := t.sendRaw(pkt)
+	result := t.sealSend(udpproto.EncodeACKBody(ackSeq, ackBits), func(ctr uint64) []byte {
+		return udpproto.EncodeACKHeader(t.token, ctr)
+	})
 	if !result.Queued() && result.Disposition != SendClosed {
 		// Retry a failed ACK using the latest receive-window snapshot. If a new
 		// reliable packet arrived while this write was in flight, ackDirty is
@@ -533,8 +613,13 @@ func (t *UDPTransport) maintenanceTick(now time.Time) bool {
 			return false
 		}
 		if now.Sub(entry.lastSentAt) >= retransmitInterval {
-			pkt := udpproto.EncodeReliable(t.token, entry.seq, entry.payload)
-			t.sendRaw(pkt)
+			// Re-sealed with a FRESH counter rather than resending the original
+			// bytes. Identical bytes would carry the original counter and the
+			// peer's replay window would discard them, making every
+			// retransmission a no-op.
+			t.sealSend(entry.payload, func(ctr uint64) []byte {
+				return udpproto.EncodeReliableHeader(t.token, entry.seq, ctr)
+			})
 			entry.lastSentAt = now
 		}
 	}
@@ -546,8 +631,9 @@ func (t *UDPTransport) maintenanceTick(now time.Time) bool {
 
 	// Keepalive
 	if time.Duration(nowTick-t.lastSendTick.Load()) > keepaliveInterval {
-		pkt := udpproto.EncodeUnreliable(t.token, nil)
-		t.sendRaw(pkt)
+		t.sealSend(nil, func(ctr uint64) []byte {
+			return udpproto.EncodeUnreliableHeader(t.token, ctr)
+		})
 	}
 	return true
 }

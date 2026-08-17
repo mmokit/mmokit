@@ -330,14 +330,26 @@ func main() {
 	cs, ss := uint64(0x1122334455667788), uint64(0x99AABBCCDDEEFF00)
 	u.Tokens = append(u.Tokens, TokenCase{ClientSalt: cs, ServerSalt: ss, Token: udpproto.MakeToken(cs, ss)})
 
-	pl := []byte{0xDE, 0xAD, 0xBE, 0xEF}
+	// v2 data packets are header || sealed(body). Only the CLEARTEXT HEADER is
+	// pinned here: sealing needs a key and a counter, and udpcrypto.Session
+	// deliberately refuses to let a caller fix a counter, because that is what
+	// makes nonce reuse unrepresentable. The AEAD itself is pinned separately by
+	// UdpCryptoGoldenTests (RFC 8439 vectors plus Go vectors), and the
+	// composition of the two by the loopback tests.
+	const goldenCounter = uint64(0x0102030405060708)
+	cookie := make([]byte, udpproto.CookieSize)
+	for i := range cookie {
+		cookie[i] = byte(0xA0 + i)
+	}
 	u.Packets = append(u.Packets,
 		PacketCase{Kind: "connReq", HexBytes: hex.EncodeToString(udpproto.EncodeConnReq(cs)), ClientSalt: cs},
-		PacketCase{Kind: "connAccept", HexBytes: hex.EncodeToString(udpproto.EncodeConnAccept(cs, ss)), ClientSalt: cs, ServerSalt: ss},
-		PacketCase{Kind: "unreliable", HexBytes: hex.EncodeToString(udpproto.EncodeUnreliable(0xCAFEBABE, pl)), Token: 0xCAFEBABE, PayloadHex: hex.EncodeToString(pl)},
-		PacketCase{Kind: "reliable", HexBytes: hex.EncodeToString(udpproto.EncodeReliable(0xCAFEBABE, 7, pl)), Token: 0xCAFEBABE, Seq: 7, PayloadHex: hex.EncodeToString(pl)},
-		PacketCase{Kind: "ack", HexBytes: hex.EncodeToString(udpproto.EncodeACK(0xCAFEBABE, 12, 0x0000000B)), Token: 0xCAFEBABE, AckSeq: 12, AckBits: 0x0000000B},
-		PacketCase{Kind: "disconnect", HexBytes: hex.EncodeToString(udpproto.EncodeDisconnect(0xCAFEBABE)), Token: 0xCAFEBABE},
+		PacketCase{Kind: "connAccept", HexBytes: hex.EncodeToString(udpproto.EncodeConnAccept(cs, ss, cookie)), ClientSalt: cs, ServerSalt: ss},
+		PacketCase{Kind: "connConfirm", HexBytes: hex.EncodeToString(udpproto.EncodeConnConfirm(0x0BADC0DE, cs, ss, cookie)), ClientSalt: cs, ServerSalt: ss},
+		PacketCase{Kind: "unreliableHeader", HexBytes: hex.EncodeToString(udpproto.EncodeUnreliableHeader(0xCAFEBABE, goldenCounter)), Token: 0xCAFEBABE},
+		PacketCase{Kind: "reliableHeader", HexBytes: hex.EncodeToString(udpproto.EncodeReliableHeader(0xCAFEBABE, 7, goldenCounter)), Token: 0xCAFEBABE, Seq: 7},
+		PacketCase{Kind: "ackHeader", HexBytes: hex.EncodeToString(udpproto.EncodeACKHeader(0xCAFEBABE, goldenCounter)), Token: 0xCAFEBABE},
+		PacketCase{Kind: "ackBody", HexBytes: hex.EncodeToString(udpproto.EncodeACKBody(12, 0x0000000B)), AckSeq: 12, AckBits: 0x0000000B},
+		PacketCase{Kind: "disconnectHeader", HexBytes: hex.EncodeToString(udpproto.EncodeDisconnectHeader(0xCAFEBABE, goldenCounter)), Token: 0xCAFEBABE},
 	)
 
 	u.SeqCmp = append(u.SeqCmp,

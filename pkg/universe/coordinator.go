@@ -3840,11 +3840,10 @@ func (c *Process) processMetrics() metrics.ProcessSnapshot {
 	snap := metrics.ProcessSnapshot{Ingress: metrics.Ingress().Snapshot()}
 	if udp, ok := c.UDPStats(); ok {
 		snap.UDP = metrics.UDPDropSnapshot{
-			Bound:               true,
-			SourceMismatchDrops: udp.SourceMismatchDrops,
-			CapacityDrops:       udp.CapacityDrops,
-			PendingFullDrops:    udp.PendingFullDrops,
-			PendingCount:        uint64(udp.PendingCount),
+			Bound:                true,
+			SourceMismatchDrops:  udp.SourceMismatchDrops,
+			CapacityDrops:        udp.CapacityDrops,
+			HandshakeRejectDrops: udp.HandshakeRejectDrops,
 		}
 	}
 	return snap

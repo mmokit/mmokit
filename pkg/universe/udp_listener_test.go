@@ -41,9 +41,33 @@ func TestStartUDPListener_GatewayBindsAndHandshakes(t *testing.T) {
 	p.startUDPListener(ctx)
 	time.Sleep(50 * time.Millisecond) // let the goroutine bind
 
-	client, err := udpclient.Dial(addr)
+	// A UDP session now requires a key issued over HTTPS, so mint one directly
+	// from the process registry the listener was wired to.
+	keyID, entry, err := p.UDPKeyRegistry().Issue("test-user", "tester", time.Now())
+	if err != nil {
+		t.Fatalf("issue udp key: %v", err)
+	}
+	client, err := udpclient.Dial(addr, uint64(keyID), entry.Key)
 	if err != nil {
 		t.Fatalf("udpclient.Dial(%s): %v — gateway did not bind UDP", addr, err)
+	}
+
+	// The handshake must actually establish a session, not merely bind a port.
+	deadline := time.Now().Add(2 * time.Second)
+	established := false
+	for time.Now().Before(deadline) {
+		if stats, ok := p.UDPStats(); ok && stats.HandshakeRejectDrops == 0 {
+			if len(p.ConnMgr.ActiveConnIDs()) > 0 {
+				established = true
+				break
+			}
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	if !established {
+		stats, _ := p.UDPStats()
+		t.Fatalf("authenticated handshake did not establish a session (handshakeRejects=%d)",
+			stats.HandshakeRejectDrops)
 	}
 	client.Close()
 

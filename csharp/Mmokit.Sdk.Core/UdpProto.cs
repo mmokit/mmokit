@@ -14,20 +14,40 @@ namespace Mmokit.Sdk.Core
         public const byte TypeConnReq = 0x03;
         public const byte TypeConnAccept = 0x04;
         public const byte TypeDisconnect = 0x05;
+        public const byte TypeConnConfirm = 0x06;
+
+        /// Protocol version carried by every packet (CE-009). A peer sending a
+        /// different version is rejected at the first packet rather than being
+        /// allowed to misparse later ones.
+        public const byte Version = 0x02;
 
         public const uint ProtocolID = 0x47414D45; // "GAME"
 
-        public const int UnreliableHeaderSize = 1 + 4;
-        public const int ReliableHeaderSize = 1 + 4 + 2;
-        public const int AckSize = 1 + 4 + 2 + 4;
-        public const int ConnReqSize = 1 + 4 + 8;
-        public const int ConnAcceptSize = 1 + 4 + 8 + 8;
-        public const int DisconnectSize = 1 + 4;
+        public const int HeaderPrefixSize = 2; // type + version
+        public const int CounterSize = 8;      // explicit AEAD packet counter
+        public const int TagSize = 16;         // AEAD tag on every sealed body
+        public const int CookieSize = 16;      // stateless handshake cookie
+
+        public const int UnreliableHeaderSize = HeaderPrefixSize + 4 + CounterSize;
+        public const int ReliableHeaderSize = HeaderPrefixSize + 4 + 2 + CounterSize;
+        public const int AckHeaderSize = HeaderPrefixSize + 4 + CounterSize;
+        public const int DisconnectHeaderSize = HeaderPrefixSize + 4 + CounterSize;
+        public const int AckBodySize = 2 + 4;
+
+        public const int ConnReqSize = HeaderPrefixSize + 4 + 8;
+        public const int ConnAcceptSize = HeaderPrefixSize + 4 + 8 + 8 + CookieSize;
+        public const int ConnConfirmSize = HeaderPrefixSize + 8 + 8 + 8 + CookieSize;
 
         // --- little-endian writers ---
         static void PutU16(byte[] b, int o, ushort v) { b[o] = (byte)v; b[o + 1] = (byte)(v >> 8); }
         static void PutU32(byte[] b, int o, uint v) { b[o] = (byte)v; b[o + 1] = (byte)(v >> 8); b[o + 2] = (byte)(v >> 16); b[o + 3] = (byte)(v >> 24); }
         static void PutU64(byte[] b, int o, ulong v) { for (int i = 0; i < 8; i++) b[o + i] = (byte)(v >> (8 * i)); }
+
+        // The AEAD counter is big-endian; every other multi-byte field is
+        // little-endian. Matching Go byte for byte matters more than internal
+        // consistency here.
+        static void PutU64BE(byte[] b, int o, ulong v) { for (int i = 0; i < 8; i++) b[o + 7 - i] = (byte)(v >> (8 * i)); }
+        static ulong GetU64BE(byte[] b, int o) { ulong v = 0; for (int i = 0; i < 8; i++) v = (v << 8) | b[o + i]; return v; }
 
         // --- little-endian readers ---
         static ushort GetU16(byte[] b, int o) => (ushort)(b[o] | (b[o + 1] << 8));
@@ -40,117 +60,190 @@ namespace Mmokit.Sdk.Core
             return (uint)combined ^ (uint)(combined >> 32);
         }
 
+        // --- handshake ---
+
         public static byte[] EncodeConnReq(ulong clientSalt)
         {
             var b = new byte[ConnReqSize];
-            b[0] = TypeConnReq;
-            PutU32(b, 1, ProtocolID);
-            PutU64(b, 5, clientSalt);
+            b[0] = TypeConnReq; b[1] = Version;
+            PutU32(b, 2, ProtocolID);
+            PutU64(b, 6, clientSalt);
             return b;
         }
 
-        /// Returns false if too short or wrong protocol ID.
+        /// Returns false if too short, wrong version, or wrong protocol ID.
         public static bool TryDecodeConnReq(byte[] data, out ulong clientSalt)
         {
             clientSalt = 0;
             if (data.Length < ConnReqSize) return false;
-            if (GetU32(data, 1) != ProtocolID) return false;
-            clientSalt = GetU64(data, 5);
+            if (data[1] != Version) return false;
+            if (GetU32(data, 2) != ProtocolID) return false;
+            clientSalt = GetU64(data, 6);
             return true;
         }
 
-        public static byte[] EncodeConnAccept(ulong clientSalt, ulong serverSalt)
+        public static byte[] EncodeConnAccept(ulong clientSalt, ulong serverSalt, byte[] cookie)
         {
             var b = new byte[ConnAcceptSize];
-            b[0] = TypeConnAccept;
-            PutU32(b, 1, ProtocolID);
-            PutU64(b, 5, clientSalt);
-            PutU64(b, 13, serverSalt);
+            b[0] = TypeConnAccept; b[1] = Version;
+            PutU32(b, 2, ProtocolID);
+            PutU64(b, 6, clientSalt);
+            PutU64(b, 14, serverSalt);
+            Array.Copy(cookie, 0, b, 22, CookieSize);
             return b;
         }
 
-        public static bool TryDecodeConnAccept(byte[] data, out ulong clientSalt, out ulong serverSalt)
+        public static bool TryDecodeConnAccept(byte[] data, out ulong clientSalt, out ulong serverSalt, out byte[] cookie)
         {
-            clientSalt = 0; serverSalt = 0;
+            clientSalt = 0; serverSalt = 0; cookie = Array.Empty<byte>();
             if (data.Length < ConnAcceptSize) return false;
-            if (GetU32(data, 1) != ProtocolID) return false;
-            clientSalt = GetU64(data, 5);
-            serverSalt = GetU64(data, 13);
+            if (data[1] != Version) return false;
+            if (GetU32(data, 2) != ProtocolID) return false;
+            clientSalt = GetU64(data, 6);
+            serverSalt = GetU64(data, 14);
+            cookie = Sub(data, 22, CookieSize);
             return true;
         }
 
-        public static byte[] EncodeUnreliable(uint token, byte[]? payload)
+        /// The client's proof step: echoes the cookie and names the key issued
+        /// over HTTPS. The server cannot decrypt anything until it knows which
+        /// key to use, which is why the key ID travels once here rather than on
+        /// every data packet.
+        public static byte[] EncodeConnConfirm(ulong keyID, ulong clientSalt, ulong serverSalt, byte[] cookie)
         {
-            int plen = payload?.Length ?? 0;
-            var b = new byte[UnreliableHeaderSize + plen];
-            b[0] = TypeUnreliable;
-            PutU32(b, 1, token);
-            if (plen > 0) Array.Copy(payload!, 0, b, UnreliableHeaderSize, plen);
+            var b = new byte[ConnConfirmSize];
+            b[0] = TypeConnConfirm; b[1] = Version;
+            PutU64(b, 2, keyID);
+            PutU64(b, 10, clientSalt);
+            PutU64(b, 18, serverSalt);
+            Array.Copy(cookie, 0, b, 26, CookieSize);
             return b;
         }
 
-        public static bool TryDecodeUnreliable(byte[] data, out uint token, out byte[] payload)
+        public static bool TryDecodeConnConfirm(byte[] data, out ulong keyID, out ulong clientSalt, out ulong serverSalt, out byte[] cookie)
         {
-            token = 0; payload = Array.Empty<byte>();
-            if (data.Length < UnreliableHeaderSize) return false;
-            token = GetU32(data, 1);
-            payload = Sub(data, UnreliableHeaderSize, data.Length - UnreliableHeaderSize);
+            keyID = 0; clientSalt = 0; serverSalt = 0; cookie = Array.Empty<byte>();
+            if (data.Length < ConnConfirmSize) return false;
+            if (data[1] != Version) return false;
+            keyID = GetU64(data, 2);
+            clientSalt = GetU64(data, 10);
+            serverSalt = GetU64(data, 18);
+            cookie = Sub(data, 26, CookieSize);
             return true;
         }
 
-        public static byte[] EncodeReliable(uint token, ushort seq, byte[] payload)
+        // --- data packets ---
+        //
+        // Encoders emit the CLEARTEXT header only; the caller appends the sealed
+        // body. Decoders return the header to use as the AEAD's additional
+        // authenticated data plus the sealed body. Keeping the split here mirrors
+        // Go's udpproto and keeps this class free of any crypto dependency.
+
+        public static byte[] EncodeUnreliableHeader(uint token, ulong counter)
         {
-            var b = new byte[ReliableHeaderSize + payload.Length];
-            b[0] = TypeReliable;
-            PutU32(b, 1, token);
-            PutU16(b, 5, seq);
-            Array.Copy(payload, 0, b, ReliableHeaderSize, payload.Length);
+            var b = new byte[UnreliableHeaderSize];
+            b[0] = TypeUnreliable; b[1] = Version;
+            PutU32(b, 2, token);
+            PutU64BE(b, 6, counter);
             return b;
         }
 
-        public static bool TryDecodeReliable(byte[] data, out uint token, out ushort seq, out byte[] payload)
+        public static bool TryDecodeUnreliable(byte[] data, out uint token, out ulong counter, out byte[] aad, out byte[] sealedBody)
         {
-            token = 0; seq = 0; payload = Array.Empty<byte>();
-            if (data.Length < ReliableHeaderSize) return false;
-            token = GetU32(data, 1);
-            seq = GetU16(data, 5);
-            payload = Sub(data, ReliableHeaderSize, data.Length - ReliableHeaderSize);
+            token = 0; counter = 0; aad = Array.Empty<byte>(); sealedBody = Array.Empty<byte>();
+            if (data.Length < UnreliableHeaderSize + TagSize) return false;
+            if (data[1] != Version) return false;
+            token = GetU32(data, 2);
+            counter = GetU64BE(data, 6);
+            aad = Sub(data, 0, UnreliableHeaderSize);
+            sealedBody = Sub(data, UnreliableHeaderSize, data.Length - UnreliableHeaderSize);
             return true;
         }
 
-        public static byte[] EncodeAck(uint token, ushort ackSeq, uint ackBits)
+        public static byte[] EncodeReliableHeader(uint token, ushort seq, ulong counter)
         {
-            var b = new byte[AckSize];
-            b[0] = TypeAck;
-            PutU32(b, 1, token);
-            PutU16(b, 5, ackSeq);
-            PutU32(b, 7, ackBits);
+            var b = new byte[ReliableHeaderSize];
+            b[0] = TypeReliable; b[1] = Version;
+            PutU32(b, 2, token);
+            PutU16(b, 6, seq);
+            PutU64BE(b, 8, counter);
             return b;
         }
 
-        public static bool TryDecodeAck(byte[] data, out uint token, out ushort ackSeq, out uint ackBits)
+        public static bool TryDecodeReliable(byte[] data, out uint token, out ushort seq, out ulong counter, out byte[] aad, out byte[] sealedBody)
         {
-            token = 0; ackSeq = 0; ackBits = 0;
-            if (data.Length < AckSize) return false;
-            token = GetU32(data, 1);
-            ackSeq = GetU16(data, 5);
-            ackBits = GetU32(data, 7);
+            token = 0; seq = 0; counter = 0; aad = Array.Empty<byte>(); sealedBody = Array.Empty<byte>();
+            if (data.Length < ReliableHeaderSize + TagSize) return false;
+            if (data[1] != Version) return false;
+            token = GetU32(data, 2);
+            seq = GetU16(data, 6);
+            counter = GetU64BE(data, 8);
+            aad = Sub(data, 0, ReliableHeaderSize);
+            sealedBody = Sub(data, ReliableHeaderSize, data.Length - ReliableHeaderSize);
             return true;
         }
 
-        public static byte[] EncodeDisconnect(uint token)
+        public static byte[] EncodeAckHeader(uint token, ulong counter)
         {
-            var b = new byte[DisconnectSize];
-            b[0] = TypeDisconnect;
-            PutU32(b, 1, token);
+            var b = new byte[AckHeaderSize];
+            b[0] = TypeAck; b[1] = Version;
+            PutU32(b, 2, token);
+            PutU64BE(b, 6, counter);
             return b;
         }
 
-        public static bool TryDecodeDisconnect(byte[] data, out uint token)
+        /// The plaintext an ACK seals. ACKs are authenticated because a forged
+        /// one retires a frame the peer never received.
+        public static byte[] EncodeAckBody(ushort ackSeq, uint ackBits)
         {
-            token = 0;
-            if (data.Length < DisconnectSize) return false;
-            token = GetU32(data, 1);
+            var b = new byte[AckBodySize];
+            PutU16(b, 0, ackSeq);
+            PutU32(b, 2, ackBits);
+            return b;
+        }
+
+        public static bool TryDecodeAckBody(byte[] body, out ushort ackSeq, out uint ackBits)
+        {
+            ackSeq = 0; ackBits = 0;
+            if (body.Length < AckBodySize) return false;
+            ackSeq = GetU16(body, 0);
+            ackBits = GetU32(body, 2);
+            return true;
+        }
+
+        public static bool TryDecodeAck(byte[] data, out uint token, out ulong counter, out byte[] aad, out byte[] sealedBody)
+        {
+            token = 0; counter = 0; aad = Array.Empty<byte>(); sealedBody = Array.Empty<byte>();
+            if (data.Length < AckHeaderSize + TagSize) return false;
+            if (data[1] != Version) return false;
+            token = GetU32(data, 2);
+            counter = GetU64BE(data, 6);
+            aad = Sub(data, 0, AckHeaderSize);
+            sealedBody = Sub(data, AckHeaderSize, data.Length - AckHeaderSize);
+            return true;
+        }
+
+        /// Disconnect seals an EMPTY body, so the tag alone proves the sender
+        /// holds the session key. In v1 anyone who learned a token could tear a
+        /// session down.
+        public static byte[] EncodeDisconnectHeader(uint token, ulong counter)
+        {
+            var b = new byte[DisconnectHeaderSize];
+            b[0] = TypeDisconnect; b[1] = Version;
+            PutU32(b, 2, token);
+            PutU64BE(b, 6, counter);
+            return b;
+        }
+
+        public static bool TryDecodeDisconnect(byte[] data, out uint token, out ulong counter, out byte[] aad, out byte[] sealedBody)
+        {
+            token = 0; counter = 0; aad = Array.Empty<byte>(); sealedBody = Array.Empty<byte>();
+            if (data.Length < DisconnectHeaderSize + TagSize) return false;
+            if (data[1] != Version) return false;
+            token = GetU32(data, 2);
+            counter = GetU64BE(data, 6);
+            aad = Sub(data, 0, DisconnectHeaderSize);
+            sealedBody = Sub(data, DisconnectHeaderSize, data.Length - DisconnectHeaderSize);
             return true;
         }
 

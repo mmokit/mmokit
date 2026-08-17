@@ -146,11 +146,10 @@ func TestHandler_EmitsUDPDropsWhenBound(t *testing.T) {
 		func() map[string]LoadSnapshot { return nil },
 		func() ProcessSnapshot {
 			return ProcessSnapshot{UDP: UDPDropSnapshot{
-				Bound:               true,
-				SourceMismatchDrops: 3,
-				CapacityDrops:       5,
-				PendingFullDrops:    7,
-				PendingCount:        11,
+				Bound:                true,
+				SourceMismatchDrops:  3,
+				CapacityDrops:        5,
+				HandshakeRejectDrops: 7,
 			}}
 		},
 	)
@@ -161,8 +160,7 @@ func TestHandler_EmitsUDPDropsWhenBound(t *testing.T) {
 	for _, want := range []string{
 		`mmokit_udp_packets_dropped_total{reason="source_mismatch"} 3`,
 		`mmokit_udp_packets_dropped_total{reason="capacity"} 5`,
-		`mmokit_udp_packets_dropped_total{reason="pending_full"} 7`,
-		"mmokit_udp_pending_handshakes 11",
+		`mmokit_udp_packets_dropped_total{reason="handshake_reject"} 7`,
 	} {
 		if !strings.Contains(body, want) {
 			t.Errorf("exposition is missing %q", want)

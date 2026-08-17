@@ -42,6 +42,11 @@ namespace Mmokit.Sdk.Core
         readonly Func<long> _nowMs;
         readonly uint _token;
 
+        /// Owns this session's traffic keys, send counter and replay window.
+        /// Every outbound body is sealed through it and every inbound one opened
+        /// through it, so the token on the wire is only a session index.
+        readonly UdpSession _session;
+
         readonly object _sendLock = new();
         ushort _sendSeq;
         readonly ReliableEntry[] _sendBuf = new ReliableEntry[ReliableBufSize];
@@ -66,11 +71,12 @@ namespace Mmokit.Sdk.Core
 
         /// Core ctor (and the testing entry point). The socket factory below
         /// constructs this with a sink that writes to the UdpClient.
-        public UdpTransport(Action<byte[]> sendRaw, Func<long> nowMs, uint token)
+        public UdpTransport(Action<byte[]> sendRaw, Func<long> nowMs, uint token, UdpSession session)
         {
             _sendRaw = sendRaw;
             _nowMs = nowMs;
             _token = token;
+            _session = session ?? throw new ArgumentNullException(nameof(session));
             long now = nowMs();
             _lastRecvMs = now;
             _lastSendMs = now;
@@ -104,7 +110,8 @@ namespace Mmokit.Sdk.Core
                     // Keep admission and the initial write atomic with Close.
                     // Otherwise Close can clear the slot and emit Disconnect
                     // before this reliable datagram reaches the socket.
-                    _sendRaw(UdpProto.EncodeReliable(_token, seq, payload));
+                    _sendRaw(_session.SealPacket(payload,
+                        ctr => UdpProto.EncodeReliableHeader(_token, seq, ctr)));
                     AdvanceClock(ref _lastSendMs, _nowMs());
                 }
                 catch
@@ -121,7 +128,8 @@ namespace Mmokit.Sdk.Core
             lock (_sendLock)
             {
                 ThrowIfClosedLocked();
-                _sendRaw(UdpProto.EncodeUnreliable(_token, data));
+                _sendRaw(_session.SealPacket(data,
+                    ctr => UdpProto.EncodeUnreliableHeader(_token, ctr)));
                 AdvanceClock(ref _lastSendMs, _nowMs());
             }
         }
@@ -133,22 +141,37 @@ namespace Mmokit.Sdk.Core
             switch (data[0])
             {
                 case UdpProto.TypeUnreliable:
-                    if (!UdpProto.TryDecodeUnreliable(data, out _, out byte[] upay)) return;
+                {
+                    if (!UdpProto.TryDecodeUnreliable(data, out _, out ulong ctr, out byte[] aad, out byte[] body)) return;
+                    var upay = _session.OpenPacket(ctr, body, aad);
+                    // Deliberately before the liveness stamp: a packet that does
+                    // not authenticate must not keep a dead session alive.
+                    if (upay == null) return;
                     AdvanceClock(ref _lastRecvMs, _nowMs());
                     if (upay.Length == 0) return; // keepalive
                     TryQueueInbound(upay);
                     break;
+                }
                 case UdpProto.TypeReliable:
-                    if (!UdpProto.TryDecodeReliable(data, out _, out ushort seq, out byte[] rpay)) return;
+                {
+                    if (!UdpProto.TryDecodeReliable(data, out _, out ushort seq, out ulong ctr, out byte[] aad, out byte[] body)) return;
+                    var rpay = _session.OpenPacket(ctr, body, aad);
+                    if (rpay == null) return;
                     AdvanceClock(ref _lastRecvMs, _nowMs());
                     bool deliver = UpdateRecvTracking(seq);
                     if (deliver && rpay.Length > 0) TryQueueInbound(rpay);
                     break;
+                }
                 case UdpProto.TypeAck:
-                    if (!UdpProto.TryDecodeAck(data, out _, out ushort ackSeq, out uint ackBits)) return;
+                {
+                    if (!UdpProto.TryDecodeAck(data, out _, out ulong ctr, out byte[] aad, out byte[] body)) return;
+                    var ackBody = _session.OpenPacket(ctr, body, aad);
+                    if (ackBody == null) return;
+                    if (!UdpProto.TryDecodeAckBody(ackBody, out ushort ackSeq, out uint ackBits)) return;
                     AdvanceClock(ref _lastRecvMs, _nowMs());
                     ProcessAck(ackSeq, ackBits);
                     break;
+                }
             }
         }
 
@@ -264,10 +287,13 @@ namespace Mmokit.Sdk.Core
                     {
                         try
                         {
-                            _sendRaw(UdpProto.EncodeReliable(
-                                _token,
-                                _sendBuf[i].Seq,
-                                _sendBuf[i].Payload));
+                            // Re-sealed with a FRESH counter. Resending the
+                            // original bytes would carry the original counter and
+                            // the peer's replay window would discard them, making
+                            // every retransmission a no-op.
+                            var rseq = _sendBuf[i].Seq;
+                            _sendRaw(_session.SealPacket(_sendBuf[i].Payload,
+                                ctr => UdpProto.EncodeReliableHeader(_token, rseq, ctr)));
                         }
                         catch
                         {
@@ -297,7 +323,8 @@ namespace Mmokit.Sdk.Core
                     {
                         try
                         {
-                            _sendRaw(UdpProto.EncodeAck(_token, ackSeq, ackBits));
+                            _sendRaw(_session.SealPacket(UdpProto.EncodeAckBody(ackSeq, ackBits),
+                                ctr => UdpProto.EncodeAckHeader(_token, ctr)));
                             AdvanceClock(ref _lastSendMs, now);
                         }
                         catch
@@ -315,7 +342,8 @@ namespace Mmokit.Sdk.Core
                 {
                     try
                     {
-                        _sendRaw(UdpProto.EncodeUnreliable(_token, null));
+                        _sendRaw(_session.SealPacket(null,
+                            ctr => UdpProto.EncodeUnreliableHeader(_token, ctr)));
                         AdvanceClock(ref _lastSendMs, now);
                     }
                     catch
@@ -368,7 +396,15 @@ namespace Mmokit.Sdk.Core
                 }
                 // Keep the final packet inside the outbound serialization gate:
                 // no reliable, ACK, or keepalive can be emitted after it.
-                try { _sendRaw(UdpProto.EncodeDisconnect(_token)); } catch { /* best effort */ }
+                // Sealed with an empty body, so the tag alone proves we hold the
+                // session key; the server will not act on a teardown it cannot
+                // authenticate.
+                try
+                {
+                    _sendRaw(_session.SealPacket(null,
+                        ctr => UdpProto.EncodeDisconnectHeader(_token, ctr)));
+                }
+                catch { /* best effort */ }
             }
             CloseSocket(); // partial-class hook; no-op for the core-only ctor
         }

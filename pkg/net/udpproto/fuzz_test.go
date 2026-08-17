@@ -33,12 +33,17 @@ var updateFuzzCorpus = flag.Bool("update-fuzz-corpus", false,
 // is pinned to. Seeding from the cross-language golden means the fuzzer starts
 // from packets a real client actually sends.
 var goldenPacketHex = []struct{ name, hex string }{
-	{"conn-req", "03454d41478877665544332211"},
-	{"conn-accept", "04454d4147887766554433221100ffeeddccbbaa99"},
-	{"unreliable", "00bebafecadeadbeef"},
-	{"reliable", "01bebafeca0700deadbeef"},
-	{"ack", "02bebafeca0c000b000000"},
-	{"disconnect", "05bebafeca"},
+	{"conn-req", "0302454d41478877665544332211"},
+	{"conn-accept", "0402454d4147887766554433221100ffeeddccbbaa99a0a1a2a3a4a5a6a7a8a9aaabacadaeaf"},
+	{"conn-confirm", "0602dec0ad0b00000000887766554433221100ffeeddccbbaa99a0a1a2a3a4a5a6a7a8a9aaabacadaeaf"},
+	// Data-packet seeds are header || 16 zero bytes standing in for a sealed
+	// body. The decoders never authenticate — that is udpcrypto's job — so what
+	// matters here is that they split a minimum-length packet without reading
+	// past it.
+	{"unreliable", "0002bebafeca010203040506070800000000000000000000000000000000"},
+	{"reliable", "0102bebafeca0700010203040506070800000000000000000000000000000000"},
+	{"ack", "0202bebafeca010203040506070800000000000000000000000000000000"},
+	{"disconnect", "0502bebafeca010203040506070800000000000000000000000000000000"},
 }
 
 func udpProtoSeeds(tb testing.TB) []fuzzSeed {
@@ -77,39 +82,67 @@ func FuzzUDPProtoDecode(f *testing.F) {
 				return
 			}
 		case TypeConnAccept:
-			if _, _, err := DecodeConnAccept(data); err != nil {
+			_, _, cookie, err := DecodeConnAccept(data)
+			if err != nil {
 				return
+			}
+			if len(cookie) != CookieSize {
+				t.Fatalf("cookie is %d bytes, want %d", len(cookie), CookieSize)
+			}
+		case TypeConnConfirm:
+			_, _, _, cookie, err := DecodeConnConfirm(data)
+			if err != nil {
+				return
+			}
+			if len(cookie) != CookieSize {
+				t.Fatalf("confirm cookie is %d bytes, want %d", len(cookie), CookieSize)
 			}
 		case TypeUnreliable:
-			_, payload, err := DecodeUnreliable(data)
+			_, _, aad, sealed, err := DecodeUnreliable(data)
 			if err != nil {
 				return
 			}
-			// The payload is a view into data; the server hands it straight to
-			// the reflection codec, so an over-long view is a real bug.
-			if len(payload) != len(data)-UnreliableHeaderSize {
-				t.Fatalf("unreliable payload is %d bytes, want %d",
-					len(payload), len(data)-UnreliableHeaderSize)
-			}
+			// aad and sealed are views into data. They must partition it
+			// exactly: the server passes both straight to the AEAD, so an
+			// over-long view reads past the datagram.
+			checkSplit(t, data, aad, sealed, UnreliableHeaderSize)
 		case TypeReliable:
-			_, _, payload, err := DecodeReliable(data)
+			_, _, _, aad, sealed, err := DecodeReliable(data)
 			if err != nil {
 				return
 			}
-			if len(payload) != len(data)-ReliableHeaderSize {
-				t.Fatalf("reliable payload is %d bytes, want %d",
-					len(payload), len(data)-ReliableHeaderSize)
-			}
+			checkSplit(t, data, aad, sealed, ReliableHeaderSize)
 		case TypeACK:
-			if _, _, _, err := DecodeACK(data); err != nil {
+			_, _, aad, sealed, err := DecodeACK(data)
+			if err != nil {
 				return
 			}
+			checkSplit(t, data, aad, sealed, ACKHeaderSize)
 		case TypeDisconnect:
-			if _, err := DecodeDisconnect(data); err != nil {
+			_, _, aad, sealed, err := DecodeDisconnect(data)
+			if err != nil {
 				return
 			}
+			checkSplit(t, data, aad, sealed, DisconnectHeaderSize)
 		}
 	})
+}
+
+// checkSplit asserts a decoder partitioned the datagram exactly into its
+// authenticated header and its sealed body, with nothing lost and nothing
+// invented.
+func checkSplit(t *testing.T, data, aad, sealed []byte, headerSize int) {
+	t.Helper()
+	if len(aad) != headerSize {
+		t.Fatalf("aad is %d bytes, want %d", len(aad), headerSize)
+	}
+	if len(aad)+len(sealed) != len(data) {
+		t.Fatalf("aad(%d)+sealed(%d) = %d, want %d",
+			len(aad), len(sealed), len(aad)+len(sealed), len(data))
+	}
+	if len(sealed) < TagSize {
+		t.Fatalf("sealed body is %d bytes, shorter than the %d-byte tag", len(sealed), TagSize)
+	}
 }
 
 // marshalFuzzCorpusFile renders one seed in Go's testdata/fuzz encoding.

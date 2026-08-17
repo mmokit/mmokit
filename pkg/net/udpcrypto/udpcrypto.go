@@ -198,6 +198,24 @@ func (s *Session) Seal(dst, plaintext, aad []byte) (uint64, []byte, error) {
 	return ctr, s.send.Seal(dst, nonce[:], plaintext, aad), nil
 }
 
+// SealWithHeader seals plaintext where the additional authenticated data is a
+// packet header that must itself contain the counter.
+//
+// buildHeader is called exactly once, with the counter this call allocated, and
+// must return the header bytes to authenticate. The indirection exists so that
+// a caller whose wire format puts the counter in the header still cannot choose
+// one: Seal and SealWithHeader are the only counter sources, and neither
+// accepts a caller-supplied value.
+func (s *Session) SealWithHeader(plaintext []byte, buildHeader func(counter uint64) []byte) (header, sealed []byte, err error) {
+	ctr := s.sendCtr.Add(1)
+	if ctr > maxCounter {
+		return nil, nil, ErrCounterExhausted
+	}
+	hdr := buildHeader(ctr)
+	nonce := nonceFor(ctr)
+	return hdr, s.send.Seal(nil, nonce[:], plaintext, hdr), nil
+}
+
 // Open authenticates and decrypts a packet received with the given counter.
 //
 // Ordering is deliberate and is the classic trap in this code: the window is

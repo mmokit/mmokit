@@ -143,7 +143,7 @@
     "packets": [
       {
         "kind": "connReq",
-        "hexBytes": "03454d41478877665544332211",
+        "hexBytes": "0302454d41478877665544332211",
         "token": 0,
         "seq": 0,
         "ackSeq": 0,
@@ -154,7 +154,7 @@
       },
       {
         "kind": "connAccept",
-        "hexBytes": "04454d4147887766554433221100ffeeddccbbaa99",
+        "hexBytes": "0402454d4147887766554433221100ffeeddccbbaa99a0a1a2a3a4a5a6a7a8a9aaabacadaeaf",
         "token": 0,
         "seq": 0,
         "ackSeq": 0,
@@ -164,31 +164,53 @@
         "payloadHex": ""
       },
       {
-        "kind": "unreliable",
-        "hexBytes": "00bebafecadeadbeef",
+        "kind": "connConfirm",
+        "hexBytes": "0602dec0ad0b00000000887766554433221100ffeeddccbbaa99a0a1a2a3a4a5a6a7a8a9aaabacadaeaf",
+        "token": 0,
+        "seq": 0,
+        "ackSeq": 0,
+        "ackBits": 0,
+        "clientSalt": 1234605616436508552,
+        "serverSalt": 11072869122414935808,
+        "payloadHex": ""
+      },
+      {
+        "kind": "unreliableHeader",
+        "hexBytes": "0002bebafeca0102030405060708",
         "token": 3405691582,
         "seq": 0,
         "ackSeq": 0,
         "ackBits": 0,
         "clientSalt": 0,
         "serverSalt": 0,
-        "payloadHex": "deadbeef"
+        "payloadHex": ""
       },
       {
-        "kind": "reliable",
-        "hexBytes": "01bebafeca0700deadbeef",
+        "kind": "reliableHeader",
+        "hexBytes": "0102bebafeca07000102030405060708",
         "token": 3405691582,
         "seq": 7,
         "ackSeq": 0,
         "ackBits": 0,
         "clientSalt": 0,
         "serverSalt": 0,
-        "payloadHex": "deadbeef"
+        "payloadHex": ""
       },
       {
-        "kind": "ack",
-        "hexBytes": "02bebafeca0c000b000000",
+        "kind": "ackHeader",
+        "hexBytes": "0202bebafeca0102030405060708",
         "token": 3405691582,
+        "seq": 0,
+        "ackSeq": 0,
+        "ackBits": 0,
+        "clientSalt": 0,
+        "serverSalt": 0,
+        "payloadHex": ""
+      },
+      {
+        "kind": "ackBody",
+        "hexBytes": "0c000b000000",
+        "token": 0,
         "seq": 0,
         "ackSeq": 12,
         "ackBits": 11,
@@ -197,8 +219,8 @@
         "payloadHex": ""
       },
       {
-        "kind": "disconnect",
-        "hexBytes": "05bebafeca",
+        "kind": "disconnectHeader",
+        "hexBytes": "0502bebafeca0102030405060708",
         "token": 3405691582,
         "seq": 0,
         "ackSeq": 0,

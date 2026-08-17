@@ -2,6 +2,8 @@ package net
 
 import (
 	"context"
+	"github.com/mmokit/mmokit/pkg/net/udpcrypto"
+	"github.com/mmokit/mmokit/pkg/net/udpproto"
 	"net/http"
 	"net/http/httptest"
 	"net/netip"
@@ -261,9 +263,9 @@ func TestAddTransport_RecordsRemoteAddr(t *testing.T) {
 	}
 }
 
-// promotePending is the only place a UDP session's peer address is known, so
+// promoteConfirmed is the only place a UDP session's peer address is known, so
 // that is where it has to be handed to the ConnManager.
-func TestPromotePending_RecordsPeerAddr(t *testing.T) {
+func TestPromoteConfirmed_RecordsPeerAddr(t *testing.T) {
 	cm := NewConnManager()
 	s, err := NewUDPServer("127.0.0.1:0", cm)
 	if err != nil {
@@ -272,12 +274,19 @@ func TestPromotePending_RecordsPeerAddr(t *testing.T) {
 	defer s.conn.Close()
 
 	peer := netip.MustParseAddrPort("198.51.100.9:5000")
-	const token uint32 = 0xABCD1234
-	s.pending[peer] = pendingHandshake{token: token, createdAt: time.Now()}
+	const clientSalt, serverSalt = uint64(0x1111), uint64(0x2222)
+	token := udpproto.MakeToken(clientSalt, serverSalt)
 
-	tr := s.promotePending(token, peer)
+	var key udpcrypto.Key
+	sess, err := udpcrypto.NewSession(key, udpcrypto.RoleServer,
+		udpproto.SessionSalt(clientSalt, serverSalt))
+	if err != nil {
+		t.Fatalf("session: %v", err)
+	}
+
+	tr := s.promoteConfirmed(token, peer, clientSalt, serverSalt, sess)
 	if tr == nil {
-		t.Fatal("promotePending returned nil for a matching pending entry")
+		t.Fatal("promoteConfirmed returned nil for a verified handshake")
 	}
 	connID, ok := s.connIDs[tr]
 	if !ok {
@@ -285,6 +294,12 @@ func TestPromotePending_RecordsPeerAddr(t *testing.T) {
 	}
 	if got := cm.RemoteAddrString(connID); got != peer.String() {
 		t.Fatalf("RemoteAddrString = %q, want %q", got, peer.String())
+	}
+
+	// A repeated ConnConfirm — the client retries when its first is lost — must
+	// return the existing session rather than building a second one.
+	if again := s.promoteConfirmed(token, peer, clientSalt, serverSalt, sess); again != tr {
+		t.Fatal("repeated promoteConfirmed built a second transport for one session")
 	}
 	tr.Close()
 }

@@ -132,9 +132,6 @@ func writeProcessMetrics(w http.ResponseWriter, p ProcessSnapshot) {
 	fmt.Fprintln(w, "# TYPE mmokit_udp_packets_dropped_total counter")
 	fmt.Fprintf(w, "mmokit_udp_packets_dropped_total{reason=\"source_mismatch\"} %d\n", p.UDP.SourceMismatchDrops)
 	fmt.Fprintf(w, "mmokit_udp_packets_dropped_total{reason=\"capacity\"} %d\n", p.UDP.CapacityDrops)
-	fmt.Fprintf(w, "mmokit_udp_packets_dropped_total{reason=\"pending_full\"} %d\n", p.UDP.PendingFullDrops)
+	fmt.Fprintf(w, "mmokit_udp_packets_dropped_total{reason=\"handshake_reject\"} %d\n", p.UDP.HandshakeRejectDrops)
 
-	fmt.Fprintln(w, "# HELP mmokit_udp_pending_handshakes Unproven UDP handshakes awaiting a return-routability packet")
-	fmt.Fprintln(w, "# TYPE mmokit_udp_pending_handshakes gauge")
-	fmt.Fprintf(w, "mmokit_udp_pending_handshakes %d\n", p.UDP.PendingCount)
 }

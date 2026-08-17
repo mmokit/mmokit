@@ -8,10 +8,91 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/mmokit/mmokit/pkg/net/udpcrypto"
+	"github.com/mmokit/mmokit/pkg/net/udpproto"
 )
 
+// cryptoPair returns a server-role session for a transport plus the paired
+// client-role session a test uses to seal packets that transport will accept.
+//
+// Inbound handlers take sealed bodies now, so a test cannot hand them plaintext
+// — which is the point: there is no path into a session that skips
+// authentication, including from a test.
+func cryptoPair(t *testing.T) (server, client *udpcrypto.Session) {
+	t.Helper()
+	var key udpcrypto.Key
+	for i := range key {
+		key[i] = byte(i * 7)
+	}
+	salt := udpproto.SessionSalt(0xAAAA, 0xBBBB)
+	srv, err := udpcrypto.NewSession(key, udpcrypto.RoleServer, salt)
+	if err != nil {
+		t.Fatalf("server session: %v", err)
+	}
+	cli, err := udpcrypto.NewSession(key, udpcrypto.RoleClient, salt)
+	if err != nil {
+		t.Fatalf("client session: %v", err)
+	}
+	return srv, cli
+}
+
+// cryptoTransport builds a bare transport wired to a fresh session pair.
+func cryptoTransport(t *testing.T) (*UDPTransport, *udpcrypto.Session) {
+	t.Helper()
+	srv, cli := cryptoPair(t)
+	return &UDPTransport{crypto: srv}, cli
+}
+
+// feedReliable seals payload as the client and delivers it to tr.
+func feedReliable(t *testing.T, tr *UDPTransport, cli *udpcrypto.Session, seq uint16, payload []byte) {
+	t.Helper()
+	hdr, sealed, err := cli.SealWithHeader(payload, func(ctr uint64) []byte {
+		return udpproto.EncodeReliableHeader(tr.token, seq, ctr)
+	})
+	if err != nil {
+		t.Fatalf("seal reliable: %v", err)
+	}
+	counter := binaryBEUint64(hdr[8:16])
+	tr.handleReliable(seq, counter, hdr, sealed)
+}
+
+// feedUnreliable seals payload as the client and delivers it to tr.
+func feedUnreliable(t *testing.T, tr *UDPTransport, cli *udpcrypto.Session, payload []byte) {
+	t.Helper()
+	hdr, sealed, err := cli.SealWithHeader(payload, func(ctr uint64) []byte {
+		return udpproto.EncodeUnreliableHeader(tr.token, ctr)
+	})
+	if err != nil {
+		t.Fatalf("seal unreliable: %v", err)
+	}
+	tr.handleUnreliable(binaryBEUint64(hdr[6:14]), hdr, sealed)
+}
+
+// feedACK seals an ack body as the client and delivers it to tr.
+func feedACK(t *testing.T, tr *UDPTransport, cli *udpcrypto.Session, ackSeq uint16, ackBits uint32) {
+	t.Helper()
+	body := udpproto.EncodeACKBody(ackSeq, ackBits)
+	hdr, sealed, err := cli.SealWithHeader(body, func(ctr uint64) []byte {
+		return udpproto.EncodeACKHeader(tr.token, ctr)
+	})
+	if err != nil {
+		t.Fatalf("seal ack: %v", err)
+	}
+	tr.handleACK(binaryBEUint64(hdr[6:14]), hdr, sealed)
+}
+
+func binaryBEUint64(b []byte) uint64 {
+	var v uint64
+	for _, x := range b {
+		v = v<<8 | uint64(x)
+	}
+	return v
+}
+
 func TestUDPTransport_SendReliableClosedDoesNotRetainFrame(t *testing.T) {
-	tr := &UDPTransport{closed: true}
+	srvSess0, _ := cryptoPair(t)
+	tr := &UDPTransport{closed: true, crypto: srvSess0}
 
 	result := tr.SendReliable([]byte("critical"))
 	if result.Disposition != SendClosed {
@@ -28,7 +109,7 @@ func TestUDPTransport_SendReliableClosedDoesNotRetainFrame(t *testing.T) {
 }
 
 func TestUDPTransport_MarkAckedRequiresExactSequenceIdentity(t *testing.T) {
-	tr := &UDPTransport{}
+	tr, _ := cryptoTransport(t)
 	const currentSeq uint16 = 300
 	idx := currentSeq % reliableBufSize
 	tr.sendBuf[idx] = reliableEntry{
@@ -51,7 +132,7 @@ func TestUDPTransport_MarkAckedRequiresExactSequenceIdentity(t *testing.T) {
 }
 
 func TestUDPTransport_SendReliableDoesNotOverwriteFullWindow(t *testing.T) {
-	tr := &UDPTransport{}
+	tr, _ := cryptoTransport(t)
 	tr.sendBuf[0] = reliableEntry{
 		seq:     0,
 		payload: []byte("unacked"),
@@ -74,7 +155,7 @@ func TestUDPTransport_SendReliableDoesNotOverwriteFullWindow(t *testing.T) {
 // a channel-0x00 frame in the event queue, and the queues must be
 // independent. This is the path auth + every typed op rides.
 func TestUDPTransport_RoutePayloadDemuxesChannels(t *testing.T) {
-	tr := &UDPTransport{}
+	tr, _ := cryptoTransport(t)
 
 	tr.routePayload([]byte{ChannelOperation, 0xAA, 0xBB}) // op
 	tr.routePayload([]byte{ChannelEvent, 0x11, 0x22})     // event
@@ -105,7 +186,7 @@ func TestUDPTransport_RoutePayloadDemuxesChannels(t *testing.T) {
 // pre-channel-prefix event — it must go to the event queue with bytes
 // intact and never into the op queue.
 func TestUDPTransport_RoutePayloadLegacyNoPrefix(t *testing.T) {
-	tr := &UDPTransport{}
+	tr, _ := cryptoTransport(t)
 	tr.routePayload([]byte{0x42, 0x99})
 
 	evs := tr.DrainInput()
@@ -120,8 +201,8 @@ func TestUDPTransport_RoutePayloadLegacyNoPrefix(t *testing.T) {
 // The reliable inbound path (handleReliable) is what auth ops use. Verify
 // an op frame delivered reliably surfaces via DrainOpInput.
 func TestUDPTransport_ReliableOpFrameReachesOpQueue(t *testing.T) {
-	tr := &UDPTransport{}
-	tr.handleReliable(1, []byte{ChannelOperation, 0x01, 0x02, 0x03})
+	tr, cli := cryptoTransport(t)
+	feedReliable(t, tr, cli, 1, []byte{ChannelOperation, 0x01, 0x02, 0x03})
 
 	ops := tr.DrainOpInput()
 	if len(ops) != 1 || !slices.Equal(ops[0], []byte{0x01, 0x02, 0x03}) {
@@ -130,13 +211,13 @@ func TestUDPTransport_ReliableOpFrameReachesOpQueue(t *testing.T) {
 }
 
 func TestUDPTransport_ReliableReceiveDeduplicatesRetransmits(t *testing.T) {
-	tr := &UDPTransport{}
+	tr, cli := cryptoTransport(t)
 	payload := []byte{ChannelEvent, 0xAA}
 
-	tr.handleReliable(7, payload)
-	tr.handleReliable(7, payload)
-	tr.handleReliable(8, []byte{ChannelEvent, 0xBB})
-	tr.handleReliable(7, payload) // older duplicate already represented in recvBits
+	feedReliable(t, tr, cli, 7, payload)
+	feedReliable(t, tr, cli, 7, payload)
+	feedReliable(t, tr, cli, 8, []byte{ChannelEvent, 0xBB})
+	feedReliable(t, tr, cli, 7, payload) // older duplicate already represented in recvBits
 
 	events := tr.DrainInput()
 	if len(events) != 2 {
@@ -148,12 +229,12 @@ func TestUDPTransport_ReliableReceiveDeduplicatesRetransmits(t *testing.T) {
 }
 
 func TestUDPTransport_ReliableReceiveAcceptsUnseenOutOfOrderPacket(t *testing.T) {
-	tr := &UDPTransport{}
+	tr, cli := cryptoTransport(t)
 
-	tr.handleReliable(10, []byte{ChannelEvent, 10})
-	tr.handleReliable(12, []byte{ChannelEvent, 12})
-	tr.handleReliable(11, []byte{ChannelEvent, 11})
-	tr.handleReliable(11, []byte{ChannelEvent, 11})
+	feedReliable(t, tr, cli, 10, []byte{ChannelEvent, 10})
+	feedReliable(t, tr, cli, 12, []byte{ChannelEvent, 12})
+	feedReliable(t, tr, cli, 11, []byte{ChannelEvent, 11})
+	feedReliable(t, tr, cli, 11, []byte{ChannelEvent, 11})
 
 	events := tr.DrainInput()
 	want := [][]byte{{10}, {12}, {11}}
@@ -163,7 +244,7 @@ func TestUDPTransport_ReliableReceiveAcceptsUnseenOutOfOrderPacket(t *testing.T)
 }
 
 func TestUDPTransport_ConcurrentDuplicateReliableDeliveredOnce(t *testing.T) {
-	tr := &UDPTransport{}
+	tr, cli := cryptoTransport(t)
 	const callers = 32
 	start := make(chan struct{})
 	var wg sync.WaitGroup
@@ -172,7 +253,7 @@ func TestUDPTransport_ConcurrentDuplicateReliableDeliveredOnce(t *testing.T) {
 		go func() {
 			defer wg.Done()
 			<-start
-			tr.handleReliable(42, []byte{ChannelEvent, 0xCC})
+			feedReliable(t, tr, cli, 42, []byte{ChannelEvent, 0xCC})
 		}()
 	}
 
@@ -185,8 +266,8 @@ func TestUDPTransport_ConcurrentDuplicateReliableDeliveredOnce(t *testing.T) {
 }
 
 func TestUDPTransport_ACKSnapshotDoesNotClearLaterReceive(t *testing.T) {
-	tr := &UDPTransport{}
-	tr.handleReliable(10, nil)
+	tr, cli := cryptoTransport(t)
+	feedReliable(t, tr, cli, 10, nil)
 
 	ackSeq, ackBits, ok := tr.takePendingACK()
 	if !ok || ackSeq != 10 || ackBits != 0 {
@@ -195,7 +276,7 @@ func TestUDPTransport_ACKSnapshotDoesNotClearLaterReceive(t *testing.T) {
 
 	// This receive occurs after the earlier ACK was snapshotted but before its
 	// hypothetical socket write completes. It must remain dirty.
-	tr.handleReliable(11, nil)
+	feedReliable(t, tr, cli, 11, nil)
 	ackSeq, ackBits, ok = tr.takePendingACK()
 	if !ok || ackSeq != 11 || ackBits != 1 {
 		t.Fatalf("later ACK snapshot = (%d, %08x, %v), want (11, 1, true)", ackSeq, ackBits, ok)
@@ -218,7 +299,9 @@ func TestAdvanceUDPClockNeverRegresses(t *testing.T) {
 func TestUDPTransport_ConcurrentHandlersMaintenanceAndClose(t *testing.T) {
 	// A zero UDPConn returns a normal write error, which lets this test exercise
 	// all synchronization paths without binding a port or depending on sleeps.
+	srvSess, cli := cryptoPair(t)
 	tr := &UDPTransport{
+		crypto: srvSess,
 		server: &UDPServer{conn: &net.UDPConn{}},
 		addr:   netip.AddrPort{},
 		done:   make(chan struct{}),
@@ -241,9 +324,9 @@ func TestUDPTransport_ConcurrentHandlersMaintenanceAndClose(t *testing.T) {
 		}()
 	}
 
-	run(func(i int) { tr.handleReliable(uint16(i), nil) })
-	run(func(int) { tr.handleUnreliable(nil) })
-	run(func(i int) { tr.handleACK(uint16(i), uint32(i)) })
+	run(func(i int) { feedReliable(t, tr, cli, uint16(i), nil) })
+	run(func(int) { feedUnreliable(t, tr, cli, nil) })
+	run(func(i int) { feedACK(t, tr, cli, uint16(i), uint32(i)) })
 	run(func(int) {
 		if !tr.maintenanceTick(time.Now()) {
 			t.Error("maintenance tick unexpectedly stopped")
@@ -265,7 +348,9 @@ func TestUDPTransport_ReliableLifetimeSurvivesRetransmits(t *testing.T) {
 		byAddr:  make(map[netip.AddrPort]*UDPTransport),
 		connIDs: make(map[*UDPTransport]uint32),
 	}
+	srvSessX, _ := cryptoPair(t)
 	tr := &UDPTransport{
+		crypto: srvSessX,
 		server: server,
 		addr:   netip.AddrPort{},
 		token:  0xABCDEF01,

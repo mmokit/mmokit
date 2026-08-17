@@ -13,6 +13,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/mmokit/mmokit/pkg/net/udpcrypto"
 	"github.com/mmokit/mmokit/pkg/net/udpproto"
 )
 
@@ -60,6 +61,9 @@ type Client struct {
 	conn  *net.UDPConn
 	token uint32
 
+	// crypto owns the traffic keys, the send counter and the replay window.
+	crypto *udpcrypto.Session
+
 	// Outbound reliability
 	sendMu  sync.Mutex
 	sendSeq uint16
@@ -85,7 +89,12 @@ type Client struct {
 }
 
 // Dial connects to the game server at addr (e.g. "localhost:9000").
-func Dial(addr string) (*Client, error) {
+//
+// keyID and key come from POST /auth/udp-key over HTTPS: the client
+// authenticates there first and only then opens a UDP session. That ordering is
+// the whole of CE-005b Tier 2 — v1 built a session first and authenticated
+// afterwards over the op channel, which left every byte forgeable on path.
+func Dial(addr string, keyID uint64, key udpcrypto.Key) (*Client, error) {
 	udpAddr, err := net.ResolveUDPAddr("udp", addr)
 	if err != nil {
 		return nil, err
@@ -120,6 +129,7 @@ func Dial(addr string) (*Client, error) {
 	conn.SetReadDeadline(time.Now().Add(handshakeTimeout))
 	buf := make([]byte, maxPacket)
 	var serverSalt uint64
+	cookie := make([]byte, 0, udpproto.CookieSize)
 	for {
 		n, err := conn.Read(buf)
 		if err != nil {
@@ -129,20 +139,37 @@ func Dial(addr string) (*Client, error) {
 		if n == 0 || buf[0] != udpproto.TypeConnAccept {
 			continue // early ServerConfig / stray packet — keep waiting for accept
 		}
-		respClientSalt, srvSalt, derr := udpproto.DecodeConnAccept(buf[:n])
+		respClientSalt, srvSalt, srvCookie, derr := udpproto.DecodeConnAccept(buf[:n])
 		if derr != nil || respClientSalt != clientSalt {
 			continue // malformed / stale accept — keep waiting
 		}
 		serverSalt = srvSalt
+		cookie = append(cookie[:0], srvCookie...) // aliases buf; copy before reuse
 		break
 	}
 	conn.SetReadDeadline(time.Time{})
 
 	token := udpproto.MakeToken(clientSalt, serverSalt)
 
+	sess, err := udpcrypto.NewSession(key, udpcrypto.RoleClient,
+		udpproto.SessionSalt(clientSalt, serverSalt))
+	if err != nil {
+		conn.Close()
+		return nil, fmt.Errorf("derive session keys: %w", err)
+	}
+
+	// Echo the cookie and name the key. The server holds nothing until this
+	// arrives, so a lost ConnConfirm costs a retry rather than a leaked table
+	// entry; promotion is idempotent on the server side.
+	if _, err := conn.Write(udpproto.EncodeConnConfirm(keyID, clientSalt, serverSalt, cookie)); err != nil {
+		conn.Close()
+		return nil, fmt.Errorf("connection confirm failed: %w", err)
+	}
+
 	c := &Client{
 		conn:    conn,
 		token:   token,
+		crypto:  sess,
 		inbound: make([][]byte, 0, 32),
 		done:    make(chan struct{}),
 	}
@@ -155,6 +182,20 @@ func Dial(addr string) (*Client, error) {
 	go c.tickLoop()
 
 	return c, nil
+}
+
+// sealSend seals body and writes header||sealed. buildHeader receives the
+// counter udpcrypto allocated, because the counter lives in the header and the
+// header is the AEAD's additional authenticated data.
+func (c *Client) sealSend(body []byte, buildHeader func(counter uint64) []byte) error {
+	hdr, sealed, err := c.crypto.SealWithHeader(body, buildHeader)
+	if err != nil {
+		return err
+	}
+	pkt := make([]byte, 0, len(hdr)+len(sealed))
+	pkt = append(pkt, hdr...)
+	pkt = append(pkt, sealed...)
+	return c.writePacket(pkt)
 }
 
 // SendReliable sends a message with reliability guarantees.
@@ -187,8 +228,9 @@ func (c *Client) SendReliable(data []byte) error {
 		used:        true,
 	}
 
-	pkt := udpproto.EncodeReliable(c.token, seq, payload)
-	err := c.writePacket(pkt)
+	err := c.sealSend(payload, func(ctr uint64) []byte {
+		return udpproto.EncodeReliableHeader(c.token, seq, ctr)
+	})
 	if err != nil {
 		// A rejected initial write must not leave a frame that maintenance can
 		// later retransmit despite the caller observing an error.
@@ -199,8 +241,9 @@ func (c *Client) SendReliable(data []byte) error {
 
 // SendUnreliable sends a message with no delivery guarantee.
 func (c *Client) SendUnreliable(data []byte) error {
-	pkt := udpproto.EncodeUnreliable(c.token, data)
-	return c.writePacket(pkt)
+	return c.sealSend(data, func(ctr uint64) []byte {
+		return udpproto.EncodeUnreliableHeader(c.token, ctr)
+	})
 }
 
 // Recv blocks until a message is available and returns it.
@@ -245,9 +288,17 @@ func (c *Client) Close() error {
 	c.inCond.Broadcast()
 	c.inMu.Unlock()
 
-	// Send disconnect (best effort)
-	pkt := udpproto.EncodeDisconnect(c.token)
-	c.conn.Write(pkt)
+	// Send disconnect (best effort). Sealed with an empty body so the tag alone
+	// proves we hold the session key; the server will not act on a teardown it
+	// cannot authenticate.
+	if hdr, sealed, err := c.crypto.SealWithHeader(nil, func(ctr uint64) []byte {
+		return udpproto.EncodeDisconnectHeader(c.token, ctr)
+	}); err == nil {
+		pkt := make([]byte, 0, len(hdr)+len(sealed))
+		pkt = append(pkt, hdr...)
+		pkt = append(pkt, sealed...)
+		c.conn.Write(pkt)
+	}
 
 	return c.conn.Close()
 }
@@ -281,9 +332,13 @@ func (c *Client) handlePacket(data []byte) {
 
 	switch data[0] {
 	case udpproto.TypeUnreliable:
-		_, payload, err := udpproto.DecodeUnreliable(data)
+		_, counter, aad, sealed, err := udpproto.DecodeUnreliable(data)
 		if err != nil {
 			return
+		}
+		payload, oerr := c.crypto.Open(nil, counter, sealed, aad)
+		if oerr != nil {
+			return // forged or replayed; must not refresh liveness
 		}
 		advanceClientClock(&c.lastRecvTick, clientClockStamp(time.Now()))
 		if len(payload) == 0 {
@@ -295,8 +350,12 @@ func (c *Client) handlePacket(data []byte) {
 		c.inMu.Unlock()
 
 	case udpproto.TypeReliable:
-		_, seq, payload, err := udpproto.DecodeReliable(data)
+		_, seq, counter, aad, sealed, err := udpproto.DecodeReliable(data)
 		if err != nil {
+			return
+		}
+		payload, oerr := c.crypto.Open(nil, counter, sealed, aad)
+		if oerr != nil {
 			return
 		}
 		advanceClientClock(&c.lastRecvTick, clientClockStamp(time.Now()))
@@ -309,8 +368,16 @@ func (c *Client) handlePacket(data []byte) {
 		}
 
 	case udpproto.TypeACK:
-		_, ackSeq, ackBits, err := udpproto.DecodeACK(data)
+		_, counter, aad, sealed, err := udpproto.DecodeACK(data)
 		if err != nil {
+			return
+		}
+		body, oerr := c.crypto.Open(nil, counter, sealed, aad)
+		if oerr != nil {
+			return
+		}
+		ackSeq, ackBits, berr := udpproto.DecodeACKBody(body)
+		if berr != nil {
 			return
 		}
 		advanceClientClock(&c.lastRecvTick, clientClockStamp(time.Now()))
@@ -407,8 +474,10 @@ func (c *Client) sendACK() {
 		return
 	}
 
-	pkt := udpproto.EncodeACK(c.token, ackSeq, ackBits)
-	if err := c.writePacket(pkt); err != nil && !errors.Is(err, net.ErrClosed) {
+	err := c.sealSend(udpproto.EncodeACKBody(ackSeq, ackBits), func(ctr uint64) []byte {
+		return udpproto.EncodeACKHeader(c.token, ctr)
+	})
+	if err != nil && !errors.Is(err, net.ErrClosed) {
 		// Preserve a newer dirty state and retry the latest receive-window
 		// snapshot after transient write failures.
 		c.recvMu.Lock()
@@ -464,12 +533,25 @@ func (c *Client) maintenanceTick(now time.Time) bool {
 	c.sendACK()
 
 	if time.Duration(nowTick-c.lastSendTick.Load()) > keepaliveInterval {
-		pkt := udpproto.EncodeUnreliable(c.token, nil)
-		c.writePacket(pkt)
+		c.sealSend(nil, func(ctr uint64) []byte {
+			return udpproto.EncodeUnreliableHeader(c.token, ctr)
+		})
 	}
 	return true
 }
 
+// encodeReliableEntry re-seals a retransmit with a FRESH counter. Resending the
+// original bytes would carry the original counter and the server's replay
+// window would discard them, making every retransmission a no-op.
 func (c *Client) encodeReliableEntry(entry *reliableEntry) []byte {
-	return udpproto.EncodeReliable(c.token, entry.seq, entry.payload)
+	hdr, sealed, err := c.crypto.SealWithHeader(entry.payload, func(ctr uint64) []byte {
+		return udpproto.EncodeReliableHeader(c.token, entry.seq, ctr)
+	})
+	if err != nil {
+		return nil
+	}
+	pkt := make([]byte, 0, len(hdr)+len(sealed))
+	pkt = append(pkt, hdr...)
+	pkt = append(pkt, sealed...)
+	return pkt
 }

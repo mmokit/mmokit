@@ -261,8 +261,10 @@ type UDPDropSnapshot struct {
 	Bound               bool   // false when no UDP listener is running
 	SourceMismatchDrops uint64 // packet source address did not match the session's
 	CapacityDrops       uint64 // session table full
-	PendingFullDrops    uint64 // pending-handshake table full
-	PendingCount        uint64 // pending handshakes right now (a gauge)
+	// HandshakeRejectDrops counts refused ConnConfirms: bad stateless cookie,
+	// unknown/expired key ID, or no key registry configured. Replaces the
+	// pending-handshake counters, whose table CE-005b Tier 2 removed.
+	HandshakeRejectDrops uint64
 }
 
 // ProcessSnapshot is the process-scoped half of a scrape: counters that belong
