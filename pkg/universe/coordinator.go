@@ -2405,6 +2405,10 @@ func (c *Process) createNode(cell CellID, spatialBucketSize float32, owningHost 
 	// OnInput / OnInputWith / InputBinding surface was deleted in
 	// Plan G Phase 7.
 	eng.SetClientInputTick(base.DispatchClientInput)
+	// Inject this process's cell geometry, the same way clusterClock is
+	// injected just below. NewStage defaults it, because a Stage built outside
+	// a Process (tests, benchmarks) still needs a working value.
+	base.baseCellSize = c.baseCellSize()
 	base.spatialGrid = spatial.NewHashGrid(spatialBucketSize)
 	if len(fromSplit) > 0 && fromSplit[0] {
 		base.fromSplit = true

@@ -75,6 +75,21 @@ type Stage struct {
 	coord     *Process // set by Process.createNode after world factory
 	fromSplit bool     // true if created during a cell split (skip initial entity spawning)
 
+	// baseCellSize is this process's cell geometry, injected at construction
+	// rather than read from a package global (CE-010). It is immutable for the
+	// life of the stage: cell size is a property of the world layout, fixed
+	// before any cell exists.
+	//
+	// Stored rather than reached through s.coord on demand for two reasons.
+	// It is read on per-entity, per-tick paths, so a pointer hop and a nil
+	// check per read is not free. And the point of CE-010 is that geometry is
+	// INJECTED — a back-pointer to a Process that may be nil is the same
+	// ambient-lookup shape as the global, just spelled differently.
+	//
+	// NewStage defaults it; Process.createNode overwrites it from
+	// baseCellSize(), the same way it overwrites clusterClock.
+	baseCellSize float32
+
 	// clusterClock stamps outbound border-frame entries with the
 	// authoritative producer's cluster-coherent wall time. Threaded from
 	// Process.ClusterClock at cell construction; tests that build a
@@ -235,12 +250,21 @@ func NewStage(eng *engine.Engine, cell CellID, aoiRadius float32, replRegistry *
 	defaultClock.Observe(uint64(time.Now().UnixMilli()), 0)
 
 	base := Stage{
-		eng:              eng,
-		cell:             cell,
-		cellID:           cellID,
-		aoiRadius:        aoiRadius,
-		bridge:           NoopBridge{},
-		clusterClock:     defaultClock,
+		eng:          eng,
+		cell:         cell,
+		cellID:       cellID,
+		aoiRadius:    aoiRadius,
+		bridge:       NoopBridge{},
+		clusterClock: defaultClock,
+		// MIGRATION SEAM (CE-010 part A). Defaults to the live global rather
+		// than coords.DefaultCellSize so that a Stage built outside a Process
+		// and the not-yet-converted sites still reading coords.CellSize agree
+		// on one value. Converting sites one commit at a time is only safe
+		// while both sources answer the same thing.
+		//
+		// The last step of part A deletes the global and this read with it,
+		// leaving coords.DefaultCellSize as the fallback.
+		baseCellSize:     coords.CellSize,
 		replicaNetIDs:    make(map[uint32]ecs.Entity),
 		highestSeenEpoch: make(map[uint32]uint32),
 		borderLastSeen:   make(map[MeshCellID]map[uint32]struct{}),
@@ -517,9 +541,15 @@ func (b *Stage) rootCell() CellID {
 	return c
 }
 
-// CellSize returns the base cell size. Entities always use base-cell coordinates
-// regardless of quadtree depth, so this always returns coords.CellSize.
-func (b *Stage) CellSize() float32 { return coords.CellSize }
+// CellSize returns the base cell size this stage's process was configured with.
+// Entities always use base-cell coordinates regardless of quadtree depth, so a
+// split cell's entities are still expressed against this value, not against the
+// smaller extent of the subcell they happen to occupy.
+//
+// Reads an injected field rather than a package global (CE-010): two Processes
+// in one binary have their own geometry, and the global could only ever hold
+// one of them.
+func (b *Stage) CellSize() float32 { return b.baseCellSize }
 
 // CellID returns this cell's mesh-form identifier (e.g., "cell_0_0").
 func (b *Stage) CellID() MeshCellID { return b.cellID }

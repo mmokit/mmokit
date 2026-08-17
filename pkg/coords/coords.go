@@ -2,13 +2,29 @@ package coords
 
 import "math"
 
+// DefaultCellSize is the cell width/height used when a process configures none.
+// 8192 (2^13) gives excellent float32 precision (~0.001 units worst case).
+//
+// A constant, deliberately. It is the fallback for an unset Config.CellSize,
+// not a place to store the live value — see CellSize below for why that
+// distinction is being drawn.
+const DefaultCellSize float32 = 8192.0
+
 // CellSize is the width/height of each cell in local units.
-// Defaults to 8192 (2^13) for excellent float32 precision (~0.001 units worst case).
-// Call SetCellSize during initialization to use a different value.
-var CellSize float32 = 8192.0
+//
+// DEPRECATED, and being removed by CE-010. A process's cell geometry is a
+// property of that process, and a mutable package global cannot express that:
+// two Processes in one binary silently share it, last writer wins, while
+// (*Process).baseCellSize() and Stage.CellSize() give each the right answer.
+// Every remaining reader of this var is a site still to convert. Do not add
+// new ones.
+var CellSize float32 = DefaultCellSize
 
 // SetCellSize overrides the default cell size. Must be called before any
 // coordinate operations (typically during game initialization).
+//
+// DEPRECATED alongside CellSize: set Config.CellSize instead, which scopes the
+// value to one process.
 func SetCellSize(size float32) {
 	CellSize = size
 }
