@@ -71,10 +71,12 @@ func TestSpawnAtLocation_ConvertsWorldToLocal(t *testing.T) {
 }
 
 func TestSpawnAtLocation_OutOfBounds_InvariantLog_Clamps(t *testing.T) {
-	wb := newTestWorldBase(t, CellID{X: 0, Y: 0}) // bounds [0,2000)×[0,2000)
 	prev := coords.CellSize
-	coords.SetCellSize(2000)
 	defer coords.SetCellSize(prev)
+	// Size passed to the fixture, not set afterwards: a Stage captures its
+	// geometry at construction, so a later SetCellSize would leave this test
+	// asserting a [0,1024) clamp while claiming to assert [0,2000).
+	wb := newTestWorldBase(t, CellID{X: 0, Y: 0}, 2000) // bounds [0,2000)×[0,2000)
 
 	wb.coord = &Process{invariantMode: InvariantLog} // non-nil so invariant path runs, but no panic
 

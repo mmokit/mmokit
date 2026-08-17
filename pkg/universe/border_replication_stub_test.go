@@ -522,8 +522,12 @@ func TestBorderDispatcher_CornerEntityReachesAllNeighbors(t *testing.T) {
 	// neighbors when the edge is long enough that the corner sits
 	// outside a 1000-radius disc around the edge midpoint — which
 	// requires cellSize > ~2000.
-	base := newTestWorldBase(t, CellID{X: 0, Y: 0})
-	coords.SetCellSize(8192)
+	// Size passed to the fixture, not set afterwards. A Stage captures its
+	// geometry at construction, so setting it after this line would leave the
+	// stage on 1024 and this regression test would stop reproducing the bug it
+	// exists for — silently, since it asserts a reachability property that
+	// simply holds at small cell sizes.
+	base := newTestWorldBase(t, CellID{X: 0, Y: 0}, 8192)
 	defer coords.SetCellSize(1024) // restore the default other tests expect
 
 	world := base.ECSWorld()
