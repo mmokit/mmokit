@@ -492,15 +492,17 @@ Header cost: the unreliable header goes from 5 bytes to roughly 29 (explicit cou
 
 #### 6.9.3 Units
 
-| # | Unit | Item | Days | Risk | After |
-| --- | --- | ---: | --- | --- | --- |
-| 1 | Crypto primitives: HKDF wrapper, seal/open, nonce ownership, replay window, fuzz, and the managed ChaCha20-Poly1305 the client needs. No wire change | CE-005b | 2.5 | med | — |
-| 2 | `POST /auth/udp-key`, process-level key registry, UDP analogue of `Gateway.onAuthSuccess` | CE-005b | 2.5 | med | 1 |
-| 3 | Stateless HMAC handshake cookie replacing `pendingHandshake` | CE-005b | 1.5 | med | 1 |
-| 4 | AEAD framing across `udpproto` / `udp_server` / `udp_transport` / `udpclient`, replay enforcement, CE-009 version byte, corpus regeneration | CE-005b, CE-009 | 3.5 | **high** | 1, 2, 3 |
-| 5 | C# parity and AEAD golden vectors in `cmd/csharp-golden` | CE-005b | 3 | med | 4 |
-| 6 | Retire op-channel auth in the C# client | CE-005b | 2.5 | med | 5 |
-| 7 | Close-out: status written back here, CHANGELOG, confirm §7.1 lifts | all | 0.5 | low | 1–6 |
+| # | Unit | Item | Days | Risk | After | Status |
+| --- | --- | ---: | --- | --- | --- | --- |
+| 1 | Crypto primitives: HKDF wrapper, seal/open, nonce ownership, replay window, fuzz, and the managed ChaCha20-Poly1305 the client needs. No wire change | CE-005b | 2.5 | med | — | **done** `fb3bc565`, `f33cf71e` |
+| 2 | `POST /auth/udp-key`, process-level key registry, UDP analogue of `Gateway.onAuthSuccess` | CE-005b | 2.5 | med | 1 | **done** `8c5ad00f` |
+| 3 | Stateless HMAC handshake cookie replacing `pendingHandshake` | CE-005b | 1.5 | med | 1 | **done** `256e7ffd` |
+| 4 | AEAD framing across `udpproto` / `udp_server` / `udp_transport` / `udpclient`, replay enforcement, CE-009 version byte, corpus regeneration | CE-005b, CE-009 | 3.5 | **high** | 1, 2, 3 | **done** `03feb27d`, `2434f04a` |
+| 5 | C# parity and AEAD golden vectors in `cmd/csharp-golden` | CE-005b | 3 | med | 4 | **absorbed** into 1 and 4 — the parity is landed and golden-tested; only a review pass remains |
+| 6 | Retire op-channel auth in the C# client | CE-005b | 2.5 | med | 5 | **open** |
+| 7 | Close-out: status written back here, CHANGELOG, confirm §7.1 lifts | all | 0.5 | low | 1–6 | **open** |
+
+Unit 4's close revealed that `just csharp-test` does not compile a generated SDK — it exercises the hand-written core only. `just csharp-compile-test` is the gate that emits one, and it was red for two commits before anyone ran it. Run it after ANY change to `csharp/Mmokit.Sdk.Core/` or to `cmd/sdkgen`.
 
 #### 6.9.4 Traps this phase must not fall into
 
