@@ -861,7 +861,7 @@ func TestBorderDispatcher_StampsClusterClockTickTime(t *testing.T) {
 
 	bd := NewBorderDispatcher(base, nil)
 	bx, by := neighborBoundaryMidpoint(CellID{X: 0, Y: 0}, 1, 1, base.CellSize())
-	nv := NewCellViewer("neighbor", CellViewerID("neighbor"), bx, by, nil, nil, nil)
+	nv := NewCellViewer("neighbor", CellViewerID("neighbor"), bx, by, nil, nil, nil, base.CellSize())
 	nv.SetDirection(1, 1)
 
 	got := bd.disp.Walk(nv, 5, bd.candidatesFor(nv, 5))

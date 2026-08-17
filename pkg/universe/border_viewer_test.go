@@ -1,6 +1,7 @@
 package universe
 
 import (
+	"github.com/mmokit/mmokit/pkg/coords"
 	"testing"
 
 	"github.com/mmokit/mmokit/pkg/replication"
@@ -11,7 +12,7 @@ func TestCellViewer_SatisfiesInterface(t *testing.T) {
 }
 
 func TestCellViewer_Position(t *testing.T) {
-	v := NewCellViewer("cell_1_0", 123, 50, 75, nil, nil, nil)
+	v := NewCellViewer("cell_1_0", 123, 50, 75, nil, nil, nil, coords.DefaultCellSize)
 	if v.ID() != 123 {
 		t.Fatalf("ID: got %d want 123", v.ID())
 	}
@@ -22,7 +23,7 @@ func TestCellViewer_Position(t *testing.T) {
 }
 
 func TestCellViewer_DefaultTier(t *testing.T) {
-	v := NewCellViewer("cell_1_0", 123, 0, 0, nil, nil, nil)
+	v := NewCellViewer("cell_1_0", 123, 0, 0, nil, nil, nil, coords.DefaultCellSize)
 	tier := v.Tier(0)
 	if tier.Radius == 0 {
 		t.Fatal("default tier should have non-zero radius")
@@ -32,7 +33,7 @@ func TestCellViewer_DefaultTier(t *testing.T) {
 func TestCellViewer_CustomTierForcesFullRateMembership(t *testing.T) {
 	v := NewCellViewer("cell_1_0", 123, 0, 0, map[uint16]replication.ReplicationTier{
 		7: {Radius: 250, UpdateDivisor: 5, BaseWeight: 3},
-	}, nil, nil)
+	}, nil, nil, coords.DefaultCellSize)
 
 	tier := v.Tier(7)
 	if tier.UpdateDivisor != 1 {
@@ -44,7 +45,7 @@ func TestCellViewer_CustomTierForcesFullRateMembership(t *testing.T) {
 }
 
 func TestCellViewer_BaselinesAllocated(t *testing.T) {
-	v := NewCellViewer("cell_1_0", 123, 0, 0, nil, nil, nil)
+	v := NewCellViewer("cell_1_0", 123, 0, 0, nil, nil, nil, coords.DefaultCellSize)
 	if v.Baselines() == nil {
 		t.Fatal("CellViewer.Baselines() should return a pre-allocated store, never nil")
 	}

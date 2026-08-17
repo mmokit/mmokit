@@ -112,7 +112,7 @@ func (b *cellBridge) ensureBorderDispatcher() *BorderDispatcher {
 		}
 		dx, dy := CellDirection(b.cell.CellID(), destCell.CellID(), baseCellSize)
 		bx, by := neighborBoundaryMidpoint(b.cell.CellID(), dx, dy, baseCellSize)
-		nv := NewCellViewer(MeshCellID(destStr), CellViewerID(destStr), bx, by, nil, b.cell, destCell)
+		nv := NewCellViewer(MeshCellID(destStr), CellViewerID(destStr), bx, by, nil, b.cell, destCell, baseCellSize)
 		nv.SetDirection(dx, dy)
 		viewers[destStr] = nv
 	}

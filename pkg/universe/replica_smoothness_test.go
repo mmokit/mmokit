@@ -77,7 +77,7 @@ func TestNoStutter_ReplicaSmoothnessAcrossBoundary(t *testing.T) {
 	// disp.Walk directly and feed dstBase.ApplyBorderFrame.
 	bd := NewBorderDispatcher(srcBase, nil)
 	bx, by := neighborBoundaryMidpoint(CellID{X: 0, Y: 0}, 1, 0, srcBase.CellSize())
-	nv := NewCellViewer("east-neighbor", CellViewerID("east-neighbor"), bx, by, nil, nil, nil)
+	nv := NewCellViewer("east-neighbor", CellViewerID("east-neighbor"), bx, by, nil, nil, nil, srcBase.CellSize())
 	nv.SetDirection(1, 0)
 
 	// Run for 2 simulated seconds = 40 ticks at 20 Hz. On each tick:

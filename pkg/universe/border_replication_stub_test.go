@@ -59,7 +59,7 @@ func TestBorderDispatcher_WireMembershipMatchesBaseline(t *testing.T) {
 	}
 	bd := NewBorderDispatcher(base, nil)
 	bx, by := neighborBoundaryMidpoint(CellID{X: 0, Y: 0}, 1, 1, base.CellSize())
-	nv := NewCellViewer("neighbor", CellViewerID("neighbor"), bx, by, tiers, nil, nil)
+	nv := NewCellViewer("neighbor", CellViewerID("neighbor"), bx, by, tiers, nil, nil, base.CellSize())
 	nv.SetDirection(1, 1)
 
 	// Tick 1 would be skipped by a generic UpdateDivisor=5 viewer. Border
@@ -167,7 +167,7 @@ func TestBorderDispatcher_DeltaCompression_UnchangedTailEmitsSentinel(t *testing
 
 	bd := NewBorderDispatcher(base, nil)
 	bx, by := neighborBoundaryMidpoint(CellID{X: 0, Y: 0}, 1, 1, base.CellSize())
-	nv := NewCellViewer("neighbor", CellViewerID("neighbor"), bx, by, nil, nil, nil)
+	nv := NewCellViewer("neighbor", CellViewerID("neighbor"), bx, by, nil, nil, nil, base.CellSize())
 	nv.SetDirection(1, 1)
 
 	// First tick: no baseline yet, so expect a full tail (component payload
@@ -241,7 +241,7 @@ func TestBorderDispatcher_DeltaCompression_ForceResync(t *testing.T) {
 
 	bd := NewBorderDispatcher(base, nil)
 	bx, by := neighborBoundaryMidpoint(CellID{X: 0, Y: 0}, 1, 1, base.CellSize())
-	nv := NewCellViewer("neighbor", CellViewerID("neighbor"), bx, by, nil, nil, nil)
+	nv := NewCellViewer("neighbor", CellViewerID("neighbor"), bx, by, nil, nil, nil, base.CellSize())
 	nv.SetDirection(1, 1)
 
 	// Prime the baseline and consume its bounded full-tail window.
@@ -300,7 +300,7 @@ func TestBorderDispatcher_DeltaCompression_ReentryEmitsFullTail(t *testing.T) {
 
 	bd := NewBorderDispatcher(base, nil)
 	bx, by := neighborBoundaryMidpoint(CellID{X: 0, Y: 0}, 1, 1, base.CellSize())
-	nv := NewCellViewer("neighbor", CellViewerID("neighbor"), bx, by, nil, nil, nil)
+	nv := NewCellViewer("neighbor", CellViewerID("neighbor"), bx, by, nil, nil, nil, base.CellSize())
 	nv.SetDirection(1, 1)
 
 	first := bd.disp.Walk(nv, 5, bd.candidatesFor(nv, 5))
@@ -396,7 +396,7 @@ func TestBorderDispatcher_DeltaCompression_EpochChangeEmitsFullTail(t *testing.T
 
 	bd := NewBorderDispatcher(base, nil)
 	bx, by := neighborBoundaryMidpoint(CellID{X: 0, Y: 0}, 1, 1, base.CellSize())
-	nv := NewCellViewer("neighbor", CellViewerID("neighbor"), bx, by, nil, nil, nil)
+	nv := NewCellViewer("neighbor", CellViewerID("neighbor"), bx, by, nil, nil, nil, base.CellSize())
 	nv.SetDirection(1, 1)
 
 	first := bd.disp.Walk(nv, 5, bd.candidatesFor(nv, 5))
@@ -561,7 +561,7 @@ func TestBorderDispatcher_CornerEntityReachesAllNeighbors(t *testing.T) {
 	}
 	for _, tc := range cases {
 		bx, by := neighborBoundaryMidpoint(CellID{X: 0, Y: 0}, tc.dx, tc.dy, base.CellSize())
-		nv := NewCellViewer("neighbor", CellViewerID("neighbor"), bx, by, nil, nil, nil)
+		nv := NewCellViewer("neighbor", CellViewerID("neighbor"), bx, by, nil, nil, nil, base.CellSize())
 		nv.SetDirection(tc.dx, tc.dy)
 
 		// Drive Walk directly so we can inspect the produced frame

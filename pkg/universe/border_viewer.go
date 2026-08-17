@@ -3,7 +3,6 @@ package universe
 import (
 	"hash/fnv"
 
-	"github.com/mmokit/mmokit/pkg/coords"
 	"github.com/mmokit/mmokit/pkg/replication"
 )
 
@@ -57,6 +56,12 @@ type CellViewer struct {
 //
 // sourceCell is the cell that owns this viewer (may be nil in tests).
 // destCell is the destination neighbor that will receive frames (may be nil in tests).
+//
+// baseCellSize is explicit rather than read from sourceCell, because sourceCell
+// is nil at twelve test call sites and the value decides defaultTier.Radius —
+// the gate that determines whether a corner entity is a border candidate at
+// all. Deriving it from a nillable field meant the viewer's geometry and the
+// owning stage's geometry could come from two different places.
 func NewCellViewer(
 	cellID MeshCellID,
 	id uint64,
@@ -64,6 +69,7 @@ func NewCellViewer(
 	tiers map[uint16]replication.ReplicationTier,
 	sourceCell *Cell,
 	destCell *Cell,
+	baseCellSize float32,
 ) *CellViewer {
 	// Capture sourceCell.MeshID() at construction time. The underlying cell's
 	// MeshID field is rewritten on merge/rename from its own game loop;
@@ -73,12 +79,8 @@ func NewCellViewer(
 	// one tick of unroutable frames while the receiver's Cells map is
 	// already carrying the new key — acceptable.
 	var sourceCellID MeshCellID
-	baseCellSize := coords.CellSize // MIGRATION SEAM (CE-010): see NewStage.
 	if sourceCell != nil {
 		sourceCellID = sourceCell.MeshID()
-		if sourceCell.Stage != nil {
-			baseCellSize = sourceCell.Stage.CellSize()
-		}
 	}
 	return &CellViewer{
 		cellID:       cellID,
