@@ -304,3 +304,43 @@ func TestPromoteConfirmed_RecordsPeerAddr(t *testing.T) {
 	}
 	tr.Close()
 }
+
+// Both transports must answer an unrecognised channel byte the same way, and
+// that answer must be rejection.
+//
+// This is the WebSocket half of the pair with
+// TestUDPTransport_RoutePayloadUnknownChannelRejected. Before CE-009's framing
+// hardening the two disagreed: the WebSocket read pump folded an unknown byte
+// into channel 0x00 and forwarded the frame with the byte STRIPPED, while the
+// UDP transport forwarded it with the byte KEPT. The same wire byte produced
+// two different payloads depending on which transport carried it, which is a
+// silent misroute rather than an error anyone could observe.
+func TestReadPump_RejectsUnknownChannelByte(t *testing.T) {
+	limits := DefaultWireLimits()
+	ws := &scriptedWebSocketConn{frames: [][]byte{{0x42, 0x99}}}
+	c := &Conn{
+		id:       1,
+		ws:       ws,
+		outbound: make(chan outboundEntry, 1),
+		done:     make(chan struct{}),
+		input:    make([][]byte, 0, inputBufferSize),
+		limits:   limits,
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan struct{})
+	go func() {
+		c.readPump(ctx)
+		close(done)
+	}()
+	waitFor(t, "unknown-channel drop", func() bool { return c.UnknownChannelDrops() == 1 })
+	cancel()
+	<-done
+
+	if msgs := c.DrainInput(); len(msgs) != 0 {
+		t.Fatalf("unknown-channel frame reached the event queue: %v", msgs)
+	}
+	if ops := c.DrainOpInput(); len(ops) != 0 {
+		t.Fatalf("unknown-channel frame reached the op queue: %v", ops)
+	}
+}

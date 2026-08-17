@@ -86,7 +86,11 @@ type Conn struct {
 	inputDrops    atomic.Uint64 // channel 0x00 frames refused at the queue cap
 	opInputDrops  atomic.Uint64 // channel 0x01 frames refused at the queue cap
 	oversizeDrops atomic.Uint64 // frames refused for exceeding MaxFrameBytes
-	dropLog       dropThrottle
+	// unknownChannelDrops counts frames refused for naming a channel this
+	// build does not implement. A peer sending one disagrees with us about
+	// framing, which is a protocol mismatch rather than congestion.
+	unknownChannelDrops atomic.Uint64
+	dropLog             dropThrottle
 
 	bytesSent atomic.Uint64
 	bytesRecv atomic.Uint64
@@ -231,9 +235,14 @@ func (c *Conn) noteInputDrop(counter *atomic.Uint64, reason string) {
 	if !c.dropLog.allow() {
 		return
 	}
-	log.Printf("conn %d: dropped inbound frame (%s queue) [event=%d op=%d oversize=%d]",
-		c.id, reason, c.inputDrops.Load(), c.opInputDrops.Load(), c.oversizeDrops.Load())
+	log.Printf("conn %d: dropped inbound frame (%s) [event=%d op=%d oversize=%d unknown-channel=%d]",
+		c.id, reason, c.inputDrops.Load(), c.opInputDrops.Load(), c.oversizeDrops.Load(),
+		c.unknownChannelDrops.Load())
 }
+
+// UnknownChannelDrops returns the number of frames refused for naming an
+// unimplemented channel.
+func (c *Conn) UnknownChannelDrops() uint64 { return c.unknownChannelDrops.Load() }
 
 // InputDrops returns the number of channel-0x00 frames refused at the queue cap.
 func (c *Conn) InputDrops() uint64 { return c.inputDrops.Load() }
@@ -293,8 +302,7 @@ func (c *Conn) readPump(ctx context.Context) {
 			}
 			c.opInput = append(c.opInput, payload)
 			c.mu.Unlock()
-		default:
-			// Channel 0x00 (events) or unknown — treat as event.
+		case ChannelEvent:
 			// Typed client-input frames also ride this channel after
 			// Plan 1 Phase 5 (the host disambiguates by typeID).
 			//
@@ -314,6 +322,16 @@ func (c *Conn) readPump(ctx context.Context) {
 			}
 			c.input = append(c.input, payload)
 			c.mu.Unlock()
+		default:
+			// Reject rather than guess. This arm used to fall in with
+			// channel 0x00 and forward the frame as an event with the
+			// channel byte STRIPPED, while the UDP transport's equivalent
+			// arm forwarded it with the byte KEPT — the same wire byte
+			// produced two different payloads depending on which transport
+			// carried it. Neither is recoverable, and guessing on a
+			// mismatch is precisely what CE-009 exists to stop.
+			c.noteInputDrop(&c.unknownChannelDrops, "unknown-channel")
+			continue
 		}
 	}
 }

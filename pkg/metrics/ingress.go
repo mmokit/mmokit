@@ -70,6 +70,14 @@ const (
 	// that presented no identity at all. Non-zero means either a misrouted
 	// producer or a peer claiming to be someone else; neither is normal.
 	ReasonIdentityMismatch
+	// ReasonUnknownChannel is a frame naming a client channel this build does
+	// not implement. Distinct from ReasonUnknownTypeID, which is a known
+	// channel carrying an unknown type: this one means the peer and the server
+	// disagree about the framing itself, so nothing inside can be trusted to
+	// mean what it looks like. Both transports used to guess at these — and
+	// guessed differently — so a non-zero rate here previously showed up as
+	// silently misrouted frames rather than as a counter.
+	ReasonUnknownChannel
 
 	// numIngressReasons must stay last. It sizes the counter table.
 	numIngressReasons
@@ -89,6 +97,7 @@ var ingressReasonNames = [numIngressReasons]string{
 	ReasonQueueFull:           "queue_full",
 	ReasonTickBudgetExhausted: "tick_budget_exhausted",
 	ReasonIdentityMismatch:    "identity_mismatch",
+	ReasonUnknownChannel:      "unknown_channel",
 }
 
 // String returns the scrape label value for r, or "invalid" when r is outside

@@ -101,9 +101,13 @@ type UDPTransport struct {
 	inboundDrops   atomic.Uint64
 	opInboundDrops atomic.Uint64
 	oversizeDrops  atomic.Uint64
-	authFailures   atomic.Uint64
-	replayDrops    atomic.Uint64
-	dropLog        dropThrottle
+	// unknownChannelDrops counts payloads naming a channel this build does not
+	// implement. See the reject arm in routePayload for why this stopped being
+	// a "legacy frame" passthrough.
+	unknownChannelDrops atomic.Uint64
+	authFailures        atomic.Uint64
+	replayDrops         atomic.Uint64
+	dropLog             dropThrottle
 
 	lastRecvTick atomic.Int64
 	lastSendTick atomic.Int64
@@ -285,12 +289,17 @@ func (t *UDPTransport) noteInboundDrop(counter *atomic.Uint64, reason string) {
 	if !t.dropLog.allow() {
 		return
 	}
-	log.Printf("udp: dropped inbound frame (%s queue) token=%08x from=%s [event=%d op=%d oversize=%d]",
+	log.Printf("udp: dropped inbound frame (%s) token=%08x from=%s [event=%d op=%d oversize=%d unknown-channel=%d]",
 		reason, t.token, t.addr,
-		t.inboundDrops.Load(), t.opInboundDrops.Load(), t.oversizeDrops.Load())
+		t.inboundDrops.Load(), t.opInboundDrops.Load(), t.oversizeDrops.Load(),
+		t.unknownChannelDrops.Load())
 }
 
 // InboundDrops returns the number of channel-0x00 payloads refused at the queue cap.
+// UnknownChannelDrops returns the number of payloads refused for naming an
+// unimplemented channel.
+func (t *UDPTransport) UnknownChannelDrops() uint64 { return t.unknownChannelDrops.Load() }
+
 func (t *UDPTransport) InboundDrops() uint64 { return t.inboundDrops.Load() }
 
 // AuthFailures counts inbound packets that failed AEAD authentication.
@@ -419,10 +428,13 @@ func (t *UDPTransport) routePayload(payload []byte) {
 		t.opInbound = append(t.opInbound, body)
 		t.inMu.Unlock()
 	default:
-		// Unknown leading byte — legacy channel-0x00 event, bytes intact.
-		body := make([]byte, len(payload))
-		copy(body, payload)
-		t.appendInbound(body, limits)
+		// Reject rather than guess. This arm used to forward an unrecognised
+		// leading byte as a channel-0x00 event with the byte KEPT, while the
+		// WebSocket path forwarded the same byte as an event with the byte
+		// STRIPPED — one wire byte, two payloads, decided by transport. The
+		// "legacy pre-channel-prefix frame" this was preserving has no
+		// producer left: every generated SDK writes an explicit channel byte.
+		t.noteInboundDrop(&t.unknownChannelDrops, "unknown-channel")
 	}
 }
 

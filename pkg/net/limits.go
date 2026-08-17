@@ -187,10 +187,16 @@ type dropThrottle struct {
 // on every Conn — would put a pointer on each connection to reach a tally that
 // is process-wide by nature.
 func ingressReasonFor(label string) metrics.IngressReason {
-	if label == "oversize" {
+	switch label {
+	case "oversize":
 		return metrics.ReasonFrameTooLarge
+	case "unknown-channel":
+		// Not queue pressure. Reporting a framing disagreement as queue_full
+		// would put a protocol mismatch on the congestion dashboard.
+		return metrics.ReasonUnknownChannel
+	default:
+		return metrics.ReasonQueueFull
 	}
-	return metrics.ReasonQueueFull
 }
 
 // allow reports whether a log line may be emitted now.

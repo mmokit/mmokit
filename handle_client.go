@@ -1,6 +1,7 @@
 package mmokit
 
 import (
+	"fmt"
 	"reflect"
 	"sort"
 	"sync"
@@ -52,6 +53,13 @@ var (
 
 // registerClientInputType marks t as a HandleClient-eligible type and
 // indexes it by typeID for inbound-frame lookup. Idempotent.
+//
+// Two distinct types hashing to the same typeID is a panic, matching
+// RegisterEvent and RegisterOp. This registry previously overwrote silently,
+// which is the worst outcome available: the loser's handler simply stops being
+// reachable, and because this is the one registry decoded straight off a client
+// socket, the symptom is a client input that is accepted and then ignored
+// rather than an error anyone can see. Rename one type if it ever fires.
 func registerClientInputType(t reflect.Type) {
 	// Registration-time shape check. This is the one registry whose types are
 	// decoded straight off a client socket, so an unsupported field here is a
@@ -59,9 +67,16 @@ func registerClientInputType(t reflect.Type) {
 	pkguniverse.ValidateMessageType(t)
 	id := TypeIDOf(t)
 	ciMu.Lock()
+	defer ciMu.Unlock()
+	if _, ok := ciSet[t]; ok {
+		return
+	}
+	if existing, ok := ciByType[id]; ok && existing != t {
+		panic(fmt.Sprintf("HandleClient: typeID collision between %s and %s (id=%#x)",
+			existing.String(), t.String(), id))
+	}
 	ciSet[t] = struct{}{}
 	ciByType[id] = t
-	ciMu.Unlock()
 }
 
 // ClientInputTypeOf returns a serializable schema describing a registered

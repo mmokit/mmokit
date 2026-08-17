@@ -182,19 +182,27 @@ func TestUDPTransport_RoutePayloadDemuxesChannels(t *testing.T) {
 	}
 }
 
-// A frame whose leading byte is neither 0x00 nor 0x01 is a legacy
-// pre-channel-prefix event — it must go to the event queue with bytes
-// intact and never into the op queue.
-func TestUDPTransport_RoutePayloadLegacyNoPrefix(t *testing.T) {
+// A frame whose leading byte is neither 0x00 nor 0x01 names a channel this
+// build does not implement, and is rejected.
+//
+// It used to be forwarded to the event queue as a "legacy pre-channel-prefix
+// event" with its bytes intact — while the WebSocket path forwarded the same
+// byte as an event with the byte STRIPPED. One wire byte, two payloads,
+// decided by which transport carried it. Nothing produces such a frame: every
+// generated SDK writes an explicit channel byte. Guessing on a framing
+// disagreement is what CE-009 exists to stop, so both transports now reject.
+func TestUDPTransport_RoutePayloadUnknownChannelRejected(t *testing.T) {
 	tr, _ := cryptoTransport(t)
 	tr.routePayload([]byte{0x42, 0x99})
 
-	evs := tr.DrainInput()
-	if len(evs) != 1 || !slices.Equal(evs[0], []byte{0x42, 0x99}) {
-		t.Fatalf("legacy event routing = %v, want [[66 153]]", evs)
+	if evs := tr.DrainInput(); evs != nil {
+		t.Fatalf("unknown-channel frame reached the event queue: %v", evs)
 	}
 	if got := tr.DrainOpInput(); got != nil {
-		t.Fatalf("legacy frame leaked into op queue: %v", got)
+		t.Fatalf("unknown-channel frame reached the op queue: %v", got)
+	}
+	if got := tr.UnknownChannelDrops(); got != 1 {
+		t.Fatalf("UnknownChannelDrops = %d, want 1 — a rejected frame must be counted, not silent", got)
 	}
 }
 

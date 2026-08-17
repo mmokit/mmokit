@@ -73,6 +73,49 @@ var (
 	brSet = map[reflect.Type]struct{}{} // T (NOT *T)
 )
 
+// downstreamIDs indexes every typeID a client may see on channel 0x00, across
+// BOTH server-to-client registries.
+//
+// The two registries are separate on the server and a single namespace on the
+// client: generated clients dispatch broadcasts and server events through one
+// `TypedEvents.Dispatch(typeID, …)` switch. A per-registry collision check
+// therefore cannot see the collision that actually matters — a broadcast type
+// and an event type hashing alike — and each registry would report itself
+// clean while the client silently routed one type's bytes into the other's
+// decoder. This index is the namespace the client actually has.
+var (
+	downstreamMu  sync.Mutex
+	downstreamIDs = map[uint32]reflect.Type{}
+)
+
+// claimDownstreamTypeID reserves id for t in the client's channel-0x00
+// dispatch namespace. Idempotent for the same type; panics when a different
+// type already holds the id. verb names the registration call in the message
+// so the panic points at the code to change.
+func claimDownstreamTypeID(verb string, id uint32, t reflect.Type) {
+	downstreamMu.Lock()
+	defer downstreamMu.Unlock()
+	if existing, ok := downstreamIDs[id]; ok && existing != t {
+		panic(fmt.Sprintf("%s: typeID collision between %s and %s (id=%#x) — "+
+			"broadcasts and server events share one client dispatch namespace; rename one type",
+			verb, existing.String(), t.String(), id))
+	}
+	downstreamIDs[id] = t
+}
+
+// releaseDownstreamTypeIDs drops the claims held by the given id→type index.
+// Only the ResetXxxForTest helpers call this; production registration is
+// append-only for the life of the binary.
+func releaseDownstreamTypeIDs(owned map[uint32]reflect.Type) {
+	downstreamMu.Lock()
+	defer downstreamMu.Unlock()
+	for id, t := range owned {
+		if downstreamIDs[id] == t {
+			delete(downstreamIDs, id)
+		}
+	}
+}
+
 // RegisterBroadcastType marks T as broadcast-eligible. Called from
 // HandleAll[T] (the broadcast-on-by-default registration verb).
 // HandleAllInternal[T] explicitly does not call this — that's how
@@ -82,6 +125,9 @@ func RegisterBroadcastType(t reflect.Type) {
 	// registries: a broadcast body is encoded by ReflectMarshal and decoded by
 	// the generated SDKs, so it obeys the same field rules.
 	pkguniverse.ValidateMessageType(t)
+	// This registry computed no typeID at all before, so a broadcast collision
+	// was not merely unguarded — it was undetectable.
+	claimDownstreamTypeID("RegisterBroadcastType", TypeIDOf(t), t)
 	brMu.Lock()
 	brSet[t] = struct{}{}
 	brMu.Unlock()

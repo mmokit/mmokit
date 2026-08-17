@@ -41,6 +41,10 @@ func RegisterEvent[T any]() {
 		panic(fmt.Sprintf("RegisterEvent: typeID collision between %s and %s (id=%#x)",
 			existing.String(), t.String(), id))
 	}
+	// Also claim the id across the shared downstream namespace, which catches
+	// the collision this registry cannot see on its own: a broadcast type
+	// hashing to the same id. Clients dispatch both through one switch.
+	claimDownstreamTypeID("RegisterEvent", id, t)
 	seByType[id] = t
 	seSet[t] = struct{}{}
 }
@@ -71,6 +75,11 @@ func RegisteredServerEventTypes() []reflect.Type {
 func ResetServerEventRegistryForTest() {
 	seMu.Lock()
 	defer seMu.Unlock()
+	// Release this registry's claims on the shared downstream namespace too.
+	// Without it, a test that resets and then registers a DIFFERENT type
+	// hashing to a previously-claimed id would panic on a collision with a
+	// registration that no longer exists.
+	releaseDownstreamTypeIDs(seByType)
 	seByType = map[uint32]reflect.Type{}
 	seSet = map[reflect.Type]struct{}{}
 }
