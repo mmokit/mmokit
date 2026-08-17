@@ -6,7 +6,6 @@ import (
 	"github.com/mlange-42/ark/ecs"
 
 	"github.com/mmokit/mmokit/pkg/component"
-	"github.com/mmokit/mmokit/pkg/coords"
 )
 
 // MoveOpt configures a MoveEntityTo call.
@@ -61,7 +60,7 @@ func (s *Stage) MoveEntityTo(e ecs.Entity, worldX, worldY float32, opts ...MoveO
 		return fmt.Errorf("MoveEntityTo: entity has no Position")
 	}
 
-	cellSize := coords.CellSize
+	cellSize := s.baseCellSize
 	destCellX := int32(worldX / cellSize)
 	destCellY := int32(worldY / cellSize)
 	// Negative-coords correction: int32 truncation is toward zero, but cell

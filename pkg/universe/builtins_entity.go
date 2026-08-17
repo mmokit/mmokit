@@ -384,8 +384,9 @@ func entitySpawnHandler(coord *Process) cmdsys.HandlerFunc {
 					ex += float32(math.Cos(theta) * r)
 					ey += float32(math.Sin(theta) * r)
 				}
-				localX := ex - float32(cellX)*coords.CellSize
-				localY := ey - float32(cellY)*coords.CellSize
+				cs := coord.baseCellSize()
+				localX := ex - float32(cellX)*cs
+				localY := ey - float32(cellY)*cs
 				destCell.Stage.Spawn(
 					component.Position{X: localX, Y: localY},
 					component.EntityKind{Type: kindID},

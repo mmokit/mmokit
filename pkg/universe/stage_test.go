@@ -49,10 +49,9 @@ func TestUpdateCellBounds_SubcellToParent_NoPositionShift(t *testing.T) {
 func TestSpawnAtLocation_ConvertsWorldToLocal(t *testing.T) {
 	// Fixture: cellSize=2000, rootCell=(1, 1). World origin of this cell is (2000, 2000).
 	// World point (2500, 2900) should become local (500, 900).
-	wb := newTestWorldBase(t, CellID{X: 1, Y: 1})
 	prev := coords.CellSize
-	coords.SetCellSize(2000)
 	defer coords.SetCellSize(prev)
+	wb := newTestWorldBase(t, CellID{X: 1, Y: 1}, 2000)
 
 	loc := coords.Location{X: 2500, Y: 2900}
 	entity := wb.SpawnAtLocation(loc)

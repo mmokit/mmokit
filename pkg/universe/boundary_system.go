@@ -4,7 +4,6 @@ import (
 	"github.com/mlange-42/ark/ecs"
 
 	"github.com/mmokit/mmokit/pkg/component"
-	"github.com/mmokit/mmokit/pkg/coords"
 	"github.com/mmokit/mmokit/pkg/engine"
 	"github.com/mmokit/mmokit/pkg/query"
 )
@@ -37,7 +36,7 @@ func (s *BoundarySystem) Init() {
 }
 
 func (s *BoundarySystem) Update(dt float32) {
-	cellSize := coords.CellSize
+	cellSize := s.stage.CellSize()
 	cell := s.stage.Cell()
 
 	// Compute this node's bounds in base-cell-local coordinates.

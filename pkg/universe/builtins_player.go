@@ -8,7 +8,6 @@ import (
 	"strings"
 
 	"github.com/mmokit/mmokit/pkg/cmdsys"
-	"github.com/mmokit/mmokit/pkg/coords"
 )
 
 // ── player.tp ───────────────────────────────────────────────────────────────
@@ -236,8 +235,9 @@ func playerTpHandler(coord *Process) cmdsys.HandlerFunc {
 
 		if target.Offline != nil {
 			cellX, cellY, localX, localY := worldToLocal(args.X, args.Y)
-			prevWorldX := float32(target.Offline.GetCellX())*coords.CellSize + target.Offline.GetX()
-			prevWorldY := float32(target.Offline.GetCellY())*coords.CellSize + target.Offline.GetY()
+			cs := coord.baseCellSize()
+			prevWorldX := float32(target.Offline.GetCellX())*cs + target.Offline.GetX()
+			prevWorldY := float32(target.Offline.GetCellY())*cs + target.Offline.GetY()
 			target.Offline.SetCell(cellX, cellY)
 			target.Offline.SetPosition(localX, localY)
 			target.DirtyMark()
@@ -286,8 +286,9 @@ func playerInfoHandler(coord *Process) cmdsys.HandlerFunc {
 		}
 
 		if target.Offline != nil {
-			worldX := float32(target.Offline.GetCellX())*coords.CellSize + target.Offline.GetX()
-			worldY := float32(target.Offline.GetCellY())*coords.CellSize + target.Offline.GetY()
+			cs := coord.baseCellSize()
+			worldX := float32(target.Offline.GetCellX())*cs + target.Offline.GetX()
+			worldY := float32(target.Offline.GetCellY())*cs + target.Offline.GetY()
 			return playerInfoResult{
 				Username: args.Username,
 				Status:   "offline",

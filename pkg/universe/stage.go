@@ -637,7 +637,7 @@ func (b *Stage) SendPlayerEntityAssigned(connID uint32, entity ecs.Entity) {
 		netID = b.netIDMap.Get(entity).ID
 	}
 	cell := b.rootCell()
-	cs := coords.CellSize
+	cs := b.baseCellSize
 	var worldX, worldY float32
 	if b.posMap.HasAll(entity) {
 		pos := b.posMap.Get(entity)
@@ -708,9 +708,9 @@ func (b *Stage) HasInflightTransfers() bool {
 // for cluster topology messages. Reads from Process.cfg.
 func (b *Stage) GridDimensions() (uint32, uint32, float32) {
 	if b.coord == nil {
-		return 0, 0, coords.CellSize
+		return 0, 0, b.baseCellSize
 	}
-	return b.coord.cfg.CellsX, b.coord.cfg.CellsY, coords.CellSize
+	return b.coord.cfg.CellsX, b.coord.cfg.CellsY, b.baseCellSize
 }
 
 // QueueCrossing appends an entity crossing event to the per-tick queue.
@@ -1305,7 +1305,7 @@ func (b *Stage) SpawnLiveFromTransfer(netID uint32, epoch uint32, blob []byte) (
 //	[18:26] producedAtMs  uint64 LE — authoritative producer's ClusterClock.TickTime (tick-aligned)
 //	[26:]   component tail: [u16 count][repeated: u16 id, u16 len, N bytes]
 func (b *Stage) ApplyBorderFrame(frame replication.Frame, sourceCellID MeshCellID) {
-	cellSize := coords.CellSize
+	cellSize := b.baseCellSize
 	rootCell := b.cell
 	for rootCell.Depth > 0 {
 		rootCell = rootCell.Parent()
@@ -1812,7 +1812,7 @@ func (b *Stage) TickTransferCooldowns() {
 // for tests and bounds-validated placement.
 func (b *Stage) SpawnAtLocation(loc coords.Location) ecs.Entity {
 	rootCell := b.rootCell()
-	cellSize := coords.CellSize
+	cellSize := b.baseCellSize
 	minX := float32(rootCell.X) * cellSize
 	minY := float32(rootCell.Y) * cellSize
 	maxX := minX + cellSize
@@ -1868,7 +1868,7 @@ func (b *Stage) SpawnAtLocation(loc coords.Location) ecs.Entity {
 // Spawn panics on duplicate-type.
 func (b *Stage) SpawnPlayer(session *engine.PlayerSession, components ...any) Entity {
 	rootCell := b.rootCell()
-	cellSize := coords.CellSize
+	cellSize := b.baseCellSize
 	minX := float32(rootCell.X) * cellSize
 	minY := float32(rootCell.Y) * cellSize
 

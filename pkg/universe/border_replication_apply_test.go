@@ -58,12 +58,27 @@ func buildWireEntryFull(worldX, worldY, radius, vx, vy, angle float32, producedA
 // newTestWorldBase creates a Stage at the given cell with a fresh
 // engine and no bridge. Used by ApplyBorderFrame tests to assert on
 // created replica entities.
-func newTestWorldBase(t *testing.T, cell CellID) *Stage {
+// newTestWorldBase builds a Stage with an explicit cell size, defaulting to
+// 1024.
+//
+// The size is a PARAMETER rather than something a caller sets afterwards
+// because cell geometry is injected at construction (CE-010): a Stage captures
+// it once, so mutating a global after the fact no longer reaches the stage —
+// which is the property the refactor is buying.
+func newTestWorldBase(t *testing.T, cell CellID, cellSize ...float32) *Stage {
 	t.Helper()
-	coords.SetCellSize(1024)
+	size := float32(1024)
+	if len(cellSize) > 0 {
+		size = cellSize[0]
+	}
+	// Still set the global: sites not yet converted read it, and the two must
+	// agree. Removed with the global in the last step of CE-010 part A.
+	coords.SetCellSize(size)
 	log := logger.New()
 	eng := engine.New(engine.DefaultConfig(), net.NewConnManager(), log)
-	return NewStage(eng, cell, 300, nil)
+	stage := NewStage(eng, cell, 300, nil)
+	stage.baseCellSize = size
+	return stage
 }
 
 func TestApplyBorderFrame_CreatesReplica(t *testing.T) {
