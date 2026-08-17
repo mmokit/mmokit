@@ -27,14 +27,19 @@ type Manifest struct {
 	// Unlike Frame above it is produced through the REAL quantize.FrameEncoder
 	// rather than hand-assembled bytes, so the golden cannot drift from
 	// wireformat.go.
-	InputAckFrame FrameCase      `json:"inputAckFrame"`
-	ApplyDelta    []ApplyCase    `json:"applyDelta"`
-	Strings       []StringCase   `json:"strings"`
-	Udp           UdpCases       `json:"udp"`
-	Reflect       ReflectCase    `json:"reflect"`
-	ClockSync     ClockSyncCase  `json:"clockSync"`
-	Playback      PlaybackCase   `json:"playback"`
-	Prediction    PredictionCase `json:"prediction"`
+	InputAckFrame FrameCase    `json:"inputAckFrame"`
+	ApplyDelta    []ApplyCase  `json:"applyDelta"`
+	Strings       []StringCase `json:"strings"`
+	Udp           UdpCases     `json:"udp"`
+	Reflect       ReflectCase  `json:"reflect"`
+	// ReflectNested pins the codec's nested-struct and slice-of-struct paths.
+	// Reflect above is flat, and flat was the whole coverage until §6.10 unit
+	// 2c — while the real 4node schema carries chat types shaped exactly like
+	// this, and §7 phase 1 turns position and velocity into nested value types.
+	ReflectNested ReflectNestedCase `json:"reflectNested"`
+	ClockSync     ClockSyncCase     `json:"clockSync"`
+	Playback      PlaybackCase      `json:"playback"`
+	Prediction    PredictionCase    `json:"prediction"`
 }
 
 // ClockSyncCase pins the sliding-window-max offset estimator across langs.
@@ -126,6 +131,43 @@ type ReflectCase struct {
 	D        bool     `json:"d"`
 	E        int64    `json:"e"`
 	F        []uint32 `json:"f"`
+}
+
+// ReflectNestedCase pins a message whose fields are a nested struct and a
+// slice of structs — the shape the flat goldenReflect never reaches.
+type ReflectNestedCase struct {
+	HexBytes string `json:"hexBytes"`
+	Channel  struct {
+		Slug        string `json:"slug"`
+		MemberCount int32  `json:"memberCount"`
+	} `json:"channel"`
+	Members []struct {
+		UserID string `json:"userID"`
+		Role   string `json:"role"`
+	} `json:"members"`
+	Tick uint32 `json:"tick"`
+}
+
+// goldenNestedInner is one element of the slice-of-struct field.
+type goldenNestedInner struct {
+	UserID string
+	Role   string
+}
+
+// goldenNestedChannel is the nested-struct field.
+type goldenNestedChannel struct {
+	Slug        string
+	MemberCount int32
+}
+
+// goldenReflectNested mirrors the chat-style shape the real schema carries:
+// a struct field, a slice-of-struct field, and a trailing scalar. The trailing
+// scalar matters — it is what catches a nested walker that consumes the wrong
+// number of bytes and leaves the cursor misaligned for everything after it.
+type goldenReflectNested struct {
+	Channel goldenNestedChannel
+	Members []goldenNestedInner
+	Tick    uint32
 }
 
 // goldenReflect is marshalled by the real reflect codec to anchor the C#
@@ -372,6 +414,30 @@ func main() {
 		HexBytes: hex.EncodeToString(grBytes),
 		A:        gr.A, B: gr.B, C: gr.C, D: gr.D, E: gr.E, F: gr.F,
 	}
+
+	// --- nested reflect golden: struct + slice-of-struct + trailing scalar ---
+	grn := goldenReflectNested{
+		Channel: goldenNestedChannel{Slug: "world", MemberCount: 3},
+		Members: []goldenNestedInner{
+			{UserID: "u-1", Role: "owner"},
+			{UserID: "u-2", Role: "member"},
+		},
+		Tick: 0xCAFEBABE,
+	}
+	grnBytes, err := universe.ReflectMarshal(&grn)
+	if err != nil {
+		log.Fatalf("marshal nested reflect golden: %v", err)
+	}
+	m.ReflectNested.HexBytes = hex.EncodeToString(grnBytes)
+	m.ReflectNested.Channel.Slug = grn.Channel.Slug
+	m.ReflectNested.Channel.MemberCount = grn.Channel.MemberCount
+	for _, mem := range grn.Members {
+		m.ReflectNested.Members = append(m.ReflectNested.Members, struct {
+			UserID string `json:"userID"`
+			Role   string `json:"role"`
+		}{UserID: mem.UserID, Role: mem.Role})
+	}
+	m.ReflectNested.Tick = grn.Tick
 
 	m.ClockSync = buildClockSyncCase()
 

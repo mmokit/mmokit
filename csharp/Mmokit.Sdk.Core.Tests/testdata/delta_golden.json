@@ -266,6 +266,24 @@
       9
     ]
   },
+  "reflectNested": {
+    "hexBytes": "0500776f726c640300000002000300752d3105006f776e65720300752d3206006d656d626572bebafeca",
+    "channel": {
+      "slug": "world",
+      "memberCount": 3
+    },
+    "members": [
+      {
+        "userID": "u-1",
+        "role": "owner"
+      },
+      {
+        "userID": "u-2",
+        "role": "member"
+      }
+    ],
+    "tick": 3405691582
+  },
   "clockSync": {
     "window": 40,
     "observations": [

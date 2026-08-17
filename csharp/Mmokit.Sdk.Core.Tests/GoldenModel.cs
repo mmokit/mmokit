@@ -12,6 +12,7 @@ namespace Mmokit.Sdk.Core.Tests
         public StringCase[] Strings { get; set; } = Array.Empty<StringCase>();
         public UdpCases Udp { get; set; } = new();
         public ReflectCase Reflect { get; set; } = new();
+        public ReflectNestedCase ReflectNested { get; set; } = new();
         public ClockSyncCase ClockSync { get; set; } = new();
         public FrameCase InputAckFrame { get; set; } = new();
         public PlaybackCase Playback { get; set; } = new();
@@ -113,6 +114,26 @@ namespace Mmokit.Sdk.Core.Tests
         public bool D { get; set; }
         public long E { get; set; }
         public uint[] F { get; set; } = Array.Empty<uint>();
+    }
+
+    public class ReflectNestedCase
+    {
+        public string HexBytes { get; set; } = "";
+        public NestedChannel Channel { get; set; } = new();
+        public NestedMember[] Members { get; set; } = Array.Empty<NestedMember>();
+        public uint Tick { get; set; }
+    }
+
+    public class NestedChannel
+    {
+        public string Slug { get; set; } = "";
+        public int MemberCount { get; set; }
+    }
+
+    public class NestedMember
+    {
+        public string UserID { get; set; } = "";
+        public string Role { get; set; } = "";
     }
 
     public class UdpCases

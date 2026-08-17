@@ -38,5 +38,57 @@ namespace Mmokit.Sdk.Core.Tests
             foreach (uint v in c.F) w.WriteU32(v);
             Assert.Equal(Golden.Hex(c.HexBytes), w.ToArray());
         }
+
+        // Nested struct + slice-of-struct + a trailing scalar.
+        //
+        // The flat case above was the entire reflect coverage until §6.10 unit
+        // 2c, while the real 4node schema already carries chat types shaped
+        // like this, and §7 phase 1 turns position and velocity into nested
+        // value types. The trailing Tick is the load-bearing part of the
+        // fixture: a nested walker that consumes the wrong number of bytes
+        // leaves the cursor misaligned, and only a field AFTER the nesting
+        // notices.
+        //
+        // Nested structs are inlined by the codec — there is no envelope, so
+        // the reader simply reads the inner fields in order.
+        [Fact]
+        public void Reader_DecodesNestedGoBytes()
+        {
+            var c = g.ReflectNested;
+            var r = new ReflectReader(Golden.Hex(c.HexBytes));
+
+            Assert.Equal(c.Channel.Slug, r.ReadString());
+            Assert.Equal(c.Channel.MemberCount, r.ReadI32());
+
+            int n = r.ReadSliceLen();
+            Assert.Equal(c.Members.Length, n);
+            for (int i = 0; i < n; i++)
+            {
+                Assert.Equal(c.Members[i].UserID, r.ReadString());
+                Assert.Equal(c.Members[i].Role, r.ReadString());
+            }
+
+            Assert.Equal(c.Tick, r.ReadU32());
+        }
+
+        [Fact]
+        public void Writer_ReproducesNestedGoBytes()
+        {
+            var c = g.ReflectNested;
+            var w = new ReflectWriter();
+
+            w.WriteString(c.Channel.Slug);
+            w.WriteI32(c.Channel.MemberCount);
+
+            w.WriteSliceLen(c.Members.Length);
+            foreach (var m in c.Members)
+            {
+                w.WriteString(m.UserID);
+                w.WriteString(m.Role);
+            }
+
+            w.WriteU32(c.Tick);
+            Assert.Equal(Golden.Hex(c.HexBytes), w.ToArray());
+        }
     }
 }
