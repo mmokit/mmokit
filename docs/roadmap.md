@@ -100,7 +100,7 @@ Every status below was verified against source on the date at the top of this fi
 
 ### 6.2 Working-tree triage — **done**
 
-The uncommitted work this section used to describe is committed. CE-001, CE-003, CE-004 and CE-005a are closed; CE-005b Tier 1 is closed with Tier 2 open; and the client-prediction workstream is documented as WS-001 below rather than existing only on disk. A roadmap read against `HEAD` is now accurate.
+The uncommitted work this section used to describe is committed. CE-001, CE-003, CE-004 and CE-005a are closed; CE-005b is closed in both tiers; and the client-prediction workstream is documented as WS-001 below rather than existing only on disk. A roadmap read against `HEAD` is now accurate.
 
 ### 6.3 P0 — must close before the 2D/3D program begins
 
@@ -164,7 +164,7 @@ Failure propagation landed earlier: [`pkg/universe/grpc_bridge.go:80`](../pkg/un
 
 Deliberately **not** done: preserving `HostRegistry.Register`'s `OwnedCells` across reconnects (restores ownership with no arbitration — the same two-owner bug from the other direction), and a versioned coordinator→host desired-state reconciliation (design item; the arbitration above is its safety-critical slice).
 
-#### CE-005b — UDP security and gating · **Tier 1 done; Tier 2 open**
+#### CE-005b — UDP security and gating · **Done (Tier 1 and Tier 2)**
 
 Tier 1 landed. [`pkg/net/udp_server.go`](../pkg/net/udp_server.go) now routes every data packet through a single identity chokepoint, `routeFor`, which requires the packet's source address to match the address its session is bound to. A token is no longer a bearer credential: replaying one from another address neither injects input nor tears the session down, and a mismatch is dropped silently rather than answered, so the server cannot be used to confirm a guessed token or as a reflector.
 
@@ -173,15 +173,17 @@ Connection requests no longer allocate. An unauthenticated request now records o
 Two Tier 1 claims were weaker than previously recorded. One is now closed, one is still live — re-verified against source 2026-08-15:
 
 - **The drop counters were unreadable in production — now fixed, do not redo it.** `Process.startUDPListener` used to discard the `*UDPServer`, leaving `SetLimits` and every drop-counter accessor with zero production callers. It now stores the handle ([`bootstrap.go:341-342`](../pkg/universe/bootstrap.go)) and applies `SetWireLimits`, and all three counters are scraped at [`pkg/metrics/http.go:133-135`](../pkg/metrics/http.go) as `mmokit_udp_packets_dropped_total{reason}`. Closed during the P0 closure phase.
-- **Pending entries expire only under table pressure, never on a timer — still live.** `sweepPendingLocked` still has exactly one caller, [`pkg/net/udp_server.go:352-353`](../pkg/net/udp_server.go), guarded by `if len(s.pending) >= s.maxPending`. So 1024 spoofed source addresses deny new connections for up to `pendingTTL` (15 s). Bounded and self-healing, but not the timer-based expiry the entry implied.
+- **Pending entries expired only under table pressure, never on a timer — now closed.** 1024 spoofed source addresses could deny new connections for up to `pendingTTL` (15 s). Tier 2 deleted the table rather than fixing the sweep: return routability is now proven by a stateless HMAC cookie the peer echoes in `ConnConfirm`, so nothing is retained between the two packets and there is nothing left to exhaust.
 
-The first was fixed inside the P0 closure phase ([§6.8](#68-next-phase--p0-closure)). The second was not, and it is subsumed rather than scheduled separately: Tier 2 replaces the pending table with a stateless HMAC handshake cookie, which removes the table the sweep exists to bound.
+Both are closed — the first inside the P0 closure phase ([§6.8](#68-completed-phase--p0-closure)), the second as a side effect of Tier 2's handshake.
 
-**UDP is off in the shipped binary default:** `--udp-listen` defaults to empty ([`bootstrap.go:73-75`](../pkg/universe/bootstrap.go)) and logs an explicit experimental warning when enabled, escalated for a non-loopback bind. Note this is *not* true of local development — `just dev` (`justfile:65`) and `just distributed-space` (`justfile:145`) both pass `--udp-listen=:9000`, a wildcard bind, deliberately as of `37d4d00`. Every dev process carries the exposure. Nine regression tests in `pkg/net/udp_server_test.go` cover spoofed data, spoofed disconnect, foreign-token promotion, handshake idempotence, and both caps; the package is race-clean.
+**UDP stays off in the shipped binary default:** `--udp-listen` defaults to empty. That is now an opt-in choice about exposing a second port rather than a warning about an unsafe transport, and the escalating experimental warning is gone with the exposure it described. The dev recipes still pass `--udp-listen=:9000` on a wildcard bind, and now also `--dev-insecure-cookie`, which is what lets `/auth/udp-key` issue a key over plain HTTP. The regression tests in `pkg/net/udp_server_test.go` cover spoofed data, spoofed disconnect, foreign-token promotion, handshake idempotence, identity binding, and both caps; the package is race-clean.
 
-**Tier 2 remains open, and it is the P0 item the next phase does not close.** Required: real cryptographic connection identity (authenticated handshake and AEAD framing) so an *on-path* attacker cannot read or forge traffic, and so address rebinding for roaming clients can be supported safely. This section is the single owner of that work — **WS-002 Unit 2 and the UDP-key half of WS-003 are folded in here**; see [§6.6](#66-workstreams-not-covered-by-a-ce-item) for what remains of those rows.
+**Tier 2 is done.** Cryptographic connection identity landed across the units in [§6.9.3](#693-units): ChaCha20-Poly1305 AEAD framing with per-direction keys and a per-direction replay window, a stateless HMAC handshake cookie, `POST /auth/udp-key` with a process-level key registry, and the identity binding that turns a resolved key into a player session. An on-path attacker can no longer read or forge client traffic. This section was the single owner of that work — **WS-002 Unit 2 and the UDP-key half of WS-003 were folded in here**; see [§6.6](#66-workstreams-not-covered-by-a-ce-item) for what remains of those rows.
 
-Scope, roughly **12.5 engineer-days**: `POST /auth/udp-key` plus a process-level key registry and a UDP analogue of `Gateway.onAuthSuccess` (~2.5 d — the `AuthResolver` seam and cookie plumbing already exist); AEAD framing and unreliable-channel replay enforcement across `udpproto`/`udp_server`/`udp_transport`/`udpclient` (~5 d); C# parity plus golden interop (~3 d); retiring op-channel auth in the C# client (~2.5 d). A stateless HMAC handshake cookie replacing the pending table belongs here too — it is the natural first half of the authenticated handshake, and doing it separately means designing the same thing twice.
+The token stopped being a credential and became a session index; the AEAD tag is the credential. Tier 1's source-address binding stays as defence in depth. Address rebinding for roaming clients is now *safe* to add — a re-handshake under the same key re-proves identity — but is not implemented.
+
+**What Tier 2 did not close.** Keys are multi-use for their five-minute TTL, deliberately, so that a lost handshake packet costs a retry rather than an HTTPS round trip. Anyone who obtains a key can therefore open a session as that user until it expires, which makes the TLS posture of the key-issuing listener load-bearing: `/auth/udp-key` refuses to serve over a plaintext listener unless `--dev-insecure-cookie` is set. See [`SECURITY.md`](../SECURITY.md) known limitation 1.
 
 Two corrections for whoever picks this up:
 
@@ -322,10 +324,10 @@ These exist in the working tree, in dated plans, or only in git history. They ar
 | --- | --- | --- | --- |
 | WS-001 | **Client prediction, reconciliation, adaptive playback** | **Partial — see [WS-001](#ws-001--client-prediction-reconciliation-and-adaptive-playback--partial) below** | Implemented, committed, and documented. Reverses a previously executed decision to remove client prediction. |
 | WS-002 | ~~Security Units 2–4~~ — **row split, see below** | — | The single row bundled three unrelated units and made all three invisible. |
-| WS-002/2 | Security Unit 2 — UDP AEAD framing | Not started | **Owned by [CE-005b](#ce-005b--udp-security-and-gating--tier-1-done-tier-2-open) Tier 2.** Not tracked here. |
+| WS-002/2 | Security Unit 2 — UDP AEAD framing | **Done** | **Owned by [CE-005b](#ce-005b--udp-security-and-gating--done-tier-1-and-tier-2) Tier 2, now closed.** Not tracked here. |
 | WS-002/3 | Security Unit 3 — mesh shared-secret auth | **Done** | **Owned by [CE-006](#ce-006--mesh-authentication-and-authorization--done-1212), now closed.** Not tracked here. |
 | WS-002/4 | Security Unit 4 — application hardening | Partial | The only orphan of the three: it belongs to neither CE item and has no owner. Umbrella spec records its detail as "to be written". |
-| WS-003 | Auth over HTTPS with OIDC social login | HTTPS endpoints exist; OIDC is a schema seam only | The `/auth/udp-key` half is **owned by CE-005b Tier 2** (~2.5 d; the `AuthResolver` seam and cookie plumbing already exist). What stays here is OIDC proper — a single unused SQL table `auth.identities` with zero Go readers or writers. **OIDC does not gate the UDP key**; the previous entry implied it did. |
+| WS-003 | Auth over HTTPS with OIDC social login | HTTPS + UDP-key done; OIDC is a schema seam only | The `/auth/udp-key` half was **owned by CE-005b Tier 2 and is closed** — every client now authenticates over HTTPS and draws its UDP key there. What stays here is OIDC proper — a single unused SQL table `auth.identities` with zero Go readers or writers. **OIDC does not gate the UDP key**; an earlier entry implied it did. |
 | WS-004 | WASM systems Phases 1–3 | Phase 0 shipped; Phase 1 entirely unbuilt | `pkg/wasmabi` declares no host imports, so commands, multi-component queries, and the query manifest do not exist. Live perf TODO: the module recompiles on every load. |
 | WS-005 | C# SDK / Unity client remainder | All nine SDK plans shipped; four scope items open | The Unity demo project lives outside this repository. The RPC ergonomics layer was promised as a follow-on spec and never written. |
 | WS-006 | Async entity serialization | Open | Recovered from the retired roadmap. Network system is 15–25 ms of a 50 ms tick budget. CE-011 covers allocation, not moving frame construction off the loop goroutine. |
@@ -392,7 +394,7 @@ Each work item should add the smallest regression test that fails before the fix
 
 Also note: `pkg/universe` intermittently reports `executor: serialize timeout on cell_0_0` ([`cell_transfer_executor.go:239`](../pkg/universe/cell_transfer_executor.go)) under PARALLEL package execution. That one is CPU contention on a `RunOnLoop` deadline, not a logic race. The recorded "roughly 1 run in 4 with default `-p`" figure is **not confirmed at `4b1d8965`** — it did not reproduce in 1 default-`-p` run (`go test ./... -count=1 -timeout 300s`, exit 0, 47.9 s, `ok pkg/universe 47.448s`) or 2 `-p 1` runs. One passing sample cannot refute a 1-in-4 rate, so **keep `-p 1` as retained insurance**, but treat it as insurance rather than a proven necessity, and note that under `-race` (2 m 55 s versus 48 s) contention is strictly worse, so a nightly race job should carry `-p 1` too.
 
-### 6.8 Next phase — P0 closure
+### 6.8 Completed phase — P0 closure
 
 **Approximately 35 engineer-days.** This phase is complete; OSS-001's publication half followed it. It takes CE-002, CE-006 and OSS-001's CI half to their full acceptance criteria. It is recorded here and nowhere else — no `docs/superpowers/` spec or plan is written for it — so this section is the deliverable, and [§4 principle 4](#4-design-principles) applies to it: **status is derived from source, not from these headings.**
 
@@ -403,9 +405,9 @@ Also note: `pkg/universe` intermittently reports `executor: serialize timeout on
 | CE-002 | **Done (8/8)** — landed, see [§6.3](#ce-002--bounded-decoding-and-ingress-budgets--done-88) |
 | CE-006 | **Done (12/12)**, including the `MeshData` payload binding — closed with a stream-captured peer ID rather than the `sender_id` field this table previously anticipated, for the reasons in [§6.3](#ce-006--mesh-authentication-and-authorization--done-1212). The one proto change that did land is the replication-receipt oneof arm, with `just proto` + `just fuzz-corpus` and a lockstep cluster redeploy |
 | OSS-001 | **Done.** CI half closed in this phase; publication half closed 2026-08-15 by publishing the repository whole and moving the reference game to `examples/space/` — see the reversal note in [§6.3](#oss-001--open-source-readiness-and-ci--done) |
-| CE-005b Tier 2 | **Still open** — see below |
+| CE-005b Tier 2 | **Closed by the following phase** — see [§6.9](#69-completed-phase--ce-005b-tier-2) |
 
-**§7.1's gate does not lift when this phase ends.** [§7.1](#71-sequencing-rule) gates the entire 104-day 2D/3D program on *every* P0 item, and CE-005b Tier 2 sits in [§6.3](#63-p0--must-close-before-the-2d3d-program-begins). The successor phase is CE-005b Tier 2 at roughly 12.5 days, after which it does. This is stated plainly here because the phase name invites the opposite reading.
+**§7.1's gate did not lift when this phase ended.** [§7.1](#71-sequencing-rule) gates the entire 104-day 2D/3D program on *every* P0 item, and CE-005b Tier 2 sits in [§6.3](#63-p0--must-close-before-the-2d3d-program-begins). It lifted one phase later, at the end of [§6.9](#69-completed-phase--ce-005b-tier-2). This is recorded plainly here because the phase name invites the opposite reading.
 
 #### 6.8.2 Sequencing
 
@@ -463,18 +465,20 @@ Each of these was found by verifying a plausible plan against source and finding
 - **Flag defaults never reach tests.** `universe.New`'s `if !flag.Parsed()` guard is always false under `go test`, so `BindFlags` is skipped entirely. Defaults must be applied as a zero-value fallback in `New()`, and roughly twenty fixture sites must set `Config.ClusterSecret` directly.
 - **A corrupt component blob must skip that component, not the entity.** Aborting the transfer turns a malformed blob into an entity-loss bug on the handoff path. The trade — an entity carrying a stale or absent component instead of a clean failure — is an authority-boundary decision and belongs in the roadmap entry, not only a code comment.
 
-### 6.9 Next phase — CE-005b Tier 2
+### 6.9 Completed phase — CE-005b Tier 2
 
-**Approximately 16 engineer-days**, against the ~12.5 the [CE-005b entry](#ce-005b--udp-security-and-gating--tier-1-done-tier-2-open) prices. The difference is not new scope: it is a crypto-primitives unit and a close-out unit that the 12.5 folds into its four chunks. They are priced here because the first one carries the phase's highest risk.
+**Approximately 16 engineer-days**, against the ~12.5 the [CE-005b entry](#ce-005b--udp-security-and-gating--done-tier-1-and-tier-2) prices. The difference is not new scope: it is a crypto-primitives unit and a close-out unit that the 12.5 folds into its four chunks. They are priced here because the first one carries the phase's highest risk.
 
-This phase closes the last open P0 item, so **[§7.1](#71-sequencing-rule)'s gate lifts when it ends** and the 104-day 2D/3D program may begin. Status is derived from source, not from this table.
+This phase closed the last open P0 item, so **[§7.1](#71-sequencing-rule)'s gate has lifted** and the 104-day 2D/3D program may begin. Status is derived from source, not from this table.
+
+**The next phase is [§7](#7-the-2d3d-and-multi-genre-program), starting at [phase 0](#75-phases)** — codec collapse and the byte-level wire goldens, which do not exist today. [§7.2](#72-prerequisite-gates) names CE-010 and CE-009 as hard prerequisites to schedule immediately; CE-009's header version byte landed here, but its schema fingerprint and two unguarded registries did not.
 
 #### 6.9.1 What it closes
 
 | Item | At phase end |
 | --- | --- |
 | CE-005b Tier 2 | **Closed** — authenticated handshake, AEAD framing, replay enforcement, C# parity, op-channel auth retired |
-| CE-009 | **Partially advanced** — the UDP header version byte only, bundled per §7.1. The schema fingerprint and the two unguarded registries (`registerClientInputType`, `RegisterBroadcastType`) remain open |
+| CE-009 | **Partially advanced** — the UDP header version byte only, bundled per §7.1. The schema fingerprint and the two unguarded registries (`registerClientInputType`, `RegisterBroadcastType`) remain open, and are a [§7.2](#72-prerequisite-gates) prerequisite |
 | CE-005b Tier 1 residual | **Closed as a side effect** — the pending-handshake table disappears, taking `sweepPendingLocked` and the 1024-spoofed-address denial window with it |
 
 #### 6.9.2 Design decisions, locked
@@ -499,10 +503,12 @@ Header cost: the unreliable header goes from 5 bytes to roughly 29 (explicit cou
 | 3 | Stateless HMAC handshake cookie replacing `pendingHandshake` | CE-005b | 1.5 | med | 1 | **done** `256e7ffd` |
 | 4 | AEAD framing across `udpproto` / `udp_server` / `udp_transport` / `udpclient`, replay enforcement, CE-009 version byte, corpus regeneration | CE-005b, CE-009 | 3.5 | **high** | 1, 2, 3 | **done** `03feb27d`, `2434f04a` |
 | 5 | C# parity and AEAD golden vectors in `cmd/csharp-golden` | CE-005b | 3 | med | 4 | **absorbed** into 1 and 4 — the parity is landed and golden-tested; only a review pass remains |
-| 6 | Retire op-channel auth in the C# client | CE-005b | 2.5 | med | 5 | **open** |
-| 7 | Close-out: status written back here, CHANGELOG, confirm §7.1 lifts | all | 0.5 | low | 1–6 | **open** |
+| 6 | Retire op-channel auth in the C# client | CE-005b | 2.5 | med | 5 | **done** `1edaf85b` |
+| 7 | Close-out: status written back here, CHANGELOG, confirm §7.1 lifts | all | 0.5 | low | 1–6 | **done** |
 
-Unit 4's close revealed that `just csharp-test` does not compile a generated SDK — it exercises the hand-written core only. `just csharp-compile-test` is the gate that emits one, and it was red for two commits before anyone ran it. Run it after ANY change to `csharp/Mmokit.Sdk.Core/` or to `cmd/sdkgen`.
+Unit 4's close revealed that `just csharp-test` does not compile a generated SDK — it exercises the hand-written core only. `just csharp-compile-test` is the gate that emits one, and it was red for two commits before anyone ran it. Run it after ANY change to `csharp/Mmokit.Sdk.Core/` or to `cmd/sdkgen`. Unit 6 found the same hole one level out: neither gate compiles a *consumer* of a generated SDK, so the C# smoke bot had not built since unit 4 changed `Connect`'s signature. `just csharp-smoke-build` closes that.
+
+**Unit 2 was marked done while half of it was missing, and unit 6 paid for it.** The row promised "a UDP analogue of `Gateway.onAuthSuccess`". The route and the key registry landed; the analogue did not. `handleConnConfirm` resolved a key to a `UDPKeyEntry` carrying `UserID`/`Username` and then read only `.Key` — those two fields had no production reader anywhere in the tree, so a UDP session was authenticated cryptographically and anonymous downstream: no `PlayerAssignment`, no spawn. Nothing failed, because the only client that could reach that path was still authenticating over the op channel afterwards. The lesson is the one this document already states for status: **derive it from source, not from the table.** A unit that adds a seam is not done until something consumes the seam.
 
 #### 6.9.4 Traps this phase must not fall into
 
@@ -549,7 +555,11 @@ every byte on the wire.
 
 **No work in this section begins until every P0 item in [section 6.3](#63-p0--must-close-before-the-2d3d-program-begins) is closed and verified against source.** This rule is recorded here so the ordering survives independently of whoever decided it.
 
-**The residual gate is CE-005b Tier 2.** The active phase in [§6.8](#68-next-phase--p0-closure) closes CE-002 and CE-006 and takes OSS-001 to Partial, but deliberately does not close CE-005b Tier 2 (~12.5 d). Four verified reasons: UDP is off in the shipped binary default while CE-002's decoder is reachable pre-auth on the WebSocket path that is on by default; AEAD does not help CE-002 at all, since the same reflection decoder runs on decrypted bytes; the locked cipher must be reversed first (ChaCha20-Poly1305 does not exist on `netstandard2.1`, the TFM Unity consumes); and CE-009 wants a version byte in the same 5-byte UDP header, so bundling them is one wire break and one golden regeneration instead of two. **This gate therefore does not lift at the end of §6.8** — it lifts one phase later.
+> **The gate has lifted.** All five P0 items — CE-002, CE-004, CE-005b, CE-006 and OSS-001 — are closed, CE-005b Tier 2 last, at unit 7 of [§6.9](#69-completed-phase--ce-005b-tier-2). **This section may begin.**
+>
+> The rule stays written down rather than deleted: it is the reason the ordering happened, and a future P0 would re-arm it.
+
+**The residual gate was CE-005b Tier 2, and it is now closed.** The P0 closure phase in [§6.8](#68-completed-phase--p0-closure) deliberately left it for the following phase, for four verified reasons: UDP was off in the shipped binary default while CE-002's decoder was reachable pre-auth on the WebSocket path that is on by default; AEAD did not help CE-002 at all, since the same reflection decoder runs on decrypted bytes; the locked cipher had to be reversed first (`netstandard2.1`, the TFM Unity consumes, was the wrong thing to have read — see [CE-005b](#ce-005b--udp-security-and-gating--done-tier-1-and-tier-2)); and CE-009 wanted a version byte in the same UDP header, so bundling them was one wire break and one golden regeneration instead of two. That phase is [§6.9](#69-completed-phase--ce-005b-tier-2), and it has ended.
 
 ### 7.2 Prerequisite gates
 
