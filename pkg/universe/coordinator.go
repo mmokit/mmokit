@@ -2408,7 +2408,7 @@ func (c *Process) createNode(cell CellID, spatialBucketSize float32, owningHost 
 	// Inject this process's cell geometry, the same way clusterClock is
 	// injected just below. NewStage defaults it, because a Stage built outside
 	// a Process (tests, benchmarks) still needs a working value.
-	base.baseCellSize = c.baseCellSize()
+	base.baseCellSize = c.CellSize()
 	base.spatialGrid = spatial.NewHashGrid(spatialBucketSize)
 	if len(fromSplit) > 0 && fromSplit[0] {
 		base.fromSplit = true
@@ -3685,7 +3685,7 @@ func (c *Process) reconcileCellNeighbors(newCell *Cell) {
 
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	baseSize := c.baseCellSize()
+	baseSize := c.CellSize()
 
 	// Build the universe of known cells: start with local c.Cells and
 	// merge in any remote cells from AllOwnedCells that aren't already covered.
@@ -3914,7 +3914,13 @@ func makeEntityCounter(w *ecs.World) func() (int, int, int, int) {
 }
 
 // baseCellSize returns the base cell size from the coordinator config.
-func (c *Process) baseCellSize() float32 {
+// CellSize returns the base cell width/height this process was configured with.
+//
+// Exported because four call sites hold a *Process and can never hold a *Stage:
+// they compute the world position that RESOLVES which cell applies, so there is
+// no stage to ask yet. Game code with a stage in hand should prefer
+// Stage.CellSize() — same value, no lookup.
+func (c *Process) CellSize() float32 {
 	if c.cfg.CellSize > 0 {
 		return c.cfg.CellSize
 	}

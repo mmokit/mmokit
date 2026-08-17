@@ -104,7 +104,7 @@ func (b *cellBridge) ensureBorderDispatcher() *BorderDispatcher {
 		return nil
 	}
 	viewers := make(map[string]*CellViewer, len(neighbors))
-	baseCellSize := b.coord.baseCellSize()
+	baseCellSize := b.coord.CellSize()
 	for destID, destCell := range neighbors {
 		destStr := string(destID)
 		if destCell == nil {
@@ -160,7 +160,7 @@ func (b *cellBridge) CellOwner(cell CellID) string {
 
 func (b *cellBridge) CellOwnerAtPos(worldX, worldY float32) string {
 	b.coord.mu.RLock()
-	baseCellSize := b.coord.baseCellSize()
+	baseCellSize := b.coord.CellSize()
 	// First check CellOwner — has full CellID structs including depth info
 	// for dynamic cells. In `all` preset mode this covers every cell in the
 	// grid; in remote-host mode it only covers LOCAL cells.

@@ -220,17 +220,9 @@ type viewerRelativePosBinding struct {
 // ViewerRelativePos returns a binding that computes world-absolute position:
 // worldX = pos.X + float32(cellCoord.CellX) * cellSize
 //
-// Cell size defaults to coords.CellSize. For dynamic cell partitioning where
-// cell sizes change at runtime, use ViewerRelativePosWithCellSize instead.
+// Cell size defaults to coords.CellSize.
 func ViewerRelativePos(posMap *ecs.Map1[component.Position], cellCoordMap *ecs.Map1[component.CellCoord]) ComponentBinding {
 	return &viewerRelativePosBinding{posMap: posMap, cellMap: cellCoordMap, cellSizeFn: func() float32 { return coords.CellSize }}
-}
-
-// ViewerRelativePosWithCellSize is like ViewerRelativePos but uses a dynamic
-// cell size from the provided callback. Use when cell sizes vary at runtime
-// (dynamic cell partitioning).
-func ViewerRelativePosWithCellSize(posMap *ecs.Map1[component.Position], cellCoordMap *ecs.Map1[component.CellCoord], cellSizeFn func() float32) ComponentBinding {
-	return &viewerRelativePosBinding{posMap: posMap, cellMap: cellCoordMap, cellSizeFn: cellSizeFn}
 }
 
 func (b *viewerRelativePosBinding) snapshotFields() []int { return []int{4, 4} }

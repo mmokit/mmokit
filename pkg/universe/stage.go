@@ -87,7 +87,7 @@ type Stage struct {
 	// ambient-lookup shape as the global, just spelled differently.
 	//
 	// NewStage defaults it; Process.createNode overwrites it from
-	// baseCellSize(), the same way it overwrites clusterClock.
+	// CellSize(), the same way it overwrites clusterClock.
 	baseCellSize float32
 
 	// clusterClock stamps outbound border-frame entries with the

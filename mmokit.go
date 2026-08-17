@@ -900,10 +900,6 @@ var (
 	// ViewerRelativePos computes world-absolute position relative to the viewer's cell.
 	ViewerRelativePos = system.ViewerRelativePos
 
-	// ViewerRelativePosWithCellSize is like ViewerRelativePos but uses a dynamic
-	// cell size callback. Use for dynamic cell partitioning.
-	ViewerRelativePosWithCellSize = system.ViewerRelativePosWithCellSize
-
 	// QVelocity quantizes a Velocity component's X/Y as two int16 fields.
 	QVelocity = system.QVelocity
 
@@ -925,9 +921,6 @@ var (
 
 	// NewPlayerViewerSource creates a ViewerSource backed by PlayerManager sessions.
 	NewPlayerViewerSource = system.NewPlayerViewerSource
-
-	// CellRelativePos converts a world position to cell-relative coordinates.
-	CellRelativePos = system.CellRelativePos
 
 	// AckReliable is the AckMode for TCP/WebSocket: baselines auto-advance on send.
 	AckReliable = replication.AckReliable

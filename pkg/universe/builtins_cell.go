@@ -284,7 +284,7 @@ func registerCellBuiltins(reg *cmdsys.Registry, coord *Process) error {
 			var rows []cellListRow
 			for _, cell := range cells {
 				nodeID := c.CellOwner[cell]
-				size := cell.Size(c.baseCellSize())
+				size := cell.Size(c.CellSize())
 				snap, _ := c.cellLoad(nodeID)
 				cd := "-"
 				if c.partState != nil {
@@ -349,8 +349,8 @@ func registerCellBuiltins(reg *cmdsys.Registry, coord *Process) error {
 				return nil, fmt.Errorf("cell %s does not exist", cell)
 			}
 			snap, _ := c.cellLoad(nodeID)
-			size := cell.Size(c.baseCellSize())
-			minX, minY, maxX, maxY := cell.WorldBounds(c.baseCellSize())
+			size := cell.Size(c.CellSize())
+			minX, minY, maxX, maxY := cell.WorldBounds(c.CellSize())
 			var sb strings.Builder
 			fmt.Fprintf(&sb, "  Cell:       %s\n", cell)
 			if nodeID != "" {

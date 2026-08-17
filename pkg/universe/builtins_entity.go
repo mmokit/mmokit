@@ -384,7 +384,7 @@ func entitySpawnHandler(coord *Process) cmdsys.HandlerFunc {
 					ex += float32(math.Cos(theta) * r)
 					ey += float32(math.Sin(theta) * r)
 				}
-				cs := coord.baseCellSize()
+				cs := coord.CellSize()
 				localX := ex - float32(cellX)*cs
 				localY := ey - float32(cellY)*cs
 				destCell.Stage.Spawn(

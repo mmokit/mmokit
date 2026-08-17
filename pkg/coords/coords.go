@@ -15,7 +15,7 @@ const DefaultCellSize float32 = 8192.0
 // DEPRECATED, and being removed by CE-010. A process's cell geometry is a
 // property of that process, and a mutable package global cannot express that:
 // two Processes in one binary silently share it, last writer wins, while
-// (*Process).baseCellSize() and Stage.CellSize() give each the right answer.
+// (*Process).CellSize() and Stage.CellSize() give each the right answer.
 // Every remaining reader of this var is a site still to convert. Do not add
 // new ones.
 var CellSize float32 = DefaultCellSize
