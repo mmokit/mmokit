@@ -475,7 +475,7 @@ Each of these was found by verifying a plausible plan against source and finding
 
 This phase closed the last open P0 item, so **[§7.1](#71-sequencing-rule)'s gate has lifted** and the 104-day 2D/3D program may begin. Status is derived from source, not from this table.
 
-**The next phase is [§7](#7-the-2d3d-and-multi-genre-program), starting at [phase 0](#75-phases)** — codec collapse and extending the byte-level wire goldens to the frame codecs. [§7.2](#72-prerequisite-gates) names CE-010 and CE-009 as hard prerequisites to schedule immediately; CE-009's header version byte landed here, but its schema fingerprint and two unguarded registries did not.
+**The next phase is [§6.10](#610-next-phase--prerequisites-and-the-safety-net)** — the CE-009/CE-010 prerequisites and phase 0's safety net, in the order source says they depend on each other rather than the order [§7.2](#72-prerequisite-gates) originally implied. CE-009's header version byte landed here; its schema fingerprint and the unguarded registries did not.
 
 #### 6.9.1 What it closes
 
@@ -549,6 +549,39 @@ every byte on the wire.
 
 **Do not land this format one file at a time.** The blast radius is roughly 4,000 lines across thirteen files that must change together — `udpproto`, `udp_server`, `udp_transport`, `udpclient` and their tests, `cmd/csharp-golden`, and the C# `UdpProto`/`UdpTransport` — because a partially-migrated tree cannot complete a handshake against itself. The unit is sized at 3.5 days for that reason, and a first attempt that began with `udpproto` alone left the repository unbuildable in nine files, which is the evidence for this instruction rather than a prediction of it.
 
+### 6.10 Next phase — prerequisites and the safety net
+
+**Approximately 20 engineer-days.** This is the work between the P0 gate lifting and [§7](#7-the-2d3d-and-multi-genre-program)'s dimension work proper. It exists as its own phase because the dependency order inside it is not the one [§7.2](#72-prerequisite-gates) originally implied, and getting that order wrong is expensive rather than merely slow.
+
+#### 6.10.1 Why the order changed
+
+§7.2 named CE-010 and CE-009 as peers to schedule "immediately after P0", with §7.5 phase 0 after them. Verified against source, the dependencies run differently in two places:
+
+- **The goldens come before the refactors, not after.** They are the safety net for CE-010 part B *and* for the codec collapse, both of which change bytes. Building the net after the fall is not a schedule preference.
+- **CE-009's fingerprint is a dependent of CE-010, not its peer.** A schema fingerprint hashes what a process's schema *is*; CE-010 part B is what makes a schema process-scoped rather than binary-scoped. Fingerprinting first means fingerprinting the wrong thing and doing it twice.
+
+One correction of substance sits underneath this. **A version byte cannot detect the 2D/3D mismatch CE-009 exists to prevent, and neither can type IDs.** `TypeIDOf` is `fnv32a(reflect.Type.String())`, so a 2D and a 3D `component.Position` hash identically — guaranteed by [§7.3](#73-architecture)'s decision to keep one type set across profiles. The mismatch lives inside the message body, unversioned on both transports. The fingerprint must be a **structural hash over field shapes**; the material already exists in `EntitySchema{Bindings, Layout, VarTail}` and the recursive `BroadcastFieldSchema`.
+
+#### 6.10.2 Units
+
+| # | Unit | Item | Days | Risk | After | Status |
+| --- | --- | ---: | --- | --- | --- | --- |
+| 1 | Registry and framing hardening: panic on duplicate client-input IDs, make broadcast collisions detectable at all, and reconcile the two transports' unknown-channel-byte fallback | CE-009 | 1 | low | — | **open** |
+| 2 | Extend the byte-level wire goldens: TS delta assertions first, then the fixed-offset frame codecs, nested struct / slice-of-struct, and a snapshot from real bindings | §7 phase 0 | 4 | med | 1 | **open** |
+| 3 | CE-010 part A — cell geometry becomes injected: delete `coords.CellSize` and its setter, converge ~75 read sites on a process-owned accessor | CE-010 | 5 | med | — | **open** |
+| 4 | CE-010 part B — the registries, the five package-global hook structs, and the three package-level `sync.Once` guards become process-owned | CE-010 | 6 | **high** | 2, 3 | **open** |
+| 5 | CE-009 — structural schema fingerprint, carried at connection setup on both transports, with rejection semantics | CE-009 | 4 | med | 4 | **open** |
+
+Unit 1 is deliberately first and deliberately tiny: it is the only unit that changes client framing behaviour, and it must land before anything else adds a byte to a client frame.
+
+#### 6.10.3 Traps
+
+- **The unknown-channel-byte fallback already disagrees between transports.** `pkg/net/conn.go` treats an unrecognised leading byte as a channel-`0x00` event with the byte **stripped**; `pkg/net/udp_transport.go` treats it as one with the byte **kept**. The same wire byte produces two different payloads depending on transport. Reconcile to a single clean reject — do not preserve either behaviour for compatibility, because nothing can be relying on both.
+- **The golden coverage is Go↔C#, not three-way.** The Unity delta decoder is byte-pinned to Go; the browser's is not, and the browser is the reference game's only client. Unit 2 fixes the asymmetry in the direction of the risk, not the direction of the existing coverage.
+- **`buildTaggedFields` cannot simply move onto the reflection codec.** The reflection codec is a self-describing struct walker; the binding walker must emit a *fixed* layout consumed by `quantize.DeltaEncoder`'s offset table. Either teach the reflection codec fixed-width layouts or unify only the walker and keep two codecs. This is an architecture decision §7.5 phase 0 currently assumes away, and it belongs before day one of the collapse, not during it.
+- **`--dump-schema` is binary-scoped, not process-scoped.** Unit 4 changes what it emits, which puts SDK regeneration and both golden gates inside its blast radius. That is the reason unit 2 precedes it.
+- **One `sync.Once` fires from `init()`, before any Process exists.** Process-owned registration cannot simply reuse the existing guards.
+
 ---
 
 ## 7. The 2D/3D and multi-genre program
@@ -567,10 +600,12 @@ every byte on the wire.
 
 ### 7.2 Prerequisite gates
 
-Two P1 items are hard prerequisites and should be scheduled immediately after P0:
+Two P1 items are hard prerequisites:
 
 - **CE-010** — a per-process dimension profile requires the process-owned immutable registries and injected cell geometry this item describes. `coords.CellSize` cannot remain a mutable package global.
-- **CE-009** — without version and fingerprint negotiation, a 2D client meeting a 3D server decodes valid bytes into the wrong shape rather than being rejected.
+- **CE-009** — without a schema fingerprint, a 2D client meeting a 3D server decodes valid bytes into the wrong shape rather than being rejected. Note that a protocol *version* does not achieve this: one type set across both profiles means identical type IDs and identical hashes, so only a structural hash over field shapes separates them.
+
+**They are not peers, and phase 0's safety net is not last.** The verified ordering — goldens, then CE-010 part A, then part B, then the fingerprint — is scheduled as [§6.10](#610-next-phase--prerequisites-and-the-safety-net), which supersedes the "schedule both immediately after P0" instruction this section used to carry.
 
 ### 7.3 Architecture
 
