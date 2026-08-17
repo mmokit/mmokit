@@ -32,6 +32,12 @@ func (b csharpBackend) CoreFiles() []CoreFile {
 		"ReconciliationGate.cs",
 		"ReflectCodec.cs",
 		"UdpProto.cs",
+		// The AEAD layer the UDP transport depends on (CE-005b Tier 2). These
+		// are hand-written core, not generated, and the transport does not
+		// compile without them.
+		"ChaCha20Poly1305.cs",
+		"UdpCrypto.cs",
+		"UdpSession.cs",
 		"UdpTransport.cs",
 		"UdpTransport.Socket.cs",
 	}

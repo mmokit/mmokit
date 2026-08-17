@@ -132,8 +132,8 @@ func TestCsharpBackend_OutputFiles_SkipsWhenNoEntities(t *testing.T) {
 
 func TestCsharpBackend_CoreFiles(t *testing.T) {
 	core := csharpBackend{coreDir: "x/core"}.CoreFiles()
-	if len(core) != 11 {
-		t.Fatalf("CoreFiles len = %d, want 11", len(core))
+	if len(core) != 14 {
+		t.Fatalf("CoreFiles len = %d, want 14", len(core))
 	}
 	// Dst basenames are what the SDK compiles; Src is threaded from coreDir.
 	if core[0].Dst != "DeltaDecoderCore.cs" || core[0].Src != "x/core/DeltaDecoderCore.cs" {
@@ -142,7 +142,11 @@ func TestCsharpBackend_CoreFiles(t *testing.T) {
 	// ReflectCodec.cs and ReconciliationGate.cs must be among the copied
 	// runtime files — the gate is the hardest, most race-prone part of client
 	// reconciliation and a Unity client must not have to reinvent it.
-	for _, want := range []string{"ReflectCodec.cs", "ReconciliationGate.cs"} {
+	// The AEAD core must ship too: a generated UdpTransport does not compile
+	// without UdpSession, and csharp-test alone would not catch that because it
+	// exercises the hand-written core rather than a generated SDK.
+	for _, want := range []string{"ReflectCodec.cs", "ReconciliationGate.cs",
+		"ChaCha20Poly1305.cs", "UdpCrypto.cs", "UdpSession.cs"} {
 		var found bool
 		for _, c := range core {
 			if c.Dst == want {
@@ -249,8 +253,8 @@ func TestCsharpBackend_Client(t *testing.T) {
 	out := csharpBackend{namespace: "Mmokit.Sdk"}.genClient(sampleEntitySchema())
 	for _, want := range []string{
 		"public sealed class DemoClient",
-		"public void Connect(string host, int port, int handshakeTimeoutMs = 5000)",
-		"_transport = UdpTransport.Connect(host, port, handshakeTimeoutMs);",
+		"public void Connect(string host, int port, ulong udpKeyId, byte[] udpKey, int handshakeTimeoutMs = 5000)",
+		"_transport = UdpTransport.Connect(host, port, udpKeyId, udpKey, handshakeTimeoutMs);",
 		"public DemoDeltaDecoder Decoder { get; } = new();",
 		"public TypedDispatcher TypedEvents { get; } = new();",
 		"public async Task<AuthLoginResponse> AuthLogin(AuthLoginRequest req)",

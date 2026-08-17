@@ -84,8 +84,12 @@ func (b csharpBackend) genClient(schema ProtocolSchema) string {
 
 	// Connect / Disconnect.
 	sb.WriteString("        /// Connect over UDP and start the receive pump.\n")
-	sb.WriteString("        public void Connect(string host, int port, int handshakeTimeoutMs = 5000)\n        {\n")
-	sb.WriteString("            _transport = UdpTransport.Connect(host, port, handshakeTimeoutMs);\n")
+	sb.WriteString("        ///\n")
+	sb.WriteString("        /// udpKeyId and udpKey come from POST /auth/udp-key over HTTPS: authenticate\n")
+	sb.WriteString("        /// there first, then open the UDP session. The transport authenticates every\n")
+	sb.WriteString("        /// packet under that key, so there is no unauthenticated connect path.\n")
+	sb.WriteString("        public void Connect(string host, int port, ulong udpKeyId, byte[] udpKey, int handshakeTimeoutMs = 5000)\n        {\n")
+	sb.WriteString("            _transport = UdpTransport.Connect(host, port, udpKeyId, udpKey, handshakeTimeoutMs);\n")
 	sb.WriteString("            _pumpCts = new CancellationTokenSource();\n")
 	sb.WriteString("            var t = _transport;\n")
 	sb.WriteString("            var ct = _pumpCts.Token;\n")
