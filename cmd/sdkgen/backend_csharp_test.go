@@ -132,8 +132,8 @@ func TestCsharpBackend_OutputFiles_SkipsWhenNoEntities(t *testing.T) {
 
 func TestCsharpBackend_CoreFiles(t *testing.T) {
 	core := csharpBackend{coreDir: "x/core"}.CoreFiles()
-	if len(core) != 14 {
-		t.Fatalf("CoreFiles len = %d, want 14", len(core))
+	if len(core) != 15 {
+		t.Fatalf("CoreFiles len = %d, want 15", len(core))
 	}
 	// Dst basenames are what the SDK compiles; Src is threaded from coreDir.
 	if core[0].Dst != "DeltaDecoderCore.cs" || core[0].Src != "x/core/DeltaDecoderCore.cs" {
@@ -145,8 +145,11 @@ func TestCsharpBackend_CoreFiles(t *testing.T) {
 	// The AEAD core must ship too: a generated UdpTransport does not compile
 	// without UdpSession, and csharp-test alone would not catch that because it
 	// exercises the hand-written core rather than a generated SDK.
+	// MmokitAuth.cs is in that list for the same reason: the generated client's
+	// ConnectAsync draws its UDP key through it, so a generated SDK without it
+	// does not compile.
 	for _, want := range []string{"ReflectCodec.cs", "ReconciliationGate.cs",
-		"ChaCha20Poly1305.cs", "UdpCrypto.cs", "UdpSession.cs"} {
+		"ChaCha20Poly1305.cs", "UdpCrypto.cs", "UdpSession.cs", "MmokitAuth.cs"} {
 		var found bool
 		for _, c := range core {
 			if c.Dst == want {
@@ -253,6 +256,14 @@ func TestCsharpBackend_Client(t *testing.T) {
 	out := csharpBackend{namespace: "Mmokit.Sdk"}.genClient(sampleEntitySchema())
 	for _, want := range []string{
 		"public sealed class DemoClient",
+		// ConnectAsync is unit 6's deliverable: it is what makes the generated
+		// client authenticate over HTTPS and draw a UDP key before it opens a
+		// socket, replacing the retired op-channel auth flow.
+		"public async Task ConnectAsync(string baseUrl, string host, int port, string username, string password,",
+		"bool registerIfMissing = false, string? email = null, int handshakeTimeoutMs = 5000,",
+		"UdpKeyCredential cred = await MmokitAuth.FetchUdpKeyAsync(",
+		"Connect(host, port, cred.KeyId, cred.Key, handshakeTimeoutMs);",
+		// The key-in-hand overload stays, for apps that run their own login.
 		"public void Connect(string host, int port, ulong udpKeyId, byte[] udpKey, int handshakeTimeoutMs = 5000)",
 		"_transport = UdpTransport.Connect(host, port, udpKeyId, udpKey, handshakeTimeoutMs);",
 		"public DemoDeltaDecoder Decoder { get; } = new();",

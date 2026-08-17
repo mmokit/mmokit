@@ -64,11 +64,14 @@ run: build
 # We still rebuild the admin SPA — the game client uses HMR but the admin
 # dashboard is served from the embedded go:embed bundle.
 #
-# UDP is off in the SERVER default (CE-005b Tier 1) and deliberately stays
-# that way — packets are unauthenticated and unencrypted. Enabling it here is
-# an explicit local-dev choice on loopback, and does not change the shipped
-# default. Override with a trailing `--udp-listen=:9001`, or disable with
-# `--udp-listen=` (std flag: last occurrence wins). `just csharp-smoke` needs it.
+# UDP is off in the SERVER default and deliberately stays that way — it is
+# opt-in, not unsafe: since CE-005b Tier 2 every packet is AEAD-sealed under a
+# key the client draws over HTTPS, and a session is bound to a user before it
+# carries a byte. Enabling it here is a local-dev convenience and does not
+# change the shipped default. Override with a trailing `--udp-listen=:9001`, or
+# disable with `--udp-listen=` (std flag: last occurrence wins).
+# `just csharp-smoke` needs it, and also needs --dev-insecure-cookie below so
+# /auth/udp-key will issue a key over plain HTTP.
 #
 # build Go + run with vite dev server (HMR on :5173, Go backend on :8080)
 dev *ARGS: admin-build build-go

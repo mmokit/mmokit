@@ -129,7 +129,7 @@ Run the smallest relevant checks first, then broaden in proportion to the change
 | Protobuf | `just proto`, inspect generated diff, then affected Go checks |
 | Entity/event/input/op schema | Regenerate each affected SDK, inspect the diff, then run the corresponding frontend checks |
 | Persistence, migrations, or DB services | Standard Go checks plus `just db-up && just test-pg`; the pgtest packages intentionally run serially and mutate a shared test DB |
-| C# core/generator | `just csharp-test`; generator changes also run `just csharp-compile-test`; regenerate goldens when wire bytes intentionally change |
+| C# core/generator | `just csharp-test`; generator changes also run `just csharp-compile-test`, and changes to `UdpTransport.Connect`/`MmokitAuth`/the generated client also run `just csharp-smoke-build` (the only gate that compiles a *consumer* of a generated SDK — the smoke bot sat broken for three commits because neither other gate builds it); regenerate goldens when wire bytes intentionally change |
 | Markdown | Check commands/links and run `markdownlint-cli2 <changed files>` when available |
 
 If Bun dependencies are absent or changed, run `bun install --frozen-lockfile` in the relevant frontend first. Full SDK generation/builds can also require PostgreSQL and dependency network access. Report any check not run and the missing prerequisite; do not claim a full suite passed based only on a targeted test.

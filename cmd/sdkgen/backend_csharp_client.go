@@ -83,10 +83,40 @@ func (b csharpBackend) genClient(schema ProtocolSchema) string {
 	sb.WriteString("\n")
 
 	// Connect / Disconnect.
-	sb.WriteString("        /// Connect over UDP and start the receive pump.\n")
+	//
+	// ConnectAsync is the whole client handshake and the entry point callers
+	// should reach for: authenticate over HTTPS, draw a UDP session key, then
+	// open the socket. Connect stays public for applications that run their
+	// own login and already hold a key.
+	sb.WriteString("        /// Authenticate over HTTPS and open an authenticated UDP session.\n")
 	sb.WriteString("        ///\n")
-	sb.WriteString("        /// udpKeyId and udpKey come from POST /auth/udp-key over HTTPS: authenticate\n")
-	sb.WriteString("        /// there first, then open the UDP session. The transport authenticates every\n")
+	sb.WriteString("        /// baseUrl is the gateway's HTTP origin (e.g. \"https://game.example:8080\").\n")
+	sb.WriteString("        /// This logs in, draws a short-lived key from POST /auth/udp-key, and hands\n")
+	sb.WriteString("        /// it to Connect. The server binds the player from that key, so the session\n")
+	sb.WriteString("        /// is authenticated from its first datagram and there is no post-connect\n")
+	sb.WriteString("        /// auth step.\n")
+	sb.WriteString("        ///\n")
+	sb.WriteString("        /// registerIfMissing defaults to false: connecting does not create an\n")
+	sb.WriteString("        /// account as a side effect. Pass true for a bot or demo that owns its own\n")
+	sb.WriteString("        /// account namespace.\n")
+	sb.WriteString("        ///\n")
+	sb.WriteString("        /// Over plain http:// the server issues a key only when started with\n")
+	sb.WriteString("        /// --dev-insecure-cookie; otherwise it answers 403 rather than put a bearer\n")
+	sb.WriteString("        /// secret on a plaintext listener.\n")
+	sb.WriteString("        public async Task ConnectAsync(string baseUrl, string host, int port, string username, string password,\n")
+	sb.WriteString("            bool registerIfMissing = false, string? email = null, int handshakeTimeoutMs = 5000,\n")
+	sb.WriteString("            CancellationToken cancellationToken = default)\n        {\n")
+	sb.WriteString("            UdpKeyCredential cred = await MmokitAuth.FetchUdpKeyAsync(\n")
+	sb.WriteString("                baseUrl, username, password, registerIfMissing, email,\n")
+	sb.WriteString("                MmokitAuth.DefaultCookieName, cancellationToken).ConfigureAwait(false);\n")
+	sb.WriteString("            Connect(host, port, cred.KeyId, cred.Key, handshakeTimeoutMs);\n")
+	sb.WriteString("        }\n\n")
+
+	sb.WriteString("        /// Open an authenticated UDP session with a key you already hold, and\n")
+	sb.WriteString("        /// start the receive pump.\n")
+	sb.WriteString("        ///\n")
+	sb.WriteString("        /// udpKeyId and udpKey come from POST /auth/udp-key over HTTPS — see\n")
+	sb.WriteString("        /// ConnectAsync, which does that for you. The transport authenticates every\n")
 	sb.WriteString("        /// packet under that key, so there is no unauthenticated connect path.\n")
 	sb.WriteString("        public void Connect(string host, int port, ulong udpKeyId, byte[] udpKey, int handshakeTimeoutMs = 5000)\n        {\n")
 	sb.WriteString("            _transport = UdpTransport.Connect(host, port, udpKeyId, udpKey, handshakeTimeoutMs);\n")

@@ -103,11 +103,12 @@ probe-json duration="30" host="localhost:8080":
     cd {{root}} && bun run diagnostics/probe.ts --host={{host}} --duration={{duration}} --json
 
 # build + run server & the vite dev server for this example's web client
-# UDP is off in the SERVER default (CE-005b Tier 1) and deliberately stays
-# that way — packets are unauthenticated and unencrypted. Enabling it here is
-# an explicit local-dev choice on loopback, and does not change the shipped
-# default. Override with a trailing `--udp-listen=:9001`, or disable with
-# `--udp-listen=` (std flag: last occurrence wins).
+# UDP is off in the SERVER default and deliberately stays that way — it is
+# opt-in, not unsafe: since CE-005b Tier 2 every packet is AEAD-sealed under a
+# key the client draws over HTTPS, and a session is bound to a user before it
+# carries a byte. Enabling it here is a local-dev convenience and does not
+# change the shipped default. Override with a trailing `--udp-listen=:9001`, or
+# disable with `--udp-listen=` (std flag: last occurrence wins).
 #
 # The bind is the WILDCARD ':9000' on purpose: a wildcard bind opens an IPv6
 # socket that accepts IPv4 peers 4-in-6, while '127.0.0.1:9000' rejects them.

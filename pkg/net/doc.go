@@ -7,6 +7,10 @@
 // typed request/response operations. This package neither encodes nor
 // interprets their bodies.
 //
-// The UDP transport is experimental and is off by default. It is neither
-// authenticated nor encrypted; see SECURITY.md before enabling it.
+// The UDP transport is off by default and opt-in via --udp-listen. Since
+// CE-005b Tier 2 it is authenticated and encrypted: every packet is sealed with
+// ChaCha20-Poly1305 under per-direction keys derived from a session key the
+// client draws over HTTPS from POST /auth/udp-key, and the session is bound to
+// that key's user before it carries a byte. See README.md for the packet
+// layout and SECURITY.md for the residual limitations.
 package net

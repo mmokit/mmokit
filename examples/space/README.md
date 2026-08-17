@@ -97,7 +97,7 @@ Universal flags are defined by `mmokit.Config.BindFlags`. Common production-spac
 | `--control-listen` | Coordinator MeshControl bind; default `:9100` (an all-interfaces bind, not loopback) |
 | `--cluster-secret` | Shared secret authenticating mesh peers; env `MMO_CLUSTER_SECRET`. Auto-generated for self-contained role sets (`all`, coordinator+host) and required on **every** process of a multi-process cluster |
 | `--port` | Gateway HTTP port for `/ws`, `/auth`, and related routes; default `8080` |
-| `--udp-listen` | Gateway UDP bind; EXPERIMENTAL and off by default, pass `:9000` to enable |
+| `--udp-listen` | Gateway UDP bind; off by default, pass `:9000` to enable. Packets are AEAD-sealed under a session key the client draws from `POST /auth/udp-key`, so enabling it also means terminating TLS on the gateway's HTTP listener |
 | `--admin-listen` | Coordinator admin/metrics bind; default `:9101`, empty to disable |
 | `--world-dir` | Directory containing tracked world-manifest JSON; default `world` |
 | `--cors-origins` | Browser origins allowed for credentialed HTTP and, by fallback, WebSocket access |

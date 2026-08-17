@@ -33,30 +33,36 @@ These are known, tracked, and unfixed. They are listed here so that nobody
 discovers them by way of an incident, and so that a report describing one of
 them is recognisable as a duplicate rather than news.
 
-### 1. The UDP client transport is experimental and unauthenticated
+### 1. The UDP client transport is off by default and needs an HTTPS origin
 
-UDP framing is neither authenticated nor encrypted. An on-path attacker can
-read and forge client traffic.
+**This limitation has been substantially closed.** CE-005b Tier 2 landed
+cryptographic connection identity: every UDP packet is sealed with
+ChaCha20-Poly1305 under per-direction keys, the handshake is stateless and
+authenticated, and a session is bound to a user before it carries a byte. On-path
+reading and forgery are closed. What remains here is deployment guidance.
 
-It is **off in the shipped binary default**: `--udp-listen` defaults to the
-empty string in [`pkg/universe/bootstrap.go`](pkg/universe/bootstrap.go), and
-enabling it logs an explicit experimental warning that escalates for a
-non-loopback bind.
+It is **off in the shipped binary default**: `--udp-listen` defaults to the empty
+string in [`pkg/universe/bootstrap.go`](pkg/universe/bootstrap.go). This is now
+an opt-in choice about exposing a second port, not a warning about an unsafe
+transport.
 
-It is **not off in local development**. Both `just dev` and `just distributed`
-in `examples/space/justfile` pass `--udp-listen=:9000`, which is a **wildcard
-bind**, not loopback. Every developer process therefore carries the
-exposure. This is deliberate — the transport needs exercising — but do not
-assume a dev box is closed just because the shipped default is.
+**The UDP transport's security depends on the HTTPS listener that issues its
+keys.** Clients draw a session key from `POST /auth/udp-key`, so that endpoint
+is the root of the transport's trust. It refuses to serve over a plaintext
+listener unless `--dev-insecure-cookie` is set, precisely because the response
+body is a bearer secret. **Do not run `--dev-insecure-cookie` outside local
+development**, and terminate TLS in front of the gateway in any deployment where
+UDP is enabled — a plaintext key handout gives an on-path attacker everything the
+AEAD was protecting.
 
-Address-identity hardening has landed (CE-005b Tier 1): a UDP token is no
-longer a bearer credential, since every data packet must arrive from the
-address its session is bound to, and an unauthenticated connection request
-allocates nothing until return routability is proven. That closes token replay
-from a different address. It does **not** close on-path reading or forgery.
+Both `just dev` and `just distributed` in the example justfiles pass
+`--udp-listen=:9000` **and** `--dev-insecure-cookie`, on a wildcard bind. That is
+a deliberate local-development posture, not a template for deployment.
 
-Cryptographic connection identity — an authenticated handshake and AEAD
-framing — is CE-005b Tier 2 and is open.
+Residual, unclosed: keys are multi-use for their five-minute TTL, so an attacker
+who obtains one can open a session as that user until it expires. Source-address
+binding from Tier 1 remains as defence in depth but is not a substitute for
+protecting the key in transit.
 
 ### 2. Mesh peers authenticate with one shared secret
 

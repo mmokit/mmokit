@@ -7,6 +7,45 @@ of [`README.md`](README.md#status) for what that means for API and wire compatib
 
 ### Breaking
 
+- **The UDP wire format is now version 2, and UDP clients must authenticate
+  over HTTPS before they connect.** Every UDP packet changes shape, so a v1
+  client cannot talk to a v2 server or the reverse: **redeploy both halves
+  together.** WebSocket clients are entirely unaffected.
+
+  What changed on the wire:
+
+  - Data packets carry an explicit AEAD counter and a ChaCha20-Poly1305 sealed
+    body. Cleartext headers are authenticated as additional data. ACKs and
+    disconnects are sealed too — in v1 anyone who learned a token could retire
+    a frame the peer never received, or tear the session down.
+  - A version byte follows the type byte on **every** packet, not just the
+    handshake ([CE-009](docs/roadmap.md)), so a peer disagreement is rejected at
+    the first datagram instead of being misparsed into the wrong shape.
+  - A new `ConnConfirm` (`0x06`) step carries the key ID and echoes a stateless
+    HMAC cookie. The server now retains nothing for a peer that has not proven
+    return routability, which removes the pending-handshake table and the
+    spoofed-address denial window it exposed.
+  - The 32-bit token stops being a credential and becomes a session index. The
+    AEAD tag is the credential.
+
+  What changed for clients:
+
+  - Clients authenticate over HTTPS and draw a short-lived session key from the
+    new `POST /auth/udp-key` before opening a socket. `UdpTransport.Connect` and
+    `udpclient.Dial` therefore take a key ID and key; there is no
+    unauthenticated connect path.
+  - **Op-channel authentication is retired in the C# client.** The generated
+    client gained `ConnectAsync(baseUrl, host, port, username, password)`, which
+    performs the HTTPS auth, draws the key, and completes the handshake. The
+    server binds the player from that key, so a connected session is already an
+    authenticated one and the old post-connect `AuthLogin`/`AuthRegister` round
+    trip is gone. Browser clients already authenticated over HTTPS and are
+    unchanged.
+
+  **Client wire type IDs are unchanged.** UDP framing is not the reflection
+  codec; verified by byte-diffing the `--dump-schema` output of all three
+  examples across the change.
+
 - **The facade moved to the module root.** Games now import
   `github.com/mmokit/mmokit` instead of `github.com/mmokit/mmokit/pkg/mmokit`.
   Update the import path; no other change is required, because the package is

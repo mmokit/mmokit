@@ -89,7 +89,7 @@ func (c *Config) BindFlags() {
 		"MeshControl listen addr (coordinator role)",
 		":9100", &c.ControlListen)
 	stringFlag("udp-listen",
-		"client UDP game protocol listen addr (gateway role; EXPERIMENTAL — framing is unauthenticated and unencrypted; empty/off by default, pass e.g. :9000 to enable)",
+		"client UDP game protocol listen addr (gateway role; AEAD-authenticated per packet under a key the client draws from POST /auth/udp-key; empty/off by default, pass e.g. :9000 to enable)",
 		"", &c.UDPListen)
 	stringFlag("admin-listen",
 		"admin HTTP listen addr for /events, /commands, /metrics, /admin/* (default :9101, only binds on RoleCoordinator processes; pass empty to disable)",
@@ -336,11 +336,12 @@ func (c *Process) startUDPListener(ctx context.Context) {
 		c.Log.Log(CatMeshCell, "udp: listener bind error on %s: %v", c.cfg.UDPListen, err)
 		return
 	}
-	if isLoopbackBind(c.cfg.UDPListen) {
-		c.Log.Log(CatMeshCell, "udp: WARNING experimental transport enabled on %s — packets are unauthenticated and unencrypted (sessions are source-address bound only)", c.cfg.UDPListen)
-	} else {
-		c.Log.Log(CatMeshCell, "udp: WARNING experimental transport enabled on NON-LOOPBACK address %s — packets are unauthenticated and unencrypted (sessions are source-address bound only); an on-path attacker can read and forge client traffic. Do not expose to untrusted networks until UDP secure framing lands", c.cfg.UDPListen)
-	}
+	// No exposure warning here any more. Until CE-005b Tier 2 every datagram
+	// was cleartext and forgeable, and a non-loopback bind genuinely was a
+	// hazard worth shouting about. Now every packet is sealed under a key
+	// drawn over HTTPS and bound to a user, so the old warning would be
+	// describing a transport that no longer exists — and a false warning
+	// teaches operators to ignore the real ones.
 	// Apply the configured ingress limits and keep the reference. Dropping
 	// the *UDPServer on the floor here is what left SetWireLimits and every
 	// drop-counter accessor without a production caller.
@@ -348,10 +349,65 @@ func (c *Process) startUDPListener(ctx context.Context) {
 	// Without this the listener cannot resolve the key IDs clients present in
 	// ConnConfirm, and refuses every handshake.
 	udpServer.SetKeyRegistry(c.udpKeyRegistry())
+	// And without this the session would be encrypted but anonymous: the key
+	// vouches for a user, but nothing downstream would learn who, so no
+	// PlayerAssignment would ever be dispatched and the client would sit in a
+	// working session with no entity. This is the UDP counterpart of the
+	// cookie read in Gateway.onWSUpgrade — both turn an HTTPS-established
+	// identity into a bound player session.
+	udpServer.SetOnAuthenticated(c.bindUDPSession)
 	c.udpServer.Store(udpServer)
 	c.Log.Log(CatMeshCell, "udp: listening on %s (roles=%s, maxFrameBytes=%d)",
 		c.cfg.UDPListen, c.roles, c.cfg.WireLimits.MaxFrameBytes)
 	go udpServer.Run(ctx)
+}
+
+// bindUDPSession binds a freshly authenticated UDP session to the player it
+// belongs to. Called once per session by the UDP listener, with the identity
+// the presented key vouches for.
+//
+// The session token is deliberately empty. The UDP key registry holds a 32-byte
+// transport secret per entry; storing the session cookie alongside it would
+// raise the value of a registry compromise from "forge this client's UDP
+// traffic until the key expires" to "hold the account". Nothing downstream
+// reads PlayerAssignment.SessionToken — it is carried across the mesh and never
+// consulted — and the AnonymousAuth path has always passed an empty one, so
+// this costs nothing that is currently used.
+func (c *Process) bindUDPSession(connID uint32, userID, username string) {
+	if c.gateway == nil {
+		c.Log.Log(CatNetConn, "udp: authenticated conn=%d user=%s but this process has no gateway to bind it to", connID, username)
+		return
+	}
+	uid, err := uuid.Parse(userID)
+	if err != nil {
+		// Only reachable if something issued a key with a malformed user ID;
+		// handleUDPKeyIssue writes resolved.UserID.String(). Refuse rather
+		// than invent an identity — a random UUID here would spawn a fresh
+		// character for a returning player.
+		c.Log.Log(CatNetConn, "udp: authenticated conn=%d user=%s has unparseable user_id %q: %v", connID, username, userID, err)
+		return
+	}
+	// This runs on its own goroutine, so the connection it names can already be
+	// gone: a client may send an authenticated Disconnect straight after its
+	// ConnConfirm, and the listener processes both before this ever reaches the
+	// gateway. Binding a dead connection would spawn a player nothing owns and
+	// stamp an activeUsers entry that no disconnect will clear — locking the
+	// account out of its own next login until the entry ages out.
+	if c.ConnMgr.Get(connID) == nil {
+		c.Log.Log(CatNetConn, "udp: conn=%d user=%s disconnected before its identity bound; not assigning a player", connID, username)
+		return
+	}
+	c.gateway.onAuthSuccess(connID, uid, username, "", 0)
+
+	// Re-check after dispatch and undo if the connection went away while the
+	// spawn was being resolved — resolveSpawn is an RPC on a standalone
+	// gateway, so that window is milliseconds, not nanoseconds. handleDisconnect
+	// has already run by then and will not run again, so this is the only place
+	// the orphan can be cleaned up.
+	if c.ConnMgr.Get(connID) == nil {
+		c.Log.Log(CatNetConn, "udp: conn=%d user=%s disconnected mid-assignment; tearing the session back down", connID, username)
+		c.gateway.handleDisconnect(pkgnet.PlayerEvent{ConnID: connID, Disconnect: true})
+	}
 }
 
 // UDPServerStats is a snapshot of the client UDP listener's refusal counters.

@@ -3,6 +3,7 @@ package net
 import (
 	"context"
 	"net"
+	"sync"
 	"testing"
 	"time"
 
@@ -453,4 +454,146 @@ func TestUDPServer_ConnectionCapEnforced(t *testing.T) {
 	if got := srv.sessionCount(); got != 1 {
 		t.Fatalf("sessions exceeded cap: %d, want 1", got)
 	}
+}
+
+// authBinding records what SetOnAuthenticated hands back.
+type authBinding struct {
+	mu    sync.Mutex
+	calls []struct {
+		connID   uint32
+		userID   string
+		username string
+	}
+	block chan struct{} // when non-nil, the callback waits on it
+}
+
+func (a *authBinding) install(s *UDPServer) {
+	s.SetOnAuthenticated(func(connID uint32, userID, username string) {
+		if a.block != nil {
+			<-a.block
+		}
+		a.mu.Lock()
+		defer a.mu.Unlock()
+		a.calls = append(a.calls, struct {
+			connID   uint32
+			userID   string
+			username string
+		}{connID, userID, username})
+	})
+}
+
+func (a *authBinding) count() int {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	return len(a.calls)
+}
+
+// A completed handshake must hand the gateway the identity the presented key
+// vouches for. Without this the session is encrypted but anonymous, and no
+// PlayerAssignment is ever dispatched — the client sits in a working session
+// with no entity.
+func TestUDPServer_HandshakeBindsIdentity(t *testing.T) {
+	srv, _, addr, cancel := newTestUDPServer(t)
+	defer cancel()
+	var bind authBinding
+	bind.install(srv)
+	keyID, key := testKeyRegistry(t, srv)
+
+	c := dialUDP(t, addr)
+	handshake(t, c, 0xA001, keyID, key)
+	waitFor(t, "identity bound", func() bool { return bind.count() == 1 })
+
+	bind.mu.Lock()
+	got := bind.calls[0]
+	bind.mu.Unlock()
+	if got.userID != "test-user" || got.username != "tester" {
+		t.Fatalf("bound identity = %+v, want test-user/tester", got)
+	}
+	if got.connID == 0 {
+		t.Fatal("bound connID 0; the transport must be registered before the identity is announced")
+	}
+	// The connID must be the one the ConnManager issued, or replies to the
+	// PlayerAssignment would route to a different connection.
+	srv.mu.RLock()
+	var known bool
+	for _, id := range srv.connIDs {
+		if id == got.connID {
+			known = true
+		}
+	}
+	srv.mu.RUnlock()
+	if !known {
+		t.Fatalf("bound connID %d matches no registered transport", got.connID)
+	}
+}
+
+// A client retries ConnConfirm when its first is lost. The retry must not bind
+// a second time: dispatching a second PlayerAssignment for a player who
+// already has one would spawn a duplicate entity.
+func TestUDPServer_RepeatedConnConfirmBindsOnce(t *testing.T) {
+	srv, _, addr, cancel := newTestUDPServer(t)
+	defer cancel()
+	var bind authBinding
+	bind.install(srv)
+	keyID, key := testKeyRegistry(t, srv)
+
+	c := dialUDP(t, addr)
+	handshake(t, c, 0xB001, keyID, key)
+	waitFor(t, "identity bound", func() bool { return bind.count() == 1 })
+
+	// Same salts → same token → the idempotent re-confirm path.
+	handshake(t, c, 0xB001, keyID, key)
+	waitFor(t, "session still single", func() bool { return srv.sessionCount() == 1 })
+
+	// Give a spurious second binding time to land before asserting its absence.
+	time.Sleep(50 * time.Millisecond)
+	if got := bind.count(); got != 1 {
+		t.Fatalf("re-confirm bound the identity %d times, want 1", got)
+	}
+}
+
+// A handshake that fails to resolve a key must bind nothing: an unauthenticated
+// peer must not reach the gateway with any identity at all.
+func TestUDPServer_RejectedHandshakeBindsNothing(t *testing.T) {
+	srv, _, addr, cancel := newTestUDPServer(t)
+	defer cancel()
+	var bind authBinding
+	bind.install(srv)
+	_, key := testKeyRegistry(t, srv)
+
+	c := dialUDP(t, addr)
+	// A key ID that was never issued.
+	handshake(t, c, 0xD001, UDPKeyID(0xdeadbeefcafe), key)
+	waitFor(t, "handshake rejected", func() bool { return srv.HandshakeRejectDrops() >= 1 })
+
+	time.Sleep(50 * time.Millisecond)
+	if got := bind.count(); got != 0 {
+		t.Fatalf("rejected handshake bound %d identities, want 0", got)
+	}
+}
+
+// The identity callback ends in resolveSpawn, which on a standalone gateway is
+// an RPC with a two-second deadline. dispatch runs on the ONE reader goroutine
+// serving every session on the socket, so a callback that ran inline would
+// stall all UDP ingress for the duration of one client's spawn lookup. This
+// asserts the callback cannot do that.
+func TestUDPServer_SlowIdentityBindingDoesNotStallIngress(t *testing.T) {
+	srv, _, addr, cancel := newTestUDPServer(t)
+	defer cancel()
+	bind := authBinding{block: make(chan struct{})}
+	bind.install(srv)
+	defer close(bind.block)
+	keyID, key := testKeyRegistry(t, srv)
+
+	// First client's binding is now wedged in the callback.
+	first := dialUDP(t, addr)
+	handshake(t, first, 0xE001, keyID, key)
+	waitFor(t, "first session established", func() bool { return srv.sessionCount() == 1 })
+
+	// A second client must still be able to complete a handshake. If the
+	// callback held the reader goroutine, this would time out.
+	second := dialUDP(t, addr)
+	handshake(t, second, 0xE002, keyID, key)
+	waitFor(t, "second session established despite a blocked binding",
+		func() bool { return srv.sessionCount() == 2 })
 }

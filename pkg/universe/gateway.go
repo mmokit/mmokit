@@ -152,7 +152,16 @@ func (g *Gateway) handleEvent(evt net.PlayerEvent) {
 		// instead of interpolating smoothly, and to flicker to
 		// (NaN, NaN) for one frame on every tick boundary.
 		g.sendServerConfig(evt.ConnID)
-		g.log.Log(CatNetConn, "gateway: conn %d connected (unauthenticated)", evt.ConnID)
+		// Report the state rather than assume it. A UDP session is
+		// authenticated by its handshake, and the binding frequently wins the
+		// race against this event, so a hard-coded "(unauthenticated)" told
+		// operators the opposite of the truth for a connection that already
+		// had a player assigned.
+		if g.isAuthenticated(evt.ConnID) {
+			g.log.Log(CatNetConn, "gateway: conn %d connected (authenticated)", evt.ConnID)
+		} else {
+			g.log.Log(CatNetConn, "gateway: conn %d connected (unauthenticated)", evt.ConnID)
+		}
 		// Start the per-conn pump immediately on processes that route via
 		// MeshData. The pump owns BOTH the pre-auth window (RouteGatewayLocal
 		// auth ops dispatched inline) AND post-auth forwarding. Embedded
@@ -218,6 +227,24 @@ func (g *Gateway) clearAuthState(connID uint32) {
 func (g *Gateway) onAuthSuccess(connID uint32, userID uuid.UUID, username, token string, expiresAtMs int64) {
 	g.authMu.Lock()
 	prev := g.authStates[connID]
+	// A connection binds to one identity. Re-authenticating as the SAME user is
+	// legitimate and expected — AUTH_VALIDATE_TOKEN re-enters here, and the
+	// empty-token branch below exists for it. Switching a live connection to a
+	// DIFFERENT user is not: it would leave two PlayerAssignments dispatched
+	// against one connection, with the second player's frames routed over a
+	// session the first still believes is theirs.
+	//
+	// This became reachable when UDP sessions started arriving pre-bound. The
+	// op-channel auth verbs are still registered for the browser, and
+	// runSessionPump dispatches them both pre- and post-auth, so without this
+	// guard a UDP client could hand over a key for one account and then rebind
+	// the same connection to another.
+	if prev.authenticated && prev.userID != userID {
+		g.authMu.Unlock()
+		g.log.Log(CatNetConn, "gateway: refusing to rebind conn=%d from user=%s to user=%s — one connection, one identity",
+			connID, prev.username, username)
+		return
+	}
 	if token == "" {
 		// AUTH_VALIDATE_TOKEN response doesn't carry the token — the
 		// client already has it; preserve the request-side value.

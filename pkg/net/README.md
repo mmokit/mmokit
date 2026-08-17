@@ -120,26 +120,53 @@ udpServer, err := net.NewUDPServer(":9000", connMgr)
 if err != nil {
     return err
 }
-udpServer.Run(ctx) // blocks until cancellation
+udpServer.SetKeyRegistry(keys)             // else every handshake is refused
+udpServer.SetOnAuthenticated(bindSession)  // else sessions are sealed but anonymous
+udpServer.Run(ctx)                         // blocks until cancellation
 ```
 
 The server uses one UDP socket and dispatches datagrams to `UDPTransport`
 instances by token. Datagrams are capped at a 1400-byte receive buffer; this
 protocol does not fragment oversized application messages.
 
-### Packet layout
+### Packet layout — protocol version 2
 
-| Type | Byte | Layout |
-| --- | --- | --- |
-| Unreliable | `0x00` | `[type][token:u32][payload]` |
-| Reliable | `0x01` | `[type][token:u32][seq:u16][payload]` |
-| ACK | `0x02` | `[type][token:u32][ack_seq:u16][ack_bits:u32]` |
-| Connection request | `0x03` | `[type][protocol_id:u32][client_salt:u64]` |
-| Connection accept | `0x04` | `[type][protocol_id:u32][client_salt:u64][server_salt:u64]` |
-| Disconnect | `0x05` | `[type][token:u32]` |
+Every packet carries a type byte and then a version byte. `‖ sealed(n+16)` is an
+AEAD-sealed body: `n` plaintext bytes plus a 16-byte tag, with the cleartext
+header fed in as additional authenticated data.
+
+| Type | Byte | Layout | Size |
+| --- | --- | --- | ---: |
+| Unreliable | `0x00` | `[type][ver][token:u32][counter:u64] ‖ sealed(n+16)` | 14+n+16 |
+| Reliable | `0x01` | `[type][ver][token:u32][seq:u16][counter:u64] ‖ sealed(n+16)` | 16+n+16 |
+| ACK | `0x02` | `[type][ver][token:u32][counter:u64] ‖ sealed(6+16)` | 36 |
+| Connection request | `0x03` | `[type][ver][protocol_id:u32][client_salt:u64]` | 14 |
+| Connection accept | `0x04` | `[type][ver][protocol_id:u32][client_salt:u64][server_salt:u64][cookie:16]` | 38 |
+| Disconnect | `0x05` | `[type][ver][token:u32][counter:u64] ‖ sealed(0+16)` | 30 |
+| Connection confirm | `0x06` | `[type][ver][key_id:u64][client_salt:u64][server_salt:u64][cookie:16]` | 42 |
 
 Client and server salts are XOR-folded into the 32-bit demultiplexing token.
-That token is not encryption or application authentication.
+**The token is a session index, not a credential** — the AEAD tag is what proves
+the sender holds the session key. Header fields are cleartext because the server
+must read the token to find the session before it can decrypt, but they are
+authenticated as AAD, so a valid body cannot be moved onto another session or
+another packet type.
+
+### Handshake and identity
+
+The handshake is stateless on the server. `ConnReq` is answered with a
+`ConnAccept` carrying an HMAC cookie over the peer's address and both salts;
+nothing is retained. `ConnConfirm` echoes that cookie — proving return
+routability from the same address — and names the key ID the client drew from
+`POST /auth/udp-key` over HTTPS. Only then does a session exist.
+
+The key registry resolves that ID to a user, and `SetOnAuthenticated` delivers
+the identity to the gateway, which binds the player session. So a UDP connection
+is authenticated from its first datagram and there is no post-connect
+authentication step; the client authenticates over HTTPS before it opens a
+socket. Directional keys are derived per session via HKDF-SHA256 over both
+salts, so the two directions never share a key, and each direction enforces a
+64-packet sliding replay window.
 
 The reliable path uses 16-bit sequence numbers, a 256-slot send ring, and an
 ACK containing the highest sequence plus a 32-bit history. Unacknowledged
@@ -151,6 +178,11 @@ window suppresses duplicate retransmissions and accepts an unseen out-of-order
 packet once. It does not provide an application-level in-order buffer, and the
 send API does not report remote delivery.
 
+A retransmission re-seals the frame under a **fresh** AEAD counter rather than
+resending the original bytes. Resending them would present a counter the peer's
+replay window has already retired, so every retransmission would be silently
+discarded — reliability would fail exactly when it was needed.
+
 An idle transport sends a keepalive after 1 second and times out after 10
 seconds without receiving a packet. `UDPTransport` runs those checks on a
 100 ms ticker.
@@ -160,7 +192,8 @@ seconds without receiving a packet. `UDPTransport` runs those checks on a
 `pkg/net/udpclient` contains the matching standalone client:
 
 ```go
-client, err := udpclient.Dial("localhost:9000")
+// keyID and key come from POST /auth/udp-key over HTTPS.
+client, err := udpclient.Dial("localhost:9000", keyID, key)
 if err != nil {
     return err
 }

@@ -40,6 +40,10 @@ func (b csharpBackend) CoreFiles() []CoreFile {
 		"UdpSession.cs",
 		"UdpTransport.cs",
 		"UdpTransport.Socket.cs",
+		// The HTTPS half of the connect sequence: the client authenticates and
+		// draws a UDP session key before it opens a socket, so the generated
+		// client's ConnectAsync does not compile without this.
+		"MmokitAuth.cs",
 	}
 	out := make([]CoreFile, len(names))
 	for i, n := range names {

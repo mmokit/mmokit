@@ -164,7 +164,7 @@ The space example's hand-authored world content lives in tracked JSON under `exa
 ## Observability and administration
 
 - Gateway HTTP defaults to `:8080` for `/ws`, `/auth`, and gateway metrics/routes.
-- Client UDP is experimental and disabled by default; enable with `--udp-listen=:9000`. Sessions are bound to a source address, but the framing is unauthenticated and unencrypted.
+- Client UDP is disabled by default; enable with `--udp-listen=:9000`. Every packet is sealed with ChaCha20-Poly1305 under per-direction keys derived from a session key the client draws over HTTPS from `POST /auth/udp-key`, and the handshake binds the session to that key's user. Source-address binding remains as defence in depth.
 - MeshControl defaults to `:9100` on the coordinator. Both mesh channels run over in-memory TLS and authenticate peers with a shared cluster secret (`--cluster-secret` / `MMO_CLUSTER_SECRET`), auto-generated for self-contained role sets and required on every process of a multi-process cluster.
 - Coordinator admin/metrics defaults to `:9101`; `/admin/` hosts the operator UI when enabled.
 - Per-cell metrics cover tick timing, entity counts, connections, bytes, and border traffic.
@@ -194,4 +194,4 @@ Reusable packages must not import an example. Each example keeps its game code u
 
 ## Known work
 
-[`roadmap.md`](roadmap.md) tracks all active correctness, security, scalability, and protocol work, with each item's status verified against source. In particular, this page should not be read as claiming that UDP transport security is complete — it remains an open P0 item, and the UDP framing is still unauthenticated. Mesh authentication is closed, with one documented limitation: the cluster secret is shared rather than per-peer, so it excludes outsiders but does not prevent one authenticated member from impersonating another.
+[`roadmap.md`](roadmap.md) tracks all active correctness, security, scalability, and protocol work, with each item's status verified against source. Mesh authentication is closed, with one documented limitation: the cluster secret is shared rather than per-peer, so it excludes outsiders but does not prevent one authenticated member from impersonating another.

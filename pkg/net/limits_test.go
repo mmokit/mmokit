@@ -284,7 +284,8 @@ func TestPromoteConfirmed_RecordsPeerAddr(t *testing.T) {
 		t.Fatalf("session: %v", err)
 	}
 
-	tr := s.promoteConfirmed(token, peer, clientSalt, serverSalt, sess)
+	entry := UDPKeyEntry{UserID: "user-1", Username: "alice"}
+	tr := s.promoteConfirmed(token, peer, clientSalt, serverSalt, sess, entry)
 	if tr == nil {
 		t.Fatal("promoteConfirmed returned nil for a verified handshake")
 	}
@@ -298,7 +299,7 @@ func TestPromoteConfirmed_RecordsPeerAddr(t *testing.T) {
 
 	// A repeated ConnConfirm — the client retries when its first is lost — must
 	// return the existing session rather than building a second one.
-	if again := s.promoteConfirmed(token, peer, clientSalt, serverSalt, sess); again != tr {
+	if again := s.promoteConfirmed(token, peer, clientSalt, serverSalt, sess, entry); again != tr {
 		t.Fatal("repeated promoteConfirmed built a second transport for one session")
 	}
 	tr.Close()

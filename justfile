@@ -183,14 +183,35 @@ csharp-sdk:
           --csharp-core csharp/Mmokit.Sdk.Core \
           --out "{{ unity_sdk_dir }}"
 
-# headless C# smoke-bot: live UDP round-trip (connect → AuthLogin → OnWorldDelta)
-# against a RUNNING 4node server. Compiles the generated SDK from UNITY_SDK_DIR.
-# Args: just csharp-smoke [host] [username] [password] [seconds]   (defaults:
-# 127.0.0.1 smokebot 4node-demo-password 12). For WSL2→Windows use the WSL IP.
-# The UDP transport is experimental. The SERVER default is off, but the dev
-# recipes enable it: `just dev` / `just distributed` in examples/4node-basic
-# both pass --udp-listen=:9000. Launching the binary by hand does not.
-# In distributed mode only the GATEWAY binds UDP.
+# compile-gate the C# smoke-bot against a freshly generated 4node-basic SDK.
+#
+# Neither of the other two C# gates covers it: `csharp-test` builds the
+# hand-written core only, and `csharp-compile-test` compiles a generated SDK but
+# no consumer of one. The bot sat uncompilable for three commits after the unit-4
+# Connect signature change because nothing built it — this recipe is that gap
+# closed. Generates into a temp dir, so unlike `csharp-sdk` it needs no
+# UNITY_SDK_DIR. Requires Postgres for the schema dump (just db-up).
+csharp-smoke-build:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    out="$(mktemp -d)"
+    trap 'rm -rf "$out"' EXIT
+    go run ./examples/4node-basic --dump-schema --control-listen= --admin-listen= \
+        "--postgres-url={{ env('POSTGRES_URL', 'postgres://mmo:mmo@localhost:5432/mmo_4node?sslmode=disable') }}" \
+      | go run ./cmd/sdkgen --lang=csharp --csharp-core csharp/Mmokit.Sdk.Core --out "$out"
+    dotnet build csharp/Mmokit.Sdk.SmokeBot -p:UnitySdkDir="$out" -nologo -v quiet
+
+# headless C# smoke-bot: live round-trip (HTTPS auth → UDP key → authenticated
+# handshake → OnWorldDelta) against a RUNNING 4node server. Compiles the
+# generated SDK from UNITY_SDK_DIR.
+# Args: just csharp-smoke [host] [username] [password] [seconds] [baseUrl]
+# (defaults: 127.0.0.1 smoke-<random> 4node-demo-password 12 http://<host>:8080).
+# For WSL2→Windows use the WSL IP.
+# The SERVER default for UDP is off, but the dev recipes enable it: `just dev` /
+# `just distributed` in examples/4node-basic both pass --udp-listen=:9000 AND
+# --dev-insecure-cookie, the latter being what lets /auth/udp-key issue a key
+# over plain HTTP. Launching the binary by hand does neither.
+# In distributed mode only the GATEWAY binds UDP and runs auth.
 # UNITY_SDK_DIR is REQUIRED and has no default (see csharp-sdk).
 csharp-smoke *ARGS:
     @test -n "{{ unity_sdk_dir }}" || { echo "error: UNITY_SDK_DIR is required. Set it to the Unity SDK tree that 'just csharp-sdk' wrote, e.g. UNITY_SDK_DIR=/path/to/UnityProject/Assets/Mmokit/Sdk just csharp-smoke" >&2; exit 1; }

@@ -5,6 +5,8 @@ import (
 
 	"github.com/google/uuid"
 
+	"github.com/mmokit/mmokit/pkg/logger"
+
 	meshpb "github.com/mmokit/mmokit/gen/go/meshpb"
 	"github.com/mmokit/mmokit/pkg/coords"
 )
@@ -247,5 +249,115 @@ func TestApplyPeerList_DropsRemovedCells(t *testing.T) {
 		if h := topo.HostForCell(MeshCellID(stale)); h != "local" {
 			t.Fatalf("post-merge: HostForCell(%q) = %q, want \"local\" (cell evicted)", stale, h)
 		}
+	}
+}
+
+// A connection binds to one identity. Re-authenticating as the same user is the
+// AUTH_VALIDATE_TOKEN path and must keep working; switching to a different user
+// must not, or a UDP client could present a key for one account and then rebind
+// the same connection to another over the op channel.
+func TestGatewayOnAuthSuccessRefusesIdentityChange(t *testing.T) {
+	// Bare gateway: dispatchPostAuthAssignment runs past the guard and finds no
+	// cell, which is fine here — the assertion is about authStates, and a
+	// coordinator would only add a spawn round trip to a test that does not
+	// examine one.
+	g := newTestBareGateway(t)
+
+	first := uuid.New()
+	g.onAuthSuccess(9, first, "alice", "tok-a", 0)
+	if st, _ := g.authStateOf(9); st.userID != first {
+		t.Fatalf("first bind did not take: %+v", st)
+	}
+
+	// A second identity on the same connection is refused outright.
+	g.onAuthSuccess(9, uuid.New(), "mallory", "tok-b", 0)
+	st, _ := g.authStateOf(9)
+	if st.userID != first || st.username != "alice" {
+		t.Fatalf("connection was rebound to a different user: %+v", st)
+	}
+
+	// The same user re-validating is not a rebind and must still be accepted —
+	// an empty token means "keep the one you have".
+	g.onAuthSuccess(9, first, "alice", "", 0)
+	st, _ = g.authStateOf(9)
+	if !st.authenticated || st.userID != first {
+		t.Fatalf("same-user re-auth was rejected: %+v", st)
+	}
+	if st.sessionToken != "tok-a" {
+		t.Fatalf("re-auth lost the session token: %q", st.sessionToken)
+	}
+}
+
+// bindUDPSession is the universe-side half of the UDP identity wiring: the
+// listener hands it the identity the presented key vouched for, and it must
+// turn that into a bound player session exactly as a WebSocket cookie does.
+func TestBindUDPSessionBindsIdentityToGateway(t *testing.T) {
+	g := newTestBareGateway(t)
+	// A live connection: bindUDPSession refuses to assign a player to one that
+	// has already gone away, so the fixture has to register a real transport.
+	connID := g.connMgr.AddTransport(&clientFrameTransport{}, "")
+	p := &Process{Log: logger.New(), ConnMgr: g.connMgr, gateway: g}
+
+	uid := uuid.New()
+	p.bindUDPSession(connID, uid.String(), "tester")
+
+	st, ok := g.authStateOf(connID)
+	if !ok || !st.authenticated {
+		t.Fatalf("conn %d not authenticated after bindUDPSession: %+v", connID, st)
+	}
+	if st.userID != uid || st.username != "tester" {
+		t.Fatalf("bound identity = %s/%s, want %s/tester", st.userID, st.username, uid)
+	}
+	// The session token is deliberately empty: the key registry holds transport
+	// secrets, and storing the session cookie beside them would make a registry
+	// compromise worth an account rather than five minutes of UDP.
+	if st.sessionToken != "" {
+		t.Fatalf("UDP bind carried a session token %q; it must not", st.sessionToken)
+	}
+}
+
+// A malformed user ID must refuse the bind rather than invent an identity —
+// minting a random UUID here would spawn a brand-new character for a returning
+// player instead of failing visibly.
+func TestBindUDPSessionRefusesUnparseableUserID(t *testing.T) {
+	g := newTestBareGateway(t)
+	connID := g.connMgr.AddTransport(&clientFrameTransport{}, "")
+	p := &Process{Log: logger.New(), ConnMgr: g.connMgr, gateway: g}
+
+	p.bindUDPSession(connID, "not-a-uuid", "tester")
+
+	if st, ok := g.authStateOf(connID); ok && st.authenticated {
+		t.Fatalf("conn %d was authenticated from an unparseable user_id: %+v", connID, st)
+	}
+}
+
+// A process with no gateway cannot bind anything. It must say so rather than
+// panic on the nil dereference — the UDP listener calls this from its own
+// goroutine, where a panic takes the process down.
+func TestBindUDPSessionWithoutGatewayDoesNotPanic(t *testing.T) {
+	p := &Process{Log: logger.New()}
+	p.bindUDPSession(6, uuid.New().String(), "tester")
+}
+
+// The identity bind runs on its own goroutine, so the connection it names can
+// already be gone — a client may send an authenticated Disconnect immediately
+// after its ConnConfirm. Assigning a player then would spawn an entity nothing
+// owns and stamp an activeUsers entry no disconnect will clear, locking the
+// account out of its own next login until the entry ages out.
+func TestBindUDPSessionSkipsAlreadyClosedConnection(t *testing.T) {
+	g := newTestBareGateway(t)
+	connID := g.connMgr.AddTransport(&clientFrameTransport{}, "")
+	p := &Process{Log: logger.New(), ConnMgr: g.connMgr, gateway: g}
+
+	// The listener saw a Disconnect and unregistered before the bind ran.
+	g.connMgr.Unregister(connID)
+
+	p.bindUDPSession(connID, uuid.New().String(), "tester")
+
+	if st, ok := g.authStateOf(connID); ok && st.authenticated {
+		t.Fatalf("bound a player to a connection that was already gone: %+v", st)
+	}
+	if sess := g.lookupSession(connID); sess != nil {
+		t.Fatal("a localSession was created for a closed connection")
 	}
 }

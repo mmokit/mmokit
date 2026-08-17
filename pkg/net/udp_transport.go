@@ -339,6 +339,14 @@ func (t *UDPTransport) Close() {
 	clear(t.sendBuf[:])
 	t.sendMu.Unlock()
 
+	// Drop the server's session maps. Closing stopped tickLoop above, so the
+	// connection-timeout path can no longer reclaim this slot — anything that
+	// closes a transport without going through removeTransport (notably
+	// ConnManager.Remove, which the gateway's kick and logout paths use) would
+	// otherwise leak one of maxConnections permanently. Idempotent, and a no-op
+	// when removeTransport already forgot us.
+	t.server.forgetTransport(t)
+
 	// Send disconnect (best effort). Sealed with an empty body, so the tag
 	// alone proves we hold the session key — the peer will not act on a
 	// teardown it cannot authenticate. Written directly rather than through
@@ -382,10 +390,12 @@ func (t *UDPTransport) handleUnreliable(counter uint64, aad, sealed []byte) {
 // An unknown leading byte is a legacy pre-channel-prefix event and routes
 // to the event queue with bytes left intact.
 //
-// Every branch is bounded. A UDP session is source-address bound but still
-// unauthenticated, and nothing drains it until the peer has a player session,
-// so the queues here grow under exactly the same conditions as the WebSocket
-// ones. Drop-newest, count, log at most once per interval.
+// Every branch is bounded. A UDP session is authenticated from its handshake
+// now, but the bound still matters: nothing drains these queues until the
+// gateway has finished binding a player session, and that binding runs
+// asynchronously, so a client that starts sending immediately can outrun it.
+// The queues grow under exactly the same conditions as the WebSocket ones.
+// Drop-newest, count, log at most once per interval.
 func (t *UDPTransport) routePayload(payload []byte) {
 	limits := t.lim()
 	if len(payload) > limits.MaxFrameBytes {

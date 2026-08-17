@@ -45,6 +45,14 @@ type UDPServer struct {
 	cookies *HandshakeCookieSigner
 	keys    *UDPKeyRegistry
 
+	// onAuthenticated is invoked once per session, after the key resolves and
+	// the transport is registered, with the identity the resolved key vouches
+	// for. It is what carries HTTPS-established identity into the gateway —
+	// the UDP analogue of the cookie read in Gateway.onWSUpgrade. Without it
+	// a cryptographically authenticated session would still have no player
+	// behind it.
+	onAuthenticated func(connID uint32, userID, username string)
+
 	// Limits are guarded by mu because the reader goroutine consults them on
 	// every connection request and promotion. Change them with SetLimits.
 	maxConnections int
@@ -206,8 +214,12 @@ func (s *UDPServer) routeFor(token uint32, ap netip.AddrPort) *UDPTransport {
 // dispatch runs on the single reader goroutine, so no double-promotion race
 // exists; the lock guards concurrent removeTransport and readers. A repeated
 // ConnConfirm — the client retries if its first is lost — returns the existing
-// session rather than building a second one.
-func (s *UDPServer) promoteConfirmed(token uint32, ap netip.AddrPort, clientSalt, serverSalt uint64, sess *udpcrypto.Session) *UDPTransport {
+// session rather than building a second one, and does NOT re-announce the
+// identity: the player is already assigned.
+//
+// entry is the resolved key's identity, carried in so the session can be bound
+// to a user rather than merely encrypted.
+func (s *UDPServer) promoteConfirmed(token uint32, ap netip.AddrPort, clientSalt, serverSalt uint64, sess *udpcrypto.Session, entry UDPKeyEntry) *UDPTransport {
 	s.mu.Lock()
 	if existing := s.byToken[token]; existing != nil {
 		s.mu.Unlock()
@@ -219,6 +231,7 @@ func (s *UDPServer) promoteConfirmed(token uint32, ap netip.AddrPort, clientSalt
 		return nil
 	}
 	limits := s.limits
+	onAuthenticated := s.onAuthenticated
 	s.mu.Unlock()
 
 	// Construct outside s.mu: AddTransport pushes onto ConnManager's bounded
@@ -232,7 +245,26 @@ func (s *UDPServer) promoteConfirmed(token uint32, ap netip.AddrPort, clientSalt
 	s.connIDs[t] = connID
 	s.mu.Unlock()
 
-	log.Printf("udp: new authenticated connection from %s (token=%08x, connID=%d)", ap, token, connID)
+	log.Printf("udp: new authenticated connection from %s user=%s (token=%08x, connID=%d)",
+		ap, entry.Username, token, connID)
+
+	// Announce after the maps are published, and off this goroutine.
+	//
+	// Off-goroutine is not a nicety. dispatch runs on the single reader
+	// goroutine that services EVERY session on this socket, and the callback
+	// ends in resolveSpawn, which in standalone-gateway mode is an RPC with a
+	// two-second deadline. Calling it inline would stall all UDP ingress —
+	// every other client's input included — for the duration of one client's
+	// spawn lookup. The WebSocket path never had this shape because each
+	// upgrade already owns its own goroutine.
+	//
+	// The resulting race with the Connected event is the one the WS path
+	// already has and already tolerates: registerTransport publishes Connected
+	// before OnUpgrade authenticates, and runSessionPump is written for a
+	// session that "may be nil pre-auth".
+	if onAuthenticated != nil {
+		go onAuthenticated(connID, entry.UserID, entry.Username)
+	}
 	return t
 }
 
@@ -313,6 +345,17 @@ func (s *UDPServer) SetKeyRegistry(r *UDPKeyRegistry) {
 	s.keys = r
 }
 
+// SetOnAuthenticated installs the callback that receives each new session's
+// identity. It fires exactly once per session — after the transport is
+// registered with the ConnManager, so connID is already valid, and never on
+// the idempotent re-confirm path, because binding a session twice would
+// dispatch a second PlayerAssignment for a player who already has one.
+func (s *UDPServer) SetOnAuthenticated(fn func(connID uint32, userID, username string)) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.onAuthenticated = fn
+}
+
 func (s *UDPServer) handleConnReq(data []byte, ap netip.AddrPort) {
 	clientSalt, err := udpproto.DecodeConnReq(data)
 	if err != nil {
@@ -385,20 +428,42 @@ func (s *UDPServer) handleConnConfirm(data []byte, ap netip.AddrPort) {
 		return
 	}
 
-	s.promoteConfirmed(udpproto.MakeToken(clientSalt, serverSalt), ap, clientSalt, serverSalt, sess)
+	s.promoteConfirmed(udpproto.MakeToken(clientSalt, serverSalt), ap, clientSalt, serverSalt, sess, entry)
 }
 
 func (s *UDPServer) removeTransport(t *UDPTransport) {
-	s.mu.Lock()
-	connID, ok := s.connIDs[t]
-	delete(s.byToken, t.token)
-	delete(s.byAddr, t.addr)
-	delete(s.connIDs, t)
-	s.mu.Unlock()
+	connID, ok := s.forgetTransport(t)
 
 	t.Close()
 
 	if ok {
 		s.connMgr.Unregister(connID)
 	}
+}
+
+// forgetTransport drops t from the session maps and reports the connID it held.
+// Idempotent, and identity-checked: a later session that reused the same token
+// or address must not be evicted by a straggling close of an older one.
+//
+// Separate from removeTransport because a transport can also be closed from
+// outside this package — Gateway.kickConn and onAuthLogout both reach
+// ConnManager.Remove, which calls Transport.Close directly. Close stops
+// tickLoop, so the connection-timeout path that would otherwise reclaim the
+// slot never runs again, and without this the entry would sit in byToken
+// forever. That was survivable while UDP sessions were never authenticated and
+// so never kicked; binding them at handshake puts the duplicate-active kick on
+// the ordinary connect path, where leaking a slot per kick would exhaust
+// maxConnections and refuse every subsequent client.
+func (s *UDPServer) forgetTransport(t *UDPTransport) (uint32, bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	connID, ok := s.connIDs[t]
+	if s.byToken[t.token] == t {
+		delete(s.byToken, t.token)
+	}
+	if s.byAddr[t.addr] == t {
+		delete(s.byAddr, t.addr)
+	}
+	delete(s.connIDs, t)
+	return connID, ok
 }
