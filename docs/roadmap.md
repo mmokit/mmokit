@@ -262,13 +262,17 @@ Both mesh channels now run over TLS and authenticate peers with a shared cluster
 
 Escape hatches exist (`IncludeAll`, `Without` in `pkg/query/query.go`), but `ForEach1/2/3` in [`pkg/universe/queries.go:37-67`](../pkg/universe/queries.go) still build raw unfiltered filters (the facade re-exports them as forwarders from `queries.go`), and WASM systems both read and overwrite neighbour-owned Replica and Ghost components ([`internal/wasmctl/wasm_system.go:187`](../internal/wasmctl/wasm_system.go), `:208`).
 
-Process isolation is untouched: `var CellSize float32 = 8192.0` remains a mutable package global in [`pkg/coords/coords.go:8`](../pkg/coords/coords.go), and four package-global wire registries exist with `ResetXxxForTest` helpers that exist only to unwind them.
+Process isolation is untouched: `var CellSize float32 = 8192.0` remains a mutable package global in [`pkg/coords/coords.go:8`](../pkg/coords/coords.go), and four package-global wire registries remain — [`handle_client.go:47`](../handle_client.go), [`handle_event.go:12`](../handle_event.go), [`handle_op.go:83`](../handle_op.go), [`broadcast.go:71`](../broadcast.go). Only two of the four have a `ResetXxxForTest` unwind helper, so the other two cannot be unwound between tests at all.
+
+A second cell-size source of truth already exists and can diverge: `(*Process).baseCellSize()` reads `Config.CellSize` and is used at a handful of sites, while far more sites read `coords.CellSize`. Two Processes in one binary where only one sets `Config.CellSize` give per-process-correct `baseCellSize()` and last-writer-wins `coords.CellSize`. Converging on the process-owned accessor is the bulk of this half.
 
 **This is the load-bearing prerequisite for 3D.** A per-process dimension profile *is* the process-owned immutable registry this item describes. Doing CE-010 first pre-pays a meaningful fraction of the 2D/3D work.
 
 #### CE-009 — Protocol version and schema fingerprint · **Open** · hard prerequisite for 3D
 
-No version or fingerprint is negotiated at connection setup. The only handshake message carries a single tick-rate field; the frame header has no version byte; the generated schema has no version.
+Partly advanced by CE-005b Tier 2, which put a version byte on every UDP datagram ([`udpproto.Version`](../pkg/net/udpproto/proto.go), enforced on decode). That versions **one transport's envelope** and nothing else. Still open, and unchanged by it: the WebSocket path negotiates no version at all; the only handshake message, `ServerConfig` ([`event_messages.go:120`](../event_messages.go)), carries a single `TickRate` field; the client frame header has no version byte; and the generated schema has no version or fingerprint.
+
+**The version byte does not address this item's motivating failure, and cannot.** Type IDs are `fnv32a(reflect.Type.String())`, so a 2D `component.Position` and a 3D one hash identically — the [§7.3](#73-architecture) decision to keep *one* type set across both profiles guarantees it. The mismatch therefore lives inside the sealed body, which is byte-identical on both transports and unversioned on both. **A schema fingerprint, not a version byte, is what rejects a 2D client meeting a 3D server.**
 
 Collision auditing is worse than previously recorded. `RegisterEvent` and `RegisterOp` panic on duplicate type IDs, but `registerClientInputType` ([`handle_client.go:55-61`](../handle_client.go)) **silently overwrites**, and `RegisterBroadcastType` never computes a type ID at all. Two of four registries are unguarded.
 
@@ -471,7 +475,7 @@ Each of these was found by verifying a plausible plan against source and finding
 
 This phase closed the last open P0 item, so **[§7.1](#71-sequencing-rule)'s gate has lifted** and the 104-day 2D/3D program may begin. Status is derived from source, not from this table.
 
-**The next phase is [§7](#7-the-2d3d-and-multi-genre-program), starting at [phase 0](#75-phases)** — codec collapse and the byte-level wire goldens, which do not exist today. [§7.2](#72-prerequisite-gates) names CE-010 and CE-009 as hard prerequisites to schedule immediately; CE-009's header version byte landed here, but its schema fingerprint and two unguarded registries did not.
+**The next phase is [§7](#7-the-2d3d-and-multi-genre-program), starting at [phase 0](#75-phases)** — codec collapse and extending the byte-level wire goldens to the frame codecs. [§7.2](#72-prerequisite-gates) names CE-010 and CE-009 as hard prerequisites to schedule immediately; CE-009's header version byte landed here, but its schema fingerprint and two unguarded registries did not.
 
 #### 6.9.1 What it closes
 
@@ -590,7 +594,7 @@ Collision is **new capability, not a port** — the existing separating-axis cod
 
 | # | Phase | Days | Ends runnable at |
 | --- | --- | ---: | --- |
-| 0 | Codec collapse and safety net (pure 2D, zero behaviour change) | 13 | Fixed-offset frame codecs rewritten on the reflection codec; byte-level wire goldens, which do not exist today; an entity-conservation integrity invariant. Full suite green, reference game unchanged. |
+| 0 | Codec collapse and safety net (pure 2D, zero behaviour change) | 13 | Fixed-offset frame codecs rewritten on the reflection codec; byte-level wire goldens **extended to the frame codecs** (see the note below — they already exist for the delta/replication path); an entity-conservation integrity invariant. Full suite green, reference game unchanged. |
 | 1 | Widen core types, still 2D only | 13 | Position and velocity gain Z; rotation becomes a quaternion with yaw helpers; collider becomes a shape union. Generated 2D SDK diff is empty. |
 | 2 | The 3D profile | 12 | Quaternion quantization, dimension-selected bindings, gravity and move modes, cluster dimension agreement. A headless 3D example survives a cell split with a non-zero destination entity count asserted. |
 | 3 | Client SDK and interpolation | 11 | Quaternion decode and slerp in TypeScript and C#, golden vectors. A browser client renders 3D with quaternion orientation. |
@@ -598,6 +602,8 @@ Collision is **new capability, not a port** — the existing separating-axis cod
 | 5 | Parity fixtures and hardening | 11 | Both profiles covered in one test binary at the pre-existing race baseline. |
 
 Phases 0 and 1 are deliberately pure 2D. Front-loading them means any later failure on the split-merge path is unambiguously a 3D bug rather than a byte-offset bug.
+
+**Correction, verified against source:** earlier revisions of phase 0 said byte-level wire goldens "do not exist today". They do, and they are CI-enforced — `csharp/Mmokit.Sdk.Core.Tests/testdata/delta_golden.json` (40 KB, generated by `cmd/csharp-golden`) pins the delta/replication encoding across Go, TypeScript and C#, and `cmd/csharp-golden` also covers the UDP AEAD and proto layers. What phase 0 must *add* is coverage of the fixed-offset frame codecs it rewrites — the cell-transfer header, border replication, and the typed event/op frames — which are the codecs with no golden today. Sizing the phase as if it starts from zero overstates it.
 
 ### 7.6 Validation
 
@@ -622,7 +628,7 @@ Recorded so the next reader does not resurrect dead work.
 | **CE-006's cluster-CA mTLS mechanism** | **Superseded** by the shared-secret plus ephemeral-TLS decision. The risk stays open; the mechanism is replaced. The two surviving `TODO(mTLS)`/`TODO(S4)` comments in `host_network.go` and `mesh_control_client.go` must be **deleted, not implemented** — and `host_network.go`'s claim that "S3 only runs in loopback" is false: all four production callers pass `":0"`, a wildcard ephemeral bind. |
 | **Certificate pinning by fingerprint for mesh TLS** | **Declined**, out of scope. Peers dial with `InsecureSkipVerify`; the residual is an active on-path MITM on an untrusted network, answered by network isolation rather than by PKI. |
 | **Audio-asset provenance as an OSS blocker** | **Moot.** The 16 unattributed `.ogg` files live under `examples/space/web/`, which is not part of the mmokit open-source distribution. |
-| **ChaCha20-Poly1305 for UDP AEAD** | **Superseded** by AES-GCM. `Mmokit.Sdk.Core` targets `netstandard2.1`, where `ChaCha20Poly1305` does not exist and `AesGcm` does. `netstandard2.1` also has no `HKDF` class. |
+| **AES-GCM for UDP AEAD** | **Superseded** by ChaCha20-Poly1305, which is what shipped (`f33cf71e`). This row previously said the reverse. The AES-GCM decision was taken because `netstandard2.1` declares `AesGcm` and not `ChaCha20Poly1305` — reading the reference assembly rather than the runtime. Mono stubs `AesGcm` to throw and Unity ships Mono, so the client hand-rolls RFC 8439 instead. Do not re-reverse this; see [CE-005b](#ce-005b--udp-security-and-gating--done-tier-1-and-tier-2). |
 | **Auth over the op channel (C# client)** | **Superseded** by the 2026-06-12 umbrella's HTTPS-then-UDP decision. The 2026-06-06 Unity SDK spec chose the op channel specifically to avoid that split; the newer decision wins. |
 | **Volumetric cell partitioning** | **Declined** — see [non-goal 1](#3-non-goals). |
 | **Client prediction removal** | **Reversed** by WS-001, which is implemented and committed. See the [WS-001 subsection](#ws-001--client-prediction-reconciliation-and-adaptive-playback--partial). |
