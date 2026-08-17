@@ -4,7 +4,6 @@ import (
 	"testing"
 
 	"github.com/mmokit/mmokit/pkg/component"
-	"github.com/mmokit/mmokit/pkg/coords"
 )
 
 // TestReplicaComponent_HasProducedAtMsField is a sentinel: it fails at
@@ -19,11 +18,11 @@ func TestReplicaComponent_HasProducedAtMsField(t *testing.T) {
 	}
 }
 
-func TestMoveTarget_SetTarget(t *testing.T) {
+func TestMoveTarget_SetTargetExplicitCellSize(t *testing.T) {
 	const cellSize float32 = 1000
 
 	mt := &component.MoveTarget{Sequence: 42}
-	mt.SetTargetWithCellSize(3500, -500, cellSize)
+	mt.SetTarget(3500, -500, cellSize)
 
 	if mt.CellX != 3 || mt.CellY != -1 {
 		t.Errorf("CellX/CellY = %d,%d, want 3,-1", mt.CellX, mt.CellY)
@@ -50,24 +49,22 @@ func TestMoveTarget_Cancel(t *testing.T) {
 	}
 }
 
-// TestMoveTarget_SetTarget_LiveCellSize is a regression guard for the
-// bug where SetTarget snapshotted coords.CellSize at init time. Verifies
-// that runtime coords.SetCellSize is reflected by SetTarget — the bug
-// manifest was 4node-basic's CellSize=2000 (default 8192) producing a
-// 4× cell-index error.
-func TestMoveTarget_SetTarget_LiveCellSize(t *testing.T) {
-	// Save and restore coords.CellSize across the test.
-	saved := coords.CellSize
-	t.Cleanup(func() { coords.SetCellSize(saved) })
-
-	coords.SetCellSize(2000)
+// The regression this guards: 4node-basic runs CellSize=2000 against a default
+// of 8192, and a SetTarget that used the wrong one produced a 4x cell-index
+// error. It used to guard that by asserting SetTarget observed a runtime
+// coords.SetCellSize.
+//
+// CE-010 made the bug impossible instead of detectable: the size is a
+// parameter, so there is no global for a caller to read the wrong value from.
+// The numbers below are what actually mattered, and still hold.
+func TestMoveTarget_SetTarget_UsesTheSizeItIsGiven(t *testing.T) {
 	mt := &component.MoveTarget{}
-	mt.SetTarget(3500, -500)
+	mt.SetTarget(3500, -500, 2000)
 
 	if mt.CellX != 1 {
-		t.Errorf("CellX = %d, want 1 (CellSize=2000, X=3500 → cell 1)", mt.CellX)
+		t.Errorf("CellX = %d, want 1 (cellSize=2000, X=3500 -> cell 1)", mt.CellX)
 	}
 	if mt.CellY != -1 {
-		t.Errorf("CellY = %d, want -1 (CellSize=2000, Y=-500 → cell -1)", mt.CellY)
+		t.Errorf("CellY = %d, want -1 (cellSize=2000, Y=-500 -> cell -1)", mt.CellY)
 	}
 }

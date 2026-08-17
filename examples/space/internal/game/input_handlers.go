@@ -6,7 +6,6 @@ import (
 	"github.com/mmokit/mmokit"
 	gamecomp "github.com/mmokit/mmokit/examples/space/internal/component"
 	"github.com/mmokit/mmokit/examples/space/internal/item"
-	"github.com/mmokit/mmokit/pkg/coords"
 )
 
 // inputSequenceAfter compares uint32 sequence numbers in serial-number space.
@@ -42,7 +41,7 @@ func (o moveTargetOutcome) consumed() bool { return o != moveTargetStale }
 // non-zero sequence is marked processed even when semantic validation rejects
 // the target, allowing prediction clients to retire poison/bad commands and
 // reconcile to authoritative state instead of retrying forever.
-func consumeMoveTargetInput(mt *mmokit.MoveTarget, msg *SetMoveTarget, canMove bool, maxWorldX, maxWorldY float32) moveTargetOutcome {
+func consumeMoveTargetInput(mt *mmokit.MoveTarget, msg *SetMoveTarget, canMove bool, maxWorldX, maxWorldY, cellSize float32) moveTargetOutcome {
 	if msg.Sequence != 0 {
 		if mt.Sequence != 0 && !inputSequenceAfter(msg.Sequence, mt.Sequence) {
 			return moveTargetStale
@@ -66,7 +65,7 @@ func consumeMoveTargetInput(mt *mmokit.MoveTarget, msg *SetMoveTarget, canMove b
 	if maxWorldY > 0 && (msg.Y < 0 || msg.Y >= maxWorldY) {
 		return moveTargetRejected
 	}
-	mt.SetTarget(msg.X, msg.Y)
+	mt.SetTarget(msg.X, msg.Y, cellSize)
 	return moveTargetApplied
 }
 
@@ -117,10 +116,11 @@ func RegisterInputs(mmo *mmokit.Process) {
 		if gw == nil {
 			return
 		}
-		maxWorldX := float32(gw.Config.MeshCellsX) * coords.CellSize
-		maxWorldY := float32(gw.Config.MeshCellsY) * coords.CellSize
+		cellSize := gw.stage.CellSize()
+		maxWorldX := float32(gw.Config.MeshCellsX) * cellSize
+		maxWorldY := float32(gw.Config.MeshCellsY) * cellSize
 		before := mt.Sequence
-		outcome := consumeMoveTargetInput(mt, msg, canMove, maxWorldX, maxWorldY)
+		outcome := consumeMoveTargetInput(mt, msg, canMove, maxWorldX, maxWorldY, cellSize)
 		logMoveTargetOutcome(player, msg, outcome, before)
 		if !outcome.consumed() {
 			// Unlabelled counter: a per-player label would scale cardinality

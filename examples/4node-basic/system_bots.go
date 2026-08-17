@@ -58,6 +58,6 @@ func (s *BotSystem) Update(dt float32) {
 		b.Behavior.TicksUntilRetarget = s.RetargetPeriod
 		tx := minX + padX + rand.Float32()*(sizeX-2*padX)
 		ty := minY + padY + rand.Float32()*(sizeY-2*padY)
-		b.MoveTarget.SetTarget(tx, ty)
+		b.MoveTarget.SetTarget(tx, ty, cellSize)
 	}
 }

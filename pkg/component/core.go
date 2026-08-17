@@ -7,7 +7,6 @@ package component
 import (
 	"math"
 
-	"github.com/mmokit/mmokit/pkg/coords"
 )
 
 // Position in world space.
@@ -132,17 +131,15 @@ type MoveTarget struct {
 	Sequence       uint32  // optional: client-supplied input sequence number
 }
 
-// SetTarget converts world-absolute coordinates to cell-local using the
-// engine's live cell size (coords.CellSize, mutable via coords.SetCellSize
-// before any cells are created) and activates the move. Use
-// SetTargetWithCellSize for custom cell sizes (rare; tests only).
-func (mt *MoveTarget) SetTarget(worldX, worldY float32) {
-	mt.SetTargetWithCellSize(worldX, worldY, coords.CellSize)
-}
-
-// SetTargetWithCellSize converts world-absolute coordinates to cell-local
-// using the given cell size and activates the move.
-func (mt *MoveTarget) SetTargetWithCellSize(worldX, worldY, cellSize float32) {
+// SetTarget converts world-absolute coordinates to cell-local using the given
+// cell size and activates the move.
+//
+// cellSize is a parameter rather than a global read (CE-010). Callers have it:
+// a Stage answers CellSize(), a Process answers CellSize(). The previous
+// two-method shape — SetTarget reading a global, SetTargetWithCellSize taking
+// it explicitly — meant the convenient name was the one that could silently be
+// wrong in a multi-process binary.
+func (mt *MoveTarget) SetTarget(worldX, worldY, cellSize float32) {
 	mt.CellX = int32(math.Floor(float64(worldX / cellSize)))
 	mt.CellY = int32(math.Floor(float64(worldY / cellSize)))
 	mt.LocalX = worldX - float32(mt.CellX)*cellSize

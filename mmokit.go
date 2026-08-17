@@ -440,6 +440,11 @@ type SpawnResolver = universe.SpawnResolver
 // local offset (LX, LY) in [0, CellSize).
 type WorldPos = coords.WorldPos
 
+// DefaultCellSize is the cell width/height a process uses when Config.CellSize
+// is left unset. A constant: it is a fallback, not the live value. Ask a Stage
+// or a Process for that.
+const DefaultCellSize = coords.DefaultCellSize
+
 // CellSize returns the current cell size in world units.
 func CellSize() float32 { return coords.CellSize }
 
@@ -707,7 +712,7 @@ func NewClickToMoveSystem() SystemDef {
 				if mt == nil {
 					return
 				}
-				mt.SetTarget(msg.X, msg.Y)
+				mt.SetTarget(msg.X, msg.Y, p.CellSize())
 			})
 		},
 	}

@@ -87,9 +87,9 @@ func TestClickToMoveInactive(t *testing.T) {
 	}
 }
 
-func TestMoveTarget_SetTargetWithCellSize(t *testing.T) {
+func TestMoveTarget_SetTargetExplicitCellSize(t *testing.T) {
 	mt := &component.MoveTarget{}
-	mt.SetTargetWithCellSize(3500, -500, 2000)
+	mt.SetTarget(3500, -500, 2000)
 
 	if mt.CellX != 1 {
 		t.Errorf("CellX = %d, want 1", mt.CellX)

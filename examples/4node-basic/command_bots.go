@@ -241,7 +241,7 @@ func spawnBotsOnLoop(cell *mmokit.Cell, count int) int {
 		retarget := uint16(rng.Intn(100))
 		botName := fmt.Sprintf("bot_%s_%06d", cell.MeshID(), base+i)
 		mt := mmokit.MoveTarget{}
-		mt.SetTarget(tx, ty)
+		mt.SetTarget(tx, ty, stage.CellSize())
 		stage.Spawn(
 			mmokit.Position{X: x - minX, Y: y - minY},
 			mmokit.Collider{Radius: PlayerRadius},

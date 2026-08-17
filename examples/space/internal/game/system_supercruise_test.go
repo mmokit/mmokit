@@ -108,7 +108,7 @@ func TestSupercruise_ChannelRootsPlayer(t *testing.T) {
 
 	sc.Phase = gamecomp.SupercruiseChanneling
 	sc.ChannelRemaining = 3.0
-	mt.SetTarget(50, 50)
+	mt.SetTarget(50, 50, mmokit.DefaultCellSize)
 
 	sys := &SupercruiseSystem{}
 	mmokit.WireSystem(sys, gw.stage.ECSWorld(), gw.eng, gw.stage)
