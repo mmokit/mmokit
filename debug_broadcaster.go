@@ -5,7 +5,6 @@ import (
 	"sort"
 	"strconv"
 
-	"github.com/mmokit/mmokit/pkg/coords"
 	"github.com/mmokit/mmokit/pkg/engine"
 )
 
@@ -66,7 +65,7 @@ func (s *debugBroadcaster) Update(dt float32) {
 		if s.sentHash[sess.ConnID] == hash {
 			return
 		}
-		msg := buildDebugInfo(cells, radius, sess.DebugFlags)
+		msg := buildDebugInfo(cells, radius, sess.DebugFlags, s.Stage().CellSize())
 		s.Stage().Engine().ConnMgr.SendReliable(sess.ConnID, BuildTypedEventFrame(&msg))
 		s.sentHash[sess.ConnID] = hash
 	})
@@ -82,10 +81,10 @@ func (s *debugBroadcaster) Update(dt float32) {
 // buildDebugInfo constructs a per-player DebugInfo with only the fields
 // whose flag the player has. AoIRadius == 0 + empty cells is the
 // "everything off" sentinel; clients render no overlay in that state.
-func buildDebugInfo(cells []ClusterCellInfo, aoiRadius float32, flags engine.DebugFlag) DebugInfo {
+func buildDebugInfo(cells []ClusterCellInfo, aoiRadius float32, flags engine.DebugFlag, baseCellSize float32) DebugInfo {
 	var msg DebugInfo
 	if flags&engine.DebugTopology != 0 {
-		msg.Topology = buildTopology(cells)
+		msg.Topology = buildTopology(cells, baseCellSize)
 		msg.AoIRadius = aoiRadius
 	}
 	// Future flags slot here as additional `if flags & <bit> != 0` branches.
@@ -93,14 +92,14 @@ func buildDebugInfo(cells []ClusterCellInfo, aoiRadius float32, flags engine.Deb
 }
 
 // buildTopology is the cell-list → CellTopology helper.
-func buildTopology(cells []ClusterCellInfo) CellTopology {
+func buildTopology(cells []ClusterCellInfo, baseCellSize float32) CellTopology {
 	var out CellTopology
 	if len(cells) == 0 {
 		return out
 	}
 	for _, c := range cells {
-		size := c.Cell.Size(coords.CellSize)
-		ox, oy := c.Cell.WorldOrigin(coords.CellSize)
+		size := c.Cell.Size(baseCellSize)
+		ox, oy := c.Cell.WorldOrigin(baseCellSize)
 		out.Cells = append(out.Cells, CellInfo{
 			CellX:   c.Cell.X,
 			CellY:   c.Cell.Y,

@@ -6,7 +6,6 @@ import (
 
 	"github.com/mmokit/mmokit"
 	gamecomp "github.com/mmokit/mmokit/examples/space/internal/component"
-	"github.com/mmokit/mmokit/pkg/coords"
 )
 
 // NetworkSystem wraps the generic ReplicationSystem with game-specific
@@ -308,7 +307,11 @@ func (s *NetworkSystem) buildMovementState(entity mmokit.Entity, streamEpoch uin
 	if s.clock != nil {
 		producedAtMs = s.clock.TickTime(gw.eng.TickIntervalMs())
 	}
-	cellSize := coords.CellSize
+	// From the GameWorld's stage, not s.Stage(): buildMovementState is called
+	// directly by tests that construct a NetworkSystem around a GameWorld
+	// without attaching it to a stage, and the GameWorld is the thing that
+	// actually owns the geometry either way.
+	cellSize := s.gw.stage.CellSize()
 	return PlayerMovementState{
 		Valid:             true,
 		PredictionTicks:   predictionTicks,

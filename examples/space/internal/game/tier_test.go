@@ -36,7 +36,7 @@ func TestDistFromStation_AdjacentCells(t *testing.T) {
 	station := mmokit.CellCoord{CellX: 0, CellY: 0}
 	stationCenterX := coords.CellSize / 2
 
-	got := distFromStation(mmokit.CellCoord{CellX: 1, CellY: 0}, stationCenterX, coords.CellSize/2, station)
+	got := distFromStation(mmokit.DefaultCellSize, mmokit.CellCoord{CellX: 1, CellY: 0}, stationCenterX, coords.CellSize/2, station)
 	want := coords.CellSize
 	if absf(got-want) > 1 {
 		t.Fatalf("distFromStation eastNeighbor = %v, want ~%v", got, want)
@@ -46,16 +46,16 @@ func TestDistFromStation_AdjacentCells(t *testing.T) {
 func TestTierForCellCenter_StationAndNeighbors(t *testing.T) {
 	station := mmokit.CellCoord{CellX: 0, CellY: 0}
 
-	if got := TierForCellCenter(station, station); got != 1 {
+	if got := TierForCellCenter(mmokit.DefaultCellSize, station, station); got != 1 {
 		t.Fatalf("station cell tier = %d, want 1", got)
 	}
-	if got := TierForCellCenter(mmokit.CellCoord{CellX: 1, CellY: 0}, station); got != 1 {
+	if got := TierForCellCenter(mmokit.DefaultCellSize, mmokit.CellCoord{CellX: 1, CellY: 0}, station); got != 1 {
 		t.Fatalf("immediate neighbor tier = %d, want 1", got)
 	}
-	if got := TierForCellCenter(mmokit.CellCoord{CellX: 3, CellY: 0}, station); got != 2 {
+	if got := TierForCellCenter(mmokit.DefaultCellSize, mmokit.CellCoord{CellX: 3, CellY: 0}, station); got != 2 {
 		t.Fatalf("3-cells-out tier = %d, want 2", got)
 	}
-	if got := TierForCellCenter(mmokit.CellCoord{CellX: 5, CellY: 0}, station); got != 3 {
+	if got := TierForCellCenter(mmokit.DefaultCellSize, mmokit.CellCoord{CellX: 5, CellY: 0}, station); got != 3 {
 		t.Fatalf("5-cells-out tier = %d, want 3", got)
 	}
 }

@@ -356,7 +356,7 @@ func NewGameWorld(base *mmokit.Stage, cfg *GameConfig, playerDB *PlayerRepo, cel
 func (gw *GameWorld) respawnLocation() (mmokit.CellCoord, float32, float32) {
 	if gw.WorldSnapshot != nil && len(gw.WorldSnapshot.Stations.Stations) > 0 {
 		st := gw.WorldSnapshot.Stations.Stations[0]
-		wp := coords.FromFlat(float64(st.WorldPos[0]), float64(st.WorldPos[1]))
+		wp := coords.FromFlat(float64(st.WorldPos[0]), float64(st.WorldPos[1]), gw.stage.CellSize())
 		return mmokit.CellCoord{CellX: wp.CellX, CellY: wp.CellY}, wp.LocalX, wp.LocalY
 	}
 	return gw.Config.StationCell, 8100, 8100

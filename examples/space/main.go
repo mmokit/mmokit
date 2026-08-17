@@ -312,8 +312,8 @@ func main() {
 			pdata := playerDB.Get(s.Username)
 			if pdata != nil && pdata.HasSave {
 				return coords.Location{
-					X: float32(pdata.CellX)*coords.CellSize + pdata.X,
-					Y: float32(pdata.CellY)*coords.CellSize + pdata.Y,
+					X: float32(pdata.CellX)*coordinator.CellSize() + pdata.X,
+					Y: float32(pdata.CellY)*coordinator.CellSize() + pdata.Y,
 					// Facing + Tag not yet persisted; leave zero.
 				}
 			}
@@ -329,8 +329,8 @@ func main() {
 				return coords.Location{X: st.WorldPos[0] + 30, Y: st.WorldPos[1]}
 			}
 			return coords.Location{
-				X: float32(gameCfg.StationCell.CellX)*coords.CellSize + 8100 + 30,
-				Y: float32(gameCfg.StationCell.CellY)*coords.CellSize + 8100,
+				X: float32(gameCfg.StationCell.CellX)*coordinator.CellSize() + 8100 + 30,
+				Y: float32(gameCfg.StationCell.CellY)*coordinator.CellSize() + 8100,
 			}
 		})
 	}

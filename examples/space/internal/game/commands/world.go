@@ -196,7 +196,7 @@ func registerWorldPlace(reg *cmdsys.Registry, coord *mmokit.Process, we *worldEd
 				return nil, fmt.Errorf("world editor: no repo wired")
 			}
 
-			wp := coords.FromFlat(float64(args.WorldX), float64(args.WorldY))
+			wp := coords.FromFlat(float64(args.WorldX), float64(args.WorldY), coord.CellSize())
 			cellID := world.CellID{X: wp.CellX, Y: wp.CellY}
 
 			id := args.ID
@@ -636,7 +636,7 @@ func registerWorldReload(reg *cmdsys.Registry, coord *mmokit.Process, we *worldE
 					}
 					// 2. Re-spawn from the new snapshot's bucket for this cell.
 					gwLocal.WorldSnapshot = newSnap
-					bucket, ok := newSnap.BucketByCell()[world.CellID{
+					bucket, ok := newSnap.BucketByCell(coord.CellSize())[world.CellID{
 						X: gwLocal.RootCell.CellX, Y: gwLocal.RootCell.CellY,
 					}]
 					if ok && bucket != nil {

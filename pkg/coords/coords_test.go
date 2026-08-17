@@ -136,7 +136,7 @@ func TestFromFlatToFlatRoundTrip(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			wp := FromFlat(tt.x, tt.y)
+			wp := FromFlat(tt.x, tt.y, CellSize)
 			gotX, gotY := wp.ToFlat()
 			if math.Abs(gotX-tt.x) > 0.01 || math.Abs(gotY-tt.y) > 0.01 {
 				t.Errorf("round-trip (%.4f,%.4f) → (%.4f,%.4f)", tt.x, tt.y, gotX, gotY)

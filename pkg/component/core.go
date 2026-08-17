@@ -6,7 +6,6 @@ package component
 
 import (
 	"math"
-
 )
 
 // Position in world space.

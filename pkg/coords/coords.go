@@ -77,11 +77,11 @@ func Distance(a, b WorldPos) float32 {
 
 // FromFlat converts a flat float64 coordinate pair to a WorldPos.
 // Used for legacy data migration and admin commands.
-func FromFlat(x, y float64) WorldPos {
-	sx := int32(math.Floor(x / float64(CellSize)))
-	sy := int32(math.Floor(y / float64(CellSize)))
-	lx := float32(x - float64(sx)*float64(CellSize))
-	ly := float32(y - float64(sy)*float64(CellSize))
+func FromFlat(x, y float64, cellSize float32) WorldPos {
+	sx := int32(math.Floor(x / float64(cellSize)))
+	sy := int32(math.Floor(y / float64(cellSize)))
+	lx := float32(x - float64(sx)*float64(cellSize))
+	ly := float32(y - float64(sy)*float64(cellSize))
 	return WorldPos{CellX: sx, CellY: sy, LocalX: lx, LocalY: ly}
 }
 

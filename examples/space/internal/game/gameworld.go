@@ -115,7 +115,7 @@ func (gw *GameWorld) bucketForRootCell() *world.CellBucket {
 	if gw.WorldSnapshot == nil {
 		return &world.CellBucket{}
 	}
-	buckets := gw.WorldSnapshot.BucketByCell()
+	buckets := gw.WorldSnapshot.BucketByCell(gw.stage.CellSize())
 	if b, ok := buckets[world.CellID{X: gw.RootCell.CellX, Y: gw.RootCell.CellY}]; ok {
 		return b
 	}

@@ -1,8 +1,6 @@
 package mmokit
 
-import (
-	"github.com/mmokit/mmokit/pkg/coords"
-)
+import ()
 
 // topologyView is the minimal interface BuildCellTopology needs from a
 // game world. *Stage satisfies it via Topology() + GridDimensions().
@@ -23,8 +21,8 @@ func BuildCellTopology(gw topologyView) CellTopology {
 		BaseCellSize: baseCS,
 	}
 	for _, c := range cells {
-		size := c.Cell.Size(coords.CellSize)
-		ox, oy := c.Cell.WorldOrigin(coords.CellSize)
+		size := c.Cell.Size(baseCS)
+		ox, oy := c.Cell.WorldOrigin(baseCS)
 		out.Cells = append(out.Cells, CellInfo{
 			CellX:   c.Cell.X,
 			CellY:   c.Cell.Y,

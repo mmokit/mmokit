@@ -23,7 +23,7 @@ func TestBucketByCell_GroupsByWorldPos(t *testing.T) {
 		}},
 	}
 
-	buckets := s.BucketByCell()
+	buckets := s.BucketByCell(coords.DefaultCellSize)
 
 	if len(buckets[world.CellID{X: 0, Y: 0}].Stations) != 1 {
 		t.Fatalf("cell (0,0) wanted 1 station, got %d", len(buckets[world.CellID{X: 0, Y: 0}].Stations))
@@ -44,7 +44,7 @@ func TestBucketByCell_GroupsByWorldPos(t *testing.T) {
 
 func TestBucketByCell_NilSlicesSafe(t *testing.T) {
 	s := &world.Snapshot{}
-	buckets := s.BucketByCell()
+	buckets := s.BucketByCell(coords.DefaultCellSize)
 	if len(buckets) != 0 {
 		t.Fatalf("empty snapshot should produce no buckets, got %d", len(buckets))
 	}

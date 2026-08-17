@@ -8,7 +8,6 @@ import (
 	"github.com/mmokit/mmokit"
 	gamecomp "github.com/mmokit/mmokit/examples/space/internal/component"
 	"github.com/mmokit/mmokit/examples/space/internal/item"
-	"github.com/mmokit/mmokit/pkg/coords"
 	"github.com/mmokit/mmokit/pkg/spatial"
 )
 
@@ -63,16 +62,16 @@ func (gw *GameWorld) SpawnPlayer(s *mmokit.PlayerSession) {
 		// If saved cell differs from this node's cell, offset position so
 		// CellBoundarySystem will transfer the entity to the correct node.
 		if cellX != gw.RootCell.CellX || cellY != gw.RootCell.CellY {
-			x += float32(cellX-gw.RootCell.CellX) * coords.CellSize
-			y += float32(cellY-gw.RootCell.CellY) * coords.CellSize
+			x += float32(cellX-gw.RootCell.CellX) * gw.stage.CellSize()
+			y += float32(cellY-gw.RootCell.CellY) * gw.stage.CellSize()
 		}
 	} else {
 		// Use gateway-resolved spawn (Process.OnResolveSpawn callback),
 		// converted from world-space to this cell's local coords. Jitter so
 		// stacked first-time logins don't collide.
 		loc := s.SpawnLocation
-		x = loc.X - float32(gw.RootCell.CellX)*coords.CellSize + (rand.Float32()-0.5)*16.7
-		y = loc.Y - float32(gw.RootCell.CellY)*coords.CellSize + (rand.Float32()-0.5)*16.7
+		x = loc.X - float32(gw.RootCell.CellX)*gw.stage.CellSize() + (rand.Float32()-0.5)*16.7
+		y = loc.Y - float32(gw.RootCell.CellY)*gw.stage.CellSize() + (rand.Float32()-0.5)*16.7
 	}
 
 	// Determine equipment: restore saved or assign starter kit

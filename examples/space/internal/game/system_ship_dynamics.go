@@ -5,7 +5,6 @@ import (
 
 	"github.com/mmokit/mmokit"
 	gamecomp "github.com/mmokit/mmokit/examples/space/internal/component"
-	"github.com/mmokit/mmokit/pkg/coords"
 )
 
 // ShipDynamicsSystem handles ship movement physics: linear drag, click-to-move
@@ -133,8 +132,9 @@ func (s *ShipDynamicsSystem) Update(dt float32) {
 			cellDX = mt.CellX - sec.CellX
 			cellDY = mt.CellY - sec.CellY
 		}
-		dx := float32(cellDX)*coords.CellSize + mt.LocalX - pos.X
-		dy := float32(cellDY)*coords.CellSize + mt.LocalY - pos.Y
+		cellSize := s.Stage().CellSize()
+		dx := float32(cellDX)*cellSize + mt.LocalX - pos.X
+		dy := float32(cellDY)*cellSize + mt.LocalY - pos.Y
 		dist := float32(math.Sqrt(float64(dx*dx + dy*dy)))
 
 		// Arrival: stop thrusting, let drag coast the ship to rest.

@@ -254,7 +254,7 @@ func registerPOISpawn(reg *cmdsys.Registry, coord *mmokit.Process) error {
 			// path uses (per-POI tier, not cell-tier).
 			cellCoord := mmokit.CellCoord{CellX: int32(cell.CellID().X), CellY: int32(cell.CellID().Y)}
 			stationCell := gw.Config.StationCell
-			tier := game.TierForDist(game.DistFromStation(cellCoord, localX, localY, stationCell))
+			tier := game.TierForDist(game.DistFromStation(cell.Stage.CellSize(), cellCoord, localX, localY, stationCell))
 
 			return mmokit.CmdOnLoop(ctx, cell.Engine, func() (POISpawnResult, error) {
 				netID := gw.SpawnPOIWithRoster(localX, localY, gamecomp.POITypeCombat, args.RosterIdx, tier)

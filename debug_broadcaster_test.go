@@ -10,7 +10,7 @@ func TestDebugBroadcaster_BuildPayload_TopologyOnly(t *testing.T) {
 	cells := []ClusterCellInfo{
 		{Cell: CellID{X: 0, Y: 0, Depth: 0}, HostID: "host-a"},
 	}
-	got := buildDebugInfo(cells, 500, engine.DebugTopology)
+	got := buildDebugInfo(cells, 500, engine.DebugTopology, DefaultCellSize)
 	if len(got.Topology.Cells) == 0 {
 		t.Errorf("Topology should be populated when DebugTopology bit is set")
 	}
@@ -23,7 +23,7 @@ func TestDebugBroadcaster_BuildPayload_NoFlags(t *testing.T) {
 	cells := []ClusterCellInfo{
 		{Cell: CellID{X: 0, Y: 0, Depth: 0}, HostID: "host-a"},
 	}
-	got := buildDebugInfo(cells, 500, 0)
+	got := buildDebugInfo(cells, 500, 0, DefaultCellSize)
 	if len(got.Topology.Cells) != 0 {
 		t.Errorf("Topology cells should be empty when DebugTopology bit is unset")
 	}
@@ -78,7 +78,7 @@ func TestDebugBroadcaster_HashChangesOnFlagsChange(t *testing.T) {
 
 func TestDebugBroadcaster_PayloadType(t *testing.T) {
 	cells := []ClusterCellInfo{{Cell: CellID{X: 1, Y: 2}, HostID: "host-a"}}
-	msg := buildDebugInfo(cells, 800, engine.DebugTopology)
+	msg := buildDebugInfo(cells, 800, engine.DebugTopology, DefaultCellSize)
 	if msg.AoIRadius != 800 {
 		t.Errorf("buildDebugInfo: AoIRadius=%v, want 800", msg.AoIRadius)
 	}
