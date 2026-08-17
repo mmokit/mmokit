@@ -26,6 +26,13 @@ type CellViewer struct {
 	dirDX        int32  // neighbor's direction from source cell (-1, 0, or +1)
 	dirDY        int32  // neighbor's direction from source cell (-1, 0, or +1)
 
+	// defaultTier is the fallback returned by Tier for kinds with no override.
+	// Precomputed because Tier is called once per candidate entity, per
+	// viewer, per tick — building the struct there was already wasted work,
+	// and sourcing its radius from the owning stage would have added a
+	// pointer chase to that same path.
+	defaultTier replication.ReplicationTier
+
 	// prevInSet is the set of netIDs that were in this viewer's push set
 	// on the previous tick. currInSet is the set being accumulated on the
 	// current tick. candidatesFor consults prevInSet for hysteresis
@@ -66,8 +73,12 @@ func NewCellViewer(
 	// one tick of unroutable frames while the receiver's Cells map is
 	// already carrying the new key — acceptable.
 	var sourceCellID MeshCellID
+	baseCellSize := coords.CellSize // MIGRATION SEAM (CE-010): see NewStage.
 	if sourceCell != nil {
 		sourceCellID = sourceCell.MeshID()
+		if sourceCell.Stage != nil {
+			baseCellSize = sourceCell.Stage.CellSize()
+		}
 	}
 	return &CellViewer{
 		cellID:       cellID,
@@ -76,12 +87,20 @@ func NewCellViewer(
 		x:            boundaryX,
 		y:            boundaryY,
 		tiers:        tiers,
-		baselines:    replication.NewBaselineStore(replication.AckReliable),
-		tailScratch:  make([]byte, 0, 256),
-		sourceCell:   sourceCell,
-		destCell:     destCell,
-		prevInSet:    make(map[uint32]struct{}),
-		currInSet:    make(map[uint32]struct{}),
+		// sqrt(2) * cellSize bounds the distance between any two points in one
+		// source cell; doubled to cover the neighbor's half of the edge and
+		// floating-point drift. See Tier for why the radius must be this large.
+		defaultTier: replication.ReplicationTier{
+			Radius:        baseCellSize * 2,
+			UpdateDivisor: 1,
+			BaseWeight:    1,
+		},
+		baselines:   replication.NewBaselineStore(replication.AckReliable),
+		tailScratch: make([]byte, 0, 256),
+		sourceCell:  sourceCell,
+		destCell:    destCell,
+		prevInSet:   make(map[uint32]struct{}),
+		currInSet:   make(map[uint32]struct{}),
 	}
 }
 
@@ -165,15 +184,7 @@ func (v *CellViewer) Tier(kind uint16) replication.ReplicationTier {
 			return t
 		}
 	}
-	// sqrt(2) * cellSize is a tight upper bound on the distance between
-	// any two points within a single source cell. Multiplied by 2 for a
-	// safety margin that covers the neighbor's half of the edge too,
-	// plus any small floating-point drift.
-	return replication.ReplicationTier{
-		Radius:        coords.CellSize * 2,
-		UpdateDivisor: 1,
-		BaseWeight:    1,
-	}
+	return v.defaultTier
 }
 
 // Baselines returns the per-neighbor acknowledged snapshot store.
