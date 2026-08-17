@@ -49,13 +49,13 @@ func TestBorderDispatcher_WireMembershipMatchesBaseline(t *testing.T) {
 	colMap := ecs.NewMap1[component.Collider](world)
 
 	ent := world.NewEntity()
-	posMap.Add(ent, &component.Position{X: coords.CellSize - 15, Y: coords.CellSize - 15})
+	posMap.Add(ent, &component.Position{X: base.CellSize() - 15, Y: base.CellSize() - 15})
 	nidMap.Add(ent, &component.NetworkID{ID: 41, Epoch: 2})
 	kindMap.Add(ent, &component.EntityKind{Type: 7})
 	colMap.Add(ent, &component.Collider{Radius: 5})
 
 	tiers := map[uint16]replication.ReplicationTier{
-		7: {Radius: coords.CellSize * 2, UpdateDivisor: 5, BaseWeight: 2},
+		7: {Radius: base.CellSize() * 2, UpdateDivisor: 5, BaseWeight: 2},
 	}
 	bd := NewBorderDispatcher(base, nil)
 	bx, by := neighborBoundaryMidpoint(CellID{X: 0, Y: 0}, 1, 1, base.CellSize())
@@ -91,7 +91,7 @@ func TestBorderDispatcher_WireMembershipMatchesBaseline(t *testing.T) {
 
 	// Restore visibility. Re-entry must be present even on another divisor-
 	// skipped tick and must carry a full tail against the dropped baseline.
-	tiers[7] = replication.ReplicationTier{Radius: coords.CellSize * 2, UpdateDivisor: 5, BaseWeight: 2}
+	tiers[7] = replication.ReplicationTier{Radius: base.CellSize() * 2, UpdateDivisor: 5, BaseWeight: 2}
 	reentered := bd.disp.Walk(nv, 3, bd.candidatesFor(nv, 3))
 	if len(reentered.Entries) != 1 {
 		t.Fatalf("re-entry count = %d, want 1", len(reentered.Entries))
@@ -140,9 +140,7 @@ func TestBorderDispatcher_WireMembershipMatchesBaseline(t *testing.T) {
 // form, consumes the bounded new-baseline full-tail window, then verifies
 // the next byte-identical tail uses the sentinel.
 func TestBorderDispatcher_DeltaCompression_UnchangedTailEmitsSentinel(t *testing.T) {
-	coords.SetCellSize(8192)
-	defer coords.SetCellSize(1024)
-	base := newTestWorldBase(t, CellID{X: 0, Y: 0})
+	base := newTestWorldBase(t, CellID{X: 0, Y: 0}, 8192)
 
 	// Register a replicated component so the tail has content to dedup.
 	world := base.ECSWorld()
@@ -158,7 +156,7 @@ func TestBorderDispatcher_DeltaCompression_UnchangedTailEmitsSentinel(t *testing
 	kindMap := ecs.NewMap1[component.EntityKind](world)
 	colMap := ecs.NewMap1[component.Collider](world)
 	ent := world.NewEntity()
-	posMap.Add(ent, &component.Position{X: coords.CellSize - 15, Y: coords.CellSize - 15})
+	posMap.Add(ent, &component.Position{X: base.CellSize() - 15, Y: base.CellSize() - 15})
 	velMap.Add(ent, &component.Velocity{})
 	nidMap.Add(ent, &component.NetworkID{ID: 1, Epoch: 0})
 	kindMap.Add(ent, &component.EntityKind{Type: 1})
@@ -216,9 +214,7 @@ func TestBorderDispatcher_DeltaCompression_UnchangedTailEmitsSentinel(t *testing
 // receiver permanently stale. The force-resync window bounds staleness
 // at ~1.5 seconds on a dropped frame.
 func TestBorderDispatcher_DeltaCompression_ForceResync(t *testing.T) {
-	coords.SetCellSize(8192)
-	defer coords.SetCellSize(1024)
-	base := newTestWorldBase(t, CellID{X: 0, Y: 0})
+	base := newTestWorldBase(t, CellID{X: 0, Y: 0}, 8192)
 
 	world := base.ECSWorld()
 	healthMap := ecs.NewMap1[testReplicaComponent](world)
@@ -232,7 +228,7 @@ func TestBorderDispatcher_DeltaCompression_ForceResync(t *testing.T) {
 	kindMap := ecs.NewMap1[component.EntityKind](world)
 	colMap := ecs.NewMap1[component.Collider](world)
 	ent := world.NewEntity()
-	posMap.Add(ent, &component.Position{X: coords.CellSize - 15, Y: coords.CellSize - 15})
+	posMap.Add(ent, &component.Position{X: base.CellSize() - 15, Y: base.CellSize() - 15})
 	velMap.Add(ent, &component.Velocity{})
 	nidMap.Add(ent, &component.NetworkID{ID: 1, Epoch: 0})
 	kindMap.Add(ent, &component.EntityKind{Type: 1})
@@ -275,9 +271,7 @@ func TestBorderDispatcher_DeltaCompression_ForceResync(t *testing.T) {
 // empty frame, so an unchanged-sentinel on re-entry would recreate the entity
 // with zero-valued game components until the next periodic full resync.
 func TestBorderDispatcher_DeltaCompression_ReentryEmitsFullTail(t *testing.T) {
-	coords.SetCellSize(8192)
-	defer coords.SetCellSize(1024)
-	base := newTestWorldBase(t, CellID{X: 0, Y: 0})
+	base := newTestWorldBase(t, CellID{X: 0, Y: 0}, 8192)
 
 	world := base.ECSWorld()
 	healthMap := ecs.NewMap1[testReplicaComponent](world)
@@ -291,7 +285,7 @@ func TestBorderDispatcher_DeltaCompression_ReentryEmitsFullTail(t *testing.T) {
 	kindMap := ecs.NewMap1[component.EntityKind](world)
 	colMap := ecs.NewMap1[component.Collider](world)
 	ent := world.NewEntity()
-	posMap.Add(ent, &component.Position{X: coords.CellSize - 15, Y: coords.CellSize - 15})
+	posMap.Add(ent, &component.Position{X: base.CellSize() - 15, Y: base.CellSize() - 15})
 	velMap.Add(ent, &component.Velocity{})
 	nidMap.Add(ent, &component.NetworkID{ID: 1, Epoch: 1})
 	kindMap.Add(ent, &component.EntityKind{Type: 1})
@@ -323,8 +317,8 @@ func TestBorderDispatcher_DeltaCompression_ReentryEmitsFullTail(t *testing.T) {
 	// Leave both edge margins. Rotating this empty interest set must also
 	// discard the baseline that described the now-destroyed remote replica.
 	pos := posMap.Get(ent)
-	pos.X = coords.CellSize / 2
-	pos.Y = coords.CellSize / 2
+	pos.X = base.CellSize() / 2
+	pos.Y = base.CellSize() / 2
 	leftTick := unchangedTick + 1
 	left := bd.disp.Walk(nv, leftTick, bd.candidatesFor(nv, leftTick))
 	if len(left.Entries) != 0 {
@@ -337,8 +331,8 @@ func TestBorderDispatcher_DeltaCompression_ReentryEmitsFullTail(t *testing.T) {
 
 	// Re-enter with byte-identical components. This must be a full tail,
 	// because the receiver no longer has state for an unchanged sentinel.
-	pos.X = coords.CellSize - 15
-	pos.Y = coords.CellSize - 15
+	pos.X = base.CellSize() - 15
+	pos.Y = base.CellSize() - 15
 	reentryTick := leftTick + 1
 	reentered := bd.disp.Walk(nv, reentryTick, bd.candidatesFor(nv, reentryTick))
 	if len(reentered.Entries) != 1 {
@@ -373,9 +367,7 @@ func TestBorderDispatcher_DeltaCompression_ReentryEmitsFullTail(t *testing.T) {
 // that a reused netID under a new authority epoch cannot inherit the prior
 // lifecycle's component baseline.
 func TestBorderDispatcher_DeltaCompression_EpochChangeEmitsFullTail(t *testing.T) {
-	coords.SetCellSize(8192)
-	defer coords.SetCellSize(1024)
-	base := newTestWorldBase(t, CellID{X: 0, Y: 0})
+	base := newTestWorldBase(t, CellID{X: 0, Y: 0}, 8192)
 
 	world := base.ECSWorld()
 	healthMap := ecs.NewMap1[testReplicaComponent](world)
@@ -388,7 +380,7 @@ func TestBorderDispatcher_DeltaCompression_EpochChangeEmitsFullTail(t *testing.T
 	kindMap := ecs.NewMap1[component.EntityKind](world)
 	colMap := ecs.NewMap1[component.Collider](world)
 	ent := world.NewEntity()
-	posMap.Add(ent, &component.Position{X: coords.CellSize - 15, Y: coords.CellSize - 15})
+	posMap.Add(ent, &component.Position{X: base.CellSize() - 15, Y: base.CellSize() - 15})
 	nidMap.Add(ent, &component.NetworkID{ID: 1, Epoch: 4})
 	kindMap.Add(ent, &component.EntityKind{Type: 1})
 	colMap.Add(ent, &component.Collider{Radius: 5})
@@ -540,7 +532,7 @@ func TestBorderDispatcher_CornerEntityReachesAllNeighbors(t *testing.T) {
 	// Asteroid sits 15 units inside the (+X, +Y) corner of cell (0,0).
 	// With AoI margin 100 this passes nearRight AND nearTop, making it
 	// a candidate for all three neighbors: (1,0), (0,1), and (1,1).
-	cs := coords.CellSize
+	cs := base.CellSize()
 	corner := cs - 15
 	ent := world.NewEntity()
 	posMap.Add(ent, &component.Position{X: corner, Y: corner})

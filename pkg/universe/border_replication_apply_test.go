@@ -8,7 +8,6 @@ import (
 
 	"github.com/mlange-42/ark/ecs"
 	"github.com/mmokit/mmokit/pkg/component"
-	"github.com/mmokit/mmokit/pkg/coords"
 	"github.com/mmokit/mmokit/pkg/engine"
 	"github.com/mmokit/mmokit/pkg/logger"
 	"github.com/mmokit/mmokit/pkg/net"
@@ -71,9 +70,6 @@ func newTestWorldBase(t *testing.T, cell CellID, cellSize ...float32) *Stage {
 	if len(cellSize) > 0 {
 		size = cellSize[0]
 	}
-	// Still set the global: sites not yet converted read it, and the two must
-	// agree. Removed with the global in the last step of CE-010 part A.
-	coords.SetCellSize(size)
 	log := logger.New()
 	eng := engine.New(engine.DefaultConfig(), net.NewConnManager(), log)
 	stage := NewStage(eng, cell, 300, nil)
@@ -832,9 +828,7 @@ func TestApplyBorderFrame_ProducedAtMsRoundTrip(t *testing.T) {
 // of the per-entity DeltaBuf (qangle occupies bytes [16:18]). Pairs
 // with the round-trip test above to pin both sides of the codec.
 func TestBorderDispatcher_StampsClusterClockTickTime(t *testing.T) {
-	coords.SetCellSize(8192)
-	defer coords.SetCellSize(1024)
-	base := newTestWorldBase(t, CellID{X: 0, Y: 0})
+	base := newTestWorldBase(t, CellID{X: 0, Y: 0}, 8192)
 
 	// Pin a deterministic clock value so the assertion is exact.
 	const stamp uint64 = 5_000_000_042
@@ -853,7 +847,7 @@ func TestBorderDispatcher_StampsClusterClockTickTime(t *testing.T) {
 	kindMap := ecs.NewMap1[component.EntityKind](world)
 	colMap := ecs.NewMap1[component.Collider](world)
 	ent := world.NewEntity()
-	posMap.Add(ent, &component.Position{X: coords.CellSize - 15, Y: coords.CellSize - 15})
+	posMap.Add(ent, &component.Position{X: base.CellSize() - 15, Y: base.CellSize() - 15})
 	velMap.Add(ent, &component.Velocity{})
 	nidMap.Add(ent, &component.NetworkID{ID: 1, Epoch: 0})
 	kindMap.Add(ent, &component.EntityKind{Type: 1})
