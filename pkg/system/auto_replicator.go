@@ -8,7 +8,6 @@ import (
 	"github.com/mlange-42/ark/ecs"
 
 	"github.com/mmokit/mmokit/pkg/component"
-	"github.com/mmokit/mmokit/pkg/coords"
 	"github.com/mmokit/mmokit/pkg/quantize"
 	"github.com/mmokit/mmokit/pkg/spatial"
 )
@@ -212,17 +211,20 @@ func (entryPositionBinding) schema() BindingSchema {
 
 // viewerRelativePosBinding computes world-absolute position from cell-local pos + cell offset.
 type viewerRelativePosBinding struct {
-	posMap     *ecs.Map1[component.Position]
-	cellMap    *ecs.Map1[component.CellCoord]
-	cellSizeFn func() float32
+	posMap   *ecs.Map1[component.Position]
+	cellMap  *ecs.Map1[component.CellCoord]
+	cellSize float32
 }
 
 // ViewerRelativePos returns a binding that computes world-absolute position:
 // worldX = pos.X + float32(cellCoord.CellX) * cellSize
 //
-// Cell size defaults to coords.CellSize.
-func ViewerRelativePos(posMap *ecs.Map1[component.Position], cellCoordMap *ecs.Map1[component.CellCoord]) ComponentBinding {
-	return &viewerRelativePosBinding{posMap: posMap, cellMap: cellCoordMap, cellSizeFn: func() float32 { return coords.CellSize }}
+// cellSize is a plain value, not a callback. It used to be a closure over a
+// mutable global so that "cell sizes change at runtime" was expressible; they
+// do not, and pretending otherwise cost a function call per field per entity
+// per viewer per tick.
+func ViewerRelativePos(posMap *ecs.Map1[component.Position], cellCoordMap *ecs.Map1[component.CellCoord], cellSize float32) ComponentBinding {
+	return &viewerRelativePosBinding{posMap: posMap, cellMap: cellCoordMap, cellSize: cellSize}
 }
 
 func (b *viewerRelativePosBinding) snapshotFields() []int { return []int{4, 4} }
@@ -233,7 +235,7 @@ func (b *viewerRelativePosBinding) worldPos(entity ecs.Entity) (float32, float32
 	}
 	pos := b.posMap.Get(entity)
 	cell := b.cellMap.Get(entity)
-	cs := b.cellSizeFn()
+	cs := b.cellSize
 	worldX := pos.X + float32(cell.CellX)*cs
 	worldY := pos.Y + float32(cell.CellY)*cs
 	return worldX, worldY
@@ -482,8 +484,12 @@ func (g *bindingGroup) schema() BindingSchema {
 
 // EngineBindings returns a ComponentBinding bundling the standard engine-level
 // replication fields: viewer-relative position, quantized velocity, quantized
-// size. velScale and sizeScale come from the process Config.
-func EngineBindings(w *ecs.World, velScale, sizeScale float32) ComponentBinding {
+// size. velScale, sizeScale and cellSize come from the process Config.
+//
+// cellSize affects the VALUE these bindings compute, never the field layout —
+// ViewerRelativePos emits two f32 fields whatever the geometry — so the wire
+// schema is unchanged and --dump-schema output is unaffected.
+func EngineBindings(w *ecs.World, velScale, sizeScale, cellSize float32) ComponentBinding {
 	if velScale == 0 {
 		velScale = 100
 	}
@@ -496,7 +502,7 @@ func EngineBindings(w *ecs.World, velScale, sizeScale float32) ComponentBinding 
 	colliderMap := ecs.NewMap1[component.Collider](w)
 
 	bindings := []ComponentBinding{
-		ViewerRelativePos(posMap, cellMap),
+		ViewerRelativePos(posMap, cellMap, cellSize),
 		QVelocity(velMap, velScale),
 		QSize(colliderMap, sizeScale),
 	}

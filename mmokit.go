@@ -1078,14 +1078,16 @@ func WithPreMarshal[T any](fn func(*T)) universe.ComponentOption {
 func BuildReplicators(w *ecs.World, coord *universe.Process, defs ...universe.EntityKindDef) *system.ReplicatorRegistry {
 	velScale := float32(2000) // matches universe.New default
 	sizeScale := float32(500) // matches universe.New default
+	cellSize := float32(coords.DefaultCellSize)
 	if coord != nil {
 		velScale = coord.Cfg().VelQuantScale
 		sizeScale = coord.Cfg().SizeQuantScale
+		cellSize = coord.CellSize()
 	}
 	replicators := system.NewReplicatorRegistry()
 	for _, def := range defs {
 		var bindings []system.ComponentBinding
-		bindings = append(bindings, system.EngineBindings(w, velScale, sizeScale))
+		bindings = append(bindings, system.EngineBindings(w, velScale, sizeScale, cellSize))
 
 		// Partition game bindings: var-tail bindings go to the end.
 		var regular, varTails []system.ComponentBinding
