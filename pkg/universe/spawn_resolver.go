@@ -45,7 +45,7 @@ func (c *Process) CellAtPosition(worldX, worldY float32) string {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 	for cell, cellID := range c.CellOwner {
-		minX, minY, maxX, maxY := cell.WorldBounds(coords.CellSize)
+		minX, minY, maxX, maxY := cell.WorldBounds(c.CellSize())
 		if worldX >= minX && worldX < maxX && worldY >= minY && worldY < maxY {
 			return string(cellID)
 		}
@@ -88,7 +88,7 @@ func (g *Gateway) resolveSpawn(ctx context.Context, userID uuid.UUID, username s
 			session := &engine.PlayerSession{UserID: userID, Username: username}
 			return spawnResolution{Location: resolver(session)}
 		}
-		return spawnResolution{Location: defaultSpawnLocation()}
+		return spawnResolution{Location: defaultSpawnLocation(g.topology.baseCellSize)}
 	}
 
 	if g.controlClient != nil {
@@ -108,15 +108,15 @@ func (g *Gateway) resolveSpawn(ctx context.Context, userID uuid.UUID, username s
 			g.log.Log(CatNetConn, "gateway: resolveSpawn RPC failed for %s: %v — using engine default", username, err)
 		}
 	}
-	return spawnResolution{Location: defaultSpawnLocation()}
+	return spawnResolution{Location: defaultSpawnLocation(g.topology.baseCellSize)}
 }
 
 // defaultSpawnLocation returns the center of cell (0,0) using the current
 // package-level world cell size. Used when no SpawnResolver is registered
 // (or the standalone RPC fails). Topology-blind — the gateway still routes
 // via CellAtPosition.
-func defaultSpawnLocation() coords.Location {
-	return coords.Location{X: coords.CellSize / 2, Y: coords.CellSize / 2}
+func defaultSpawnLocation(baseCellSize float32) coords.Location {
+	return coords.Location{X: baseCellSize / 2, Y: baseCellSize / 2}
 }
 
 // ── spawnOrchestrator ─────────────────────────────────────────────────────────

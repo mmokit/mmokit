@@ -5,7 +5,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/mmokit/mmokit/pkg/coords"
 	"github.com/mmokit/mmokit/pkg/metrics"
 )
 
@@ -207,7 +206,7 @@ func (c *Process) SplitCell(cell CellID, bypassCooldown bool) error {
 	// MinCellSize (BaseCellSize/4) when pc is absent, matching the
 	// resolved value Build() installs on the default-partition path.
 	pc := c.cfg.DynamicPartitioning
-	minCellSize := coords.CellSize / 4
+	minCellSize := c.CellSize() / 4
 	if pc != nil && pc.MinCellSize > 0 {
 		minCellSize = pc.MinCellSize
 	}
@@ -219,7 +218,7 @@ func (c *Process) SplitCell(cell CellID, bypassCooldown bool) error {
 		return fmt.Errorf("cell %s does not exist", cell)
 	}
 
-	cellSize := cell.Size(coords.CellSize)
+	cellSize := cell.Size(c.CellSize())
 	if cellSize/2 < minCellSize {
 		return fmt.Errorf("cell %s (size %.0f) cannot split: would be below min size %.0f", cell, cellSize, minCellSize)
 	}

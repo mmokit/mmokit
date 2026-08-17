@@ -4,7 +4,6 @@ import (
 	"context"
 	"time"
 
-	"github.com/mmokit/mmokit/pkg/coords"
 	"github.com/mmokit/mmokit/pkg/metrics"
 )
 
@@ -67,7 +66,7 @@ func (pm *partitionMonitor) evaluate() {
 		}
 
 		// --- Split check ---
-		cellSize := cell.Size(coords.CellSize)
+		cellSize := cell.Size(pm.coord.CellSize())
 		canSplit := cellSize/2 >= pm.cfg.MinCellSize
 
 		if pm.cfg.AutoSplitEnabled && smoothed > pm.cfg.SplitThreshold && canSplit {

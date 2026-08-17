@@ -10,7 +10,6 @@ import (
 	"github.com/mlange-42/ark/ecs"
 	"github.com/mmokit/mmokit/pkg/cmdsys"
 	"github.com/mmokit/mmokit/pkg/component"
-	"github.com/mmokit/mmokit/pkg/coords"
 )
 
 // ── entity.spawn ────────────────────────────────────────────────────────────
@@ -158,8 +157,7 @@ func findKindByName(stage *Stage, kindName string) (uint8, bool) {
 }
 
 // worldToLocal converts a world coordinate to cell indices and cell-local offsets.
-func worldToLocal(worldX, worldY float32) (cellX, cellY int32, localX, localY float32) {
-	cs := coords.CellSize
+func worldToLocal(worldX, worldY, cs float32) (cellX, cellY int32, localX, localY float32) {
 	cx := int32(worldX / cs)
 	cy := int32(worldY / cs)
 	if worldX < 0 && worldX != float32(cx)*cs {
@@ -172,8 +170,7 @@ func worldToLocal(worldX, worldY float32) (cellX, cellY int32, localX, localY fl
 }
 
 // localToWorld converts a cell-local coordinate to a world coordinate.
-func localToWorld(cellX, cellY int32, localX, localY float32) (float32, float32) {
-	cs := coords.CellSize
+func localToWorld(cellX, cellY int32, localX, localY, cs float32) (float32, float32) {
 	return float32(cellX)*cs + localX, float32(cellY)*cs + localY
 }
 
@@ -371,7 +368,7 @@ func entitySpawnHandler(coord *Process) cmdsys.HandlerFunc {
 		}
 
 		hostID := localHostIDFor(coord, destCell)
-		cellX, cellY, _, _ := worldToLocal(args.X, args.Y)
+		cellX, cellY, _, _ := worldToLocal(args.X, args.Y, coord.CellSize())
 
 		spawned, err := runOnCell(ctx, destCell, func() (int32, error) {
 			rng := rand.New(rand.NewSource(int64(args.Count) * time.Now().UnixNano()))
@@ -616,7 +613,7 @@ func entityListHandler(coord *Process) cmdsys.HandlerFunc {
 					var worldX, worldY float32
 					if posMap.HasAll(entity) {
 						pos := posMap.Get(entity)
-						worldX, worldY = localToWorld(cX, cY, pos.X, pos.Y)
+						worldX, worldY = localToWorld(cX, cY, pos.X, pos.Y, coord.CellSize())
 					}
 					out = append(out, entityRow{
 						NetID:  nid.ID,
@@ -662,7 +659,7 @@ func entityTpHandler(coord *Process) cmdsys.HandlerFunc {
 			posMap := ownerCell.Stage.PositionMap()
 			if posMap.HasAll(entity) {
 				pos := posMap.Get(entity)
-				prevWorldX, prevWorldY = localToWorld(cid.X, cid.Y, pos.X, pos.Y)
+				prevWorldX, prevWorldY = localToWorld(cid.X, cid.Y, pos.X, pos.Y, coord.CellSize())
 			}
 
 			// Determine kind name.

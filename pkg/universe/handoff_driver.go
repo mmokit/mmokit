@@ -6,7 +6,6 @@ import (
 	"github.com/mlange-42/ark/ecs"
 
 	"github.com/mmokit/mmokit/pkg/component"
-	"github.com/mmokit/mmokit/pkg/coords"
 	"github.com/mmokit/mmokit/pkg/engine"
 )
 
@@ -467,7 +466,7 @@ func (hd *HandoffDriver) handleCrossing(evt CrossingEvent, currentClusterTick ui
 		cc := hd.cellMap.Get(evt.Entity)
 		normPosX, normPosY = pos.X, pos.Y
 		normCellX, normCellY = cc.CellX, cc.CellY
-		cellSize := coords.CellSize
+		cellSize := hd.base.CellSize()
 		for normPosX >= cellSize {
 			normPosX -= cellSize
 			normCellX++

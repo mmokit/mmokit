@@ -3,8 +3,6 @@ package universe
 import (
 	"context"
 	"time"
-
-	"github.com/mmokit/mmokit/pkg/coords"
 )
 
 // mergeNoInvariants is a sentinel Invariant slice that disables
@@ -149,11 +147,11 @@ func stepMergeApplyCoordMutation(c *Process, ctx *CommitContext) error {
 
 	var mergeDirectives []rewireDirective
 	if c.Control.Topology.Neighbors != nil {
-		c.Control.Topology.UpdateAfterMerge(siblings, parent, coords.CellSize)
+		c.Control.Topology.UpdateAfterMerge(siblings, parent, c.CellSize())
 		// Incremental rewire — touch the parent plus whatever the old
 		// siblings used to border.
 		affected := []CellID{parent}
-		c.Control.Topology.RebuildNeighborsFor(affected, coords.CellSize)
+		c.Control.Topology.RebuildNeighborsFor(affected, c.CellSize())
 		mergeDirectives = c.computeRewireDirectivesLocked(affected)
 	}
 	c.mu.Unlock()

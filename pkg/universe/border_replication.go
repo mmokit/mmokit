@@ -8,7 +8,6 @@ import (
 
 	"github.com/mlange-42/ark/ecs"
 	"github.com/mmokit/mmokit/pkg/component"
-	"github.com/mmokit/mmokit/pkg/coords"
 	"github.com/mmokit/mmokit/pkg/quantize"
 	"github.com/mmokit/mmokit/pkg/replication"
 )
@@ -100,7 +99,7 @@ func (bd *BorderDispatcher) candidatesFor(nv *CellViewer, currentTick uint64) it
 			return
 		}
 		world := bd.base.ECSWorld()
-		cellSize := coords.CellSize
+		cellSize := bd.base.CellSize()
 		lMinX, lMinY, lMaxX, lMaxY := bd.base.Cell().LocalBounds(cellSize)
 		enterMargin := bd.base.GetAoIRadius()
 		if enterMargin <= 0 {

@@ -965,7 +965,7 @@ func (s *meshControlServer) handleInboundResolveSpawn(gatewayID string, req *mes
 	if resolver != nil {
 		loc = resolver(&session)
 	} else {
-		loc = defaultSpawnLocation()
+		loc = defaultSpawnLocation(s.coord.CellSize())
 	}
 	resp.WorldX = loc.X
 	resp.WorldY = loc.Y

@@ -1823,7 +1823,7 @@ func (c *Process) Build() {
 	// Compute spatial hash cell size (default: CellSize / 10)
 	spatialCellSize := cfg.SpatialBucketSize
 	if spatialCellSize <= 0 {
-		spatialCellSize = coords.CellSize / 10
+		spatialCellSize = c.CellSize() / 10
 	}
 
 	// Initialize net ID allocator
@@ -1832,7 +1832,7 @@ func (c *Process) Build() {
 	// Resolve dynamic partitioning defaults
 	if cfg.DynamicPartitioning != nil {
 		if cfg.DynamicPartitioning.MinCellSize <= 0 {
-			cfg.DynamicPartitioning.MinCellSize = coords.CellSize / 4
+			cfg.DynamicPartitioning.MinCellSize = c.CellSize() / 4
 		}
 		c.partState = newPartitionState()
 	}
@@ -1905,7 +1905,7 @@ func (c *Process) Build() {
 			cfg:        &c.cfg,
 			sessions:   make(map[uint32]*localSession),
 			authStates: make(map[uint32]connAuthState),
-			topology:   newCachedTopology(c),
+			topology:   newCachedTopology(c, c.CellSize()),
 			tickRate:   uint32(cfg.TickRate),
 		}
 		c.gateway.sessionRoutes = c.sessionRoutes
@@ -2007,7 +2007,7 @@ func (c *Process) Build() {
 		}
 
 		// Compute topology and wire neighbors
-		c.Control.Topology = ComputeTopology(cells, coords.CellSize)
+		c.Control.Topology = ComputeTopology(cells, c.CellSize())
 		c.mu.Lock()
 		for cell, neighborCells := range c.Control.Topology.Neighbors {
 			nodeID := c.CellOwner[cell]
@@ -2215,7 +2215,7 @@ func (c *Process) buildStandaloneGateway() {
 		cfg:         &c.cfg,
 		sessions:    make(map[uint32]*localSession),
 		authStates:  make(map[uint32]connAuthState),
-		topology:    newCachedTopology(nil), // populated by PeerList broadcasts
+		topology:    newCachedTopology(nil, c.CellSize()), // populated by PeerList broadcasts
 		hostNetwork: hn,
 		spawnOrch:   newSpawnOrchestrator(),
 		tickRate:    uint32(cfg.TickRate),
@@ -2920,7 +2920,7 @@ func (c *Process) cellToHostResolver() func(MeshCellID) string {
 func (c *Process) resolveSpatialCellSize() float32 {
 	bucket := c.cfg.SpatialBucketSize
 	if bucket <= 0 {
-		bucket = coords.CellSize / 10
+		bucket = c.CellSize() / 10
 	}
 	return bucket
 }
@@ -3080,7 +3080,7 @@ func (c *Process) renameCellOnNode(from, to MeshCellID) error {
 		// with the wrong coordinate.
 		cell.setIdentity(to, toCellID)
 		if cell.Stage != nil {
-			cell.Stage.UpdateCellBounds(toCellID, coords.CellSize)
+			cell.Stage.UpdateCellBounds(toCellID, c.CellSize())
 		}
 		if cell.Metrics != nil {
 			cell.Metrics.SetCellID(string(to))

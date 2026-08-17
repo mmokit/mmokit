@@ -111,7 +111,7 @@ func (b *cellBridge) ensureBorderDispatcher() *BorderDispatcher {
 			continue
 		}
 		dx, dy := CellDirection(b.cell.CellID(), destCell.CellID(), baseCellSize)
-		bx, by := neighborBoundaryMidpoint(b.cell.CellID(), dx, dy)
+		bx, by := neighborBoundaryMidpoint(b.cell.CellID(), dx, dy, baseCellSize)
 		nv := NewCellViewer(MeshCellID(destStr), CellViewerID(destStr), bx, by, nil, b.cell, destCell)
 		nv.SetDirection(dx, dy)
 		viewers[destStr] = nv
@@ -143,8 +143,8 @@ func (b *cellBridge) invalidateBorderDispatcher() {
 
 // neighborBoundaryMidpoint computes the world-space midpoint of the shared
 // edge between a cell and its neighbor in direction (dx, dy).
-func neighborBoundaryMidpoint(cell CellID, dx, dy int32) (float32, float32) {
-	minX, minY, maxX, maxY := cell.WorldBounds(coords.CellSize)
+func neighborBoundaryMidpoint(cell CellID, dx, dy int32, baseCellSize float32) (float32, float32) {
+	minX, minY, maxX, maxY := cell.WorldBounds(baseCellSize)
 	cx := (minX + maxX) / 2
 	cy := (minY + maxY) / 2
 	halfW := (maxX - minX) / 2
@@ -258,7 +258,7 @@ func (b *cellBridge) RequestRespawn(connID uint32, username string) {
 		session := &engine.PlayerSession{ConnID: connID, Username: username}
 		loc = resolver(session)
 	} else {
-		loc = defaultSpawnLocation()
+		loc = defaultSpawnLocation(b.coord.CellSize())
 	}
 
 	targetCellID := b.coord.CellAtPosition(loc.X, loc.Y)

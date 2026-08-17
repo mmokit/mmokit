@@ -124,6 +124,10 @@ func TestCellAtPosition_RoutesFreshLoginToOwningCell(t *testing.T) {
 	// Build a cachedTopology snapshot matching the 4node-basic layout:
 	// cells 0_0 / 1_0 / 0_1 / 1_1 at depth 0.
 	topo := &cachedTopology{
+		// Geometry is explicit now: a topology that does not know its cell
+		// size cannot map a world position to a cell, and reading it from a
+		// global is what CE-010 removes.
+		baseCellSize: 2000,
 		cells: map[MeshCellID]string{
 			"cell_0_0": "host-a",
 			"cell_1_0": "host-a",
@@ -169,6 +173,10 @@ func TestCellAtPosition_OutOfBoundsReturnsEmpty(t *testing.T) {
 	defer coords.SetCellSize(prev)
 
 	topo := &cachedTopology{
+		// Geometry is explicit now: a topology that does not know its cell
+		// size cannot map a world position to a cell, and reading it from a
+		// global is what CE-010 removes.
+		baseCellSize: 2000,
 		cells: map[MeshCellID]string{
 			"cell_0_0": "host-a",
 			"cell_1_0": "host-a",
@@ -212,7 +220,7 @@ func TestApplyPeerList_DropsRemovedCells(t *testing.T) {
 	coords.SetCellSize(2000)
 	defer coords.SetCellSize(prev)
 
-	topo := &cachedTopology{}
+	topo := &cachedTopology{baseCellSize: 2000}
 
 	// Initial broadcast: 0_0 split into 4 depth-1 children, all on host-a.
 	// Other base cells live on host-b.

@@ -58,7 +58,7 @@ func TestBorderDispatcher_WireMembershipMatchesBaseline(t *testing.T) {
 		7: {Radius: coords.CellSize * 2, UpdateDivisor: 5, BaseWeight: 2},
 	}
 	bd := NewBorderDispatcher(base, nil)
-	bx, by := neighborBoundaryMidpoint(CellID{X: 0, Y: 0}, 1, 1)
+	bx, by := neighborBoundaryMidpoint(CellID{X: 0, Y: 0}, 1, 1, base.CellSize())
 	nv := NewCellViewer("neighbor", CellViewerID("neighbor"), bx, by, tiers, nil, nil)
 	nv.SetDirection(1, 1)
 
@@ -166,7 +166,7 @@ func TestBorderDispatcher_DeltaCompression_UnchangedTailEmitsSentinel(t *testing
 	healthMap.Add(ent, &testReplicaComponent{Health: 100, Shield: 50})
 
 	bd := NewBorderDispatcher(base, nil)
-	bx, by := neighborBoundaryMidpoint(CellID{X: 0, Y: 0}, 1, 1)
+	bx, by := neighborBoundaryMidpoint(CellID{X: 0, Y: 0}, 1, 1, base.CellSize())
 	nv := NewCellViewer("neighbor", CellViewerID("neighbor"), bx, by, nil, nil, nil)
 	nv.SetDirection(1, 1)
 
@@ -240,7 +240,7 @@ func TestBorderDispatcher_DeltaCompression_ForceResync(t *testing.T) {
 	healthMap.Add(ent, &testReplicaComponent{Health: 100, Shield: 50})
 
 	bd := NewBorderDispatcher(base, nil)
-	bx, by := neighborBoundaryMidpoint(CellID{X: 0, Y: 0}, 1, 1)
+	bx, by := neighborBoundaryMidpoint(CellID{X: 0, Y: 0}, 1, 1, base.CellSize())
 	nv := NewCellViewer("neighbor", CellViewerID("neighbor"), bx, by, nil, nil, nil)
 	nv.SetDirection(1, 1)
 
@@ -299,7 +299,7 @@ func TestBorderDispatcher_DeltaCompression_ReentryEmitsFullTail(t *testing.T) {
 	healthMap.Add(ent, &testReplicaComponent{Health: 100, Shield: 50})
 
 	bd := NewBorderDispatcher(base, nil)
-	bx, by := neighborBoundaryMidpoint(CellID{X: 0, Y: 0}, 1, 1)
+	bx, by := neighborBoundaryMidpoint(CellID{X: 0, Y: 0}, 1, 1, base.CellSize())
 	nv := NewCellViewer("neighbor", CellViewerID("neighbor"), bx, by, nil, nil, nil)
 	nv.SetDirection(1, 1)
 
@@ -395,7 +395,7 @@ func TestBorderDispatcher_DeltaCompression_EpochChangeEmitsFullTail(t *testing.T
 	healthMap.Add(ent, &testReplicaComponent{Health: 100, Shield: 50})
 
 	bd := NewBorderDispatcher(base, nil)
-	bx, by := neighborBoundaryMidpoint(CellID{X: 0, Y: 0}, 1, 1)
+	bx, by := neighborBoundaryMidpoint(CellID{X: 0, Y: 0}, 1, 1, base.CellSize())
 	nv := NewCellViewer("neighbor", CellViewerID("neighbor"), bx, by, nil, nil, nil)
 	nv.SetDirection(1, 1)
 
@@ -560,7 +560,7 @@ func TestBorderDispatcher_CornerEntityReachesAllNeighbors(t *testing.T) {
 		{"diagonal", 1, 1},
 	}
 	for _, tc := range cases {
-		bx, by := neighborBoundaryMidpoint(CellID{X: 0, Y: 0}, tc.dx, tc.dy)
+		bx, by := neighborBoundaryMidpoint(CellID{X: 0, Y: 0}, tc.dx, tc.dy, base.CellSize())
 		nv := NewCellViewer("neighbor", CellViewerID("neighbor"), bx, by, nil, nil, nil)
 		nv.SetDirection(tc.dx, tc.dy)
 

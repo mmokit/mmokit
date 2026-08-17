@@ -14,7 +14,6 @@ import (
 
 	meshpb "github.com/mmokit/mmokit/gen/go/meshpb"
 	"github.com/mmokit/mmokit/pkg/component"
-	"github.com/mmokit/mmokit/pkg/coords"
 	"github.com/mmokit/mmokit/pkg/engine"
 	"github.com/mmokit/mmokit/pkg/logger"
 )
@@ -246,7 +245,7 @@ func (e *cellTransferExecutor) Execute(cmd cellTransferCommand) error {
 	if err != nil {
 		return fmt.Errorf("executor: parse dest cell %q: %w", cmd.DestCellID, err)
 	}
-	minX, minY, maxX, maxY := destCell.WorldBounds(coords.CellSize)
+	minX, minY, maxX, maxY := destCell.WorldBounds(e.coord.CellSize())
 
 	proto := &meshpb.CellTransfer{
 		RequestId:  cmd.RequestID,
@@ -1293,12 +1292,12 @@ func (d *cellTransferDispatcherImpl) sendCellTransferCommitToRemote(requestID ui
 // serializeQuadrantEntities runs on the source cell's game loop. Walks all
 // non-ghost, non-replica entities with a Position and keeps only those whose
 // local coordinates fall in the requested quadrant (0=BL, 1=BR, 2=TL, 3=TR).
-// The source cell's Size(coords.CellSize) determines the half-plane split.
+// The source cell's Size(stage cell size) determines the half-plane split.
 func serializeQuadrantEntities(src *Cell, quadrant int) ([][]byte, error) {
 	if quadrant < 0 || quadrant > 3 {
 		return nil, fmt.Errorf("invalid quadrant %d", quadrant)
 	}
-	half := src.CellID().Size(coords.CellSize) / 2
+	half := src.CellID().Size(src.Stage.CellSize()) / 2
 	wantXi := int32(quadrant & 1)
 	wantYi := int32((quadrant >> 1) & 1)
 
@@ -1366,7 +1365,7 @@ func collectTransferContext(e *cellTransferExecutor, src *Cell, cmd cellTransfer
 	var shouldInclude func(en ecs.Entity, px, py float32, isRep bool, repSrc string) (bool, string)
 	switch cmd.Kind {
 	case CellTransferSplit:
-		half := src.CellID().Size(coords.CellSize) / 2
+		half := src.CellID().Size(src.Stage.CellSize()) / 2
 		q := int(cmd.Quadrant)
 		qx := float32(q & 1)
 		qy := float32((q >> 1) & 1)

@@ -860,7 +860,7 @@ func TestBorderDispatcher_StampsClusterClockTickTime(t *testing.T) {
 	colMap.Add(ent, &component.Collider{Radius: 5})
 
 	bd := NewBorderDispatcher(base, nil)
-	bx, by := neighborBoundaryMidpoint(CellID{X: 0, Y: 0}, 1, 1)
+	bx, by := neighborBoundaryMidpoint(CellID{X: 0, Y: 0}, 1, 1, base.CellSize())
 	nv := NewCellViewer("neighbor", CellViewerID("neighbor"), bx, by, nil, nil, nil)
 	nv.SetDirection(1, 1)
 

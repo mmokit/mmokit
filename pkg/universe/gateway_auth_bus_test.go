@@ -1,6 +1,7 @@
 package universe
 
 import (
+	"github.com/mmokit/mmokit/pkg/coords"
 	"testing"
 
 	"github.com/google/uuid"
@@ -107,6 +108,6 @@ func newTestBareGateway(t *testing.T) *Gateway {
 		connMgr:    net.NewConnManager(),
 		authStates: map[uint32]connAuthState{},
 		sessions:   map[uint32]*localSession{},
-		topology:   &cachedTopology{},
+		topology:   &cachedTopology{baseCellSize: coords.DefaultCellSize},
 	}
 }

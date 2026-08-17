@@ -232,7 +232,7 @@ func (c *ControlPlane) rebuildTopologyForCell(cellKey MeshCellID) {
 		// Release path: drop the cell entirely so RebuildNeighborsFor's
 		// frontier pass skips it and the invariant stays satisfied.
 		delete(c.Topology.Neighbors, cid)
-		c.Topology.RebuildNeighborsFor([]CellID{cid}, coords.CellSize)
+		c.Topology.RebuildNeighborsFor([]CellID{cid}, c.baseCellSize())
 		return
 	}
 	if _, ok := c.Topology.Neighbors[cid]; !ok {
@@ -240,5 +240,18 @@ func (c *ControlPlane) rebuildTopologyForCell(cellKey MeshCellID) {
 		// RebuildNeighborsFor treats it as present.
 		c.Topology.Neighbors[cid] = nil
 	}
-	c.Topology.RebuildNeighborsFor([]CellID{cid}, coords.CellSize)
+	c.Topology.RebuildNeighborsFor([]CellID{cid}, c.baseCellSize())
+}
+
+// baseCellSize returns the containing process's cell geometry.
+//
+// Nil-guarded because ControlPlane is constructed as a bare struct literal in
+// tests (process left nil) while production always sets the back-reference.
+// Falling back to the package default keeps those fixtures working without
+// giving every one of them a Process it does not otherwise need.
+func (c *ControlPlane) baseCellSize() float32 {
+	if c.process == nil {
+		return coords.DefaultCellSize
+	}
+	return c.process.CellSize()
 }

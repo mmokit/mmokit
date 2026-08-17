@@ -892,12 +892,18 @@ type cachedTopology struct {
 	// coord.cellToHostMap. When nil (standalone T9), the cells map below is used.
 	coord *Process
 
+	// baseCellSize is this gateway process's cell geometry. Carried here
+	// rather than read from coord because coord is exactly nil on the
+	// standalone path, which is also the path that resolves spawn positions
+	// and maps world coordinates to cells.
+	baseCellSize float32
+
 	mu    sync.RWMutex
 	cells map[MeshCellID]string // cellID -> hostID (standalone mode only)
 }
 
-func newCachedTopology(coord *Process) *cachedTopology {
-	return &cachedTopology{coord: coord}
+func newCachedTopology(coord *Process, baseCellSize float32) *cachedTopology {
+	return &cachedTopology{coord: coord, baseCellSize: baseCellSize}
 }
 
 // HostForCell returns the hostID that owns cellID.
@@ -949,7 +955,7 @@ func (t *cachedTopology) cellAtPosition(worldX, worldY float32) string {
 		if err != nil {
 			continue
 		}
-		minX, minY, maxX, maxY := cell.WorldBounds(coords.CellSize)
+		minX, minY, maxX, maxY := cell.WorldBounds(t.baseCellSize)
 		if worldX >= minX && worldX < maxX && worldY >= minY && worldY < maxY {
 			return string(cellID)
 		}

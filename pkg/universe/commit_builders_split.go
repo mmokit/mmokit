@@ -3,8 +3,6 @@ package universe
 import (
 	"context"
 	"time"
-
-	"github.com/mmokit/mmokit/pkg/coords"
 )
 
 // buildSplitPlan translates a SPLIT CellTransferRequest into a data-driven
@@ -96,12 +94,12 @@ func stepSplitApplyCoordMutation(c *Process, ctx *CommitContext) error {
 
 	var splitDirectives []rewireDirective
 	if c.Control.Topology.Neighbors != nil {
-		c.Control.Topology.UpdateAfterSplit(parent, children, coords.CellSize)
+		c.Control.Topology.UpdateAfterSplit(parent, children, c.CellSize())
 		// Incremental rewire — only touch the parent's former frontier
 		// plus the new children.
 		affected := make([]CellID, 0, 5)
 		affected = append(affected, children[:]...)
-		c.Control.Topology.RebuildNeighborsFor(affected, coords.CellSize)
+		c.Control.Topology.RebuildNeighborsFor(affected, c.CellSize())
 		splitDirectives = c.computeRewireDirectivesLocked(affected)
 	}
 	c.mu.Unlock()

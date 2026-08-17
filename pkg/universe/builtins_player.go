@@ -212,7 +212,7 @@ func playerTpHandler(coord *Process) cmdsys.HandlerFunc {
 				posMap := target.Stage.PositionMap()
 				if posMap.HasAll(target.Online.Entity) {
 					pos := posMap.Get(target.Online.Entity)
-					prevWorldX, prevWorldY = localToWorld(cid.X, cid.Y, pos.X, pos.Y)
+					prevWorldX, prevWorldY = localToWorld(cid.X, cid.Y, pos.X, pos.Y, coord.CellSize())
 				}
 				if err := target.Stage.MoveEntityTo(
 					target.Online.Entity, args.X, args.Y,
@@ -234,7 +234,7 @@ func playerTpHandler(coord *Process) cmdsys.HandlerFunc {
 		}
 
 		if target.Offline != nil {
-			cellX, cellY, localX, localY := worldToLocal(args.X, args.Y)
+			cellX, cellY, localX, localY := worldToLocal(args.X, args.Y, coord.CellSize())
 			cs := coord.CellSize()
 			prevWorldX := float32(target.Offline.GetCellX())*cs + target.Offline.GetX()
 			prevWorldY := float32(target.Offline.GetCellY())*cs + target.Offline.GetY()
@@ -270,7 +270,7 @@ func playerInfoHandler(coord *Process) cmdsys.HandlerFunc {
 				posMap := target.Stage.PositionMap()
 				if posMap.HasAll(target.Online.Entity) {
 					pos := posMap.Get(target.Online.Entity)
-					worldX, worldY = localToWorld(cid.X, cid.Y, pos.X, pos.Y)
+					worldX, worldY = localToWorld(cid.X, cid.Y, pos.X, pos.Y, coord.CellSize())
 				}
 				hostID := localHostIDFor(coord, cell)
 				return playerInfoResult{
