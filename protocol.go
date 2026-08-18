@@ -150,29 +150,35 @@ func (p *Protocol) WriteSchema(w io.Writer) error {
 	return enc.Encode(p.Schema())
 }
 
-// AssembleFromProcess hydrates the Protocol with runtime-discovered
-// entity replicators from any cell's EntityKindDefs. Client-input types
-// (HandleClient[T]) and typed operations (RegisterOp[Req, Res]) are
-// harvested in Schema() from the process's own WireRegistry.
+// AssembleFromProcess hydrates the Protocol with this process's realized
+// entity kinds. Idempotent: calling it twice yields the same schema.
 //
-// Called by the engine's --dump-schema path after Build() has populated
-// every registry but before Start has begun the game loop.
+// The entity section used to be derived by iterating proc.Cells and reading
+// EntityKindDefs off the first cell that had any, which made the emitted
+// protocol depend on the process's ROLES — a gateway or a pure coordinator
+// owns no cells and reported "entities": null. It also meant the derivation
+// only ever ran on the --dump-schema path, so a runtime-computed schema could
+// never equal the one the SDK was generated from. Both matter now that the
+// schema is something a peer is checked against.
+//
+// proc.NewSchemaStage() replaces the cell hunt: the kinds are realized against
+// a throwaway stage this call constructs, so the answer is the same on every
+// role.
+//
+// Called from Build() once every registry is populated.
 func (p *Protocol) AssembleFromProcess(proc *universe.Process) {
-	// Entity replicators: build from the first cell's EntityKindDefs against
-	// a throwaway ECS world. The dump path doesn't run the game loop, so the
-	// registry only needs schema metadata, not real entities.
-	for _, cell := range proc.Cells {
-		defs := cell.Stage.EntityKindDefs()
-		if len(defs) == 0 {
-			continue
-		}
-		defSlice := make([]universe.EntityKindDef, 0, len(defs))
-		for _, def := range defs {
-			defSlice = append(defSlice, *def)
-			p.EntityName(def.Kind, def.Name)
-		}
-		w := ecs.NewWorld()
-		p.SetReplicators(BuildReplicators(w, proc, defSlice...))
-		break
+	stage := proc.NewSchemaStage()
+	defs := stage.EntityKindDefs()
+	if len(defs) == 0 {
+		return
 	}
+	defSlice := make([]universe.EntityKindDef, 0, len(defs))
+	// Reset rather than append: this is idempotent, and EntityName appends.
+	p.entityNames = p.entityNames[:0]
+	for _, def := range defs {
+		defSlice = append(defSlice, *def)
+		p.EntityName(def.Kind, def.Name)
+	}
+	// A throwaway ECS world: the registry needs schema metadata, not entities.
+	p.SetReplicators(BuildReplicators(ecs.NewWorld(), proc, defSlice...))
 }

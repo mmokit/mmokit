@@ -2122,6 +2122,22 @@ func (c *Process) Build() {
 	if c.bus != nil {
 		c.bus.SetProcessID(c.processID())
 	}
+
+	c.assembleProtocol()
+}
+
+// assembleProtocol derives the process's protocol schema now that every
+// registry is populated, so the answer is identical on every role and
+// available at runtime rather than only on the --dump-schema path.
+//
+// Reached through the c.protocol `any` seam that SetProtocol installs, for the
+// same reason dumpSchemaAndExit uses it: *mmokit.Protocol lives in the facade,
+// which imports this package. A Process built without the facade has no
+// protocol and nothing to assemble.
+func (c *Process) assembleProtocol() {
+	if p, ok := c.protocol.(interface{ AssembleFromProcess(*Process) }); ok {
+		p.AssembleFromProcess(c)
+	}
 }
 
 // isStandaloneGateway returns true when this process is a gateway without a

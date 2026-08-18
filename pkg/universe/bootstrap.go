@@ -209,21 +209,20 @@ func DisabledPartitionConfig() *PartitionConfig {
 	}
 }
 
-// dumpSchemaAndExit assembles the ProtocolSchema from the runtime registries
-// and prints it as JSON to stdout, then exits. Called from Start when
-// --dump-schema is set. The protocol must implement AssembleFromProcess +
-// WriteSchema; the *mmokit.Protocol type satisfies the interface and is
-// installed by mmokit.New via SetProtocol.
+// dumpSchemaAndExit prints the ProtocolSchema as JSON to stdout, then exits.
+// Called from Start when --dump-schema is set.
+//
+// It only WRITES. Build() assembles the schema on every process, so what this
+// dumps is the same value the running server would report — which is the
+// property that lets a client be checked against it.
 func (c *Process) dumpSchemaAndExit() {
 	p, ok := c.protocol.(interface {
-		AssembleFromProcess(*Process)
 		WriteSchema(io.Writer) error
 	})
 	if !ok {
 		fmt.Fprintln(os.Stderr, "dump-schema: no protocol installed — was the Process constructed via mmokit.New with Config.Name set?")
 		os.Exit(1)
 	}
-	p.AssembleFromProcess(c)
 	if err := p.WriteSchema(os.Stdout); err != nil {
 		fmt.Fprintf(os.Stderr, "dump-schema: %v\n", err)
 		os.Exit(1)
