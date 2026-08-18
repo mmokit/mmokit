@@ -121,22 +121,18 @@ type malformedOpRequest struct{ Name string }
 
 type malformedOpResponse struct{ OK bool }
 
-// registerGatewayLocalOp registers malformedOpRequest as a RouteGatewayLocal
-// op and returns its wire typeID.
-func registerGatewayLocalOp(t *testing.T) uint32 {
+// newGatewayLocalOpProcess returns a Process whose registry carries
+// malformedOpRequest as a RouteGatewayLocal op, plus the op's wire typeID.
+func newGatewayLocalOpProcess(t *testing.T) (*Process, uint32) {
 	t.Helper()
-	globalWire.RegisterTypedOp(RouteGatewayLocal,
+	p := &Process{wire: NewWireRegistry()}
+	p.wire.RegisterTypedOp(RouteGatewayLocal,
 		reflect.TypeFor[malformedOpRequest](),
 		reflect.TypeFor[malformedOpResponse](),
 		func(_ *ops.OpContext, _ *malformedOpRequest) (*malformedOpResponse, error) {
 			return &malformedOpResponse{OK: true}, nil
 		})
-	t.Cleanup(func() {
-		globalWire.mu.Lock()
-		delete(globalWire.typedOps, TypeIDOf(reflect.TypeFor[malformedOpRequest]()))
-		globalWire.mu.Unlock()
-	})
-	return TypeIDOf(reflect.TypeFor[malformedOpRequest]())
+	return p, TypeIDOf(reflect.TypeFor[malformedOpRequest]())
 }
 
 // malformedOpFrame builds a 0x01 typed-op payload (channel byte already
@@ -152,10 +148,11 @@ func malformedOpFrame(typeID uint32) []byte {
 // goroutine with no barrier of its own, so on HEAD this panics with "slice
 // bounds out of range" and takes the process with it.
 func TestProcessOpFrame_MalformedBody_DoesNotPanic(t *testing.T) {
-	typeID := registerGatewayLocalOp(t)
+	p, typeID := newGatewayLocalOpProcess(t)
 
 	g := &Gateway{
 		id:      "gw-test",
+		process: p,
 		connMgr: pkgnet.NewConnManager(),
 		log:     logger.New(CatNetConn),
 	}

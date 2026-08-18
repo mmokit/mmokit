@@ -12,10 +12,6 @@ type pTestOpRes struct{ Y int32 }
 // reflect-codec field shapes for both request + response.
 func TestProtocolSchemaTypedOperations(t *testing.T) {
 	p := newTestProcess(t)
-	// Every Process in a binary still shares one registry, so a previous
-	// test's ops would otherwise be visible here.
-	p.Wire().ResetTypedOpsForTest()
-	t.Cleanup(p.Wire().ResetTypedOpsForTest)
 
 	RegisterOp[pTestOpReq, pTestOpRes](p, RouteGatewayLocal,
 		func(_ *OpContext, req *pTestOpReq) (*pTestOpRes, error) {
@@ -49,10 +45,6 @@ func TestProtocolSchemaTypedOperations(t *testing.T) {
 // schema dumps before any game has migrated.
 func TestProtocolSchemaTypedOperationsEmpty(t *testing.T) {
 	p := newTestProcess(t)
-	// Every Process in a binary still shares one registry, so a previous
-	// test's ops would otherwise be visible here.
-	p.Wire().ResetTypedOpsForTest()
-	t.Cleanup(p.Wire().ResetTypedOpsForTest)
 
 	schema := NewProtocol(p, "test").Schema()
 	if len(schema.Operations) != 0 {

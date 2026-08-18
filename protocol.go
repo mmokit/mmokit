@@ -65,17 +65,12 @@ type Protocol struct {
 	replicators *system.ReplicatorRegistry
 }
 
-// NewProtocol creates a Protocol with the given game name. Universal
-// engine-level typed events (Pong, DebugInfo, WorldDelta,
-// PlayerEntityAssigned, CellChange, ServerConfig) are auto-registered
-// via mmokit.RegisterEvent[T] — every game gets them for free. The
-// universal client→server Ping input is registered as a typed
-// client-input via the engine-default HandleClient[Ping] handler
-// installed by universe.New (see EngineDefaultClientHandlers in
-// init.go); games never need to wire it themselves.
+// NewProtocol creates a Protocol exporting p's registry under the given game
+// name. The universal engine-level typed events (Pong, DebugInfo, WorldDelta,
+// PlayerEntityAssigned, CellChange, ServerConfig) and the universal
+// client→server Ping input are already on that registry: New installs them via
+// bootstrapWire before calling this. Games never wire them themselves.
 func NewProtocol(p *Process, game string) *Protocol {
-	registerEngineTypedEvents(p.Wire())
-	registerFrameworkOps(p.Wire())
 	return &Protocol{game: game, wire: p.Wire()}
 }
 

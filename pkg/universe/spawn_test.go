@@ -24,7 +24,7 @@ func newTestStage(t *testing.T) *Stage {
 func newTestStageAt(t *testing.T, cell CellID) *Stage {
 	t.Helper()
 	eng := engine.New(engine.DefaultConfig(), net.NewConnManager(), logger.New())
-	return NewStage(eng, cell, 100, nil, globalWire)
+	return NewStage(eng, cell, 100, nil, NewWireRegistry())
 }
 
 // TestSpawn_AttachesEveryComponent verifies that Stage.Spawn attaches each

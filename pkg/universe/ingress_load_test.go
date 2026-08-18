@@ -90,9 +90,8 @@ func TestIngress_SustainedLoadBoundedAndRecovers(t *testing.T) {
 
 	// A real registered type, so each frame runs the full production path:
 	// frame walk, strict decode under the client profile, dispatcher invoke.
-	bindClientInputTypeID(t, loadPingTypeID, reflect.TypeFor[loadPing]())
-
 	cell := newTestCell("ingress-load", CellID{X: 0, Y: 0})
+	bindClientInputTypeID(t, cell.Stage.Wire(), loadPingTypeID, reflect.TypeFor[loadPing]())
 
 	limits := pkgnet.DefaultWireLimits()
 	limits.MaxInputQueueDepth = queueDepth

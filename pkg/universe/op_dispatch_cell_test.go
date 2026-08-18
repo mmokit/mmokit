@@ -61,17 +61,14 @@ type cellOpRes struct {
 	Y int32
 }
 
-// installFrameworkEncoderStubs ensures the registry's MakeOperationErrorBody
-// encoder is non-nil so encodeOpError returns frames. mmokit installs the real
-// ones, but this test file is in package universe and avoids the mmokit import
-// cycle — so it defers to mmokit's when the external test package has linked
-// it in, and supplies a stub otherwise.
+// installFrameworkEncoderStubs gives p's registry a MakeOperationErrorBody
+// encoder so encodeOpError returns frames. mmokit.New installs the real ones,
+// but this file is in package universe and avoids the mmokit import cycle, and
+// the fixtures here build their Process by struct literal — so a stub is the
+// only answer available and the right one. Every assertion below compares
+// against p's own OperationErrorTypeID, so the value is self-consistent.
 func installFrameworkEncoderStubs(t *testing.T, p *Process) {
 	t.Helper()
-	if real := globalWire.FrameworkEncoders(); real.MakeOperationErrorBody != nil {
-		p.Wire().SetFrameworkEncoders(real)
-		return
-	}
 	p.Wire().SetFrameworkEncoders(FrameworkEncoders{
 		OperationErrorTypeID:   0xDEADDEAD,
 		MakeOperationErrorBody: func(uint32, string) []byte { return []byte{0xEE} },
@@ -92,7 +89,7 @@ func newCellRoutedOpFixture(t *testing.T) (*Process, *captureConnSender) {
 	log := logger.New()
 	eng := engine.New(engine.Config{TickRate: 100}, conn, log)
 	cellID, _ := ParseCellID("cell_0_0")
-	stage := NewStage(eng, cellID, 300, nil, globalWire)
+	stage := NewStage(eng, cellID, 300, nil, p.Wire())
 	stage.coord = p
 	cell := NewCell(cellID.MeshID(), cellID)
 	cell.Stage = stage

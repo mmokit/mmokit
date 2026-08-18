@@ -31,10 +31,6 @@ type tOpRes struct {
 
 func TestRegisterOp_LookupByTypeID(t *testing.T) {
 	p := newTestProcess(t)
-	// Every Process in a binary still shares one registry, so a previous
-	// test's ops would otherwise be visible here.
-	p.Wire().ResetTypedOpsForTest()
-	t.Cleanup(p.Wire().ResetTypedOpsForTest)
 
 	RegisterOp[tOpReq, tOpRes](p, RouteGatewayLocal,
 		func(_ *OpContext, req *tOpReq) (*tOpRes, error) {
@@ -69,10 +65,6 @@ func TestRegisterOp_SameShapeIsIdempotent(t *testing.T) {
 	// setup functions that fire many times in tests without juggling
 	// reset boilerplate.
 	p := newTestProcess(t)
-	// Every Process in a binary still shares one registry, so a previous
-	// test's ops would otherwise be visible here.
-	p.Wire().ResetTypedOpsForTest()
-	t.Cleanup(p.Wire().ResetTypedOpsForTest)
 
 	RegisterOp[tOpReq, tOpRes](p, RouteGatewayLocal,
 		func(_ *OpContext, _ *tOpReq) (*tOpRes, error) { return &tOpRes{Y: 1}, nil })
@@ -105,10 +97,6 @@ func TestRegisterOp_DifferentShapePanics(t *testing.T) {
 	// type (or a different Kind) is a wire-schema-changing programmer
 	// error — must panic.
 	p := newTestProcess(t)
-	// Every Process in a binary still shares one registry, so a previous
-	// test's ops would otherwise be visible here.
-	p.Wire().ResetTypedOpsForTest()
-	t.Cleanup(p.Wire().ResetTypedOpsForTest)
 
 	RegisterOp[tOpReq, tOpRes](p, RouteGatewayLocal,
 		func(_ *OpContext, _ *tOpReq) (*tOpRes, error) { return nil, nil })

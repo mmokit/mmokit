@@ -313,13 +313,12 @@ func dispatchInboundEventFrameSeeds(tb testing.TB) []fuzzSeed {
 // is the WALK: the offset arithmetic, the bodyLen bound, and termination. Body
 // decoding is FuzzReflectUnmarshal's job.
 func FuzzDispatchInboundEventFrame(f *testing.F) {
-	bindClientInputTypeID(f, fuzzInputPingTypeID, reflect.TypeFor[fuzzClientPing]())
-	bindClientInputTypeID(f, fuzzInputMoveTypeID, reflect.TypeFor[fuzzClientMove]())
-
 	// One fixture for the whole run: the walker is stateless, and rebuilding a
 	// Stage per input would make the fuzzer measure ECS setup instead of the
 	// decoder.
 	cell := newTestCell("fuzz-input", CellID{X: 0, Y: 0})
+	bindClientInputTypeID(f, cell.Stage.Wire(), fuzzInputPingTypeID, reflect.TypeFor[fuzzClientPing]())
+	bindClientInputTypeID(f, cell.Stage.Wire(), fuzzInputMoveTypeID, reflect.TypeFor[fuzzClientMove]())
 	ent := cell.Stage.Spawn(component.Position{X: 10, Y: 20})
 	sess := &engine.PlayerSession{ConnID: 1, Username: "fuzz", Entity: ent.Handle()}
 

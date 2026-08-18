@@ -19,16 +19,20 @@ import (
 // builds two Processes: RegisterOp's duplicate path ends with
 // `existing.Handler = handler`, and the auth handlers are closures over
 // their own *Process, so the first Process ended up dispatching auth into
-// the second's service.
+// the second's service. TestTypedOpHandlersDoNotLeakAcrossProcesses in
+// internal/facadetest is that bug, reduced.
 //
-// A registry is created per Process and injected into each Stage, exactly
-// as the base cell size now is. Registration stays open for the life of the
-// process rather than sealing at Build(): initSystems runs on remote cell
-// assignment and on cell SPLIT as well as at Build, System.Init() is a
-// documented place to register from, and sealing would turn that into a
-// panic on a background goroutine minutes into a run. Re-registering the
-// same type on the same registry is idempotent, which is what makes a
-// split safe.
+// One registry is created per Process, by universe.New, and injected into
+// every Stage that Process creates — exactly as the base cell size is.
+//
+// Registration stays open for the life of the process rather than sealing at
+// Build(). That is deliberate and it is the cheaper alternative this unit
+// rejected: initSystems runs on remote cell assignment and on cell SPLIT as
+// well as at Build, System.Init() is a documented place to register from
+// (examples/simple does it), and sealing would turn a documented pattern into
+// a panic on a background goroutine minutes into a run. Re-registering the
+// same type on the same registry is idempotent, which is what makes a split
+// safe for free.
 //
 // All four maps sit behind one RWMutex. Registration happens at startup;
 // the per-frame paths (inbound typeID lookup, broadcast eligibility) are
@@ -280,23 +284,6 @@ func (w *WireRegistry) ServerEventTypes() []reflect.Type {
 	return sortedTypes(w.seSet)
 }
 
-// ResetServerEventsForTest is exported for tests only.
-func (w *WireRegistry) ResetServerEventsForTest() {
-	w.mu.Lock()
-	defer w.mu.Unlock()
-	// Release this registry's claims on the shared downstream namespace too.
-	// Without it, a test that resets and then registers a DIFFERENT type
-	// hashing to a previously-claimed id would panic on a collision with a
-	// registration that no longer exists.
-	for id, t := range w.seByType {
-		if w.downstreamIDs[id] == t {
-			delete(w.downstreamIDs, id)
-		}
-	}
-	w.seByType = map[uint32]reflect.Type{}
-	w.seSet = map[reflect.Type]struct{}{}
-}
-
 // ─── broadcasts (mmokit.HandleAll) ────────────────────────────────────────────
 
 // RegisterBroadcast marks t as broadcast-eligible. Called from HandleAll[T],
@@ -435,13 +422,6 @@ func (w *WireRegistry) TypedOps() []*TypedOpEntry {
 		return out[i].RequestType.String() < out[j].RequestType.String()
 	})
 	return out
-}
-
-// ResetTypedOpsForTest is exported for tests only.
-func (w *WireRegistry) ResetTypedOpsForTest() {
-	w.mu.Lock()
-	defer w.mu.Unlock()
-	w.typedOps = map[uint32]*TypedOpEntry{}
 }
 
 // sortedTypes returns set's keys ordered by reflect.Type.String(). Every

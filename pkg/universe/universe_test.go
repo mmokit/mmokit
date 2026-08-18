@@ -19,7 +19,7 @@ func newTestCell(id string, cell CellID) *Cell {
 	log := logger.New()
 	connMgr := net.NewConnManager()
 	eng := engine.New(engine.DefaultConfig(), connMgr, log)
-	base := NewStage(eng, cell, 0, nil, globalWire)
+	base := NewStage(eng, cell, 0, nil, NewWireRegistry())
 	c := NewCell(MeshCellID(id), cell)
 	c.Engine = eng
 	c.Stage = base

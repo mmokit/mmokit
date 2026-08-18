@@ -546,6 +546,10 @@ func (b *Stage) rootCell() CellID {
 	return c
 }
 
+// Wire returns the registry of the process that owns this stage — injected at
+// construction, the same way the base cell size is.
+func (b *Stage) Wire() *WireRegistry { return b.wire }
+
 // CellSize returns the base cell size this stage's process was configured with.
 // Entities always use base-cell coordinates regardless of quadtree depth, so a
 // split cell's entities are still expressed against this value, not against the

@@ -60,7 +60,7 @@ func TestCommands_Despawn_NoopOnDeadHandle(t *testing.T) {
 
 func TestCommands_Despawn_UsesAuthoritativeRemovalPath(t *testing.T) {
 	eng := engine.New(engine.DefaultConfig(), net.NewConnManager(), logger.New())
-	stage := NewStage(eng, CellID{X: 0, Y: 0}, 100, nil, globalWire)
+	stage := NewStage(eng, CellID{X: 0, Y: 0}, 100, nil, NewWireRegistry())
 	grid := spatial.NewHashGrid(100)
 	stage.SetSpatialGrid(grid)
 
@@ -119,7 +119,7 @@ func TestCommands_Despawn_UsesAuthoritativeRemovalPath(t *testing.T) {
 // after construction.
 func TestStage_HasCommands(t *testing.T) {
 	eng := engine.New(engine.DefaultConfig(), net.NewConnManager(), logger.New())
-	stage := NewStage(eng, CellID{X: 0, Y: 0}, 100, nil, globalWire)
+	stage := NewStage(eng, CellID{X: 0, Y: 0}, 100, nil, NewWireRegistry())
 
 	if stage.Commands() == nil {
 		t.Fatal("Stage.Commands() returned nil")
@@ -142,7 +142,7 @@ func (s funcSystem) Update(dt float32) { s.fn(dt) }
 // systems through it exercises the same wire-up the loop uses.
 func TestCommands_DespawnVisibleToNextSystem(t *testing.T) {
 	eng := engine.New(engine.DefaultConfig(), net.NewConnManager(), logger.New())
-	stage := NewStage(eng, CellID{X: 0, Y: 0}, 100, nil, globalWire)
+	stage := NewStage(eng, CellID{X: 0, Y: 0}, 100, nil, NewWireRegistry())
 	grid := spatial.NewHashGrid(100)
 	stage.SetSpatialGrid(grid)
 

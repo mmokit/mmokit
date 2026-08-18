@@ -19,7 +19,7 @@ func TestUpdateCellBounds_SubcellToParent_NoPositionShift(t *testing.T) {
 	// Entities have base-cell positions: e.g. (5000, 3000) which is valid
 	// in the right subcell's LocalBounds [4096, 8192) x [0, 4096).
 	subcell := CellID{X: 1, Y: 0, Depth: 1}
-	base := NewStage(eng, subcell, 3000, nil, globalWire)
+	base := NewStage(eng, subcell, 3000, nil, NewWireRegistry())
 
 	// Spawn a test entity with a known position
 	spawnMap := ecs.NewMap2[component.Position, component.CellCoord](eng.ECS)

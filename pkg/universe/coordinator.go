@@ -886,7 +886,7 @@ func New(cfg Config) *Process {
 		c.ConnMgr.SetWireLimits(cfg.WireLimits)
 	}
 	c.invariantMode = cfg.InvariantMode
-	c.wire = globalWire
+	c.wire = NewWireRegistry()
 	c.wireLimits = clientProfile(cfg.WireLimits)
 	c.strictNetIDIndex = cfg.StrictNetIDIndex
 	c.blinkDetectorTicks = cfg.BlinkDetectorTicks
@@ -977,15 +977,28 @@ func New(cfg Config) *Process {
 	// otherwise miss console registration.
 	c.registerAllBuiltins()
 
-	// Install engine-default HandleClient handlers (e.g. Ping → Pong) via
-	// the mmokit-side hook. The hook is nil in tests that build a Process
-	// without importing mmokit; that's fine — those tests don't exercise
-	// the typed-input client path.
-	if EngineDefaultClientHandlers != nil {
-		EngineDefaultClientHandlers(c)
-	}
-
 	return c
+}
+
+// Wire returns this process's client-facing message registry: the types
+// clients may send, the types the server may send back, and the typed-op
+// bindings. Every Stage this process creates is injected with it.
+//
+// Registries are per-Process. A binary that builds two Processes gives them
+// two registries, which is the point: they used to share four package-global
+// maps, and RegisterOp's duplicate path ends by overwriting the stored handler
+// closure — so the second Process's RegisterAuthService silently repointed the
+// first Process's auth ops at the second Process's service.
+//
+// Nil for a nil receiver, matching clientWireLimits: fixtures across
+// pkg/universe build a Gateway or a Stage with no Process behind it, and every
+// read on a nil *WireRegistry answers "nothing registered" — which is the
+// truth for a process that does not exist.
+func (c *Process) Wire() *WireRegistry {
+	if c == nil {
+		return nil
+	}
+	return c.wire
 }
 
 // registerAllBuiltins registers every coordinator builtin command into

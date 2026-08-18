@@ -44,14 +44,17 @@ func newTestCell(cell pkguniverse.CellID) *pkguniverse.Cell {
 	eng := engine.New(platformCfg, connMgr, log)
 	events := make(chan net.PlayerEvent, 64)
 
-	base := pkguniverse.NewStage(eng, cell, cfg.AoIRadius, nil, pkguniverse.GlobalWire())
-	base.SetSpatialGrid(spatial.NewHashGrid(coords.DefaultCellSize / 10))
-
 	// Collect system defs and realize entity kinds via a throwaway coordinator.
 	// Kind specs must run against the stage before NewGameWorld spawns any
 	// initial entities (asteroids, station) — those calls rely on
-	// EntityKindDefs being populated.
-	tmpCoord := pkguniverse.New(pkguniverse.Config{CellsX: 1, CellsY: 1, TickRate: platformCfg.TickRate})
+	// EntityKindDefs being populated. The coordinator is built first so the
+	// stage can carry ITS registry: GameSetup registers this game's server
+	// events on it, and the stage's send path resolves against the same one.
+	tmpCoord := mmokit.New(mmokit.Config{CellsX: 1, CellsY: 1, TickRate: platformCfg.TickRate, Headless: true})
+
+	base := pkguniverse.NewStage(eng, cell, cfg.AoIRadius, nil, tmpCoord.Wire())
+	base.SetSpatialGrid(spatial.NewHashGrid(coords.DefaultCellSize / 10))
+
 	GameSetup(tmpCoord)
 	tmpCoord.RealizeKindSpecs(base)
 

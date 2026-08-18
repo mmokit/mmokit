@@ -22,8 +22,9 @@ import (
 //
 // Both profiles are values. They are passed down the decode recursion by value
 // inside decodeState and are never stored in a package-level variable: CE-010
-// counted coords.CellSize (now deleted) plus four package-global wire registries as the debt
-// gating the whole 2D/3D program, and this unit is not adding a fifth.
+// counted coords.CellSize and four package-global wire registries as the debt
+// worth paying down (both are gone now — the registries live on Process.wire),
+// and this unit is not adding a fifth.
 
 // clientProfile derives the ingress limit profile from an operator-supplied
 // base (Config.WireLimits, which may be the zero value).

@@ -844,6 +844,10 @@ func New(cfg Config) *Process {
 		cfg.Admin.ServerFactory = DefaultAdminServerFactory()
 	}
 	proc := universe.New(cfg)
+	// Everything the framework itself puts on this process's wire: the
+	// engine-level typed events, the typed-op error encoder, and the
+	// engine-default client inputs. Per-Process, not per-binary.
+	bootstrapWire(proc)
 	proc.SetProtocol(NewProtocol(proc, cfg.Name))
 	if err := wasmctl.RegisterVerbs(proc); err != nil {
 		panic(fmt.Sprintf("mmokit.New: register wasm verbs: %v", err))

@@ -42,8 +42,7 @@ func TestRegisterEvent_RegisteredTypes(t *testing.T) {
 	mmokit.RegisterEvent[testServerEventB](p)
 
 	// Membership, not a count: the enumeration also carries the six engine
-	// events mmokit.New registers, and — until registries are per-process —
-	// whatever a sibling test registered.
+	// events mmokit.New puts on every process's registry.
 	types := p.Wire().ServerEventTypes()
 	for _, want := range []reflect.Type{
 		reflect.TypeFor[testServerEventA](),
