@@ -38,6 +38,7 @@ import (
 	"github.com/mmokit/mmokit/pkg/service"
 	"github.com/mmokit/mmokit/pkg/services/auth"
 	"github.com/mmokit/mmokit/pkg/spatial"
+	"github.com/mmokit/mmokit/pkg/system"
 )
 
 const netIDRangeSize uint32 = 10_000_000
@@ -345,6 +346,19 @@ type Config struct {
 	// match a Kind registered via Process.RegisterService. Bound to the
 	// --services CLI flag.
 	ServiceKinds []string
+
+	// Dimension is the spatial profile this process simulates in, chosen once
+	// at construction. It selects behaviour — which engine bindings replicate,
+	// and later which systems and validators run — and never selects types.
+	// Zero value is Dimension2D.
+	//
+	// Deliberately not a flag. A cluster whose processes disagree about the
+	// dimension is undetectable on the wire today (one component set across
+	// profiles means identical type IDs and identical hashes; only a structural
+	// schema fingerprint separates them — see docs/roadmap.md §7.2), so this is
+	// a decision the game makes in code, not one an operator can create a skew
+	// with from a command line.
+	Dimension Dimension
 
 	// DumpSchema, when true, causes Process.Start to dump the protocol schema
 	// JSON to stdout and exit before any listeners or game-loop goroutines
@@ -885,6 +899,11 @@ func New(cfg Config) *Process {
 	if c.ConnMgr != nil {
 		c.ConnMgr.SetWireLimits(cfg.WireLimits)
 	}
+	// Resolve the dimension profile now rather than at first replicator build:
+	// an unimplemented profile panics, and a panic here names Config.Dimension
+	// instead of surfacing several frames into schema assembly.
+	_ = system.EngineBindingsFor(cfg.Dimension)
+
 	c.invariantMode = cfg.InvariantMode
 	c.wire = NewWireRegistry()
 	c.wireLimits = clientProfile(cfg.WireLimits)
@@ -3942,6 +3961,10 @@ func makeEntityCounter(w *ecs.World) func() (int, int, int, int) {
 // they compute the world position that RESOLVES which cell applies, so there is
 // no stage to ask yet. Game code with a stage in hand should prefer
 // Stage.CellSize() — same value, no lookup.
+// Dimension returns the spatial profile this process was constructed with.
+// Fixed for the life of the process.
+func (c *Process) Dimension() Dimension { return c.cfg.Dimension }
+
 func (c *Process) CellSize() float32 {
 	if c.cfg.CellSize > 0 {
 		return c.cfg.CellSize

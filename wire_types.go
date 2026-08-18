@@ -45,3 +45,15 @@ type WireRegistry = pkguniverse.WireRegistry
 type WireSource interface {
 	Wire() *WireRegistry
 }
+
+// Dimension is the spatial profile a process simulates in, set once via
+// Config.Dimension. It selects behaviour — which engine bindings replicate,
+// and later which systems and validators run — and never selects types.
+type Dimension = pkguniverse.Dimension
+
+// Dimension profiles. Dimension3D is selectable and not yet implemented:
+// constructing a process with it panics rather than falling back to 2D.
+const (
+	Dimension2D = pkguniverse.Dimension2D
+	Dimension3D = pkguniverse.Dimension3D
+)

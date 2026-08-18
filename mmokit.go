@@ -1084,15 +1084,21 @@ func BuildReplicators(w *ecs.World, coord *universe.Process, defs ...universe.En
 	velScale := float32(2000) // matches universe.New default
 	sizeScale := float32(500) // matches universe.New default
 	cellSize := float32(coords.DefaultCellSize)
+	dimension := system.Dimension2D
 	if coord != nil {
 		velScale = coord.Cfg().VelQuantScale
 		sizeScale = coord.Cfg().SizeQuantScale
 		cellSize = coord.CellSize()
+		dimension = coord.Dimension()
 	}
+	// The process's dimension profile selects which engine-level bindings every
+	// entity kind carries. This is the one call site — the profile is resolved
+	// once here rather than consulted per binding.
+	engine := system.EngineBindingsFor(dimension)
 	replicators := system.NewReplicatorRegistry()
 	for _, def := range defs {
 		var bindings []system.ComponentBinding
-		bindings = append(bindings, system.EngineBindings(w, velScale, sizeScale, cellSize))
+		bindings = append(bindings, engine.Bindings(w, velScale, sizeScale, cellSize))
 
 		// Partition game bindings: var-tail bindings go to the end.
 		var regular, varTails []system.ComponentBinding
