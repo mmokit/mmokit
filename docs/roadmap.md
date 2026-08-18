@@ -590,6 +590,8 @@ Two assertions in unit 2 are worth knowing about before editing near them, becau
 - **`buildTaggedFields` cannot simply move onto the reflection codec.** The reflection codec is a self-describing struct walker; the binding walker must emit a *fixed* layout consumed by `quantize.DeltaEncoder`'s offset table. Either teach the reflection codec fixed-width layouts or unify only the walker and keep two codecs. This is an architecture decision §7.5 phase 0 currently assumes away, and it belongs before day one of the collapse, not during it.
 - **`--dump-schema` is binary-scoped, not process-scoped.** Unit 4 changes what it emits, which puts SDK regeneration and both golden gates inside its blast radius. That is the reason unit 2 precedes it.
 
+- **One `sync.Once` fires from `init()`, before any Process exists.** Process-owned registration cannot simply reuse the existing guards.
+
 **What part A actually found**, recorded because it is the argument for doing part B rather than declaring the debt paid:
 
 - **Five border tests had been running at 1024 while their source declared 8192.** `newTestWorldBase` called `coords.SetCellSize(1024)` *after* the test set 8192, clobbering it on the next line. Not a regression introduced by the refactor — true since the fixture was written. They passed because the properties they assert also hold at 1024.
@@ -599,7 +601,6 @@ Two assertions in unit 2 are worth knowing about before editing near them, becau
 None of these was visible while a single global kept every reader in agreement. That is the shape of the remaining part-B debt too: the four package-global wire registries and the process-global hook structs are not wrong today, they are wrong the moment a second Process exists in one binary.
 
 Deleting beat threading repeatedly: seven zero-caller exported functions were removed rather than given a cell-size parameter — `CellRelativePos`, `ViewerRelativePosWithCellSize`, `Normalize`, `RelativeOffset`, `Distance`, `WorldPos.ToFlat`, and the two facade wrappers.
-- **One `sync.Once` fires from `init()`, before any Process exists.** Process-owned registration cannot simply reuse the existing guards.
 
 ---
 
