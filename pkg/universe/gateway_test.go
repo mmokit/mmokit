@@ -8,7 +8,6 @@ import (
 	"github.com/mmokit/mmokit/pkg/logger"
 
 	meshpb "github.com/mmokit/mmokit/gen/go/meshpb"
-	"github.com/mmokit/mmokit/pkg/coords"
 )
 
 func TestGatewayDispatchPlayerAssignmentCarriesInitialStreamGeneration(t *testing.T) {
@@ -117,9 +116,6 @@ func TestGatewayLookupSessionReturnsRouteSnapshot(t *testing.T) {
 // resolve time (8192 default, not yet updated by SetCellSize), and the
 // gateway's anyCellID fallback scattered logins across random cells.
 func TestCellAtPosition_RoutesFreshLoginToOwningCell(t *testing.T) {
-	prev := coords.CellSize
-	coords.SetCellSize(2000)
-	defer coords.SetCellSize(prev)
 
 	// Build a cachedTopology snapshot matching the 4node-basic layout:
 	// cells 0_0 / 1_0 / 0_1 / 1_1 at depth 0.
@@ -168,9 +164,6 @@ func TestCellAtPosition_RoutesFreshLoginToOwningCell(t *testing.T) {
 // MUST return "" for points outside every cell, so the gateway sees
 // a clear signal to reject the login.
 func TestCellAtPosition_OutOfBoundsReturnsEmpty(t *testing.T) {
-	prev := coords.CellSize
-	coords.SetCellSize(2000)
-	defer coords.SetCellSize(prev)
 
 	topo := &cachedTopology{
 		// Geometry is explicit now: a topology that does not know its cell
@@ -216,9 +209,6 @@ func TestCellAtPosition_OutOfBoundsReturnsEmpty(t *testing.T) {
 // processLogin assigns the player to a dead cell. Symptom in distributed mode:
 // new logins routed to a missing cell after merge → client can never connect.
 func TestApplyPeerList_DropsRemovedCells(t *testing.T) {
-	prev := coords.CellSize
-	coords.SetCellSize(2000)
-	defer coords.SetCellSize(prev)
 
 	topo := &cachedTopology{baseCellSize: 2000}
 

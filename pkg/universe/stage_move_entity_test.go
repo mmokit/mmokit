@@ -13,10 +13,15 @@ import (
 // coord to the depth-0 cell containing it (production bridges do the
 // same plus split-aware sub-cell resolution, which is exercised by
 // integration tests that wire the real cellBridge).
+// moveTestCellSize is the geometry every fixture in this file agrees on.
+// Stated once because the bridge double below has no Stage to ask.
+const moveTestCellSize float32 = coords.DefaultCellSize
+
 type moveTestBridge struct{ NoopBridge }
 
 func (moveTestBridge) CellOwnerAtPos(worldX, worldY float32) string {
-	cellSize := coords.CellSize
+	// Must match the size the tests build their stage with (moveTestCellSize).
+	cellSize := moveTestCellSize
 	cx := int32(worldX / cellSize)
 	cy := int32(worldY / cellSize)
 	if worldX < 0 && worldX != float32(cx)*cellSize {
@@ -68,8 +73,8 @@ func TestMoveEntityTo_CrossCell_EnqueuesCrossingWithBypass(t *testing.T) {
 	).Handle()
 	netID := stage.NetworkIDMap().Get(ent).ID
 
-	farX := coords.CellSize*5 + 10
-	farY := coords.CellSize*5 + 10
+	farX := moveTestCellSize*5 + 10
+	farY := moveTestCellSize*5 + 10
 	if err := stage.MoveEntityTo(ent, farX, farY, MoveBypassCooldown()); err != nil {
 		t.Fatalf("MoveEntityTo: %v", err)
 	}
@@ -89,7 +94,7 @@ func TestMoveEntityTo_CrossCell_EnqueuesCrossingWithBypass(t *testing.T) {
 	// Position must be pre-stamped to destination-frame coords (so the
 	// destination receives the post-TP world position when it deserializes).
 	pos := stage.PositionMap().Get(ent)
-	cellSize := coords.CellSize
+	cellSize := moveTestCellSize
 	wantX := farX - 5*cellSize // dest cellX = 5
 	wantY := farY - 5*cellSize // dest cellY = 5
 	if pos.X != wantX || pos.Y != wantY {
@@ -113,7 +118,7 @@ func TestMoveEntityTo_MoveAsPlayer_PopulatesCrossing(t *testing.T) {
 		component.EntityKind{Type: 1},
 		component.Collider{Radius: 5},
 	).Handle()
-	farX := coords.CellSize*2 + 10
+	farX := moveTestCellSize*2 + 10
 	if err := stage.MoveEntityTo(ent, farX, 10, MoveAsPlayer(42, "alice")); err != nil {
 		t.Fatalf("MoveEntityTo: %v", err)
 	}

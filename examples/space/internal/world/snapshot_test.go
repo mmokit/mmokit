@@ -8,9 +8,6 @@ import (
 )
 
 func TestBucketByCell_GroupsByWorldPos(t *testing.T) {
-	prev := coords.CellSize
-	defer func() { coords.CellSize = prev }()
-	coords.CellSize = 8192
 
 	s := &world.Snapshot{
 		Stations: &world.Stations{Stations: []world.Station{

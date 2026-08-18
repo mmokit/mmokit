@@ -7,7 +7,6 @@ import (
 	"github.com/mlange-42/ark/ecs"
 
 	"github.com/mmokit/mmokit/pkg/component"
-	"github.com/mmokit/mmokit/pkg/coords"
 	"github.com/mmokit/mmokit/pkg/engine"
 	pkgnet "github.com/mmokit/mmokit/pkg/net"
 )
@@ -582,7 +581,6 @@ func TestHandoffDriver_ForwardsCommitWindowInputAcrossRemoteHost(t *testing.T) {
 // returns false so the source stays Live and we can inspect its live
 // Position/CellCoord after the call.)
 func TestHandoffDriver_LeavesSourceEntityPositionUnchanged(t *testing.T) {
-	coords.SetCellSize(1024)
 	base := newTestWorldBase(t, CellID{X: 0, Y: 0})
 
 	rec := &handoffRecordingBridge{failsForDest: "cell_1_0"}
@@ -631,7 +629,6 @@ func TestHandoffDriver_LeavesSourceEntityPositionUnchanged(t *testing.T) {
 // The fix: SpawnFromTransferCore must not allow frame.Components to
 // overwrite the core position that was already written from frame.PosX/PosY.
 func TestHandoffDriver_PositionReplicatorInRegistry_DoesNotCorruptDestSpawn(t *testing.T) {
-	coords.SetCellSize(1024)
 
 	// Source cell: register component.Position in the ReplicationRegistry using
 	// the default reflection-based codec — simulates Field[mmokit.Position]() in

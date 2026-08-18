@@ -23,7 +23,7 @@ func newTestStage(t testing.TB) (*pkguniverse.Stage, *engine.Engine) {
 	cm := net.NewConnManager()
 	eng := engine.New(engine.Config{TickRate: 20}, cm, log)
 	stage := pkguniverse.NewStage(eng, pkguniverse.CellID{}, 1000, nil)
-	stage.SetSpatialGrid(spatial.NewHashGrid(coords.CellSize / 10))
+	stage.SetSpatialGrid(spatial.NewHashGrid(coords.DefaultCellSize / 10))
 	return stage, eng
 }
 
@@ -121,12 +121,12 @@ func newTwoCellLoopback(t *testing.T) (*pkguniverse.Stage, *pkguniverse.Stage, f
 	cmA := net.NewConnManager()
 	engA := engine.New(engine.Config{TickRate: 20}, cmA, log)
 	stageA := pkguniverse.NewStage(engA, pkguniverse.CellID{X: 0, Y: 0}, 1000, nil)
-	stageA.SetSpatialGrid(spatial.NewHashGrid(coords.CellSize / 10))
+	stageA.SetSpatialGrid(spatial.NewHashGrid(coords.DefaultCellSize / 10))
 
 	cmB := net.NewConnManager()
 	engB := engine.New(engine.Config{TickRate: 20}, cmB, log)
 	stageB := pkguniverse.NewStage(engB, pkguniverse.CellID{X: 1, Y: 0}, 1000, nil)
-	stageB.SetSpatialGrid(spatial.NewHashGrid(coords.CellSize / 10))
+	stageB.SetSpatialGrid(spatial.NewHashGrid(coords.DefaultCellSize / 10))
 
 	bridge := &loopbackBridge{
 		routes: map[pkguniverse.MeshCellID]*pkguniverse.Stage{

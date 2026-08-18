@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"github.com/mmokit/mmokit/pkg/cmdsys"
-	"github.com/mmokit/mmokit/pkg/coords"
 )
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -27,7 +26,6 @@ import (
 // ═══════════════════════════════════════════════════════════════════════════
 
 func TestPerfDistributedFanOut(t *testing.T) {
-	coords.SetCellSize(1024)
 
 	fx := newDistributedFixture(t, FixtureConfig{
 		CellsX:   2,

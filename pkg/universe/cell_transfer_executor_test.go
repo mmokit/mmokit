@@ -13,7 +13,6 @@ import (
 
 	meshpb "github.com/mmokit/mmokit/gen/go/meshpb"
 	"github.com/mmokit/mmokit/pkg/component"
-	"github.com/mmokit/mmokit/pkg/coords"
 	"github.com/mmokit/mmokit/pkg/engine"
 )
 
@@ -39,7 +38,6 @@ import (
 // second cell after this helper returns and use that one as the source.
 func newExecutorTestCoord(t *testing.T) (*Process, *Host, *Cell) {
 	t.Helper()
-	coords.SetCellSize(1024)
 
 	coord := New(Config{
 		CellsX:   1,
@@ -325,7 +323,7 @@ func TestEntitylessSessionTransferRemapsCrossHostIdentityAndCommitRoute(t *testi
 func TestExecutorSerializeSplitPerQuadrant(t *testing.T) {
 	coord, host, srcCell := newExecutorTestCoord(t)
 	src := srcCell.CellID()
-	cellSize := src.Size(coords.CellSize)
+	cellSize := src.Size(coord.CellSize())
 	half := cellSize / 2
 
 	// Plant one entity in each quadrant, plus an extra in the BR quadrant

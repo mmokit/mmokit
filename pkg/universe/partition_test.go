@@ -3,7 +3,6 @@ package universe
 import (
 	"testing"
 
-	"github.com/mmokit/mmokit/pkg/coords"
 	"github.com/mmokit/mmokit/pkg/logger"
 	"github.com/mmokit/mmokit/pkg/net"
 )
@@ -143,7 +142,6 @@ func TestSplitCell_DisabledPartitioning(t *testing.T) {
 	// DefaultPartitionConfig when the field is nil. The test covers the
 	// no-fixture startup path; fixture coverage for the enabled case is
 	// provided by the other TestSplitCell_* tests.
-	coords.SetCellSize(8192)
 	c := New(Config{
 		CellsX:      2,
 		CellsY:      2,

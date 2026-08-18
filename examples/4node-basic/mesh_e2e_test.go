@@ -159,8 +159,6 @@ var cellLayout = map[string]string{
 func buildTestCluster(t *testing.T) *testCluster {
 	t.Helper()
 
-	mmokit.SetCellSize(CellSize)
-
 	// 1. Coord-role process on an ephemeral port.
 	coord := mmokit.New(mmokit.Config{
 		CellsX:              CellsX,

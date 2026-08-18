@@ -7,7 +7,6 @@ import (
 	"github.com/mlange-42/ark/ecs"
 
 	"github.com/mmokit/mmokit/pkg/component"
-	"github.com/mmokit/mmokit/pkg/coords"
 	"github.com/mmokit/mmokit/pkg/engine"
 )
 
@@ -59,7 +58,7 @@ func TestS7SplitAcrossHosts(t *testing.T) {
 		// because spawnTestEntity just stores them raw; the executor quadrant
 		// filter uses local-cell coords, which at depth-0 cell {0,0} are the
 		// same as world coords.
-		cellSize := parentCellID.Size(coords.CellSize)
+		cellSize := parentCellID.Size(fx.Coord().CellSize())
 		half := cellSize / 2
 		type plant struct {
 			netID uint32
@@ -251,7 +250,7 @@ func TestS7SplitPreservesPlayerSessionsOnDest(t *testing.T) {
 		// for localConnID, plant a PlayerConn-bearing entity in the TR
 		// quadrant (so we know which child it should land on), and wire the
 		// session's Entity to it.
-		cellSize := parentCellID.Size(coords.CellSize)
+		cellSize := parentCellID.Size(fx.Coord().CellSize())
 		half := cellSize / 2
 		const netID uint32 = 7777
 		execOnLoop(t, srcCell, func() {
@@ -345,7 +344,7 @@ func TestS7SplitRemapsSessionEpochAndHost(t *testing.T) {
 
 		// Plant an entity in the TR quadrant so req.adoptedUsers is populated
 		// and we exercise the non-fallback branch of the remap.
-		cellSize := parentCellID.Size(coords.CellSize)
+		cellSize := parentCellID.Size(fx.Coord().CellSize())
 		half := cellSize / 2
 		const netID uint32 = 8888
 		execOnLoop(t, srcCell, func() {

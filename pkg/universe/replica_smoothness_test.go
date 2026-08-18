@@ -5,7 +5,6 @@ import (
 
 	"github.com/mlange-42/ark/ecs"
 	"github.com/mmokit/mmokit/pkg/component"
-	"github.com/mmokit/mmokit/pkg/coords"
 )
 
 // TestNoStutter_ReplicaSmoothnessAcrossBoundary is the user-reported
@@ -29,7 +28,6 @@ import (
 func TestNoStutter_ReplicaSmoothnessAcrossBoundary(t *testing.T) {
 	// Use a smaller cell size so the test entity doesn't need extreme
 	// coordinates to sit near the shared edge. Reset after the test runs.
-	coords.SetCellSize(1024)
 
 	// Build two WorldBases — the "source" cell (0,0) is where the bot
 	// lives, and the "dest" cell (1,0) is where the viewer lives.
@@ -65,7 +63,7 @@ func TestNoStutter_ReplicaSmoothnessAcrossBoundary(t *testing.T) {
 	bot := world.NewEntity()
 	// Start at 90% across the cell in X, middle in Y — well inside the
 	// enter margin (default AoI radius 100).
-	posMap.Add(bot, &component.Position{X: coords.CellSize * 0.9, Y: coords.CellSize * 0.5})
+	posMap.Add(bot, &component.Position{X: srcBase.CellSize() * 0.9, Y: srcBase.CellSize() * 0.5})
 	velMap.Add(bot, &component.Velocity{X: 40, Y: 0}) // 40 u/s east
 	nidMap.Add(bot, &component.NetworkID{ID: botNetID, Epoch: 1})
 	kindMap.Add(bot, &component.EntityKind{Type: 1})
@@ -97,8 +95,8 @@ func TestNoStutter_ReplicaSmoothnessAcrossBoundary(t *testing.T) {
 		// keeps qualifying for border replication. If it runs past the
 		// cell boundary, wrap back to the 0.85 cell-size mark.
 		srcPos.X += 40.0 * float32(dtMs) / 1000.0
-		if srcPos.X >= coords.CellSize-20 {
-			srcPos.X = coords.CellSize * 0.85
+		if srcPos.X >= srcBase.CellSize()-20 {
+			srcPos.X = srcBase.CellSize() * 0.85
 		}
 
 		// Build the border frame from the source cell. tick starts at 5

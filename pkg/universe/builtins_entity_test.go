@@ -24,7 +24,6 @@ import (
 
 	"github.com/mmokit/mmokit/pkg/cmdsys"
 	"github.com/mmokit/mmokit/pkg/component"
-	"github.com/mmokit/mmokit/pkg/coords"
 	"github.com/mmokit/mmokit/pkg/engine"
 	"github.com/mmokit/mmokit/pkg/logger"
 	netpkg "github.com/mmokit/mmokit/pkg/net"
@@ -36,7 +35,6 @@ import (
 func newTestCoordWithStage(t *testing.T, cellID, hostID string) *Process {
 	t.Helper()
 	// Use a small cell size consistent with other stage tests.
-	coords.SetCellSize(1024)
 	parsed, err := ParseCellID(cellID)
 	if err != nil {
 		t.Fatalf("ParseCellID(%q): %v", cellID, err)
@@ -370,7 +368,6 @@ func findFirstLiveNetID(t *testing.T, stage *Stage) uint32 {
 // ── ComponentAccessors ────────────────────────────────────────────────────────
 
 func TestComponentAccessors_ReturnsLivePointer(t *testing.T) {
-	coords.SetCellSize(1024)
 	log := logger.New()
 	eng := engine.New(engine.DefaultConfig(), netpkg.NewConnManager(), log)
 	parsed, _ := ParseCellID("0_0")

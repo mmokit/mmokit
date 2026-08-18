@@ -8,7 +8,6 @@ import (
 
 	"github.com/mmokit/mmokit"
 	gamecomp "github.com/mmokit/mmokit/examples/space/internal/component"
-	"github.com/mmokit/mmokit/pkg/coords"
 )
 
 type movementSeedClock struct{ stamp uint64 }
@@ -53,10 +52,10 @@ func TestNetworkSystemBuildMovementStateIsWorldAbsoluteAndComplete(t *testing.T)
 	if got.EntityNetID != 91 || got.StreamEpoch != 7 || got.ProcessedSequence != 44 {
 		t.Fatalf("seed authority/sequence = %+v", got)
 	}
-	if got.WorldX != 2*coords.CellSize+25 || got.WorldY != 3*coords.CellSize+40 {
+	if got.WorldX != 2*gw.stage.CellSize()+25 || got.WorldY != 3*gw.stage.CellSize()+40 {
 		t.Fatalf("world position = (%g,%g)", got.WorldX, got.WorldY)
 	}
-	if got.TargetX != 4*coords.CellSize+10 || got.TargetY != 5*coords.CellSize+20 || !got.TargetActive {
+	if got.TargetX != 4*gw.stage.CellSize()+10 || got.TargetY != 5*gw.stage.CellSize()+20 || !got.TargetActive {
 		t.Fatalf("world target = (%g,%g active=%v)", got.TargetX, got.TargetY, got.TargetActive)
 	}
 	if got.VelocityX != 12 || got.VelocityY != -4 || got.Angle != 0.75 || got.AngularVelocity != -0.4 {

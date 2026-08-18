@@ -12,7 +12,6 @@ import (
 )
 
 func TestUpdateCellBounds_SubcellToParent_NoPositionShift(t *testing.T) {
-	coords.SetCellSize(8192)
 	log := logger.New()
 	eng := engine.New(engine.DefaultConfig(), net.NewConnManager(), log)
 
@@ -29,7 +28,7 @@ func TestUpdateCellBounds_SubcellToParent_NoPositionShift(t *testing.T) {
 
 	// Merge subcell into parent {X:0, Y:0, Depth:0}
 	parent := CellID{X: 0, Y: 0, Depth: 0}
-	base.UpdateCellBounds(parent, coords.CellSize)
+	base.UpdateCellBounds(parent, base.CellSize())
 
 	// Cell identity should be updated
 	if base.Cell() != parent {
@@ -49,8 +48,6 @@ func TestUpdateCellBounds_SubcellToParent_NoPositionShift(t *testing.T) {
 func TestSpawnAtLocation_ConvertsWorldToLocal(t *testing.T) {
 	// Fixture: cellSize=2000, rootCell=(1, 1). World origin of this cell is (2000, 2000).
 	// World point (2500, 2900) should become local (500, 900).
-	prev := coords.CellSize
-	defer coords.SetCellSize(prev)
 	wb := newTestWorldBase(t, CellID{X: 1, Y: 1}, 2000)
 
 	loc := coords.Location{X: 2500, Y: 2900}
@@ -71,8 +68,6 @@ func TestSpawnAtLocation_ConvertsWorldToLocal(t *testing.T) {
 }
 
 func TestSpawnAtLocation_OutOfBounds_InvariantLog_Clamps(t *testing.T) {
-	prev := coords.CellSize
-	defer coords.SetCellSize(prev)
 	// Size passed to the fixture, not set afterwards: a Stage captures its
 	// geometry at construction, so a later SetCellSize would leave this test
 	// asserting a [0,1024) clamp while claiming to assert [0,2000).
@@ -96,9 +91,6 @@ func TestSpawnAtLocation_OutOfBounds_InvariantLog_Clamps(t *testing.T) {
 }
 
 func TestSpawnAtLocation_OutOfBounds_InvariantPanic(t *testing.T) {
-	prev := coords.CellSize
-	coords.SetCellSize(2000)
-	defer coords.SetCellSize(prev)
 
 	wb := newTestWorldBase(t, CellID{X: 0, Y: 0})
 	wb.coord = &Process{invariantMode: InvariantPanic}

@@ -8,7 +8,6 @@ import (
 	"github.com/mlange-42/ark/ecs"
 
 	"github.com/mmokit/mmokit/pkg/component"
-	"github.com/mmokit/mmokit/pkg/coords"
 )
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -35,7 +34,6 @@ import (
 // ═══════════════════════════════════════════════════════════════════════════
 
 func TestS7MergeAcrossHosts(t *testing.T) {
-	coords.SetCellSize(1024)
 
 	fx := newDistributedFixture(t, FixtureConfig{
 		CellsX:   2,
@@ -77,7 +75,7 @@ func TestS7MergeAcrossHosts(t *testing.T) {
 	// entity already landed on the survivor via the boundary path.
 	plantedOnChild := make(map[string]uint32) // childKey -> netID
 	nextNet := uint32(12000)
-	subSize := coords.CellSize / 2
+	subSize := coord.CellSize() / 2
 	for i, ch := range children {
 		childKey := string(ch.MeshID())
 		childCell := fx.AnyCell(childKey)
@@ -199,7 +197,6 @@ doneEntityCheck:
 // the parent's own directive and every external neighbor's reference to
 // the parent silently dropped.
 func TestS7MergeWiresParentNeighbors(t *testing.T) {
-	coords.SetCellSize(1024)
 
 	fx := newColocatedFixture(t, FixtureConfig{
 		CellsX:   2,
@@ -265,7 +262,6 @@ func TestS7MergeWiresParentNeighbors(t *testing.T) {
 // merge because replication sends frames for two entities sharing the same
 // netID and the stationary duplicate wins on most ticks.
 func TestS7MergeNoDuplicateNetIDs(t *testing.T) {
-	coords.SetCellSize(1024)
 
 	fx := newColocatedFixture(t, FixtureConfig{
 		CellsX:   2,
@@ -290,7 +286,7 @@ func TestS7MergeNoDuplicateNetIDs(t *testing.T) {
 	// transfers and the merge executor produces duplicate/missing entities
 	// that muddle the drain-duplicate check.
 	children := parentCellID.Children()
-	subSize := coords.CellSize / 2
+	subSize := coord.CellSize() / 2
 	for i, ch := range children {
 		childKey := string(ch.MeshID())
 		childCell := fx.AnyCell(childKey)
@@ -357,7 +353,6 @@ func mapKeys[K ~string, V any](m map[K]V) []string {
 // (never mutated by the coord's pre-remove loop), so the remote path
 // never exhibited the bug.
 func TestS7MergeShutsDownDonorCells(t *testing.T) {
-	coords.SetCellSize(1024)
 
 	fx := newColocatedFixture(t, FixtureConfig{
 		CellsX:   2,
@@ -422,7 +417,6 @@ func TestS7MergeShutsDownDonorCells(t *testing.T) {
 // the merge through the orchestrator, and asserts the route was migrated
 // to the parent host + parentKey with a bumped epoch.
 func TestS7MergeRemapsSessionAcrossHosts(t *testing.T) {
-	coords.SetCellSize(1024)
 
 	fx := newDistributedFixture(t, FixtureConfig{
 		CellsX:   2,

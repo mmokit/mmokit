@@ -18,7 +18,7 @@ func makeGrid3x3() []pkguniverse.CellID {
 }
 
 func TestTopology_CenterHas8Neighbors(t *testing.T) {
-	topo := pkguniverse.ComputeTopology(makeGrid3x3(), coords.CellSize)
+	topo := pkguniverse.ComputeTopology(makeGrid3x3(), coords.DefaultCellSize)
 	center := pkguniverse.CellID{X: 0, Y: 0}
 	n := topo.Neighbors[center]
 	if len(n) != 8 {
@@ -27,7 +27,7 @@ func TestTopology_CenterHas8Neighbors(t *testing.T) {
 }
 
 func TestTopology_CornerHas3Neighbors(t *testing.T) {
-	topo := pkguniverse.ComputeTopology(makeGrid3x3(), coords.CellSize)
+	topo := pkguniverse.ComputeTopology(makeGrid3x3(), coords.DefaultCellSize)
 	corner := pkguniverse.CellID{X: -1, Y: -1}
 	n := topo.Neighbors[corner]
 	if len(n) != 3 {
@@ -36,7 +36,7 @@ func TestTopology_CornerHas3Neighbors(t *testing.T) {
 }
 
 func TestTopology_EdgeHas5Neighbors(t *testing.T) {
-	topo := pkguniverse.ComputeTopology(makeGrid3x3(), coords.CellSize)
+	topo := pkguniverse.ComputeTopology(makeGrid3x3(), coords.DefaultCellSize)
 	edge := pkguniverse.CellID{X: 0, Y: -1}
 	n := topo.Neighbors[edge]
 	if len(n) != 5 {
@@ -45,7 +45,7 @@ func TestTopology_EdgeHas5Neighbors(t *testing.T) {
 }
 
 func TestTopology_SingleCellNoNeighbors(t *testing.T) {
-	topo := pkguniverse.ComputeTopology([]pkguniverse.CellID{{X: 0, Y: 0}}, coords.CellSize)
+	topo := pkguniverse.ComputeTopology([]pkguniverse.CellID{{X: 0, Y: 0}}, coords.DefaultCellSize)
 	n := topo.Neighbors[pkguniverse.CellID{X: 0, Y: 0}]
 	if len(n) != 0 {
 		t.Fatalf("single cell should have 0 neighbors, got %d", len(n))

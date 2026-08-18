@@ -24,7 +24,6 @@ import (
 	"time"
 
 	"github.com/mmokit/mmokit/pkg/cmdsys"
-	"github.com/mmokit/mmokit/pkg/coords"
 )
 
 // ── mock PlayerDataLocator ────────────────────────────────────────────────────
@@ -79,7 +78,6 @@ func (m *mockLocator) ListOffline() []PlayerDataAccessor {
 // pre-seeded with the given player.
 func newTestCoordWithPlayer(t *testing.T, username string, cellX, cellY int32, x, y float32) (*Process, *mockLocator) {
 	t.Helper()
-	coords.SetCellSize(1024)
 	coord := &Process{
 		Cells: map[MeshCellID]*Cell{},
 		Hosts: map[string]*Host{},
@@ -223,7 +221,7 @@ func TestPlayerTpHandler_OfflineUpdatesPosition(t *testing.T) {
 	if pd.cellX != 2 || pd.cellY != 0 {
 		t.Errorf("cell = (%d,%d), want (2,0)", pd.cellX, pd.cellY)
 	}
-	expectedLocalX := float32(2200) - float32(2)*coords.CellSize
+	expectedLocalX := float32(2200) - float32(2)*coord.CellSize()
 	if pd.x != expectedLocalX {
 		t.Errorf("local X = %g, want %g", pd.x, expectedLocalX)
 	}
@@ -283,8 +281,8 @@ func TestPlayerInfoHandler_OfflineReturnsWorldCoords(t *testing.T) {
 	if out.Status != "offline" {
 		t.Errorf("Status = %q, want offline", out.Status)
 	}
-	wantX := float32(1)*coords.CellSize + 512
-	wantY := float32(0)*coords.CellSize + 256
+	wantX := float32(1)*coord.CellSize() + 512
+	wantY := float32(0)*coord.CellSize() + 256
 	if out.WorldX != wantX || out.WorldY != wantY {
 		t.Errorf("world = (%g,%g), want (%g,%g)", out.WorldX, out.WorldY, wantX, wantY)
 	}

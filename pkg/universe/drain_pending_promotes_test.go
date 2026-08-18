@@ -6,16 +6,15 @@ import (
 	"github.com/mlange-42/ark/ecs"
 
 	"github.com/mmokit/mmokit/pkg/component"
-	"github.com/mmokit/mmokit/pkg/coords"
 	"github.com/mmokit/mmokit/pkg/logger"
 	"github.com/mmokit/mmokit/pkg/replication"
 )
 
 // newMinimalCell creates a minimal Cell for use in drainPendingPromotes tests.
 // It wires Stage and the engine Log; other fields are left at zero.
-func newMinimalCell(t *testing.T, cell CellID) *Cell {
+func newMinimalCell(t *testing.T, cell CellID, cellSize ...float32) *Cell {
 	t.Helper()
-	base := newTestWorldBase(t, cell)
+	base := newTestWorldBase(t, cell, cellSize...)
 	c := NewCell(cell.MeshID(), cell)
 	c.Stage = base
 	c.Engine = base.eng
@@ -72,12 +71,11 @@ func worldXOf(t *testing.T, base *Stage, ent ecs.Entity, cellSize float32) float
 // already carried by the fixed DeltaBuf fields.
 func TestDrainPendingPromotes_BorderReplicaTip_WorldXCorrect(t *testing.T) {
 	const cellSize = float32(1024)
-	coords.SetCellSize(cellSize)
 
 	// --- Source side (cell_0_0): build the transfer blob ---
 	// Register Position in the src registry to exercise the scanEntityComponents
 	// bug path (border frame component tail includes raw source position).
-	src := newTestWorldBase(t, CellID{X: 0, Y: 0})
+	src := newTestWorldBase(t, CellID{X: 0, Y: 0}, cellSize)
 	srcPosMap := ecs.NewMap1[component.Position](src.ECSWorld())
 	RegisterComponent(src.ReplicationRegistry(), srcPosMap)
 
@@ -120,7 +118,7 @@ func TestDrainPendingPromotes_BorderReplicaTip_WorldXCorrect(t *testing.T) {
 	// --- Destination side (cell_1_0): pre-populate a border replica ---
 	// Also register Position in dst registry — this is what triggers the
 	// apply-side overwrite of localX with the raw source value.
-	dst := newMinimalCell(t, CellID{X: 1, Y: 0})
+	dst := newMinimalCell(t, CellID{X: 1, Y: 0}, cellSize)
 	dstPosMap := ecs.NewMap1[component.Position](dst.Stage.ECSWorld())
 	RegisterComponent(dst.Stage.ReplicationRegistry(), dstPosMap)
 
@@ -245,10 +243,9 @@ func TestDrainPendingPromotes_BorderReplicaTip_WorldXCorrect(t *testing.T) {
 // dip-and-jump). Generalizes the existing motion-only de-stale to Collider.
 func TestDrainPendingPromotes_DeStalesColliderRadius(t *testing.T) {
 	const cellSize = float32(1024)
-	coords.SetCellSize(cellSize)
 
 	// Source: blob captures the STALE radius at crossing time.
-	src := newTestWorldBase(t, CellID{X: 0, Y: 0})
+	src := newTestWorldBase(t, CellID{X: 0, Y: 0}, cellSize)
 	rec := &handoffRecordingBridge{}
 	hd := newAutoAcceptHandoffDriver(src, rec)
 
@@ -266,7 +263,7 @@ func TestDrainPendingPromotes_DeStalesColliderRadius(t *testing.T) {
 
 	// Destination: border-replica refreshed with a FRESHER radius — the entity
 	// breathed between crossing and commit.
-	dst := newMinimalCell(t, CellID{X: 1, Y: 0})
+	dst := newMinimalCell(t, CellID{X: 1, Y: 0}, cellSize)
 	const freshRadius = float32(42)
 	dst.Stage.ApplyBorderFrame(replication.Frame{Entries: []replication.FrameEntry{{
 		NetID:    replication.NetID{ID: netID, Epoch: 1},
@@ -304,9 +301,8 @@ func TestDrainPendingPromotes_DeStalesColliderRadius(t *testing.T) {
 // the fix holds for the SpawnFromTransferCore-only path.
 func TestDrainPendingPromotes_NoReplica_WorldXCorrect(t *testing.T) {
 	const cellSize = float32(1024)
-	coords.SetCellSize(cellSize)
 
-	src := newTestWorldBase(t, CellID{X: 0, Y: 0})
+	src := newTestWorldBase(t, CellID{X: 0, Y: 0}, cellSize)
 	rec := &handoffRecordingBridge{}
 	hd := newAutoAcceptHandoffDriver(src, rec)
 
@@ -329,7 +325,7 @@ func TestDrainPendingPromotes_NoReplica_WorldXCorrect(t *testing.T) {
 	blob := rec.handoffs[0].TransferBlob
 
 	// Destination: NO border replica. Pure fast-mover case.
-	dst := newMinimalCell(t, CellID{X: 1, Y: 0})
+	dst := newMinimalCell(t, CellID{X: 1, Y: 0}, cellSize)
 
 	dst.pendingPromotes = map[uint64][]pendingPromote{
 		12: {{
@@ -380,10 +376,9 @@ func TestDrainPendingPromotes_NoReplica_WorldXCorrect(t *testing.T) {
 // (walk LEFT) — matching the user-reported symptom.
 func TestDrainPendingPromotes_WithMoveTargetInRegistry_WorldXCorrect(t *testing.T) {
 	const cellSize = float32(1024)
-	coords.SetCellSize(cellSize)
 
 	// Source with MoveTarget in the registry.
-	src := newTestWorldBase(t, CellID{X: 0, Y: 0})
+	src := newTestWorldBase(t, CellID{X: 0, Y: 0}, cellSize)
 	mtMap := ecs.NewMap1[component.MoveTarget](src.ECSWorld())
 	RegisterComponent(src.ReplicationRegistry(), mtMap)
 
@@ -414,7 +409,7 @@ func TestDrainPendingPromotes_WithMoveTargetInRegistry_WorldXCorrect(t *testing.
 	blob := rec.handoffs[0].TransferBlob
 
 	// Destination with border replica and MoveTarget registry.
-	dst := newMinimalCell(t, CellID{X: 1, Y: 0})
+	dst := newMinimalCell(t, CellID{X: 1, Y: 0}, cellSize)
 	dstMTMap := ecs.NewMap1[component.MoveTarget](dst.Stage.ECSWorld())
 	RegisterComponent(dst.Stage.ReplicationRegistry(), dstMTMap)
 

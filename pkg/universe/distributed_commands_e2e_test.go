@@ -5,7 +5,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/mmokit/mmokit/pkg/coords"
 	"github.com/mmokit/mmokit/pkg/logger"
 )
 
@@ -93,8 +92,8 @@ func TestPlayerTP_OfflineUpdatesDB_E2E(t *testing.T) {
 	coord.SetHasPlayerDB(true)
 
 	// Far-away world position — should land in cell (3, 3).
-	farX := coords.CellSize*3 + 50
-	farY := coords.CellSize*3 + 75
+	farX := coord.CellSize()*3 + 50
+	farY := coord.CellSize()*3 + 75
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()

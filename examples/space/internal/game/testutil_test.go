@@ -45,7 +45,7 @@ func newTestCell(cell pkguniverse.CellID) *pkguniverse.Cell {
 	events := make(chan net.PlayerEvent, 64)
 
 	base := pkguniverse.NewStage(eng, cell, cfg.AoIRadius, nil)
-	base.SetSpatialGrid(spatial.NewHashGrid(coords.CellSize / 10))
+	base.SetSpatialGrid(spatial.NewHashGrid(coords.DefaultCellSize / 10))
 
 	// Collect system defs and realize entity kinds via a throwaway coordinator.
 	// Kind specs must run against the stage before NewGameWorld spawns any

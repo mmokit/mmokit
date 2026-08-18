@@ -6,7 +6,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/mmokit/mmokit/pkg/coords"
 	"github.com/mmokit/mmokit/pkg/logger"
 	"github.com/mmokit/mmokit/pkg/net"
 )
@@ -24,7 +23,6 @@ type distributedFixture struct {
 func newDistributedFixture(t *testing.T, cfg FixtureConfig) clusterFixture {
 	t.Helper()
 	cfg.normalize()
-	coords.SetCellSize(cfg.CellSize)
 
 	// 1. Coord-role process on an ephemeral port.
 	coordMode := "coordinator"

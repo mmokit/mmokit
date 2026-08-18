@@ -7,7 +7,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/mmokit/mmokit/pkg/coords"
 	"github.com/mmokit/mmokit/pkg/logger"
 	"github.com/mmokit/mmokit/pkg/net"
 )
@@ -242,7 +241,6 @@ type colocatedFixture struct {
 func newColocatedFixture(t *testing.T, cfg FixtureConfig) clusterFixture {
 	t.Helper()
 	cfg.normalize()
-	coords.SetCellSize(cfg.CellSize)
 
 	// Colocated = single process with RoleAll + exactly one host.
 	// Multi-host-in-binary testing lives in distributedFixture.

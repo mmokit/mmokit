@@ -7,7 +7,6 @@ import (
 	"github.com/mlange-42/ark/ecs"
 
 	"github.com/mmokit/mmokit/pkg/component"
-	"github.com/mmokit/mmokit/pkg/coords"
 	"github.com/mmokit/mmokit/pkg/engine"
 )
 
@@ -30,7 +29,7 @@ import (
 func TestSplit_SourceDeactivatesTransferredPlayerViewer(t *testing.T) {
 	coord, host, srcCell := newExecutorTestCoord(t)
 	src := srcCell.CellID()
-	half := src.Size(coords.CellSize) / 2
+	half := src.Size(coord.CellSize()) / 2
 
 	const connID uint32 = 4242
 	const netID uint32 = 7777

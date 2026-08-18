@@ -5,7 +5,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/mmokit/mmokit/pkg/coords"
 	"github.com/mmokit/mmokit/pkg/metrics"
 )
 
@@ -501,7 +500,6 @@ func TestRebalanceInflightGate(t *testing.T) {
 // ═══════════════════════════════════════════════════════════════════════════
 
 func TestS7AutoRebalanceEndToEnd(t *testing.T) {
-	coords.SetCellSize(1024)
 
 	fx := newDistributedFixture(t, FixtureConfig{
 		CellsX:   2,

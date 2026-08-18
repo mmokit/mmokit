@@ -256,7 +256,6 @@ func TestCell_MsgHandoff_ReplacesExistingReplicaAtCommitTick(t *testing.T) {
 // the boundary-handoff path handles it in the hook.
 func TestCell_MsgHandoff_PreservesDebugFlagsOnSession(t *testing.T) {
 	const cellSize = float32(1024)
-	coords.SetCellSize(cellSize)
 
 	c := newTestCoordinator(Config{CellsX: 2, CellsY: 1, CellSize: cellSize})
 	dst := c.Cells[CellID{X: 1, Y: 0}.MeshID()]
@@ -560,7 +559,7 @@ func TestBridge_RequestRespawn(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ParseCellID: %v", err)
 	}
-	minX, minY, maxX, maxY := targetCell.WorldBounds(coords.CellSize)
+	minX, minY, maxX, maxY := targetCell.WorldBounds(c.CellSize())
 	want := coords.Location{X: (minX + maxX) / 2, Y: (minY + maxY) / 2}
 	c.OnResolveSpawn(func(_ *engine.PlayerSession) coords.Location { return want })
 
@@ -763,7 +762,7 @@ func TestComputeTopology_3x3(t *testing.T) {
 		}
 	}
 
-	topo := ComputeTopology(cells, coords.CellSize)
+	topo := ComputeTopology(cells, coords.DefaultCellSize)
 
 	center := CellID{X: 1, Y: 1}
 	if len(topo.Neighbors[center]) != 8 {
@@ -811,9 +810,6 @@ type recordingBridge struct {
 // registered, the spawn path returns the engine default (center of cell
 // (0,0)) — exercised through Bridge.RequestRespawn.
 func TestOnResolveSpawn_DefaultLocation(t *testing.T) {
-	prev := coords.CellSize
-	coords.SetCellSize(2000)
-	defer coords.SetCellSize(prev)
 
 	c := newTestCoordinator(Config{CellsX: 1, CellsY: 1, CellSize: 2000})
 

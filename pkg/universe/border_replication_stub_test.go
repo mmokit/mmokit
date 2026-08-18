@@ -9,7 +9,6 @@ import (
 	"github.com/mlange-42/ark/ecs"
 
 	"github.com/mmokit/mmokit/pkg/component"
-	"github.com/mmokit/mmokit/pkg/coords"
 	"github.com/mmokit/mmokit/pkg/replication"
 )
 
@@ -520,7 +519,6 @@ func TestBorderDispatcher_CornerEntityReachesAllNeighbors(t *testing.T) {
 	// exists for — silently, since it asserts a reachability property that
 	// simply holds at small cell sizes.
 	base := newTestWorldBase(t, CellID{X: 0, Y: 0}, 8192)
-	defer coords.SetCellSize(1024) // restore the default other tests expect
 
 	world := base.ECSWorld()
 	posMap := ecs.NewMap1[component.Position](world)

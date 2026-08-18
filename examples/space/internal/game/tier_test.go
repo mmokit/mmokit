@@ -4,7 +4,6 @@ import (
 	"testing"
 
 	"github.com/mmokit/mmokit"
-	"github.com/mmokit/mmokit/pkg/coords"
 )
 
 func TestTierForDist_Boundaries(t *testing.T) {
@@ -34,10 +33,10 @@ func TestTierForDist_Boundaries(t *testing.T) {
 
 func TestDistFromStation_AdjacentCells(t *testing.T) {
 	station := mmokit.CellCoord{CellX: 0, CellY: 0}
-	stationCenterX := coords.CellSize / 2
+	stationCenterX := float32(mmokit.DefaultCellSize) / 2
 
-	got := distFromStation(mmokit.DefaultCellSize, mmokit.CellCoord{CellX: 1, CellY: 0}, stationCenterX, coords.CellSize/2, station)
-	want := coords.CellSize
+	got := distFromStation(mmokit.DefaultCellSize, mmokit.CellCoord{CellX: 1, CellY: 0}, stationCenterX, float32(mmokit.DefaultCellSize)/2, station)
+	want := float32(mmokit.DefaultCellSize)
 	if absf(got-want) > 1 {
 		t.Fatalf("distFromStation eastNeighbor = %v, want ~%v", got, want)
 	}

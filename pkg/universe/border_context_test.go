@@ -7,7 +7,6 @@ import (
 
 	meshpb "github.com/mmokit/mmokit/gen/go/meshpb"
 	"github.com/mmokit/mmokit/pkg/component"
-	"github.com/mmokit/mmokit/pkg/coords"
 )
 
 // TestUpsertBorderReplicaFromTransfer_SeedsReplica confirms a TransferFrame
@@ -86,8 +85,8 @@ func TestUpsertBorderReplicaFromTransfer_NonOriginRoot(t *testing.T) {
 // the source-id plumbing, and that each blob round-trips through
 // UnmarshalTransferFrame.
 func TestCollectBorderContextFor_SplitFilterAndSource(t *testing.T) {
-	stage := newTestStage(t) // cell {0,0} depth 0; size = coords.CellSize
-	half := stage.cell.Size(coords.CellSize) / 2
+	stage := newTestStage(t) // cell {0,0} depth 0
+	half := stage.cell.Size(stage.CellSize()) / 2
 
 	// Local in quadrant 0 (BL) — authoritative on this child, must be excluded.
 	q0 := stage.Spawn(component.Position{X: 10, Y: 10})
