@@ -809,13 +809,13 @@ func SendEventTyped[T any](stage *Stage, connID uint32, msg *T) {
 // oversized field is runtime data on the tick goroutine and must not be.
 func BuildTypedEventFrameRaw[T any](msg *T) []byte {
 	t := reflect.TypeFor[T]()
-	if ServerEventHooks.IsRegistered == nil || ServerEventHooks.TypeIDOf == nil {
+	if ServerEventHooks.IsRegistered == nil {
 		panic(fmt.Sprintf("BuildTypedEventFrameRaw: ServerEventHooks not wired (import mmokit so its init() runs); type %s", t.String()))
 	}
 	if !ServerEventHooks.IsRegistered(t) {
 		panic(fmt.Sprintf("BuildTypedEventFrameRaw: type %s not registered via mmokit.RegisterEvent[T]", t.String()))
 	}
-	id := ServerEventHooks.TypeIDOf(t)
+	id := TypeIDOf(t)
 	body, err := ReflectMarshal(msg)
 	if err != nil {
 		NoteMarshalDrop(CatMeshAction, "typed event %s dropped — %v", t.String(), err)
@@ -2026,7 +2026,6 @@ func (s *Stage) HandleEngineAction(action *CrossCellAction) bool {
 // BroadcastHooks indirection (init-populated by mmokit).
 func (s *Stage) maybeBroadcast(targetNetID uint32, msgPtr any) {
 	if BroadcastHooks.Eligible == nil ||
-		BroadcastHooks.TypeIDOf == nil ||
 		BroadcastHooks.ExtractAnchors == nil {
 		// Hooks not populated (test build without mmokit, or partial init).
 		return
@@ -2062,7 +2061,7 @@ func (s *Stage) maybeBroadcast(targetNetID uint32, msgPtr any) {
 		return
 	}
 	s.broadcastQueue.Push(BroadcastEvent{
-		TypeID:  BroadcastHooks.TypeIDOf(t),
+		TypeID:  TypeIDOf(t),
 		Body:    body,
 		Anchors: localAnchors,
 	})

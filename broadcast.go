@@ -2,7 +2,6 @@ package mmokit
 
 import (
 	"fmt"
-	"hash/fnv"
 	"reflect"
 	"sort"
 	"sync"
@@ -44,26 +43,6 @@ type BroadcastFieldSchema struct {
 	Size     int                    `json:"size"`
 	Fields   []BroadcastFieldSchema `json:"fields,omitempty"` // for encoding == "struct"
 	Item     *BroadcastFieldSchema  `json:"item,omitempty"`   // for encoding == "slice"
-}
-
-// TypeIDOf returns the stable wire identifier for a broadcast-eligible Go type.
-// Computed as fnv32a(reflect.Type.String()) — e.g. "game.Damage" → some uint32.
-//
-// reflect.Type.String() qualifies by package NAME, not import path: a type in
-// .../internal/game and one in .../examples/space/internal/game both stringify
-// to "game.Damage" and hash identically. So the ID survives moving a package
-// between directories, and breaks on renaming the package or the type. Two
-// registered types whose package names AND type names collide would share an
-// ID; RegisterEvent and RegisterOp panic on a duplicate.
-//
-// Renaming is a deliberate wire-break in lockstep with SDK regeneration.
-// Contrast pkg/service.EventTypeName, which keys the server-internal service
-// event bus by PkgPath()+"."+Name() and is therefore path-sensitive; no client
-// wire type reaches it.
-func TypeIDOf(t reflect.Type) uint32 {
-	h := fnv.New32a()
-	_, _ = h.Write([]byte(t.String()))
-	return h.Sum32()
 }
 
 // broadcastRegistry holds the global registry of broadcast-eligible types.
@@ -185,6 +164,10 @@ func fieldSchemaOf(f reflect.StructField) BroadcastFieldSchema {
 	out.Name = lowerFirst(f.Name)
 	return out
 }
+
+// entityType is the reflect.Type for Entity, used by schemaForType to emit
+// the 4-byte NetID encoding for Entity-typed fields.
+var entityType = reflect.TypeFor[Entity]()
 
 // schemaForType is the recursive helper used by fieldSchemaOf to walk into
 // nested structs and slice element types. Returns a schema with Encoding +
@@ -310,63 +293,4 @@ func brIsRegistered(t reflect.Type) bool {
 	_, ok := brSet[t]
 	brMu.RUnlock()
 	return ok
-}
-
-// entityType is the reflect.Type for mmokit.Entity, used by walkAnchors
-// to identify Entity-typed fields without an interface check.
-var entityType = reflect.TypeFor[Entity]()
-
-// ExtractAnchors reflects on msgPtr (pointer to a broadcast-eligible struct)
-// and returns deduped NetIDs of all Entity-typed fields plus the receiver.
-//
-// Recurses into sub-struct fields. Skips zero-value Entities (NetID == 0).
-// Returns deduped slice in stable order (first encountered wins; the
-// target/receiver is added first).
-func ExtractAnchors(msgPtr any, target Entity) []uint32 {
-	seen := map[uint32]struct{}{}
-	var out []uint32
-
-	add := func(nid uint32) {
-		if nid == 0 {
-			return
-		}
-		if _, dup := seen[nid]; dup {
-			return
-		}
-		seen[nid] = struct{}{}
-		out = append(out, nid)
-	}
-
-	add(target.NetID())
-
-	v := reflect.ValueOf(msgPtr)
-	if v.Kind() == reflect.Pointer {
-		if v.IsNil() {
-			return out
-		}
-		v = v.Elem()
-	}
-	walkAnchors(v, add)
-	return out
-}
-
-// walkAnchors recursively visits struct fields, calling add(nid) for each
-// Entity-typed field's NetID. Non-struct, non-Entity fields are ignored.
-func walkAnchors(v reflect.Value, add func(uint32)) {
-	if v.Kind() != reflect.Struct {
-		return
-	}
-	for i := 0; i < v.NumField(); i++ {
-		f := v.Field(i)
-		if !v.Type().Field(i).IsExported() {
-			continue
-		}
-		if f.Type() == entityType {
-			add(f.Interface().(Entity).NetID())
-			continue
-		}
-		if f.Kind() == reflect.Struct {
-			walkAnchors(f, add)
-		}
-	}
 }

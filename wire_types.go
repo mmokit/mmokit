@@ -1,0 +1,35 @@
+package mmokit
+
+import (
+	pkguniverse "github.com/mmokit/mmokit/pkg/universe"
+)
+
+// Wire primitives re-exported from pkg/universe. They are defined there
+// because universe is the layer that decodes and routes the bytes; they are
+// aliased here so game code keeps importing mmokit alone.
+
+// TypeIDOf returns the stable wire identifier for a registered Go message
+// type — fnv32a(reflect.Type.String()). See pkguniverse.TypeIDOf for the
+// full contract, including why the ID survives moving a package between
+// directories but breaks on renaming the package or the type.
+var TypeIDOf = pkguniverse.TypeIDOf
+
+// ExtractAnchors returns deduped NetIDs of every Entity-typed field in
+// msgPtr plus the receiver. Anchors drive the AoI filter at broadcast
+// drain time.
+var ExtractAnchors = pkguniverse.ExtractAnchors
+
+// RouteKind classifies where a typed-op handler runs in the cluster:
+// RouteGatewayLocal on the gateway with no cell forwarding,
+// RoutePlayerCell on the cell currently owning the player's entity.
+type RouteKind = pkguniverse.RouteKind
+
+// Route kinds. Passed as the first argument to RegisterOp.
+const (
+	RouteGatewayLocal = pkguniverse.RouteGatewayLocal
+	RoutePlayerCell   = pkguniverse.RoutePlayerCell
+)
+
+// TypedOpEntry is the registry record for one typed-op binding, created by
+// RegisterOp[Req, Res] and looked up by request typeID by the dispatcher.
+type TypedOpEntry = pkguniverse.TypedOpEntry

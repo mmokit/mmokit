@@ -9,35 +9,6 @@ import (
 	pkguniverse "github.com/mmokit/mmokit/pkg/universe"
 )
 
-// RouteKind classifies where a typed-op handler runs in the cluster.
-//
-// RouteGatewayLocal — handler runs on the gateway, no cell forwarding.
-// Examples: login, ping, anything that doesn't need ECS access.
-//
-// RoutePlayerCell — handler runs on the player's authoritative cell
-// (the cell currently owning the player's entity). Examples: marketplace,
-// bank, anything that mutates ECS state. Phase 1 of Plan 2 wires the
-// gateway-local path only; cell routing comes in Phase 3.
-type RouteKind uint8
-
-const (
-	RouteGatewayLocal RouteKind = iota
-	RoutePlayerCell
-)
-
-// String returns a stable, human-readable name. Used by diagnostics, logs,
-// and SDK schema export.
-func (k RouteKind) String() string {
-	switch k {
-	case RouteGatewayLocal:
-		return "gateway-local"
-	case RoutePlayerCell:
-		return "player-cell"
-	default:
-		return "unknown"
-	}
-}
-
 // OperationError is the framework-defined response the typed-op dispatcher
 // returns when an op fails before reaching, or inside, a registered handler.
 // Codes are stable; the message is informational and may change. Clients
@@ -66,18 +37,6 @@ func registerFrameworkOps() {
 
 func init() {
 	registerFrameworkOps()
-}
-
-// TypedOpEntry is the registry record for one typed-op binding. Created by
-// RegisterOp[Req, Res] and looked up by request typeID by the dispatcher.
-type TypedOpEntry struct {
-	Kind           RouteKind
-	RequestType    reflect.Type
-	ResponseType   reflect.Type
-	ResponseTypeID uint32
-	// Handler is the originally-registered func(*OpContext, *Req) (*Res, error)
-	// stored as `any`. The dispatcher uses reflect.Call to invoke it.
-	Handler any
 }
 
 var (

@@ -17,10 +17,6 @@ import "reflect"
 var ServerEventHooks struct {
 	// IsRegistered reports whether t was registered via mmokit.RegisterEvent[T].
 	IsRegistered func(t reflect.Type) bool
-
-	// TypeIDOf returns the wire-stable uint32 identifier for type t.
-	// Computed on the mmokit side as fnv32(reflect.Type.String()).
-	TypeIDOf func(t reflect.Type) uint32
 }
 
 // EngineDefaultFrameHooks lets pkg/universe and pkg/engine emit the

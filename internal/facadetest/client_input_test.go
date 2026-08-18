@@ -35,10 +35,7 @@ func TestHandleClient_RegistersInClientInputRegistry(t *testing.T) {
 		t.Errorf("clientInputPing not registered after HandleClient")
 	}
 
-	if pkguniverse.ClientInputHooks.TypeIDOf == nil {
-		t.Fatal("ClientInputHooks.TypeIDOf not wired")
-	}
-	id := pkguniverse.ClientInputHooks.TypeIDOf(pingType)
+	id := pkguniverse.TypeIDOf(pingType)
 	if id == 0 {
 		t.Errorf("expected non-zero typeID for clientInputPing")
 	}
