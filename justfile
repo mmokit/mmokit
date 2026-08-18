@@ -25,6 +25,60 @@ client-sdk GAME:
         --out {{ GAME }}/web/sdk \
         --core pkg/quantize/ts/delta-decoder-core.ts
 
+# ─── protocol schema goldens ──────────────────────────────────────────────────
+#
+# `--dump-schema` is the single source both SDK generators read, so its JSON is
+# the client-visible protocol contract. Nothing pinned it: `just client-sdk`
+# piped the dump straight into sdkgen, so a registration that silently appeared
+# or vanished only showed up as a diff in generated SDK files nobody reads.
+#
+# These two recipes are that gate. `schema-golden` rewrites the pins;
+# `schema-check` fails on any drift. The dump is deterministic — every registry
+# it reads sorts by reflect.Type.String() before emitting.
+#
+# Both need PostgreSQL for space and 4node-basic (`just db-up`); those two open
+# their database before --dump-schema exits.
+
+schema_pg := env('POSTGRES_URL', 'postgres://mmo:mmo@localhost:5432/mmo?sslmode=disable')
+
+# dump every example's protocol schema into DIR as <short-name>.json
+[private]
+schema-dump DIR:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    mkdir -p "{{ DIR }}"
+    dump() {
+        go run "./examples/$1" --dump-schema --control-listen= --admin-listen= \
+            "--postgres-url={{ schema_pg }}" > "{{ DIR }}/$2.json"
+    }
+    dump simple      simple
+    dump 4node-basic 4node
+    dump space       space
+
+# rewrite the pinned protocol-schema goldens in testdata/schema/
+schema-golden: (schema-dump "testdata/schema")
+    @echo "wrote testdata/schema/{simple,4node,space}.json"
+
+# fail if any example's --dump-schema output has drifted from its golden
+schema-check:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    out="$(mktemp -d)"
+    trap 'rm -rf "$out"' EXIT
+    just schema-dump "$out"
+    rc=0
+    for n in simple 4node space; do
+        if ! diff -u "testdata/schema/$n.json" "$out/$n.json"; then
+            echo "schema-check: $n drifted from testdata/schema/$n.json" >&2
+            rc=1
+        fi
+    done
+    if [ "$rc" -ne 0 ]; then
+        echo "schema-check: the client-visible protocol changed. If intended, run 'just schema-golden' and regenerate the SDKs." >&2
+        exit 1
+    fi
+    echo "schema-check: all three schemas match their goldens"
+
 # remove bin/
 clean:
     rm -rf bin/

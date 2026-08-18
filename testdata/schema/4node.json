@@ -1,0 +1,2439 @@
+{
+  "game": "basic",
+  "entities": [
+    {
+      "kind": 1,
+      "name": "Player",
+      "bindings": [
+        {
+          "type": "engine_bindings",
+          "fields": [
+            {
+              "name": "worldX",
+              "encoding": "f32",
+              "size": 4
+            },
+            {
+              "name": "worldY",
+              "encoding": "f32",
+              "size": 4
+            },
+            {
+              "name": "velX",
+              "encoding": "qvel",
+              "size": 2,
+              "scale": 2000
+            },
+            {
+              "name": "velY",
+              "encoding": "qvel",
+              "size": 2,
+              "scale": 2000
+            },
+            {
+              "name": "radius",
+              "encoding": "qvel",
+              "size": 2,
+              "scale": 500
+            },
+            {
+              "name": "width",
+              "encoding": "qvel",
+              "size": 2,
+              "scale": 500
+            },
+            {
+              "name": "height",
+              "encoding": "qvel",
+              "size": 2,
+              "scale": 500
+            }
+          ]
+        },
+        {
+          "type": "component",
+          "fields": [
+            {
+              "name": "name",
+              "encoding": "string",
+              "size": -1,
+              "initial": true
+            }
+          ],
+          "structName": "PlayerName"
+        },
+        {
+          "type": "component",
+          "fields": null,
+          "structName": "MoveTarget"
+        },
+        {
+          "type": "component",
+          "fields": [
+            {
+              "name": "r",
+              "encoding": "u8",
+              "size": 1
+            },
+            {
+              "name": "g",
+              "encoding": "u8",
+              "size": 1
+            },
+            {
+              "name": "b",
+              "encoding": "u8",
+              "size": 1
+            }
+          ],
+          "structName": "Tint"
+        }
+      ],
+      "layout": [
+        4,
+        4,
+        2,
+        2,
+        2,
+        2,
+        2,
+        1,
+        1,
+        1
+      ],
+      "initialData": "length_prefixed_string_u8"
+    },
+    {
+      "kind": 2,
+      "name": "Bot",
+      "bindings": [
+        {
+          "type": "engine_bindings",
+          "fields": [
+            {
+              "name": "worldX",
+              "encoding": "f32",
+              "size": 4
+            },
+            {
+              "name": "worldY",
+              "encoding": "f32",
+              "size": 4
+            },
+            {
+              "name": "velX",
+              "encoding": "qvel",
+              "size": 2,
+              "scale": 2000
+            },
+            {
+              "name": "velY",
+              "encoding": "qvel",
+              "size": 2,
+              "scale": 2000
+            },
+            {
+              "name": "radius",
+              "encoding": "qvel",
+              "size": 2,
+              "scale": 500
+            },
+            {
+              "name": "width",
+              "encoding": "qvel",
+              "size": 2,
+              "scale": 500
+            },
+            {
+              "name": "height",
+              "encoding": "qvel",
+              "size": 2,
+              "scale": 500
+            }
+          ]
+        },
+        {
+          "type": "component",
+          "fields": [
+            {
+              "name": "name",
+              "encoding": "string",
+              "size": -1,
+              "initial": true
+            }
+          ],
+          "structName": "PlayerName"
+        },
+        {
+          "type": "component",
+          "fields": null,
+          "structName": "MoveTarget"
+        },
+        {
+          "type": "component",
+          "fields": [
+            {
+              "name": "r",
+              "encoding": "u8",
+              "size": 1
+            },
+            {
+              "name": "g",
+              "encoding": "u8",
+              "size": 1
+            },
+            {
+              "name": "b",
+              "encoding": "u8",
+              "size": 1
+            }
+          ],
+          "structName": "Tint"
+        },
+        {
+          "type": "component",
+          "fields": null,
+          "structName": "BotBehavior"
+        }
+      ],
+      "layout": [
+        4,
+        4,
+        2,
+        2,
+        2,
+        2,
+        2,
+        1,
+        1,
+        1
+      ],
+      "initialData": "length_prefixed_string_u8"
+    }
+  ],
+  "client_input_types": [
+    {
+      "name": "mmokit.MoveTargetMsg",
+      "type_id": 644814507,
+      "fields": [
+        {
+          "name": "x",
+          "encoding": "f32",
+          "size": 4
+        },
+        {
+          "name": "y",
+          "encoding": "f32",
+          "size": 4
+        }
+      ]
+    },
+    {
+      "name": "mmokit.Ping",
+      "type_id": 2350322182,
+      "fields": [
+        {
+          "name": "clientTime",
+          "encoding": "i64",
+          "size": 8
+        }
+      ]
+    },
+    {
+      "name": "mmokit.ReplicationAck",
+      "type_id": 3976019817,
+      "fields": [
+        {
+          "name": "streamEpoch",
+          "encoding": "u32",
+          "size": 4
+        },
+        {
+          "name": "seq",
+          "encoding": "u32",
+          "size": 4
+        }
+      ]
+    }
+  ],
+  "server_event_types": [
+    {
+      "name": "chat.ChatBannedEvent",
+      "type_id": 4194199167,
+      "fields": [
+        {
+          "name": "channelID",
+          "encoding": "string",
+          "size": 0
+        },
+        {
+          "name": "byUserID",
+          "encoding": "string",
+          "size": 0
+        },
+        {
+          "name": "untilMs",
+          "encoding": "i64",
+          "size": 8
+        },
+        {
+          "name": "reason",
+          "encoding": "string",
+          "size": 0
+        }
+      ]
+    },
+    {
+      "name": "chat.ChatChannelGoneEvent",
+      "type_id": 1960213205,
+      "fields": [
+        {
+          "name": "channelID",
+          "encoding": "string",
+          "size": 0
+        }
+      ]
+    },
+    {
+      "name": "chat.ChatChannelUpdatedEvent",
+      "type_id": 55056437,
+      "fields": [
+        {
+          "name": "channel",
+          "encoding": "struct",
+          "size": 0,
+          "fields": [
+            {
+              "name": "channelID",
+              "encoding": "string",
+              "size": 0
+            },
+            {
+              "name": "slug",
+              "encoding": "string",
+              "size": 0
+            },
+            {
+              "name": "kind",
+              "encoding": "u32",
+              "size": 4
+            },
+            {
+              "name": "topic",
+              "encoding": "string",
+              "size": 0
+            },
+            {
+              "name": "slowModeSeconds",
+              "encoding": "i32",
+              "size": 4
+            },
+            {
+              "name": "ownerUserID",
+              "encoding": "string",
+              "size": 0
+            },
+            {
+              "name": "memberCount",
+              "encoding": "i32",
+              "size": 4
+            },
+            {
+              "name": "hasPassword",
+              "encoding": "bool",
+              "size": 1
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "chat.ChatChannelsHydratedEvent",
+      "type_id": 2802704824,
+      "fields": [
+        {
+          "name": "channels",
+          "encoding": "slice",
+          "size": 0,
+          "item": {
+            "name": "",
+            "encoding": "struct",
+            "size": 0,
+            "fields": [
+              {
+                "name": "channelID",
+                "encoding": "string",
+                "size": 0
+              },
+              {
+                "name": "slug",
+                "encoding": "string",
+                "size": 0
+              },
+              {
+                "name": "kind",
+                "encoding": "u32",
+                "size": 4
+              },
+              {
+                "name": "topic",
+                "encoding": "string",
+                "size": 0
+              },
+              {
+                "name": "slowModeSeconds",
+                "encoding": "i32",
+                "size": 4
+              },
+              {
+                "name": "ownerUserID",
+                "encoding": "string",
+                "size": 0
+              },
+              {
+                "name": "memberCount",
+                "encoding": "i32",
+                "size": 4
+              },
+              {
+                "name": "hasPassword",
+                "encoding": "bool",
+                "size": 1
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "chat.ChatDMEvent",
+      "type_id": 1655326146,
+      "fields": [
+        {
+          "name": "msgID",
+          "encoding": "string",
+          "size": 0
+        },
+        {
+          "name": "senderUserID",
+          "encoding": "string",
+          "size": 0
+        },
+        {
+          "name": "senderUsername",
+          "encoding": "string",
+          "size": 0
+        },
+        {
+          "name": "body",
+          "encoding": "string",
+          "size": 0
+        },
+        {
+          "name": "sentAtMs",
+          "encoding": "i64",
+          "size": 8
+        }
+      ]
+    },
+    {
+      "name": "chat.ChatKickedEvent",
+      "type_id": 2279800006,
+      "fields": [
+        {
+          "name": "channelID",
+          "encoding": "string",
+          "size": 0
+        },
+        {
+          "name": "byUserID",
+          "encoding": "string",
+          "size": 0
+        },
+        {
+          "name": "reason",
+          "encoding": "string",
+          "size": 0
+        }
+      ]
+    },
+    {
+      "name": "chat.ChatMemberJoinedEvent",
+      "type_id": 751602250,
+      "fields": [
+        {
+          "name": "channelID",
+          "encoding": "string",
+          "size": 0
+        },
+        {
+          "name": "userID",
+          "encoding": "string",
+          "size": 0
+        },
+        {
+          "name": "username",
+          "encoding": "string",
+          "size": 0
+        }
+      ]
+    },
+    {
+      "name": "chat.ChatMemberLeftEvent",
+      "type_id": 4055818562,
+      "fields": [
+        {
+          "name": "channelID",
+          "encoding": "string",
+          "size": 0
+        },
+        {
+          "name": "userID",
+          "encoding": "string",
+          "size": 0
+        }
+      ]
+    },
+    {
+      "name": "chat.ChatMemberRoleChangedEvent",
+      "type_id": 497425675,
+      "fields": [
+        {
+          "name": "channelID",
+          "encoding": "string",
+          "size": 0
+        },
+        {
+          "name": "userID",
+          "encoding": "string",
+          "size": 0
+        },
+        {
+          "name": "role",
+          "encoding": "string",
+          "size": 0
+        }
+      ]
+    },
+    {
+      "name": "chat.ChatMessageDeletedEvent",
+      "type_id": 2340570591,
+      "fields": [
+        {
+          "name": "msgID",
+          "encoding": "string",
+          "size": 0
+        },
+        {
+          "name": "channelID",
+          "encoding": "string",
+          "size": 0
+        },
+        {
+          "name": "deletedByUserID",
+          "encoding": "string",
+          "size": 0
+        }
+      ]
+    },
+    {
+      "name": "chat.ChatMessageEvent",
+      "type_id": 3189576544,
+      "fields": [
+        {
+          "name": "msgID",
+          "encoding": "string",
+          "size": 0
+        },
+        {
+          "name": "channelID",
+          "encoding": "string",
+          "size": 0
+        },
+        {
+          "name": "senderUserID",
+          "encoding": "string",
+          "size": 0
+        },
+        {
+          "name": "senderUsername",
+          "encoding": "string",
+          "size": 0
+        },
+        {
+          "name": "body",
+          "encoding": "string",
+          "size": 0
+        },
+        {
+          "name": "sentAtMs",
+          "encoding": "i64",
+          "size": 8
+        }
+      ]
+    },
+    {
+      "name": "chat.ChatMutedEvent",
+      "type_id": 4251753812,
+      "fields": [
+        {
+          "name": "channelID",
+          "encoding": "string",
+          "size": 0
+        },
+        {
+          "name": "untilMs",
+          "encoding": "i64",
+          "size": 8
+        },
+        {
+          "name": "reason",
+          "encoding": "string",
+          "size": 0
+        }
+      ]
+    },
+    {
+      "name": "chat.ChatRateLimitedEvent",
+      "type_id": 1223617517,
+      "fields": [
+        {
+          "name": "retryAfterMs",
+          "encoding": "i64",
+          "size": 8
+        }
+      ]
+    },
+    {
+      "name": "chat.ChatUnmutedEvent",
+      "type_id": 4175161299,
+      "fields": [
+        {
+          "name": "channelID",
+          "encoding": "string",
+          "size": 0
+        }
+      ]
+    },
+    {
+      "name": "mmokit.CellChange",
+      "type_id": 1196329874,
+      "fields": [
+        {
+          "name": "cellX",
+          "encoding": "i32",
+          "size": 4
+        },
+        {
+          "name": "cellY",
+          "encoding": "i32",
+          "size": 4
+        }
+      ]
+    },
+    {
+      "name": "mmokit.DebugInfo",
+      "type_id": 2213731489,
+      "fields": [
+        {
+          "name": "topology",
+          "encoding": "struct",
+          "size": 0,
+          "fields": [
+            {
+              "name": "cells",
+              "encoding": "slice",
+              "size": 0,
+              "item": {
+                "name": "",
+                "encoding": "struct",
+                "size": 0,
+                "fields": [
+                  {
+                    "name": "cellX",
+                    "encoding": "i32",
+                    "size": 4
+                  },
+                  {
+                    "name": "cellY",
+                    "encoding": "i32",
+                    "size": 4
+                  },
+                  {
+                    "name": "depth",
+                    "encoding": "u32",
+                    "size": 4
+                  },
+                  {
+                    "name": "size",
+                    "encoding": "f32",
+                    "size": 4
+                  },
+                  {
+                    "name": "originX",
+                    "encoding": "f32",
+                    "size": 4
+                  },
+                  {
+                    "name": "originY",
+                    "encoding": "f32",
+                    "size": 4
+                  },
+                  {
+                    "name": "nodeID",
+                    "encoding": "string",
+                    "size": 0
+                  }
+                ]
+              }
+            },
+            {
+              "name": "gridW",
+              "encoding": "i32",
+              "size": 4
+            },
+            {
+              "name": "gridH",
+              "encoding": "i32",
+              "size": 4
+            },
+            {
+              "name": "baseCellSize",
+              "encoding": "f32",
+              "size": 4
+            }
+          ]
+        },
+        {
+          "name": "aoIRadius",
+          "encoding": "f32",
+          "size": 4
+        }
+      ]
+    },
+    {
+      "name": "mmokit.OperationError",
+      "type_id": 1032367819,
+      "fields": [
+        {
+          "name": "code",
+          "encoding": "u32",
+          "size": 4
+        },
+        {
+          "name": "message",
+          "encoding": "string",
+          "size": 0
+        }
+      ]
+    },
+    {
+      "name": "mmokit.PlayerEntityAssigned",
+      "type_id": 44496856,
+      "fields": [
+        {
+          "name": "entityNetID",
+          "encoding": "u32",
+          "size": 4
+        },
+        {
+          "name": "worldX",
+          "encoding": "f32",
+          "size": 4
+        },
+        {
+          "name": "worldY",
+          "encoding": "f32",
+          "size": 4
+        }
+      ]
+    },
+    {
+      "name": "mmokit.Pong",
+      "type_id": 2233975548,
+      "fields": [
+        {
+          "name": "clientTime",
+          "encoding": "i64",
+          "size": 8
+        },
+        {
+          "name": "serverTime",
+          "encoding": "i64",
+          "size": 8
+        }
+      ]
+    },
+    {
+      "name": "mmokit.ServerConfig",
+      "type_id": 2854082715,
+      "fields": [
+        {
+          "name": "tickRate",
+          "encoding": "u32",
+          "size": 4
+        }
+      ]
+    },
+    {
+      "name": "mmokit.WorldDelta",
+      "type_id": 106632948,
+      "fields": [
+        {
+          "name": "body",
+          "encoding": "bytes",
+          "size": 0
+        },
+        {
+          "name": "streamEpoch",
+          "encoding": "u32",
+          "size": 4
+        }
+      ]
+    }
+  ],
+  "operations": [
+    {
+      "kind": "gateway-local",
+      "request_type_id": 2315561577,
+      "request_type_name": "auth.AuthChangePasswordRequest",
+      "request_fields": [
+        {
+          "name": "currentPassword",
+          "encoding": "string",
+          "size": 0
+        },
+        {
+          "name": "newPassword",
+          "encoding": "string",
+          "size": 0
+        }
+      ],
+      "response_type_id": 1641904471,
+      "response_type_name": "auth.AuthChangePasswordResponse",
+      "response_fields": [
+        {
+          "name": "errorCode",
+          "encoding": "u32",
+          "size": 4
+        },
+        {
+          "name": "errorMessage",
+          "encoding": "string",
+          "size": 0
+        }
+      ]
+    },
+    {
+      "kind": "gateway-local",
+      "request_type_id": 4224799079,
+      "request_type_name": "auth.AuthLoginRequest",
+      "request_fields": [
+        {
+          "name": "username",
+          "encoding": "string",
+          "size": 0
+        },
+        {
+          "name": "password",
+          "encoding": "string",
+          "size": 0
+        },
+        {
+          "name": "mfaCode",
+          "encoding": "string",
+          "size": 0
+        }
+      ],
+      "response_type_id": 3372600061,
+      "response_type_name": "auth.AuthLoginResponse",
+      "response_fields": [
+        {
+          "name": "userID",
+          "encoding": "string",
+          "size": 0
+        },
+        {
+          "name": "username",
+          "encoding": "string",
+          "size": 0
+        },
+        {
+          "name": "sessionToken",
+          "encoding": "string",
+          "size": 0
+        },
+        {
+          "name": "expiresAtMs",
+          "encoding": "i64",
+          "size": 8
+        },
+        {
+          "name": "errorCode",
+          "encoding": "u32",
+          "size": 4
+        },
+        {
+          "name": "errorMessage",
+          "encoding": "string",
+          "size": 0
+        },
+        {
+          "name": "retryAfterMs",
+          "encoding": "i64",
+          "size": 8
+        },
+        {
+          "name": "canonical",
+          "encoding": "string",
+          "size": 0
+        }
+      ]
+    },
+    {
+      "kind": "gateway-local",
+      "request_type_id": 2287282620,
+      "request_type_name": "auth.AuthLogoutRequest",
+      "request_fields": null,
+      "response_type_id": 3113766352,
+      "response_type_name": "auth.AuthLogoutResponse",
+      "response_fields": [
+        {
+          "name": "userID",
+          "encoding": "string",
+          "size": 0
+        },
+        {
+          "name": "username",
+          "encoding": "string",
+          "size": 0
+        },
+        {
+          "name": "errorCode",
+          "encoding": "u32",
+          "size": 4
+        },
+        {
+          "name": "errorMessage",
+          "encoding": "string",
+          "size": 0
+        }
+      ]
+    },
+    {
+      "kind": "gateway-local",
+      "request_type_id": 841855209,
+      "request_type_name": "auth.AuthRegisterRequest",
+      "request_fields": [
+        {
+          "name": "username",
+          "encoding": "string",
+          "size": 0
+        },
+        {
+          "name": "password",
+          "encoding": "string",
+          "size": 0
+        },
+        {
+          "name": "email",
+          "encoding": "string",
+          "size": 0
+        }
+      ],
+      "response_type_id": 2591208663,
+      "response_type_name": "auth.AuthRegisterResponse",
+      "response_fields": [
+        {
+          "name": "userID",
+          "encoding": "string",
+          "size": 0
+        },
+        {
+          "name": "username",
+          "encoding": "string",
+          "size": 0
+        },
+        {
+          "name": "sessionToken",
+          "encoding": "string",
+          "size": 0
+        },
+        {
+          "name": "expiresAtMs",
+          "encoding": "i64",
+          "size": 8
+        },
+        {
+          "name": "errorCode",
+          "encoding": "u32",
+          "size": 4
+        },
+        {
+          "name": "errorMessage",
+          "encoding": "string",
+          "size": 0
+        },
+        {
+          "name": "retryAfterMs",
+          "encoding": "i64",
+          "size": 8
+        },
+        {
+          "name": "canonical",
+          "encoding": "string",
+          "size": 0
+        }
+      ]
+    },
+    {
+      "kind": "gateway-local",
+      "request_type_id": 4162264177,
+      "request_type_name": "auth.AuthValidateTokenRequest",
+      "request_fields": [
+        {
+          "name": "sessionToken",
+          "encoding": "string",
+          "size": 0
+        }
+      ],
+      "response_type_id": 2491845935,
+      "response_type_name": "auth.AuthValidateTokenResponse",
+      "response_fields": [
+        {
+          "name": "userID",
+          "encoding": "string",
+          "size": 0
+        },
+        {
+          "name": "username",
+          "encoding": "string",
+          "size": 0
+        },
+        {
+          "name": "expiresAtMs",
+          "encoding": "i64",
+          "size": 8
+        },
+        {
+          "name": "errorCode",
+          "encoding": "u32",
+          "size": 4
+        },
+        {
+          "name": "errorMessage",
+          "encoding": "string",
+          "size": 0
+        },
+        {
+          "name": "retryAfterMs",
+          "encoding": "i64",
+          "size": 8
+        }
+      ]
+    },
+    {
+      "kind": "gateway-local",
+      "request_type_id": 3986057831,
+      "request_type_name": "chat.ChatAddMemberRequest",
+      "request_fields": [
+        {
+          "name": "channelID",
+          "encoding": "string",
+          "size": 0
+        },
+        {
+          "name": "userID",
+          "encoding": "string",
+          "size": 0
+        },
+        {
+          "name": "role",
+          "encoding": "string",
+          "size": 0
+        }
+      ],
+      "response_type_id": 1649157629,
+      "response_type_name": "chat.ChatAddMemberResponse",
+      "response_fields": [
+        {
+          "name": "errorBlock",
+          "encoding": "struct",
+          "size": 0,
+          "fields": [
+            {
+              "name": "errorCode",
+              "encoding": "u32",
+              "size": 4
+            },
+            {
+              "name": "errorMessage",
+              "encoding": "string",
+              "size": 0
+            },
+            {
+              "name": "retryAfterMs",
+              "encoding": "i64",
+              "size": 8
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "kind": "gateway-local",
+      "request_type_id": 3905108543,
+      "request_type_name": "chat.ChatBanRequest",
+      "request_fields": [
+        {
+          "name": "channelID",
+          "encoding": "string",
+          "size": 0
+        },
+        {
+          "name": "userID",
+          "encoding": "string",
+          "size": 0
+        },
+        {
+          "name": "durationMs",
+          "encoding": "i64",
+          "size": 8
+        },
+        {
+          "name": "reason",
+          "encoding": "string",
+          "size": 0
+        }
+      ],
+      "response_type_id": 432362437,
+      "response_type_name": "chat.ChatBanResponse",
+      "response_fields": [
+        {
+          "name": "errorBlock",
+          "encoding": "struct",
+          "size": 0,
+          "fields": [
+            {
+              "name": "errorCode",
+              "encoding": "u32",
+              "size": 4
+            },
+            {
+              "name": "errorMessage",
+              "encoding": "string",
+              "size": 0
+            },
+            {
+              "name": "retryAfterMs",
+              "encoding": "i64",
+              "size": 8
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "kind": "gateway-local",
+      "request_type_id": 2548855809,
+      "request_type_name": "chat.ChatBroadcastRequest",
+      "request_fields": [
+        {
+          "name": "channelID",
+          "encoding": "string",
+          "size": 0
+        },
+        {
+          "name": "body",
+          "encoding": "string",
+          "size": 0
+        }
+      ],
+      "response_type_id": 3075599999,
+      "response_type_name": "chat.ChatBroadcastResponse",
+      "response_fields": [
+        {
+          "name": "errorBlock",
+          "encoding": "struct",
+          "size": 0,
+          "fields": [
+            {
+              "name": "errorCode",
+              "encoding": "u32",
+              "size": 4
+            },
+            {
+              "name": "errorMessage",
+              "encoding": "string",
+              "size": 0
+            },
+            {
+              "name": "retryAfterMs",
+              "encoding": "i64",
+              "size": 8
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "kind": "gateway-local",
+      "request_type_id": 547858919,
+      "request_type_name": "chat.ChatBulkSetMembersRequest",
+      "request_fields": [
+        {
+          "name": "channelID",
+          "encoding": "string",
+          "size": 0
+        },
+        {
+          "name": "userIDs",
+          "encoding": "slice",
+          "size": 0,
+          "item": {
+            "name": "",
+            "encoding": "string",
+            "size": 0
+          }
+        }
+      ],
+      "response_type_id": 1181949053,
+      "response_type_name": "chat.ChatBulkSetMembersResponse",
+      "response_fields": [
+        {
+          "name": "errorBlock",
+          "encoding": "struct",
+          "size": 0,
+          "fields": [
+            {
+              "name": "errorCode",
+              "encoding": "u32",
+              "size": 4
+            },
+            {
+              "name": "errorMessage",
+              "encoding": "string",
+              "size": 0
+            },
+            {
+              "name": "retryAfterMs",
+              "encoding": "i64",
+              "size": 8
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "kind": "gateway-local",
+      "request_type_id": 3267852966,
+      "request_type_name": "chat.ChatCreateRequest",
+      "request_fields": [
+        {
+          "name": "slug",
+          "encoding": "string",
+          "size": 0
+        },
+        {
+          "name": "password",
+          "encoding": "string",
+          "size": 0
+        },
+        {
+          "name": "topic",
+          "encoding": "string",
+          "size": 0
+        }
+      ],
+      "response_type_id": 3756816890,
+      "response_type_name": "chat.ChatCreateResponse",
+      "response_fields": [
+        {
+          "name": "channel",
+          "encoding": "struct",
+          "size": 0,
+          "fields": [
+            {
+              "name": "channelID",
+              "encoding": "string",
+              "size": 0
+            },
+            {
+              "name": "slug",
+              "encoding": "string",
+              "size": 0
+            },
+            {
+              "name": "kind",
+              "encoding": "u32",
+              "size": 4
+            },
+            {
+              "name": "topic",
+              "encoding": "string",
+              "size": 0
+            },
+            {
+              "name": "slowModeSeconds",
+              "encoding": "i32",
+              "size": 4
+            },
+            {
+              "name": "ownerUserID",
+              "encoding": "string",
+              "size": 0
+            },
+            {
+              "name": "memberCount",
+              "encoding": "i32",
+              "size": 4
+            },
+            {
+              "name": "hasPassword",
+              "encoding": "bool",
+              "size": 1
+            }
+          ]
+        },
+        {
+          "name": "errorBlock",
+          "encoding": "struct",
+          "size": 0,
+          "fields": [
+            {
+              "name": "errorCode",
+              "encoding": "u32",
+              "size": 4
+            },
+            {
+              "name": "errorMessage",
+              "encoding": "string",
+              "size": 0
+            },
+            {
+              "name": "retryAfterMs",
+              "encoding": "i64",
+              "size": 8
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "kind": "gateway-local",
+      "request_type_id": 4210245378,
+      "request_type_name": "chat.ChatDeleteMessageRequest",
+      "request_fields": [
+        {
+          "name": "msgID",
+          "encoding": "string",
+          "size": 0
+        },
+        {
+          "name": "channelID",
+          "encoding": "string",
+          "size": 0
+        }
+      ],
+      "response_type_id": 2679903342,
+      "response_type_name": "chat.ChatDeleteMessageResponse",
+      "response_fields": [
+        {
+          "name": "errorBlock",
+          "encoding": "struct",
+          "size": 0,
+          "fields": [
+            {
+              "name": "errorCode",
+              "encoding": "u32",
+              "size": 4
+            },
+            {
+              "name": "errorMessage",
+              "encoding": "string",
+              "size": 0
+            },
+            {
+              "name": "retryAfterMs",
+              "encoding": "i64",
+              "size": 8
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "kind": "gateway-local",
+      "request_type_id": 552096018,
+      "request_type_name": "chat.ChatJoinRequest",
+      "request_fields": [
+        {
+          "name": "slug",
+          "encoding": "string",
+          "size": 0
+        },
+        {
+          "name": "password",
+          "encoding": "string",
+          "size": 0
+        }
+      ],
+      "response_type_id": 2048863422,
+      "response_type_name": "chat.ChatJoinResponse",
+      "response_fields": [
+        {
+          "name": "channel",
+          "encoding": "struct",
+          "size": 0,
+          "fields": [
+            {
+              "name": "channelID",
+              "encoding": "string",
+              "size": 0
+            },
+            {
+              "name": "slug",
+              "encoding": "string",
+              "size": 0
+            },
+            {
+              "name": "kind",
+              "encoding": "u32",
+              "size": 4
+            },
+            {
+              "name": "topic",
+              "encoding": "string",
+              "size": 0
+            },
+            {
+              "name": "slowModeSeconds",
+              "encoding": "i32",
+              "size": 4
+            },
+            {
+              "name": "ownerUserID",
+              "encoding": "string",
+              "size": 0
+            },
+            {
+              "name": "memberCount",
+              "encoding": "i32",
+              "size": 4
+            },
+            {
+              "name": "hasPassword",
+              "encoding": "bool",
+              "size": 1
+            }
+          ]
+        },
+        {
+          "name": "errorBlock",
+          "encoding": "struct",
+          "size": 0,
+          "fields": [
+            {
+              "name": "errorCode",
+              "encoding": "u32",
+              "size": 4
+            },
+            {
+              "name": "errorMessage",
+              "encoding": "string",
+              "size": 0
+            },
+            {
+              "name": "retryAfterMs",
+              "encoding": "i64",
+              "size": 8
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "kind": "gateway-local",
+      "request_type_id": 1265687188,
+      "request_type_name": "chat.ChatKickRequest",
+      "request_fields": [
+        {
+          "name": "channelID",
+          "encoding": "string",
+          "size": 0
+        },
+        {
+          "name": "userID",
+          "encoding": "string",
+          "size": 0
+        },
+        {
+          "name": "reason",
+          "encoding": "string",
+          "size": 0
+        }
+      ],
+      "response_type_id": 173236856,
+      "response_type_name": "chat.ChatKickResponse",
+      "response_fields": [
+        {
+          "name": "errorBlock",
+          "encoding": "struct",
+          "size": 0,
+          "fields": [
+            {
+              "name": "errorCode",
+              "encoding": "u32",
+              "size": 4
+            },
+            {
+              "name": "errorMessage",
+              "encoding": "string",
+              "size": 0
+            },
+            {
+              "name": "retryAfterMs",
+              "encoding": "i64",
+              "size": 8
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "kind": "gateway-local",
+      "request_type_id": 2339866317,
+      "request_type_name": "chat.ChatLeaveRequest",
+      "request_fields": [
+        {
+          "name": "channelID",
+          "encoding": "string",
+          "size": 0
+        }
+      ],
+      "response_type_id": 1886749235,
+      "response_type_name": "chat.ChatLeaveResponse",
+      "response_fields": [
+        {
+          "name": "errorBlock",
+          "encoding": "struct",
+          "size": 0,
+          "fields": [
+            {
+              "name": "errorCode",
+              "encoding": "u32",
+              "size": 4
+            },
+            {
+              "name": "errorMessage",
+              "encoding": "string",
+              "size": 0
+            },
+            {
+              "name": "retryAfterMs",
+              "encoding": "i64",
+              "size": 8
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "kind": "gateway-local",
+      "request_type_id": 3553279802,
+      "request_type_name": "chat.ChatListChannelsRequest",
+      "request_fields": null,
+      "response_type_id": 2283039702,
+      "response_type_name": "chat.ChatListChannelsResponse",
+      "response_fields": [
+        {
+          "name": "channels",
+          "encoding": "slice",
+          "size": 0,
+          "item": {
+            "name": "",
+            "encoding": "struct",
+            "size": 0,
+            "fields": [
+              {
+                "name": "channelID",
+                "encoding": "string",
+                "size": 0
+              },
+              {
+                "name": "slug",
+                "encoding": "string",
+                "size": 0
+              },
+              {
+                "name": "kind",
+                "encoding": "u32",
+                "size": 4
+              },
+              {
+                "name": "topic",
+                "encoding": "string",
+                "size": 0
+              },
+              {
+                "name": "slowModeSeconds",
+                "encoding": "i32",
+                "size": 4
+              },
+              {
+                "name": "ownerUserID",
+                "encoding": "string",
+                "size": 0
+              },
+              {
+                "name": "memberCount",
+                "encoding": "i32",
+                "size": 4
+              },
+              {
+                "name": "hasPassword",
+                "encoding": "bool",
+                "size": 1
+              }
+            ]
+          }
+        },
+        {
+          "name": "errorBlock",
+          "encoding": "struct",
+          "size": 0,
+          "fields": [
+            {
+              "name": "errorCode",
+              "encoding": "u32",
+              "size": 4
+            },
+            {
+              "name": "errorMessage",
+              "encoding": "string",
+              "size": 0
+            },
+            {
+              "name": "retryAfterMs",
+              "encoding": "i64",
+              "size": 8
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "kind": "gateway-local",
+      "request_type_id": 2262811257,
+      "request_type_name": "chat.ChatListMembersRequest",
+      "request_fields": [
+        {
+          "name": "channelID",
+          "encoding": "string",
+          "size": 0
+        }
+      ],
+      "response_type_id": 1215878119,
+      "response_type_name": "chat.ChatListMembersResponse",
+      "response_fields": [
+        {
+          "name": "members",
+          "encoding": "slice",
+          "size": 0,
+          "item": {
+            "name": "",
+            "encoding": "struct",
+            "size": 0,
+            "fields": [
+              {
+                "name": "userID",
+                "encoding": "string",
+                "size": 0
+              },
+              {
+                "name": "username",
+                "encoding": "string",
+                "size": 0
+              },
+              {
+                "name": "role",
+                "encoding": "string",
+                "size": 0
+              },
+              {
+                "name": "joinedAtMs",
+                "encoding": "i64",
+                "size": 8
+              }
+            ]
+          }
+        },
+        {
+          "name": "errorBlock",
+          "encoding": "struct",
+          "size": 0,
+          "fields": [
+            {
+              "name": "errorCode",
+              "encoding": "u32",
+              "size": 4
+            },
+            {
+              "name": "errorMessage",
+              "encoding": "string",
+              "size": 0
+            },
+            {
+              "name": "retryAfterMs",
+              "encoding": "i64",
+              "size": 8
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "kind": "gateway-local",
+      "request_type_id": 1753388812,
+      "request_type_name": "chat.ChatMuteUserRequest",
+      "request_fields": [
+        {
+          "name": "userID",
+          "encoding": "string",
+          "size": 0
+        },
+        {
+          "name": "channelID",
+          "encoding": "string",
+          "size": 0
+        },
+        {
+          "name": "durationMs",
+          "encoding": "i64",
+          "size": 8
+        },
+        {
+          "name": "reason",
+          "encoding": "string",
+          "size": 0
+        }
+      ],
+      "response_type_id": 2304639520,
+      "response_type_name": "chat.ChatMuteUserResponse",
+      "response_fields": [
+        {
+          "name": "errorBlock",
+          "encoding": "struct",
+          "size": 0,
+          "fields": [
+            {
+              "name": "errorCode",
+              "encoding": "u32",
+              "size": 4
+            },
+            {
+              "name": "errorMessage",
+              "encoding": "string",
+              "size": 0
+            },
+            {
+              "name": "retryAfterMs",
+              "encoding": "i64",
+              "size": 8
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "kind": "gateway-local",
+      "request_type_id": 2714166128,
+      "request_type_name": "chat.ChatRegisterChannelRequest",
+      "request_fields": [
+        {
+          "name": "slug",
+          "encoding": "string",
+          "size": 0
+        },
+        {
+          "name": "kind",
+          "encoding": "u32",
+          "size": 4
+        },
+        {
+          "name": "topic",
+          "encoding": "string",
+          "size": 0
+        },
+        {
+          "name": "slowModeSeconds",
+          "encoding": "i32",
+          "size": 4
+        },
+        {
+          "name": "password",
+          "encoding": "string",
+          "size": 0
+        }
+      ],
+      "response_type_id": 178786748,
+      "response_type_name": "chat.ChatRegisterChannelResponse",
+      "response_fields": [
+        {
+          "name": "channel",
+          "encoding": "struct",
+          "size": 0,
+          "fields": [
+            {
+              "name": "channelID",
+              "encoding": "string",
+              "size": 0
+            },
+            {
+              "name": "slug",
+              "encoding": "string",
+              "size": 0
+            },
+            {
+              "name": "kind",
+              "encoding": "u32",
+              "size": 4
+            },
+            {
+              "name": "topic",
+              "encoding": "string",
+              "size": 0
+            },
+            {
+              "name": "slowModeSeconds",
+              "encoding": "i32",
+              "size": 4
+            },
+            {
+              "name": "ownerUserID",
+              "encoding": "string",
+              "size": 0
+            },
+            {
+              "name": "memberCount",
+              "encoding": "i32",
+              "size": 4
+            },
+            {
+              "name": "hasPassword",
+              "encoding": "bool",
+              "size": 1
+            }
+          ]
+        },
+        {
+          "name": "errorBlock",
+          "encoding": "struct",
+          "size": 0,
+          "fields": [
+            {
+              "name": "errorCode",
+              "encoding": "u32",
+              "size": 4
+            },
+            {
+              "name": "errorMessage",
+              "encoding": "string",
+              "size": 0
+            },
+            {
+              "name": "retryAfterMs",
+              "encoding": "i64",
+              "size": 8
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "kind": "gateway-local",
+      "request_type_id": 2583604912,
+      "request_type_name": "chat.ChatRemoveMemberRequest",
+      "request_fields": [
+        {
+          "name": "channelID",
+          "encoding": "string",
+          "size": 0
+        },
+        {
+          "name": "userID",
+          "encoding": "string",
+          "size": 0
+        }
+      ],
+      "response_type_id": 2364974844,
+      "response_type_name": "chat.ChatRemoveMemberResponse",
+      "response_fields": [
+        {
+          "name": "errorBlock",
+          "encoding": "struct",
+          "size": 0,
+          "fields": [
+            {
+              "name": "errorCode",
+              "encoding": "u32",
+              "size": 4
+            },
+            {
+              "name": "errorMessage",
+              "encoding": "string",
+              "size": 0
+            },
+            {
+              "name": "retryAfterMs",
+              "encoding": "i64",
+              "size": 8
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "kind": "gateway-local",
+      "request_type_id": 2155395571,
+      "request_type_name": "chat.ChatRenameChannelRequest",
+      "request_fields": [
+        {
+          "name": "channelID",
+          "encoding": "string",
+          "size": 0
+        },
+        {
+          "name": "newSlug",
+          "encoding": "string",
+          "size": 0
+        }
+      ],
+      "response_type_id": 3234768417,
+      "response_type_name": "chat.ChatRenameChannelResponse",
+      "response_fields": [
+        {
+          "name": "channel",
+          "encoding": "struct",
+          "size": 0,
+          "fields": [
+            {
+              "name": "channelID",
+              "encoding": "string",
+              "size": 0
+            },
+            {
+              "name": "slug",
+              "encoding": "string",
+              "size": 0
+            },
+            {
+              "name": "kind",
+              "encoding": "u32",
+              "size": 4
+            },
+            {
+              "name": "topic",
+              "encoding": "string",
+              "size": 0
+            },
+            {
+              "name": "slowModeSeconds",
+              "encoding": "i32",
+              "size": 4
+            },
+            {
+              "name": "ownerUserID",
+              "encoding": "string",
+              "size": 0
+            },
+            {
+              "name": "memberCount",
+              "encoding": "i32",
+              "size": 4
+            },
+            {
+              "name": "hasPassword",
+              "encoding": "bool",
+              "size": 1
+            }
+          ]
+        },
+        {
+          "name": "errorBlock",
+          "encoding": "struct",
+          "size": 0,
+          "fields": [
+            {
+              "name": "errorCode",
+              "encoding": "u32",
+              "size": 4
+            },
+            {
+              "name": "errorMessage",
+              "encoding": "string",
+              "size": 0
+            },
+            {
+              "name": "retryAfterMs",
+              "encoding": "i64",
+              "size": 8
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "kind": "gateway-local",
+      "request_type_id": 3957248345,
+      "request_type_name": "chat.ChatSendDMRequest",
+      "request_fields": [
+        {
+          "name": "recipientUserID",
+          "encoding": "string",
+          "size": 0
+        },
+        {
+          "name": "body",
+          "encoding": "string",
+          "size": 0
+        }
+      ],
+      "response_type_id": 1669544519,
+      "response_type_name": "chat.ChatSendDMResponse",
+      "response_fields": [
+        {
+          "name": "msgID",
+          "encoding": "string",
+          "size": 0
+        },
+        {
+          "name": "sentAtMs",
+          "encoding": "i64",
+          "size": 8
+        },
+        {
+          "name": "errorBlock",
+          "encoding": "struct",
+          "size": 0,
+          "fields": [
+            {
+              "name": "errorCode",
+              "encoding": "u32",
+              "size": 4
+            },
+            {
+              "name": "errorMessage",
+              "encoding": "string",
+              "size": 0
+            },
+            {
+              "name": "retryAfterMs",
+              "encoding": "i64",
+              "size": 8
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "kind": "gateway-local",
+      "request_type_id": 26548940,
+      "request_type_name": "chat.ChatSendRequest",
+      "request_fields": [
+        {
+          "name": "channelID",
+          "encoding": "string",
+          "size": 0
+        },
+        {
+          "name": "body",
+          "encoding": "string",
+          "size": 0
+        }
+      ],
+      "response_type_id": 4030470624,
+      "response_type_name": "chat.ChatSendResponse",
+      "response_fields": [
+        {
+          "name": "msgID",
+          "encoding": "string",
+          "size": 0
+        },
+        {
+          "name": "sentAtMs",
+          "encoding": "i64",
+          "size": 8
+        },
+        {
+          "name": "errorBlock",
+          "encoding": "struct",
+          "size": 0,
+          "fields": [
+            {
+              "name": "errorCode",
+              "encoding": "u32",
+              "size": 4
+            },
+            {
+              "name": "errorMessage",
+              "encoding": "string",
+              "size": 0
+            },
+            {
+              "name": "retryAfterMs",
+              "encoding": "i64",
+              "size": 8
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "kind": "gateway-local",
+      "request_type_id": 432598206,
+      "request_type_name": "chat.ChatSetMemberRoleRequest",
+      "request_fields": [
+        {
+          "name": "channelID",
+          "encoding": "string",
+          "size": 0
+        },
+        {
+          "name": "userID",
+          "encoding": "string",
+          "size": 0
+        },
+        {
+          "name": "role",
+          "encoding": "string",
+          "size": 0
+        }
+      ],
+      "response_type_id": 3643238018,
+      "response_type_name": "chat.ChatSetMemberRoleResponse",
+      "response_fields": [
+        {
+          "name": "errorBlock",
+          "encoding": "struct",
+          "size": 0,
+          "fields": [
+            {
+              "name": "errorCode",
+              "encoding": "u32",
+              "size": 4
+            },
+            {
+              "name": "errorMessage",
+              "encoding": "string",
+              "size": 0
+            },
+            {
+              "name": "retryAfterMs",
+              "encoding": "i64",
+              "size": 8
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "kind": "gateway-local",
+      "request_type_id": 3373349922,
+      "request_type_name": "chat.ChatSetSlowModeRequest",
+      "request_fields": [
+        {
+          "name": "channelID",
+          "encoding": "string",
+          "size": 0
+        },
+        {
+          "name": "seconds",
+          "encoding": "i32",
+          "size": 4
+        }
+      ],
+      "response_type_id": 3434326798,
+      "response_type_name": "chat.ChatSetSlowModeResponse",
+      "response_fields": [
+        {
+          "name": "errorBlock",
+          "encoding": "struct",
+          "size": 0,
+          "fields": [
+            {
+              "name": "errorCode",
+              "encoding": "u32",
+              "size": 4
+            },
+            {
+              "name": "errorMessage",
+              "encoding": "string",
+              "size": 0
+            },
+            {
+              "name": "retryAfterMs",
+              "encoding": "i64",
+              "size": 8
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "kind": "gateway-local",
+      "request_type_id": 1949888311,
+      "request_type_name": "chat.ChatSetTopicRequest",
+      "request_fields": [
+        {
+          "name": "channelID",
+          "encoding": "string",
+          "size": 0
+        },
+        {
+          "name": "topic",
+          "encoding": "string",
+          "size": 0
+        }
+      ],
+      "response_type_id": 1424252813,
+      "response_type_name": "chat.ChatSetTopicResponse",
+      "response_fields": [
+        {
+          "name": "errorBlock",
+          "encoding": "struct",
+          "size": 0,
+          "fields": [
+            {
+              "name": "errorCode",
+              "encoding": "u32",
+              "size": 4
+            },
+            {
+              "name": "errorMessage",
+              "encoding": "string",
+              "size": 0
+            },
+            {
+              "name": "retryAfterMs",
+              "encoding": "i64",
+              "size": 8
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "kind": "gateway-local",
+      "request_type_id": 3875845044,
+      "request_type_name": "chat.ChatUnbanRequest",
+      "request_fields": [
+        {
+          "name": "channelID",
+          "encoding": "string",
+          "size": 0
+        },
+        {
+          "name": "userID",
+          "encoding": "string",
+          "size": 0
+        }
+      ],
+      "response_type_id": 1493768472,
+      "response_type_name": "chat.ChatUnbanResponse",
+      "response_fields": [
+        {
+          "name": "errorBlock",
+          "encoding": "struct",
+          "size": 0,
+          "fields": [
+            {
+              "name": "errorCode",
+              "encoding": "u32",
+              "size": 4
+            },
+            {
+              "name": "errorMessage",
+              "encoding": "string",
+              "size": 0
+            },
+            {
+              "name": "retryAfterMs",
+              "encoding": "i64",
+              "size": 8
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "kind": "gateway-local",
+      "request_type_id": 3117935277,
+      "request_type_name": "chat.ChatUnmuteUserRequest",
+      "request_fields": [
+        {
+          "name": "userID",
+          "encoding": "string",
+          "size": 0
+        },
+        {
+          "name": "channelID",
+          "encoding": "string",
+          "size": 0
+        }
+      ],
+      "response_type_id": 922675091,
+      "response_type_name": "chat.ChatUnmuteUserResponse",
+      "response_fields": [
+        {
+          "name": "errorBlock",
+          "encoding": "struct",
+          "size": 0,
+          "fields": [
+            {
+              "name": "errorCode",
+              "encoding": "u32",
+              "size": 4
+            },
+            {
+              "name": "errorMessage",
+              "encoding": "string",
+              "size": 0
+            },
+            {
+              "name": "retryAfterMs",
+              "encoding": "i64",
+              "size": 8
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "kind": "gateway-local",
+      "request_type_id": 520068211,
+      "request_type_name": "chat.ChatUnregisterChannelRequest",
+      "request_fields": [
+        {
+          "name": "channelID",
+          "encoding": "string",
+          "size": 0
+        }
+      ],
+      "response_type_id": 3475322273,
+      "response_type_name": "chat.ChatUnregisterChannelResponse",
+      "response_fields": [
+        {
+          "name": "errorBlock",
+          "encoding": "struct",
+          "size": 0,
+          "fields": [
+            {
+              "name": "errorCode",
+              "encoding": "u32",
+              "size": 4
+            },
+            {
+              "name": "errorMessage",
+              "encoding": "string",
+              "size": 0
+            },
+            {
+              "name": "retryAfterMs",
+              "encoding": "i64",
+              "size": 8
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "kind": "gateway-local",
+      "request_type_id": 2490288062,
+      "request_type_name": "echo.EchoFetchRequest",
+      "request_fields": [
+        {
+          "name": "key",
+          "encoding": "string",
+          "size": 0
+        }
+      ],
+      "response_type_id": 3963561858,
+      "response_type_name": "echo.EchoFetchResponse",
+      "response_fields": [
+        {
+          "name": "value",
+          "encoding": "string",
+          "size": 0
+        },
+        {
+          "name": "foundAtMs",
+          "encoding": "i64",
+          "size": 8
+        },
+        {
+          "name": "instanceID",
+          "encoding": "string",
+          "size": 0
+        }
+      ]
+    },
+    {
+      "kind": "gateway-local",
+      "request_type_id": 3281263802,
+      "request_type_name": "echo.EchoPersistRequest",
+      "request_fields": [
+        {
+          "name": "key",
+          "encoding": "string",
+          "size": 0
+        },
+        {
+          "name": "value",
+          "encoding": "string",
+          "size": 0
+        }
+      ],
+      "response_type_id": 2182257750,
+      "response_type_name": "echo.EchoPersistResponse",
+      "response_fields": [
+        {
+          "name": "ok",
+          "encoding": "bool",
+          "size": 1
+        },
+        {
+          "name": "instanceID",
+          "encoding": "string",
+          "size": 0
+        }
+      ]
+    },
+    {
+      "kind": "gateway-local",
+      "request_type_id": 3903702940,
+      "request_type_name": "echo.EchoPingRequest",
+      "request_fields": [
+        {
+          "name": "msg",
+          "encoding": "string",
+          "size": 0
+        }
+      ],
+      "response_type_id": 1066131760,
+      "response_type_name": "echo.EchoPingResponse",
+      "response_fields": [
+        {
+          "name": "msg",
+          "encoding": "string",
+          "size": 0
+        },
+        {
+          "name": "instanceID",
+          "encoding": "string",
+          "size": 0
+        }
+      ]
+    }
+  ]
+}

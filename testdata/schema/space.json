@@ -1,0 +1,3265 @@
+{
+  "game": "space",
+  "entities": [
+    {
+      "kind": 0,
+      "name": "Ship",
+      "bindings": [
+        {
+          "type": "engine_bindings",
+          "fields": [
+            {
+              "name": "worldX",
+              "encoding": "f32",
+              "size": 4
+            },
+            {
+              "name": "worldY",
+              "encoding": "f32",
+              "size": 4
+            },
+            {
+              "name": "velX",
+              "encoding": "qvel",
+              "size": 2,
+              "scale": 2000
+            },
+            {
+              "name": "velY",
+              "encoding": "qvel",
+              "size": 2,
+              "scale": 2000
+            },
+            {
+              "name": "radius",
+              "encoding": "qvel",
+              "size": 2,
+              "scale": 500
+            },
+            {
+              "name": "width",
+              "encoding": "qvel",
+              "size": 2,
+              "scale": 500
+            },
+            {
+              "name": "height",
+              "encoding": "qvel",
+              "size": 2,
+              "scale": 500
+            }
+          ]
+        },
+        {
+          "type": "component",
+          "fields": [
+            {
+              "name": "name",
+              "encoding": "string",
+              "size": -1,
+              "initial": true
+            }
+          ],
+          "structName": "PilotName"
+        },
+        {
+          "type": "component",
+          "fields": [
+            {
+              "name": "healthCurrent",
+              "encoding": "f32",
+              "size": 4
+            },
+            {
+              "name": "healthMax",
+              "encoding": "f32",
+              "size": 4
+            }
+          ],
+          "structName": "Health"
+        },
+        {
+          "type": "component",
+          "fields": [
+            {
+              "name": "shieldCurrent",
+              "encoding": "f32",
+              "size": 4
+            },
+            {
+              "name": "shieldMax",
+              "encoding": "f32",
+              "size": 4
+            }
+          ],
+          "structName": "Shield"
+        },
+        {
+          "type": "component",
+          "fields": null,
+          "structName": "ShipControl"
+        },
+        {
+          "type": "component",
+          "fields": null,
+          "structName": "Equipment"
+        },
+        {
+          "type": "component",
+          "fields": null,
+          "structName": "Inventory"
+        },
+        {
+          "type": "component",
+          "fields": null,
+          "structName": "AbilitySet"
+        },
+        {
+          "type": "component",
+          "fields": [
+            {
+              "name": "phase",
+              "encoding": "u8",
+              "size": 1
+            },
+            {
+              "name": "bufferHP",
+              "encoding": "f32",
+              "size": 4
+            },
+            {
+              "name": "bufferMax",
+              "encoding": "f32",
+              "size": 4
+            },
+            {
+              "name": "channelRemaining",
+              "encoding": "f32",
+              "size": 4
+            },
+            {
+              "name": "lockoutRemaining",
+              "encoding": "f32",
+              "size": 4
+            }
+          ],
+          "structName": "Supercruise"
+        },
+        {
+          "type": "component",
+          "fields": null,
+          "structName": "MoveTarget"
+        },
+        {
+          "type": "component",
+          "fields": [
+            {
+              "name": "lockerNetID",
+              "encoding": "u32",
+              "size": 4
+            },
+            {
+              "name": "lockerProgress",
+              "encoding": "qnorm",
+              "size": 1
+            }
+          ],
+          "structName": "LockedBy"
+        },
+        {
+          "type": "component",
+          "fields": [
+            {
+              "name": "beam0Active",
+              "encoding": "bool",
+              "size": 1
+            },
+            {
+              "name": "beam1Active",
+              "encoding": "bool",
+              "size": 1
+            },
+            {
+              "name": "miningTargetNetID",
+              "encoding": "u32",
+              "size": 4
+            }
+          ],
+          "structName": "ActiveMining"
+        },
+        {
+          "type": "q_angle",
+          "fields": [
+            {
+              "name": "angle",
+              "encoding": "qangle",
+              "size": 2
+            }
+          ]
+        },
+        {
+          "type": "var_tail",
+          "fields": null
+        }
+      ],
+      "layout": [
+        4,
+        4,
+        2,
+        2,
+        2,
+        2,
+        2,
+        4,
+        4,
+        4,
+        4,
+        1,
+        4,
+        4,
+        4,
+        4,
+        4,
+        1,
+        1,
+        1,
+        4,
+        2,
+        -1
+      ],
+      "varTail": {
+        "name": "statusEffects",
+        "itemSize": 2,
+        "itemFields": [
+          {
+            "name": "type",
+            "encoding": "u8",
+            "size": 1
+          },
+          {
+            "name": "duration",
+            "encoding": "qnorm",
+            "size": 1,
+            "scale": 25.5
+          }
+        ]
+      },
+      "initialData": "length_prefixed_string_u8"
+    },
+    {
+      "kind": 1,
+      "name": "Asteroid",
+      "bindings": [
+        {
+          "type": "engine_bindings",
+          "fields": [
+            {
+              "name": "worldX",
+              "encoding": "f32",
+              "size": 4
+            },
+            {
+              "name": "worldY",
+              "encoding": "f32",
+              "size": 4
+            },
+            {
+              "name": "velX",
+              "encoding": "qvel",
+              "size": 2,
+              "scale": 2000
+            },
+            {
+              "name": "velY",
+              "encoding": "qvel",
+              "size": 2,
+              "scale": 2000
+            },
+            {
+              "name": "radius",
+              "encoding": "qvel",
+              "size": 2,
+              "scale": 500
+            },
+            {
+              "name": "width",
+              "encoding": "qvel",
+              "size": 2,
+              "scale": 500
+            },
+            {
+              "name": "height",
+              "encoding": "qvel",
+              "size": 2,
+              "scale": 500
+            }
+          ]
+        },
+        {
+          "type": "component",
+          "fields": [
+            {
+              "name": "itemID",
+              "encoding": "u32",
+              "size": 4
+            },
+            {
+              "name": "remaining",
+              "encoding": "f32",
+              "size": 4
+            }
+          ],
+          "structName": "Minable"
+        },
+        {
+          "type": "component",
+          "fields": null,
+          "structName": "PlacedID"
+        }
+      ],
+      "layout": [
+        4,
+        4,
+        2,
+        2,
+        2,
+        2,
+        2,
+        4,
+        4
+      ]
+    },
+    {
+      "kind": 2,
+      "name": "Station",
+      "bindings": [
+        {
+          "type": "engine_bindings",
+          "fields": [
+            {
+              "name": "worldX",
+              "encoding": "f32",
+              "size": 4
+            },
+            {
+              "name": "worldY",
+              "encoding": "f32",
+              "size": 4
+            },
+            {
+              "name": "velX",
+              "encoding": "qvel",
+              "size": 2,
+              "scale": 2000
+            },
+            {
+              "name": "velY",
+              "encoding": "qvel",
+              "size": 2,
+              "scale": 2000
+            },
+            {
+              "name": "radius",
+              "encoding": "qvel",
+              "size": 2,
+              "scale": 500
+            },
+            {
+              "name": "width",
+              "encoding": "qvel",
+              "size": 2,
+              "scale": 500
+            },
+            {
+              "name": "height",
+              "encoding": "qvel",
+              "size": 2,
+              "scale": 500
+            }
+          ]
+        },
+        {
+          "type": "component",
+          "fields": null,
+          "structName": "PlacedID"
+        }
+      ],
+      "layout": [
+        4,
+        4,
+        2,
+        2,
+        2,
+        2,
+        2
+      ]
+    },
+    {
+      "kind": 3,
+      "name": "LootCrate",
+      "bindings": [
+        {
+          "type": "engine_bindings",
+          "fields": [
+            {
+              "name": "worldX",
+              "encoding": "f32",
+              "size": 4
+            },
+            {
+              "name": "worldY",
+              "encoding": "f32",
+              "size": 4
+            },
+            {
+              "name": "velX",
+              "encoding": "qvel",
+              "size": 2,
+              "scale": 2000
+            },
+            {
+              "name": "velY",
+              "encoding": "qvel",
+              "size": 2,
+              "scale": 2000
+            },
+            {
+              "name": "radius",
+              "encoding": "qvel",
+              "size": 2,
+              "scale": 500
+            },
+            {
+              "name": "width",
+              "encoding": "qvel",
+              "size": 2,
+              "scale": 500
+            },
+            {
+              "name": "height",
+              "encoding": "qvel",
+              "size": 2,
+              "scale": 500
+            }
+          ]
+        },
+        {
+          "type": "component",
+          "fields": [
+            {
+              "name": "remaining",
+              "encoding": "f32",
+              "size": 4
+            }
+          ],
+          "structName": "Lifetime"
+        },
+        {
+          "type": "var_tail",
+          "fields": null
+        }
+      ],
+      "layout": [
+        4,
+        4,
+        2,
+        2,
+        2,
+        2,
+        2,
+        4,
+        -1
+      ],
+      "varTail": {
+        "name": "items",
+        "itemSize": 8,
+        "itemFields": [
+          {
+            "name": "itemId",
+            "encoding": "u32",
+            "size": 4
+          },
+          {
+            "name": "quantity",
+            "encoding": "u32",
+            "size": 4
+          }
+        ]
+      }
+    },
+    {
+      "kind": 4,
+      "name": "NPC",
+      "bindings": [
+        {
+          "type": "engine_bindings",
+          "fields": [
+            {
+              "name": "worldX",
+              "encoding": "f32",
+              "size": 4
+            },
+            {
+              "name": "worldY",
+              "encoding": "f32",
+              "size": 4
+            },
+            {
+              "name": "velX",
+              "encoding": "qvel",
+              "size": 2,
+              "scale": 2000
+            },
+            {
+              "name": "velY",
+              "encoding": "qvel",
+              "size": 2,
+              "scale": 2000
+            },
+            {
+              "name": "radius",
+              "encoding": "qvel",
+              "size": 2,
+              "scale": 500
+            },
+            {
+              "name": "width",
+              "encoding": "qvel",
+              "size": 2,
+              "scale": 500
+            },
+            {
+              "name": "height",
+              "encoding": "qvel",
+              "size": 2,
+              "scale": 500
+            }
+          ]
+        },
+        {
+          "type": "component",
+          "fields": [
+            {
+              "name": "healthCurrent",
+              "encoding": "f32",
+              "size": 4
+            },
+            {
+              "name": "healthMax",
+              "encoding": "f32",
+              "size": 4
+            }
+          ],
+          "structName": "Health"
+        },
+        {
+          "type": "component",
+          "fields": [
+            {
+              "name": "shieldCurrent",
+              "encoding": "f32",
+              "size": 4
+            },
+            {
+              "name": "shieldMax",
+              "encoding": "f32",
+              "size": 4
+            }
+          ],
+          "structName": "Shield"
+        },
+        {
+          "type": "component",
+          "fields": [
+            {
+              "name": "archetype",
+              "encoding": "u8",
+              "size": 1
+            },
+            {
+              "name": "state",
+              "encoding": "u8",
+              "size": 1,
+              "initial": true
+            }
+          ],
+          "structName": "NPCAI"
+        },
+        {
+          "type": "component",
+          "fields": null,
+          "structName": "PlacedID"
+        },
+        {
+          "type": "q_angle",
+          "fields": [
+            {
+              "name": "angle",
+              "encoding": "qangle",
+              "size": 2
+            }
+          ]
+        },
+        {
+          "type": "var_tail",
+          "fields": null
+        }
+      ],
+      "layout": [
+        4,
+        4,
+        2,
+        2,
+        2,
+        2,
+        2,
+        4,
+        4,
+        4,
+        4,
+        1,
+        2,
+        -1
+      ],
+      "varTail": {
+        "name": "statusEffects",
+        "itemSize": 2,
+        "itemFields": [
+          {
+            "name": "type",
+            "encoding": "u8",
+            "size": 1
+          },
+          {
+            "name": "duration",
+            "encoding": "qnorm",
+            "size": 1,
+            "scale": 25.5
+          }
+        ]
+      },
+      "initialData": "length_prefixed_string_u8"
+    },
+    {
+      "kind": 5,
+      "name": "POI",
+      "bindings": [
+        {
+          "type": "engine_bindings",
+          "fields": [
+            {
+              "name": "worldX",
+              "encoding": "f32",
+              "size": 4
+            },
+            {
+              "name": "worldY",
+              "encoding": "f32",
+              "size": 4
+            },
+            {
+              "name": "velX",
+              "encoding": "qvel",
+              "size": 2,
+              "scale": 2000
+            },
+            {
+              "name": "velY",
+              "encoding": "qvel",
+              "size": 2,
+              "scale": 2000
+            },
+            {
+              "name": "radius",
+              "encoding": "qvel",
+              "size": 2,
+              "scale": 500
+            },
+            {
+              "name": "width",
+              "encoding": "qvel",
+              "size": 2,
+              "scale": 500
+            },
+            {
+              "name": "height",
+              "encoding": "qvel",
+              "size": 2,
+              "scale": 500
+            }
+          ]
+        },
+        {
+          "type": "component",
+          "fields": [
+            {
+              "name": "type",
+              "encoding": "u8",
+              "size": 1
+            },
+            {
+              "name": "status",
+              "encoding": "u8",
+              "size": 1,
+              "initial": true
+            },
+            {
+              "name": "tier",
+              "encoding": "u8",
+              "size": 1,
+              "initial": true
+            }
+          ],
+          "structName": "POI"
+        },
+        {
+          "type": "component",
+          "fields": null,
+          "structName": "PlacedID"
+        }
+      ],
+      "layout": [
+        4,
+        4,
+        2,
+        2,
+        2,
+        2,
+        2,
+        1
+      ],
+      "initialData": "length_prefixed_string_u8"
+    },
+    {
+      "kind": 6,
+      "name": "AoEMarker",
+      "bindings": [
+        {
+          "type": "engine_bindings",
+          "fields": [
+            {
+              "name": "worldX",
+              "encoding": "f32",
+              "size": 4
+            },
+            {
+              "name": "worldY",
+              "encoding": "f32",
+              "size": 4
+            },
+            {
+              "name": "velX",
+              "encoding": "qvel",
+              "size": 2,
+              "scale": 2000
+            },
+            {
+              "name": "velY",
+              "encoding": "qvel",
+              "size": 2,
+              "scale": 2000
+            },
+            {
+              "name": "radius",
+              "encoding": "qvel",
+              "size": 2,
+              "scale": 500
+            },
+            {
+              "name": "width",
+              "encoding": "qvel",
+              "size": 2,
+              "scale": 500
+            },
+            {
+              "name": "height",
+              "encoding": "qvel",
+              "size": 2,
+              "scale": 500
+            }
+          ]
+        },
+        {
+          "type": "component",
+          "fields": [
+            {
+              "name": "remaining",
+              "encoding": "f32",
+              "size": 4
+            }
+          ],
+          "structName": "Lifetime"
+        },
+        {
+          "type": "component",
+          "fields": [
+            {
+              "name": "aoESpecRadius",
+              "encoding": "f32",
+              "size": 4
+            },
+            {
+              "name": "damage",
+              "encoding": "f32",
+              "size": 4
+            },
+            {
+              "name": "ownerNetID",
+              "encoding": "u32",
+              "size": 4
+            },
+            {
+              "name": "factionMask",
+              "encoding": "u8",
+              "size": 1
+            },
+            {
+              "name": "damageType",
+              "encoding": "u8",
+              "size": 1
+            },
+            {
+              "name": "abilityType",
+              "encoding": "u8",
+              "size": 1
+            }
+          ],
+          "structName": "AoESpec"
+        }
+      ],
+      "layout": [
+        4,
+        4,
+        2,
+        2,
+        2,
+        2,
+        2,
+        4,
+        4,
+        4,
+        4,
+        1,
+        1,
+        1
+      ]
+    },
+    {
+      "kind": 7,
+      "name": "Projectile",
+      "bindings": [
+        {
+          "type": "engine_bindings",
+          "fields": [
+            {
+              "name": "worldX",
+              "encoding": "f32",
+              "size": 4
+            },
+            {
+              "name": "worldY",
+              "encoding": "f32",
+              "size": 4
+            },
+            {
+              "name": "velX",
+              "encoding": "qvel",
+              "size": 2,
+              "scale": 2000
+            },
+            {
+              "name": "velY",
+              "encoding": "qvel",
+              "size": 2,
+              "scale": 2000
+            },
+            {
+              "name": "radius",
+              "encoding": "qvel",
+              "size": 2,
+              "scale": 500
+            },
+            {
+              "name": "width",
+              "encoding": "qvel",
+              "size": 2,
+              "scale": 500
+            },
+            {
+              "name": "height",
+              "encoding": "qvel",
+              "size": 2,
+              "scale": 500
+            }
+          ]
+        },
+        {
+          "type": "component",
+          "fields": [
+            {
+              "name": "remaining",
+              "encoding": "f32",
+              "size": 4
+            }
+          ],
+          "structName": "Lifetime"
+        },
+        {
+          "type": "component",
+          "fields": [
+            {
+              "name": "ownerNetID",
+              "encoding": "u32",
+              "size": 4
+            },
+            {
+              "name": "targetNetID",
+              "encoding": "u32",
+              "size": 4
+            },
+            {
+              "name": "damage",
+              "encoding": "f32",
+              "size": 4
+            },
+            {
+              "name": "splashRadius",
+              "encoding": "f32",
+              "size": 4
+            },
+            {
+              "name": "splashDamage",
+              "encoding": "f32",
+              "size": 4
+            },
+            {
+              "name": "maxTurnRate",
+              "encoding": "f32",
+              "size": 4
+            },
+            {
+              "name": "type",
+              "encoding": "u8",
+              "size": 1
+            },
+            {
+              "name": "pierceCount",
+              "encoding": "u8",
+              "size": 1
+            }
+          ],
+          "structName": "ProjectileSpec"
+        }
+      ],
+      "layout": [
+        4,
+        4,
+        2,
+        2,
+        2,
+        2,
+        2,
+        4,
+        4,
+        4,
+        4,
+        4,
+        4,
+        4,
+        1,
+        1
+      ]
+    },
+    {
+      "kind": 8,
+      "name": "LineTelegraph",
+      "bindings": [
+        {
+          "type": "engine_bindings",
+          "fields": [
+            {
+              "name": "worldX",
+              "encoding": "f32",
+              "size": 4
+            },
+            {
+              "name": "worldY",
+              "encoding": "f32",
+              "size": 4
+            },
+            {
+              "name": "velX",
+              "encoding": "qvel",
+              "size": 2,
+              "scale": 2000
+            },
+            {
+              "name": "velY",
+              "encoding": "qvel",
+              "size": 2,
+              "scale": 2000
+            },
+            {
+              "name": "radius",
+              "encoding": "qvel",
+              "size": 2,
+              "scale": 500
+            },
+            {
+              "name": "width",
+              "encoding": "qvel",
+              "size": 2,
+              "scale": 500
+            },
+            {
+              "name": "height",
+              "encoding": "qvel",
+              "size": 2,
+              "scale": 500
+            }
+          ]
+        },
+        {
+          "type": "component",
+          "fields": [
+            {
+              "name": "remaining",
+              "encoding": "f32",
+              "size": 4
+            }
+          ],
+          "structName": "Lifetime"
+        },
+        {
+          "type": "component",
+          "fields": [
+            {
+              "name": "length",
+              "encoding": "f32",
+              "size": 4
+            },
+            {
+              "name": "halfWidth",
+              "encoding": "f32",
+              "size": 4
+            },
+            {
+              "name": "ownerNetID",
+              "encoding": "u32",
+              "size": 4
+            }
+          ],
+          "structName": "LineTelegraphSpec"
+        },
+        {
+          "type": "q_angle",
+          "fields": [
+            {
+              "name": "angle",
+              "encoding": "qangle",
+              "size": 2
+            }
+          ]
+        }
+      ],
+      "layout": [
+        4,
+        4,
+        2,
+        2,
+        2,
+        2,
+        2,
+        4,
+        4,
+        4,
+        4,
+        2
+      ]
+    },
+    {
+      "kind": 9,
+      "name": "Dungeon",
+      "bindings": [
+        {
+          "type": "engine_bindings",
+          "fields": [
+            {
+              "name": "worldX",
+              "encoding": "f32",
+              "size": 4
+            },
+            {
+              "name": "worldY",
+              "encoding": "f32",
+              "size": 4
+            },
+            {
+              "name": "velX",
+              "encoding": "qvel",
+              "size": 2,
+              "scale": 2000
+            },
+            {
+              "name": "velY",
+              "encoding": "qvel",
+              "size": 2,
+              "scale": 2000
+            },
+            {
+              "name": "radius",
+              "encoding": "qvel",
+              "size": 2,
+              "scale": 500
+            },
+            {
+              "name": "width",
+              "encoding": "qvel",
+              "size": 2,
+              "scale": 500
+            },
+            {
+              "name": "height",
+              "encoding": "qvel",
+              "size": 2,
+              "scale": 500
+            }
+          ]
+        },
+        {
+          "type": "component",
+          "fields": [
+            {
+              "name": "name",
+              "encoding": "string",
+              "size": -1,
+              "initial": true
+            },
+            {
+              "name": "entranceMask",
+              "encoding": "u16",
+              "size": 2,
+              "initial": true
+            }
+          ],
+          "structName": "Dungeon"
+        },
+        {
+          "type": "component",
+          "fields": null,
+          "structName": "PlacedID"
+        }
+      ],
+      "layout": [
+        4,
+        4,
+        2,
+        2,
+        2,
+        2,
+        2
+      ],
+      "initialData": "length_prefixed_string_u8"
+    },
+    {
+      "kind": 10,
+      "name": "DungeonWall",
+      "bindings": [
+        {
+          "type": "engine_bindings",
+          "fields": [
+            {
+              "name": "worldX",
+              "encoding": "f32",
+              "size": 4
+            },
+            {
+              "name": "worldY",
+              "encoding": "f32",
+              "size": 4
+            },
+            {
+              "name": "velX",
+              "encoding": "qvel",
+              "size": 2,
+              "scale": 2000
+            },
+            {
+              "name": "velY",
+              "encoding": "qvel",
+              "size": 2,
+              "scale": 2000
+            },
+            {
+              "name": "radius",
+              "encoding": "qvel",
+              "size": 2,
+              "scale": 500
+            },
+            {
+              "name": "width",
+              "encoding": "qvel",
+              "size": 2,
+              "scale": 500
+            },
+            {
+              "name": "height",
+              "encoding": "qvel",
+              "size": 2,
+              "scale": 500
+            }
+          ]
+        },
+        {
+          "type": "component",
+          "fields": null,
+          "structName": "DungeonWall"
+        },
+        {
+          "type": "component",
+          "fields": null,
+          "structName": "PlacedID"
+        },
+        {
+          "type": "q_angle",
+          "fields": [
+            {
+              "name": "angle",
+              "encoding": "qangle",
+              "size": 2
+            }
+          ]
+        }
+      ],
+      "layout": [
+        4,
+        4,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2
+      ]
+    },
+    {
+      "kind": 11,
+      "name": "Decoration",
+      "bindings": [
+        {
+          "type": "engine_bindings",
+          "fields": [
+            {
+              "name": "worldX",
+              "encoding": "f32",
+              "size": 4
+            },
+            {
+              "name": "worldY",
+              "encoding": "f32",
+              "size": 4
+            },
+            {
+              "name": "velX",
+              "encoding": "qvel",
+              "size": 2,
+              "scale": 2000
+            },
+            {
+              "name": "velY",
+              "encoding": "qvel",
+              "size": 2,
+              "scale": 2000
+            },
+            {
+              "name": "radius",
+              "encoding": "qvel",
+              "size": 2,
+              "scale": 500
+            },
+            {
+              "name": "width",
+              "encoding": "qvel",
+              "size": 2,
+              "scale": 500
+            },
+            {
+              "name": "height",
+              "encoding": "qvel",
+              "size": 2,
+              "scale": 500
+            }
+          ]
+        },
+        {
+          "type": "component",
+          "fields": [
+            {
+              "name": "kind",
+              "encoding": "string",
+              "size": -1,
+              "initial": true
+            },
+            {
+              "name": "variant",
+              "encoding": "string",
+              "size": -1,
+              "initial": true
+            }
+          ],
+          "structName": "Decoration"
+        },
+        {
+          "type": "component",
+          "fields": null,
+          "structName": "PlacedID"
+        }
+      ],
+      "layout": [
+        4,
+        4,
+        2,
+        2,
+        2,
+        2,
+        2
+      ],
+      "initialData": "length_prefixed_string_u8"
+    }
+  ],
+  "broadcast_types": [
+    {
+      "name": "game.BeamToggle",
+      "type_id": 3336466016,
+      "fields": [
+        {
+          "name": "caster",
+          "encoding": "entity",
+          "size": 4
+        },
+        {
+          "name": "beam",
+          "encoding": "u8",
+          "size": 1
+        },
+        {
+          "name": "active",
+          "encoding": "bool",
+          "size": 1
+        }
+      ]
+    },
+    {
+      "name": "game.Damage",
+      "type_id": 2160636458,
+      "fields": [
+        {
+          "name": "amount",
+          "encoding": "f32",
+          "size": 4
+        },
+        {
+          "name": "bonusDamage",
+          "encoding": "f32",
+          "size": 4
+        },
+        {
+          "name": "slot",
+          "encoding": "u8",
+          "size": 1
+        },
+        {
+          "name": "abilityType",
+          "encoding": "u8",
+          "size": 1
+        },
+        {
+          "name": "source",
+          "encoding": "entity",
+          "size": 4
+        },
+        {
+          "name": "target",
+          "encoding": "entity",
+          "size": 4
+        },
+        {
+          "name": "dealt",
+          "encoding": "f32",
+          "size": 4
+        },
+        {
+          "name": "killed",
+          "encoding": "bool",
+          "size": 1
+        }
+      ]
+    },
+    {
+      "name": "game.Heal",
+      "type_id": 3044634105,
+      "fields": [
+        {
+          "name": "amount",
+          "encoding": "f32",
+          "size": 4
+        },
+        {
+          "name": "source",
+          "encoding": "entity",
+          "size": 4
+        },
+        {
+          "name": "target",
+          "encoding": "entity",
+          "size": 4
+        }
+      ]
+    },
+    {
+      "name": "game.Killed",
+      "type_id": 1854708522,
+      "fields": [
+        {
+          "name": "killer",
+          "encoding": "entity",
+          "size": 4
+        },
+        {
+          "name": "target",
+          "encoding": "entity",
+          "size": 4
+        }
+      ]
+    },
+    {
+      "name": "game.MineExtract",
+      "type_id": 2782759801,
+      "fields": [
+        {
+          "name": "caster",
+          "encoding": "entity",
+          "size": 4
+        },
+        {
+          "name": "asteroid",
+          "encoding": "entity",
+          "size": 4
+        },
+        {
+          "name": "beam",
+          "encoding": "u8",
+          "size": 1
+        },
+        {
+          "name": "requestedAmt",
+          "encoding": "f32",
+          "size": 4
+        },
+        {
+          "name": "extracted",
+          "encoding": "f32",
+          "size": 4
+        },
+        {
+          "name": "depleted",
+          "encoding": "bool",
+          "size": 1
+        }
+      ]
+    },
+    {
+      "name": "game.Status",
+      "type_id": 3320606109,
+      "fields": [
+        {
+          "name": "effectType",
+          "encoding": "u8",
+          "size": 1
+        },
+        {
+          "name": "duration",
+          "encoding": "f32",
+          "size": 4
+        },
+        {
+          "name": "value",
+          "encoding": "f32",
+          "size": 4
+        },
+        {
+          "name": "slot",
+          "encoding": "u8",
+          "size": 1
+        },
+        {
+          "name": "abilityType",
+          "encoding": "u8",
+          "size": 1
+        },
+        {
+          "name": "source",
+          "encoding": "entity",
+          "size": 4
+        },
+        {
+          "name": "target",
+          "encoding": "entity",
+          "size": 4
+        }
+      ]
+    }
+  ],
+  "client_input_types": [
+    {
+      "name": "game.CastAbility",
+      "type_id": 384530210,
+      "fields": [
+        {
+          "name": "sequence",
+          "encoding": "u32",
+          "size": 4
+        },
+        {
+          "name": "slot",
+          "encoding": "u8",
+          "size": 1
+        },
+        {
+          "name": "aimX",
+          "encoding": "f32",
+          "size": 4
+        },
+        {
+          "name": "aimY",
+          "encoding": "f32",
+          "size": 4
+        }
+      ]
+    },
+    {
+      "name": "game.ChannelAim",
+      "type_id": 51853863,
+      "fields": [
+        {
+          "name": "sequence",
+          "encoding": "u32",
+          "size": 4
+        },
+        {
+          "name": "slot",
+          "encoding": "u8",
+          "size": 1
+        },
+        {
+          "name": "aimX",
+          "encoding": "f32",
+          "size": 4
+        },
+        {
+          "name": "aimY",
+          "encoding": "f32",
+          "size": 4
+        }
+      ]
+    },
+    {
+      "name": "game.Dock",
+      "type_id": 3036116268,
+      "fields": [
+        {
+          "name": "sequence",
+          "encoding": "u32",
+          "size": 4
+        }
+      ]
+    },
+    {
+      "name": "game.Equip",
+      "type_id": 2312466029,
+      "fields": [
+        {
+          "name": "sequence",
+          "encoding": "u32",
+          "size": 4
+        },
+        {
+          "name": "itemID",
+          "encoding": "u32",
+          "size": 4
+        },
+        {
+          "name": "slot",
+          "encoding": "u8",
+          "size": 1
+        },
+        {
+          "name": "targetBank",
+          "encoding": "bool",
+          "size": 1
+        }
+      ]
+    },
+    {
+      "name": "game.InventoryTransfer",
+      "type_id": 646273254,
+      "fields": [
+        {
+          "name": "sequence",
+          "encoding": "u32",
+          "size": 4
+        },
+        {
+          "name": "itemID",
+          "encoding": "u32",
+          "size": 4
+        },
+        {
+          "name": "quantity",
+          "encoding": "i32",
+          "size": 4
+        },
+        {
+          "name": "deposit",
+          "encoding": "bool",
+          "size": 1
+        }
+      ]
+    },
+    {
+      "name": "game.JettisonItem",
+      "type_id": 3260198712,
+      "fields": [
+        {
+          "name": "sequence",
+          "encoding": "u32",
+          "size": 4
+        },
+        {
+          "name": "itemID",
+          "encoding": "u32",
+          "size": 4
+        }
+      ]
+    },
+    {
+      "name": "game.LootAll",
+      "type_id": 4286991476,
+      "fields": [
+        {
+          "name": "sequence",
+          "encoding": "u32",
+          "size": 4
+        },
+        {
+          "name": "crateNetID",
+          "encoding": "u32",
+          "size": 4
+        }
+      ]
+    },
+    {
+      "name": "game.LootItem",
+      "type_id": 2379787030,
+      "fields": [
+        {
+          "name": "sequence",
+          "encoding": "u32",
+          "size": 4
+        },
+        {
+          "name": "crateNetID",
+          "encoding": "u32",
+          "size": 4
+        },
+        {
+          "name": "itemID",
+          "encoding": "u32",
+          "size": 4
+        }
+      ]
+    },
+    {
+      "name": "game.Respawn",
+      "type_id": 542642465,
+      "fields": [
+        {
+          "name": "sequence",
+          "encoding": "u32",
+          "size": 4
+        }
+      ]
+    },
+    {
+      "name": "game.SelectTarget",
+      "type_id": 3135441742,
+      "fields": [
+        {
+          "name": "sequence",
+          "encoding": "u32",
+          "size": 4
+        },
+        {
+          "name": "netID",
+          "encoding": "u32",
+          "size": 4
+        }
+      ]
+    },
+    {
+      "name": "game.SetMoveTarget",
+      "type_id": 1076278689,
+      "fields": [
+        {
+          "name": "sequence",
+          "encoding": "u32",
+          "size": 4
+        },
+        {
+          "name": "active",
+          "encoding": "bool",
+          "size": 1
+        },
+        {
+          "name": "x",
+          "encoding": "f32",
+          "size": 4
+        },
+        {
+          "name": "y",
+          "encoding": "f32",
+          "size": 4
+        }
+      ]
+    },
+    {
+      "name": "game.ToggleSuperCruise",
+      "type_id": 1572760473,
+      "fields": [
+        {
+          "name": "sequence",
+          "encoding": "u32",
+          "size": 4
+        }
+      ]
+    },
+    {
+      "name": "game.Undock",
+      "type_id": 345818843,
+      "fields": [
+        {
+          "name": "sequence",
+          "encoding": "u32",
+          "size": 4
+        }
+      ]
+    },
+    {
+      "name": "mmokit.Ping",
+      "type_id": 2350322182,
+      "fields": [
+        {
+          "name": "clientTime",
+          "encoding": "i64",
+          "size": 8
+        }
+      ]
+    },
+    {
+      "name": "mmokit.ReplicationAck",
+      "type_id": 3976019817,
+      "fields": [
+        {
+          "name": "streamEpoch",
+          "encoding": "u32",
+          "size": 4
+        },
+        {
+          "name": "seq",
+          "encoding": "u32",
+          "size": 4
+        }
+      ]
+    }
+  ],
+  "server_event_types": [
+    {
+      "name": "game.BankContents",
+      "type_id": 3466397487,
+      "fields": [
+        {
+          "name": "items",
+          "encoding": "slice",
+          "size": 0,
+          "item": {
+            "name": "",
+            "encoding": "struct",
+            "size": 0,
+            "fields": [
+              {
+                "name": "itemID",
+                "encoding": "u32",
+                "size": 4
+              },
+              {
+                "name": "quantity",
+                "encoding": "i32",
+                "size": 4
+              }
+            ]
+          }
+        },
+        {
+          "name": "totalMass",
+          "encoding": "f32",
+          "size": 4
+        },
+        {
+          "name": "maxMass",
+          "encoding": "f32",
+          "size": 4
+        },
+        {
+          "name": "cargoItems",
+          "encoding": "slice",
+          "size": 0,
+          "item": {
+            "name": "",
+            "encoding": "struct",
+            "size": 0,
+            "fields": [
+              {
+                "name": "itemID",
+                "encoding": "u32",
+                "size": 4
+              },
+              {
+                "name": "quantity",
+                "encoding": "i32",
+                "size": 4
+              }
+            ]
+          }
+        },
+        {
+          "name": "cargoMass",
+          "encoding": "f32",
+          "size": 4
+        },
+        {
+          "name": "maxCargoMass",
+          "encoding": "f32",
+          "size": 4
+        },
+        {
+          "name": "currencies",
+          "encoding": "slice",
+          "size": 0,
+          "item": {
+            "name": "",
+            "encoding": "struct",
+            "size": 0,
+            "fields": [
+              {
+                "name": "currencyID",
+                "encoding": "u32",
+                "size": 4
+              },
+              {
+                "name": "balance",
+                "encoding": "i64",
+                "size": 8
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "game.BeamClip",
+      "type_id": 903803186,
+      "fields": [
+        {
+          "name": "caster",
+          "encoding": "u32",
+          "size": 4
+        },
+        {
+          "name": "hitX",
+          "encoding": "f32",
+          "size": 4
+        },
+        {
+          "name": "hitY",
+          "encoding": "f32",
+          "size": 4
+        }
+      ]
+    },
+    {
+      "name": "game.CurrencyUpdate",
+      "type_id": 1915624825,
+      "fields": [
+        {
+          "name": "currencyID",
+          "encoding": "u32",
+          "size": 4
+        },
+        {
+          "name": "balance",
+          "encoding": "i64",
+          "size": 8
+        },
+        {
+          "name": "earned",
+          "encoding": "i64",
+          "size": 8
+        }
+      ]
+    },
+    {
+      "name": "game.Docked",
+      "type_id": 2348110877,
+      "fields": null
+    },
+    {
+      "name": "game.DockingState",
+      "type_id": 1551949585,
+      "fields": [
+        {
+          "name": "docking",
+          "encoding": "bool",
+          "size": 1
+        },
+        {
+          "name": "progress",
+          "encoding": "f32",
+          "size": 4
+        },
+        {
+          "name": "totalTime",
+          "encoding": "f32",
+          "size": 4
+        },
+        {
+          "name": "stationID",
+          "encoding": "u32",
+          "size": 4
+        }
+      ]
+    },
+    {
+      "name": "game.EquipResult",
+      "type_id": 1353665212,
+      "fields": [
+        {
+          "name": "success",
+          "encoding": "bool",
+          "size": 1
+        },
+        {
+          "name": "reason",
+          "encoding": "string",
+          "size": 0
+        },
+        {
+          "name": "slot",
+          "encoding": "u32",
+          "size": 4
+        },
+        {
+          "name": "equippedItemID",
+          "encoding": "u32",
+          "size": 4
+        },
+        {
+          "name": "previousItemID",
+          "encoding": "u32",
+          "size": 4
+        }
+      ]
+    },
+    {
+      "name": "game.MapData",
+      "type_id": 3245181347,
+      "fields": [
+        {
+          "name": "stations",
+          "encoding": "slice",
+          "size": 0,
+          "item": {
+            "name": "",
+            "encoding": "struct",
+            "size": 0,
+            "fields": [
+              {
+                "name": "cellX",
+                "encoding": "i32",
+                "size": 4
+              },
+              {
+                "name": "cellY",
+                "encoding": "i32",
+                "size": 4
+              },
+              {
+                "name": "localX",
+                "encoding": "f32",
+                "size": 4
+              },
+              {
+                "name": "localY",
+                "encoding": "f32",
+                "size": 4
+              },
+              {
+                "name": "name",
+                "encoding": "string",
+                "size": 0
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "game.PlayerDied",
+      "type_id": 4015454016,
+      "fields": [
+        {
+          "name": "killerID",
+          "encoding": "u32",
+          "size": 4
+        }
+      ]
+    },
+    {
+      "name": "game.PlayerOwnState",
+      "type_id": 2686326743,
+      "fields": [
+        {
+          "name": "abilityCooldowns",
+          "encoding": "slice",
+          "size": 0,
+          "item": {
+            "name": "",
+            "encoding": "struct",
+            "size": 0,
+            "fields": [
+              {
+                "name": "slot",
+                "encoding": "u32",
+                "size": 4
+              },
+              {
+                "name": "remaining",
+                "encoding": "f32",
+                "size": 4
+              },
+              {
+                "name": "total",
+                "encoding": "f32",
+                "size": 4
+              }
+            ]
+          }
+        },
+        {
+          "name": "equipment",
+          "encoding": "struct",
+          "size": 0,
+          "fields": [
+            {
+              "name": "weapon1",
+              "encoding": "u32",
+              "size": 4
+            },
+            {
+              "name": "weapon2",
+              "encoding": "u32",
+              "size": 4
+            },
+            {
+              "name": "shield",
+              "encoding": "u32",
+              "size": 4
+            },
+            {
+              "name": "thruster",
+              "encoding": "u32",
+              "size": 4
+            }
+          ]
+        },
+        {
+          "name": "cargoItems",
+          "encoding": "slice",
+          "size": 0,
+          "item": {
+            "name": "",
+            "encoding": "struct",
+            "size": 0,
+            "fields": [
+              {
+                "name": "itemID",
+                "encoding": "u32",
+                "size": 4
+              },
+              {
+                "name": "quantity",
+                "encoding": "i32",
+                "size": 4
+              }
+            ]
+          }
+        },
+        {
+          "name": "cargoMass",
+          "encoding": "f32",
+          "size": 4
+        },
+        {
+          "name": "maxCargoMass",
+          "encoding": "f32",
+          "size": 4
+        },
+        {
+          "name": "beingLockedByID",
+          "encoding": "u32",
+          "size": 4
+        },
+        {
+          "name": "beingLockedByProgress",
+          "encoding": "f32",
+          "size": 4
+        },
+        {
+          "name": "movement",
+          "encoding": "struct",
+          "size": 0,
+          "fields": [
+            {
+              "name": "valid",
+              "encoding": "bool",
+              "size": 1
+            },
+            {
+              "name": "predictionTicks",
+              "encoding": "u8",
+              "size": 1
+            },
+            {
+              "name": "tick",
+              "encoding": "u32",
+              "size": 4
+            },
+            {
+              "name": "producedAtMs",
+              "encoding": "u64",
+              "size": 8
+            },
+            {
+              "name": "entityNetID",
+              "encoding": "u32",
+              "size": 4
+            },
+            {
+              "name": "streamEpoch",
+              "encoding": "u32",
+              "size": 4
+            },
+            {
+              "name": "processedSequence",
+              "encoding": "u32",
+              "size": 4
+            },
+            {
+              "name": "tickIntervalMs",
+              "encoding": "u32",
+              "size": 4
+            },
+            {
+              "name": "worldX",
+              "encoding": "f32",
+              "size": 4
+            },
+            {
+              "name": "worldY",
+              "encoding": "f32",
+              "size": 4
+            },
+            {
+              "name": "velocityX",
+              "encoding": "f32",
+              "size": 4
+            },
+            {
+              "name": "velocityY",
+              "encoding": "f32",
+              "size": 4
+            },
+            {
+              "name": "angle",
+              "encoding": "f32",
+              "size": 4
+            },
+            {
+              "name": "angularVelocity",
+              "encoding": "f32",
+              "size": 4
+            },
+            {
+              "name": "targetActive",
+              "encoding": "bool",
+              "size": 1
+            },
+            {
+              "name": "targetX",
+              "encoding": "f32",
+              "size": 4
+            },
+            {
+              "name": "targetY",
+              "encoding": "f32",
+              "size": 4
+            },
+            {
+              "name": "thrust",
+              "encoding": "f32",
+              "size": 4
+            },
+            {
+              "name": "turnRate",
+              "encoding": "f32",
+              "size": 4
+            },
+            {
+              "name": "turnAccel",
+              "encoding": "f32",
+              "size": 4
+            },
+            {
+              "name": "maxSpeed",
+              "encoding": "f32",
+              "size": 4
+            },
+            {
+              "name": "speedMultiplier",
+              "encoding": "f32",
+              "size": 4
+            },
+            {
+              "name": "dragCoefficient",
+              "encoding": "f32",
+              "size": 4
+            },
+            {
+              "name": "arrivalDistance",
+              "encoding": "f32",
+              "size": 4
+            },
+            {
+              "name": "decelerationDist",
+              "encoding": "f32",
+              "size": 4
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "game.PlayerSpawned",
+      "type_id": 2947010648,
+      "fields": [
+        {
+          "name": "yourEntityID",
+          "encoding": "u32",
+          "size": 4
+        },
+        {
+          "name": "itemDefs",
+          "encoding": "slice",
+          "size": 0,
+          "item": {
+            "name": "",
+            "encoding": "struct",
+            "size": 0,
+            "fields": [
+              {
+                "name": "id",
+                "encoding": "u32",
+                "size": 4
+              },
+              {
+                "name": "name",
+                "encoding": "string",
+                "size": 0
+              },
+              {
+                "name": "massPerUnit",
+                "encoding": "f32",
+                "size": 4
+              },
+              {
+                "name": "category",
+                "encoding": "u32",
+                "size": 4
+              },
+              {
+                "name": "equipSlot",
+                "encoding": "u32",
+                "size": 4
+              }
+            ]
+          }
+        },
+        {
+          "name": "equipment",
+          "encoding": "struct",
+          "size": 0,
+          "fields": [
+            {
+              "name": "weapon1",
+              "encoding": "u32",
+              "size": 4
+            },
+            {
+              "name": "weapon2",
+              "encoding": "u32",
+              "size": 4
+            },
+            {
+              "name": "shield",
+              "encoding": "u32",
+              "size": 4
+            },
+            {
+              "name": "thruster",
+              "encoding": "u32",
+              "size": 4
+            }
+          ]
+        },
+        {
+          "name": "originCellX",
+          "encoding": "i32",
+          "size": 4
+        },
+        {
+          "name": "originCellY",
+          "encoding": "i32",
+          "size": 4
+        }
+      ]
+    },
+    {
+      "name": "game.TransferResult",
+      "type_id": 3979425881,
+      "fields": [
+        {
+          "name": "success",
+          "encoding": "bool",
+          "size": 1
+        },
+        {
+          "name": "reason",
+          "encoding": "string",
+          "size": 0
+        },
+        {
+          "name": "itemID",
+          "encoding": "u32",
+          "size": 4
+        },
+        {
+          "name": "quantity",
+          "encoding": "i32",
+          "size": 4
+        },
+        {
+          "name": "deposit",
+          "encoding": "bool",
+          "size": 1
+        }
+      ]
+    },
+    {
+      "name": "marketplace.MarketTradeNotification",
+      "type_id": 1118226639,
+      "fields": [
+        {
+          "name": "orderID",
+          "encoding": "u64",
+          "size": 8
+        },
+        {
+          "name": "itemID",
+          "encoding": "u32",
+          "size": 4
+        },
+        {
+          "name": "filledQty",
+          "encoding": "i32",
+          "size": 4
+        },
+        {
+          "name": "price",
+          "encoding": "i64",
+          "size": 8
+        },
+        {
+          "name": "youSold",
+          "encoding": "bool",
+          "size": 1
+        },
+        {
+          "name": "currencyChange",
+          "encoding": "i64",
+          "size": 8
+        },
+        {
+          "name": "currencyID",
+          "encoding": "u32",
+          "size": 4
+        }
+      ]
+    },
+    {
+      "name": "mmokit.CellChange",
+      "type_id": 1196329874,
+      "fields": [
+        {
+          "name": "cellX",
+          "encoding": "i32",
+          "size": 4
+        },
+        {
+          "name": "cellY",
+          "encoding": "i32",
+          "size": 4
+        }
+      ]
+    },
+    {
+      "name": "mmokit.DebugInfo",
+      "type_id": 2213731489,
+      "fields": [
+        {
+          "name": "topology",
+          "encoding": "struct",
+          "size": 0,
+          "fields": [
+            {
+              "name": "cells",
+              "encoding": "slice",
+              "size": 0,
+              "item": {
+                "name": "",
+                "encoding": "struct",
+                "size": 0,
+                "fields": [
+                  {
+                    "name": "cellX",
+                    "encoding": "i32",
+                    "size": 4
+                  },
+                  {
+                    "name": "cellY",
+                    "encoding": "i32",
+                    "size": 4
+                  },
+                  {
+                    "name": "depth",
+                    "encoding": "u32",
+                    "size": 4
+                  },
+                  {
+                    "name": "size",
+                    "encoding": "f32",
+                    "size": 4
+                  },
+                  {
+                    "name": "originX",
+                    "encoding": "f32",
+                    "size": 4
+                  },
+                  {
+                    "name": "originY",
+                    "encoding": "f32",
+                    "size": 4
+                  },
+                  {
+                    "name": "nodeID",
+                    "encoding": "string",
+                    "size": 0
+                  }
+                ]
+              }
+            },
+            {
+              "name": "gridW",
+              "encoding": "i32",
+              "size": 4
+            },
+            {
+              "name": "gridH",
+              "encoding": "i32",
+              "size": 4
+            },
+            {
+              "name": "baseCellSize",
+              "encoding": "f32",
+              "size": 4
+            }
+          ]
+        },
+        {
+          "name": "aoIRadius",
+          "encoding": "f32",
+          "size": 4
+        }
+      ]
+    },
+    {
+      "name": "mmokit.OperationError",
+      "type_id": 1032367819,
+      "fields": [
+        {
+          "name": "code",
+          "encoding": "u32",
+          "size": 4
+        },
+        {
+          "name": "message",
+          "encoding": "string",
+          "size": 0
+        }
+      ]
+    },
+    {
+      "name": "mmokit.PlayerEntityAssigned",
+      "type_id": 44496856,
+      "fields": [
+        {
+          "name": "entityNetID",
+          "encoding": "u32",
+          "size": 4
+        },
+        {
+          "name": "worldX",
+          "encoding": "f32",
+          "size": 4
+        },
+        {
+          "name": "worldY",
+          "encoding": "f32",
+          "size": 4
+        }
+      ]
+    },
+    {
+      "name": "mmokit.Pong",
+      "type_id": 2233975548,
+      "fields": [
+        {
+          "name": "clientTime",
+          "encoding": "i64",
+          "size": 8
+        },
+        {
+          "name": "serverTime",
+          "encoding": "i64",
+          "size": 8
+        }
+      ]
+    },
+    {
+      "name": "mmokit.ServerConfig",
+      "type_id": 2854082715,
+      "fields": [
+        {
+          "name": "tickRate",
+          "encoding": "u32",
+          "size": 4
+        }
+      ]
+    },
+    {
+      "name": "mmokit.WorldDelta",
+      "type_id": 106632948,
+      "fields": [
+        {
+          "name": "body",
+          "encoding": "bytes",
+          "size": 0
+        },
+        {
+          "name": "streamEpoch",
+          "encoding": "u32",
+          "size": 4
+        }
+      ]
+    }
+  ],
+  "operations": [
+    {
+      "kind": "gateway-local",
+      "request_type_id": 2315561577,
+      "request_type_name": "auth.AuthChangePasswordRequest",
+      "request_fields": [
+        {
+          "name": "currentPassword",
+          "encoding": "string",
+          "size": 0
+        },
+        {
+          "name": "newPassword",
+          "encoding": "string",
+          "size": 0
+        }
+      ],
+      "response_type_id": 1641904471,
+      "response_type_name": "auth.AuthChangePasswordResponse",
+      "response_fields": [
+        {
+          "name": "errorCode",
+          "encoding": "u32",
+          "size": 4
+        },
+        {
+          "name": "errorMessage",
+          "encoding": "string",
+          "size": 0
+        }
+      ]
+    },
+    {
+      "kind": "gateway-local",
+      "request_type_id": 4224799079,
+      "request_type_name": "auth.AuthLoginRequest",
+      "request_fields": [
+        {
+          "name": "username",
+          "encoding": "string",
+          "size": 0
+        },
+        {
+          "name": "password",
+          "encoding": "string",
+          "size": 0
+        },
+        {
+          "name": "mfaCode",
+          "encoding": "string",
+          "size": 0
+        }
+      ],
+      "response_type_id": 3372600061,
+      "response_type_name": "auth.AuthLoginResponse",
+      "response_fields": [
+        {
+          "name": "userID",
+          "encoding": "string",
+          "size": 0
+        },
+        {
+          "name": "username",
+          "encoding": "string",
+          "size": 0
+        },
+        {
+          "name": "sessionToken",
+          "encoding": "string",
+          "size": 0
+        },
+        {
+          "name": "expiresAtMs",
+          "encoding": "i64",
+          "size": 8
+        },
+        {
+          "name": "errorCode",
+          "encoding": "u32",
+          "size": 4
+        },
+        {
+          "name": "errorMessage",
+          "encoding": "string",
+          "size": 0
+        },
+        {
+          "name": "retryAfterMs",
+          "encoding": "i64",
+          "size": 8
+        },
+        {
+          "name": "canonical",
+          "encoding": "string",
+          "size": 0
+        }
+      ]
+    },
+    {
+      "kind": "gateway-local",
+      "request_type_id": 2287282620,
+      "request_type_name": "auth.AuthLogoutRequest",
+      "request_fields": null,
+      "response_type_id": 3113766352,
+      "response_type_name": "auth.AuthLogoutResponse",
+      "response_fields": [
+        {
+          "name": "userID",
+          "encoding": "string",
+          "size": 0
+        },
+        {
+          "name": "username",
+          "encoding": "string",
+          "size": 0
+        },
+        {
+          "name": "errorCode",
+          "encoding": "u32",
+          "size": 4
+        },
+        {
+          "name": "errorMessage",
+          "encoding": "string",
+          "size": 0
+        }
+      ]
+    },
+    {
+      "kind": "gateway-local",
+      "request_type_id": 841855209,
+      "request_type_name": "auth.AuthRegisterRequest",
+      "request_fields": [
+        {
+          "name": "username",
+          "encoding": "string",
+          "size": 0
+        },
+        {
+          "name": "password",
+          "encoding": "string",
+          "size": 0
+        },
+        {
+          "name": "email",
+          "encoding": "string",
+          "size": 0
+        }
+      ],
+      "response_type_id": 2591208663,
+      "response_type_name": "auth.AuthRegisterResponse",
+      "response_fields": [
+        {
+          "name": "userID",
+          "encoding": "string",
+          "size": 0
+        },
+        {
+          "name": "username",
+          "encoding": "string",
+          "size": 0
+        },
+        {
+          "name": "sessionToken",
+          "encoding": "string",
+          "size": 0
+        },
+        {
+          "name": "expiresAtMs",
+          "encoding": "i64",
+          "size": 8
+        },
+        {
+          "name": "errorCode",
+          "encoding": "u32",
+          "size": 4
+        },
+        {
+          "name": "errorMessage",
+          "encoding": "string",
+          "size": 0
+        },
+        {
+          "name": "retryAfterMs",
+          "encoding": "i64",
+          "size": 8
+        },
+        {
+          "name": "canonical",
+          "encoding": "string",
+          "size": 0
+        }
+      ]
+    },
+    {
+      "kind": "gateway-local",
+      "request_type_id": 4162264177,
+      "request_type_name": "auth.AuthValidateTokenRequest",
+      "request_fields": [
+        {
+          "name": "sessionToken",
+          "encoding": "string",
+          "size": 0
+        }
+      ],
+      "response_type_id": 2491845935,
+      "response_type_name": "auth.AuthValidateTokenResponse",
+      "response_fields": [
+        {
+          "name": "userID",
+          "encoding": "string",
+          "size": 0
+        },
+        {
+          "name": "username",
+          "encoding": "string",
+          "size": 0
+        },
+        {
+          "name": "expiresAtMs",
+          "encoding": "i64",
+          "size": 8
+        },
+        {
+          "name": "errorCode",
+          "encoding": "u32",
+          "size": 4
+        },
+        {
+          "name": "errorMessage",
+          "encoding": "string",
+          "size": 0
+        },
+        {
+          "name": "retryAfterMs",
+          "encoding": "i64",
+          "size": 8
+        }
+      ]
+    },
+    {
+      "kind": "player-cell",
+      "request_type_id": 3942631510,
+      "request_type_name": "game.BankRequest",
+      "request_fields": [
+        {
+          "name": "sequence",
+          "encoding": "u32",
+          "size": 4
+        }
+      ],
+      "response_type_id": 3471921834,
+      "response_type_name": "game.BankResponse",
+      "response_fields": [
+        {
+          "name": "contents",
+          "encoding": "struct",
+          "size": 0,
+          "fields": [
+            {
+              "name": "items",
+              "encoding": "slice",
+              "size": 0,
+              "item": {
+                "name": "",
+                "encoding": "struct",
+                "size": 0,
+                "fields": [
+                  {
+                    "name": "itemID",
+                    "encoding": "u32",
+                    "size": 4
+                  },
+                  {
+                    "name": "quantity",
+                    "encoding": "i32",
+                    "size": 4
+                  }
+                ]
+              }
+            },
+            {
+              "name": "totalMass",
+              "encoding": "f32",
+              "size": 4
+            },
+            {
+              "name": "maxMass",
+              "encoding": "f32",
+              "size": 4
+            },
+            {
+              "name": "cargoItems",
+              "encoding": "slice",
+              "size": 0,
+              "item": {
+                "name": "",
+                "encoding": "struct",
+                "size": 0,
+                "fields": [
+                  {
+                    "name": "itemID",
+                    "encoding": "u32",
+                    "size": 4
+                  },
+                  {
+                    "name": "quantity",
+                    "encoding": "i32",
+                    "size": 4
+                  }
+                ]
+              }
+            },
+            {
+              "name": "cargoMass",
+              "encoding": "f32",
+              "size": 4
+            },
+            {
+              "name": "maxCargoMass",
+              "encoding": "f32",
+              "size": 4
+            },
+            {
+              "name": "currencies",
+              "encoding": "slice",
+              "size": 0,
+              "item": {
+                "name": "",
+                "encoding": "struct",
+                "size": 0,
+                "fields": [
+                  {
+                    "name": "currencyID",
+                    "encoding": "u32",
+                    "size": 4
+                  },
+                  {
+                    "name": "balance",
+                    "encoding": "i64",
+                    "size": 8
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "error",
+          "encoding": "string",
+          "size": 0
+        }
+      ]
+    },
+    {
+      "kind": "player-cell",
+      "request_type_id": 4056584215,
+      "request_type_name": "game.RepairRequest",
+      "request_fields": [
+        {
+          "name": "sequence",
+          "encoding": "u32",
+          "size": 4
+        }
+      ],
+      "response_type_id": 980531693,
+      "response_type_name": "game.RepairResponse",
+      "response_fields": [
+        {
+          "name": "success",
+          "encoding": "bool",
+          "size": 1
+        },
+        {
+          "name": "cost",
+          "encoding": "i64",
+          "size": 8
+        },
+        {
+          "name": "newHealth",
+          "encoding": "f32",
+          "size": 4
+        },
+        {
+          "name": "error",
+          "encoding": "string",
+          "size": 0
+        }
+      ]
+    },
+    {
+      "kind": "player-cell",
+      "request_type_id": 3646092705,
+      "request_type_name": "marketplace.MarketBrowseRequest",
+      "request_fields": [
+        {
+          "name": "itemID",
+          "encoding": "u32",
+          "size": 4
+        }
+      ],
+      "response_type_id": 4179283756,
+      "response_type_name": "marketplace.MarketOrderBookResponse",
+      "response_fields": [
+        {
+          "name": "itemID",
+          "encoding": "u32",
+          "size": 4
+        },
+        {
+          "name": "sellLevels",
+          "encoding": "slice",
+          "size": 0,
+          "item": {
+            "name": "",
+            "encoding": "struct",
+            "size": 0,
+            "fields": [
+              {
+                "name": "price",
+                "encoding": "i64",
+                "size": 8
+              },
+              {
+                "name": "quantity",
+                "encoding": "i32",
+                "size": 4
+              },
+              {
+                "name": "orderCount",
+                "encoding": "u32",
+                "size": 4
+              }
+            ]
+          }
+        },
+        {
+          "name": "buyLevels",
+          "encoding": "slice",
+          "size": 0,
+          "item": {
+            "name": "",
+            "encoding": "struct",
+            "size": 0,
+            "fields": [
+              {
+                "name": "price",
+                "encoding": "i64",
+                "size": 8
+              },
+              {
+                "name": "quantity",
+                "encoding": "i32",
+                "size": 4
+              },
+              {
+                "name": "orderCount",
+                "encoding": "u32",
+                "size": 4
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "kind": "player-cell",
+      "request_type_id": 3148294921,
+      "request_type_name": "marketplace.MarketCancelOrderRequest",
+      "request_fields": [
+        {
+          "name": "orderID",
+          "encoding": "u64",
+          "size": 8
+        }
+      ],
+      "response_type_id": 1944057696,
+      "response_type_name": "marketplace.MarketOrderResultResponse",
+      "response_fields": [
+        {
+          "name": "orderID",
+          "encoding": "u64",
+          "size": 8
+        },
+        {
+          "name": "filledQty",
+          "encoding": "i32",
+          "size": 4
+        },
+        {
+          "name": "avgPrice",
+          "encoding": "i64",
+          "size": 8
+        },
+        {
+          "name": "totalCost",
+          "encoding": "i64",
+          "size": 8
+        }
+      ]
+    },
+    {
+      "kind": "player-cell",
+      "request_type_id": 1757899923,
+      "request_type_name": "marketplace.MarketCreateOrderRequest",
+      "request_fields": [
+        {
+          "name": "itemID",
+          "encoding": "u32",
+          "size": 4
+        },
+        {
+          "name": "isBuy",
+          "encoding": "bool",
+          "size": 1
+        },
+        {
+          "name": "pricePerUnit",
+          "encoding": "i64",
+          "size": 8
+        },
+        {
+          "name": "quantity",
+          "encoding": "i32",
+          "size": 4
+        }
+      ],
+      "response_type_id": 1944057696,
+      "response_type_name": "marketplace.MarketOrderResultResponse",
+      "response_fields": [
+        {
+          "name": "orderID",
+          "encoding": "u64",
+          "size": 8
+        },
+        {
+          "name": "filledQty",
+          "encoding": "i32",
+          "size": 4
+        },
+        {
+          "name": "avgPrice",
+          "encoding": "i64",
+          "size": 8
+        },
+        {
+          "name": "totalCost",
+          "encoding": "i64",
+          "size": 8
+        }
+      ]
+    },
+    {
+      "kind": "player-cell",
+      "request_type_id": 2255322720,
+      "request_type_name": "marketplace.MarketInstantTradeRequest",
+      "request_fields": [
+        {
+          "name": "itemID",
+          "encoding": "u32",
+          "size": 4
+        },
+        {
+          "name": "isBuy",
+          "encoding": "bool",
+          "size": 1
+        },
+        {
+          "name": "quantity",
+          "encoding": "i32",
+          "size": 4
+        }
+      ],
+      "response_type_id": 1944057696,
+      "response_type_name": "marketplace.MarketOrderResultResponse",
+      "response_fields": [
+        {
+          "name": "orderID",
+          "encoding": "u64",
+          "size": 8
+        },
+        {
+          "name": "filledQty",
+          "encoding": "i32",
+          "size": 4
+        },
+        {
+          "name": "avgPrice",
+          "encoding": "i64",
+          "size": 8
+        },
+        {
+          "name": "totalCost",
+          "encoding": "i64",
+          "size": 8
+        }
+      ]
+    },
+    {
+      "kind": "player-cell",
+      "request_type_id": 679829874,
+      "request_type_name": "marketplace.MarketMyOrdersRequest",
+      "request_fields": null,
+      "response_type_id": 416989598,
+      "response_type_name": "marketplace.MarketMyOrdersResponse",
+      "response_fields": [
+        {
+          "name": "orders",
+          "encoding": "slice",
+          "size": 0,
+          "item": {
+            "name": "",
+            "encoding": "struct",
+            "size": 0,
+            "fields": [
+              {
+                "name": "orderID",
+                "encoding": "u64",
+                "size": 8
+              },
+              {
+                "name": "itemID",
+                "encoding": "u32",
+                "size": 4
+              },
+              {
+                "name": "isBuy",
+                "encoding": "bool",
+                "size": 1
+              },
+              {
+                "name": "pricePerUnit",
+                "encoding": "i64",
+                "size": 8
+              },
+              {
+                "name": "quantity",
+                "encoding": "i32",
+                "size": 4
+              },
+              {
+                "name": "origQuantity",
+                "encoding": "i32",
+                "size": 4
+              },
+              {
+                "name": "createdAt",
+                "encoding": "i64",
+                "size": 8
+              },
+              {
+                "name": "expiresAt",
+                "encoding": "i64",
+                "size": 8
+              }
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}
