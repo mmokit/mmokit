@@ -39,6 +39,11 @@ type Engine struct {
 	EntityCounter func() (real, replica, ghost, connected int)
 
 	netIDBase uint32
+	// cellSize is the world's base cell width/height, injected per cell by the
+	// universe layer. It lives here because systems in pkg/system need it and
+	// cannot import pkg/universe (that is the direction of the dependency), so
+	// the engine is the lowest common seam between them.
+	cellSize  float32
 	nextNetID atomic.Uint32
 
 	toRemove          []removalRequest
@@ -111,6 +116,14 @@ func (e *Engine) SetClientInputTick(fn func()) {
 func (e *Engine) SetNetIDBase(base uint32) {
 	e.netIDBase = base
 }
+
+// SetCellSize injects the world's base cell size. Called once per cell by the
+// universe layer, before any system runs.
+func (e *Engine) SetCellSize(size float32) { e.cellSize = size }
+
+// CellSize returns the world's base cell width/height. Zero only on an engine
+// built outside the universe layer, which is a test or benchmark harness.
+func (e *Engine) CellSize() float32 { return e.cellSize }
 
 // NetIDBase returns the base offset for NetworkID allocation.
 func (e *Engine) NetIDBase() uint32 {

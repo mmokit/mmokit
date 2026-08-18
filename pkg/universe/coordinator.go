@@ -2394,6 +2394,9 @@ func (c *Process) createNode(cell CellID, spatialBucketSize float32, owningHost 
 	}
 	eng := engine.New(platformCfg, connSender, cfg.Logger)
 	eng.SetNetIDBase(c.netIDAlloc.Allocate())
+	// Systems in pkg/system read geometry from the engine: they cannot import
+	// pkg/universe, so Stage is not reachable from them.
+	eng.SetCellSize(c.CellSize())
 
 	events := make(chan net.PlayerEvent, 64)
 

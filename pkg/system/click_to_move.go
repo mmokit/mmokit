@@ -16,6 +16,10 @@ const defaultMaxSpeed float32 = 300
 // Skips Ghost and Replica entities.
 type ClickToMoveSystem struct {
 	engine.SystemBase
+	// cellSize is resolved once in Init rather than read per tick. Update runs
+	// every tick for every cell, and the value cannot change during a
+	// process's life.
+	cellSize float32
 	entities query.Query[struct {
 		Pos    *component.Position
 		Vel    *component.Velocity
@@ -25,8 +29,21 @@ type ClickToMoveSystem struct {
 	}]
 }
 
+// Init resolves the world geometry this system converts cell deltas with.
+//
+// Falls back to the package default when there is no engine, which happens
+// only in unit tests that drive Update directly against a bare ECS world.
+func (s *ClickToMoveSystem) Init() {
+	if e := s.Engine(); e != nil {
+		s.cellSize = e.CellSize()
+	}
+	if s.cellSize == 0 {
+		s.cellSize = coords.DefaultCellSize
+	}
+}
+
 func (s *ClickToMoveSystem) Update(dt float32) {
-	cellSize := coords.CellSize
+	cellSize := s.cellSize
 	for _, b := range s.entities.Iter {
 		if !b.MT.Active {
 			continue
