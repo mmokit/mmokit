@@ -1,8 +1,16 @@
 package marketplace
 
 import (
+	"errors"
+
 	"github.com/mmokit/mmokit"
 )
+
+// errMarketNotHosted answers a marketplace op that reached a process without a
+// Settlement. Unreachable while every marketplace op is RoutePlayerCell and
+// the owning host has one — it exists so registering the ops everywhere cannot
+// turn into a nil dereference.
+var errMarketNotHosted = errors.New("marketplace is not hosted on this process")
 
 // RegisterHandlers registers all marketplace operation handlers. Each
 // op runs as a typed RoutePlayerCell handler — the dispatcher routes the
@@ -14,9 +22,19 @@ import (
 // are themselves mutex-protected so they tolerate concurrent calls from
 // any number of cells; the cell-routing constraint exists primarily so
 // future ops on this same kind can safely reach the cell's ECS state.
+// svc is nil on a process that does not host the marketplace. The five ops
+// still register there, because the typed-op registry IS the protocol schema
+// and a process that skips them reports a different contract than its peers.
+// All five are RoutePlayerCell, so on such a process the dispatcher forwards
+// them to the owning host and these bodies never run — errMarketNotHosted is
+// the answer if that assumption ever stops holding, which is a clear error
+// instead of a nil dereference on the tick goroutine.
 func RegisterHandlers(p *mmokit.Process, svc *Settlement, stationID uint32) {
 	mmokit.RegisterOp[MarketBrowseRequest, MarketOrderBookResponse](p, mmokit.RoutePlayerCell,
 		func(_ *mmokit.OpContext, req *MarketBrowseRequest) (*MarketOrderBookResponse, error) {
+			if svc == nil {
+				return nil, errMarketNotHosted
+			}
 			view := svc.Browse(stationID, req.ItemID)
 			resp := &MarketOrderBookResponse{ItemID: view.ItemID}
 			for _, l := range view.SellLevels {
@@ -38,6 +56,9 @@ func RegisterHandlers(p *mmokit.Process, svc *Settlement, stationID uint32) {
 
 	mmokit.RegisterOp[MarketCreateOrderRequest, MarketOrderResultResponse](p, mmokit.RoutePlayerCell,
 		func(ctx *mmokit.OpContext, req *MarketCreateOrderRequest) (*MarketOrderResultResponse, error) {
+			if svc == nil {
+				return nil, errMarketNotHosted
+			}
 			var (
 				result *mmokit.PlaceResult
 				err    error
@@ -60,6 +81,9 @@ func RegisterHandlers(p *mmokit.Process, svc *Settlement, stationID uint32) {
 
 	mmokit.RegisterOp[MarketCancelOrderRequest, MarketOrderResultResponse](p, mmokit.RoutePlayerCell,
 		func(ctx *mmokit.OpContext, req *MarketCancelOrderRequest) (*MarketOrderResultResponse, error) {
+			if svc == nil {
+				return nil, errMarketNotHosted
+			}
 			if err := svc.CancelOrder(ctx.Username, req.OrderID); err != nil {
 				return nil, err
 			}
@@ -68,6 +92,9 @@ func RegisterHandlers(p *mmokit.Process, svc *Settlement, stationID uint32) {
 
 	mmokit.RegisterOp[MarketMyOrdersRequest, MarketMyOrdersResponse](p, mmokit.RoutePlayerCell,
 		func(ctx *mmokit.OpContext, _ *MarketMyOrdersRequest) (*MarketMyOrdersResponse, error) {
+			if svc == nil {
+				return nil, errMarketNotHosted
+			}
 			orders := svc.PlayerOrders(ctx.Username)
 			resp := &MarketMyOrdersResponse{}
 			for _, o := range orders {
@@ -87,6 +114,9 @@ func RegisterHandlers(p *mmokit.Process, svc *Settlement, stationID uint32) {
 
 	mmokit.RegisterOp[MarketInstantTradeRequest, MarketOrderResultResponse](p, mmokit.RoutePlayerCell,
 		func(ctx *mmokit.OpContext, req *MarketInstantTradeRequest) (*MarketOrderResultResponse, error) {
+			if svc == nil {
+				return nil, errMarketNotHosted
+			}
 			var (
 				result *mmokit.PlaceResult
 				err    error

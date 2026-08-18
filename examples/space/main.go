@@ -285,9 +285,10 @@ func main() {
 
 	// After New, not before: the five marketplace ops register on the
 	// process's own typed-op registry, which does not exist until now.
-	if marketSvc != nil {
-		marketplace.RegisterHandlers(coordinator, marketSvc, 1)
-	}
+	// Unconditional for the same reason GameProtocol is — marketSvc is nil on
+	// a process that does not host the marketplace, and the handlers tolerate
+	// that; what matters is that the op TYPES are in every process's schema.
+	marketplace.RegisterHandlers(coordinator, marketSvc, 1)
 
 	// Game admin commands register on every process that has a console
 	// (coordinator, host, node) so operators can dispatch from any pane.
@@ -315,8 +316,14 @@ func main() {
 		coordinator.SetPlayerDataLocator(playerDB.Locator())
 	}
 
+	// Unconditional, and deliberately not gated on RoleHost: this is the
+	// client-visible contract, and a gateway — the process clients actually
+	// connect to — must report the same one a host does. Gating it made
+	// `--dump-schema --mode=gateway` emit 0 of 12 entities and 5 of 12 ops.
+	game.GameProtocol(coordinator)
+
 	if needsGameState {
-		game.GameSetup(coordinator)
+		game.GameSystems(coordinator)
 		game.InitDropTables()
 
 		coordinator.OnResolveSpawn(func(s *mmokit.PlayerSession) coords.Location {

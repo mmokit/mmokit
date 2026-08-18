@@ -32,9 +32,24 @@ func NewGameWorldStateFactory(
 	}
 }
 
-// GameSetup registers game-specific entity kinds, input handlers, the
-// player-join hook, and systems on the coordinator.
-func GameSetup(coord *mmokit.Process) {
+// GameProtocol registers everything that is part of the client-visible
+// contract: entity kinds, typed server events, client inputs, typed ops, and
+// the broadcast-eligible verbs.
+//
+// Call this on EVERY process, whatever its roles. The protocol schema is what
+// --dump-schema emits and what a client is validated against, so a process
+// that skips it reports a different contract than its peers — and a gateway,
+// which is the process clients actually connect to, would report the emptiest
+// one of all. It is also what the gateway's own op routing consults:
+// processOpFrame asks the local registry whether a request typeID is
+// RouteGatewayLocal, so a gateway missing these registrations forwards ops it
+// should have handled itself.
+//
+// Nothing here runs game logic. HandleClient and HandleAll install per-Stage
+// handlers through OnStageInit, and a process with no cells has no stages, so
+// on a gateway they register the wire types and nothing fires. Entity kinds
+// are closures realized per-Stage for the same reason.
+func GameProtocol(coord *mmokit.Process) {
 	RegisterServerEvents(coord)
 	RegisterEntityKinds(coord)
 	RegisterInputs(coord)
@@ -42,12 +57,23 @@ func GameSetup(coord *mmokit.Process) {
 	// authoritative cell engine via Process.DispatchCellRoutedOp.
 	mmokit.RegisterOp(coord, mmokit.RoutePlayerCell, HandleBankRequest)
 	mmokit.RegisterOp(coord, mmokit.RoutePlayerCell, HandleRepairRequest)
+	// Verbs are protocol, not behaviour: each is a HandleAll, which is what
+	// puts the message type in the broadcast registry and therefore in the
+	// schema's broadcast_types section.
 	RegisterDamageVerb(coord)
 	RegisterMiningVerb(coord)
 	RegisterStatusVerb(coord)
 	RegisterHealVerb(coord)
 	RegisterDeathVerbs(coord)
 	RegisterBeamToggleVerb(coord)
+}
+
+// GameSystems registers the simulation itself — the tick observers, the
+// player-join hook, and every ECS system. None of it is client-visible, and
+// all of it needs cells, so it belongs only on a process that hosts them.
+//
+// System registration order is semantic; preserve it. Network stays last.
+func GameSystems(coord *mmokit.Process) {
 	// Death observer: fires Killed exactly once per entity per Health drop-to-zero.
 	// Runs as the canonical lifecycle path post-Plan E — ApplyDamage no longer
 	// dispatches death directly.
@@ -87,6 +113,14 @@ func GameSetup(coord *mmokit.Process) {
 	coord.AddSystem(mmokit.NewSystem(&CollisionSystem{}))
 	coord.AddSystem(mmokit.NewSystem(&ShieldRegenSystem{}))
 	coord.AddSystem(mmokit.NewSystem(&NetworkSystem{}))
+}
+
+// GameSetup is protocol plus systems — what a process that hosts cells wants.
+// main.go calls the two halves separately because a gateway wants only the
+// first; tests that build a full single-process world call this.
+func GameSetup(coord *mmokit.Process) {
+	GameProtocol(coord)
+	GameSystems(coord)
 }
 
 // registerPlayerJoin installs the spawn / reconnect hook via
