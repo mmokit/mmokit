@@ -551,7 +551,7 @@ every byte on the wire.
 
 ### 6.10 Next phase — prerequisites and the safety net
 
-**Approximately 20 engineer-days.** This is the work between the P0 gate lifting and [§7](#7-the-2d3d-and-multi-genre-program)'s dimension work proper. It exists as its own phase because the dependency order inside it is not the one [§7.2](#72-prerequisite-gates) originally implied, and getting that order wrong is expensive rather than merely slow.
+**Approximately 20 engineer-days.** This is the work between the P0 gate lifting and [§7](#7-the-2d3d-and-multi-genre-program)'s dimension work proper. Unit 5 is the exception: it is a §7 phase-2 deliverable pulled forward, because once part B lands it is half a day and it is the thing [§7.3](#73-architecture) actually asks for. It exists as its own phase because the dependency order inside it is not the one [§7.2](#72-prerequisite-gates) originally implied, and getting that order wrong is expensive rather than merely slow.
 
 #### 6.10.1 Why the order changed
 
@@ -569,8 +569,9 @@ One correction of substance sits underneath this. **A version byte cannot detect
 | 1 | Registry and framing hardening: panic on duplicate client-input IDs, make broadcast collisions detectable at all, and reconcile the two transports' unknown-channel-byte fallback | CE-009 | 1 | low | — | **done** `8677252d` |
 | 2 | Extend the byte-level wire goldens: TS delta assertions first, then the fixed-offset frame codecs, nested struct / slice-of-struct, and a snapshot from real bindings | §7 phase 0 | 4 | med | 1 | **mostly done** `357bd61c`, `0fe980ce`, `90bb0a66` — see below |
 | 3 | CE-010 part A — cell geometry becomes injected: delete `coords.CellSize` and its setter, converge ~75 read sites on a process-owned accessor | CE-010 | 5 | med | — | **done** `8981d581`..`cb82506b` |
-| 4 | CE-010 part B — the registries, the five package-global hook structs, and the three package-level `sync.Once` guards become process-owned | CE-010 | 6 | **high** | 2, 3 | **open** |
-| 5 | CE-009 — structural schema fingerprint, carried at connection setup on both transports, with rejection semantics | CE-009 | 4 | med | 4 | **open** |
+| 4 | CE-010 part B — a `WireRegistry` owned by `Process`; the four registries, five hook structs and three `sync.Once` guards go with it | CE-010 | 6 | **high** | 2, 3 | **open** |
+| 5 | The dimension profile itself — `Config.Dimension` + an `EngineBindingSet` selected at construction | §7 phase 2 | 0.5 | low | 4 | **open** |
+| 6 | CE-009 — structural schema fingerprint, carried at connection setup on both transports, with rejection semantics | CE-009 | 4 | med | 4 | **open** |
 
 Unit 1 is deliberately first and deliberately tiny: it is the only unit that changes client framing behaviour, and it must land before anything else adds a byte to a client frame.
 
@@ -583,7 +584,21 @@ Two pieces remain and are carried into whoever starts the codec collapse rather 
 
 Two assertions in unit 2 are worth knowing about before editing near them, because both look like padding and are not. `TestTransferFrame_FixedHeaderSizeIsStill87` derives the header size from the golden bytes rather than from the constant, so adding a field and updating two of the three copies of the hand-summed sum fails there — nothing checked that before. And the `reflectNested` fixture's trailing scalar is what catches a nested walker consuming the wrong byte count: nested structs are inlined with no envelope, so a miscount produces no local error, only a cursor misaligned for everything after it.
 
-#### 6.10.3 Traps
+#### 6.10.3 Why part B, now that it does not gate 3D
+
+A design pass (four independent proposals, adversarially judged against source) established two things that change this unit's justification, and one that changes its shape.
+
+**It does not gate 3D.** See the correction in [§7.2](#72-prerequisite-gates). Do not carry the old reason forward.
+
+**It fixes a live correctness bug instead.** `handle_op.go`'s `RegisterOp` ends a duplicate registration with `existing.Handler = handler` — last-writer-wins on a *binary-global* map. The auth handlers are closures capturing their own `*Process`. So two Processes in one binary that both call `RegisterAuthService` leave the FIRST dispatching auth into the SECOND's service. `examples/4node-basic/mesh_e2e_test.go` already constructs N Processes in one binary, so this is present-tense, not hypothetical. CE-009's fingerprint also wants a per-process schema, and cannot have one while the registries are a union.
+
+**The cheap option — freeze the registries at `Build()` — is not available.** `initSystems` runs at three sites, not one: `coordinator.go:2065` (Build), `coordinator.go:2983` (remote cell assign) and `cell_transfer_executor.go:495` (**split**). Registration from `System.Init()` is documented as supported (`handle_event.go:23`) and `examples/simple/system_field.go:30` does it. A seal would turn a documented pattern into a production panic on a cell split, on a background goroutine, minutes into a run. Per-process registries preserve that contract for free, because a split re-registers on the same Process.
+
+**Shape.** A `WireRegistry` in `pkg/universe`, owned by `Process` and injected into `Stage` exactly as `baseCellSize` now is. `*Process` becomes the universal first argument of the registration verbs — chosen over a new `Protocol`/`Registry` handle because `HandleClient` and `HandleAll` *already* take one, which is 20 of ~48 game call sites: making `*Process` universal edits zero of them, a new handle edits all 20. The five hook structs and the root `init()` body exist only so a global registry could call back into the facade, and die with it.
+
+**All three `sync.Once` guards protect a panic that cannot happen.** `RegisterEvent` returns early on `seSet[t]` (`handle_event.go:37`), so it has never panicked on a duplicate; the comment justifying the guard in `examples/space/internal/game/event_messages.go:207` is false. Delete the guards rather than porting them.
+
+#### 6.10.4 Traps
 
 - **The unknown-channel-byte fallback already disagrees between transports.** `pkg/net/conn.go` treats an unrecognised leading byte as a channel-`0x00` event with the byte **stripped**; `pkg/net/udp_transport.go` treats it as one with the byte **kept**. The same wire byte produces two different payloads depending on transport. Reconcile to a single clean reject — do not preserve either behaviour for compatibility, because nothing can be relying on both.
 - **The golden coverage is Go↔C#, not three-way.** The Unity delta decoder is byte-pinned to Go; the browser's is not, and the browser is the reference game's only client. Unit 2 fixes the asymmetry in the direction of the risk, not the direction of the existing coverage.
@@ -622,7 +637,9 @@ Deleting beat threading repeatedly: seven zero-caller exported functions were re
 
 Two P1 items are hard prerequisites:
 
-- **CE-010** — a per-process dimension profile requires the process-owned immutable registries and injected cell geometry this item describes. `coords.CellSize` cannot remain a mutable package global.
+- **CE-010** — a per-process dimension profile requires the injected cell geometry this item describes. `coords.CellSize` could not remain a mutable package global; part A deleted it.
+
+  **Correction, verified against source.** This bullet used to also require "the process-owned immutable registries", and that half is **false**. The profile selects bindings, not types (see [§7.3](#73-architecture)), and the binding half of the schema is *already* process-scoped: `Protocol.Schema()` takes `Entities` from a `ReplicatorRegistry` built by `BuildReplicators(w, coord, …)`, which takes a `*Process`. `EngineBindings` has one call site, inside that function, and `viewerRelativePosBinding.snapshotFields()` returning `[]int{4,4}` is the entire dimension-varying wire surface. The four global wire registries hold message *type* lists — exactly what the profile never selects. **Part B is still worth doing, for the reasons in [§6.10](#610-next-phase--prerequisites-and-the-safety-net), but it does not gate 3D.**
 - **CE-009** — without a schema fingerprint, a 2D client meeting a 3D server decodes valid bytes into the wrong shape rather than being rejected. Note that a protocol *version* does not achieve this: one type set across both profiles means identical type IDs and identical hashes, so only a structural hash over field shapes separates them.
 
 **They are not peers, and phase 0's safety net is not last.** The verified ordering — goldens, then CE-010 part A, then part B, then the fingerprint — is scheduled as [§6.10](#610-next-phase--prerequisites-and-the-safety-net), which supersedes the "schedule both immediately after P0" instruction this section used to carry.
