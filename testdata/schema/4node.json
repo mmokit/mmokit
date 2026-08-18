@@ -1,5 +1,7 @@
 {
   "game": "basic",
+  "dimension": "2d",
+  "fingerprint": "d3c55737",
   "entities": [
     {
       "kind": 1,

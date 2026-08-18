@@ -1,5 +1,7 @@
 {
   "game": "simple",
+  "dimension": "2d",
+  "fingerprint": "b9c92f69",
   "entities": null,
   "client_input_types": [
     {

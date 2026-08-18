@@ -19,7 +19,18 @@ import (
 
 // ProtocolSchema is the complete machine-readable protocol description.
 type ProtocolSchema struct {
-	Game             string                  `json:"game"`
+	Game string `json:"game"`
+	// Dimension is the spatial profile the emitting process was built with.
+	// Part of the contract rather than a diagnostic: it is what the field
+	// shapes below are shapes FOR, and it makes the dump self-describing for
+	// an operator who has to answer "which profile is this server running".
+	Dimension string `json:"dimension"`
+	// Fingerprint is the structural hash of everything else in this document,
+	// as 8 lowercase hex digits. See SchemaFingerprint. Generated SDKs copy
+	// this value verbatim rather than recomputing it — two canonicalizations
+	// drifting by one byte would produce a framework that rejects its own
+	// client.
+	Fingerprint      string                  `json:"fingerprint"`
 	Entities         []system.EntitySchema   `json:"entities"`
 	BroadcastTypes   []BroadcastTypeSchema   `json:"broadcast_types,omitempty"`
 	ClientInputTypes []ClientInputTypeSchema `json:"client_input_types,omitempty"`
@@ -60,9 +71,15 @@ type OperationSchema struct {
 // Protocol collects the full client/server contract for a game.
 type Protocol struct {
 	game        string
+	dimension   string
 	wire        *WireRegistry
 	entityNames []entityNameEntry
 	replicators *system.ReplicatorRegistry
+
+	// fingerprint is computed once, by AssembleFromProcess, because the
+	// connection-setup gates consult it per request and hashing the whole
+	// schema on every WebSocket upgrade would be absurd.
+	fingerprint uint32
 }
 
 // NewProtocol creates a Protocol exporting p's registry under the given game
@@ -71,7 +88,7 @@ type Protocol struct {
 // client→server Ping input are already on that registry: New installs them via
 // bootstrapWire before calling this. Games never wire them themselves.
 func NewProtocol(p *Process, game string) *Protocol {
-	return &Protocol{game: game, wire: p.Wire()}
+	return &Protocol{game: game, dimension: p.Dimension().String(), wire: p.Wire()}
 }
 
 // SetReplicators wires in the ReplicatorRegistry for entity schema extraction.
@@ -91,7 +108,11 @@ type entityNameEntry struct {
 
 // Schema builds the complete ProtocolSchema from all registered sources.
 func (p *Protocol) Schema() ProtocolSchema {
-	ps := ProtocolSchema{Game: p.game}
+	ps := ProtocolSchema{
+		Game:        p.game,
+		Dimension:   p.dimension,
+		Fingerprint: FormatSchemaFingerprint(p.fingerprint),
+	}
 	if p.replicators != nil {
 		ps.Entities = p.replicators.Schema()
 		// Apply entity names.
@@ -170,6 +191,9 @@ func (p *Protocol) AssembleFromProcess(proc *universe.Process) {
 	stage := proc.NewSchemaStage()
 	defs := stage.EntityKindDefs()
 	if len(defs) == 0 {
+		// No entity kinds is a legitimate protocol — examples/simple has none.
+		// The other four registries still describe a contract worth hashing.
+		p.recomputeFingerprint()
 		return
 	}
 	defSlice := make([]universe.EntityKindDef, 0, len(defs))
@@ -181,4 +205,17 @@ func (p *Protocol) AssembleFromProcess(proc *universe.Process) {
 	}
 	// A throwaway ECS world: the registry needs schema metadata, not entities.
 	p.SetReplicators(BuildReplicators(ecs.NewWorld(), proc, defSlice...))
+	p.recomputeFingerprint()
 }
+
+// recomputeFingerprint refreshes the cached structural hash. Safe to call at
+// any point after the registries are populated: the projection zeroes the
+// Fingerprint field, so hashing a schema that already carries one yields the
+// same value.
+func (p *Protocol) recomputeFingerprint() {
+	p.fingerprint = SchemaFingerprint(p.Schema())
+}
+
+// SchemaFingerprint returns the structural hash of this process's protocol, or
+// 0 before AssembleFromProcess has run.
+func (p *Protocol) SchemaFingerprint() uint32 { return p.fingerprint }

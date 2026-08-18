@@ -2140,6 +2140,21 @@ func (c *Process) assembleProtocol() {
 	}
 }
 
+// SchemaFingerprint returns the structural hash of this process's
+// client-visible protocol, or 0 when the process has no protocol installed —
+// which is what a Process built through universe.New without the facade has,
+// and is why 0 is reserved rather than being a possible hash value.
+//
+// Reached through the c.protocol `any` seam for the same reason
+// assembleProtocol is: *mmokit.Protocol lives in the facade, which imports
+// this package.
+func (c *Process) SchemaFingerprint() uint32 {
+	if p, ok := c.protocol.(interface{ SchemaFingerprint() uint32 }); ok {
+		return p.SchemaFingerprint()
+	}
+	return 0
+}
+
 // isStandaloneGateway returns true when this process is a gateway without a
 // colocated coordinator — i.e. it dials a remote coordinator for topology.
 func (c *Process) isStandaloneGateway() bool {

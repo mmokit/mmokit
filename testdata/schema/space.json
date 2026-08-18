@@ -1,5 +1,7 @@
 {
   "game": "space",
+  "dimension": "2d",
+  "fingerprint": "b85844e7",
   "entities": [
     {
       "kind": 0,
