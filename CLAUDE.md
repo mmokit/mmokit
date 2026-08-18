@@ -64,7 +64,7 @@ Use the current process-level APIs:
 - `mmokit.AddState[T](process, factory)` and `mmokit.State[T](stage)` for typed per-cell state
 - `mmokit.RegisterKind[Bundle](process, kind, name, ...)` for entity kinds
 - `process.OnPlayerJoin(...)` and `stage.SpawnPlayer(...)` for player creation
-- `mmokit.HandleClient`, `mmokit.RegisterEvent`, and `mmokit.RegisterOp` for typed wire messages
+- `mmokit.HandleClient`, `mmokit.RegisterEvent`, and `mmokit.RegisterOp` for typed wire messages — each takes the owning process first (a `*Process`, or a `*Stage` when a system registers from `Init()`); the registries are per-process, reachable as `Process.Wire()` / `Stage.Wire()`
 - `stage.Spawn(...)` for ordinary entity construction
 
 Do not revive removed APIs found in historical documents, including:
@@ -92,7 +92,7 @@ Do not revive removed APIs found in historical documents, including:
 
 - Client channel `0x00` carries typed events/input; channel `0x01` carries typed operations. Both use the reflection codec.
 - Wire type IDs are `fnv32a(reflect.Type.String())`, which qualifies by package *name*, not import path. Renaming a registered type or its package is breaking; moving its package between directories is not.
-- Regenerate affected SDKs after changing entity bundles, replication tags, client input, events, broadcasts, or operations.
+- Regenerate affected SDKs after changing entity bundles, replication tags, client input, events, broadcasts, or operations. `just schema-check` byte-diffs all three examples' `--dump-schema` against `testdata/schema/` and is the gate that catches an unintended one; `just schema-golden` re-pins it after an intended change.
 - Clients remain topology-agnostic and receive absolute world coordinates.
 - Preserve cluster-clock timestamps, commit-tick authority handoff, and fresh destination snapshots.
 - Cell topology changes go through commit plans. Never update ownership maps as a shortcut.

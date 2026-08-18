@@ -258,15 +258,15 @@ Both mesh channels now run over TLS and authenticate peers with a shared cluster
 
 ### 6.4 P1 — quality and protocol
 
-#### CE-010 — Process isolation and iteration consistency · **Partial** · promoted from P2, gates the 2D/3D program
+#### CE-010 — Process isolation and iteration consistency · **Partial** · promoted from P2
 
 Escape hatches exist (`IncludeAll`, `Without` in `pkg/query/query.go`), but `ForEach1/2/3` in [`pkg/universe/queries.go:37-67`](../pkg/universe/queries.go) still build raw unfiltered filters (the facade re-exports them as forwarders from `queries.go`), and WASM systems both read and overwrite neighbour-owned Replica and Ghost components ([`internal/wasmctl/wasm_system.go:187`](../internal/wasmctl/wasm_system.go), `:208`).
 
-Process isolation is untouched: `var CellSize float32 = 8192.0` remains a mutable package global in [`pkg/coords/coords.go:8`](../pkg/coords/coords.go), and four package-global wire registries remain — [`handle_client.go:47`](../handle_client.go), [`handle_event.go:12`](../handle_event.go), [`handle_op.go:83`](../handle_op.go), [`broadcast.go:71`](../broadcast.go). Only two of the four have a `ResetXxxForTest` unwind helper, so the other two cannot be unwound between tests at all.
+**Process isolation is done**, in two halves scheduled as units 3 and 4 of [§6.10](#610-next-phase--prerequisites-and-the-safety-net). Part A deleted the mutable `coords.CellSize` global and converged ~75 read sites on a process-owned accessor; part B moved the four package-global wire registries onto a `WireRegistry` owned by `Process` and injected into every `Stage`, taking the five hook structs, the root `init()` and three `sync.Once` guards with them. The `ResetXxxForTest` helpers went too: a test that wants a clean registry builds a `Process`.
 
-A second cell-size source of truth already exists and can diverge: `(*Process).baseCellSize()` reads `Config.CellSize` and is used at a handful of sites, while far more sites read `coords.CellSize`. Two Processes in one binary where only one sets `Config.CellSize` give per-process-correct `baseCellSize()` and last-writer-wins `coords.CellSize`. Converging on the process-owned accessor is the bulk of this half.
+**It did not gate 3D**, and the claim that it did is corrected in [§7.2](#72-prerequisite-gates) — do not carry the old reason forward. What part B closed instead is a live correctness bug: `RegisterOp`'s duplicate path ends with `existing.Handler = handler` on what was a binary-global map, and service handlers close over their own `*Process`, so two Processes in one binary that both registered auth left the first dispatching into the second's service. `internal/facadetest` pins it.
 
-**This is the load-bearing prerequisite for 3D.** A per-process dimension profile *is* the process-owned immutable registry this item describes. Doing CE-010 first pre-pays a meaningful fraction of the 2D/3D work.
+**What remains open under this item is the iteration-consistency half only.**
 
 #### CE-009 — Protocol version and schema fingerprint · **Open** · hard prerequisite for 3D
 
@@ -274,7 +274,7 @@ Partly advanced by CE-005b Tier 2, which put a version byte on every UDP datagra
 
 **The version byte does not address this item's motivating failure, and cannot.** Type IDs are `fnv32a(reflect.Type.String())`, so a 2D `component.Position` and a 3D one hash identically — the [§7.3](#73-architecture) decision to keep *one* type set across both profiles guarantees it. The mismatch therefore lives inside the sealed body, which is byte-identical on both transports and unversioned on both. **A schema fingerprint, not a version byte, is what rejects a 2D client meeting a 3D server.**
 
-Collision auditing is worse than previously recorded. `RegisterEvent` and `RegisterOp` panic on duplicate type IDs, but `registerClientInputType` ([`handle_client.go:55-61`](../handle_client.go)) **silently overwrites**, and `RegisterBroadcastType` never computes a type ID at all. Two of four registries are unguarded.
+Collision auditing was closed by unit 1 of [§6.10](#610-next-phase--prerequisites-and-the-safety-net) (`8677252d`) and the registries moved in part B: all four now live on [`pkg/universe/wire_registry.go`](../pkg/universe/wire_registry.go), the client-input path panics on a collision instead of silently overwriting, and broadcasts claim their ID in the shared downstream namespace that clients actually dispatch through. Nothing here changes the paragraph above: a fingerprint, not a collision check, is what this item still owes.
 
 Without this, a 2D client connecting to a 3D server decodes valid bytes into the wrong shape instead of being rejected.
 
@@ -569,8 +569,8 @@ One correction of substance sits underneath this. **A version byte cannot detect
 | 1 | Registry and framing hardening: panic on duplicate client-input IDs, make broadcast collisions detectable at all, and reconcile the two transports' unknown-channel-byte fallback | CE-009 | 1 | low | — | **done** `8677252d` |
 | 2 | Extend the byte-level wire goldens: TS delta assertions first, then the fixed-offset frame codecs, nested struct / slice-of-struct, and a snapshot from real bindings | §7 phase 0 | 4 | med | 1 | **mostly done** `357bd61c`, `0fe980ce`, `90bb0a66` — see below |
 | 3 | CE-010 part A — cell geometry becomes injected: delete `coords.CellSize` and its setter, converge ~75 read sites on a process-owned accessor | CE-010 | 5 | med | — | **done** `8981d581`..`cb82506b` |
-| 4 | CE-010 part B — a `WireRegistry` owned by `Process`; the four registries, five hook structs and three `sync.Once` guards go with it | CE-010 | 6 | **high** | 2, 3 | **open** |
-| 5 | The dimension profile itself — `Config.Dimension` + an `EngineBindingSet` selected at construction | §7 phase 2 | 0.5 | low | 4 | **open** |
+| 4 | CE-010 part B — a `WireRegistry` owned by `Process`; the four registries, five hook structs and three `sync.Once` guards go with it | CE-010 | 6 | **high** | 2, 3 | **done** `7323818e`..`6c04ef90` |
+| 5 | The dimension profile itself — `Config.Dimension` + an `EngineBindingSet` selected at construction | §7 phase 2 | 0.5 | low | 4 | **done** `1171a4e8` |
 | 6 | CE-009 — structural schema fingerprint, carried at connection setup on both transports, with rejection semantics | CE-009 | 4 | med | 4 | **open** |
 
 Unit 1 is deliberately first and deliberately tiny: it is the only unit that changes client framing behaviour, and it must land before anything else adds a byte to a client frame.
@@ -617,6 +617,24 @@ None of these was visible while a single global kept every reader in agreement. 
 
 Deleting beat threading repeatedly: seven zero-caller exported functions were removed rather than given a cell-size parameter — `CellRelativePos`, `ViewerRelativePosWithCellSize`, `Normalize`, `RelativeOffset`, `Distance`, `WorldPos.ToFlat`, and the two facade wrappers.
 
+#### 6.10.5 What part B landed
+
+Five commits, each green and each byte-diffed against the unit-0 schema goldens: `7323818e` (the goldens themselves), `c0c75871`, `63e6683c`, `74ea20be`, `6c04ef90`. Unit 5 followed in `1171a4e8`.
+
+**The schema never moved.** Not at the flip either, which is the interesting result rather than a foregone one — step 4 was explicitly allowed to change bytes. It did not, because the earlier steps had already replaced every registration that only ran at package-init with one that runs against a `*Process`: `examples/4node-basic/services/echo`'s `init()` became `echo.RegisterTypedOps(process)`, called unconditionally from `main`, and the three `sync.Once` guards were deleted rather than ported.
+
+**The `sync.Once` comments were false, and deleting them was not optional.** All three claimed `RegisterEvent` panics on a duplicate; it returns early on one, which is exactly what makes registering from `System.Init()` safe. Harmless while a single registry existed — and an outright bug the moment a registration function takes a registry parameter, because a process-global `Once` means the second registry receives nothing. Two more in the examples (`examples/space/internal/game/event_messages.go`, echo's) went for the same reason.
+
+**Twelve of the thirteen hook callbacks were answers to questions `pkg/universe` can now ask itself.** What survives is not a hook struct but four closures on the registry — `FrameworkEncoders` — and it survives for one reason: `OperationError`, `PlayerEntityAssigned` and `ServerConfig` are declared in the facade, so their wire identity is `fnv32a("mmokit.OperationError")` and friends. Moving the declarations down to remove the indirection would rename all three on the wire.
+
+**The registration verbs take a `WireSource`, not a `*Process`.** A `*Process` satisfies it, so the "edits zero of the 20 `HandleClient`/`HandleAll` sites" argument holds unchanged. The widening exists for the `System.Init()` case §6.10.3 names as load-bearing: a System has a `Stage`, not a `Process`, and `s.Stage().Process()` is nil on a stage built without one.
+
+**Two acceptance tests, both verified non-vacuous** by temporarily pointing `Process.wire` back at a package variable and watching them fail: `TestWireRegistriesAreProcessScoped` and `TestTypedOpHandlersDoNotLeakAcrossProcesses`, the latter being §6.10.3's auth bug reduced to its mechanism.
+
+**Unit 5's one design decision:** `Dimension3D` is declared, selectable, and panics. A 2D fallback is not a soft failure — it produces a server encoding two coordinates while its operator believes it encodes three, and nothing downstream can detect that, for precisely the reason [§6.10.1](#6101-why-the-order-changed) gives about type IDs. `universe.New` resolves the profile eagerly so the panic names `Config.Dimension`.
+
+Unit 0 was not in the original table and is worth recording: `--dump-schema` had nothing pinning it. `just client-sdk` piped it straight into sdkgen, so a wire registration that appeared or vanished surfaced only as a diff in generated files nobody reads. `just schema-golden` / `just schema-check` now pin all three examples; every step of part B was diffed against them.
+
 ---
 
 ## 7. The 2D/3D and multi-genre program
@@ -637,7 +655,7 @@ Deleting beat threading repeatedly: seven zero-caller exported functions were re
 
 Two P1 items are hard prerequisites:
 
-- **CE-010** — a per-process dimension profile requires the injected cell geometry this item describes. `coords.CellSize` could not remain a mutable package global; part A deleted it.
+- **CE-010** — **closed for this purpose.** A per-process dimension profile required the injected cell geometry this item describes; `coords.CellSize` could not remain a mutable package global, and part A deleted it. The profile itself landed as unit 5 of [§6.10](#610-next-phase--prerequisites-and-the-safety-net) — `Config.Dimension` selecting a `system.EngineBindingSet` at construction, with `Dimension3D` declared, selectable, and panicking until the bindings exist.
 
   **Correction, verified against source.** This bullet used to also require "the process-owned immutable registries", and that half is **false**. The profile selects bindings, not types (see [§7.3](#73-architecture)), and the binding half of the schema is *already* process-scoped: `Protocol.Schema()` takes `Entities` from a `ReplicatorRegistry` built by `BuildReplicators(w, coord, …)`, which takes a `*Process`. `EngineBindings` has one call site, inside that function, and `viewerRelativePosBinding.snapshotFields()` returning `[]int{4,4}` is the entire dimension-varying wire surface. The four global wire registries hold message *type* lists — exactly what the profile never selects. **Part B is still worth doing, for the reasons in [§6.10](#610-next-phase--prerequisites-and-the-safety-net), but it does not gate 3D.**
 - **CE-009** — without a schema fingerprint, a 2D client meeting a 3D server decodes valid bytes into the wrong shape rather than being rejected. Note that a protocol *version* does not achieve this: one type set across both profiles means identical type IDs and identical hashes, so only a structural hash over field shapes separates them.

@@ -147,7 +147,11 @@ Use typed surfaces instead of ad-hoc frames:
 | Operator mutation | `pkg/cmdsys` command and route |
 | Cross-process service behavior | `pkg/service` kind plus MeshData routing |
 
+Every registration verb takes the owning process first — a `*Process`, or a `*Stage` where a system registers from `Init()`. The four registries they write to are one `universe.WireRegistry` owned by that `Process` and injected into each of its stages, reachable as `Process.Wire()` / `Stage.Wire()`. Registries are per-process, not per-binary: two processes in one binary have two, and registration stays open for the life of the process because `initSystems` also runs on remote cell assignment and on cell split.
+
 The `All` registration variants replay handlers onto cells created later by splits or migrations. Stage-scoped variants should only be used when a handler is intentionally local to one existing cell.
+
+`Config.Dimension` selects the process's spatial profile at construction. It chooses behavior — currently the engine-level replication bindings, via `system.EngineBindingSet` — and never chooses types. `Dimension2D` is the only implemented profile; `Dimension3D` is selectable and panics.
 
 ## Persistence and world content
 
