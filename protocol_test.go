@@ -11,15 +11,18 @@ type pTestOpRes struct{ Y int32 }
 // in ProtocolSchema.TypedOperations with correct kind, type IDs, names, and
 // reflect-codec field shapes for both request + response.
 func TestProtocolSchemaTypedOperations(t *testing.T) {
-	t.Cleanup(ResetTypedOpRegistryForTest)
-	ResetTypedOpRegistryForTest()
+	p := newTestProcess(t)
+	// Every Process in a binary still shares one registry, so a previous
+	// test's ops would otherwise be visible here.
+	p.Wire().ResetTypedOpsForTest()
+	t.Cleanup(p.Wire().ResetTypedOpsForTest)
 
-	RegisterOp[pTestOpReq, pTestOpRes](RouteGatewayLocal,
+	RegisterOp[pTestOpReq, pTestOpRes](p, RouteGatewayLocal,
 		func(_ *OpContext, req *pTestOpReq) (*pTestOpRes, error) {
 			return &pTestOpRes{Y: req.X}, nil
 		})
 
-	schema := NewProtocol("test").Schema()
+	schema := NewProtocol(p, "test").Schema()
 	if len(schema.Operations) != 1 {
 		t.Fatalf("TypedOperations: got %d, want 1 (entries=%+v)", len(schema.Operations), schema.Operations)
 	}
@@ -45,10 +48,13 @@ func TestProtocolSchemaTypedOperations(t *testing.T) {
 // section is omitted when no ops are registered. Important for zero-diff
 // schema dumps before any game has migrated.
 func TestProtocolSchemaTypedOperationsEmpty(t *testing.T) {
-	t.Cleanup(ResetTypedOpRegistryForTest)
-	ResetTypedOpRegistryForTest()
+	p := newTestProcess(t)
+	// Every Process in a binary still shares one registry, so a previous
+	// test's ops would otherwise be visible here.
+	p.Wire().ResetTypedOpsForTest()
+	t.Cleanup(p.Wire().ResetTypedOpsForTest)
 
-	schema := NewProtocol("test").Schema()
+	schema := NewProtocol(p, "test").Schema()
 	if len(schema.Operations) != 0 {
 		t.Errorf("TypedOperations should be empty, got %+v", schema.Operations)
 	}

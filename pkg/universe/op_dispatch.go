@@ -39,18 +39,18 @@ import (
 // The typed-op registry is the process's WireRegistry; a nil one (a fixture
 // with no Process behind it) has no registrations, so every inbound is
 // unknown.
-func DispatchTypedOpInbound(payload []byte, ctx *ops.OpContext, router CellOpRouter, lim pkgnet.WireLimits) []byte {
+func DispatchTypedOpInbound(wire *WireRegistry, payload []byte, ctx *ops.OpContext, router CellOpRouter, lim pkgnet.WireLimits) []byte {
 	typeID, requestID, body, err := DecodeTypedOpFrame(payload)
 	if err != nil {
 		return nil
 	}
 
-	entry, ok := globalWire.LookupTypedOp(typeID)
+	entry, ok := wire.LookupTypedOp(typeID)
 	if !ok {
 		// A sustained rate here is either an SDK/server version skew or
 		// someone walking the registry.
 		metrics.Ingress().RecordRejected(metrics.SurfaceClient, metrics.ReasonUnknownTypeID)
-		return encodeOpError(requestID, opErrorUnknownTypeID,
+		return encodeOpError(wire, requestID, opErrorUnknownTypeID,
 			fmt.Sprintf("unknown typed-op typeID %#x", typeID))
 	}
 	reqType := entry.RequestType
@@ -63,7 +63,7 @@ func DispatchTypedOpInbound(payload []byte, ctx *ops.OpContext, router CellOpRou
 		// via cell engine connMgr) or a synchronous OperationError frame
 		// when the cell isn't reachable on this process.
 		if router == nil {
-			return encodeOpError(requestID, opErrorHandlerFailed,
+			return encodeOpError(wire, requestID, opErrorHandlerFailed,
 				fmt.Sprintf("op %s requires cell routing; no router wired", reqType.String()))
 		}
 		// Copy body — the underlying buffer is owned by the caller
@@ -83,7 +83,7 @@ func DispatchTypedOpInbound(payload []byte, ctx *ops.OpContext, router CellOpRou
 		// Never call the handler on a body the decoder refused: reqPtr is only
 		// partially written, so the handler would see a request whose refused
 		// fields are indistinguishable from an intentional zero value.
-		return encodeOpError(requestID, opErrorDecodeFailed,
+		return encodeOpError(wire, requestID, opErrorDecodeFailed,
 			fmt.Sprintf("decode %s: %v", reqType.String(), err))
 	}
 
@@ -93,7 +93,7 @@ func DispatchTypedOpInbound(payload []byte, ctx *ops.OpContext, router CellOpRou
 	resPtr := results[0]
 	errVal := results[1]
 	if !errVal.IsNil() {
-		return encodeOpError(requestID, opErrorHandlerFailed,
+		return encodeOpError(wire, requestID, opErrorHandlerFailed,
 			errVal.Interface().(error).Error())
 	}
 	if resPtr.IsNil() {
@@ -104,7 +104,7 @@ func DispatchTypedOpInbound(payload []byte, ctx *ops.OpContext, router CellOpRou
 		// The handler succeeded but its response does not fit the wire. Answer
 		// with a typed error rather than dropping the frame — the client is
 		// blocked on this requestID either way.
-		return encodeOpError(requestID, opErrorHandlerFailed,
+		return encodeOpError(wire, requestID, opErrorHandlerFailed,
 			fmt.Sprintf("encode response: %v", err))
 	}
 	return EncodeTypedOpFrame(resTypeID, requestID, resBody)
@@ -125,8 +125,8 @@ const (
 // encoder so the framework type's encoder lives next to its definition (see
 // FrameworkEncoders). Returns nil when that encoder is unset — a fixture
 // without the mmokit import has no OperationError type to encode.
-func encodeOpError(requestID uint64, code uint32, message string) []byte {
-	enc := globalWire.FrameworkEncoders()
+func encodeOpError(wire *WireRegistry, requestID uint64, code uint32, message string) []byte {
+	enc := wire.FrameworkEncoders()
 	if enc.MakeOperationErrorBody == nil {
 		return nil
 	}

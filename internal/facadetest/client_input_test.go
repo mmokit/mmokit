@@ -68,10 +68,10 @@ func TestClientInputTypes_DeterministicOrder(t *testing.T) {
 	mmokit.HandleClient(p, func(player mmokit.Entity, msg *bbInput) {})
 	mmokit.HandleClient(p, func(player mmokit.Entity, msg *aaInput) {})
 
-	types := mmokit.ClientInputTypes()
+	types := p.Wire().ClientInputTypes()
 
-	// Find both in the slice; they may share the slice with other
-	// types from earlier tests (registry is package-global).
+	// Find both in the slice; they share it with the engine-default client
+	// inputs (Ping, ReplicationAck) that mmokit.New registers.
 	var aaIdx, bbIdx int = -1, -1
 	for i, tt := range types {
 		if tt == reflect.TypeFor[aaInput]() {

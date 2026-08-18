@@ -57,7 +57,7 @@ func TestHandleAllInternal_NoBroadcastRegistration(t *testing.T) {
 	})
 	mmokit.HandleAllInternal(p, func(target mmokit.Entity, msg *internalOnlyMsg) {})
 
-	for _, ty := range mmokit.BroadcastTypes() {
+	for _, ty := range p.Wire().BroadcastTypes() {
 		if ty == reflect.TypeFor[internalOnlyMsg]() {
 			t.Fatal("HandleAllInternal incorrectly registered internalOnlyMsg in broadcast registry")
 		}
@@ -79,16 +79,17 @@ func TestHandleAll_RegistersInBroadcastRegistry(t *testing.T) {
 	})
 	mmokit.HandleAll(p, func(target mmokit.Entity, msg *broadcastableMsg) {})
 
-	if !slices.Contains(mmokit.BroadcastTypes(), reflect.TypeFor[broadcastableMsg]()) {
+	if !slices.Contains(p.Wire().BroadcastTypes(), reflect.TypeFor[broadcastableMsg]()) {
 		t.Fatal("HandleAll did not register broadcastableMsg in broadcast registry")
 	}
 }
 
 func TestRegisterBroadcastType_Idempotent(t *testing.T) {
-	mmokit.RegisterBroadcastType(reflect.TypeFor[testBroadcastableMsg]())
-	mmokit.RegisterBroadcastType(reflect.TypeFor[testBroadcastableMsg]())
+	p := newFacadeProcess(t)
+	mmokit.RegisterBroadcastType(p, reflect.TypeFor[testBroadcastableMsg]())
+	mmokit.RegisterBroadcastType(p, reflect.TypeFor[testBroadcastableMsg]())
 
-	types := mmokit.BroadcastTypes()
+	types := p.Wire().BroadcastTypes()
 	count := 0
 	for _, ty := range types {
 		if ty == reflect.TypeFor[testBroadcastableMsg]() {

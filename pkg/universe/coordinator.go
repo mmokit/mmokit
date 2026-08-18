@@ -540,6 +540,12 @@ type Process struct {
 	// them. Copied by value into decodeState, never shared.
 	wireLimits net.WireLimits
 
+	// wire is this process's client-facing message registry: the types
+	// clients may send, the types the server may send back, and the typed-op
+	// bindings. Injected into every Stage this process creates, exactly as
+	// baseCellSize is. See WireRegistry.
+	wire *WireRegistry
+
 	// commitLog is a bounded in-memory ring of CommitEvents covering
 	// commit-plan steps, invariant violations, and host/session events.
 	// Initialized in New() with Config.CommitLogCapacity (default 1024).
@@ -880,6 +886,7 @@ func New(cfg Config) *Process {
 		c.ConnMgr.SetWireLimits(cfg.WireLimits)
 	}
 	c.invariantMode = cfg.InvariantMode
+	c.wire = globalWire
 	c.wireLimits = clientProfile(cfg.WireLimits)
 	c.strictNetIDIndex = cfg.StrictNetIDIndex
 	c.blinkDetectorTicks = cfg.BlinkDetectorTicks
@@ -2399,7 +2406,7 @@ func (c *Process) createNode(cell CellID, spatialBucketSize float32, owningHost 
 
 	events := make(chan net.PlayerEvent, 64)
 
-	base := NewStage(eng, cell, cfg.AoIRadius, nil)
+	base := NewStage(eng, cell, cfg.AoIRadius, nil, c.Wire())
 
 	// Wire the typed client-input dispatch path (channel 0x00 post
 	// Plan 1 Phase 5 unification; mmokit.HandleClient). All
@@ -2760,7 +2767,7 @@ func (c *Process) Start(parent ...context.Context) {
 		// Process.DispatchCellRoutedOp (engine.RunOnLoop on the player's
 		// authoritative cell).
 		c.cfg.OpRouter.SetTypedOpHandler(func(payload []byte, ctx *ops.OpContext) []byte {
-			return DispatchTypedOpInbound(payload, ctx, c, c.clientWireLimits())
+			return DispatchTypedOpInbound(c.Wire(), payload, ctx, c, c.clientWireLimits())
 		})
 		go c.cfg.OpRouter.Run(ctx)
 	}

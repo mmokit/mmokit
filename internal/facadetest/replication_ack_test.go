@@ -161,7 +161,7 @@ func TestDefaultReplicationConfig_LatchesAckModeFromTransportClass(t *testing.T)
 	udpConn := connMgr.AddTransport(&bestEffortInputTransport{}, "")
 	wsConn := connMgr.AddTransport(&fakeInputTransport{}, "") // no class -> conservative
 
-	cfg := mmokit.DefaultReplicationConfig(eng, spatial.NewHashGrid(100), nil)
+	cfg := mmokit.DefaultReplicationConfig(cell.Stage, eng, spatial.NewHashGrid(100), nil)
 	if cfg.AckModeFor == nil {
 		t.Fatal("DefaultReplicationConfig did not wire AckModeFor")
 	}

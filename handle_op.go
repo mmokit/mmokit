@@ -2,7 +2,6 @@ package mmokit
 
 import (
 	"reflect"
-	"sync"
 
 	pkguniverse "github.com/mmokit/mmokit/pkg/universe"
 )
@@ -23,18 +22,16 @@ const (
 	OpErrorDecodeFailed  uint32 = 3 // request body failed to decode via the reflection codec
 )
 
-var registerFrameworkOpsOnce sync.Once
-
-// registerFrameworkOps lazily registers framework-owned typed-op response
-// types so the dispatcher can encode them by typeID. Idempotent.
-func registerFrameworkOps() {
-	registerFrameworkOpsOnce.Do(func() {
-		RegisterEvent[OperationError]()
-	})
-}
-
-func init() {
-	registerFrameworkOps()
+// registerFrameworkOps registers framework-owned typed-op response types on
+// wire so the dispatcher can encode them by typeID.
+//
+// This used to be sync.Once-guarded "because RegisterEvent panics on a
+// duplicate". It does not — RegisterServerEvent returns early on a type
+// already in the set. The guard was load-bearing in the wrong direction once
+// registries became per-process: a process-global Once means the SECOND
+// registry never gets the type.
+func registerFrameworkOps(wire *WireRegistry) {
+	wire.RegisterServerEvent(reflect.TypeFor[OperationError]())
 }
 
 // RegisterOp registers a typed operation handler. The wire typeID is
@@ -52,7 +49,10 @@ func init() {
 // Response type is idempotent (last-writer-wins on the handler closure)
 // so games can call RegisterOp from a setup function that runs many
 // times across tests without juggling reset boilerplate. Mirrors
-// HandleClient's idempotent behavior.
+// HandleClient's idempotent behavior. Registries are per-Process, so that
+// last write can no longer land in a sibling Process's handler slot — which
+// it did, silently, for every service whose handlers close over their own
+// *Process.
 //
 // Panics on:
 //   - Re-registration of a type with a different Kind or different
@@ -60,26 +60,9 @@ func init() {
 //     change silently).
 //   - typeID collision between two distinct Request types (extremely
 //     unlikely at codebase scale; rename one type if it triggers).
-func RegisterOp[Req any, Res any](kind RouteKind, handler func(*OpContext, *Req) (*Res, error)) {
-	pkguniverse.GlobalWire().RegisterTypedOp(kind,
+func RegisterOp[Req any, Res any](src WireSource, kind RouteKind, handler func(*OpContext, *Req) (*Res, error)) {
+	src.Wire().RegisterTypedOp(kind,
 		reflect.TypeFor[Req](), reflect.TypeFor[Res](), handler)
-}
-
-// LookupTypedOp returns the registry entry for the given request typeID,
-// or (nil, false) if none.
-func LookupTypedOp(reqTypeID uint32) (*TypedOpEntry, bool) {
-	return pkguniverse.GlobalWire().LookupTypedOp(reqTypeID)
-}
-
-// RegisteredTypedOps returns all registered entries in deterministic
-// (request type name) order. Used by sdkgen and protocol-schema export.
-func RegisteredTypedOps() []*TypedOpEntry {
-	return pkguniverse.GlobalWire().TypedOps()
-}
-
-// ResetTypedOpRegistryForTest is exported for tests only.
-func ResetTypedOpRegistryForTest() {
-	pkguniverse.GlobalWire().ResetTypedOpsForTest()
 }
 
 // OpContextStage returns the *Stage on which a RoutePlayerCell typed-op

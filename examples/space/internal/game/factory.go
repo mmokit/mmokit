@@ -35,13 +35,13 @@ func NewGameWorldStateFactory(
 // GameSetup registers game-specific entity kinds, input handlers, the
 // player-join hook, and systems on the coordinator.
 func GameSetup(coord *mmokit.Process) {
-	RegisterServerEvents()
+	RegisterServerEvents(coord)
 	RegisterEntityKinds(coord)
 	RegisterInputs(coord)
 	// Typed-op handlers — RoutePlayerCell ops dispatched on the player's
 	// authoritative cell engine via Process.DispatchCellRoutedOp.
-	mmokit.RegisterOp(mmokit.RoutePlayerCell, HandleBankRequest)
-	mmokit.RegisterOp(mmokit.RoutePlayerCell, HandleRepairRequest)
+	mmokit.RegisterOp(coord, mmokit.RoutePlayerCell, HandleBankRequest)
+	mmokit.RegisterOp(coord, mmokit.RoutePlayerCell, HandleRepairRequest)
 	RegisterDamageVerb(coord)
 	RegisterMiningVerb(coord)
 	RegisterStatusVerb(coord)

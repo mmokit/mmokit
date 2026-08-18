@@ -33,7 +33,7 @@ func newVerbCell(t *testing.T, id string) *universe.Cell {
 	t.Helper()
 	log := logger.New()
 	eng := engine.New(engine.Config{TickRate: 20}, net.NewConnManager(), log)
-	stage := universe.NewStage(eng, universe.CellID{}, 1000, nil)
+	stage := universe.NewStage(eng, universe.CellID{}, 1000, nil, universe.GlobalWire())
 	stage.SetSpatialGrid(spatial.NewHashGrid(coords.DefaultCellSize / 10))
 	gl := engine.NewGameLoop(eng, nil, nil, engine.Hooks{})
 

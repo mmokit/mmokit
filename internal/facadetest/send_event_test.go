@@ -45,11 +45,6 @@ type mmokitSendEventMsg struct {
 //
 //	[0x00][typeID:u32 BE][bodyLen:u32 BE][body]
 func TestSendEvent_ThroughFacade(t *testing.T) {
-	mmokit.ResetServerEventRegistryForTest()
-	t.Cleanup(mmokit.ResetServerEventRegistryForTest)
-
-	mmokit.RegisterEvent[mmokitSendEventMsg]()
-
 	conn := &sendEventCaptureConn{sent: make(map[uint32][]byte)}
 	log := logger.New()
 	eng := engine.New(engine.DefaultConfig(), conn, log)
@@ -58,7 +53,10 @@ func TestSendEvent_ThroughFacade(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ParseCellID: %v", err)
 	}
-	stage := pkguniverse.NewStage(eng, cellID, 300, nil)
+	// The stage carries the registry, so it is both what the verb registers
+	// against and what the send path resolves against.
+	stage := pkguniverse.NewStage(eng, cellID, 300, nil, pkguniverse.NewWireRegistry())
+	mmokit.RegisterEvent[mmokitSendEventMsg](stage)
 
 	const connID uint32 = 42
 	msg := &mmokitSendEventMsg{A: 7, B: 9}

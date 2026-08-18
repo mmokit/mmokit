@@ -4,8 +4,6 @@ import (
 	"fmt"
 	"reflect"
 	"unicode"
-
-	pkguniverse "github.com/mmokit/mmokit/pkg/universe"
 )
 
 // BroadcastTypeSchema is a serializable description of a broadcast-eligible
@@ -47,15 +45,8 @@ type BroadcastFieldSchema struct {
 // HandleAll[T] (the broadcast-on-by-default registration verb).
 // HandleAllInternal[T] explicitly does not call this — that's how
 // server-internal types stay out of the broadcast registry. Idempotent.
-func RegisterBroadcastType(t reflect.Type) {
-	pkguniverse.GlobalWire().RegisterBroadcast(t)
-}
-
-// BroadcastTypes returns the registered broadcast-eligible types in
-// deterministic order (sorted by reflect.Type.String()). Used by sdkgen
-// to emit TS class declarations.
-func BroadcastTypes() []reflect.Type {
-	return pkguniverse.GlobalWire().BroadcastTypes()
+func RegisterBroadcastType(src WireSource, t reflect.Type) {
+	src.Wire().RegisterBroadcast(t)
 }
 
 // BroadcastTypeOf returns a serializable schema describing a broadcast-eligible

@@ -44,7 +44,7 @@ func newTestCell(cell pkguniverse.CellID) *pkguniverse.Cell {
 	eng := engine.New(platformCfg, connMgr, log)
 	events := make(chan net.PlayerEvent, 64)
 
-	base := pkguniverse.NewStage(eng, cell, cfg.AoIRadius, nil)
+	base := pkguniverse.NewStage(eng, cell, cfg.AoIRadius, nil, pkguniverse.GlobalWire())
 	base.SetSpatialGrid(spatial.NewHashGrid(coords.DefaultCellSize / 10))
 
 	// Collect system defs and realize entity kinds via a throwaway coordinator.

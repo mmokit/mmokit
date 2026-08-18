@@ -36,7 +36,7 @@ func newTestGameWorld() (*GameWorld, *net.ConnManager) {
 	cfg.AsteroidCount = 0 // skip spawning asteroids in tests
 	cfg.ShipShield = 200  // nonzero so the post-transfer ApplyEquipmentStats assertion is meaningful
 	playerDB := NewPlayerRepo(nil, persisttest.NewPlayerRepoMock(), gamepersisttest.NewPlayerStateRepoMock(), nil)
-	base := pkguniverse.NewStage(eng, pkguniverse.CellID{}, cfg.AoIRadius, nil)
+	base := pkguniverse.NewStage(eng, pkguniverse.CellID{}, cfg.AoIRadius, nil, pkguniverse.GlobalWire())
 	base.SetSpatialGrid(mmokit.NewHashGrid(1000))
 	// Realize entity kinds against the stage before NewGameWorld spawns
 	// initial cell content (asteroids/station) — those calls require the

@@ -46,11 +46,6 @@ type sendEventTestMsg struct {
 //
 // where body is the reflection-codec encoding of the struct.
 func TestStageSendEventTyped(t *testing.T) {
-	mmokit.ResetServerEventRegistryForTest()
-	t.Cleanup(mmokit.ResetServerEventRegistryForTest)
-
-	mmokit.RegisterEvent[sendEventTestMsg]()
-
 	conn := &sendEventCaptureConn{sent: make(map[uint32][]byte)}
 	log := logger.New()
 	eng := engine.New(engine.DefaultConfig(), conn, log)
@@ -59,7 +54,11 @@ func TestStageSendEventTyped(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ParseCellID: %v", err)
 	}
-	stage := pkguniverse.NewStage(eng, cellID, 300, nil)
+	// A registry of this fixture's own: the stage is the WireSource the verb
+	// registers against and the send path resolves against, so the two cannot
+	// drift, and no other test's registrations are visible here.
+	stage := pkguniverse.NewStage(eng, cellID, 300, nil, pkguniverse.NewWireRegistry())
+	mmokit.RegisterEvent[sendEventTestMsg](stage)
 
 	const connID uint32 = 42
 	msg := &sendEventTestMsg{A: 7, B: 9}
@@ -107,9 +106,6 @@ func TestStageSendEventTyped(t *testing.T) {
 // sending a type that was never registered via mmokit.RegisterEvent[T] is
 // a programmer error and must panic with an actionable message.
 func TestStageSendEventTyped_PanicsWhenUnregistered(t *testing.T) {
-	mmokit.ResetServerEventRegistryForTest()
-	t.Cleanup(mmokit.ResetServerEventRegistryForTest)
-
 	conn := &sendEventCaptureConn{sent: make(map[uint32][]byte)}
 	log := logger.New()
 	eng := engine.New(engine.DefaultConfig(), conn, log)
@@ -118,7 +114,8 @@ func TestStageSendEventTyped_PanicsWhenUnregistered(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ParseCellID: %v", err)
 	}
-	stage := pkguniverse.NewStage(eng, cellID, 300, nil)
+	// Empty registry: nothing is registered, which is the case under test.
+	stage := pkguniverse.NewStage(eng, cellID, 300, nil, pkguniverse.NewWireRegistry())
 
 	defer func() {
 		r := recover()

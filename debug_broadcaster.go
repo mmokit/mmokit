@@ -56,7 +56,7 @@ func (s *debugBroadcaster) Update(dt float32) {
 			// identical hash and the broadcaster would silently skip.
 			if _, hadFlags := s.sentHash[sess.ConnID]; hadFlags {
 				var empty DebugInfo
-				s.Stage().Engine().ConnMgr.SendReliable(sess.ConnID, BuildTypedEventFrame(&empty))
+				s.Stage().Engine().ConnMgr.SendReliable(sess.ConnID, BuildTypedEventFrame(s.Stage(), &empty))
 				delete(s.sentHash, sess.ConnID)
 			}
 			return
@@ -66,7 +66,7 @@ func (s *debugBroadcaster) Update(dt float32) {
 			return
 		}
 		msg := buildDebugInfo(cells, radius, sess.DebugFlags, s.Stage().CellSize())
-		s.Stage().Engine().ConnMgr.SendReliable(sess.ConnID, BuildTypedEventFrame(&msg))
+		s.Stage().Engine().ConnMgr.SendReliable(sess.ConnID, BuildTypedEventFrame(s.Stage(), &msg))
 		s.sentHash[sess.ConnID] = hash
 	})
 

@@ -29,9 +29,11 @@ import (
 //     to REGISTER Ping and ReplicationAck handlers against a Process that
 //     universe.New has just built.
 func init() {
-	registerEngineTypedEvents()
+	wire := pkguniverse.GlobalWire()
+	registerEngineTypedEvents(wire)
+	registerFrameworkOps(wire)
 
-	pkguniverse.GlobalWire().SetFrameworkEncoders(pkguniverse.FrameworkEncoders{
+	wire.SetFrameworkEncoders(pkguniverse.FrameworkEncoders{
 		OperationErrorTypeID: TypeIDOf(reflect.TypeFor[OperationError]()),
 		MakeOperationErrorBody: func(code uint32, message string) []byte {
 			body, err := pkguniverse.ReflectMarshal(&OperationError{Code: code, Message: message})
@@ -51,14 +53,14 @@ func init() {
 			return body
 		},
 		PlayerEntityAssigned: func(netID uint32, worldX, worldY float32) []byte {
-			return pkguniverse.BuildTypedEventFrameRaw(&PlayerEntityAssigned{
+			return pkguniverse.BuildTypedEventFrameRaw(wire, &PlayerEntityAssigned{
 				EntityNetID: netID,
 				WorldX:      worldX,
 				WorldY:      worldY,
 			})
 		},
 		ServerConfig: func(tickRate uint32) []byte {
-			return pkguniverse.BuildTypedEventFrameRaw(&ServerConfig{TickRate: tickRate})
+			return pkguniverse.BuildTypedEventFrameRaw(wire, &ServerConfig{TickRate: tickRate})
 		},
 	})
 

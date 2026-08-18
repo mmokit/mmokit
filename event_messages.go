@@ -1,6 +1,6 @@
 package mmokit
 
-import "sync"
+import "reflect"
 
 // Engine-level typed server→client event messages — registered via
 // RegisterEvent[T] and emitted with SendEvent. Channel 0x00 carries
@@ -121,19 +121,20 @@ type ServerConfig struct {
 	TickRate uint32
 }
 
-// registerEngineTypedEvents registers each engine-level typed event
-// exactly once, regardless of how many Protocol instances the process
-// creates. NewProtocol calls this on every invocation; the sync.Once
-// makes repeated calls safe (RegisterEvent panics on re-registration).
-func registerEngineTypedEvents() {
-	engineTypedEventsOnce.Do(func() {
-		RegisterEvent[Pong]()
-		RegisterEvent[DebugInfo]()
-		RegisterEvent[WorldDelta]()
-		RegisterEvent[PlayerEntityAssigned]()
-		RegisterEvent[CellChange]()
-		RegisterEvent[ServerConfig]()
-	})
+// registerEngineTypedEvents registers each engine-level typed event on wire.
+// Every game gets them for free.
+//
+// This was sync.Once-guarded on the stated grounds that "RegisterEvent panics
+// on re-registration". It does not — RegisterServerEvent returns early for a
+// type already in the set, which is the same property that makes registering
+// from System.Init() safe. The guard was harmless while one registry existed
+// and would be a bug now: a process-global Once means the second Process's
+// registry never gets Pong.
+func registerEngineTypedEvents(wire *WireRegistry) {
+	wire.RegisterServerEvent(reflect.TypeFor[Pong]())
+	wire.RegisterServerEvent(reflect.TypeFor[DebugInfo]())
+	wire.RegisterServerEvent(reflect.TypeFor[WorldDelta]())
+	wire.RegisterServerEvent(reflect.TypeFor[PlayerEntityAssigned]())
+	wire.RegisterServerEvent(reflect.TypeFor[CellChange]())
+	wire.RegisterServerEvent(reflect.TypeFor[ServerConfig]())
 }
-
-var engineTypedEventsOnce sync.Once

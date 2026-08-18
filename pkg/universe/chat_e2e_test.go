@@ -34,7 +34,7 @@ func TestChat_RegisterChatService_RegistersTypedEvents(t *testing.T) {
 	}
 
 	id := mmokit.TypeIDOf(reflect.TypeOf(chat.ChatMessageEvent{}))
-	if got, ok := mmokit.LookupServerEventType(id); !ok || got == nil {
+	if got, ok := p.Wire().ServerEventType(id); !ok || got == nil {
 		t.Errorf("chat ChatMessageEvent not registered after RegisterChatServiceWithMock")
 	}
 }
@@ -73,7 +73,7 @@ func TestChat_ServiceLifecycleEndToEnd(t *testing.T) {
 		reflect.TypeOf(chat.ChatRateLimitedEvent{}),
 	} {
 		id := mmokit.TypeIDOf(evType)
-		if _, ok := mmokit.LookupServerEventType(id); !ok {
+		if _, ok := p.Wire().ServerEventType(id); !ok {
 			t.Errorf("typed-event registry missing %s", evType.Name())
 		}
 	}

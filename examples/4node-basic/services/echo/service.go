@@ -14,7 +14,6 @@ import (
 	"embed"
 	"errors"
 	"fmt"
-	"sync"
 	"sync/atomic"
 	"time"
 
@@ -34,8 +33,6 @@ var migrationsFS embed.FS
 // Nil until Service.Init runs (typed-op response is OperationError until
 // then).
 var liveService atomic.Pointer[Service]
-
-var registerOnce sync.Once
 
 // Service is the runtime instance of the echo demo service.
 type Service struct {
@@ -63,16 +60,17 @@ var Kind = mmokit.ServiceKind{
 	MigrationsRoot: "migrations",
 }
 
-// init registers the typed-op handlers at package-load time so the
-// schema dump (--dump-schema) sees them before Service.Init runs. The
-// handler closures resolve the live *Service pointer at invocation time
-// via liveService.Load() — nil until Init populates it.
-func init() {
-	registerOnce.Do(registerTypedOps)
-}
-
-func registerTypedOps() {
-	mmokit.RegisterOp[EchoPingRequest, EchoPingResponse](mmokit.RouteGatewayLocal,
+// RegisterTypedOps registers the three echo typed-op handlers on p. The
+// handler closures resolve the live *Service pointer at invocation time via
+// liveService.Load() — nil until Service.Init populates it.
+//
+// Call this from main UNCONDITIONALLY, before Build, so --dump-schema sees the
+// three ops. It used to be a package init(), which is why it needed no caller
+// and no Process; gating the call on a role would silently drop three ops from
+// the emitted schema and break the SDK byte gate on a build that has the code
+// linked in.
+func RegisterTypedOps(p *mmokit.Process) {
+	mmokit.RegisterOp[EchoPingRequest, EchoPingResponse](p, mmokit.RouteGatewayLocal,
 		func(opCtx *mmokit.OpContext, req *EchoPingRequest) (*EchoPingResponse, error) {
 			s := liveService.Load()
 			if s == nil {
@@ -85,7 +83,7 @@ func registerTypedOps() {
 			}, nil
 		})
 
-	mmokit.RegisterOp[EchoPersistRequest, EchoPersistResponse](mmokit.RouteGatewayLocal,
+	mmokit.RegisterOp[EchoPersistRequest, EchoPersistResponse](p, mmokit.RouteGatewayLocal,
 		func(opCtx *mmokit.OpContext, req *EchoPersistRequest) (*EchoPersistResponse, error) {
 			s := liveService.Load()
 			if s == nil {
@@ -107,7 +105,7 @@ func registerTypedOps() {
 			return &EchoPersistResponse{OK: true, InstanceID: s.instanceID}, nil
 		})
 
-	mmokit.RegisterOp[EchoFetchRequest, EchoFetchResponse](mmokit.RouteGatewayLocal,
+	mmokit.RegisterOp[EchoFetchRequest, EchoFetchResponse](p, mmokit.RouteGatewayLocal,
 		func(opCtx *mmokit.OpContext, req *EchoFetchRequest) (*EchoFetchResponse, error) {
 			s := liveService.Load()
 			if s == nil {

@@ -21,7 +21,7 @@ import (
 // Process.OnStageInit that calls Handle on each Stage.
 func HandleAll[M any](world *pkguniverse.Process, fn func(target Entity, msg *M)) {
 	var zero M
-	RegisterBroadcastType(reflect.TypeOf(zero))
+	RegisterBroadcastType(world, reflect.TypeOf(zero))
 	world.OnStageInit(func(stage *pkguniverse.Stage) {
 		Handle(stage, fn)
 	})

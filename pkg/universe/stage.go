@@ -90,6 +90,12 @@ type Stage struct {
 	// CellSize(), the same way it overwrites clusterClock.
 	baseCellSize float32
 
+	// wire is the owning process's client-facing message registry, injected
+	// at construction alongside baseCellSize. Not defaulted: a Stage whose
+	// registry were silently empty would answer "type not registered" to
+	// every send, which is a panic three call frames away from the mistake.
+	wire *WireRegistry
+
 	// clusterClock stamps outbound border-frame entries with the
 	// authoritative producer's cluster-coherent wall time. Threaded from
 	// Process.ClusterClock at cell construction; tests that build a
@@ -233,8 +239,11 @@ func (s *Stage) TickCallbacks() []func(dt float32) {
 }
 
 // NewStage creates a Stage for use within a world factory.
-// Typically called by the Process; games that need manual setup can call this directly.
-func NewStage(eng *engine.Engine, cell CellID, aoiRadius float32, replRegistry *ReplicationRegistry) *Stage {
+// Typically called by the Process; games that need manual setup can call this
+// directly, in which case wire is the registry the stage's sends and inbound
+// dispatch resolve against — pass the owning Process's, or a fresh
+// NewWireRegistry for a fixture that registers its own types.
+func NewStage(eng *engine.Engine, cell CellID, aoiRadius float32, replRegistry *ReplicationRegistry, wire *WireRegistry) *Stage {
 	w := eng.ECS
 	if replRegistry == nil {
 		replRegistry = NewReplicationRegistry()
@@ -260,6 +269,7 @@ func NewStage(eng *engine.Engine, cell CellID, aoiRadius float32, replRegistry *
 		// default; Process.createNode overwrites it with the configured
 		// geometry immediately after construction.
 		baseCellSize:     coords.DefaultCellSize,
+		wire:             wire,
 		replicaNetIDs:    make(map[uint32]ecs.Entity),
 		highestSeenEpoch: make(map[uint32]uint32),
 		borderLastSeen:   make(map[MeshCellID]map[uint32]struct{}),
@@ -785,7 +795,7 @@ func (b *Stage) Hooks() engine.Hooks {
 // generic methods on non-generic types. This is the canonical send path
 // after Plan 1 Phase 7 retired the proto-envelope Stage.SendEvent.
 func SendEventTyped[T any](stage *Stage, connID uint32, msg *T) {
-	frame := BuildTypedEventFrameRaw(msg)
+	frame := BuildTypedEventFrameRaw(stage.Wire(), msg)
 	if frame == nil {
 		// Encoder guard rejected the payload; BuildTypedEventFrameRaw already
 		// counted and logged it. Sending a nil frame would close the read side
@@ -801,16 +811,17 @@ func SendEventTyped[T any](stage *Stage, connID uint32, msg *T) {
 // marketplace/bank notifications). T must be registered via
 // mmokit.RegisterEvent[T] at startup; panics otherwise.
 //
-// Same wire layout as SendEventTyped; the only difference is that the
-// caller is responsible for delivering the frame.
+// wire is the registry the type must be registered in — the owning Process's
+// or Stage's. Same wire layout as SendEventTyped; the only difference is that
+// the caller is responsible for delivering the frame.
 //
 // Returns nil — never panics — when the encoder length guards reject the
 // payload, e.g. an event carrying a player-supplied string over 65535 bytes.
 // Misregistration is a startup-time programmer error and still panics; an
 // oversized field is runtime data on the tick goroutine and must not be.
-func BuildTypedEventFrameRaw[T any](msg *T) []byte {
+func BuildTypedEventFrameRaw[T any](wire *WireRegistry, msg *T) []byte {
 	t := reflect.TypeFor[T]()
-	if !globalWire.ServerEventRegistered(t) {
+	if !wire.ServerEventRegistered(t) {
 		panic(fmt.Sprintf("BuildTypedEventFrameRaw: type %s not registered via mmokit.RegisterEvent[T]", t.String()))
 	}
 	id := TypeIDOf(t)

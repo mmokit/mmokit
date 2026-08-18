@@ -60,6 +60,7 @@ type OperationSchema struct {
 // Protocol collects the full client/server contract for a game.
 type Protocol struct {
 	game        string
+	wire        *WireRegistry
 	entityNames []entityNameEntry
 	replicators *system.ReplicatorRegistry
 }
@@ -72,9 +73,10 @@ type Protocol struct {
 // client-input via the engine-default HandleClient[Ping] handler
 // installed by universe.New (see EngineDefaultClientHandlers in
 // init.go); games never need to wire it themselves.
-func NewProtocol(game string) *Protocol {
-	registerEngineTypedEvents()
-	return &Protocol{game: game}
+func NewProtocol(p *Process, game string) *Protocol {
+	registerEngineTypedEvents(p.Wire())
+	registerFrameworkOps(p.Wire())
+	return &Protocol{game: game, wire: p.Wire()}
 }
 
 // SetReplicators wires in the ReplicatorRegistry for entity schema extraction.
@@ -109,13 +111,13 @@ func (p *Protocol) Schema() ProtocolSchema {
 	// Broadcast-eligible typed messages: every type registered via
 	// HandleAll[T] gets a schema entry here so sdkgen can emit a matching
 	// TS class + decoder. HandleAllInternal[T] types are excluded.
-	for _, t := range BroadcastTypes() {
+	for _, t := range p.wire.BroadcastTypes() {
 		ps.BroadcastTypes = append(ps.BroadcastTypes, BroadcastTypeOf(t))
 	}
 	// Client-input types: every type registered via HandleClient[T] gets a
 	// schema entry here so sdkgen can emit a matching TS class with an
 	// encode() instance method + a static typeID.
-	for _, t := range ClientInputTypes() {
+	for _, t := range p.wire.ClientInputTypes() {
 		ps.ClientInputTypes = append(ps.ClientInputTypes, ClientInputTypeOf(t))
 	}
 	// Typed server events: every type registered via RegisterEvent[T] gets a
@@ -123,14 +125,14 @@ func (p *Protocol) Schema() ProtocolSchema {
 	// decode(buf) method + a client.onXxx(handler) wrapper. Wire layout
 	// reuses BroadcastTypeOf (the reflection codec is identical to the
 	// broadcast/client-input path; only the dispatch direction differs).
-	for _, t := range RegisteredServerEventTypes() {
+	for _, t := range p.wire.ServerEventTypes() {
 		ps.ServerEventTypes = append(ps.ServerEventTypes, BroadcastTypeOf(t))
 	}
 	// Operations: every RegisterOp[Req, Res any] entry exposes its
 	// request + response types here. Sdkgen emits operations.ts (per-op
 	// Request/Response classes) + a Promise correlator on the generated
 	// client. Wire layout reuses BroadcastTypeOf for both halves.
-	for _, e := range RegisteredTypedOps() {
+	for _, e := range p.wire.TypedOps() {
 		reqType := BroadcastTypeOf(e.RequestType)
 		resType := BroadcastTypeOf(e.ResponseType)
 		ps.Operations = append(ps.Operations, OperationSchema{
@@ -156,7 +158,7 @@ func (p *Protocol) WriteSchema(w io.Writer) error {
 // AssembleFromProcess hydrates the Protocol with runtime-discovered
 // entity replicators from any cell's EntityKindDefs. Client-input types
 // (HandleClient[T]) and typed operations (RegisterOp[Req, Res]) are
-// harvested directly in Schema() via the global mmokit registry.
+// harvested in Schema() from the process's own WireRegistry.
 //
 // Called by the engine's --dump-schema path after Build() has populated
 // every registry but before Start has begun the game loop.

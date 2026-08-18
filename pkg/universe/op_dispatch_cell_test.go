@@ -66,12 +66,13 @@ type cellOpRes struct {
 // ones, but this test file is in package universe and avoids the mmokit import
 // cycle — so it defers to mmokit's when the external test package has linked
 // it in, and supplies a stub otherwise.
-func installFrameworkEncoderStubs(t *testing.T) {
+func installFrameworkEncoderStubs(t *testing.T, p *Process) {
 	t.Helper()
-	if globalWire.FrameworkEncoders().MakeOperationErrorBody != nil {
+	if real := globalWire.FrameworkEncoders(); real.MakeOperationErrorBody != nil {
+		p.Wire().SetFrameworkEncoders(real)
 		return
 	}
-	withFrameworkEncoders(t, FrameworkEncoders{
+	p.Wire().SetFrameworkEncoders(FrameworkEncoders{
 		OperationErrorTypeID:   0xDEADDEAD,
 		MakeOperationErrorBody: func(uint32, string) []byte { return []byte{0xEE} },
 	})
@@ -91,7 +92,7 @@ func newCellRoutedOpFixture(t *testing.T) (*Process, *captureConnSender) {
 	log := logger.New()
 	eng := engine.New(engine.Config{TickRate: 100}, conn, log)
 	cellID, _ := ParseCellID("cell_0_0")
-	stage := NewStage(eng, cellID, 300, nil)
+	stage := NewStage(eng, cellID, 300, nil, globalWire)
 	stage.coord = p
 	cell := NewCell(cellID.MeshID(), cellID)
 	cell.Stage = stage
@@ -148,8 +149,8 @@ func awaitFrame(t *testing.T, conn *captureConnSender, connID uint32) []byte {
 // cell's engine via SubmitLoopJob, the loop runs the handler, encodes the
 // response, and sends via the engine's ConnMgr.
 func TestProcessDispatchCellRoutedOp_HappyPath(t *testing.T) {
-	installFrameworkEncoderStubs(t)
 	p, conn := newCellRoutedOpFixture(t)
+	installFrameworkEncoderStubs(t, p)
 
 	body := mustMarshal(t, &cellOpReq{X: 21})
 	const requestID uint64 = 42
@@ -199,9 +200,8 @@ func TestProcessDispatchCellRoutedOp_HappyPath(t *testing.T) {
 // TestProcessDispatchCellRoutedOp_OfflineUser hits the synchronous
 // OperationError path when the user isn't in the active session map.
 func TestProcessDispatchCellRoutedOp_OfflineUser(t *testing.T) {
-	installFrameworkEncoderStubs(t)
-
 	p := minimalCoordWithCell(t, "host-a", "cell_0_0")
+	installFrameworkEncoderStubs(t, p)
 
 	body := mustMarshal(t, &cellOpReq{X: 1})
 	handler := func(*ops.OpContext, *cellOpReq) (*cellOpRes, error) {
@@ -258,10 +258,10 @@ func (r *opErrorRecorder) snapshot() ([]uint32, []string) {
 // — unlike installFrameworkEncoderStubs, which defers to mmokit's real encoder when
 // the external test package has linked it in. The hook fires on the cell loop
 // goroutine, hence the mutex.
-func installOpErrorRecorder(t *testing.T) *opErrorRecorder {
+func installOpErrorRecorder(t *testing.T, p *Process) *opErrorRecorder {
 	t.Helper()
 	rec := &opErrorRecorder{}
-	withFrameworkEncoders(t, FrameworkEncoders{
+	p.Wire().SetFrameworkEncoders(FrameworkEncoders{
 		OperationErrorTypeID: 0xDEADDEAD,
 		MakeOperationErrorBody: func(code uint32, message string) []byte {
 			rec.record(code, message)
@@ -281,8 +281,8 @@ func installOpErrorRecorder(t *testing.T) *opErrorRecorder {
 // hang the pre-CE-002 panic produced, minus the log line. The answer has to be
 // built and sent from inside the closure, and it is asserted here.
 func TestProcessDispatchCellRoutedOp_DecodeError(t *testing.T) {
-	rec := installOpErrorRecorder(t)
 	p, conn := newCellRoutedOpFixture(t)
+	rec := installOpErrorRecorder(t, p)
 
 	handler := func(*ops.OpContext, *cellOpStrReq) (*cellOpRes, error) {
 		t.Error("handler ran on a body the decoder refused; it would have seen " +
@@ -313,9 +313,9 @@ func TestProcessDispatchCellRoutedOp_DecodeError(t *testing.T) {
 	if err != nil {
 		t.Fatalf("DecodeTypedOpFrame: %v", err)
 	}
-	if gotTypeID != globalWire.FrameworkEncoders().OperationErrorTypeID {
+	if gotTypeID != p.Wire().FrameworkEncoders().OperationErrorTypeID {
 		t.Errorf("response typeID = %#x, want OperationError %#x",
-			gotTypeID, globalWire.FrameworkEncoders().OperationErrorTypeID)
+			gotTypeID, p.Wire().FrameworkEncoders().OperationErrorTypeID)
 	}
 	if gotReqID != requestID {
 		t.Errorf("response requestID = %d, want %d (the client correlates on it)",

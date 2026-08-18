@@ -17,7 +17,8 @@ import (
 // re-export that the chat package itself can no longer provide
 // without forming an import cycle.
 func TestRegisterChatServerEvents_TypeIDsRegistered(t *testing.T) {
-	mmokit.RegisterChatServerEvents()
+	p := mmokit.New(mmokit.Config{Mode: "all", CellsX: 1, CellsY: 1, Headless: true})
+	mmokit.RegisterChatServerEvents(p)
 
 	for _, sample := range []any{
 		(*chat.ChatMessageEvent)(nil),
@@ -41,7 +42,7 @@ func TestRegisterChatServerEvents_TypeIDsRegistered(t *testing.T) {
 			t.Errorf("typeID for %s is zero", elem.String())
 			continue
 		}
-		got, ok := mmokit.LookupServerEventType(id)
+		got, ok := p.Wire().ServerEventType(id)
 		if !ok {
 			t.Errorf("typeID %#x for %s not found in server-event registry", id, elem.String())
 			continue

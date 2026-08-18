@@ -22,10 +22,9 @@ type dispRes struct {
 }
 
 func TestDispatchTypedOp_GatewayLocal_HappyPath(t *testing.T) {
-	t.Cleanup(mmokit.ResetTypedOpRegistryForTest)
-	mmokit.ResetTypedOpRegistryForTest()
+	p := newOpTestProcess(t)
 
-	mmokit.RegisterOp[dispReq, dispRes](mmokit.RouteGatewayLocal,
+	mmokit.RegisterOp[dispReq, dispRes](p, mmokit.RouteGatewayLocal,
 		func(_ *mmokit.OpContext, req *dispReq) (*dispRes, error) {
 			return &dispRes{Y: req.X * 2}, nil
 		})
@@ -38,7 +37,7 @@ func TestDispatchTypedOp_GatewayLocal_HappyPath(t *testing.T) {
 
 	// Strip the channel byte to get the payload the dispatcher expects.
 	payload := frame[1:]
-	respFrame := pkguniverse.DispatchTypedOpInbound(payload, &ops.OpContext{ConnID: 7, Username: "alice"}, nil, pkgnet.WireLimits{})
+	respFrame := pkguniverse.DispatchTypedOpInbound(p.Wire(), payload, &ops.OpContext{ConnID: 7, Username: "alice"}, nil, pkgnet.WireLimits{})
 	if respFrame == nil {
 		t.Fatalf("DispatchTypedOpInbound: nil response frame")
 	}
@@ -66,12 +65,11 @@ func TestDispatchTypedOp_GatewayLocal_HappyPath(t *testing.T) {
 }
 
 func TestDispatchTypedOp_UnknownTypeID_ReturnsOperationError(t *testing.T) {
-	t.Cleanup(mmokit.ResetTypedOpRegistryForTest)
-	mmokit.ResetTypedOpRegistryForTest()
+	p := newOpTestProcess(t)
 
 	// Build a frame at a typeID nobody registered.
 	frame := pkguniverse.EncodeTypedOpFrame(0xDEADBEEF, 99, nil)
-	resp := pkguniverse.DispatchTypedOpInbound(frame[1:], &ops.OpContext{}, nil, pkgnet.WireLimits{})
+	resp := pkguniverse.DispatchTypedOpInbound(p.Wire(), frame[1:], &ops.OpContext{}, nil, pkgnet.WireLimits{})
 	if resp == nil {
 		t.Fatalf("expected OperationError frame for unknown typeID, got nil")
 	}
@@ -95,10 +93,9 @@ func TestDispatchTypedOp_UnknownTypeID_ReturnsOperationError(t *testing.T) {
 }
 
 func TestDispatchTypedOp_HandlerError_ReturnsOperationError(t *testing.T) {
-	t.Cleanup(mmokit.ResetTypedOpRegistryForTest)
-	mmokit.ResetTypedOpRegistryForTest()
+	p := newOpTestProcess(t)
 
-	mmokit.RegisterOp[dispReq, dispRes](mmokit.RouteGatewayLocal,
+	mmokit.RegisterOp[dispReq, dispRes](p, mmokit.RouteGatewayLocal,
 		func(_ *mmokit.OpContext, _ *dispReq) (*dispRes, error) {
 			return nil, errFakeHandler
 		})
@@ -106,7 +103,7 @@ func TestDispatchTypedOp_HandlerError_ReturnsOperationError(t *testing.T) {
 	reqBody := mustMarshal(t, &dispReq{X: 1})
 	reqTypeID := mmokit.TypeIDOf(reflect.TypeFor[dispReq]())
 	frame := pkguniverse.EncodeTypedOpFrame(reqTypeID, 5, reqBody)
-	resp := pkguniverse.DispatchTypedOpInbound(frame[1:], &ops.OpContext{}, nil, pkgnet.WireLimits{})
+	resp := pkguniverse.DispatchTypedOpInbound(p.Wire(), frame[1:], &ops.OpContext{}, nil, pkgnet.WireLimits{})
 	if resp == nil {
 		t.Fatalf("expected OperationError frame on handler error, got nil")
 	}
@@ -131,16 +128,15 @@ func TestDispatchTypedOp_RoutePlayerCell_NoRouter_ReturnsOperationError(t *testi
 	// OperationError{OpErrorHandlerFailed}. Used by tests that exercise
 	// the dispatcher in isolation; production wiring passes *Process as
 	// the router (see Process.DispatchCellRoutedOp).
-	t.Cleanup(mmokit.ResetTypedOpRegistryForTest)
-	mmokit.ResetTypedOpRegistryForTest()
+	p := newOpTestProcess(t)
 
-	mmokit.RegisterOp[dispReq, dispRes](mmokit.RoutePlayerCell,
+	mmokit.RegisterOp[dispReq, dispRes](p, mmokit.RoutePlayerCell,
 		func(_ *mmokit.OpContext, _ *dispReq) (*dispRes, error) { return &dispRes{}, nil })
 
 	reqBody := mustMarshal(t, &dispReq{X: 1})
 	reqTypeID := mmokit.TypeIDOf(reflect.TypeFor[dispReq]())
 	frame := pkguniverse.EncodeTypedOpFrame(reqTypeID, 7, reqBody)
-	resp := pkguniverse.DispatchTypedOpInbound(frame[1:], &ops.OpContext{}, nil, pkgnet.WireLimits{})
+	resp := pkguniverse.DispatchTypedOpInbound(p.Wire(), frame[1:], &ops.OpContext{}, nil, pkgnet.WireLimits{})
 	if resp == nil {
 		t.Fatalf("expected OperationError frame for cell-routed op, got nil")
 	}
@@ -160,7 +156,8 @@ func TestDispatchTypedOp_RoutePlayerCell_NoRouter_ReturnsOperationError(t *testi
 }
 
 func TestDispatchTypedOp_TruncatedFrame_ReturnsNil(t *testing.T) {
-	resp := pkguniverse.DispatchTypedOpInbound([]byte{0x01, 0x02}, &ops.OpContext{}, nil, pkgnet.WireLimits{})
+	p := newOpTestProcess(t)
+	resp := pkguniverse.DispatchTypedOpInbound(p.Wire(), []byte{0x01, 0x02}, &ops.OpContext{}, nil, pkgnet.WireLimits{})
 	if resp != nil {
 		t.Fatalf("truncated frame should drop silently (nil response), got %x", resp)
 	}
@@ -184,11 +181,10 @@ type dispStrReq struct {
 // exists to prevent: bounding the decoder is worthless if a refused body is
 // dispatched as a zero value.
 func TestDispatchTypedOpInbound_DecodeError(t *testing.T) {
-	t.Cleanup(mmokit.ResetTypedOpRegistryForTest)
-	mmokit.ResetTypedOpRegistryForTest()
+	p := newOpTestProcess(t)
 
 	handlerRan := false
-	mmokit.RegisterOp[dispStrReq, dispRes](mmokit.RouteGatewayLocal,
+	mmokit.RegisterOp[dispStrReq, dispRes](p, mmokit.RouteGatewayLocal,
 		func(_ *mmokit.OpContext, _ *dispStrReq) (*dispRes, error) {
 			handlerRan = true
 			return &dispRes{}, nil
@@ -200,7 +196,7 @@ func TestDispatchTypedOpInbound_DecodeError(t *testing.T) {
 	reqTypeID := mmokit.TypeIDOf(reflect.TypeFor[dispStrReq]())
 	frame := pkguniverse.EncodeTypedOpFrame(reqTypeID, 4242, []byte{64, 0})
 
-	resp := pkguniverse.DispatchTypedOpInbound(frame[1:],
+	resp := pkguniverse.DispatchTypedOpInbound(p.Wire(), frame[1:],
 		&ops.OpContext{ConnID: 3, Username: "alice"}, nil, pkgnet.WireLimits{})
 	if resp == nil {
 		t.Fatal("expected an OperationError frame for a refused body; nil means " +
@@ -247,11 +243,10 @@ func TestDispatchTypedOpInbound_DecodeError(t *testing.T) {
 // op body, so surplus bytes mean the sender and this process disagree about
 // what typeID names.
 func TestDispatchTypedOpInbound_RejectsTrailingBytes(t *testing.T) {
-	t.Cleanup(mmokit.ResetTypedOpRegistryForTest)
-	mmokit.ResetTypedOpRegistryForTest()
+	p := newOpTestProcess(t)
 
 	handlerRan := false
-	mmokit.RegisterOp[dispReq, dispRes](mmokit.RouteGatewayLocal,
+	mmokit.RegisterOp[dispReq, dispRes](p, mmokit.RouteGatewayLocal,
 		func(_ *mmokit.OpContext, _ *dispReq) (*dispRes, error) {
 			handlerRan = true
 			return &dispRes{}, nil
@@ -261,7 +256,7 @@ func TestDispatchTypedOpInbound_RejectsTrailingBytes(t *testing.T) {
 	reqTypeID := mmokit.TypeIDOf(reflect.TypeFor[dispReq]())
 	frame := pkguniverse.EncodeTypedOpFrame(reqTypeID, 777, body)
 
-	resp := pkguniverse.DispatchTypedOpInbound(frame[1:],
+	resp := pkguniverse.DispatchTypedOpInbound(p.Wire(), frame[1:],
 		&ops.OpContext{ConnID: 3, Username: "alice"}, nil, pkgnet.WireLimits{})
 	if resp == nil {
 		t.Fatal("expected an OperationError frame for a body with trailing bytes")
@@ -328,10 +323,9 @@ func (f *fakeCellOpRouter) DispatchCellRoutedOp(
 // The router's returned bytes pass straight through (so async-success vs
 // synchronous-error is the router's call to make).
 func TestDispatchTypedOp_RoutePlayerCell_ForwardsToRouter(t *testing.T) {
-	t.Cleanup(mmokit.ResetTypedOpRegistryForTest)
-	mmokit.ResetTypedOpRegistryForTest()
+	p := newOpTestProcess(t)
 
-	mmokit.RegisterOp[dispReq, dispRes](mmokit.RoutePlayerCell,
+	mmokit.RegisterOp[dispReq, dispRes](p, mmokit.RoutePlayerCell,
 		func(_ *mmokit.OpContext, req *dispReq) (*dispRes, error) {
 			return &dispRes{Y: req.X * 2}, nil
 		})
@@ -342,7 +336,7 @@ func TestDispatchTypedOp_RoutePlayerCell_ForwardsToRouter(t *testing.T) {
 	frame := pkguniverse.EncodeTypedOpFrame(reqTypeID, 99, reqBody)
 
 	router := &fakeCellOpRouter{} // returns nil → "scheduled async"
-	resp := pkguniverse.DispatchTypedOpInbound(frame[1:], &ops.OpContext{ConnID: 7, Username: "alice"}, router, pkgnet.WireLimits{})
+	resp := pkguniverse.DispatchTypedOpInbound(p.Wire(), frame[1:], &ops.OpContext{ConnID: 7, Username: "alice"}, router, pkgnet.WireLimits{})
 
 	if !router.called {
 		t.Fatal("router.DispatchCellRoutedOp was not invoked")
@@ -377,13 +371,9 @@ func TestDispatchTypedOp_RoutePlayerCell_ForwardsToRouter(t *testing.T) {
 // player has no active session on this Process — neither offline players
 // nor remote-host players can be served from this dispatcher's Process.
 func TestDispatchCellRoutedOp_NoActiveSession(t *testing.T) {
-	t.Cleanup(mmokit.ResetTypedOpRegistryForTest)
-	mmokit.ResetTypedOpRegistryForTest()
+	p := newOpTestProcess(t)
 
-	cfg := mmokit.Config{Headless: true, ConnManager: mmokit.NewConnManager()}
-	p := mmokit.New(cfg)
-
-	mmokit.RegisterOp[dispReq, dispRes](mmokit.RoutePlayerCell,
+	mmokit.RegisterOp[dispReq, dispRes](p, mmokit.RoutePlayerCell,
 		func(_ *mmokit.OpContext, _ *dispReq) (*dispRes, error) { return &dispRes{}, nil })
 
 	reqBody := mustMarshal(t, &dispReq{X: 1})
@@ -391,7 +381,7 @@ func TestDispatchCellRoutedOp_NoActiveSession(t *testing.T) {
 	frame := pkguniverse.EncodeTypedOpFrame(reqTypeID, 11, reqBody)
 
 	resp := pkguniverse.DispatchTypedOpInbound(
-		frame[1:],
+		p.Wire(), frame[1:],
 		&ops.OpContext{ConnID: 1, Username: "ghost"},
 		p, // *Process implements CellOpRouter
 		pkgnet.WireLimits{},

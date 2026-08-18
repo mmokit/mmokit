@@ -72,7 +72,7 @@ func newTestWorldBase(t *testing.T, cell CellID, cellSize ...float32) *Stage {
 	}
 	log := logger.New()
 	eng := engine.New(engine.DefaultConfig(), net.NewConnManager(), log)
-	stage := NewStage(eng, cell, 300, nil)
+	stage := NewStage(eng, cell, 300, nil, globalWire)
 	stage.baseCellSize = size
 	return stage
 }

@@ -26,10 +26,10 @@ func GlobalWire() *WireRegistry { return globalWire }
 
 // Wire returns the process's client-facing message registry.
 //
-// Still process-independent — see globalWire.
-func (c *Process) Wire() *WireRegistry { return globalWire }
+// The field is real now, but universe.New still assigns globalWire to it, so
+// every Process in a binary shares one — that is what keeps this step a
+// provable no-op. The flip is a one-line change here.
+func (c *Process) Wire() *WireRegistry { return c.wire }
 
 // Wire returns the registry of the process that owns this stage.
-//
-// Still process-independent — see globalWire.
-func (b *Stage) Wire() *WireRegistry { return globalWire }
+func (b *Stage) Wire() *WireRegistry { return b.wire }

@@ -1,8 +1,6 @@
 package game
 
 import (
-	"sync"
-
 	"github.com/mmokit/mmokit"
 	"github.com/mmokit/mmokit/examples/space/internal/marketplace"
 )
@@ -201,27 +199,26 @@ type BeamClip struct {
 }
 
 // RegisterServerEvents registers every typed server event the space game
-// emits. Called by GameSetup so both production (cmd/server/main.go) and
+// emits on p's registry. Called by GameSetup so both production (main.go) and
 // tests (per-test newTestGameWorld → GameSetup) get the registrations.
 //
-// sync.Once-guarded because mmokit.RegisterEvent[T] panics on duplicate
-// registration of the same Go type and tests build many GameWorlds in one
-// process.
-func RegisterServerEvents() {
-	registerServerEventsOnce.Do(func() {
-		mmokit.RegisterEvent[PlayerSpawned]()
-		mmokit.RegisterEvent[PlayerDied]()
-		mmokit.RegisterEvent[PlayerOwnState]()
-		mmokit.RegisterEvent[BankContents]()
-		mmokit.RegisterEvent[TransferResult]()
-		mmokit.RegisterEvent[EquipResult]()
-		mmokit.RegisterEvent[DockingState]()
-		mmokit.RegisterEvent[Docked]()
-		mmokit.RegisterEvent[MapData]()
-		mmokit.RegisterEvent[CurrencyUpdate]()
-		mmokit.RegisterEvent[BeamClip]()
-		mmokit.RegisterEvent[marketplace.MarketTradeNotification]()
-	})
+// The sync.Once this used to carry was justified as "mmokit.RegisterEvent[T]
+// panics on duplicate registration of the same Go type". It does not — it
+// returns early for a type already registered, which is what makes calling it
+// from System.Init() safe. With per-Process registries the guard would be an
+// actual bug: the second Process built by a test binary would get none of
+// these events.
+func RegisterServerEvents(p *mmokit.Process) {
+	mmokit.RegisterEvent[PlayerSpawned](p)
+	mmokit.RegisterEvent[PlayerDied](p)
+	mmokit.RegisterEvent[PlayerOwnState](p)
+	mmokit.RegisterEvent[BankContents](p)
+	mmokit.RegisterEvent[TransferResult](p)
+	mmokit.RegisterEvent[EquipResult](p)
+	mmokit.RegisterEvent[DockingState](p)
+	mmokit.RegisterEvent[Docked](p)
+	mmokit.RegisterEvent[MapData](p)
+	mmokit.RegisterEvent[CurrencyUpdate](p)
+	mmokit.RegisterEvent[BeamClip](p)
+	mmokit.RegisterEvent[marketplace.MarketTradeNotification](p)
 }
-
-var registerServerEventsOnce sync.Once

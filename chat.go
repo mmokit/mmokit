@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"reflect"
-	"sync"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
@@ -122,7 +121,7 @@ func RegisterChatService(p *pkguniverse.Process, opts ChatOpts) error {
 			if event == nil || p.ConnMgr == nil {
 				return
 			}
-			frame := buildTypedEventFrameAny(event)
+			frame := buildTypedEventFrameAny(p.Wire(), event)
 			if frame == nil {
 				return
 			}
@@ -142,7 +141,7 @@ func RegisterChatService(p *pkguniverse.Process, opts ChatOpts) error {
 
 	// Register every chat-emitted typed server event with the codec
 	// before Build() runs, so any later send path can resolve typeIDs.
-	RegisterChatServerEvents()
+	RegisterChatServerEvents(p)
 
 	// Register all 23 typed-op chat handlers. All RouteGatewayLocal —
 	// chat doesn't need cell-routed dispatch (no ECS access, no per-
@@ -151,7 +150,7 @@ func RegisterChatService(p *pkguniverse.Process, opts ChatOpts) error {
 	// represent gateway-internal presence transitions driven by the
 	// service.Bus subscription wired in chat.Service.Init. Exposing
 	// them on the wire would let clients forge presence.
-	registerChatTypedOps(getSvc)
+	registerChatTypedOps(p, getSvc)
 
 	// Auto-include "chat" in cfg.ServiceKinds when this process WILL
 	// host services (RoleService is in the mode), so that operators
@@ -207,9 +206,9 @@ func RegisterChatServiceWithMock(p *pkguniverse.Process, repo ChatRepository, au
 // here — those are driven by service.Bus subscriptions wired in
 // chat.Service.Init and must not be exposed on the wire (clients forging
 // presence would be a trust hole).
-func registerChatTypedOps(getSvc chat.ServiceProvider) {
+func registerChatTypedOps(p *pkguniverse.Process, getSvc chat.ServiceProvider) {
 	// --- Player ops ---
-	RegisterOp[chat.ChatSendRequest, chat.ChatSendResponse](RouteGatewayLocal,
+	RegisterOp[chat.ChatSendRequest, chat.ChatSendResponse](p, RouteGatewayLocal,
 		func(opCtx *OpContext, req *chat.ChatSendRequest) (*chat.ChatSendResponse, error) {
 			svc := getSvc()
 			if svc == nil {
@@ -217,7 +216,7 @@ func registerChatTypedOps(getSvc chat.ServiceProvider) {
 			}
 			return svc.HandleSend(opCtx, req)
 		})
-	RegisterOp[chat.ChatSendDMRequest, chat.ChatSendDMResponse](RouteGatewayLocal,
+	RegisterOp[chat.ChatSendDMRequest, chat.ChatSendDMResponse](p, RouteGatewayLocal,
 		func(opCtx *OpContext, req *chat.ChatSendDMRequest) (*chat.ChatSendDMResponse, error) {
 			svc := getSvc()
 			if svc == nil {
@@ -225,7 +224,7 @@ func registerChatTypedOps(getSvc chat.ServiceProvider) {
 			}
 			return svc.HandleSendDM(opCtx, req)
 		})
-	RegisterOp[chat.ChatJoinRequest, chat.ChatJoinResponse](RouteGatewayLocal,
+	RegisterOp[chat.ChatJoinRequest, chat.ChatJoinResponse](p, RouteGatewayLocal,
 		func(opCtx *OpContext, req *chat.ChatJoinRequest) (*chat.ChatJoinResponse, error) {
 			svc := getSvc()
 			if svc == nil {
@@ -233,7 +232,7 @@ func registerChatTypedOps(getSvc chat.ServiceProvider) {
 			}
 			return svc.HandleJoin(opCtx, req)
 		})
-	RegisterOp[chat.ChatLeaveRequest, chat.ChatLeaveResponse](RouteGatewayLocal,
+	RegisterOp[chat.ChatLeaveRequest, chat.ChatLeaveResponse](p, RouteGatewayLocal,
 		func(opCtx *OpContext, req *chat.ChatLeaveRequest) (*chat.ChatLeaveResponse, error) {
 			svc := getSvc()
 			if svc == nil {
@@ -241,7 +240,7 @@ func registerChatTypedOps(getSvc chat.ServiceProvider) {
 			}
 			return svc.HandleLeave(opCtx, req)
 		})
-	RegisterOp[chat.ChatCreateRequest, chat.ChatCreateResponse](RouteGatewayLocal,
+	RegisterOp[chat.ChatCreateRequest, chat.ChatCreateResponse](p, RouteGatewayLocal,
 		func(opCtx *OpContext, req *chat.ChatCreateRequest) (*chat.ChatCreateResponse, error) {
 			svc := getSvc()
 			if svc == nil {
@@ -249,7 +248,7 @@ func registerChatTypedOps(getSvc chat.ServiceProvider) {
 			}
 			return svc.HandleCreate(opCtx, req)
 		})
-	RegisterOp[chat.ChatListChannelsRequest, chat.ChatListChannelsResponse](RouteGatewayLocal,
+	RegisterOp[chat.ChatListChannelsRequest, chat.ChatListChannelsResponse](p, RouteGatewayLocal,
 		func(opCtx *OpContext, req *chat.ChatListChannelsRequest) (*chat.ChatListChannelsResponse, error) {
 			svc := getSvc()
 			if svc == nil {
@@ -257,7 +256,7 @@ func registerChatTypedOps(getSvc chat.ServiceProvider) {
 			}
 			return svc.HandleListChannels(opCtx, req)
 		})
-	RegisterOp[chat.ChatListMembersRequest, chat.ChatListMembersResponse](RouteGatewayLocal,
+	RegisterOp[chat.ChatListMembersRequest, chat.ChatListMembersResponse](p, RouteGatewayLocal,
 		func(opCtx *OpContext, req *chat.ChatListMembersRequest) (*chat.ChatListMembersResponse, error) {
 			svc := getSvc()
 			if svc == nil {
@@ -265,7 +264,7 @@ func registerChatTypedOps(getSvc chat.ServiceProvider) {
 			}
 			return svc.HandleListMembers(opCtx, req)
 		})
-	RegisterOp[chat.ChatRenameChannelRequest, chat.ChatRenameChannelResponse](RouteGatewayLocal,
+	RegisterOp[chat.ChatRenameChannelRequest, chat.ChatRenameChannelResponse](p, RouteGatewayLocal,
 		func(opCtx *OpContext, req *chat.ChatRenameChannelRequest) (*chat.ChatRenameChannelResponse, error) {
 			svc := getSvc()
 			if svc == nil {
@@ -273,7 +272,7 @@ func registerChatTypedOps(getSvc chat.ServiceProvider) {
 			}
 			return svc.HandleRenameChannel(opCtx, req)
 		})
-	RegisterOp[chat.ChatSetTopicRequest, chat.ChatSetTopicResponse](RouteGatewayLocal,
+	RegisterOp[chat.ChatSetTopicRequest, chat.ChatSetTopicResponse](p, RouteGatewayLocal,
 		func(opCtx *OpContext, req *chat.ChatSetTopicRequest) (*chat.ChatSetTopicResponse, error) {
 			svc := getSvc()
 			if svc == nil {
@@ -281,7 +280,7 @@ func registerChatTypedOps(getSvc chat.ServiceProvider) {
 			}
 			return svc.HandleSetTopic(opCtx, req)
 		})
-	RegisterOp[chat.ChatSetSlowModeRequest, chat.ChatSetSlowModeResponse](RouteGatewayLocal,
+	RegisterOp[chat.ChatSetSlowModeRequest, chat.ChatSetSlowModeResponse](p, RouteGatewayLocal,
 		func(opCtx *OpContext, req *chat.ChatSetSlowModeRequest) (*chat.ChatSetSlowModeResponse, error) {
 			svc := getSvc()
 			if svc == nil {
@@ -291,7 +290,7 @@ func registerChatTypedOps(getSvc chat.ServiceProvider) {
 		})
 
 	// --- Membership-mutation ops ---
-	RegisterOp[chat.ChatAddMemberRequest, chat.ChatAddMemberResponse](RouteGatewayLocal,
+	RegisterOp[chat.ChatAddMemberRequest, chat.ChatAddMemberResponse](p, RouteGatewayLocal,
 		func(opCtx *OpContext, req *chat.ChatAddMemberRequest) (*chat.ChatAddMemberResponse, error) {
 			svc := getSvc()
 			if svc == nil {
@@ -299,7 +298,7 @@ func registerChatTypedOps(getSvc chat.ServiceProvider) {
 			}
 			return svc.HandleAddMember(opCtx, req)
 		})
-	RegisterOp[chat.ChatRemoveMemberRequest, chat.ChatRemoveMemberResponse](RouteGatewayLocal,
+	RegisterOp[chat.ChatRemoveMemberRequest, chat.ChatRemoveMemberResponse](p, RouteGatewayLocal,
 		func(opCtx *OpContext, req *chat.ChatRemoveMemberRequest) (*chat.ChatRemoveMemberResponse, error) {
 			svc := getSvc()
 			if svc == nil {
@@ -307,7 +306,7 @@ func registerChatTypedOps(getSvc chat.ServiceProvider) {
 			}
 			return svc.HandleRemoveMember(opCtx, req)
 		})
-	RegisterOp[chat.ChatBulkSetMembersRequest, chat.ChatBulkSetMembersResponse](RouteGatewayLocal,
+	RegisterOp[chat.ChatBulkSetMembersRequest, chat.ChatBulkSetMembersResponse](p, RouteGatewayLocal,
 		func(opCtx *OpContext, req *chat.ChatBulkSetMembersRequest) (*chat.ChatBulkSetMembersResponse, error) {
 			svc := getSvc()
 			if svc == nil {
@@ -315,7 +314,7 @@ func registerChatTypedOps(getSvc chat.ServiceProvider) {
 			}
 			return svc.HandleBulkSetMembers(opCtx, req)
 		})
-	RegisterOp[chat.ChatRegisterChannelRequest, chat.ChatRegisterChannelResponse](RouteGatewayLocal,
+	RegisterOp[chat.ChatRegisterChannelRequest, chat.ChatRegisterChannelResponse](p, RouteGatewayLocal,
 		func(opCtx *OpContext, req *chat.ChatRegisterChannelRequest) (*chat.ChatRegisterChannelResponse, error) {
 			svc := getSvc()
 			if svc == nil {
@@ -323,7 +322,7 @@ func registerChatTypedOps(getSvc chat.ServiceProvider) {
 			}
 			return svc.HandleRegisterChannel(opCtx, req)
 		})
-	RegisterOp[chat.ChatUnregisterChannelRequest, chat.ChatUnregisterChannelResponse](RouteGatewayLocal,
+	RegisterOp[chat.ChatUnregisterChannelRequest, chat.ChatUnregisterChannelResponse](p, RouteGatewayLocal,
 		func(opCtx *OpContext, req *chat.ChatUnregisterChannelRequest) (*chat.ChatUnregisterChannelResponse, error) {
 			svc := getSvc()
 			if svc == nil {
@@ -331,7 +330,7 @@ func registerChatTypedOps(getSvc chat.ServiceProvider) {
 			}
 			return svc.HandleUnregisterChannel(opCtx, req)
 		})
-	RegisterOp[chat.ChatSetMemberRoleRequest, chat.ChatSetMemberRoleResponse](RouteGatewayLocal,
+	RegisterOp[chat.ChatSetMemberRoleRequest, chat.ChatSetMemberRoleResponse](p, RouteGatewayLocal,
 		func(opCtx *OpContext, req *chat.ChatSetMemberRoleRequest) (*chat.ChatSetMemberRoleResponse, error) {
 			svc := getSvc()
 			if svc == nil {
@@ -341,7 +340,7 @@ func registerChatTypedOps(getSvc chat.ServiceProvider) {
 		})
 
 	// --- Moderation ops ---
-	RegisterOp[chat.ChatDeleteMessageRequest, chat.ChatDeleteMessageResponse](RouteGatewayLocal,
+	RegisterOp[chat.ChatDeleteMessageRequest, chat.ChatDeleteMessageResponse](p, RouteGatewayLocal,
 		func(opCtx *OpContext, req *chat.ChatDeleteMessageRequest) (*chat.ChatDeleteMessageResponse, error) {
 			svc := getSvc()
 			if svc == nil {
@@ -349,7 +348,7 @@ func registerChatTypedOps(getSvc chat.ServiceProvider) {
 			}
 			return svc.HandleDeleteMessage(opCtx, req)
 		})
-	RegisterOp[chat.ChatMuteUserRequest, chat.ChatMuteUserResponse](RouteGatewayLocal,
+	RegisterOp[chat.ChatMuteUserRequest, chat.ChatMuteUserResponse](p, RouteGatewayLocal,
 		func(opCtx *OpContext, req *chat.ChatMuteUserRequest) (*chat.ChatMuteUserResponse, error) {
 			svc := getSvc()
 			if svc == nil {
@@ -357,7 +356,7 @@ func registerChatTypedOps(getSvc chat.ServiceProvider) {
 			}
 			return svc.HandleMuteUser(opCtx, req)
 		})
-	RegisterOp[chat.ChatUnmuteUserRequest, chat.ChatUnmuteUserResponse](RouteGatewayLocal,
+	RegisterOp[chat.ChatUnmuteUserRequest, chat.ChatUnmuteUserResponse](p, RouteGatewayLocal,
 		func(opCtx *OpContext, req *chat.ChatUnmuteUserRequest) (*chat.ChatUnmuteUserResponse, error) {
 			svc := getSvc()
 			if svc == nil {
@@ -365,7 +364,7 @@ func registerChatTypedOps(getSvc chat.ServiceProvider) {
 			}
 			return svc.HandleUnmuteUser(opCtx, req)
 		})
-	RegisterOp[chat.ChatKickRequest, chat.ChatKickResponse](RouteGatewayLocal,
+	RegisterOp[chat.ChatKickRequest, chat.ChatKickResponse](p, RouteGatewayLocal,
 		func(opCtx *OpContext, req *chat.ChatKickRequest) (*chat.ChatKickResponse, error) {
 			svc := getSvc()
 			if svc == nil {
@@ -373,7 +372,7 @@ func registerChatTypedOps(getSvc chat.ServiceProvider) {
 			}
 			return svc.HandleKickFromChannel(opCtx, req)
 		})
-	RegisterOp[chat.ChatBanRequest, chat.ChatBanResponse](RouteGatewayLocal,
+	RegisterOp[chat.ChatBanRequest, chat.ChatBanResponse](p, RouteGatewayLocal,
 		func(opCtx *OpContext, req *chat.ChatBanRequest) (*chat.ChatBanResponse, error) {
 			svc := getSvc()
 			if svc == nil {
@@ -381,7 +380,7 @@ func registerChatTypedOps(getSvc chat.ServiceProvider) {
 			}
 			return svc.HandleBanFromChannel(opCtx, req)
 		})
-	RegisterOp[chat.ChatUnbanRequest, chat.ChatUnbanResponse](RouteGatewayLocal,
+	RegisterOp[chat.ChatUnbanRequest, chat.ChatUnbanResponse](p, RouteGatewayLocal,
 		func(opCtx *OpContext, req *chat.ChatUnbanRequest) (*chat.ChatUnbanResponse, error) {
 			svc := getSvc()
 			if svc == nil {
@@ -389,7 +388,7 @@ func registerChatTypedOps(getSvc chat.ServiceProvider) {
 			}
 			return svc.HandleUnbanFromChannel(opCtx, req)
 		})
-	RegisterOp[chat.ChatBroadcastRequest, chat.ChatBroadcastResponse](RouteGatewayLocal,
+	RegisterOp[chat.ChatBroadcastRequest, chat.ChatBroadcastResponse](p, RouteGatewayLocal,
 		func(opCtx *OpContext, req *chat.ChatBroadcastRequest) (*chat.ChatBroadcastResponse, error) {
 			svc := getSvc()
 			if svc == nil {
@@ -398,8 +397,6 @@ func registerChatTypedOps(getSvc chat.ServiceProvider) {
 			return svc.HandleBroadcastSystem(opCtx, req)
 		})
 }
-
-var registerChatServerEventsOnce sync.Once
 
 // RegisterChatServerEvents registers every chat-emitted typed server
 // event with the mmokit codec so the wire layer can encode/decode by
@@ -412,23 +409,26 @@ var registerChatServerEventsOnce sync.Once
 // Lives in the mmokit facade rather than pkg/services/chat so the
 // chat package doesn't have to import mmokit (which would form an
 // import cycle once mmokit imports chat).
-func RegisterChatServerEvents() {
-	registerChatServerEventsOnce.Do(func() {
-		RegisterEvent[chat.ChatMessageEvent]()
-		RegisterEvent[chat.ChatDMEvent]()
-		RegisterEvent[chat.ChatMemberJoinedEvent]()
-		RegisterEvent[chat.ChatMemberLeftEvent]()
-		RegisterEvent[chat.ChatMessageDeletedEvent]()
-		RegisterEvent[chat.ChatMutedEvent]()
-		RegisterEvent[chat.ChatUnmutedEvent]()
-		RegisterEvent[chat.ChatKickedEvent]()
-		RegisterEvent[chat.ChatBannedEvent]()
-		RegisterEvent[chat.ChatChannelUpdatedEvent]()
-		RegisterEvent[chat.ChatChannelGoneEvent]()
-		RegisterEvent[chat.ChatMemberRoleChangedEvent]()
-		RegisterEvent[chat.ChatRateLimitedEvent]()
-		RegisterEvent[chat.ChatChannelsHydratedEvent]()
-	})
+//
+// The sync.Once this used to carry was justified by "RegisterEvent panics on
+// duplicate registration". It does not, and never did — RegisterEvent returns
+// early for a type already in the set. A process-global Once would now mean
+// the second Process's registry silently gets none of these.
+func RegisterChatServerEvents(p *pkguniverse.Process) {
+	RegisterEvent[chat.ChatMessageEvent](p)
+	RegisterEvent[chat.ChatDMEvent](p)
+	RegisterEvent[chat.ChatMemberJoinedEvent](p)
+	RegisterEvent[chat.ChatMemberLeftEvent](p)
+	RegisterEvent[chat.ChatMessageDeletedEvent](p)
+	RegisterEvent[chat.ChatMutedEvent](p)
+	RegisterEvent[chat.ChatUnmutedEvent](p)
+	RegisterEvent[chat.ChatKickedEvent](p)
+	RegisterEvent[chat.ChatBannedEvent](p)
+	RegisterEvent[chat.ChatChannelUpdatedEvent](p)
+	RegisterEvent[chat.ChatChannelGoneEvent](p)
+	RegisterEvent[chat.ChatMemberRoleChangedEvent](p)
+	RegisterEvent[chat.ChatRateLimitedEvent](p)
+	RegisterEvent[chat.ChatChannelsHydratedEvent](p)
 }
 
 // buildTypedEventFrameAny is the non-generic counterpart to
@@ -437,7 +437,7 @@ func RegisterChatServerEvents() {
 // the type was never registered via RegisterEvent[T] — chat's fanout
 // silently drops in that case rather than panicking on a mis-wired
 // service.
-func buildTypedEventFrameAny(event any) []byte {
+func buildTypedEventFrameAny(wire *WireRegistry, event any) []byte {
 	if event == nil {
 		return nil
 	}
@@ -445,7 +445,7 @@ func buildTypedEventFrameAny(event any) []byte {
 	if t.Kind() == reflect.Pointer {
 		t = t.Elem()
 	}
-	if _, ok := LookupServerEventType(TypeIDOf(t)); !ok {
+	if !wire.ServerEventRegistered(t) {
 		return nil
 	}
 	id := TypeIDOf(t)

@@ -30,10 +30,13 @@ type tOpRes struct {
 }
 
 func TestRegisterOp_LookupByTypeID(t *testing.T) {
-	t.Cleanup(ResetTypedOpRegistryForTest)
-	ResetTypedOpRegistryForTest()
+	p := newTestProcess(t)
+	// Every Process in a binary still shares one registry, so a previous
+	// test's ops would otherwise be visible here.
+	p.Wire().ResetTypedOpsForTest()
+	t.Cleanup(p.Wire().ResetTypedOpsForTest)
 
-	RegisterOp[tOpReq, tOpRes](RouteGatewayLocal,
+	RegisterOp[tOpReq, tOpRes](p, RouteGatewayLocal,
 		func(_ *OpContext, req *tOpReq) (*tOpRes, error) {
 			return &tOpRes{Y: req.X * 2}, nil
 		})
@@ -41,9 +44,9 @@ func TestRegisterOp_LookupByTypeID(t *testing.T) {
 	reqID := TypeIDOf(reflect.TypeFor[tOpReq]())
 	resID := TypeIDOf(reflect.TypeFor[tOpRes]())
 
-	entry, ok := LookupTypedOp(reqID)
+	entry, ok := p.Wire().LookupTypedOp(reqID)
 	if !ok {
-		t.Fatalf("LookupTypedOp(%#x): not found", reqID)
+		t.Fatalf("p.Wire().LookupTypedOp(%#x): not found", reqID)
 	}
 	if entry.Kind != RouteGatewayLocal {
 		t.Errorf("Kind: got %v, want RouteGatewayLocal", entry.Kind)
@@ -65,16 +68,19 @@ func TestRegisterOp_SameShapeIsIdempotent(t *testing.T) {
 	// HandleClient's idempotent contract so games can call RegisterOp from
 	// setup functions that fire many times in tests without juggling
 	// reset boilerplate.
-	t.Cleanup(ResetTypedOpRegistryForTest)
-	ResetTypedOpRegistryForTest()
+	p := newTestProcess(t)
+	// Every Process in a binary still shares one registry, so a previous
+	// test's ops would otherwise be visible here.
+	p.Wire().ResetTypedOpsForTest()
+	t.Cleanup(p.Wire().ResetTypedOpsForTest)
 
-	RegisterOp[tOpReq, tOpRes](RouteGatewayLocal,
+	RegisterOp[tOpReq, tOpRes](p, RouteGatewayLocal,
 		func(_ *OpContext, _ *tOpReq) (*tOpRes, error) { return &tOpRes{Y: 1}, nil })
 	// Re-register: must NOT panic, and the second handler should win.
-	RegisterOp[tOpReq, tOpRes](RouteGatewayLocal,
+	RegisterOp[tOpReq, tOpRes](p, RouteGatewayLocal,
 		func(_ *OpContext, _ *tOpReq) (*tOpRes, error) { return &tOpRes{Y: 99}, nil })
 
-	entry, ok := LookupTypedOp(TypeIDOf(reflect.TypeFor[tOpReq]()))
+	entry, ok := p.Wire().LookupTypedOp(TypeIDOf(reflect.TypeFor[tOpReq]()))
 	if !ok {
 		t.Fatal("entry missing after re-register")
 	}
@@ -98,10 +104,13 @@ func TestRegisterOp_DifferentShapePanics(t *testing.T) {
 	// Re-registering the same Request type with a different Response
 	// type (or a different Kind) is a wire-schema-changing programmer
 	// error — must panic.
-	t.Cleanup(ResetTypedOpRegistryForTest)
-	ResetTypedOpRegistryForTest()
+	p := newTestProcess(t)
+	// Every Process in a binary still shares one registry, so a previous
+	// test's ops would otherwise be visible here.
+	p.Wire().ResetTypedOpsForTest()
+	t.Cleanup(p.Wire().ResetTypedOpsForTest)
 
-	RegisterOp[tOpReq, tOpRes](RouteGatewayLocal,
+	RegisterOp[tOpReq, tOpRes](p, RouteGatewayLocal,
 		func(_ *OpContext, _ *tOpReq) (*tOpRes, error) { return nil, nil })
 
 	defer func() {
@@ -109,21 +118,22 @@ func TestRegisterOp_DifferentShapePanics(t *testing.T) {
 			t.Fatal("expected panic on RegisterOp with different Response type")
 		}
 	}()
-	RegisterOp[tOpReq, tOpRes2](RouteGatewayLocal,
+	RegisterOp[tOpReq, tOpRes2](p, RouteGatewayLocal,
 		func(_ *OpContext, _ *tOpReq) (*tOpRes2, error) { return nil, nil })
 }
 
 func TestOperationError_TypeIDStable(t *testing.T) {
-	// The package init() registers OperationError as a framework typed-op
-	// response. LookupServerEventType must resolve its typeID back to the
-	// concrete type — proves the init ran.
+	// NewProtocol registers OperationError as a framework typed-op response on
+	// the process's registry. Resolving its typeID back to the concrete type
+	// proves that bootstrap ran for this Process.
+	p := newTestProcess(t)
 	id := TypeIDOf(reflect.TypeFor[OperationError]())
-	gotType, ok := LookupServerEventType(id)
+	gotType, ok := p.Wire().ServerEventType(id)
 	if !ok {
-		t.Fatalf("LookupServerEventType(%#x): not registered (init didn't run?)", id)
+		t.Fatalf("p.Wire().ServerEventType(%#x): not registered (init didn't run?)", id)
 	}
 	wantType := reflect.TypeFor[OperationError]()
 	if gotType != wantType {
-		t.Errorf("LookupServerEventType(%#x) = %v, want %v", id, gotType, wantType)
+		t.Errorf("p.Wire().ServerEventType(%#x) = %v, want %v", id, gotType, wantType)
 	}
 }

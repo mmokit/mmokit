@@ -27,7 +27,7 @@ type FieldSystem struct {
 }
 
 func (s *FieldSystem) Init() {
-	mmokit.RegisterEvent[WaveStateMsg]()
+	mmokit.RegisterEvent[WaveStateMsg](s.Stage())
 
 	const count = 60
 	const span = 1200.0
@@ -46,5 +46,5 @@ func (s *FieldSystem) Update(dt float32) {
 		e.Pos.Y = s.Amplitude * float32(math.Sin(t+float64(e.Pos.X)*float64(s.Spread)))
 		msg.Positions = append(msg.Positions, WavePos{X: e.Pos.X, Y: e.Pos.Y + s.Baseline})
 	}
-	mmokit.SendEventToAll(s.Engine(), &msg)
+	mmokit.SendEventToAll(s.Stage(), &msg)
 }

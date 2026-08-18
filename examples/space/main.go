@@ -176,6 +176,12 @@ func main() {
 		coordCfg.CellsY = gameCfg.MeshCellsY
 	}
 
+	// Declared here, assigned after the config is complete: the marketplace
+	// notification closures below capture it to name the registry their typed
+	// event frames are keyed against, and the dynamic-cells topology callback
+	// captures it too. Neither runs before New returns.
+	var coordinator *mmokit.Process
+
 	if needsGameState {
 		playerRepo := store.Players()
 		marketRepo := gameStore.Market()
@@ -189,7 +195,8 @@ func main() {
 		playerSessions = mmokit.NewPlayerSessions()
 		opRouter = mmokit.NewOpRouter(connMgr, playerSessions)
 
-		// Marketplace service
+		// Marketplace service. Its two notification closures build typed-event
+		// frames, which name a registry, so they capture `coordinator`.
 		marketCfg := mmokit.OrderBookConfig{
 			TaxPct:      gameCfg.MarketTaxPct,
 			OrderExpiry: int64(gameCfg.MarketOrderExpiry * 3600),
@@ -232,7 +239,7 @@ func main() {
 							currencies = append(currencies, game.CurrencyBalance{CurrencyID: curID, Balance: bal})
 						}
 					}
-					connMgr.SendReliable(connID, mmokit.BuildTypedEventFrame(&game.BankContents{
+					connMgr.SendReliable(connID, mmokit.BuildTypedEventFrame(coordinator, &game.BankContents{
 						Items:        items,
 						TotalMass:    pdata.BankTotalMass(),
 						MaxMass:      gameCfg.BankMaxMass,
@@ -252,20 +259,18 @@ func main() {
 				if connID == 0 {
 					return
 				}
-				connMgr.SendReliable(connID, mmokit.BuildTypedEventFrame(msg))
+				connMgr.SendReliable(connID, mmokit.BuildTypedEventFrame(coordinator, msg))
 			},
 		)
 		if err := marketSvc.LoadAll(context.Background()); err != nil {
 			log.Fatalf("failed to load marketplace data: %v", err)
 		}
-		marketplace.RegisterHandlers(marketSvc, 1)
 	}
 
 	// Wire dynamic-cells topology-change broadcast before constructing the
 	// coordinator so the callback pointer is set before splits/merges can
 	// fire. The callback captures `coordinator` by closure and nil-checks
 	// in case something triggers it before New returns.
-	var coordinator *mmokit.Process
 	if coordCfg.DynamicPartitioning == nil {
 		coordCfg.DynamicPartitioning = mmokit.DefaultPartitionConfig()
 	}
@@ -277,6 +282,12 @@ func main() {
 	coordCfg.OpRouter = opRouter
 
 	coordinator = mmokit.New(coordCfg)
+
+	// After New, not before: the five marketplace ops register on the
+	// process's own typed-op registry, which does not exist until now.
+	if marketSvc != nil {
+		marketplace.RegisterHandlers(coordinator, marketSvc, 1)
+	}
 
 	// Game admin commands register on every process that has a console
 	// (coordinator, host, node) so operators can dispatch from any pane.

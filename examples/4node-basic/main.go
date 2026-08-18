@@ -75,6 +75,11 @@ func main() {
 	if err := process.RegisterService(echo.Kind); err != nil {
 		log.Fatalf("4node-basic: register echo service: %v", err)
 	}
+	// Unconditional, and deliberately not gated on RoleService: the typed-op
+	// registry is what --dump-schema emits and what the generated SDKs are
+	// byte-compared against, so a process that does not host echo still has to
+	// declare echo's three ops.
+	echo.RegisterTypedOps(process)
 
 	process.AddSystem(mmokit.NewClickToMoveSystem())
 	process.AddSystem(mmokit.NewPhysicsSystem())

@@ -47,10 +47,3 @@ func HandleClient[M any](world *pkguniverse.Process, fn func(player Entity, msg 
 func ClientInputTypeOf(t reflect.Type) ClientInputTypeSchema {
 	return BroadcastTypeOf(t)
 }
-
-// ClientInputTypes returns the registered client-input types in
-// deterministic order (sorted by reflect.Type.String()). Used by sdkgen
-// to emit TS class declarations for client-bound message types.
-func ClientInputTypes() []reflect.Type {
-	return pkguniverse.GlobalWire().ClientInputTypes()
-}

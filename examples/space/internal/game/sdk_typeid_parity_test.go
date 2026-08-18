@@ -89,12 +89,13 @@ func TestSDKTypeIDsMatchGoTypeNames(t *testing.T) {
 // not know is not by itself an error.
 func TestSDKServerEventsAreRegistered(t *testing.T) {
 	// Registration is explicit rather than init-time: RegisterServerEvents is
-	// what main.go calls during setup. It is sync.Once-guarded, so calling it
-	// here is safe alongside the package's other tests.
-	RegisterServerEvents()
+	// what main.go calls during setup. It is idempotent per registry, so
+	// calling it here is safe alongside the package's other tests.
+	p := mmokit.New(mmokit.Config{CellsX: 1, CellsY: 1, TickRate: 20, Headless: true})
+	RegisterServerEvents(p)
 
 	registered := map[string]bool{}
-	for _, ty := range mmokit.RegisteredServerEventTypes() {
+	for _, ty := range p.Wire().ServerEventTypes() {
 		registered[ty.String()] = true
 	}
 	if len(registered) == 0 {

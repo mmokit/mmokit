@@ -33,3 +33,15 @@ const (
 // TypedOpEntry is the registry record for one typed-op binding, created by
 // RegisterOp[Req, Res] and looked up by request typeID by the dispatcher.
 type TypedOpEntry = pkguniverse.TypedOpEntry
+
+// WireRegistry is a process's client-facing message registry: the types
+// clients may send, the types the server may send back, and the typed-op
+// bindings. Reach one with Process.Wire() or Stage.Wire().
+type WireRegistry = pkguniverse.WireRegistry
+
+// WireSource is anything that can name the registry a frame belongs to — a
+// *Process or a *Stage. Frame builders take one rather than a *Process so a
+// caller holding either can pass what it has.
+type WireSource interface {
+	Wire() *WireRegistry
+}

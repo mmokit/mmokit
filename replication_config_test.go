@@ -17,7 +17,7 @@ func TestDefaultReplicationConfigReadsSessionStreamGeneration(t *testing.T) {
 		t.Fatal("player session was not registered")
 	}
 
-	cfg := DefaultReplicationConfig(eng, spatial.NewHashGrid(100), nil)
+	cfg := DefaultReplicationConfig(newTestProcess(t), eng, spatial.NewHashGrid(100), nil)
 	if cfg.StreamGeneration == nil {
 		t.Fatal("default replication config has no stream-generation callback")
 	}

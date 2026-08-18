@@ -41,7 +41,7 @@ func newTestCoordWithStage(t *testing.T, cellID, hostID string) *Process {
 	}
 	log := logger.New()
 	eng := engine.New(engine.DefaultConfig(), netpkg.NewConnManager(), log)
-	stage := NewStage(eng, parsed, 300, nil)
+	stage := NewStage(eng, parsed, 300, nil, globalWire)
 	stage.SetBridge(moveTestBridge{})
 
 	cell := NewCell(MeshCellID(cellID), parsed)
@@ -371,7 +371,7 @@ func TestComponentAccessors_ReturnsLivePointer(t *testing.T) {
 	log := logger.New()
 	eng := engine.New(engine.DefaultConfig(), netpkg.NewConnManager(), log)
 	parsed, _ := ParseCellID("0_0")
-	stage := NewStage(eng, parsed, 300, nil)
+	stage := NewStage(eng, parsed, 300, nil, globalWire)
 	w := stage.ECSWorld()
 
 	// Build a kind def with Position as a Required component via the same

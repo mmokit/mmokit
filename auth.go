@@ -112,7 +112,7 @@ func RegisterAuthService(p *universe.Process, opts AuthOpts) error {
 	// auth ops never need cell-routed dispatch (no ECS access, no per-player
 	// cell affinity). The handlers wrap the live Service.Handle* methods and
 	// publish bus events on success.
-	RegisterOp[auth.AuthLoginRequest, auth.AuthLoginResponse](RouteGatewayLocal,
+	RegisterOp[auth.AuthLoginRequest, auth.AuthLoginResponse](p, RouteGatewayLocal,
 		func(opCtx *OpContext, req *auth.AuthLoginRequest) (*auth.AuthLoginResponse, error) {
 			if liveService == nil {
 				return nil, errAuthServiceNotReady
@@ -162,7 +162,7 @@ func RegisterAuthService(p *universe.Process, opts AuthOpts) error {
 			}
 			return resp, nil
 		})
-	RegisterOp[auth.AuthRegisterRequest, auth.AuthRegisterResponse](RouteGatewayLocal,
+	RegisterOp[auth.AuthRegisterRequest, auth.AuthRegisterResponse](p, RouteGatewayLocal,
 		func(opCtx *OpContext, req *auth.AuthRegisterRequest) (*auth.AuthRegisterResponse, error) {
 			if liveService == nil {
 				return nil, errAuthServiceNotReady
@@ -202,7 +202,7 @@ func RegisterAuthService(p *universe.Process, opts AuthOpts) error {
 			}
 			return resp, nil
 		})
-	RegisterOp[auth.AuthValidateTokenRequest, auth.AuthValidateTokenResponse](RouteGatewayLocal,
+	RegisterOp[auth.AuthValidateTokenRequest, auth.AuthValidateTokenResponse](p, RouteGatewayLocal,
 		func(opCtx *OpContext, req *auth.AuthValidateTokenRequest) (*auth.AuthValidateTokenResponse, error) {
 			if liveService == nil {
 				return nil, errAuthServiceNotReady
@@ -234,7 +234,7 @@ func RegisterAuthService(p *universe.Process, opts AuthOpts) error {
 			}
 			return resp, nil
 		})
-	RegisterOp[auth.AuthLogoutRequest, auth.AuthLogoutResponse](RouteGatewayLocal,
+	RegisterOp[auth.AuthLogoutRequest, auth.AuthLogoutResponse](p, RouteGatewayLocal,
 		func(opCtx *OpContext, req *auth.AuthLogoutRequest) (*auth.AuthLogoutResponse, error) {
 			if liveService == nil {
 				return nil, errAuthServiceNotReady
@@ -265,7 +265,7 @@ func RegisterAuthService(p *universe.Process, opts AuthOpts) error {
 			}
 			return resp, nil
 		})
-	RegisterOp[auth.AuthChangePasswordRequest, auth.AuthChangePasswordResponse](RouteGatewayLocal,
+	RegisterOp[auth.AuthChangePasswordRequest, auth.AuthChangePasswordResponse](p, RouteGatewayLocal,
 		func(opCtx *OpContext, req *auth.AuthChangePasswordRequest) (*auth.AuthChangePasswordResponse, error) {
 			if liveService == nil {
 				return nil, errAuthServiceNotReady

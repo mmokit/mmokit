@@ -11,7 +11,8 @@ import (
 func TestMakeWorldDeltaFrameCarriesStreamEpochOutsideDeltaBody(t *testing.T) {
 	body := []byte{0x10, 0x20, 0x30}
 	const wantEpoch = uint32(41)
-	wire := makeWorldDeltaFrame(&system.ReplicationFrame{StreamEpoch: wantEpoch}, body)
+	p := newTestProcess(t)
+	wire := makeWorldDeltaFrame(p.Wire(), &system.ReplicationFrame{StreamEpoch: wantEpoch}, body)
 
 	if len(wire) < 13+len(body)+4 {
 		t.Fatalf("wire length = %d, want at least %d", len(wire), 13+len(body)+4)

@@ -382,7 +382,7 @@ func registerServiceBuiltins(reg *cmdsys.Registry, coord *Process) error {
 			// sentinel; "service-cli" tags any DB rows the handler writes
 			// so an operator can grep their own console activity later.
 			opCtx := &ops.OpContext{ConnID: 0, Username: "service-cli"}
-			respFrame := DispatchTypedOpInbound(frame[1:], opCtx, nil, coord.clientWireLimits())
+			respFrame := DispatchTypedOpInbound(coord.Wire(), frame[1:], opCtx, nil, coord.clientWireLimits())
 			if respFrame == nil {
 				return nil, fmt.Errorf("dispatcher returned nil frame (RoutePlayerCell async path?)")
 			}

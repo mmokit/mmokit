@@ -22,7 +22,7 @@ func newTestStage(t testing.TB) (*pkguniverse.Stage, *engine.Engine) {
 	log := logger.New()
 	cm := net.NewConnManager()
 	eng := engine.New(engine.Config{TickRate: 20}, cm, log)
-	stage := pkguniverse.NewStage(eng, pkguniverse.CellID{}, 1000, nil)
+	stage := pkguniverse.NewStage(eng, pkguniverse.CellID{}, 1000, nil, pkguniverse.NewWireRegistry())
 	stage.SetSpatialGrid(spatial.NewHashGrid(coords.DefaultCellSize / 10))
 	return stage, eng
 }
@@ -118,14 +118,18 @@ func newTwoCellLoopback(t *testing.T) (*pkguniverse.Stage, *pkguniverse.Stage, f
 	t.Helper()
 	log := logger.New()
 
+	// One registry for both stages: they stand in for two cells of a single
+	// process, and a process has one registry.
+	wire := pkguniverse.NewWireRegistry()
+
 	cmA := net.NewConnManager()
 	engA := engine.New(engine.Config{TickRate: 20}, cmA, log)
-	stageA := pkguniverse.NewStage(engA, pkguniverse.CellID{X: 0, Y: 0}, 1000, nil)
+	stageA := pkguniverse.NewStage(engA, pkguniverse.CellID{X: 0, Y: 0}, 1000, nil, wire)
 	stageA.SetSpatialGrid(spatial.NewHashGrid(coords.DefaultCellSize / 10))
 
 	cmB := net.NewConnManager()
 	engB := engine.New(engine.Config{TickRate: 20}, cmB, log)
-	stageB := pkguniverse.NewStage(engB, pkguniverse.CellID{X: 1, Y: 0}, 1000, nil)
+	stageB := pkguniverse.NewStage(engB, pkguniverse.CellID{X: 1, Y: 0}, 1000, nil, wire)
 	stageB.SetSpatialGrid(spatial.NewHashGrid(coords.DefaultCellSize / 10))
 
 	bridge := &loopbackBridge{

@@ -106,6 +106,10 @@ func minimalCoordWithCell(t *testing.T, hostID string, cellID MeshCellID) *Proce
 	t.Helper()
 	log := logger.New()
 	c := &Process{Log: log}
+	// New() would do this; a struct-literal Process has to. A nil registry
+	// reads as empty, so the dispatcher would answer every op "unknown typeID"
+	// and every error frame nil.
+	c.wire = NewWireRegistry()
 	c.Control = newControlPlane(log)
 	c.Control.process = c
 	c.Control.cellToHostMap = map[MeshCellID]string{cellID: hostID}

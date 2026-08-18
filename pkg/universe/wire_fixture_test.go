@@ -32,13 +32,3 @@ func bindClientInputTypeID(tb testing.TB, id uint32, typ reflect.Type) {
 		w.mu.Unlock()
 	})
 }
-
-// withFrameworkEncoders installs enc on the process registry for the duration
-// of the test. Fixtures use it to supply an OperationError encoder without
-// importing mmokit, which owns the type.
-func withFrameworkEncoders(tb testing.TB, enc FrameworkEncoders) {
-	tb.Helper()
-	prev := globalWire.FrameworkEncoders()
-	globalWire.SetFrameworkEncoders(enc)
-	tb.Cleanup(func() { globalWire.SetFrameworkEncoders(prev) })
-}

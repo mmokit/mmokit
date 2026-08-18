@@ -14,8 +14,8 @@ import (
 // are themselves mutex-protected so they tolerate concurrent calls from
 // any number of cells; the cell-routing constraint exists primarily so
 // future ops on this same kind can safely reach the cell's ECS state.
-func RegisterHandlers(svc *Settlement, stationID uint32) {
-	mmokit.RegisterOp[MarketBrowseRequest, MarketOrderBookResponse](mmokit.RoutePlayerCell,
+func RegisterHandlers(p *mmokit.Process, svc *Settlement, stationID uint32) {
+	mmokit.RegisterOp[MarketBrowseRequest, MarketOrderBookResponse](p, mmokit.RoutePlayerCell,
 		func(_ *mmokit.OpContext, req *MarketBrowseRequest) (*MarketOrderBookResponse, error) {
 			view := svc.Browse(stationID, req.ItemID)
 			resp := &MarketOrderBookResponse{ItemID: view.ItemID}
@@ -36,7 +36,7 @@ func RegisterHandlers(svc *Settlement, stationID uint32) {
 			return resp, nil
 		})
 
-	mmokit.RegisterOp[MarketCreateOrderRequest, MarketOrderResultResponse](mmokit.RoutePlayerCell,
+	mmokit.RegisterOp[MarketCreateOrderRequest, MarketOrderResultResponse](p, mmokit.RoutePlayerCell,
 		func(ctx *mmokit.OpContext, req *MarketCreateOrderRequest) (*MarketOrderResultResponse, error) {
 			var (
 				result *mmokit.PlaceResult
@@ -58,7 +58,7 @@ func RegisterHandlers(svc *Settlement, stationID uint32) {
 			}, nil
 		})
 
-	mmokit.RegisterOp[MarketCancelOrderRequest, MarketOrderResultResponse](mmokit.RoutePlayerCell,
+	mmokit.RegisterOp[MarketCancelOrderRequest, MarketOrderResultResponse](p, mmokit.RoutePlayerCell,
 		func(ctx *mmokit.OpContext, req *MarketCancelOrderRequest) (*MarketOrderResultResponse, error) {
 			if err := svc.CancelOrder(ctx.Username, req.OrderID); err != nil {
 				return nil, err
@@ -66,7 +66,7 @@ func RegisterHandlers(svc *Settlement, stationID uint32) {
 			return &MarketOrderResultResponse{OrderID: req.OrderID}, nil
 		})
 
-	mmokit.RegisterOp[MarketMyOrdersRequest, MarketMyOrdersResponse](mmokit.RoutePlayerCell,
+	mmokit.RegisterOp[MarketMyOrdersRequest, MarketMyOrdersResponse](p, mmokit.RoutePlayerCell,
 		func(ctx *mmokit.OpContext, _ *MarketMyOrdersRequest) (*MarketMyOrdersResponse, error) {
 			orders := svc.PlayerOrders(ctx.Username)
 			resp := &MarketMyOrdersResponse{}
@@ -85,7 +85,7 @@ func RegisterHandlers(svc *Settlement, stationID uint32) {
 			return resp, nil
 		})
 
-	mmokit.RegisterOp[MarketInstantTradeRequest, MarketOrderResultResponse](mmokit.RoutePlayerCell,
+	mmokit.RegisterOp[MarketInstantTradeRequest, MarketOrderResultResponse](p, mmokit.RoutePlayerCell,
 		func(ctx *mmokit.OpContext, req *MarketInstantTradeRequest) (*MarketOrderResultResponse, error) {
 			var (
 				result *mmokit.PlaceResult

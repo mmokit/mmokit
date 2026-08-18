@@ -1146,7 +1146,7 @@ func (g *Gateway) processOpFrame(connID uint32, sess *localSession, raw []byte) 
 		// g.process is set in BOTH embedded and standalone build paths, unlike
 		// g.coord which is nil for a standalone gateway. clientWireLimits
 		// tolerates a nil receiver for the fixtures that build a bare Gateway.
-		if respFrame := DispatchTypedOpInbound(raw, opCtx, nil, g.process.clientWireLimits()); respFrame != nil {
+		if respFrame := DispatchTypedOpInbound(g.process.Wire(), raw, opCtx, nil, g.process.clientWireLimits()); respFrame != nil {
 			g.connMgr.SendReliable(connID, respFrame)
 		}
 		return
@@ -1156,7 +1156,7 @@ func (g *Gateway) processOpFrame(connID uint32, sess *localSession, raw []byte) 
 	// a session, there's nowhere to forward; drop with a best-effort
 	// OperationError so the client sees a failure instead of hanging.
 	if sess == nil {
-		if respFrame := encodeTypedOpUnroutable(raw); respFrame != nil {
+		if respFrame := encodeTypedOpUnroutable(g.process.Wire(), raw); respFrame != nil {
 			g.connMgr.SendReliable(connID, respFrame)
 		}
 		return
@@ -1167,13 +1167,13 @@ func (g *Gateway) processOpFrame(connID uint32, sess *localSession, raw []byte) 
 // encodeTypedOpUnroutable builds an OperationError response correlated to
 // the request_id in raw. Used for op frames that arrive before authentication
 // completes (no session → no host to forward to). Returns nil when the
-// typed-op hooks aren't wired or the frame is structurally bad.
-func encodeTypedOpUnroutable(raw []byte) []byte {
+// registry has no OperationError encoder or the frame is structurally bad.
+func encodeTypedOpUnroutable(wire *WireRegistry, raw []byte) []byte {
 	_, requestID, _, err := DecodeTypedOpFrame(raw)
 	if err != nil {
 		return nil
 	}
-	return encodeOpError(requestID, opErrorHandlerFailed,
+	return encodeOpError(wire, requestID, opErrorHandlerFailed,
 		"op requires an authenticated session")
 }
 

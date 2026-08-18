@@ -53,7 +53,7 @@ func (s *NetworkSystem) Init() {
 		clock = p.ClusterClock
 	}
 	s.clock = clock
-	cfg := mmokit.DefaultReplicationConfig(gw.eng, gw.Spatial, clock)
+	cfg := mmokit.DefaultReplicationConfig(gw.stage, gw.eng, gw.Spatial, clock)
 	// Dead and docked players keep their entities, so they remain valid viewers
 	// with positions. Keeping those connected lifecycle states in the viewer
 	// list preserves one ordered replication stream while their own Dormant

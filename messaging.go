@@ -70,8 +70,11 @@ func SendEvent[T any](stage *Stage, connID uint32, msg *T) {
 // Game-loop code should prefer SendEvent. Direct-framing is rare; the only
 // remaining caller is the marketplace/bank update path that needs to fire
 // frames from off-loop goroutines without a *Stage in scope.
-func BuildTypedEventFrame[T any](msg *T) []byte {
-	return pkguniverse.BuildTypedEventFrameRaw(msg)
+//
+// src names the registry T must be registered in — pass whichever of the
+// *Process or *Stage is in scope.
+func BuildTypedEventFrame[T any](src WireSource, msg *T) []byte {
+	return pkguniverse.BuildTypedEventFrameRaw(src.Wire(), msg)
 }
 
 // SendEventToAll builds the typed-event frame for msg once and writes it
@@ -80,11 +83,16 @@ func BuildTypedEventFrame[T any](msg *T) []byte {
 // same payload — calling SendEvent in a loop would re-marshal once per
 // recipient. T must be registered via RegisterEvent[T].
 //
+// Takes the *Stage rather than the *Engine it iterates: the stage names both
+// the engine and the registry T must be registered in, and every caller has
+// one in scope wherever it had the engine.
+//
 // Usage from a system:
 //
-//	mmokit.SendEventToAll(s.Engine(), &WorldSnapshot{...})
-func SendEventToAll[T any](eng *Engine, msg *T) {
-	frame := BuildTypedEventFrame(msg)
+//	mmokit.SendEventToAll(s.Stage(), &WorldSnapshot{...})
+func SendEventToAll[T any](stage *Stage, msg *T) {
+	frame := BuildTypedEventFrame(stage, msg)
+	eng := stage.Engine()
 	eng.Players.ForEach(StateActive, func(sess *PlayerSession) {
 		eng.ConnMgr.SendReliable(sess.ConnID, frame)
 	})

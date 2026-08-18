@@ -777,12 +777,19 @@ type ReplicationTier = system.ReplicationTier
 // passing it to NewReplicationSystem. The clock argument is typically the
 // Process's shared *universe.ClusterClock (from Coordinator/host/Stage) — it
 // satisfies the small system.ClusterClock interface structurally.
-func DefaultReplicationConfig(eng *engine.Engine, grid *spatial.HashGrid, clock system.ClusterClock) ReplicationConfig {
+//
+// src names the registry the per-tick WorldDelta frames are keyed against —
+// pass whichever of the *Process or *Stage is in scope.
+func DefaultReplicationConfig(src WireSource, eng *engine.Engine, grid *spatial.HashGrid, clock system.ClusterClock) ReplicationConfig {
+	wire := src.Wire()
 	return ReplicationConfig{
-		World:          eng.ECS,
-		SpatialGrid:    grid,
-		Viewers:        system.NewPlayerViewerSource(eng.ECS, eng.Players, engine.StateActive),
-		Frame:          system.NewBinaryFrameWriterWithMetadata(eng.ConnMgr, makeWorldDeltaFrame),
+		World:       eng.ECS,
+		SpatialGrid: grid,
+		Viewers:     system.NewPlayerViewerSource(eng.ECS, eng.Players, engine.StateActive),
+		Frame: system.NewBinaryFrameWriterWithMetadata(eng.ConnMgr,
+			func(frame *system.ReplicationFrame, body []byte) []byte {
+				return makeWorldDeltaFrame(wire, frame, body)
+			}),
 		GetTick:        func() uint32 { return eng.Tick },
 		RemovedIDs:     eng.SampleRemovedNetIDs,
 		ClusterClock:   clock,
@@ -837,7 +844,7 @@ func New(cfg Config) *Process {
 		cfg.Admin.ServerFactory = DefaultAdminServerFactory()
 	}
 	proc := universe.New(cfg)
-	proc.SetProtocol(NewProtocol(cfg.Name))
+	proc.SetProtocol(NewProtocol(proc, cfg.Name))
 	if err := wasmctl.RegisterVerbs(proc); err != nil {
 		panic(fmt.Sprintf("mmokit.New: register wasm verbs: %v", err))
 	}
@@ -1118,7 +1125,7 @@ type defaultNetworkSystem struct {
 
 func (s *defaultNetworkSystem) Init() {
 	stage := s.Stage()
-	cfg := DefaultReplicationConfig(s.Engine(), stage.SpatialGrid(), stage.Process().ClusterClock)
+	cfg := DefaultReplicationConfig(stage, s.Engine(), stage.SpatialGrid(), stage.Process().ClusterClock)
 	cfg.AoIRadius = stage.GetAoIRadius()
 	wireBlinkDetector(&cfg, stage.Process(), s.Engine().Log)
 	autoDiscoverReplicators(stage, &cfg)
@@ -1206,8 +1213,8 @@ func autoDiscoverReplicators(stage *universe.Stage, cfg *ReplicationConfig) {
 // where bodyLen == 8 + bodyByteLen. StreamEpoch scopes the delta header's
 // frame sequence to the session's replication generation, so a delayed frame
 // from the previous source can be rejected before its FreshSnapshot flag is applied.
-func makeWorldDeltaFrame(frame *system.ReplicationFrame, body []byte) []byte {
-	return universe.BuildTypedEventFrameRaw(&WorldDelta{
+func makeWorldDeltaFrame(wire *WireRegistry, frame *system.ReplicationFrame, body []byte) []byte {
+	return universe.BuildTypedEventFrameRaw(wire, &WorldDelta{
 		Body:        body,
 		StreamEpoch: frame.StreamEpoch,
 	})
