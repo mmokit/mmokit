@@ -126,35 +126,16 @@ func serviceKindOf(t reflect.Type) string {
 	return name[:dot]
 }
 
-// routingString turns a TypedOpInfo.Kind (uint8 mirror of mmokit.RouteKind)
-// into a human-readable routing label. Falls back to e.KindName when the
-// hooks already populated it (the fast path — mmokit's init copies
-// RouteKind.String() into KindName at registration time).
-func routingString(kind uint8, kindName string) string {
-	if kindName != "" {
-		return kindName
-	}
-	switch kind {
-	case TypedOpHooks.RouteGatewayLocal:
-		return "gateway-local"
-	default:
-		return "unknown"
-	}
-}
-
-// findOpByShortName returns the registry row whose request type maps to
-// the given short name. Returns the zero TypedOpInfo and false if no
-// match. Snapshot of the registry — calls ListTypedOps once.
-func findOpByShortName(name string) (TypedOpInfo, bool) {
-	if TypedOpHooks.ListTypedOps == nil {
-		return TypedOpInfo{}, false
-	}
-	for _, e := range TypedOpHooks.ListTypedOps() {
+// findOpByShortName returns the registry entry whose request type maps to the
+// given short name, or (nil, false) if no match. Snapshot of the registry —
+// walks TypedOps once.
+func findOpByShortName(wire *WireRegistry, name string) (*TypedOpEntry, bool) {
+	for _, e := range wire.TypedOps() {
 		if opShortName(e.RequestType) == name {
 			return e, true
 		}
 	}
-	return TypedOpInfo{}, false
+	return nil, false
 }
 
 // printStructFields renders an indented field listing for a struct type.
@@ -188,10 +169,7 @@ func registerServiceBuiltins(reg *cmdsys.Registry, coord *Process) error {
 		Args:        serviceListArgs{},
 		Result:      serviceListResult{},
 		Handler: func(ctx context.Context, env *cmdsys.Env, raw any) (any, error) {
-			if TypedOpHooks.ListTypedOps == nil {
-				return serviceListResult{}, nil
-			}
-			entries := TypedOpHooks.ListTypedOps()
+			entries := coord.Wire().TypedOps()
 
 			type kindAgg struct {
 				name     string
@@ -210,7 +188,7 @@ func registerServiceBuiltins(reg *cmdsys.Registry, coord *Process) error {
 					agg[kind] = a
 				}
 				a.opCount++
-				a.routings[routingString(e.Kind, e.KindName)] = struct{}{}
+				a.routings[e.Kind.String()] = struct{}{}
 			}
 			rows := make([]serviceKindRow, 0, len(agg))
 			for _, a := range agg {
@@ -261,10 +239,8 @@ func registerServiceBuiltins(reg *cmdsys.Registry, coord *Process) error {
 			// not integer code. Aggregate the typed-op registry by kind so
 			// per-instance OpCount matches what `service list` reports.
 			typedOpsByKind := map[string]int{}
-			if TypedOpHooks.ListTypedOps != nil {
-				for _, e := range TypedOpHooks.ListTypedOps() {
-					typedOpsByKind[serviceKindOf(e.RequestType)]++
-				}
+			for _, e := range coord.Wire().TypedOps() {
+				typedOpsByKind[serviceKindOf(e.RequestType)]++
 			}
 			rows := make([]serviceInstanceRow, 0)
 			for _, k := range coord.coordServices.Kinds() {
@@ -299,10 +275,7 @@ func registerServiceBuiltins(reg *cmdsys.Registry, coord *Process) error {
 		Result:      serviceOpsResult{},
 		Handler: func(ctx context.Context, env *cmdsys.Env, raw any) (any, error) {
 			args := raw.(serviceOpsArgs)
-			if TypedOpHooks.ListTypedOps == nil {
-				return serviceOpsResult{}, nil
-			}
-			entries := TypedOpHooks.ListTypedOps()
+			entries := coord.Wire().TypedOps()
 			kindFilter := strings.TrimSpace(args.Kind)
 			rows := make([]serviceOpsRow, 0, len(entries))
 			for _, e := range entries {
@@ -313,7 +286,7 @@ func registerServiceBuiltins(reg *cmdsys.Registry, coord *Process) error {
 				rows = append(rows, serviceOpsRow{
 					Op:       opShortName(e.RequestType),
 					Kind:     svcKind,
-					Routing:  routingString(e.Kind, e.KindName),
+					Routing:  e.Kind.String(),
 					Request:  e.RequestType.String(),
 					Response: e.ResponseType.String(),
 				})
@@ -343,13 +316,13 @@ func registerServiceBuiltins(reg *cmdsys.Registry, coord *Process) error {
 			if name == "" {
 				return nil, fmt.Errorf("op name is required (try `service ops`)")
 			}
-			e, ok := findOpByShortName(name)
+			e, ok := findOpByShortName(coord.Wire(), name)
 			if !ok {
 				return nil, fmt.Errorf("unknown op %q (try `service ops`)", name)
 			}
 			var sb strings.Builder
 			fmt.Fprintf(&sb, "  Op:       %s\n", opShortName(e.RequestType))
-			fmt.Fprintf(&sb, "  Kind:     %s\n", e.KindName)
+			fmt.Fprintf(&sb, "  Kind:     %s\n", e.Kind)
 			fmt.Fprintf(&sb, "  Request:  %s\n", e.RequestType.String())
 			printStructFields(&sb, e.RequestType, "    ")
 			fmt.Fprintf(&sb, "  Response: %s\n", e.ResponseType.String())
@@ -376,7 +349,7 @@ func registerServiceBuiltins(reg *cmdsys.Registry, coord *Process) error {
 			if name == "" {
 				return nil, fmt.Errorf("op name is required (try `service ops`)")
 			}
-			e, ok := findOpByShortName(name)
+			e, ok := findOpByShortName(coord.Wire(), name)
 			if !ok {
 				return nil, fmt.Errorf("unknown op %q (try `service ops`)", name)
 			}
@@ -385,8 +358,8 @@ func registerServiceBuiltins(reg *cmdsys.Registry, coord *Process) error {
 			// console goroutine has none to thread through engine.RunOnLoop.
 			// Surface a clear error rather than letting DispatchTypedOpInbound
 			// return an opaque "no active cell" failure later.
-			if e.Kind != TypedOpHooks.RouteGatewayLocal {
-				return nil, fmt.Errorf("op %q is %s — invoke from a logged-in client; console-driven cell ops are not yet supported", name, e.KindName)
+			if e.Kind != RouteGatewayLocal {
+				return nil, fmt.Errorf("op %q is %s — invoke from a logged-in client; console-driven cell ops are not yet supported", name, e.Kind)
 			}
 
 			jsonBody := strings.TrimSpace(args.JSON)
@@ -403,7 +376,7 @@ func registerServiceBuiltins(reg *cmdsys.Registry, coord *Process) error {
 			if err != nil {
 				return nil, fmt.Errorf("encode request: %w", err)
 			}
-			frame := EncodeTypedOpFrame(e.RequestID, 0, body)
+			frame := EncodeTypedOpFrame(TypeIDOf(e.RequestType), 0, body)
 
 			// Synthesize an OpContext. ConnID 0 is a "no real client"
 			// sentinel; "service-cli" tags any DB rows the handler writes
@@ -420,7 +393,7 @@ func registerServiceBuiltins(reg *cmdsys.Registry, coord *Process) error {
 			}
 
 			var sb strings.Builder
-			if resTypeID == TypedOpHooks.OperationErrorTypeID {
+			if resTypeID == coord.Wire().FrameworkEncoders().OperationErrorTypeID {
 				// OperationError shape mirrored on the universe side via
 				// reflection — Code uint32, Message string. Decode as a
 				// dynamic struct so this file stays free of the mmokit

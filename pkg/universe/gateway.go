@@ -452,17 +452,18 @@ func (g *Gateway) dispatchPostAuthAssignment(connID uint32, userID uuid.UUID, us
 // tick rate to the given connection via the local ConnManager. Works
 // identically in embedded and standalone modes because g.connMgr is
 // always the process's real WebSocket-serving ConnManager. Falls back
-// silently when tickRate is zero (tests / misconfigured setup) or when
-// the EngineDefaultFrameHooks builder is unwired (test paths that never
-// import mmokit).
+// silently when tickRate is zero (tests / misconfigured setup) or when the
+// registry's ServerConfig encoder is unset (test paths that never import
+// mmokit, so the framework wire types are undeclared).
 func (g *Gateway) sendServerConfig(connID uint32) {
 	if g.tickRate == 0 {
 		return
 	}
-	if EngineDefaultFrameHooks.ServerConfig == nil {
+	build := g.process.Wire().FrameworkEncoders().ServerConfig
+	if build == nil {
 		return
 	}
-	frame := EngineDefaultFrameHooks.ServerConfig(g.tickRate)
+	frame := build(g.tickRate)
 	if frame == nil {
 		// Encoder guard rejected the payload — already counted and logged.
 		return
@@ -1122,17 +1123,9 @@ func (g *Gateway) processOpFrame(connID uint32, sess *localSession, raw []byte) 
 		return
 	}
 
-	var kind uint8
-	var routeKnown bool
-	if TypedOpHooks.LookupTypedOp != nil {
-		k, _, _, _, _, ok := TypedOpHooks.LookupTypedOp(typeID)
-		if ok {
-			kind = k
-			routeKnown = true
-		}
-	}
+	entry, routeKnown := g.process.Wire().LookupTypedOp(typeID)
 
-	if routeKnown && kind == TypedOpHooks.RouteGatewayLocal {
+	if routeKnown && entry.Kind == RouteGatewayLocal {
 		// Build OpContext with ConnID + Username + ClientIP, matching
 		// pkg/ops/router.go's poll() construction so handlers see the
 		// same context shape regardless of which drain path delivered
@@ -1180,7 +1173,7 @@ func encodeTypedOpUnroutable(raw []byte) []byte {
 	if err != nil {
 		return nil
 	}
-	return encodeOpErrorViaHooks(requestID, opErrorHandlerFailed,
+	return encodeOpError(requestID, opErrorHandlerFailed,
 		"op requires an authenticated session")
 }
 

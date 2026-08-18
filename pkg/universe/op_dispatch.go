@@ -36,40 +36,34 @@ import (
 // accepted and falls back to the defaults, which is what a fixture that never
 // calls BindFlags gets.
 //
-// Universe cannot import mmokit (circular dep) — the typed-op
-// registry, RouteKind enum, and OperationError encoder are reached via
-// the TypedOpHooks indirection populated by mmokit's init().
+// The typed-op registry is the process's WireRegistry; a nil one (a fixture
+// with no Process behind it) has no registrations, so every inbound is
+// unknown.
 func DispatchTypedOpInbound(payload []byte, ctx *ops.OpContext, router CellOpRouter, lim pkgnet.WireLimits) []byte {
 	typeID, requestID, body, err := DecodeTypedOpFrame(payload)
 	if err != nil {
 		return nil
 	}
 
-	if TypedOpHooks.LookupTypedOp == nil {
-		// Hooks not wired (universe-only test, no mmokit import). No
-		// handlers can be registered, so every typed-op inbound is by
-		// definition unknown.
-		return encodeOpErrorViaHooks(requestID, opErrorUnknownTypeID,
-			fmt.Sprintf("typed-op hooks unwired (typeID %#x)", typeID))
-	}
-
-	kind, reqType, _, resTypeID, handler, ok := TypedOpHooks.LookupTypedOp(typeID)
+	entry, ok := globalWire.LookupTypedOp(typeID)
 	if !ok {
-		// A sustained rate here is either an SDK/server version skew or someone
-		// walking the registry; the hooks-unwired arm above is a local wiring
-		// fault and is deliberately not counted as ingress.
+		// A sustained rate here is either an SDK/server version skew or
+		// someone walking the registry.
 		metrics.Ingress().RecordRejected(metrics.SurfaceClient, metrics.ReasonUnknownTypeID)
-		return encodeOpErrorViaHooks(requestID, opErrorUnknownTypeID,
+		return encodeOpError(requestID, opErrorUnknownTypeID,
 			fmt.Sprintf("unknown typed-op typeID %#x", typeID))
 	}
+	reqType := entry.RequestType
+	resTypeID := entry.ResponseTypeID
+	handler := entry.Handler
 
-	if kind != TypedOpHooks.RouteGatewayLocal {
+	if entry.Kind != RouteGatewayLocal {
 		// RoutePlayerCell: defer to the process-level router. router
 		// returns nil for successful async dispatch (response sent later
 		// via cell engine connMgr) or a synchronous OperationError frame
 		// when the cell isn't reachable on this process.
 		if router == nil {
-			return encodeOpErrorViaHooks(requestID, opErrorHandlerFailed,
+			return encodeOpError(requestID, opErrorHandlerFailed,
 				fmt.Sprintf("op %s requires cell routing; no router wired", reqType.String()))
 		}
 		// Copy body — the underlying buffer is owned by the caller
@@ -89,7 +83,7 @@ func DispatchTypedOpInbound(payload []byte, ctx *ops.OpContext, router CellOpRou
 		// Never call the handler on a body the decoder refused: reqPtr is only
 		// partially written, so the handler would see a request whose refused
 		// fields are indistinguishable from an intentional zero value.
-		return encodeOpErrorViaHooks(requestID, opErrorDecodeFailed,
+		return encodeOpError(requestID, opErrorDecodeFailed,
 			fmt.Sprintf("decode %s: %v", reqType.String(), err))
 	}
 
@@ -99,7 +93,7 @@ func DispatchTypedOpInbound(payload []byte, ctx *ops.OpContext, router CellOpRou
 	resPtr := results[0]
 	errVal := results[1]
 	if !errVal.IsNil() {
-		return encodeOpErrorViaHooks(requestID, opErrorHandlerFailed,
+		return encodeOpError(requestID, opErrorHandlerFailed,
 			errVal.Interface().(error).Error())
 	}
 	if resPtr.IsNil() {
@@ -110,7 +104,7 @@ func DispatchTypedOpInbound(payload []byte, ctx *ops.OpContext, router CellOpRou
 		// The handler succeeded but its response does not fit the wire. Answer
 		// with a typed error rather than dropping the frame — the client is
 		// blocked on this requestID either way.
-		return encodeOpErrorViaHooks(requestID, opErrorHandlerFailed,
+		return encodeOpError(requestID, opErrorHandlerFailed,
 			fmt.Sprintf("encode response: %v", err))
 	}
 	return EncodeTypedOpFrame(resTypeID, requestID, resBody)
@@ -126,15 +120,33 @@ const (
 	opErrorDecodeFailed  uint32 = 3
 )
 
-// encodeOpErrorViaHooks builds a typed-op response frame carrying an
-// OperationError. The message body is constructed by the mmokit-side
-// MakeOperationErrorBody hook so the framework type's encoder lives
-// next to its definition. Returns nil if hooks are unwired (test-only
-// path without the mmokit import).
-func encodeOpErrorViaHooks(requestID uint64, code uint32, message string) []byte {
-	if TypedOpHooks.MakeOperationErrorBody == nil {
+// encodeOpError builds a typed-op response frame carrying an OperationError.
+// The message body is constructed by the registry's MakeOperationErrorBody
+// encoder so the framework type's encoder lives next to its definition (see
+// FrameworkEncoders). Returns nil when that encoder is unset — a fixture
+// without the mmokit import has no OperationError type to encode.
+func encodeOpError(requestID uint64, code uint32, message string) []byte {
+	enc := globalWire.FrameworkEncoders()
+	if enc.MakeOperationErrorBody == nil {
 		return nil
 	}
-	body := TypedOpHooks.MakeOperationErrorBody(code, message)
-	return EncodeTypedOpFrame(TypedOpHooks.OperationErrorTypeID, requestID, body)
+	body := enc.MakeOperationErrorBody(code, message)
+	return EncodeTypedOpFrame(enc.OperationErrorTypeID, requestID, body)
+}
+
+// CellOpRouter resolves a typed-op request to the player's authoritative
+// cell on this process and dispatches the handler on that cell's engine
+// loop.
+//
+// Implementations return a non-nil response frame synchronously when the
+// op cannot be routed (no active session, player on a remote host, etc.) —
+// typically an OperationError frame. They return nil when the dispatch is
+// scheduled successfully; the response frame is sent asynchronously via
+// the cell engine's connection manager once the handler completes.
+//
+// Process implements this via Process.dispatchCellRoutedOp; tests that
+// build a Stage standalone without a Process can pass nil and the
+// dispatcher returns OperationError for every RoutePlayerCell inbound.
+type CellOpRouter interface {
+	DispatchCellRoutedOp(reqType reflect.Type, resTypeID uint32, requestID uint64, body []byte, handler any, ctx *ops.OpContext) []byte
 }

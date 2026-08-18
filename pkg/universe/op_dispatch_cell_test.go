@@ -61,22 +61,20 @@ type cellOpRes struct {
 	Y int32
 }
 
-// installFrameworkHookStubs ensures TypedOpHooks.MakeOperationErrorBody is
-// non-nil so encodeOpErrorViaHooks returns frames. mmokit's init normally
-// wires these but this test file is in package universe and avoids the
-// mmokit import cycle. Restores original values on cleanup.
-func installFrameworkHookStubs(t *testing.T) {
+// installFrameworkEncoderStubs ensures the registry's MakeOperationErrorBody
+// encoder is non-nil so encodeOpError returns frames. mmokit installs the real
+// ones, but this test file is in package universe and avoids the mmokit import
+// cycle — so it defers to mmokit's when the external test package has linked
+// it in, and supplies a stub otherwise.
+func installFrameworkEncoderStubs(t *testing.T) {
 	t.Helper()
-	prevMakeBody := TypedOpHooks.MakeOperationErrorBody
-	prevErrTypeID := TypedOpHooks.OperationErrorTypeID
-	t.Cleanup(func() {
-		TypedOpHooks.MakeOperationErrorBody = prevMakeBody
-		TypedOpHooks.OperationErrorTypeID = prevErrTypeID
-	})
-	if TypedOpHooks.MakeOperationErrorBody == nil {
-		TypedOpHooks.MakeOperationErrorBody = func(uint32, string) []byte { return []byte{0xEE} }
-		TypedOpHooks.OperationErrorTypeID = 0xDEADDEAD
+	if globalWire.FrameworkEncoders().MakeOperationErrorBody != nil {
+		return
 	}
+	withFrameworkEncoders(t, FrameworkEncoders{
+		OperationErrorTypeID:   0xDEADDEAD,
+		MakeOperationErrorBody: func(uint32, string) []byte { return []byte{0xEE} },
+	})
 }
 
 // newCellRoutedOpFixture builds the scaffolding DispatchCellRoutedOp needs to
@@ -150,7 +148,7 @@ func awaitFrame(t *testing.T, conn *captureConnSender, connID uint32) []byte {
 // cell's engine via SubmitLoopJob, the loop runs the handler, encodes the
 // response, and sends via the engine's ConnMgr.
 func TestProcessDispatchCellRoutedOp_HappyPath(t *testing.T) {
-	installFrameworkHookStubs(t)
+	installFrameworkEncoderStubs(t)
 	p, conn := newCellRoutedOpFixture(t)
 
 	body := mustMarshal(t, &cellOpReq{X: 21})
@@ -201,7 +199,7 @@ func TestProcessDispatchCellRoutedOp_HappyPath(t *testing.T) {
 // TestProcessDispatchCellRoutedOp_OfflineUser hits the synchronous
 // OperationError path when the user isn't in the active session map.
 func TestProcessDispatchCellRoutedOp_OfflineUser(t *testing.T) {
-	installFrameworkHookStubs(t)
+	installFrameworkEncoderStubs(t)
 
 	p := minimalCoordWithCell(t, "host-a", "cell_0_0")
 
@@ -257,23 +255,19 @@ func (r *opErrorRecorder) snapshot() ([]uint32, []string) {
 }
 
 // installOpErrorRecorder replaces the OperationError body hook unconditionally
-// — unlike installFrameworkHookStubs, which defers to mmokit's real hook when
+// — unlike installFrameworkEncoderStubs, which defers to mmokit's real encoder when
 // the external test package has linked it in. The hook fires on the cell loop
 // goroutine, hence the mutex.
 func installOpErrorRecorder(t *testing.T) *opErrorRecorder {
 	t.Helper()
 	rec := &opErrorRecorder{}
-	prevMakeBody := TypedOpHooks.MakeOperationErrorBody
-	prevErrTypeID := TypedOpHooks.OperationErrorTypeID
-	t.Cleanup(func() {
-		TypedOpHooks.MakeOperationErrorBody = prevMakeBody
-		TypedOpHooks.OperationErrorTypeID = prevErrTypeID
+	withFrameworkEncoders(t, FrameworkEncoders{
+		OperationErrorTypeID: 0xDEADDEAD,
+		MakeOperationErrorBody: func(code uint32, message string) []byte {
+			rec.record(code, message)
+			return []byte{0xEE}
+		},
 	})
-	TypedOpHooks.MakeOperationErrorBody = func(code uint32, message string) []byte {
-		rec.record(code, message)
-		return []byte{0xEE}
-	}
-	TypedOpHooks.OperationErrorTypeID = 0xDEADDEAD
 	return rec
 }
 
@@ -319,9 +313,9 @@ func TestProcessDispatchCellRoutedOp_DecodeError(t *testing.T) {
 	if err != nil {
 		t.Fatalf("DecodeTypedOpFrame: %v", err)
 	}
-	if gotTypeID != TypedOpHooks.OperationErrorTypeID {
+	if gotTypeID != globalWire.FrameworkEncoders().OperationErrorTypeID {
 		t.Errorf("response typeID = %#x, want OperationError %#x",
-			gotTypeID, TypedOpHooks.OperationErrorTypeID)
+			gotTypeID, globalWire.FrameworkEncoders().OperationErrorTypeID)
 	}
 	if gotReqID != requestID {
 		t.Errorf("response requestID = %d, want %d (the client correlates on it)",

@@ -1,9 +1,7 @@
 package mmokit
 
 import (
-	"fmt"
 	"reflect"
-	"sort"
 	"sync"
 
 	pkguniverse "github.com/mmokit/mmokit/pkg/universe"
@@ -39,12 +37,6 @@ func init() {
 	registerFrameworkOps()
 }
 
-var (
-	typedOpMu  sync.RWMutex
-	typedOps   = map[uint32]*TypedOpEntry{}
-	typedOpSet = map[reflect.Type]struct{}{}
-)
-
 // RegisterOp registers a typed operation handler. The wire typeID is
 // derived from the Request type via TypeIDOf; the response typeID is
 // derived from Res. Each handler signature is
@@ -69,73 +61,25 @@ var (
 //   - typeID collision between two distinct Request types (extremely
 //     unlikely at codebase scale; rename one type if it triggers).
 func RegisterOp[Req any, Res any](kind RouteKind, handler func(*OpContext, *Req) (*Res, error)) {
-	reqType := reflect.TypeFor[Req]()
-	resType := reflect.TypeFor[Res]()
-	// Both halves: the request is decoded here from a client body, the
-	// response is decoded by the generated SDKs and by the console's
-	// `service call`. An unsupported field in either is a wire bug.
-	pkguniverse.ValidateMessageType(reqType)
-	pkguniverse.ValidateMessageType(resType)
-	reqID := TypeIDOf(reqType)
-	resID := TypeIDOf(resType)
-
-	typedOpMu.Lock()
-	defer typedOpMu.Unlock()
-	if existing, ok := typedOps[reqID]; ok {
-		if existing.RequestType != reqType {
-			panic(fmt.Sprintf("RegisterOp: typeID collision between %s and %s (id=%#x)",
-				existing.RequestType.String(), reqType.String(), reqID))
-		}
-		if existing.Kind != kind || existing.ResponseType != resType {
-			panic(fmt.Sprintf("RegisterOp: %s re-registered with different shape "+
-				"(was kind=%s res=%s; now kind=%s res=%s)",
-				reqType.String(), existing.Kind, existing.ResponseType, kind, resType))
-		}
-		// Same type, same Kind, same Response — refresh the handler
-		// closure and return.
-		existing.Handler = handler
-		return
-	}
-	typedOps[reqID] = &TypedOpEntry{
-		Kind:           kind,
-		RequestType:    reqType,
-		ResponseType:   resType,
-		ResponseTypeID: resID,
-		Handler:        handler,
-	}
-	typedOpSet[reqType] = struct{}{}
+	pkguniverse.GlobalWire().RegisterTypedOp(kind,
+		reflect.TypeFor[Req](), reflect.TypeFor[Res](), handler)
 }
 
 // LookupTypedOp returns the registry entry for the given request typeID,
 // or (nil, false) if none.
 func LookupTypedOp(reqTypeID uint32) (*TypedOpEntry, bool) {
-	typedOpMu.RLock()
-	defer typedOpMu.RUnlock()
-	e, ok := typedOps[reqTypeID]
-	return e, ok
+	return pkguniverse.GlobalWire().LookupTypedOp(reqTypeID)
 }
 
 // RegisteredTypedOps returns all registered entries in deterministic
 // (request type name) order. Used by sdkgen and protocol-schema export.
 func RegisteredTypedOps() []*TypedOpEntry {
-	typedOpMu.RLock()
-	defer typedOpMu.RUnlock()
-	out := make([]*TypedOpEntry, 0, len(typedOps))
-	for _, e := range typedOps {
-		out = append(out, e)
-	}
-	sort.Slice(out, func(i, j int) bool {
-		return out[i].RequestType.String() < out[j].RequestType.String()
-	})
-	return out
+	return pkguniverse.GlobalWire().TypedOps()
 }
 
 // ResetTypedOpRegistryForTest is exported for tests only.
 func ResetTypedOpRegistryForTest() {
-	typedOpMu.Lock()
-	defer typedOpMu.Unlock()
-	typedOps = map[uint32]*TypedOpEntry{}
-	typedOpSet = map[reflect.Type]struct{}{}
+	pkguniverse.GlobalWire().ResetTypedOpsForTest()
 }
 
 // OpContextStage returns the *Stage on which a RoutePlayerCell typed-op

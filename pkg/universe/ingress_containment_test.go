@@ -121,30 +121,22 @@ type malformedOpRequest struct{ Name string }
 
 type malformedOpResponse struct{ OK bool }
 
-// installGatewayLocalOpStub points the typed-op hooks at a single
-// RouteGatewayLocal registration for malformedOpRequest.
-func installGatewayLocalOpStub(t *testing.T, typeID uint32) {
+// registerGatewayLocalOp registers malformedOpRequest as a RouteGatewayLocal
+// op and returns its wire typeID.
+func registerGatewayLocalOp(t *testing.T) uint32 {
 	t.Helper()
-	prevLookup := TypedOpHooks.LookupTypedOp
-	prevRoute := TypedOpHooks.RouteGatewayLocal
+	globalWire.RegisterTypedOp(RouteGatewayLocal,
+		reflect.TypeFor[malformedOpRequest](),
+		reflect.TypeFor[malformedOpResponse](),
+		func(_ *ops.OpContext, _ *malformedOpRequest) (*malformedOpResponse, error) {
+			return &malformedOpResponse{OK: true}, nil
+		})
 	t.Cleanup(func() {
-		TypedOpHooks.LookupTypedOp = prevLookup
-		TypedOpHooks.RouteGatewayLocal = prevRoute
+		globalWire.mu.Lock()
+		delete(globalWire.typedOps, TypeIDOf(reflect.TypeFor[malformedOpRequest]()))
+		globalWire.mu.Unlock()
 	})
-
-	TypedOpHooks.RouteGatewayLocal = 1
-	handler := func(_ *ops.OpContext, _ *malformedOpRequest) (*malformedOpResponse, error) {
-		return &malformedOpResponse{OK: true}, nil
-	}
-	TypedOpHooks.LookupTypedOp = func(id uint32) (uint8, reflect.Type, reflect.Type, uint32, any, bool) {
-		if id != typeID {
-			return 0, nil, nil, 0, nil, false
-		}
-		return TypedOpHooks.RouteGatewayLocal,
-			reflect.TypeFor[malformedOpRequest](),
-			reflect.TypeFor[malformedOpResponse](),
-			typeID + 1, handler, true
-	}
+	return TypeIDOf(reflect.TypeFor[malformedOpRequest]())
 }
 
 // malformedOpFrame builds a 0x01 typed-op payload (channel byte already
@@ -160,8 +152,7 @@ func malformedOpFrame(typeID uint32) []byte {
 // goroutine with no barrier of its own, so on HEAD this panics with "slice
 // bounds out of range" and takes the process with it.
 func TestProcessOpFrame_MalformedBody_DoesNotPanic(t *testing.T) {
-	const typeID uint32 = 0xC0FFEE01
-	installGatewayLocalOpStub(t, typeID)
+	typeID := registerGatewayLocalOp(t)
 
 	g := &Gateway{
 		id:      "gw-test",
@@ -217,13 +208,8 @@ func (c *countingTransport) Close()                  {}
 // budget it drained every queued frame for every connected player, so one
 // tick's cost was set by how fast the clients chose to send.
 func TestDispatchClientInput_StopsAtPerTickCap(t *testing.T) {
-	prev := ClientInputHooks.TypeOfTypeID
-	// Non-nil so DispatchClientInput does not short-circuit; returning nil
-	// makes every frame an untrusted typeID, which is dropped after being
-	// counted against the budget.
-	ClientInputHooks.TypeOfTypeID = func(uint32) reflect.Type { return nil }
-	t.Cleanup(func() { ClientInputHooks.TypeOfTypeID = prev })
-
+	// Every frame names an unregistered typeID, which is dropped after being
+	// counted against the budget — the budget is what this test measures.
 	cell := newTestCell("budget", CellID{X: 0, Y: 0})
 	connMgr := cell.Engine.ConnMgr.(*pkgnet.ConnManager)
 

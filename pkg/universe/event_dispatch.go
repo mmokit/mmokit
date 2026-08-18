@@ -13,7 +13,7 @@ import (
 //	[typeID:u32 LE][body_len:u32 LE][body] repeated
 //
 // For each entry, the typeID is looked up in the client-input registry
-// (populated by mmokit.HandleClient) via the ClientInputHooks indirection;
+// (populated by mmokit.HandleClient) via the stage's WireRegistry;
 // if registered, the body is decoded via the reflection codec and routed to
 // the matching handler through stage.Dispatcher().Invoke. If the typeID is
 // unknown, or the body fails to decode, the entry is logged and skipped — a
@@ -56,17 +56,7 @@ func DispatchInboundEventFrame(stage *Stage, playerNetID uint32, payload []byte)
 		body := payload[off : off+int(bodyLen)]
 		off += int(bodyLen)
 
-		// Universe cannot import mmokit — go through the pre-wired
-		// ClientInputHooks indirection populated in init.go.
-		if ClientInputHooks.TypeOfTypeID == nil {
-			if stage.eng != nil {
-				stage.eng.Log.Log(CatClientInput,
-					"[%s] DispatchInboundEventFrame: ClientInputHooks not wired (universe-only test?)",
-					stage.cellID)
-			}
-			continue
-		}
-		t := ClientInputHooks.TypeOfTypeID(typeID)
+		t := stage.Wire().ClientInputType(typeID)
 		if t == nil {
 			metrics.Ingress().RecordRejected(metrics.SurfaceClient, metrics.ReasonUnknownTypeID)
 			if stage.eng != nil {

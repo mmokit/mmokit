@@ -313,18 +313,8 @@ func dispatchInboundEventFrameSeeds(tb testing.TB) []fuzzSeed {
 // is the WALK: the offset arithmetic, the bodyLen bound, and termination. Body
 // decoding is FuzzReflectUnmarshal's job.
 func FuzzDispatchInboundEventFrame(f *testing.F) {
-	prev := ClientInputHooks.TypeOfTypeID
-	ClientInputHooks.TypeOfTypeID = func(id uint32) reflect.Type {
-		switch id {
-		case fuzzInputPingTypeID:
-			return reflect.TypeFor[fuzzClientPing]()
-		case fuzzInputMoveTypeID:
-			return reflect.TypeFor[fuzzClientMove]()
-		default:
-			return nil
-		}
-	}
-	f.Cleanup(func() { ClientInputHooks.TypeOfTypeID = prev })
+	bindClientInputTypeID(f, fuzzInputPingTypeID, reflect.TypeFor[fuzzClientPing]())
+	bindClientInputTypeID(f, fuzzInputMoveTypeID, reflect.TypeFor[fuzzClientMove]())
 
 	// One fixture for the whole run: the walker is stateless, and rebuilding a
 	// Stage per input would make the fuzzer measure ECS setup instead of the

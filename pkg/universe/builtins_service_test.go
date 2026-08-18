@@ -10,8 +10,10 @@ import (
 // is shaped around: the conventional "<Verb>Request" suffix, a service-
 // prefixed type, and a non-Request type (e.g. OperationError) that
 // should still produce a usable handle.
-type authLoginRequest struct{ X int }
-type marketBrowseRequest struct{ Y int }
+// int32, not int: these stand in for real wire types, and
+// ValidateMessageType rejects a platform-width int.
+type authLoginRequest struct{ X int32 }
+type marketBrowseRequest struct{ Y int32 }
 type opShortNameOperationError struct{ Code uint32 }
 
 func TestOpShortName(t *testing.T) {
@@ -66,40 +68,30 @@ func TestPrintStructFields(t *testing.T) {
 	}
 }
 
-func TestFindOpByShortName_NoHook(t *testing.T) {
-	prev := TypedOpHooks.ListTypedOps
-	TypedOpHooks.ListTypedOps = nil
-	t.Cleanup(func() { TypedOpHooks.ListTypedOps = prev })
-
-	if _, ok := findOpByShortName("anything"); ok {
-		t.Errorf("findOpByShortName with nil hook should return false")
+// A nil registry is what a fixture with no Process behind it holds, and it
+// reads as empty — the successor to the old "typed-op hooks unwired" arm.
+func TestFindOpByShortName_NilRegistry(t *testing.T) {
+	if _, ok := findOpByShortName(nil, "anything"); ok {
+		t.Errorf("findOpByShortName on a nil registry should return false")
 	}
 }
 
 func TestFindOpByShortName_Match(t *testing.T) {
-	prev := TypedOpHooks.ListTypedOps
-	TypedOpHooks.ListTypedOps = func() []TypedOpInfo {
-		return []TypedOpInfo{
-			{
-				Kind:         0,
-				KindName:     "gateway-local",
-				RequestType:  reflect.TypeFor[authLoginRequest](),
-				ResponseType: reflect.TypeFor[opShortNameOperationError](),
-				RequestID:    0xAAAA,
-			},
-		}
-	}
-	t.Cleanup(func() { TypedOpHooks.ListTypedOps = prev })
+	wire := NewWireRegistry()
+	wire.RegisterTypedOp(RouteGatewayLocal,
+		reflect.TypeFor[authLoginRequest](),
+		reflect.TypeFor[opShortNameOperationError](),
+		func() {})
 
-	got, ok := findOpByShortName("authLogin")
+	got, ok := findOpByShortName(wire, "authLogin")
 	if !ok {
 		t.Fatalf("findOpByShortName(authLogin): not found")
 	}
-	if got.RequestID != 0xAAAA {
-		t.Errorf("RequestID: got %#x, want 0xAAAA", got.RequestID)
+	if want := TypeIDOf(reflect.TypeFor[authLoginRequest]()); TypeIDOf(got.RequestType) != want {
+		t.Errorf("request typeID: got %#x, want %#x", TypeIDOf(got.RequestType), want)
 	}
 
-	if _, ok := findOpByShortName("nope"); ok {
+	if _, ok := findOpByShortName(wire, "nope"); ok {
 		t.Errorf("findOpByShortName(nope) should miss")
 	}
 }
@@ -129,27 +121,17 @@ func TestServiceKindOf(t *testing.T) {
 	}
 }
 
-// TestRoutingString covers the small helper that emits the routing
-// label. Prefers e.KindName when populated (the live path); falls back
-// to the uint8 lookup when KindName is empty.
-func TestRoutingString(t *testing.T) {
-	// Live path: KindName already populated by mmokit.init.
-	if got := routingString(0, "gateway-local"); got != "gateway-local" {
-		t.Errorf("routingString(_, gateway-local) = %q", got)
+// TestRouteKindString covers the routing label the console renders. It used
+// to come from a uint8 mirror plus a cached string; TypedOpEntry now carries
+// the real RouteKind, so there is exactly one source for the label.
+func TestRouteKindString(t *testing.T) {
+	if got := RouteGatewayLocal.String(); got != "gateway-local" {
+		t.Errorf("RouteGatewayLocal.String() = %q", got)
 	}
-	if got := routingString(1, "player-cell"); got != "player-cell" {
-		t.Errorf("routingString(_, player-cell) = %q", got)
+	if got := RoutePlayerCell.String(); got != "player-cell" {
+		t.Errorf("RoutePlayerCell.String() = %q", got)
 	}
-
-	// Empty-KindName fallback: relies on TypedOpHooks.RouteGatewayLocal.
-	prev := TypedOpHooks.RouteGatewayLocal
-	TypedOpHooks.RouteGatewayLocal = 0
-	t.Cleanup(func() { TypedOpHooks.RouteGatewayLocal = prev })
-
-	if got := routingString(0, ""); got != "gateway-local" {
-		t.Errorf("routingString(0, empty) = %q, want gateway-local", got)
-	}
-	if got := routingString(99, ""); got != "unknown" {
-		t.Errorf("routingString(99, empty) = %q, want unknown", got)
+	if got := RouteKind(99).String(); got != "unknown" {
+		t.Errorf("RouteKind(99).String() = %q, want unknown", got)
 	}
 }

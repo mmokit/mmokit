@@ -620,11 +620,12 @@ func (b *Stage) EnsureEntityKindComponents(entity ecs.Entity) {
 // typed event to a client, informing it of its entity NetID and world
 // position. Uses the node's root cell coordinates.
 //
-// Builds the encoded frame via EngineDefaultFrameHooks.PlayerEntityAssigned,
-// populated by mmokit's init(). When the hook is nil (test paths that
-// never import mmokit) this is a silent no-op.
+// Builds the encoded frame via the registry's PlayerEntityAssigned encoder.
+// When that encoder is unset (test paths that never import mmokit, so the
+// framework wire types are undeclared) this is a silent no-op.
 func (b *Stage) SendPlayerEntityAssigned(connID uint32, entity ecs.Entity) {
-	if EngineDefaultFrameHooks.PlayerEntityAssigned == nil {
+	build := b.Wire().FrameworkEncoders().PlayerEntityAssigned
+	if build == nil {
 		return
 	}
 	netID := uint32(0)
@@ -639,7 +640,7 @@ func (b *Stage) SendPlayerEntityAssigned(connID uint32, entity ecs.Entity) {
 		worldX = pos.X + float32(cell.X)*cs
 		worldY = pos.Y + float32(cell.Y)*cs
 	}
-	frame := EngineDefaultFrameHooks.PlayerEntityAssigned(netID, worldX, worldY)
+	frame := build(netID, worldX, worldY)
 	if frame == nil {
 		// Encoder guard rejected the payload — already counted and logged.
 		return
@@ -809,10 +810,7 @@ func SendEventTyped[T any](stage *Stage, connID uint32, msg *T) {
 // oversized field is runtime data on the tick goroutine and must not be.
 func BuildTypedEventFrameRaw[T any](msg *T) []byte {
 	t := reflect.TypeFor[T]()
-	if ServerEventHooks.IsRegistered == nil {
-		panic(fmt.Sprintf("BuildTypedEventFrameRaw: ServerEventHooks not wired (import mmokit so its init() runs); type %s", t.String()))
-	}
-	if !ServerEventHooks.IsRegistered(t) {
+	if !globalWire.ServerEventRegistered(t) {
 		panic(fmt.Sprintf("BuildTypedEventFrameRaw: type %s not registered via mmokit.RegisterEvent[T]", t.String()))
 	}
 	id := TypeIDOf(t)
@@ -2022,23 +2020,17 @@ func (s *Stage) HandleEngineAction(action *CrossCellAction) bool {
 //     is locally known — viewers on this cell can't see anything).
 //
 // Called twice for cross-cell sends (source pre-handler + dest post-handler);
-// once for same-cell sends. Hooks into the mmokit-side registry via the
-// BroadcastHooks indirection (init-populated by mmokit).
+// once for same-cell sends.
 func (s *Stage) maybeBroadcast(targetNetID uint32, msgPtr any) {
-	if BroadcastHooks.Eligible == nil ||
-		BroadcastHooks.ExtractAnchors == nil {
-		// Hooks not populated (test build without mmokit, or partial init).
-		return
-	}
 	t := reflect.TypeOf(msgPtr)
 	if t.Kind() == reflect.Pointer {
 		t = t.Elem()
 	}
-	if !BroadcastHooks.Eligible(t) {
+	if !s.Wire().BroadcastEligible(t) {
 		return
 	}
 
-	anchors := BroadcastHooks.ExtractAnchors(msgPtr, targetNetID, s)
+	anchors := ExtractAnchors(msgPtr, EntityByNetID(s, targetNetID))
 	// Filter anchors to those resolvable on this stage. Replicas count —
 	// the AoI filter at drain time uses the local entity's position, which
 	// is whatever this cell knows for that NetID.

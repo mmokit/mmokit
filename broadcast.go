@@ -3,8 +3,6 @@ package mmokit
 import (
 	"fmt"
 	"reflect"
-	"sort"
-	"sync"
 	"unicode"
 
 	pkguniverse "github.com/mmokit/mmokit/pkg/universe"
@@ -45,85 +43,19 @@ type BroadcastFieldSchema struct {
 	Item     *BroadcastFieldSchema  `json:"item,omitempty"`   // for encoding == "slice"
 }
 
-// broadcastRegistry holds the global registry of broadcast-eligible types.
-// Sdkgen reads this via BroadcastTypes() to emit TS class declarations.
-var (
-	brMu  sync.RWMutex
-	brSet = map[reflect.Type]struct{}{} // T (NOT *T)
-)
-
-// downstreamIDs indexes every typeID a client may see on channel 0x00, across
-// BOTH server-to-client registries.
-//
-// The two registries are separate on the server and a single namespace on the
-// client: generated clients dispatch broadcasts and server events through one
-// `TypedEvents.Dispatch(typeID, …)` switch. A per-registry collision check
-// therefore cannot see the collision that actually matters — a broadcast type
-// and an event type hashing alike — and each registry would report itself
-// clean while the client silently routed one type's bytes into the other's
-// decoder. This index is the namespace the client actually has.
-var (
-	downstreamMu  sync.Mutex
-	downstreamIDs = map[uint32]reflect.Type{}
-)
-
-// claimDownstreamTypeID reserves id for t in the client's channel-0x00
-// dispatch namespace. Idempotent for the same type; panics when a different
-// type already holds the id. verb names the registration call in the message
-// so the panic points at the code to change.
-func claimDownstreamTypeID(verb string, id uint32, t reflect.Type) {
-	downstreamMu.Lock()
-	defer downstreamMu.Unlock()
-	if existing, ok := downstreamIDs[id]; ok && existing != t {
-		panic(fmt.Sprintf("%s: typeID collision between %s and %s (id=%#x) — "+
-			"broadcasts and server events share one client dispatch namespace; rename one type",
-			verb, existing.String(), t.String(), id))
-	}
-	downstreamIDs[id] = t
-}
-
-// releaseDownstreamTypeIDs drops the claims held by the given id→type index.
-// Only the ResetXxxForTest helpers call this; production registration is
-// append-only for the life of the binary.
-func releaseDownstreamTypeIDs(owned map[uint32]reflect.Type) {
-	downstreamMu.Lock()
-	defer downstreamMu.Unlock()
-	for id, t := range owned {
-		if downstreamIDs[id] == t {
-			delete(downstreamIDs, id)
-		}
-	}
-}
-
 // RegisterBroadcastType marks T as broadcast-eligible. Called from
 // HandleAll[T] (the broadcast-on-by-default registration verb).
 // HandleAllInternal[T] explicitly does not call this — that's how
 // server-internal types stay out of the broadcast registry. Idempotent.
 func RegisterBroadcastType(t reflect.Type) {
-	// Registration-time shape check, same validator as the other three wire
-	// registries: a broadcast body is encoded by ReflectMarshal and decoded by
-	// the generated SDKs, so it obeys the same field rules.
-	pkguniverse.ValidateMessageType(t)
-	// This registry computed no typeID at all before, so a broadcast collision
-	// was not merely unguarded — it was undetectable.
-	claimDownstreamTypeID("RegisterBroadcastType", TypeIDOf(t), t)
-	brMu.Lock()
-	brSet[t] = struct{}{}
-	brMu.Unlock()
+	pkguniverse.GlobalWire().RegisterBroadcast(t)
 }
 
 // BroadcastTypes returns the registered broadcast-eligible types in
 // deterministic order (sorted by reflect.Type.String()). Used by sdkgen
 // to emit TS class declarations.
 func BroadcastTypes() []reflect.Type {
-	brMu.RLock()
-	defer brMu.RUnlock()
-	out := make([]reflect.Type, 0, len(brSet))
-	for t := range brSet {
-		out = append(out, t)
-	}
-	sort.Slice(out, func(i, j int) bool { return out[i].String() < out[j].String() })
-	return out
+	return pkguniverse.GlobalWire().BroadcastTypes()
 }
 
 // BroadcastTypeOf returns a serializable schema describing a broadcast-eligible
@@ -284,13 +216,4 @@ func lowerFirst(s string) string {
 		runes[i] = unicode.ToLower(runes[i])
 	}
 	return string(runes)
-}
-
-// brIsRegistered reports whether t is currently in the broadcast registry.
-// Internal helper for the universe-side eligibility hook (see init.go).
-func brIsRegistered(t reflect.Type) bool {
-	brMu.RLock()
-	_, ok := brSet[t]
-	brMu.RUnlock()
-	return ok
 }

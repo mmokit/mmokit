@@ -15,8 +15,8 @@ import (
 type clientInputPing struct{ N uint32 }
 
 // TestHandleClient_RegistersInClientInputRegistry verifies that calling
-// HandleClient[T] populates the mmokit-side client-input registry and
-// the universe-side ClientInputHooks indirection sees the type.
+// HandleClient[T] populates the process's client-input registry, both by
+// type (the eligibility check) and by typeID (inbound frame dispatch).
 func TestHandleClient_RegistersInClientInputRegistry(t *testing.T) {
 	p := mmokit.New(mmokit.Config{
 		Mode:     "all",
@@ -28,10 +28,8 @@ func TestHandleClient_RegistersInClientInputRegistry(t *testing.T) {
 	mmokit.HandleClient(p, func(player mmokit.Entity, msg *clientInputPing) {})
 
 	pingType := reflect.TypeFor[clientInputPing]()
-	if pkguniverse.ClientInputHooks.IsRegistered == nil {
-		t.Fatal("ClientInputHooks.IsRegistered not wired")
-	}
-	if !pkguniverse.ClientInputHooks.IsRegistered(pingType) {
+	wire := p.Wire()
+	if !wire.ClientInputRegistered(pingType) {
 		t.Errorf("clientInputPing not registered after HandleClient")
 	}
 
@@ -40,18 +38,14 @@ func TestHandleClient_RegistersInClientInputRegistry(t *testing.T) {
 		t.Errorf("expected non-zero typeID for clientInputPing")
 	}
 
-	if pkguniverse.ClientInputHooks.TypeOfTypeID == nil {
-		t.Fatal("ClientInputHooks.TypeOfTypeID not wired")
-	}
-	gotType := pkguniverse.ClientInputHooks.TypeOfTypeID(id)
-	if gotType != pingType {
-		t.Errorf("TypeOfTypeID(%d) = %v, want %v", id, gotType, pingType)
+	if gotType := wire.ClientInputType(id); gotType != pingType {
+		t.Errorf("ClientInputType(%d) = %v, want %v", id, gotType, pingType)
 	}
 
 	// Unknown typeID resolves to nil — drives the "untrusted typeID"
 	// log + drop path in DispatchClientInput.
-	if pkguniverse.ClientInputHooks.TypeOfTypeID(0xDEADBEEF) != nil {
-		t.Errorf("TypeOfTypeID for unregistered ID should return nil")
+	if wire.ClientInputType(0xDEADBEEF) != nil {
+		t.Errorf("ClientInputType for an unregistered ID should return nil")
 	}
 }
 

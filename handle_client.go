@@ -1,10 +1,7 @@
 package mmokit
 
 import (
-	"fmt"
 	"reflect"
-	"sort"
-	"sync"
 
 	pkguniverse "github.com/mmokit/mmokit/pkg/universe"
 )
@@ -35,48 +32,11 @@ import (
 // only the entry-point trust contract differs.
 func HandleClient[M any](world *pkguniverse.Process, fn func(player Entity, msg *M)) {
 	var zero M
-	msgType := reflect.TypeOf(zero)
-	registerClientInputType(msgType)
+	world.Wire().RegisterClientInput(reflect.TypeOf(zero))
 
 	world.OnStageInit(func(stage *pkguniverse.Stage) {
 		Handle(stage, fn)
 	})
-}
-
-// ─── client-input registry ────────────────────────────────────────────────────
-
-var (
-	ciMu     sync.RWMutex
-	ciSet    = map[reflect.Type]struct{}{} // T (NOT *T)
-	ciByType = map[uint32]reflect.Type{}   // typeID → reflect.Type for dispatch
-)
-
-// registerClientInputType marks t as a HandleClient-eligible type and
-// indexes it by typeID for inbound-frame lookup. Idempotent.
-//
-// Two distinct types hashing to the same typeID is a panic, matching
-// RegisterEvent and RegisterOp. This registry previously overwrote silently,
-// which is the worst outcome available: the loser's handler simply stops being
-// reachable, and because this is the one registry decoded straight off a client
-// socket, the symptom is a client input that is accepted and then ignored
-// rather than an error anyone can see. Rename one type if it ever fires.
-func registerClientInputType(t reflect.Type) {
-	// Registration-time shape check. This is the one registry whose types are
-	// decoded straight off a client socket, so an unsupported field here is a
-	// wire bug reachable by an unauthenticated peer rather than a codegen one.
-	pkguniverse.ValidateMessageType(t)
-	id := TypeIDOf(t)
-	ciMu.Lock()
-	defer ciMu.Unlock()
-	if _, ok := ciSet[t]; ok {
-		return
-	}
-	if existing, ok := ciByType[id]; ok && existing != t {
-		panic(fmt.Sprintf("HandleClient: typeID collision between %s and %s (id=%#x)",
-			existing.String(), t.String(), id))
-	}
-	ciSet[t] = struct{}{}
-	ciByType[id] = t
 }
 
 // ClientInputTypeOf returns a serializable schema describing a registered
@@ -92,32 +52,5 @@ func ClientInputTypeOf(t reflect.Type) ClientInputTypeSchema {
 // deterministic order (sorted by reflect.Type.String()). Used by sdkgen
 // to emit TS class declarations for client-bound message types.
 func ClientInputTypes() []reflect.Type {
-	ciMu.RLock()
-	defer ciMu.RUnlock()
-	out := make([]reflect.Type, 0, len(ciSet))
-	for t := range ciSet {
-		out = append(out, t)
-	}
-	sort.Slice(out, func(i, j int) bool { return out[i].String() < out[j].String() })
-	return out
-}
-
-// ciIsRegistered reports whether t is currently in the client-input
-// registry. Internal helper for the universe-side ClientInputHooks
-// indirection (see init.go).
-func ciIsRegistered(t reflect.Type) bool {
-	ciMu.RLock()
-	_, ok := ciSet[t]
-	ciMu.RUnlock()
-	return ok
-}
-
-// ciTypeOfTypeID resolves a wire typeID back to its registered Go type.
-// Returns nil for unknown typeIDs (which the dispatch path treats as
-// untrusted and drops with a log).
-func ciTypeOfTypeID(typeID uint32) reflect.Type {
-	ciMu.RLock()
-	t := ciByType[typeID]
-	ciMu.RUnlock()
-	return t
+	return pkguniverse.GlobalWire().ClientInputTypes()
 }

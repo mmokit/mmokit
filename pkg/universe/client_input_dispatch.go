@@ -77,13 +77,6 @@ func (s *Stage) DispatchClientInput() {
 	if s == nil || s.eng == nil {
 		return
 	}
-	if ClientInputHooks.TypeOfTypeID == nil {
-		// mmokit not imported (tests built standalone): no handlers
-		// can possibly be registered, so dropping is the correct silent
-		// behavior.
-		return
-	}
-
 	connMgr := s.eng.ConnMgr
 	if connMgr == nil {
 		return
@@ -172,7 +165,7 @@ func (s *Stage) dispatchOneClientInput(sess *engine.PlayerSession, typeID uint32
 		}
 	}()
 
-	msgType := ClientInputHooks.TypeOfTypeID(typeID)
+	msgType := s.Wire().ClientInputType(typeID)
 	if msgType == nil {
 		metrics.Ingress().RecordRejected(metrics.SurfaceClient, metrics.ReasonUnknownTypeID)
 		s.eng.Log.Log(CatClientInput,

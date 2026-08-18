@@ -3,7 +3,6 @@ package universe
 import (
 	"encoding/binary"
 	"net/http/httptest"
-	"reflect"
 	"strings"
 	"testing"
 
@@ -296,10 +295,7 @@ func TestVCMQueueDrop_RecordsQueueFull(t *testing.T) {
 // does not have. Sustained, it is a version skew or a registry probe, and it is
 // invisible on a scrape unless it is counted here.
 func TestClientInput_UnknownTypeIDIsCounted(t *testing.T) {
-	prev := ClientInputHooks.TypeOfTypeID
-	ClientInputHooks.TypeOfTypeID = func(uint32) reflect.Type { return nil }
-	t.Cleanup(func() { ClientInputHooks.TypeOfTypeID = prev })
-
+	// 0xFEED0001 is registered by nothing, which is the whole point.
 	cell := newTestCell("unknown-typeid", CellID{X: 0, Y: 0})
 	connMgr := cell.Engine.ConnMgr.(*pkgnet.ConnManager)
 	tr := &countingTransport{}

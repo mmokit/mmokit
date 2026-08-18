@@ -90,14 +90,7 @@ func TestIngress_SustainedLoadBoundedAndRecovers(t *testing.T) {
 
 	// A real registered type, so each frame runs the full production path:
 	// frame walk, strict decode under the client profile, dispatcher invoke.
-	prevType := ClientInputHooks.TypeOfTypeID
-	ClientInputHooks.TypeOfTypeID = func(id uint32) reflect.Type {
-		if id == loadPingTypeID {
-			return reflect.TypeFor[loadPing]()
-		}
-		return nil
-	}
-	t.Cleanup(func() { ClientInputHooks.TypeOfTypeID = prevType })
+	bindClientInputTypeID(t, loadPingTypeID, reflect.TypeFor[loadPing]())
 
 	cell := newTestCell("ingress-load", CellID{X: 0, Y: 0})
 

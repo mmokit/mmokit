@@ -46,24 +46,24 @@ func (p *Process) DispatchCellRoutedOp(
 	ctx *ops.OpContext,
 ) []byte {
 	if ctx.Username == "" {
-		return encodeOpErrorViaHooks(requestID, opErrorHandlerFailed,
+		return encodeOpError(requestID, opErrorHandlerFailed,
 			fmt.Sprintf("op %s: unauthenticated session", reqType.String()))
 	}
 
 	cellID, ok := p.findActiveUserCell(ctx.Username)
 	if !ok {
-		return encodeOpErrorViaHooks(requestID, opErrorHandlerFailed,
+		return encodeOpError(requestID, opErrorHandlerFailed,
 			fmt.Sprintf("op %s: no active cell for user %q on this process",
 				reqType.String(), ctx.Username))
 	}
 	cell, ok := p.getCell(cellID)
 	if !ok {
-		return encodeOpErrorViaHooks(requestID, opErrorHandlerFailed,
+		return encodeOpError(requestID, opErrorHandlerFailed,
 			fmt.Sprintf("op %s: cell %s not owned by this process",
 				reqType.String(), cellID))
 	}
 	if cell.Stage == nil || cell.Stage.eng == nil {
-		return encodeOpErrorViaHooks(requestID, opErrorHandlerFailed,
+		return encodeOpError(requestID, opErrorHandlerFailed,
 			fmt.Sprintf("op %s: cell %s has no engine",
 				reqType.String(), cellID))
 	}
@@ -107,7 +107,7 @@ func (p *Process) DispatchCellRoutedOp(
 			// dropped and the client's typed-op promise never settles. Before
 			// this the decode panicked and the loop-job recover turned that
 			// same hang into a silent one.
-			respFrame = encodeOpErrorViaHooks(requestID, opErrorDecodeFailed,
+			respFrame = encodeOpError(requestID, opErrorDecodeFailed,
 				fmt.Sprintf("op %s: decode request: %v", reqType.String(), decodeErr))
 		} else {
 			handlerVal := reflect.ValueOf(handler)
@@ -117,14 +117,14 @@ func (p *Process) DispatchCellRoutedOp(
 			errVal := results[1]
 
 			if !errVal.IsNil() {
-				respFrame = encodeOpErrorViaHooks(requestID, opErrorHandlerFailed,
+				respFrame = encodeOpError(requestID, opErrorHandlerFailed,
 					errVal.Interface().(error).Error())
 			} else if resPtr.IsNil() {
 				respFrame = EncodeTypedOpFrame(resTypeID, requestID, nil)
 			} else if resBody, mErr := ReflectMarshal(resPtr.Interface()); mErr != nil {
 				// Handler succeeded but its response does not fit the wire; answer
 				// with a typed error so the client's requestID is not left pending.
-				respFrame = encodeOpErrorViaHooks(requestID, opErrorHandlerFailed,
+				respFrame = encodeOpError(requestID, opErrorHandlerFailed,
 					fmt.Sprintf("encode response: %v", mErr))
 			} else {
 				respFrame = EncodeTypedOpFrame(resTypeID, requestID, resBody)
@@ -147,7 +147,7 @@ func (p *Process) DispatchCellRoutedOp(
 		// Loop queue full — handler did not run. Surface as
 		// OperationError so the client doesn't hang on its pending
 		// promise indefinitely.
-		return encodeOpErrorViaHooks(requestID, opErrorHandlerFailed,
+		return encodeOpError(requestID, opErrorHandlerFailed,
 			fmt.Sprintf("op %s: cell %s loop queue full",
 				reqType.String(), cellID))
 	}
