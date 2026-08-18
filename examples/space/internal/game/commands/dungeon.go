@@ -422,7 +422,7 @@ func registerDungeonSpawn(reg *cmdsys.Registry, coord *mmokit.Process) error {
 		Handler: func(ctx context.Context, env *cmdsys.Env, raw any) (any, error) {
 			args := raw.(DungeonSpawnArgs)
 			// Resolve the cell via its center coordinates.
-			cellSize := mmokit.CellSize()
+			cellSize := coord.CellSize()
 			worldX := float32(args.CellX)*cellSize + cellSize/2
 			worldY := float32(args.CellY)*cellSize + cellSize/2
 			cellID := coord.CellAtPosition(worldX, worldY)

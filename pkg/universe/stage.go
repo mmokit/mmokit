@@ -256,15 +256,10 @@ func NewStage(eng *engine.Engine, cell CellID, aoiRadius float32, replRegistry *
 		aoiRadius:    aoiRadius,
 		bridge:       NoopBridge{},
 		clusterClock: defaultClock,
-		// MIGRATION SEAM (CE-010 part A). Defaults to the live global rather
-		// than coords.DefaultCellSize so that a Stage built outside a Process
-		// and the not-yet-converted sites still reading coords.CellSize agree
-		// on one value. Converting sites one commit at a time is only safe
-		// while both sources answer the same thing.
-		//
-		// The last step of part A deletes the global and this read with it,
-		// leaving coords.DefaultCellSize as the fallback.
-		baseCellSize:     coords.CellSize,
+		// A Stage built outside a Process (tests, benchmarks) gets the
+		// default; Process.createNode overwrites it with the configured
+		// geometry immediately after construction.
+		baseCellSize:     coords.DefaultCellSize,
 		replicaNetIDs:    make(map[uint32]ecs.Entity),
 		highestSeenEpoch: make(map[uint32]uint32),
 		borderLastSeen:   make(map[MeshCellID]map[uint32]struct{}),

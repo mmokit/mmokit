@@ -3,8 +3,6 @@ package universe
 import (
 	"testing"
 	"time"
-
-	"github.com/mmokit/mmokit/pkg/coords"
 )
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -172,9 +170,10 @@ func TestSplit_ChildCellSeededWithBorderContext(t *testing.T) {
 	// Quadrant 1 (BR) strengthens the guard: 102 Live, 101/103/104 Replica.
 	assertChildVisibleSet(1)
 
-	// Keep coords import meaningful and pin the cell-size assumption the
-	// quadrant math relies on (newExecutorTestCoord sets it to 1024).
-	if coords.CellSize != 1024 {
-		t.Fatalf("expected CellSize 1024, got %v", coords.CellSize)
+	// Pin the cell-size assumption the quadrant math above relies on. Asked of
+	// the process rather than a global, so it is this cluster's geometry
+	// rather than whatever another test last set.
+	if got := coord.CellSize(); got != 1024 {
+		t.Fatalf("expected cell size 1024, got %v", got)
 	}
 }

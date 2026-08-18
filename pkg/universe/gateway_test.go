@@ -112,7 +112,7 @@ func TestGatewayLookupSessionReturnsRouteSnapshot(t *testing.T) {
 // pre-Location anyCellID bug. With CellSize=2000 and a 2×2 grid, a spawn
 // point at world (0.85*cellSize, 0.85*cellSize) = (1700, 1700) must
 // deterministically resolve to cell_0_0. Prior to the flip-day commit,
-// cellAtPosition returned "" whenever coords.CellSize was stale at
+// cellAtPosition returned "" whenever the cell size was stale at
 // resolve time (8192 default, not yet updated by SetCellSize), and the
 // gateway's anyCellID fallback scattered logins across random cells.
 func TestCellAtPosition_RoutesFreshLoginToOwningCell(t *testing.T) {

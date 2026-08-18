@@ -223,7 +223,7 @@ func snapshotCells(coord *mmokit.Process) []*mmokit.Cell {
 // game tick from any other goroutine corrupts the ECS.
 func spawnBotsOnLoop(cell *mmokit.Cell, count int) int {
 	stage := cell.Stage
-	cellSize := mmokit.CellSize()
+	cellSize := cell.Stage.CellSize()
 	minX, minY, maxX, maxY := cell.CellID().WorldBounds(cellSize)
 	sizeX := maxX - minX
 	sizeY := maxY - minY

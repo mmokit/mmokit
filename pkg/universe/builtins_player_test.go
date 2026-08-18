@@ -81,6 +81,9 @@ func newTestCoordWithPlayer(t *testing.T, username string, cellX, cellY int32, x
 	coord := &Process{
 		Cells: map[MeshCellID]*Cell{},
 		Hosts: map[string]*Host{},
+		// The geometry this file's assertions are written against. It used to
+		// arrive from whatever the previous test left in the package global.
+		cfg: Config{CellSize: 1024},
 	}
 	withFreshRegistry(coord)
 	loc := newMockLocator()

@@ -52,7 +52,7 @@ func TestMoveTarget_Cancel(t *testing.T) {
 // The regression this guards: 4node-basic runs CellSize=2000 against a default
 // of 8192, and a SetTarget that used the wrong one produced a 4x cell-index
 // error. It used to guard that by asserting SetTarget observed a runtime
-// coords.SetCellSize.
+// a runtime global.
 //
 // CE-010 made the bug impossible instead of detectable: the size is a
 // parameter, so there is no global for a caller to read the wrong value from.

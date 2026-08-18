@@ -71,7 +71,7 @@ func newExecutorTestCoord(t *testing.T) (*Process, *Host, *Cell) {
 		// executor Receive path created via context.Background()) and
 		// drains their game loops via Cell.Shutdown. Without this, the
 		// Receive-spawned goroutines leak past the test and race with
-		// the next test's coords.SetCellSize. See the S7-T10 race-fix
+		// the next test's setup. See the S7-T10 race-fix
 		// notes on Cell.Shutdown in cell.go.
 		coord.Shutdown()
 	})

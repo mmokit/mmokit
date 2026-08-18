@@ -5,142 +5,61 @@ import (
 	"testing"
 )
 
-func TestCellSize(t *testing.T) {
-	if CellSize != 8192.0 {
-		t.Fatalf("CellSize = %v, want 8192.0", CellSize)
-	}
-}
+// FromFlat is what survives of this package's coordinate maths after CE-010.
+//
+// Normalize, RelativeOffset, Distance and WorldPos.ToFlat were deleted rather
+// than converted: each would have needed a cell-size parameter threaded through
+// it, and none had a single caller outside this file's own tests. Their tests
+// went with them — a round-trip test whose other half no longer exists is not
+// coverage, it is a reason to keep dead code alive.
+func TestFromFlat(t *testing.T) {
+	const cellSize float32 = 8192
 
-func TestNormalize(t *testing.T) {
 	tests := []struct {
-		name string
-		in   WorldPos
-		want WorldPos
+		name       string
+		x, y       float64
+		wantCellX  int32
+		wantCellY  int32
+		wantLocalX float32
+		wantLocalY float32
 	}{
-		{
-			name: "already normalized no-op",
-			in:   WorldPos{CellX: 1, CellY: 2, LocalX: 100, LocalY: 200},
-			want: WorldPos{CellX: 1, CellY: 2, LocalX: 100, LocalY: 200},
-		},
-		{
-			name: "positive overflow wraps CellX++",
-			in:   WorldPos{CellX: 0, CellY: 0, LocalX: CellSize + 100, LocalY: 50},
-			want: WorldPos{CellX: 1, CellY: 0, LocalX: 100, LocalY: 50},
-		},
-		{
-			name: "negative wraps CellX--",
-			in:   WorldPos{CellX: 0, CellY: 0, LocalX: -100, LocalY: 50},
-			want: WorldPos{CellX: -1, CellY: 0, LocalX: CellSize - 100, LocalY: 50},
-		},
-		{
-			name: "multi-cell overflow",
-			in:   WorldPos{CellX: 0, CellY: 0, LocalX: CellSize*3 + 500, LocalY: -CellSize*2 - 300},
-			want: WorldPos{CellX: 3, CellY: -3, LocalX: 500, LocalY: CellSize - 300},
-		},
+		{"origin", 0, 0, 0, 0, 0, 0},
+		{"inside the first cell", 12345.678, 9876.543, 1, 1, 4153.678, 1684.543},
+		// Negative coordinates floor toward minus infinity rather than
+		// truncating toward zero, so the local offset stays in [0, cellSize).
+		{"negative", -5000.5, -12000.25, -1, -2, 3191.5, 4383.75},
+		{"exact cell boundary", 8192, 16384, 1, 2, 0, 0},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := tt.in
-			Normalize(&got)
-			if got.CellX != tt.want.CellX || got.CellY != tt.want.CellY {
-				t.Errorf("cell = (%d,%d), want (%d,%d)", got.CellX, got.CellY, tt.want.CellX, tt.want.CellY)
+			got := FromFlat(tt.x, tt.y, cellSize)
+			if got.CellX != tt.wantCellX || got.CellY != tt.wantCellY {
+				t.Fatalf("cell = (%d,%d), want (%d,%d)", got.CellX, got.CellY, tt.wantCellX, tt.wantCellY)
 			}
-			if math.Abs(float64(got.LocalX-tt.want.LocalX)) > 0.01 || math.Abs(float64(got.LocalY-tt.want.LocalY)) > 0.01 {
-				t.Errorf("local = (%.2f,%.2f), want (%.2f,%.2f)", got.LocalX, got.LocalY, tt.want.LocalX, tt.want.LocalY)
+			if math.Abs(float64(got.LocalX-tt.wantLocalX)) > 0.01 ||
+				math.Abs(float64(got.LocalY-tt.wantLocalY)) > 0.01 {
+				t.Fatalf("local = (%.4f,%.4f), want (%.4f,%.4f)",
+					got.LocalX, got.LocalY, tt.wantLocalX, tt.wantLocalY)
+			}
+			// The local offset must always land inside the cell, which is the
+			// invariant the floor-vs-truncate distinction exists to preserve.
+			if got.LocalX < 0 || got.LocalX >= cellSize || got.LocalY < 0 || got.LocalY >= cellSize {
+				t.Fatalf("local offset (%.4f,%.4f) outside [0,%v)", got.LocalX, got.LocalY, cellSize)
 			}
 		})
 	}
 }
 
-func TestRelativeOffset(t *testing.T) {
-	tests := []struct {
-		name   string
-		from   WorldPos
-		to     WorldPos
-		wantDX float32
-		wantDY float32
-	}{
-		{
-			name:   "same cell same point",
-			from:   WorldPos{CellX: 0, CellY: 0, LocalX: 100, LocalY: 100},
-			to:     WorldPos{CellX: 0, CellY: 0, LocalX: 100, LocalY: 100},
-			wantDX: 0,
-			wantDY: 0,
-		},
-		{
-			name:   "adjacent cell offset equals CellSize",
-			from:   WorldPos{CellX: 0, CellY: 0, LocalX: 0, LocalY: 0},
-			to:     WorldPos{CellX: 1, CellY: 0, LocalX: 0, LocalY: 0},
-			wantDX: CellSize,
-			wantDY: 0,
-		},
-		{
-			name:   "diagonal",
-			from:   WorldPos{CellX: 0, CellY: 0, LocalX: 100, LocalY: 200},
-			to:     WorldPos{CellX: 1, CellY: 1, LocalX: 100, LocalY: 200},
-			wantDX: CellSize,
-			wantDY: CellSize,
-		},
+// The size is a parameter, so two callers can use different geometries in one
+// process — the property CE-010 exists to provide.
+func TestFromFlat_HonoursTheSizeItIsGiven(t *testing.T) {
+	at8192 := FromFlat(10000, 0, 8192)
+	at1024 := FromFlat(10000, 0, 1024)
+	if at8192.CellX != 1 {
+		t.Fatalf("cellX at 8192 = %d, want 1", at8192.CellX)
 	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			dx, dy := RelativeOffset(tt.from, tt.to)
-			if math.Abs(float64(dx-tt.wantDX)) > 0.01 || math.Abs(float64(dy-tt.wantDY)) > 0.01 {
-				t.Errorf("RelativeOffset = (%.2f,%.2f), want (%.2f,%.2f)", dx, dy, tt.wantDX, tt.wantDY)
-			}
-		})
-	}
-}
-
-func TestDistance(t *testing.T) {
-	tests := []struct {
-		name string
-		a, b WorldPos
-		want float32
-	}{
-		{
-			name: "same point is 0",
-			a:    WorldPos{CellX: 0, CellY: 0, LocalX: 50, LocalY: 50},
-			b:    WorldPos{CellX: 0, CellY: 0, LocalX: 50, LocalY: 50},
-			want: 0,
-		},
-		{
-			name: "3-4-5 triangle",
-			a:    WorldPos{CellX: 0, CellY: 0, LocalX: 0, LocalY: 0},
-			b:    WorldPos{CellX: 0, CellY: 0, LocalX: 3, LocalY: 4},
-			want: 5,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got := Distance(tt.a, tt.b)
-			if math.Abs(float64(got-tt.want)) > 0.01 {
-				t.Errorf("Distance = %.4f, want %.4f", got, tt.want)
-			}
-		})
-	}
-}
-
-func TestFromFlatToFlatRoundTrip(t *testing.T) {
-	tests := []struct {
-		name string
-		x, y float64
-	}{
-		{"positive", 12345.678, 9876.543},
-		{"negative", -5000.5, -12000.25},
-		{"large values", 100000.0, 200000.0},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			wp := FromFlat(tt.x, tt.y, CellSize)
-			gotX, gotY := wp.ToFlat()
-			if math.Abs(gotX-tt.x) > 0.01 || math.Abs(gotY-tt.y) > 0.01 {
-				t.Errorf("round-trip (%.4f,%.4f) → (%.4f,%.4f)", tt.x, tt.y, gotX, gotY)
-			}
-		})
+	if at1024.CellX != 9 {
+		t.Fatalf("cellX at 1024 = %d, want 9", at1024.CellX)
 	}
 }

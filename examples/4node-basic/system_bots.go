@@ -33,7 +33,7 @@ type BotSystem struct {
 // auto-bind handles it.
 
 func (s *BotSystem) Update(dt float32) {
-	cellSize := mmokit.CellSize()
+	cellSize := s.Stage().CellSize()
 	// Target the depth-0 ANCESTOR of this cell rather than the cell's own
 	// bounds. A bot living in cell_d1_0_1 (child of 0_0) still picks
 	// targets anywhere inside 0_0's full world area. This keeps bots

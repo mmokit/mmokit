@@ -245,7 +245,7 @@ func registerPOISpawn(reg *cmdsys.Registry, coord *mmokit.Process) error {
 
 			// Convert world coords to cell-local — gw.SpawnPOI takes
 			// local coords (matches the procgen path in spawnPOIs).
-			minX, minY, _, _ := cell.CellID().WorldBounds(mmokit.CellSize())
+			minX, minY, _, _ := cell.CellID().WorldBounds(coord.CellSize())
 			localX := args.X - minX
 			localY := args.Y - minY
 

@@ -445,12 +445,6 @@ type WorldPos = coords.WorldPos
 // or a Process for that.
 const DefaultCellSize = coords.DefaultCellSize
 
-// CellSize returns the current cell size in world units.
-func CellSize() float32 { return coords.CellSize }
-
-// SetCellSize overrides the default cell size (call during initialization).
-func SetCellSize(size float32) { coords.SetCellSize(size) }
-
 // Location is a world-space anchor for spawn/respawn/teleport targets.
 // See coords.Location for the full doc.
 type Location = coords.Location

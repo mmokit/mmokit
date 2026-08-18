@@ -860,7 +860,6 @@ func New(cfg Config) *Process {
 	}
 
 	if cfg.CellSize > 0 {
-		coords.SetCellSize(cfg.CellSize)
 	}
 
 	c := &Process{
@@ -3927,12 +3926,7 @@ func (c *Process) CellSize() float32 {
 	if c.cfg.CellSize > 0 {
 		return c.cfg.CellSize
 	}
-	// MIGRATION SEAM (CE-010 part A): fall back to the live global rather than
-	// coords.DefaultCellSize, so a process whose Config leaves CellSize unset
-	// still agrees with the sites not yet converted — including test fixtures
-	// that configure geometry with coords.SetCellSize. The last step of part A
-	// deletes the global and this read, leaving coords.DefaultCellSize.
-	return coords.CellSize
+	return coords.DefaultCellSize
 }
 
 // ---------------------------------------------------------------------------

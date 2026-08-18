@@ -137,7 +137,7 @@ type Cell struct {
 	// Shutdown() reads + acts on them to cancel the game loop and block
 	// until it has actually exited. This is how S7-T10 stops cell
 	// goroutines from leaking past a Shutdown call and racing with the
-	// next test's setup (coords.SetCellSize, etc.).
+	// next test's setup.
 	runMu     sync.Mutex
 	runCancel context.CancelFunc // nil until Run starts; reset when Run exits
 	runDone   chan struct{}      // closed when Run returns

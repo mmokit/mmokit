@@ -167,7 +167,7 @@ var topologies = []topoBuilder{
 // passing a fresh clusterFixture each time. Cleanup happens via t.Cleanup
 // registered inside the builders.
 //
-// Topology fixtures run sequentially because coords.CellSize is mutable
+// Topology fixtures run sequentially because they share process-level state
 // package-global configuration. Parallel fixtures race even when they set the
 // same value and could observe different sizes if a future test diverges.
 func forEachTopology(t *testing.T, cfg FixtureConfig, body func(t *testing.T, fx clusterFixture)) {
