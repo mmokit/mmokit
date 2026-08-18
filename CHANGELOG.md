@@ -19,8 +19,10 @@ of [`README.md`](README.md#status) for what that means for API and wire compatib
     disconnects are sealed too — in v1 anyone who learned a token could retire
     a frame the peer never received, or tear the session down.
   - A version byte follows the type byte on **every** packet, not just the
-    handshake ([CE-009](docs/roadmap.md)), so a peer disagreement is rejected at
-    the first datagram instead of being misparsed into the wrong shape.
+    handshake ([CE-009](docs/roadmap.md)). It versions the packet envelope: a
+    peer running a different packet layout is rejected at the first datagram.
+    It does **not** version the sealed payload's shape — that needs CE-009's
+    schema fingerprint, which is not in this release.
   - A new `ConnConfirm` (`0x06`) step carries the key ID and echoes a stateless
     HMAC cookie. The server now retains nothing for a peer that has not proven
     return routability, which removes the pending-handshake table and the

@@ -85,9 +85,11 @@ namespace Mmokit.Sdk.Core.Tests
             }
         }
 
-        // Every packet must carry the version byte, or a peer that disagrees
-        // about the world's shape decodes valid bytes into the wrong types
-        // instead of being rejected (CE-009).
+        // Every packet must carry the version byte so a peer running a
+        // different packet envelope is rejected at the first datagram rather
+        // than failing further in as a bad AEAD tag (CE-009). It does not cover
+        // payload-shape disagreement — that is the schema fingerprint's job and
+        // the fingerprint does not exist yet.
         [Fact]
         public void EveryPacketCarriesTheVersionByte()
         {

@@ -16,9 +16,10 @@ namespace Mmokit.Sdk.Core
         public const byte TypeDisconnect = 0x05;
         public const byte TypeConnConfirm = 0x06;
 
-        /// Protocol version carried by every packet (CE-009). A peer sending a
-        /// different version is rejected at the first packet rather than being
-        /// allowed to misparse later ones.
+        /// Envelope version carried by every packet (CE-009). A peer running a
+        /// different packet layout is rejected at the first packet. It does not
+        /// version the shape of the sealed payload — see the contract on Go's
+        /// udpproto.Version for what that does and does not buy.
         public const byte Version = 0x02;
 
         public const uint ProtocolID = 0x47414D45; // "GAME"

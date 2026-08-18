@@ -10,9 +10,10 @@
 // v2 changes three things in ONE wire break — deliberately bundled so there is
 // one lockstep redeploy and one golden regeneration rather than three:
 //
-//  1. A version byte follows the type byte on every packet (CE-009). Without it
-//     a client and server that disagree about the shape of the world decode
-//     each other's valid bytes into the wrong types instead of disconnecting.
+//  1. A version byte follows the type byte on every packet (CE-009). It
+//     versions THIS ENVELOPE — the header layout, and the fact that the body is
+//     sealed — and nothing inside the sealed body. See Version for what that
+//     does and does not buy.
 //  2. Data packets carry an explicit AEAD counter and a sealed body. The token
 //     stops being a credential and becomes a session index; the tag is the
 //     credential.
@@ -46,8 +47,27 @@ const (
 	TypeConnConfirm byte = 0x06
 )
 
-// Version is the protocol version carried by every packet (CE-009). Bump it for
+// Version is the ENVELOPE version carried by every packet (CE-009). Bump it for
 // any layout change or any change to the meaning of a sealed body.
+//
+// What it covers: a peer running a different packet envelope is rejected at the
+// first datagram with ErrBadVersion, instead of failing further in as a bad
+// AEAD tag or a short read — failures that are harder to attribute to the real
+// cause.
+//
+// What it does NOT cover, despite CE-009 being the item that asked for it: any
+// disagreement about the shape of the DECODED PAYLOAD. Wire type IDs are
+// fnv32a(reflect.Type.String()) and the framework deliberately keeps one
+// component type set across dimension profiles, so a 2D and a 3D Position hash
+// identically. That mismatch lives inside the sealed body, which this byte
+// never reads. Rejecting a 2D client that meets a 3D server needs a structural
+// hash over field shapes — CE-009's schema fingerprint, still open. This
+// comment used to claim the opposite; do not read the byte as covering it.
+//
+// Against v1 specifically it buys nothing. A v1 handshake packet puts
+// protocolID where v2 reads the version, so it fails ErrBadProtocolID anyway,
+// and v1 data packets carry no AEAD tag. The value is forward-looking: the next
+// envelope change gets a clean rejection rather than a decode failure.
 const Version byte = 0x02
 
 // ProtocolID is a magic number to reject stray UDP packets.
@@ -84,7 +104,10 @@ var (
 	ErrTooShort      = errors.New("packet too short")
 	ErrBadType       = errors.New("unknown packet type")
 	ErrBadProtocolID = errors.New("wrong protocol ID")
-	ErrBadVersion    = errors.New("unsupported protocol version")
+	// ErrBadVersion is returned but not yet distinguished: the server drops on
+	// any decode error with no per-reason metric, so a version mismatch is
+	// currently indistinguishable from a truncated packet to an operator.
+	ErrBadVersion = errors.New("unsupported protocol version")
 )
 
 // MakeToken computes the connection token from client and server salts.
