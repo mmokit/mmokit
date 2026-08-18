@@ -5,6 +5,18 @@ import { BasicDeltaDecoder } from "./delta-decoder.js";
 import { TypedDispatcher, ChatBannedEvent, ChatChannelGoneEvent, ChatChannelUpdatedEvent, ChatChannelsHydratedEvent, ChatDMEvent, ChatKickedEvent, ChatMemberJoinedEvent, ChatMemberLeftEvent, ChatMemberRoleChangedEvent, ChatMessageDeletedEvent, ChatMessageEvent, ChatMutedEvent, ChatRateLimitedEvent, ChatUnmutedEvent, CellChange, DebugInfo, OperationError, PlayerEntityAssigned, Pong, ServerConfig, WorldDelta } from "./broadcasts.js";
 import { AuthChangePasswordRequest, AuthChangePasswordResponse, AuthLoginRequest, AuthLoginResponse, AuthLogoutRequest, AuthLogoutResponse, AuthRegisterRequest, AuthRegisterResponse, AuthValidateTokenRequest, AuthValidateTokenResponse, ChatAddMemberRequest, ChatAddMemberResponse, ChatBanRequest, ChatBanResponse, ChatBroadcastRequest, ChatBroadcastResponse, ChatBulkSetMembersRequest, ChatBulkSetMembersResponse, ChatCreateRequest, ChatCreateResponse, ChatDeleteMessageRequest, ChatDeleteMessageResponse, ChatJoinRequest, ChatJoinResponse, ChatKickRequest, ChatKickResponse, ChatLeaveRequest, ChatLeaveResponse, ChatListChannelsRequest, ChatListChannelsResponse, ChatListMembersRequest, ChatListMembersResponse, ChatMuteUserRequest, ChatMuteUserResponse, ChatRegisterChannelRequest, ChatRegisterChannelResponse, ChatRemoveMemberRequest, ChatRemoveMemberResponse, ChatRenameChannelRequest, ChatRenameChannelResponse, ChatSendDMRequest, ChatSendDMResponse, ChatSendRequest, ChatSendResponse, ChatSetMemberRoleRequest, ChatSetMemberRoleResponse, ChatSetSlowModeRequest, ChatSetSlowModeResponse, ChatSetTopicRequest, ChatSetTopicResponse, ChatUnbanRequest, ChatUnbanResponse, ChatUnmuteUserRequest, ChatUnmuteUserResponse, ChatUnregisterChannelRequest, ChatUnregisterChannelResponse, EchoFetchRequest, EchoFetchResponse, EchoPersistRequest, EchoPersistResponse, EchoPingRequest, EchoPingResponse } from "./operations.js";
 
+/** Structural fingerprint of the protocol this SDK was generated from.
+ *  Sent at connection setup; the server refuses a mismatch. */
+export const SCHEMA_FINGERPRINT = "d3c55737";
+
+/** Appends the schema fingerprint to a connect URL, preserving any
+ *  query the caller already put there. */
+function withSchemaFingerprint(url: string): string {
+  const u = new URL(url);
+  u.searchParams.set("schema", SCHEMA_FINGERPRINT);
+  return u.toString();
+}
+
 export interface BasicClientOptions {
   url: string;
   onOpen?: () => void;
@@ -22,7 +34,7 @@ export class BasicClient {
   private nextTypedOpRequestID: bigint = 1n;
 
   constructor(private options: BasicClientOptions) {
-    this.transport = new Transport(options.url);
+    this.transport = new Transport(withSchemaFingerprint(options.url));
   }
 
   connect(): void {

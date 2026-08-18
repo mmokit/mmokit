@@ -179,6 +179,8 @@ func (c *Config) BindFlags() {
 		"disable interactive console (for non-TTY environments)")
 	flag.BoolVar(&c.DevInsecureCookie, "dev-insecure-cookie", c.DevInsecureCookie,
 		"disable Secure flag on the auth session cookie (plain-HTTP local dev only)")
+	flag.BoolVar(&c.AllowUnfingerprintedClients, "allow-unfingerprinted-clients", false,
+		"accept clients that present no schema fingerprint at connection setup (for wscat/devtools; a client presenting a WRONG fingerprint is still refused)")
 	flag.BoolVar(&c.DumpSchema, "dump-schema", false,
 		"dump protocol schema JSON to stdout and exit (after Build, before Start)")
 }
@@ -267,7 +269,10 @@ func (c *Process) startHTTPListener() {
 
 	mux := http.NewServeMux()
 	c.ConnMgr.AllowedOrigins = wsAllowedOrigins(c.cfg)
-	mux.HandleFunc("/ws", c.ConnMgr.HandleWebSocket)
+	// Gated: a client whose compiled-in protocol fingerprint disagrees with
+	// this process's is refused before the upgrade, so it never becomes a
+	// connection. See Process.schemaGate.
+	mux.HandleFunc("/ws", c.schemaGate(c.ConnMgr.HandleWebSocket))
 	// Diagnostic endpoints — heartbeat WS + write-path stats. Live
 	// alongside /ws on the gateway listener so the Bun probe and
 	// in-browser overlay can reach them without any extra config.
@@ -277,7 +282,12 @@ func (c *Process) startHTTPListener() {
 	// the auth service so it uses the gateway's own AuthResolver: the process
 	// that hands out the key is then always the process that terminates the
 	// UDP session, and no key crosses a process boundary in distributed mode.
-	mux.HandleFunc("POST /auth/udp-key", c.handleUDPKeyIssue)
+	// Gated for the same reason /ws is, and this is where UDP gets its check:
+	// a client cannot complete the UDP handshake without a key from here, so
+	// refusing issuance refuses the session — with an HTTP status the client
+	// surfaces, and without adding a byte to any packet or a third break to
+	// the UDP wire format.
+	mux.HandleFunc("POST /auth/udp-key", c.schemaGate(c.handleUDPKeyIssue))
 	mux.Handle("/metrics", c.MetricsHandler())
 	mux.Handle("/commands", handleCommandList(c.registry))
 	mux.Handle("/commands/", handleCommandDescribe(c.registry))

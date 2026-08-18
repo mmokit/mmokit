@@ -360,6 +360,15 @@ type Config struct {
 	// with from a command line.
 	Dimension Dimension
 
+	// AllowUnfingerprintedClients lets a client connect without presenting a
+	// schema fingerprint at connection setup. Off by default.
+	//
+	// The escape hatch exists for wscat and browser devtools poking at a live
+	// gateway. It permits an ABSENT fingerprint only — a present-but-wrong one
+	// still refuses, because that is never a human at a terminal, it is a
+	// stale build.
+	AllowUnfingerprintedClients bool
+
 	// DumpSchema, when true, causes Process.Start to dump the protocol schema
 	// JSON to stdout and exit before any listeners or game-loop goroutines
 	// start. Engine-owned via the --dump-schema flag in BindFlags. Games never

@@ -55,6 +55,15 @@ func (b csharpBackend) genClient(schema ProtocolSchema) string {
 	sb.WriteString("using System;\nusing System.Collections.Generic;\nusing System.Threading;\nusing System.Threading.Tasks;\nusing Mmokit.Sdk.Core;\n\n")
 	fmt.Fprintf(&sb, "namespace %s\n{\n", b.namespace)
 
+	// Compile-time protocol fingerprint, copied from the schema dump this SDK
+	// was generated from. Presented at connection setup so a stale SDK is
+	// refused rather than left to mis-decode every snapshot.
+	fmt.Fprintf(&sb, "    /// Structural fingerprint of the protocol this SDK was generated from.\n")
+	fmt.Fprintf(&sb, "    /// Pass to MmokitAuth.FetchUdpKey*Async so the server can refuse a mismatch.\n")
+	fmt.Fprintf(&sb, "    public static class %sProtocol\n    {\n", gameName)
+	fmt.Fprintf(&sb, "        public const string SchemaFingerprint = %q;\n", schema.Fingerprint)
+	fmt.Fprintf(&sb, "    }\n\n")
+
 	if hasOpError {
 		sb.WriteString("    /// Thrown when an operation returns a framework OperationError. Carries\n")
 		sb.WriteString("    /// the server-supplied Code + Message so callers can branch on the reason\n")

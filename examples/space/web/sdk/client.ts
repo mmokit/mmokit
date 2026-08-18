@@ -5,6 +5,18 @@ import { SpaceDeltaDecoder } from "./delta-decoder.js";
 import { TypedDispatcher, BankContents, BeamClip, CurrencyUpdate, Docked, DockingState, EquipResult, MapData, PlayerDied, PlayerOwnState, PlayerSpawned, TransferResult, MarketTradeNotification, CellChange, DebugInfo, OperationError, PlayerEntityAssigned, Pong, ServerConfig, WorldDelta } from "./broadcasts.js";
 import { AuthChangePasswordRequest, AuthChangePasswordResponse, AuthLoginRequest, AuthLoginResponse, AuthLogoutRequest, AuthLogoutResponse, AuthRegisterRequest, AuthRegisterResponse, AuthValidateTokenRequest, AuthValidateTokenResponse, BankRequest, BankResponse, MarketBrowseRequest, MarketCancelOrderRequest, MarketCreateOrderRequest, MarketInstantTradeRequest, MarketMyOrdersRequest, MarketMyOrdersResponse, MarketOrderBookResponse, MarketOrderResultResponse, RepairRequest, RepairResponse } from "./operations.js";
 
+/** Structural fingerprint of the protocol this SDK was generated from.
+ *  Sent at connection setup; the server refuses a mismatch. */
+export const SCHEMA_FINGERPRINT = "b85844e7";
+
+/** Appends the schema fingerprint to a connect URL, preserving any
+ *  query the caller already put there. */
+function withSchemaFingerprint(url: string): string {
+  const u = new URL(url);
+  u.searchParams.set("schema", SCHEMA_FINGERPRINT);
+  return u.toString();
+}
+
 export interface SpaceClientOptions {
   url: string;
   onOpen?: () => void;
@@ -22,7 +34,7 @@ export class SpaceClient {
   private nextTypedOpRequestID: bigint = 1n;
 
   constructor(private options: SpaceClientOptions) {
-    this.transport = new Transport(options.url);
+    this.transport = new Transport(withSchemaFingerprint(options.url));
   }
 
   connect(): void {

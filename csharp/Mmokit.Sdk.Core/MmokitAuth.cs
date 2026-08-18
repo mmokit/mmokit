@@ -95,11 +95,12 @@ namespace Mmokit.Sdk.Core
             bool registerIfMissing = false,
             string? email = null,
             string cookieName = DefaultCookieName,
-            CancellationToken cancellationToken = default)
+            CancellationToken cancellationToken = default,
+            string? schemaFingerprint = null)
         {
             string session = await AuthenticateAsync(baseUrl, username, password, registerIfMissing, email, cookieName, cancellationToken)
                 .ConfigureAwait(false);
-            return await FetchUdpKeyWithSessionAsync(baseUrl, session, cookieName, cancellationToken)
+            return await FetchUdpKeyWithSessionAsync(baseUrl, session, cookieName, cancellationToken, schemaFingerprint)
                 .ConfigureAwait(false);
         }
 
@@ -164,7 +165,8 @@ namespace Mmokit.Sdk.Core
             string baseUrl,
             string sessionCookieValue,
             string cookieName = DefaultCookieName,
-            CancellationToken cancellationToken = default)
+            CancellationToken cancellationToken = default,
+            string? schemaFingerprint = null)
         {
             if (string.IsNullOrEmpty(sessionCookieValue))
             {
@@ -172,8 +174,15 @@ namespace Mmokit.Sdk.Core
             }
 
             HttpClient http = Shared.Value;
+            // The fingerprint rides the query string because this route is the
+            // UDP handshake's gate: a client cannot complete the handshake
+            // without a key from here, so refusing issuance refuses the
+            // session — without adding a byte to any UDP packet.
+            string path = string.IsNullOrEmpty(schemaFingerprint)
+                ? "/auth/udp-key"
+                : "/auth/udp-key?schema=" + Uri.EscapeDataString(schemaFingerprint);
             using HttpResponseMessage res = await PostJsonAsync(
-                http, baseUrl, "/auth/udp-key", null, sessionCookieValue, cookieName, cancellationToken).ConfigureAwait(false);
+                http, baseUrl, path, null, sessionCookieValue, cookieName, cancellationToken).ConfigureAwait(false);
 
             if (!res.IsSuccessStatusCode)
             {

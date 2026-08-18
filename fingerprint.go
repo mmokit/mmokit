@@ -7,6 +7,7 @@ import (
 	"fmt"
 
 	"github.com/mmokit/mmokit/pkg/system"
+	pkguniverse "github.com/mmokit/mmokit/pkg/universe"
 )
 
 // schemaFingerprintDomain separates this hash from every other use of SHA-256
@@ -75,11 +76,12 @@ func SchemaFingerprint(ps ProtocolSchema) uint32 {
 
 // FormatSchemaFingerprint renders a fingerprint as 8 lowercase hex digits —
 // the form carried in the schema JSON and in the connection-setup query
-// parameter. Chosen over decimal because it is fixed-width and greppable in an
-// access log.
-func FormatSchemaFingerprint(fp uint32) string {
-	return fmt.Sprintf("%08x", fp)
-}
+// parameter. Declared in pkg/universe, where the connection-setup gates that
+// parse it live.
+var FormatSchemaFingerprint = pkguniverse.FormatSchemaFingerprint
+
+// ParseSchemaFingerprint reads the form FormatSchemaFingerprint writes.
+var ParseSchemaFingerprint = pkguniverse.ParseSchemaFingerprint
 
 // projectForFingerprint returns a copy of ps with the fields excluded from the
 // hash zeroed. A copy, not a mutation: callers hand us the schema they are

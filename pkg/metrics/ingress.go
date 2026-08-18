@@ -78,12 +78,19 @@ const (
 	// guessed differently — so a non-zero rate here previously showed up as
 	// silently misrouted frames rather than as a counter.
 	ReasonUnknownChannel
+	// ReasonSchemaMismatch is a connection setup refused because the client's
+	// compiled-in protocol fingerprint disagrees with this process's. Counted
+	// on the client surface even though no frame was decoded: it is a peer
+	// turned away at the door, and a sustained rate means a partial redeploy —
+	// someone is running an SDK generated against a different build.
+	ReasonSchemaMismatch
 
 	// numIngressReasons must stay last. It sizes the counter table.
 	numIngressReasons
 )
 
 var ingressReasonNames = [numIngressReasons]string{
+	ReasonSchemaMismatch:      "schema_mismatch",
 	ReasonTruncated:           "truncated",
 	ReasonStringLimit:         "string_limit",
 	ReasonSliceLimit:          "slice_limit",

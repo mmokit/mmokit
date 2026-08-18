@@ -90,6 +90,19 @@ type Bot struct {
 
 	ctx    context.Context
 	cancel context.CancelFunc
+
+	// schemaFingerprint is presented at connection setup. Empty means the bot
+	// was built without one, which the gateway refuses unless it is running
+	// with --allow-unfingerprinted-clients.
+	schemaFingerprint string
+}
+
+// WithSchemaFingerprint sets the protocol fingerprint the bot presents at
+// connection setup. The gateway refuses a connection whose fingerprint
+// disagrees with its own, so a bot built against a stale protocol fails to
+// connect rather than mis-decoding every snapshot it receives.
+func WithSchemaFingerprint(fp string) Option {
+	return func(b *Bot) { b.schemaFingerprint = fp }
 }
 
 // New creates a new Bot with the given username.
@@ -134,7 +147,7 @@ func (b *Bot) Connect(addr string) error {
 	hdr := http.Header{}
 	hdr.Set("Cookie", cookie.Name+"="+cookie.Value)
 
-	ws, _, err := websocket.Dial(dialCtx, toWSURL(addr), &websocket.DialOptions{
+	ws, _, err := websocket.Dial(dialCtx, toWSURL(addr, b.schemaFingerprint), &websocket.DialOptions{
 		HTTPHeader: hdr,
 	})
 	if err != nil {
@@ -478,16 +491,26 @@ func toHTTPURL(addr string) string {
 }
 
 // toWSURL normalizes addr into the WebSocket URL the gateway listens on
-// (path /ws — see pkg/net/server.go::ListenAndServe).
-func toWSURL(addr string) string {
+// (path /ws), carrying the schema fingerprint the gateway checks before it
+// upgrades the connection.
+func toWSURL(addr, schemaFingerprint string) string {
+	var base string
 	switch {
 	case strings.HasPrefix(addr, "ws://"), strings.HasPrefix(addr, "wss://"):
-		return addr
+		base = addr
 	case strings.HasPrefix(addr, "http://"):
-		return "ws://" + strings.TrimPrefix(addr, "http://") + "/ws"
+		base = "ws://" + strings.TrimPrefix(addr, "http://") + "/ws"
 	case strings.HasPrefix(addr, "https://"):
-		return "wss://" + strings.TrimPrefix(addr, "https://") + "/ws"
+		base = "wss://" + strings.TrimPrefix(addr, "https://") + "/ws"
 	default:
-		return "ws://" + addr + "/ws"
+		base = "ws://" + addr + "/ws"
 	}
+	if schemaFingerprint == "" {
+		return base
+	}
+	sep := "?"
+	if strings.Contains(base, "?") {
+		sep = "&"
+	}
+	return base + sep + "schema=" + schemaFingerprint
 }

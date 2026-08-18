@@ -79,7 +79,13 @@ type OperationSchema struct {
 }
 
 type ProtocolSchema struct {
-	Game             string                  `json:"game"`
+	Game string `json:"game"`
+	// Dimension and Fingerprint come from the server's schema dump. The
+	// fingerprint is COPIED into the generated SDK, never recomputed here:
+	// two independent canonicalizations drifting by a byte would produce a
+	// framework that rejects its own client.
+	Dimension        string                  `json:"dimension"`
+	Fingerprint      string                  `json:"fingerprint"`
 	Entities         []EntitySchema          `json:"entities"`
 	BroadcastTypes   []BroadcastTypeSchema   `json:"broadcast_types,omitempty"`
 	ClientInputTypes []ClientInputTypeSchema `json:"client_input_types,omitempty"`

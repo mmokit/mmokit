@@ -766,6 +766,21 @@ func (g *Generator) genClient() string {
 
 	b.WriteString("\n")
 
+	// Compile-time protocol fingerprint, copied from the schema dump this SDK
+	// was generated from. The server refuses a connection whose fingerprint
+	// disagrees with its own, so this is what makes a stale SDK fail at
+	// connection setup instead of mis-decoding every snapshot afterwards.
+	fmt.Fprintf(&b, "/** Structural fingerprint of the protocol this SDK was generated from.\n")
+	fmt.Fprintf(&b, " *  Sent at connection setup; the server refuses a mismatch. */\n")
+	fmt.Fprintf(&b, "export const SCHEMA_FINGERPRINT = %q;\n\n", g.schema.Fingerprint)
+	b.WriteString("/** Appends the schema fingerprint to a connect URL, preserving any\n")
+	b.WriteString(" *  query the caller already put there. */\n")
+	b.WriteString("function withSchemaFingerprint(url: string): string {\n")
+	b.WriteString("  const u = new URL(url);\n")
+	b.WriteString("  u.searchParams.set(\"schema\", SCHEMA_FINGERPRINT);\n")
+	b.WriteString("  return u.toString();\n")
+	b.WriteString("}\n\n")
+
 	// Options interface.
 	fmt.Fprintf(&b, "export interface %sClientOptions {\n", gameName)
 	b.WriteString("  url: string;\n")
@@ -795,7 +810,7 @@ func (g *Generator) genClient() string {
 	b.WriteString("\n")
 
 	fmt.Fprintf(&b, "  constructor(private options: %sClientOptions) {\n", gameName)
-	b.WriteString("    this.transport = new Transport(options.url);\n")
+	b.WriteString("    this.transport = new Transport(withSchemaFingerprint(options.url));\n")
 	b.WriteString("  }\n\n")
 
 	// connect / disconnect / connected

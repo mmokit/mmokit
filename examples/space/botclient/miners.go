@@ -46,10 +46,13 @@ func runMiners(addr string, count int) {
 
 	var wg sync.WaitGroup
 	bots := make([]*bot.Bot, count)
+	// Computed once: the gateway refuses a connection whose protocol
+	// fingerprint disagrees with its own.
+	fp := schemaFingerprint()
 
 	for i := 0; i < count; i++ {
 		name := fmt.Sprintf("bot_miner_%d", i+1)
-		bots[i] = bot.New(name)
+		bots[i] = bot.New(name, bot.WithSchemaFingerprint(fp))
 		if err := bots[i].Connect(addr); err != nil {
 			log.Fatalf("bot %s connect failed: %v", name, err)
 		}

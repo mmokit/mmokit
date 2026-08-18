@@ -1,8 +1,10 @@
 package universe
 
 import (
+	"fmt"
 	"hash/fnv"
 	"reflect"
+	"strconv"
 )
 
 // Wire primitives shared by pkg/universe's dispatch paths and the mmokit
@@ -129,4 +131,27 @@ func walkAnchors(v reflect.Value, add func(uint32)) {
 			walkAnchors(f, add)
 		}
 	}
+}
+
+// FormatSchemaFingerprint renders a structural schema fingerprint as 8
+// lowercase hex digits — the form carried in the schema JSON, in the
+// connection-setup query parameter, and in logs. Fixed-width and greppable in
+// an access log, unlike decimal.
+func FormatSchemaFingerprint(fp uint32) string {
+	return fmt.Sprintf("%08x", fp)
+}
+
+// ParseSchemaFingerprint reads the form FormatSchemaFingerprint writes.
+// Deliberately strict: exactly 8 hex digits, nothing else, because this parses
+// an untrusted query parameter and a lenient parse is a way to be admitted by
+// accident.
+func ParseSchemaFingerprint(s string) (uint32, bool) {
+	if len(s) != 8 {
+		return 0, false
+	}
+	v, err := strconv.ParseUint(s, 16, 32)
+	if err != nil {
+		return 0, false
+	}
+	return uint32(v), true
 }
