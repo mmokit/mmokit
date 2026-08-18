@@ -568,7 +568,7 @@ One correction of substance sits underneath this. **A version byte cannot detect
 | --- | --- | ---: | --- | --- | --- | --- |
 | 1 | Registry and framing hardening: panic on duplicate client-input IDs, make broadcast collisions detectable at all, and reconcile the two transports' unknown-channel-byte fallback | CE-009 | 1 | low | — | **done** `8677252d` |
 | 2 | Extend the byte-level wire goldens: TS delta assertions first, then the fixed-offset frame codecs, nested struct / slice-of-struct, and a snapshot from real bindings | §7 phase 0 | 4 | med | 1 | **mostly done** `357bd61c`, `0fe980ce`, `90bb0a66` — see below |
-| 3 | CE-010 part A — cell geometry becomes injected: delete `coords.CellSize` and its setter, converge ~75 read sites on a process-owned accessor | CE-010 | 5 | med | — | **open** |
+| 3 | CE-010 part A — cell geometry becomes injected: delete `coords.CellSize` and its setter, converge ~75 read sites on a process-owned accessor | CE-010 | 5 | med | — | **done** `8981d581`..`cb82506b` |
 | 4 | CE-010 part B — the registries, the five package-global hook structs, and the three package-level `sync.Once` guards become process-owned | CE-010 | 6 | **high** | 2, 3 | **open** |
 | 5 | CE-009 — structural schema fingerprint, carried at connection setup on both transports, with rejection semantics | CE-009 | 4 | med | 4 | **open** |
 
@@ -589,6 +589,16 @@ Two assertions in unit 2 are worth knowing about before editing near them, becau
 - **The golden coverage is Go↔C#, not three-way.** The Unity delta decoder is byte-pinned to Go; the browser's is not, and the browser is the reference game's only client. Unit 2 fixes the asymmetry in the direction of the risk, not the direction of the existing coverage.
 - **`buildTaggedFields` cannot simply move onto the reflection codec.** The reflection codec is a self-describing struct walker; the binding walker must emit a *fixed* layout consumed by `quantize.DeltaEncoder`'s offset table. Either teach the reflection codec fixed-width layouts or unify only the walker and keep two codecs. This is an architecture decision §7.5 phase 0 currently assumes away, and it belongs before day one of the collapse, not during it.
 - **`--dump-schema` is binary-scoped, not process-scoped.** Unit 4 changes what it emits, which puts SDK regeneration and both golden gates inside its blast radius. That is the reason unit 2 precedes it.
+
+**What part A actually found**, recorded because it is the argument for doing part B rather than declaring the debt paid:
+
+- **Five border tests had been running at 1024 while their source declared 8192.** `newTestWorldBase` called `coords.SetCellSize(1024)` *after* the test set 8192, clobbering it on the next line. Not a regression introduced by the refactor — true since the fixture was written. They passed because the properties they assert also hold at 1024.
+- **`NewCellViewer` and its stage could disagree about geometry.** The viewer derived its size from a nillable `sourceCell`, falling back to the global, while the stage used an injected field. That value sets `defaultTier.Radius`, the gate deciding whether a corner entity is a border candidate at all.
+- **`BuildCellTopology` reported one geometry and computed another** — it already received the base cell size and used the global anyway, so the debug overlay would have drawn cells at one size and labelled them with another.
+
+None of these was visible while a single global kept every reader in agreement. That is the shape of the remaining part-B debt too: the four package-global wire registries and the process-global hook structs are not wrong today, they are wrong the moment a second Process exists in one binary.
+
+Deleting beat threading repeatedly: seven zero-caller exported functions were removed rather than given a cell-size parameter — `CellRelativePos`, `ViewerRelativePosWithCellSize`, `Normalize`, `RelativeOffset`, `Distance`, `WorldPos.ToFlat`, and the two facade wrappers.
 - **One `sync.Once` fires from `init()`, before any Process exists.** Process-owned registration cannot simply reuse the existing guards.
 
 ---
