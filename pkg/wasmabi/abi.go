@@ -18,13 +18,21 @@ func ElemSize[T any]() uint32 {
 
 // ABIVersion is bumped whenever the export/import contract or the agreed
 // component layouts change. The host rejects any module whose embedded
-// version differs. Phase 1 will replace the manual bump with a layout hash.
+// version differs.
+//
+// The "phase 1 will replace this with a layout hash" note that stood here is
+// retired rather than implemented: the per-column ElemSize check in
+// wasm_system.go already is that guard, and it fires correctly here —
+// sizeof(Position) went 8 -> 12 with Z, so any out-of-tree module fails loudly
+// at load while in-tree fixtures rebuild from source.
 //
 // v2: wasmsys_update gained a cluster-coherent `nowMs` argument so guests can
 // drive time-based animation from a clock that is identical across every cell
 // and host (see ClusterClock), instead of a cell-local tick counter that jumps
 // when an entity crosses a cell boundary.
-const ABIVersion uint64 = 2
+// v3: component.Position and component.Velocity gained Z, so every agreed
+// component layout carrying one changed width.
+const ABIVersion uint64 = 3
 
 // Exported function names the guest provides (see pkg/wasmsys/exports.go).
 const (

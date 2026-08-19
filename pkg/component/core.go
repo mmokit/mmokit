@@ -9,13 +9,23 @@ import (
 )
 
 // Position in world space.
+//
+// Z is carried by every profile, not only the 3D one. §7.3 committed to ONE
+// component set across profiles — sibling Position3-style types would let
+// framework code that statically names component.Position match zero entities
+// in a 3D world, and a cell split would then serialize nothing with no error.
+// A 2D profile simply leaves Z at zero and no binding emits it.
+//
+// A sibling scalar rather than a nested Vec3 field: the binding walker is flat
+// and refuses a struct at construction. Vec3 exists alongside for math, and
+// converts freely because the field names, types and order match.
 type Position struct {
-	X, Y float32
+	X, Y, Z float32
 }
 
-// Velocity in world units per second.
+// Velocity in world units per second. See Position on why Z is unconditional.
 type Velocity struct {
-	X, Y float32
+	X, Y, Z float32
 }
 
 // Rotation facing direction.

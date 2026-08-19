@@ -333,6 +333,14 @@ jobs:
       # This also gates the CE-009 schema fingerprint, which is derived from
       # this exact document — so a green here is what says the value clients
       # present at connection setup still matches what the server expects.
+      # examples/4node-basic loads a wasm system at startup, and dist/ is
+      # gitignored — so on a fresh runner the module is absent and
+      # NewWasmSystem panics on the missing file before --dump-schema can run.
+      # Building it here is what makes this job work on a clean checkout; it
+      # was verified locally against a virgin DATABASE but not a virgin tree.
+      - name: build the wasm system modules
+        run: just wasm-build
+
       - name: schema-check
         run: just schema-check
 

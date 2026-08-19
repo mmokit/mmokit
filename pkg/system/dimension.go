@@ -82,8 +82,9 @@ func EngineBindingsFor(d Dimension) EngineBindingSet {
 		return EngineBindingSet{Dimension: Dimension2D, Bindings: EngineBindings}
 	case Dimension3D:
 		panic("system.EngineBindingsFor: the 3d profile is not implemented yet — " +
-			"Position and Velocity are still two-component and the wire codec's " +
-			"field walker is still flat (see docs/roadmap.md §7.5 phases 1-2)")
+			"the core types are widened (phase 1) but no 3D binding set emits Z, " +
+			"and QAngle still sits outside EngineBindings so orientation is not " +
+			"dimension-selected (see docs/roadmap.md §7.5 phase 2)")
 	default:
 		panic(fmt.Sprintf("system.EngineBindingsFor: unknown dimension %d", uint8(d)))
 	}

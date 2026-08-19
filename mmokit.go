@@ -39,6 +39,10 @@ type Position = component.Position
 // Velocity is an entity's movement speed (X, Y in world units per second).
 type Velocity = component.Velocity
 
+// Vec3 is the math type for positions, velocities and offsets. Position and
+// Velocity convert to and from it directly.
+type Vec3 = component.Vec3
+
 // Rotation is an entity's facing direction (Angle in radians).
 type Rotation = component.Rotation
 

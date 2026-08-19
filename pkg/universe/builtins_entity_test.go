@@ -522,7 +522,7 @@ func TestEntityModifyHandler_Errors(t *testing.T) {
 		t.Error("expected error for unknown component")
 	}
 	// Unknown field.
-	if _, err := cmd.Handler(ctx, &cmdsys.Env{}, entityModifyArgs{NetID: netID, Component: "Position", Field: "Z", Value: "1"}); err == nil {
+	if _, err := cmd.Handler(ctx, &cmdsys.Env{}, entityModifyArgs{NetID: netID, Component: "Position", Field: "NoSuchField", Value: "1"}); err == nil {
 		t.Error("expected error for unknown field")
 	}
 	// Bad value.
