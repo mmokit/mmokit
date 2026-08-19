@@ -308,74 +308,123 @@ func isNewerUint32Serial(candidate, current uint32) bool {
 }
 
 // decodeSnapshot converts raw snapshot bytes into an EntitySnapshot.
-// Positions in the snapshot are cell-local (from CellRelativePos on the server).
+//
+// The field order here is not a guess: it mirrors the per-kind snapshot stream
+// in testdata/schema/space.json exactly, and TestBotDecoderMatchesTheSchema
+// asserts that against the committed golden. It had drifted badly — rotation
+// was read fifth when the schema emits `angle` LAST, health was read as two
+// uint16s where the schema says four-byte floats, and five Ship fields were
+// missing entirely — so every field past the fourth decoded from the wrong
+// bytes. Nothing caught it because nothing cross-checked the bot against the
+// schema, and the bot is a load-test client whose wrong values look like
+// gameplay rather than like a decode error.
+//
+// The generated SDKs solve this properly by construction. The bot decodes by
+// hand because it predates them and lives inside the example; the test is what
+// makes the hand-rolled copy honest until it is rewired onto generated code.
+//
+// Positions in the snapshot are cell-local (from ViewerRelativePos).
 func decodeSnapshot(netID uint32, entityType uint8, snap []byte) *EntitySnapshot {
-	r := quantize.NewSnapshotReader(snap)
+	return decodeSnapshotFrom(quantize.NewSnapshotReader(snap), netID, entityType)
+}
 
-	// Base fields (all entity types): 25 bytes
+// decodeSnapshotFrom is decodeSnapshot with the reader supplied, so a test can
+// inspect r.Remaining() afterwards and assert the decoder consumed exactly the
+// width the schema declares. That assertion is the only thing tying this
+// hand-rolled decoder to the layout the server actually emits.
+func decodeSnapshotFrom(r *quantize.SnapshotReader, netID uint32, entityType uint8) *EntitySnapshot {
+
+	// EngineBindings, identical for every kind: 18 bytes.
+	// worldX f32, worldY f32, velX qvel, velY qvel, radius qvel, width qvel, height qvel.
 	x := r.Float32()
 	y := r.Float32()
 	vx := r.UnQVel(qVelScale)
 	vy := r.UnQVel(qVelScale)
-	rotation := r.UnQAngle()
 	radius := r.UnQVel(qSizeScale)
-	_ = r.UnQVel(qSizeScale) // width — bot doesn't need
-	_ = r.UnQVel(qSizeScale) // height — bot doesn't need
-	lockedByID := r.Uint32()
-	lockedByProgress := r.UnQNorm()
+	_ = r.UnQVel(qSizeScale) // width — bot does not use it
+	_ = r.UnQVel(qSizeScale) // height — bot does not use it
 
 	es := &EntitySnapshot{
-		ID:               netID,
-		Type:             entityType,
-		X:                x,
-		Y:                y,
-		VX:               vx,
-		VY:               vy,
-		Rotation:         rotation,
-		Radius:           radius,
-		LockedByID:       lockedByID,
-		LockedByProgress: lockedByProgress,
+		ID:     netID,
+		Type:   entityType,
+		X:      x,
+		Y:      y,
+		VX:     vx,
+		VY:     vy,
+		Radius: radius,
 	}
 
 	switch entityType {
-	case gamecomp.KindShip, gamecomp.KindNPC:
-		// Combat fields: healthCur(2), healthMax(2), shieldCur(2), shieldMax(2)
-		es.Health = float32(r.Uint16())
-		es.MaxHealth = float32(r.Uint16())
-		es.Shield = float32(r.Uint16())
-		es.MaxShield = float32(r.Uint16())
+	case gamecomp.KindShip:
+		// Health f32 x4, phase u8, buffers/channel/lockout f32 x4,
+		// locker u32 + qnorm, two beam bools, mining target u32, angle qangle.
+		es.Health = r.Float32()
+		es.MaxHealth = r.Float32()
+		es.Shield = r.Float32()
+		es.MaxShield = r.Float32()
+		_ = r.Uint8()   // phase
+		_ = r.Float32() // bufferHP
+		_ = r.Float32() // bufferMax
+		_ = r.Float32() // channelRemaining
+		_ = r.Float32() // lockoutRemaining
+		es.LockedByID = r.Uint32()
+		es.LockedByProgress = r.UnQNorm()
+		beam0 := r.Bool()
+		beam1 := r.Bool()
+		es.MiningActive = beam0 || beam1
+		es.MiningBeamMask = boolMask(beam0, beam1)
+		es.MiningTargetID = r.Uint32()
+		es.Rotation = r.UnQAngle()
 
-		if entityType == gamecomp.KindShip {
-			// Mining: flags(1), miningTargetID(4), combatTargetID(4)
-			flags := r.Uint8()
-			es.MiningActive = flags != 0
-			es.MiningBeamMask = uint32(flags)
-			es.MiningTargetID = r.Uint32()
-			_ = r.Uint32() // combatTargetID
-		}
+	case gamecomp.KindNPC:
+		// Same health block, then AI state and angle. No buffers, no beams —
+		// reading the Ship shape here was part of the old drift.
+		es.Health = r.Float32()
+		es.MaxHealth = r.Float32()
+		es.Shield = r.Float32()
+		es.MaxShield = r.Float32()
+		_ = r.Uint8() // state
+		es.Rotation = r.UnQAngle()
 
 	case gamecomp.KindAsteroid:
 		es.ItemID = r.Uint32()
 		es.ResourceRemaining = r.Float32()
 
 	case gamecomp.KindLootCrate:
+		es.ResourceRemaining = r.Float32() // remaining
+
+		// Var-tail: uint16 byte length, then 8-byte {itemID u32, quantity u32}
+		// items. Declared in the schema as varTail.itemSize 8, which is what
+		// bounds the loop rather than a hand-picked constant.
+		const lootItemSize = 8
 		if r.Remaining() >= 2 {
-			tailLen := int(r.Uint16())
-			if tailLen > 0 && r.Remaining() >= 1 {
-				count := r.Uint8()
-				for j := uint8(0); j < count && r.Remaining() >= 8; j++ {
-					itemID := r.Uint32()
-					qty := r.Uint32()
-					es.CargoItems = append(es.CargoItems, &InventoryItem{
-						ItemID:   itemID,
-						Quantity: int32(qty),
-					})
-				}
+			tailBytes := int(r.Uint16())
+			for tailBytes >= lootItemSize && r.Remaining() >= lootItemSize {
+				itemID := r.Uint32()
+				qty := r.Uint32()
+				tailBytes -= lootItemSize
+				es.CargoItems = append(es.CargoItems, &InventoryItem{
+					ItemID:   itemID,
+					Quantity: int32(qty),
+				})
 			}
 		}
 	}
 
 	return es
+}
+
+// boolMask packs the two mining-beam flags into the bitmask shape the bot's
+// callers already expect.
+func boolMask(beam0, beam1 bool) uint32 {
+	var m uint32
+	if beam0 {
+		m |= 1
+	}
+	if beam1 {
+		m |= 2
+	}
+	return m
 }
 
 // decodeLengthPrefixedString decodes a uint16-length-prefixed UTF-8 string.

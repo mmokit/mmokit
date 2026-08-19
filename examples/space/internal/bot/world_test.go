@@ -29,7 +29,7 @@ func TestDecodeBinaryFrameFreshSnapshotClearsBaselines(t *testing.T) {
 	decoderState := newDeltaDecoderState()
 	decoderState.baselines = map[uint32]*baselineEntry{
 		7: {
-			snapshot:       botTestSnapshot(gamecomp.KindShip, 12),
+			snapshot:       botTestSnapshot(t, gamecomp.KindShip, 12),
 			authorityEpoch: 3,
 			entityType:     gamecomp.KindShip,
 			pilotName:      "stale",
@@ -54,7 +54,7 @@ func TestDecodeBinaryFrameFreshSnapshotPreservesAuthorityFence(t *testing.T) {
 		NetID:      netID,
 		Epoch:      4,
 		EntityType: gamecomp.KindShip,
-		Snapshot:   botTestSnapshot(gamecomp.KindShip, 4),
+		Snapshot:   botTestSnapshot(t, gamecomp.KindShip, 4),
 	}
 	if _, ok := decodeBinaryFrame(botTestFrame(1, 0, []quantize.FullEntry{newer}, nil), 1, decoderState, decoders); !ok {
 		t.Fatal("newer frame decode failed")
@@ -62,7 +62,7 @@ func TestDecodeBinaryFrameFreshSnapshotPreservesAuthorityFence(t *testing.T) {
 
 	older := newer
 	older.Epoch = 3
-	older.Snapshot = botTestSnapshot(gamecomp.KindShip, 3)
+	older.Snapshot = botTestSnapshot(t, gamecomp.KindShip, 3)
 	state, ok := decodeBinaryFrame(
 		botTestFrame(2, quantize.FrameFlagFreshSnapshot, []quantize.FullEntry{older}, nil),
 		1,
@@ -89,7 +89,7 @@ func TestDecodeBinaryFrameRejectsStaleStreamFreshBeforeMutation(t *testing.T) {
 		NetID:      netID,
 		Epoch:      7,
 		EntityType: gamecomp.KindShip,
-		Snapshot:   botTestSnapshot(gamecomp.KindShip, 1),
+		Snapshot:   botTestSnapshot(t, gamecomp.KindShip, 1),
 	}
 	if _, ok := decodeBinaryFrame(botTestFrame(100, 0, []quantize.FullEntry{oldAuthority}, nil), math.MaxUint32, decoderState, decoders); !ok {
 		t.Fatal("old stream setup frame decode failed")
@@ -97,7 +97,7 @@ func TestDecodeBinaryFrameRejectsStaleStreamFreshBeforeMutation(t *testing.T) {
 
 	newAuthority := oldAuthority
 	newAuthority.Epoch = 8
-	newAuthority.Snapshot = botTestSnapshot(gamecomp.KindShip, 2)
+	newAuthority.Snapshot = botTestSnapshot(t, gamecomp.KindShip, 2)
 	if _, ok := decodeBinaryFrame(
 		botTestFrame(1, quantize.FrameFlagFreshSnapshot, []quantize.FullEntry{newAuthority}, nil),
 		0,
@@ -110,7 +110,7 @@ func TestDecodeBinaryFrameRejectsStaleStreamFreshBeforeMutation(t *testing.T) {
 	// A delayed frame from the old stream has a numerically later per-stream
 	// sequence and FreshSnapshot set. It must be rejected before either the
 	// baseline clear or the older entity epoch can run.
-	oldAuthority.Snapshot = botTestSnapshot(gamecomp.KindShip, 99)
+	oldAuthority.Snapshot = botTestSnapshot(t, gamecomp.KindShip, 99)
 	state, ok := decodeBinaryFrame(
 		botTestFrame(101, quantize.FrameFlagFreshSnapshot, []quantize.FullEntry{oldAuthority}, nil),
 		math.MaxUint32,
@@ -144,18 +144,18 @@ func TestDecodeBinaryFrameRejectsSameStreamReorderingBeforeFreshMutation(t *test
 		NetID:      netID,
 		Epoch:      3,
 		EntityType: gamecomp.KindShip,
-		Snapshot:   botTestSnapshot(gamecomp.KindShip, 1),
+		Snapshot:   botTestSnapshot(t, gamecomp.KindShip, 1),
 	}
 	if _, ok := decodeBinaryFrame(botTestFrame(100, 0, []quantize.FullEntry{entry}, nil), 20, decoderState, decoders); !ok {
 		t.Fatal("setup frame decode failed")
 	}
-	entry.Snapshot = botTestSnapshot(gamecomp.KindShip, 2)
+	entry.Snapshot = botTestSnapshot(t, gamecomp.KindShip, 2)
 	if _, ok := decodeBinaryFrame(botTestFrame(102, 0, []quantize.FullEntry{entry}, nil), 20, decoderState, decoders); !ok {
 		t.Fatal("forward frame decode failed")
 	}
 
 	for _, sequence := range []uint32{102, 101, 102 + 0x80000000} {
-		entry.Snapshot = botTestSnapshot(gamecomp.KindShip, 99)
+		entry.Snapshot = botTestSnapshot(t, gamecomp.KindShip, 99)
 		state, ok := decodeBinaryFrame(
 			botTestFrame(sequence, quantize.FrameFlagFreshSnapshot, []quantize.FullEntry{entry}, nil),
 			20,
@@ -176,7 +176,7 @@ func TestDecodeBinaryFrameRejectsSameStreamReorderingBeforeFreshMutation(t *test
 
 	// Rejected frames do not advance the frontier; the next ordered frame is
 	// still accepted normally.
-	entry.Snapshot = botTestSnapshot(gamecomp.KindShip, 3)
+	entry.Snapshot = botTestSnapshot(t, gamecomp.KindShip, 3)
 	if _, ok := decodeBinaryFrame(botTestFrame(103, 0, []quantize.FullEntry{entry}, nil), 20, decoderState, decoders); !ok {
 		t.Fatal("ordered frame after reordering was rejected")
 	}
@@ -190,12 +190,12 @@ func TestDecodeBinaryFrameAcceptsSameStreamSequenceWrap(t *testing.T) {
 		NetID:      netID,
 		Epoch:      1,
 		EntityType: gamecomp.KindShip,
-		Snapshot:   botTestSnapshot(gamecomp.KindShip, 1),
+		Snapshot:   botTestSnapshot(t, gamecomp.KindShip, 1),
 	}
 	if _, ok := decodeBinaryFrame(botTestFrame(math.MaxUint32, 0, []quantize.FullEntry{entry}, nil), 30, decoderState, decoders); !ok {
 		t.Fatal("pre-wrap frame decode failed")
 	}
-	entry.Snapshot = botTestSnapshot(gamecomp.KindShip, 2)
+	entry.Snapshot = botTestSnapshot(t, gamecomp.KindShip, 2)
 	state, ok := decodeBinaryFrame(botTestFrame(0, 0, []quantize.FullEntry{entry}, nil), 30, decoderState, decoders)
 	if !ok {
 		t.Fatal("wrapped frame sequence was rejected")
@@ -214,7 +214,7 @@ func TestDecodeBinaryFrameFullAuthorityEpochOrdering(t *testing.T) {
 		NetID:       netID,
 		Epoch:       math.MaxUint32,
 		EntityType:  gamecomp.KindShip,
-		Snapshot:    botTestSnapshot(gamecomp.KindShip, 1),
+		Snapshot:    botTestSnapshot(t, gamecomp.KindShip, 1),
 		InitialData: botTestInitialString("pilot"),
 	}
 	if _, ok := decodeBinaryFrame(botTestFrame(1, 0, []quantize.FullEntry{initial}, nil), 1, decoderState, decoders); !ok {
@@ -225,7 +225,7 @@ func TestDecodeBinaryFrameFullAuthorityEpochOrdering(t *testing.T) {
 	// must not leak across that authority boundary.
 	newer := initial
 	newer.Epoch = 0
-	newer.Snapshot = botTestSnapshot(gamecomp.KindShip, 2)
+	newer.Snapshot = botTestSnapshot(t, gamecomp.KindShip, 2)
 	newer.InitialData = nil
 	state, ok := decodeBinaryFrame(botTestFrame(2, 0, []quantize.FullEntry{newer}, nil), 1, decoderState, decoders)
 	if !ok {
@@ -239,7 +239,7 @@ func TestDecodeBinaryFrameFullAuthorityEpochOrdering(t *testing.T) {
 	}
 
 	older := initial
-	older.Snapshot = botTestSnapshot(gamecomp.KindShip, 3)
+	older.Snapshot = botTestSnapshot(t, gamecomp.KindShip, 3)
 	state, ok = decodeBinaryFrame(botTestFrame(3, 0, []quantize.FullEntry{older}, nil), 1, decoderState, decoders)
 	if !ok {
 		t.Fatal("older epoch frame decode failed")
@@ -260,7 +260,7 @@ func TestDecodeBinaryFrameFullPreservesInitialDataOnlyWithinScope(t *testing.T) 
 		NetID:       netID,
 		Epoch:       9,
 		EntityType:  gamecomp.KindShip,
-		Snapshot:    botTestSnapshot(gamecomp.KindShip, 1),
+		Snapshot:    botTestSnapshot(t, gamecomp.KindShip, 1),
 		InitialData: botTestInitialString("pilot"),
 	}
 	if _, ok := decodeBinaryFrame(botTestFrame(1, 0, []quantize.FullEntry{first}, nil), 1, decoderState, decoders); !ok {
@@ -268,7 +268,7 @@ func TestDecodeBinaryFrameFullPreservesInitialDataOnlyWithinScope(t *testing.T) 
 	}
 
 	keyframe := first
-	keyframe.Snapshot = botTestSnapshot(gamecomp.KindShip, 2)
+	keyframe.Snapshot = botTestSnapshot(t, gamecomp.KindShip, 2)
 	keyframe.InitialData = nil
 	state, ok := decodeBinaryFrame(botTestFrame(2, 0, []quantize.FullEntry{keyframe}, nil), 1, decoderState, decoders)
 	if !ok {
@@ -282,7 +282,7 @@ func TestDecodeBinaryFrameFullPreservesInitialDataOnlyWithinScope(t *testing.T) 
 		NetID:      netID,
 		Epoch:      9,
 		EntityType: gamecomp.KindNPC,
-		Snapshot:   botTestSnapshot(gamecomp.KindNPC, 3),
+		Snapshot:   botTestSnapshot(t, gamecomp.KindNPC, 3),
 	}
 	state, ok = decodeBinaryFrame(botTestFrame(3, 0, []quantize.FullEntry{changedType}, nil), 1, decoderState, decoders)
 	if !ok {
@@ -295,8 +295,8 @@ func TestDecodeBinaryFrameFullPreservesInitialDataOnlyWithinScope(t *testing.T) 
 
 func TestDecodeBinaryFrameDeltaRequiresMatchingEpochAndType(t *testing.T) {
 	const netID = uint32(13)
-	baseSnapshot := botTestSnapshot(gamecomp.KindShip, 1)
-	nextSnapshot := botTestSnapshot(gamecomp.KindShip, 2)
+	baseSnapshot := botTestSnapshot(t, gamecomp.KindShip, 1)
+	nextSnapshot := botTestSnapshot(t, gamecomp.KindShip, 2)
 	shipDelta := newDeltaDecoders().ship.Encode(baseSnapshot, nextSnapshot, nil)
 
 	tests := []struct {
@@ -344,17 +344,15 @@ func botTestFrame(tick, flags uint32, full []quantize.FullEntry, deltas []quanti
 	return quantize.NewFrameEncoder(256).Encode(tick, tick, flags, full, deltas, nil, nil)
 }
 
-func botTestSnapshot(entityType uint8, x float32) []byte {
-	size := 25
-	switch entityType {
-	case gamecomp.KindShip:
-		size = 42
-	case gamecomp.KindNPC:
-		size = 33
-	case gamecomp.KindAsteroid:
-		size = 33
-	}
-	snapshot := make([]byte, size)
+// botTestSnapshot builds a correctly-sized zero snapshot for a kind.
+//
+// The widths come from the committed schema golden rather than from constants.
+// They used to be hard-coded (25/42/33/33) and had drifted from what the server
+// emits — the same drift decodeSnapshot itself carried — so these fixtures
+// agreed with the buggy decoder and disagreed with the protocol.
+func botTestSnapshot(t *testing.T, entityType uint8, x float32) []byte {
+	t.Helper()
+	snapshot := make([]byte, schemaSnapshotWidth(t, entityType))
 	binary.BigEndian.PutUint32(snapshot[:4], math.Float32bits(x))
 	return snapshot
 }
