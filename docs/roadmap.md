@@ -717,7 +717,7 @@ Collision is **new capability, not a port** — the existing separating-axis cod
 
 | # | Phase | Days | Ends runnable at |
 | --- | --- | ---: | --- |
-| 0 | Safety net and schema truth (pure 2D, byte-stable) | 14.5 | The unpinned framings byte-pinned; a golden whose bytes come from real `auto_replicator` bindings; the reflect codec pinned from TypeScript; an entity-conservation integrity invariant; `just schema-check` in CI; the schema field-name defect fixed. Full suite green. **The codec collapse is struck — see [§7.5.1](#751-why-the-codec-collapse-is-struck).** |
+| 0 | Safety net and schema truth (pure 2D, byte-stable) — **done**, see [§7.5.4](#754-what-phase-0-landed-and-what-it-did-not) | 14.5 | The unpinned framings byte-pinned; a golden whose bytes come from real `auto_replicator` bindings; the reflect codec pinned from TypeScript; an entity-conservation integrity invariant; `just schema-check` in CI; the schema field-name defect fixed. Full suite green. **The codec collapse is struck — see [§7.5.1](#751-why-the-codec-collapse-is-struck).** |
 | 1 | Widen core types, still 2D only | 13 | Position and velocity gain Z; rotation becomes a quaternion with yaw helpers; collider becomes a shape union. Generated 2D SDK diff is empty. |
 | 2 | The 3D profile | 12 | Quaternion quantization, dimension-selected bindings, gravity and move modes, cluster dimension agreement. A headless 3D example survives a cell split with a non-zero destination entity count asserted. |
 | 3 | Client SDK and interpolation | 11 | Quaternion decode and slerp in TypeScript and C#, golden vectors. A browser client renders 3D with quaternion orientation. |
@@ -748,23 +748,39 @@ Phase 0 stays byte-stable anyway, for the reason §7.5 already gives: front-load
 
 Two live defects were found while planning this phase, and they reorder it. Both are recorded in [§7.5.3](#753-two-defects-found-while-planning).
 
-| # | Step | Days | May move goldens |
+| # | Step | Days | Status |
 | --- | --- | ---: | --- |
-| 1 | `just schema-check` in CI, behind a PostgreSQL service | 1 | no |
-| 2 | Put the schema field name on the leaf; fix the NPCAI/POI swap it causes | 2 | **yes** — `space.json`, deliberately |
-| 3 | A golden whose snapshot bytes come from real `auto_replicator` bindings | 2.5 | `delta_golden.json` gains a section |
-| 4 | Byte-pin the three unpinned framings (border body, typed event, typed op) | 2.5 | no |
-| 5 | Entity-conservation integrity invariant | 2 | no |
-| 6 | Encoding-table hygiene inside `pkg/system`, no new package | 1.5 | no |
-| 7 | Repair the bot's snapshot offset tables | 1.5 | no |
-| 8 | TypeScript pin for the reflect codec | 1 | no |
-| 9 | Record the resolution and the third codec family | 0.5 | no |
+| 1 | `just schema-check` in CI, behind a PostgreSQL service | 1 | **done** `d398a786` |
+| 2 | Put the schema field name on the leaf; fix the NPCAI/POI swap it causes | 2 | **done** `f46a381f` |
+| 3 | A golden whose snapshot bytes come from real `auto_replicator` bindings | 2.5 | **done (Go half)** `b98f9234` |
+| 4 | Byte-pin the unpinned client framings | 2.5 | **done** `444d12cd` |
+| 5 | Entity-conservation check across a topology commit | 2 | **done** `188770fa` |
+| 6 | Encoding-table hygiene inside `pkg/system`, no new package | 1.5 | **done** `2eb46ead` |
+| 7 | Repair the bot's snapshot offset tables | 1.5 | **done** `9f077837` |
+| 8 | TypeScript pin for the reflect codec | 1 | **done** `a446db55` |
+| 9 | Record the resolution and the third codec family | 0.5 | **done** |
 
-Step 2 goes first: it is a live bug in the reference game, and the fix needs no hand-written client change because `npc.ts` and `poi.ts` were both written against the correct semantics. Every step after it asserts `schema-check` is byte-clean, which only means something once step 2 has corrected what the golden pins.
+Step 2 went first: it was a live bug in the reference game, and the fix needed no hand-written client change because `npc.ts` and `poi.ts` were both written against the correct semantics. Every step after it asserts `schema-check` is byte-clean, which only means something once step 2 has corrected what the golden pins.
 
-**Progress.** Steps 1, 2 and 7 are done (`d398a786`, `f46a381f`, `9f077837`) — both live defects closed and the schema gate now runs in CI. Steps 3, 4, 5, 6, 8 and 9 remain.
+#### 7.5.4 What phase 0 landed, and what it did not
 
-**Two of the remaining steps are shaped differently than the estimate assumed**, found while starting them:
+**Two live defects closed**, both described in [§7.5.3](#753-two-defects-found-while-planning), plus a third found during step 6: the snapshot walk carried the same hard `val.(bool)` type assertion as the hash walk, and five converters answered `0` for an unhandled kind rather than refusing. A struct tagged `net:"u8"` encoded zeros forever; the same field tagged `net:"f32"` panicked on the cell goroutine instead.
+
+**What is now pinned that was not.** The binding walker's real output — snapshot bytes, initial payload, and the layout `[]int` with an assertion that it sums to the payload length. Both client channel framings, with the typed-op decode asserted independently of encode. The browser's reflect decoding, against the same manifest section C# asserts. And `just schema-check` runs in CI with a database, so the protocol document is gated rather than merely recorded.
+
+**Scope corrections found by doing the work:**
+
+- Step 4 was scoped as three framings. There is no separate border-snapshot codec — the border path sends `replication.Frame.Encode()`, already pinned by unit 2.
+- Step 8 could not be a unit test, and could not live in the `go` CI job: there is no shared TypeScript reflect codec to test, and that job has no bun, so the gate would have skipped silently forever.
+- Step 5 could not be an `Invariant`. It brackets `ExecuteCommitPlan` instead.
+
+**Left undone, deliberately and named rather than implied:**
+
+- **Step 3's cross-language half.** The Go golden landed; mirroring it into `cmd/csharp-golden` as a new manifest section with C# and TypeScript consumers did not. The Go half is the half that grades steps 6 and 7; the mirror is what would catch a C#/Go divergence in the binding walker specifically, and the delta path already has that coverage.
+- **The var-tail path** is absent from the step 3 fixture.
+- **A third codec family exists** and is unpinned: the mesh-internal protobuf surface (`proto/meshpb`). It never reaches a client, which is why phase 0 does not owe it a byte golden, but it is the reason "two codecs" in [§7.5.1](#751-why-the-codec-collapse-is-struck) is a statement about the CLIENT-facing surface rather than a count of every encoder in the tree.
+
+**Two steps were shaped differently than the estimate assumed**, found while starting them:
 
 - **Step 5 needs a mechanism, not just another invariant.** `Invariant.Check(c *Process)` is a point-in-time predicate over Process state, and conservation is inherently a before/after comparison across a commit. Adding a sixth entry to `defaultInvariants` cannot express it. It needs a hook in the commit-plan executor that snapshots the live netID set before the plan runs and compares after, with deliberate departures (entities transferred to a remote host) subtracted — which means the plan has to say which those are. Size it against that, not against writing another predicate.
 - **Step 8 has nothing to pin generically.** There is no shared TypeScript reflect codec: `cmd/sdkgen` inlines a per-type `decode` into each generated class, so `pkg/quantize/ts/` has no equivalent of Go's `ReflectMarshal` or C#'s `ReflectCodec`. Pinning it therefore means a generate-and-decode harness — emit an SDK for a schema shaped like the manifest's `reflect`/`reflectNested` fixtures, then assert the generated decoder reproduces their values — which is the TypeScript analogue of `just csharp-compile-test`, not a unit test. The alternative, hoisting a generic reflect codec into the shared core, would be new code with no production consumer.
