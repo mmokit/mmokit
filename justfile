@@ -255,6 +255,44 @@ csharp-smoke-build:
       | go run ./cmd/sdkgen --lang=csharp --csharp-core csharp/Mmokit.Sdk.Core --out "$out"
     dotnet build csharp/Mmokit.Sdk.SmokeBot -p:UnitySdkDir="$out" -nologo -v quiet
 
+# compile-gate the terminal client against a freshly generated 4node-basic SDK.
+#
+# Same shape and the same reason as csharp-smoke-build: nothing else compiles a
+# CONSUMER of the generated SDK against the current schema, and a consumer is
+# what catches a generated API changing shape. Generates into a temp dir, so it
+# needs no UNITY_SDK_DIR. Requires Postgres for the schema dump (just db-up).
+csharp-cli-build:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    out="$(mktemp -d)"
+    trap 'rm -rf "$out"' EXIT
+    go run ./examples/4node-basic --dump-schema --control-listen= --admin-listen= \
+        "--postgres-url={{ env('POSTGRES_URL', 'postgres://mmo:mmo@localhost:5432/mmo_4node?sslmode=disable') }}" \
+      | go run ./cmd/sdkgen --lang=csharp --csharp-core csharp/Mmokit.Sdk.Core --out "$out"
+    dotnet build csharp/Mmokit.Sdk.CliGame -p:UnitySdkDir="$out" -nologo -v quiet
+
+# play examples/4node-basic in the terminal, over UDP, against a RUNNING server.
+#
+# Start one first, in another pane:
+#   cd examples/4node-basic && just dev        (or: just distributed)
+# Both pass --udp-listen=:9000 and --dev-insecure-cookie; a hand-launched
+# binary does neither, and the server's UDP default is OFF.
+#
+# Generates its own SDK into a temp dir, so unlike csharp-smoke it needs no
+# UNITY_SDK_DIR. Requires Postgres for that dump (just db-up).
+#
+# Args: just csharp-cli [host] [username] [password] [baseUrl]
+# WSL2→Windows: pass the WSL IP (`hostname -I`) rather than 127.0.0.1.
+csharp-cli *ARGS:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    out="$(mktemp -d)"
+    trap 'rm -rf "$out"' EXIT
+    go run ./examples/4node-basic --dump-schema --control-listen= --admin-listen= \
+        "--postgres-url={{ env('POSTGRES_URL', 'postgres://mmo:mmo@localhost:5432/mmo_4node?sslmode=disable') }}" \
+      | go run ./cmd/sdkgen --lang=csharp --csharp-core csharp/Mmokit.Sdk.Core --out "$out"
+    dotnet run --project csharp/Mmokit.Sdk.CliGame -p:UnitySdkDir="$out" -- {{ARGS}}
+
 # headless C# smoke-bot: live round-trip (HTTPS auth → UDP key → authenticated
 # handshake → OnWorldDelta) against a RUNNING 4node server. Compiles the
 # generated SDK from UNITY_SDK_DIR.

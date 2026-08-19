@@ -1,0 +1,47 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Terminal client for examples/4node-basic over the UDP transport. Same build
+    shape as the smoke-bot next door: it compiles the
+    canonical hand-written runtime
+    (Mmokit.Sdk.Core, via ProjectReference) plus the *generated* schema-driven
+    surface (BasicClient / Entities / Ops / Events / DeltaDecoder), which it picks
+    up from the already-deployed Unity SDK so no schema dump (Postgres) is needed
+    just to build.
+
+    UnitySdkDir is REQUIRED and has no default. It previously defaulted to one
+    developer's absolute /mnt/c path, so a build on any other machine failed
+    with a confusing "SDK not found" pointing at a directory the developer had
+    never heard of. Set it explicitly:
+      dotnet build -p:UnitySdkDir=/path/to/Mmokit/Sdk
+    `just csharp-cli` passes it through from UNITY_SDK_DIR.
+  -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <LangVersion>latest</LangVersion>
+    <AssemblyName>mmokit-cli</AssemblyName>
+    <RootNamespace>Mmokit.Sdk.CliGame</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Canonical runtime (UdpTransport, ReflectCodec, DeltaDecoderCore, …). -->
+    <ProjectReference Include="../Mmokit.Sdk.Core/Mmokit.Sdk.Core.csproj" />
+    <!-- Generated schema-driven SDK from the deployed Unity copy (root *.cs only,
+         NOT _core/ — the runtime comes from the ProjectReference above).
+         Conditioned so an unset UnitySdkDir does not glob '/*.cs' at the
+         filesystem root; CheckGeneratedSdk below reports the real problem. -->
+    <Compile Condition="'$(UnitySdkDir)' != ''" Include="$(UnitySdkDir)/*.cs" />
+  </ItemGroup>
+
+  <!-- Clear errors when UnitySdkDir is unset, or set but not yet deployed. -->
+  <Target Name="CheckGeneratedSdk" BeforeTargets="BeforeBuild">
+    <Error Condition="'$(UnitySdkDir)' == ''"
+           Text="UnitySdkDir is required and has no default. Pass -p:UnitySdkDir=/path/to/Mmokit/Sdk, or run `just csharp-cli` with UNITY_SDK_DIR set." />
+    <Error Condition="!Exists('$(UnitySdkDir)/Client.cs')"
+           Text="Generated SDK not found at '$(UnitySdkDir)'. Run `just csharp-sdk` first, or pass -p:UnitySdkDir=/path/to/Mmokit/Sdk." />
+  </Target>
+
+</Project>
