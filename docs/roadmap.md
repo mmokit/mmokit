@@ -90,6 +90,13 @@ A short factual inventory, doubling as the "do not rebuild this" list. Detail li
 
 ### 6.1 How to read this section
 
+**Cost model.** This project has no users and no deployments. A wire break costs a
+regeneration and a rebuild, not an upgrade window, so "this would break deployed
+clients" is not an argument here and should not be used as one. What a wire break
+does still cost is real and worth weighing: regenerating both SDKs, moving the
+byte goldens, and losing the ability to say a later failure is unambiguously a
+logic bug rather than a byte-offset bug.
+
 Every status below was verified against source on the date at the top of this file. Statuses carry a `file:line` citation. **Re-verify before republishing** — line citations drift, and the previous roadmap shipped with evidence links pointing at unrelated code within three weeks.
 
 | Status | Meaning |
@@ -262,7 +269,7 @@ Both mesh channels now run over TLS and authenticate peers with a shared cluster
 
 Escape hatches exist (`IncludeAll`, `Without` in `pkg/query/query.go`), but `ForEach1/2/3` in [`pkg/universe/queries.go:37-67`](../pkg/universe/queries.go) still build raw unfiltered filters (the facade re-exports them as forwarders from `queries.go`), and WASM systems both read and overwrite neighbour-owned Replica and Ghost components ([`internal/wasmctl/wasm_system.go:187`](../internal/wasmctl/wasm_system.go), `:208`).
 
-**Process isolation is done**, in two halves scheduled as units 3 and 4 of [§6.10](#610-next-phase--prerequisites-and-the-safety-net). Part A deleted the mutable `coords.CellSize` global and converged ~75 read sites on a process-owned accessor; part B moved the four package-global wire registries onto a `WireRegistry` owned by `Process` and injected into every `Stage`, taking the five hook structs, the root `init()` and three `sync.Once` guards with them. The `ResetXxxForTest` helpers went too: a test that wants a clean registry builds a `Process`.
+**Process isolation is done**, in two halves scheduled as units 3 and 4 of [§6.10](#610-completed-phase--prerequisites-and-the-safety-net). Part A deleted the mutable `coords.CellSize` global and converged ~75 read sites on a process-owned accessor; part B moved the four package-global wire registries onto a `WireRegistry` owned by `Process` and injected into every `Stage`, taking the five hook structs, the root `init()` and three `sync.Once` guards with them. The `ResetXxxForTest` helpers went too: a test that wants a clean registry builds a `Process`.
 
 **It did not gate 3D**, and the claim that it did is corrected in [§7.2](#72-prerequisite-gates) — do not carry the old reason forward. What part B closed instead is a live correctness bug: `RegisterOp`'s duplicate path ends with `existing.Handler = handler` on what was a binary-global map, and service handlers close over their own `*Process`, so two Processes in one binary that both registered auth left the first dispatching into the second's service. `internal/facadetest` pins it.
 
@@ -270,11 +277,11 @@ Escape hatches exist (`IncludeAll`, `Without` in `pkg/query/query.go`), but `For
 
 #### CE-009 — Protocol version and schema fingerprint · **Done**
 
-Closed by unit 6 of [§6.10](#610-next-phase--prerequisites-and-the-safety-net) — see [§6.10.6](#6106-what-ce-009-landed) for what it landed and what it cost.
+Closed by unit 6 of [§6.10](#610-completed-phase--prerequisites-and-the-safety-net) — see [§6.10.6](#6106-what-ce-009-landed) for what it landed and what it cost.
 
 **The version byte CE-005b Tier 2 added does not address this item's motivating failure, and cannot.** Type IDs are `fnv32a(reflect.Type.String())`, so a 2D `component.Position` and a 3D one hash identically — the [§7.3](#73-architecture) decision to keep *one* type set across both profiles guarantees it. The mismatch lives inside the message body, byte-identical on both transports. That is why the answer is a structural hash over field shapes: `mmokit.SchemaFingerprint` hashes `EntitySchema{Bindings, Layout, VarTail}` and the four message registries, so a binding set emitting three world coordinates instead of two rotates it.
 
-Collision auditing was closed by unit 1 of [§6.10](#610-next-phase--prerequisites-and-the-safety-net) (`8677252d`) and the registries moved in part B: all four now live on [`pkg/universe/wire_registry.go`](../pkg/universe/wire_registry.go), the client-input path panics on a collision instead of silently overwriting, and broadcasts claim their ID in the shared downstream namespace that clients actually dispatch through. Nothing here changes the paragraph above: a fingerprint, not a collision check, is what this item still owes.
+Collision auditing was closed by unit 1 of [§6.10](#610-completed-phase--prerequisites-and-the-safety-net) (`8677252d`) and the registries moved in part B: all four now live on [`pkg/universe/wire_registry.go`](../pkg/universe/wire_registry.go), the client-input path panics on a collision instead of silently overwriting, and broadcasts claim their ID in the shared downstream namespace that clients actually dispatch through. Nothing here changes the paragraph above: a fingerprint, not a collision check, is what this item still owes.
 
 A 2D client connecting to a 3D server is now refused at connection setup on both transports rather than decoding valid bytes into the wrong shape.
 
@@ -475,14 +482,14 @@ Each of these was found by verifying a plausible plan against source and finding
 
 This phase closed the last open P0 item, so **[§7.1](#71-sequencing-rule)'s gate has lifted** and the 104-day 2D/3D program may begin. Status is derived from source, not from this table.
 
-**The next phase is [§6.10](#610-next-phase--prerequisites-and-the-safety-net)** — the CE-009/CE-010 prerequisites and phase 0's safety net, in the order source says they depend on each other rather than the order [§7.2](#72-prerequisite-gates) originally implied. CE-009's header version byte landed here; its schema fingerprint and the unguarded registries landed in that following phase.
+**The next phase is [§6.10](#610-completed-phase--prerequisites-and-the-safety-net)** — the CE-009/CE-010 prerequisites and phase 0's safety net, in the order source says they depend on each other rather than the order [§7.2](#72-prerequisite-gates) originally implied. CE-009's header version byte landed here; its schema fingerprint and the unguarded registries landed in that following phase.
 
 #### 6.9.1 What it closes
 
 | Item | At phase end |
 | --- | --- |
 | CE-005b Tier 2 | **Closed** — authenticated handshake, AEAD framing, replay enforcement, C# parity, op-channel auth retired |
-| CE-009 | **Partially advanced here** — the UDP header version byte only, bundled per §7.1. The schema fingerprint and the two unguarded registries were closed later, in [§6.10](#610-next-phase--prerequisites-and-the-safety-net) units 1 and 6 |
+| CE-009 | **Partially advanced here** — the UDP header version byte only, bundled per §7.1. The schema fingerprint and the two unguarded registries were closed later, in [§6.10](#610-completed-phase--prerequisites-and-the-safety-net) units 1 and 6 |
 | CE-005b Tier 1 residual | **Closed as a side effect** — the pending-handshake table disappears, taking `sweepPendingLocked` and the 1024-spoofed-address denial window with it |
 
 #### 6.9.2 Design decisions, locked
@@ -549,9 +556,9 @@ every byte on the wire.
 
 **Do not land this format one file at a time.** The blast radius is roughly 4,000 lines across thirteen files that must change together — `udpproto`, `udp_server`, `udp_transport`, `udpclient` and their tests, `cmd/csharp-golden`, and the C# `UdpProto`/`UdpTransport` — because a partially-migrated tree cannot complete a handshake against itself. The unit is sized at 3.5 days for that reason, and a first attempt that began with `udpproto` alone left the repository unbuildable in nine files, which is the evidence for this instruction rather than a prediction of it.
 
-### 6.10 Next phase — prerequisites and the safety net
+### 6.10 Completed phase — prerequisites and the safety net
 
-**Approximately 20 engineer-days.** This is the work between the P0 gate lifting and [§7](#7-the-2d3d-and-multi-genre-program)'s dimension work proper. Unit 5 is the exception: it is a §7 phase-2 deliverable pulled forward, because once part B lands it is half a day and it is the thing [§7.3](#73-architecture) actually asks for. It exists as its own phase because the dependency order inside it is not the one [§7.2](#72-prerequisite-gates) originally implied, and getting that order wrong is expensive rather than merely slow.
+**Approximately 20 engineer-days estimated; 27 spent.** **Every unit is closed.** This was the work between the P0 gate lifting and [§7](#7-the-2d3d-and-multi-genre-program)'s dimension work proper. Unit 5 is the exception: it is a §7 phase-2 deliverable pulled forward, because once part B lands it is half a day and it is the thing [§7.3](#73-architecture) actually asks for. It exists as its own phase because the dependency order inside it is not the one [§7.2](#72-prerequisite-gates) originally implied, and getting that order wrong is expensive rather than merely slow.
 
 #### 6.10.1 Why the order changed
 
@@ -602,7 +609,7 @@ A design pass (four independent proposals, adversarially judged against source) 
 
 - **The unknown-channel-byte fallback already disagrees between transports.** `pkg/net/conn.go` treats an unrecognised leading byte as a channel-`0x00` event with the byte **stripped**; `pkg/net/udp_transport.go` treats it as one with the byte **kept**. The same wire byte produces two different payloads depending on transport. Reconcile to a single clean reject — do not preserve either behaviour for compatibility, because nothing can be relying on both.
 - **The golden coverage is Go↔C#, not three-way.** The Unity delta decoder is byte-pinned to Go; the browser's is not, and the browser is the reference game's only client. Unit 2 fixes the asymmetry in the direction of the risk, not the direction of the existing coverage.
-- **`buildTaggedFields` cannot simply move onto the reflection codec.** The reflection codec is a self-describing struct walker; the binding walker must emit a *fixed* layout consumed by `quantize.DeltaEncoder`'s offset table. Either teach the reflection codec fixed-width layouts or unify only the walker and keep two codecs. This is an architecture decision §7.5 phase 0 currently assumes away, and it belongs before day one of the collapse, not during it.
+- **`buildTaggedFields` cannot simply move onto the reflection codec.** ~~Either teach the reflection codec fixed-width layouts or unify only the walker and keep two codecs.~~ **Resolved: neither, and the collapse is struck.** `structSize`/`valueSize` are value-driven, so one derivation cannot produce a type-level offset table; and the walker half serves no phase-1 or phase-2 deliverable because the core components carry no `net:` tags at all. See [§7.5.1](#751-why-the-codec-collapse-is-struck).
 - **`--dump-schema` is binary-scoped, not process-scoped.** Unit 4 changes what it emits, which puts SDK regeneration and both golden gates inside its blast radius. That is the reason unit 2 precedes it.
 
 - **One `sync.Once` fires from `init()`, before any Process exists.** Process-owned registration cannot simply reuse the existing guards.
@@ -679,12 +686,12 @@ Seven commits, `b8480ed8`..`af30bf37`. **Ten days against a four-day estimate**,
 
 Two P1 items are hard prerequisites:
 
-- **CE-010** — **closed for this purpose.** A per-process dimension profile required the injected cell geometry this item describes; `coords.CellSize` could not remain a mutable package global, and part A deleted it. The profile itself landed as unit 5 of [§6.10](#610-next-phase--prerequisites-and-the-safety-net) — `Config.Dimension` selecting a `system.EngineBindingSet` at construction, with `Dimension3D` declared, selectable, and panicking until the bindings exist.
+- **CE-010** — **closed for this purpose.** A per-process dimension profile required the injected cell geometry this item describes; `coords.CellSize` could not remain a mutable package global, and part A deleted it. The profile itself landed as unit 5 of [§6.10](#610-completed-phase--prerequisites-and-the-safety-net) — `Config.Dimension` selecting a `system.EngineBindingSet` at construction, with `Dimension3D` declared, selectable, and panicking until the bindings exist.
 
-  **Correction, verified against source.** This bullet used to also require "the process-owned immutable registries", and that half is **false**. The profile selects bindings, not types (see [§7.3](#73-architecture)), and the binding half of the schema is *already* process-scoped: `Protocol.Schema()` takes `Entities` from a `ReplicatorRegistry` built by `BuildReplicators(w, coord, …)`, which takes a `*Process`. `EngineBindings` has one call site, inside that function, and `viewerRelativePosBinding.snapshotFields()` returning `[]int{4,4}` is the entire dimension-varying wire surface. The four global wire registries hold message *type* lists — exactly what the profile never selects. **Part B is still worth doing, for the reasons in [§6.10](#610-next-phase--prerequisites-and-the-safety-net), but it does not gate 3D.**
+  **Correction, verified against source.** This bullet used to also require "the process-owned immutable registries", and that half is **false**. The profile selects bindings, not types (see [§7.3](#73-architecture)), and the binding half of the schema is *already* process-scoped: `Protocol.Schema()` takes `Entities` from a `ReplicatorRegistry` built by `BuildReplicators(w, coord, …)`, which takes a `*Process`. `EngineBindings` has one call site, inside that function, and `viewerRelativePosBinding.snapshotFields()` returning `[]int{4,4}` is the entire dimension-varying wire surface. The four global wire registries hold message *type* lists — exactly what the profile never selects. **Part B is still worth doing, for the reasons in [§6.10](#610-completed-phase--prerequisites-and-the-safety-net), but it does not gate 3D.**
 - **CE-009** — **closed.** A 2D client meeting a 3D server is refused at connection setup on both transports. A protocol *version* could not have achieved this — one type set across both profiles means identical type IDs — so the check is a structural hash over field shapes, `mmokit.SchemaFingerprint`. See [§6.10.6](#6106-what-ce-009-landed).
 
-**They are not peers, and phase 0's safety net is not last.** The verified ordering — goldens, then CE-010 part A, then part B, then the fingerprint — is scheduled as [§6.10](#610-next-phase--prerequisites-and-the-safety-net), which supersedes the "schedule both immediately after P0" instruction this section used to carry.
+**They are not peers, and phase 0's safety net is not last.** The verified ordering — goldens, then CE-010 part A, then part B, then the fingerprint — is scheduled as [§6.10](#610-completed-phase--prerequisites-and-the-safety-net), which supersedes the "schedule both immediately after P0" instruction this section used to carry.
 
 ### 7.3 Architecture
 
@@ -710,7 +717,7 @@ Collision is **new capability, not a port** — the existing separating-axis cod
 
 | # | Phase | Days | Ends runnable at |
 | --- | --- | ---: | --- |
-| 0 | Codec collapse and safety net (pure 2D, zero behaviour change) | 13 | Fixed-offset frame codecs rewritten on the reflection codec; byte-level wire goldens **extended to the frame codecs** (see the note below — they already exist for the delta/replication path); an entity-conservation integrity invariant. Full suite green, reference game unchanged. |
+| 0 | Safety net and schema truth (pure 2D, byte-stable) | 14.5 | The unpinned framings byte-pinned; a golden whose bytes come from real `auto_replicator` bindings; the reflect codec pinned from TypeScript; an entity-conservation integrity invariant; `just schema-check` in CI; the schema field-name defect fixed. Full suite green. **The codec collapse is struck — see [§7.5.1](#751-why-the-codec-collapse-is-struck).** |
 | 1 | Widen core types, still 2D only | 13 | Position and velocity gain Z; rotation becomes a quaternion with yaw helpers; collider becomes a shape union. Generated 2D SDK diff is empty. |
 | 2 | The 3D profile | 12 | Quaternion quantization, dimension-selected bindings, gravity and move modes, cluster dimension agreement. A headless 3D example survives a cell split with a non-zero destination entity count asserted. |
 | 3 | Client SDK and interpolation | 11 | Quaternion decode and slerp in TypeScript and C#, golden vectors. A browser client renders 3D with quaternion orientation. |
@@ -723,7 +730,49 @@ Phases 0 and 1 are deliberately pure 2D. Front-loading them means any later fail
 
 **But the coverage is Go↔C# only, and that asymmetry is worth fixing early.** TypeScript reads the same manifest for `clockSync` and `playback` alone (`pkg/quantize/ts/clock-sync.test.ts`, `playback-golden.test.ts`); `delta-decoder-core.test.ts` contains no golden reference at all. So **the Unity client's delta decoder is pinned to Go's bytes and the browser's is not** — the reverse of where the risk sits, since the browser is the primary client and the reference game's only one.
 
-What phase 0 must *add*, then: TS-side byte assertions for the delta frame, plus goldens for the fixed-offset codecs it rewrites — `pkg/replication/frame.go` (round-trip tested only today), `transfer.go`'s `MarshalTransferFrame`, the border-snapshot body, and the two channel-framing headers. Also the reflect codec's nested-struct and slice-of-struct paths, which `cmd/csharp-golden` flags as a gap in its own comment ("All fields flat"), and at least one golden whose snapshot bytes come from real `auto_replicator` bindings rather than a literal placeholder.
+What phase 0 must *add* is listed in [§7.5.2](#752-phase-0-steps). Two items this section used to list are already done: TS-side byte assertions for the delta frame landed in `357bd61c` (`pkg/quantize/ts/delta-golden.test.ts`), and the reflect codec's nested-struct and slice-of-struct paths are covered by the `reflectNested` fixture.
+
+#### 7.5.1 Why the codec collapse is struck
+
+Phase 0 used to lead with "fixed-offset frame codecs rewritten on the reflection codec", and [§6.10.4](#6104-traps) recorded the unresolved question underneath it: teach the reflection codec fixed-width layouts, or unify only the walker and keep two codecs. **The answer is neither.** Verified against source:
+
+- **A single derivation is not expressible.** `structSize` and `valueSize` ([`reflect_marshal.go:375`](../pkg/universe/reflect_marshal.go), `:399`) take a `reflect.Value`, not a `reflect.Type`, because string and slice widths are value-dependent. The fixed-offset path needs the exact opposite: a type-level `[]int` resolved once and prefix-summed at [`delta.go:31`](../pkg/quantize/delta.go), then used for raw `bytes.Equal(prev[off:off+sz], curr[off:off+sz])`. The offset table *is* the delta algorithm, not an implementation detail of it.
+- **The walker half serves no phase-1 or phase-2 deliverable.** `component.Position`, `Velocity`, `Rotation` and `Collider` carry **zero** `net:` tags ([`core.go:11-35`](../pkg/component/core.go)); their entire client wire surface is the hand-written `EngineBindings`. Widening Position with a sibling `Z float32` needs no walker change at all — only introducing a nested `Vec3` value type would, and nothing in phases 1–2 requires one. §7.3's "the walker is flat, so nested vector value types contribute zero wire fields" is true and should stop being cited as the phase-0 justification.
+- **The import graph forbids the rewrite as stated.** `go list -deps ./pkg/system` contains no `pkg/universe`, and `pkg/replication` is a leaf by design, so `auto_replicator` cannot call `ReflectMarshal` without first relocating the reflect codec.
+
+An earlier draft of this correction also argued that the rewrite would force a lockstep redeploy under CE-009. **That argument is void and was never load-bearing** — this project has no users and no deployments. The decision rests on the three points above, all of which are properties of the code.
+
+Phase 0 stays byte-stable anyway, for the reason §7.5 already gives: front-loading it means a later failure on the split-merge path is unambiguously a 3D bug rather than a byte-offset bug. That is about debuggability, not about anyone's upgrade window.
+
+#### 7.5.2 Phase 0 steps
+
+Two live defects were found while planning this phase, and they reorder it. Both are recorded in [§7.5.3](#753-two-defects-found-while-planning).
+
+| # | Step | Days | May move goldens |
+| --- | --- | ---: | --- |
+| 1 | `just schema-check` in CI, behind a PostgreSQL service | 1 | no |
+| 2 | Put the schema field name on the leaf; fix the NPCAI/POI swap it causes | 2 | **yes** — `space.json`, deliberately |
+| 3 | A golden whose snapshot bytes come from real `auto_replicator` bindings | 2.5 | `delta_golden.json` gains a section |
+| 4 | Byte-pin the three unpinned framings (border body, typed event, typed op) | 2.5 | no |
+| 5 | Entity-conservation integrity invariant | 2 | no |
+| 6 | Encoding-table hygiene inside `pkg/system`, no new package | 1.5 | no |
+| 7 | Repair the bot's snapshot offset tables | 1.5 | no |
+| 8 | TypeScript pin for the reflect codec | 1 | no |
+| 9 | Record the resolution and the third codec family | 0.5 | no |
+
+Step 2 goes first: it is a live bug in the reference game, and the fix needs no hand-written client change because `npc.ts` and `poi.ts` were both written against the correct semantics. Every step after it asserts `schema-check` is byte-clean, which only means something once step 2 has corrected what the golden pins.
+
+#### 7.5.3 Two defects found while planning
+
+**The emitted schema swaps two field names.** `buildTaggedFields` appends `rb.fieldNames` in *declaration* order ([`auto_replicator.go:631`](../pkg/system/auto_replicator.go)); `schema()` consumes that list as *snapshot fields, then initial fields* ([`:776`](../pkg/system/auto_replicator.go)). The two orders agree only when no `initial` field precedes a snapshot field. Exactly two components interleave: `NPCAI` (I,S) and `POI` (I,S,I), both in `examples/space`.
+
+`NPCAI` declares `Archetype uint8 net:"initial,u8"` then `State uint8 net:"u8"`, and `testdata/schema/space.json` pins `archetype` as the snapshot field and `state` as `initial: true` — inverted. The generated decoder therefore reads the per-tick byte into `archetype` and the entered-payload byte into `state`, so [`npc.ts:131`](../examples/space/web/src/entities/npc.ts) keys sprite styling off live AI state and `:155` fades entities by comparing an archetype against `AI_STATE_LEASH`. Byte layout is untouched; only the labels are wrong. `POI` has the same shape (`Type`/`Status`).
+
+The schema golden added in CE-010 step 0 pins the defect rather than catching it — a golden records what the code does, which is exactly why step 1 (running it in CI) and step 2 (making it right) are separate steps.
+
+**The load-test bot's hand-rolled decoder is misaligned.** [`bot/world.go:312`](../examples/space/internal/bot/world.go) `decodeSnapshot` reads `rotation(2)` where the schema's snapshot stream has `radius(2)`, and reads health as `Uint16` where the schema says four-byte floats. Rotation is not in `EngineBindings` at all, so every field from that point on is shifted. Nothing cross-checks the bot's offsets against the schema, so CI is green.
+
+**A third correction, not a defect.** `QAngle` is **not** in `EngineBindings` — that is `ViewerRelativePos + QVelocity + QSize` ([`auto_replicator.go:504`](../pkg/system/auto_replicator.go)) — and `examples/space` wires rotation per entity kind. So phase 2's "dimension-selected bindings" cannot currently reach rotation. Deliberately not fixed in phase 0: moving `QAngle` into `EngineBindings` would add a rotation field to every entity kind that lacks one and duplicate it for the four space kinds that wire it by hand. That is a design question for phase 2, and it is written here so phase 2 does not discover it on day one.
 
 ### 7.6 Validation
 
