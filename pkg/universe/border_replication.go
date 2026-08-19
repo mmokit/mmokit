@@ -170,7 +170,7 @@ func (bd *BorderDispatcher) candidatesFor(nv *CellViewer, currentTick uint64) it
 			// entity visibly snaps east on every cell crossing.
 			var rotAngle float32
 			if rotMap.HasAll(entity) {
-				rotAngle = rotMap.Get(entity).Angle
+				rotAngle = rotMap.Get(entity).Yaw()
 			}
 
 			ref := replication.EntityRef{

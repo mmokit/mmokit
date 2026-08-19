@@ -111,10 +111,11 @@ func TestForEach3(t *testing.T) {
 	stage, _ := newTestStage(t)
 	w := stage.ECSWorld()
 	mp := ecs.NewMap4[component.Position, component.Velocity, component.Rotation, component.NetworkID](w)
+	rotQ := component.RotationFromYaw(0.5)
 	h := mp.NewEntity(
 		&component.Position{X: 1},
 		&component.Velocity{X: 2},
-		&component.Rotation{Angle: 0.5},
+		&rotQ,
 		&component.NetworkID{ID: 300},
 	)
 	stage.RegisterLiveNetID(300, h)

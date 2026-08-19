@@ -168,10 +168,11 @@ func TestFinishTransferSpawn_Asteroid(t *testing.T) {
 	gw, _ := newTestGameWorld()
 
 	mapper := ecs.NewMap6[mmokit.Position, mmokit.Velocity, mmokit.Rotation, mmokit.Collider, mmokit.NetworkID, mmokit.EntityKind](gw.stage.ECSWorld())
+	rotA := mmokit.RotationFromYaw(1.0)
 	entity := mapper.NewEntity(
 		&mmokit.Position{X: 500, Y: -300},
 		&mmokit.Velocity{X: 0, Y: 0},
-		&mmokit.Rotation{Angle: 1.0},
+		&rotA,
 		&mmokit.Collider{Radius: 2.0},
 		&mmokit.NetworkID{ID: 100},
 		&mmokit.EntityKind{Type: gamecomp.KindAsteroid},
@@ -213,10 +214,11 @@ func TestFinishTransferSpawn_Ship(t *testing.T) {
 	gw.Players.RegisterTransferSession(connID, "testplayer")
 
 	mapper := ecs.NewMap6[mmokit.Position, mmokit.Velocity, mmokit.Rotation, mmokit.Collider, mmokit.NetworkID, mmokit.EntityKind](gw.stage.ECSWorld())
+	rotB := mmokit.RotationFromYaw(1.5)
 	entity := mapper.NewEntity(
 		&mmokit.Position{X: 10, Y: 20},
 		&mmokit.Velocity{X: 3, Y: 4},
-		&mmokit.Rotation{Angle: 1.5},
+		&rotB,
 		&mmokit.Collider{Radius: 5},
 		&mmokit.NetworkID{ID: 200},
 		&mmokit.EntityKind{Type: gamecomp.KindShip},

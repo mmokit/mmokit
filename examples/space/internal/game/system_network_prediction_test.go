@@ -24,12 +24,13 @@ func TestNetworkSystemBuildMovementStateIsWorldAbsoluteAndComplete(t *testing.T)
 		mmokit.Velocity,
 		mmokit.Rotation,
 	](gw.stage.ECSWorld())
+	rotPred := mmokit.RotationFromYaw(0.75)
 	handle := mapper.NewEntity(
 		&mmokit.Position{X: 25, Y: 40},
 		&mmokit.NetworkID{ID: 91, Epoch: 9},
 		&mmokit.CellCoord{CellX: 2, CellY: 3},
 		&mmokit.Velocity{X: 12, Y: -4},
-		&mmokit.Rotation{Angle: 0.75},
+		&rotPred,
 	)
 	entity := mmokit.EntityFromECS(gw.stage, handle)
 	mmokit.Set(entity, gamecomp.ShipControl{

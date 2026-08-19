@@ -120,7 +120,7 @@ func (s *ShipDynamicsSystem) Update(dt float32) {
 				} else {
 					ship.AngularVel += step
 				}
-				rot.Angle += ship.AngularVel * dt
+				rot.AddYaw(ship.AngularVel * dt)
 			}
 			continue
 		}
@@ -152,14 +152,14 @@ func (s *ShipDynamicsSystem) Update(dt float32) {
 		// max ω if the turn is big enough, and smooth ramp-down without
 		// discrete braking jitter.
 		targetAngle := float32(math.Atan2(float64(dy), float64(dx)))
-		angleDiff := normalizeAngle(targetAngle - rot.Angle)
+		angleDiff := normalizeAngle(targetAngle - rot.Yaw())
 
 		const angEps = float32(0.001)
 		absDiff := float32(math.Abs(float64(angleDiff)))
 
 		if absDiff < angEps && float32(math.Abs(float64(ship.AngularVel))) < angEps {
 			// Arrived on target — snap exact and kill residual ω.
-			rot.Angle = targetAngle
+			rot.SetYaw(targetAngle)
 			ship.AngularVel = 0
 		} else {
 			// Ideal ω magnitude for braking to rest over absDiff.
@@ -191,10 +191,10 @@ func (s *ShipDynamicsSystem) Update(dt float32) {
 			stepAng := ship.AngularVel * dt
 			if signf(stepAng) == signf(angleDiff) &&
 				float32(math.Abs(float64(stepAng))) >= absDiff {
-				rot.Angle = targetAngle
+				rot.SetYaw(targetAngle)
 				ship.AngularVel = 0
 			} else {
-				rot.Angle += stepAng
+				rot.AddYaw(stepAng)
 			}
 		}
 
@@ -211,8 +211,9 @@ func (s *ShipDynamicsSystem) Update(dt float32) {
 		}
 
 		thrustMag := thrust * alignment * distFactor * dt
-		vel.X += float32(math.Cos(float64(rot.Angle))) * thrustMag
-		vel.Y += float32(math.Sin(float64(rot.Angle))) * thrustMag
+		fx, fy := rot.Forward()
+		vel.X += fx * thrustMag
+		vel.Y += fy * thrustMag
 
 		// Max speed clamp — only while a movement-status is active
 		// (afterburner boost or slow debuff). Without a status effect,

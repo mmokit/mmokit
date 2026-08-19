@@ -902,9 +902,9 @@ func TestApplyBorderFrame_RotationRoundTrip(t *testing.T) {
 	if !rotMap.HasAll(ent) {
 		t.Fatal("replica missing Rotation component")
 	}
-	if absDiff(rotMap.Get(ent).Angle, wantAngle1) > 0.01 {
+	if absDiff(rotMap.Get(ent).Yaw(), wantAngle1) > 0.01 {
 		t.Fatalf("create path: replica angle = %.4f, want ~%.4f (qangle round-trip lost rotation)",
-			rotMap.Get(ent).Angle, wantAngle1)
+			rotMap.Get(ent).Yaw(), wantAngle1)
 	}
 
 	const wantAngle2 float32 = -2.3562 // ~-3pi/4 (sw)
@@ -918,9 +918,9 @@ func TestApplyBorderFrame_RotationRoundTrip(t *testing.T) {
 		},
 	}
 	base.ApplyBorderFrame(frame2, "source")
-	if absDiff(rotMap.Get(ent).Angle, wantAngle2) > 0.01 {
+	if absDiff(rotMap.Get(ent).Yaw(), wantAngle2) > 0.01 {
 		t.Fatalf("update path: replica angle = %.4f, want ~%.4f (refresh failed to update rotation)",
-			rotMap.Get(ent).Angle, wantAngle2)
+			rotMap.Get(ent).Yaw(), wantAngle2)
 	}
 }
 
@@ -957,8 +957,8 @@ func TestPromoteReplicaToLive_PreservesBorderRotation(t *testing.T) {
 	if !rotMap.HasAll(ent) {
 		t.Fatal("post-promote entity missing Rotation component")
 	}
-	if absDiff(rotMap.Get(ent).Angle, wantAngle) > 0.01 {
+	if absDiff(rotMap.Get(ent).Yaw(), wantAngle) > 0.01 {
 		t.Fatalf("post-promote angle = %.4f, want ~%.4f (rotation lost across handoff — would visibly snap)",
-			rotMap.Get(ent).Angle, wantAngle)
+			rotMap.Get(ent).Yaw(), wantAngle)
 	}
 }

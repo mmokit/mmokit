@@ -74,7 +74,7 @@ func (s *CollisionSystem) Update(dt float32) {
 
 			var rotation float32
 			if rot := mmokit.Get[mmokit.Rotation](entity); rot != nil {
-				rotation = rot.Angle
+				rotation = rot.Yaw()
 			}
 			playerEntry := mmokit.SpatialEntry{
 				Entity:   sess.Entity,

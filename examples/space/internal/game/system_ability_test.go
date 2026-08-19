@@ -357,7 +357,7 @@ func TestAbility_BeamClipsAtLOSWall(t *testing.T) {
 		// Caster facing matches aim direction (along +x) so the ±120°
 		// arc check in tickChannels passes.
 		rot := mmokit.Get[mmokit.Rotation](player)
-		rot.Angle = 0
+		rot.SetYaw(0)
 
 		// Bypass dispatchSkillshotChannel + queued Commands so the test
 		// is deterministic on a single tick — attach Channeling directly

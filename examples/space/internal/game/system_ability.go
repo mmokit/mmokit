@@ -648,8 +648,7 @@ func (s *AbilitySystem) fireProjectile(
 	norm := float32(math.Sqrt(float64(dirX*dirX + dirY*dirY)))
 	if norm < 1e-3 {
 		if rot := mmokit.Get[mmokit.Rotation](caster); rot != nil {
-			dirX = float32(math.Cos(float64(rot.Angle)))
-			dirY = float32(math.Sin(float64(rot.Angle)))
+			dirX, dirY = rot.Forward()
 		} else {
 			return // can't fire without a direction
 		}
@@ -770,7 +769,7 @@ func (s *AbilitySystem) tickChannels(dt float32) {
 		// straight backwards. 120° (2.094 rad) is the loosest allowance
 		// that still satisfies that intent.
 		const beamArcLimit float32 = 2.094
-		if angleDelta(casterRot.Angle, aimAngle) > beamArcLimit {
+		if angleDelta(casterRot.Yaw(), aimAngle) > beamArcLimit {
 			ends = append(ends, endCandidate{caster, ch.SlotID})
 			return
 		}

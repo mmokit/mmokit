@@ -403,7 +403,7 @@ func (c *Cell) drainPendingPromotes(currentClusterTick uint64) {
 					recentVelY = vel.Y
 				}
 				if c.Stage.rotMap.HasAll(ent) {
-					recentAngle = c.Stage.rotMap.Get(ent).Angle
+					recentAngle = c.Stage.rotMap.Get(ent).Yaw()
 					hasRecentRot = true
 				}
 				if c.Stage.cellMap.HasAll(ent) {
@@ -494,7 +494,7 @@ func (c *Cell) drainPendingPromotes(currentClusterTick uint64) {
 					vel.Y = recentVelY
 				}
 				if hasRecentRot && c.Stage.rotMap.HasAll(newEnt) {
-					c.Stage.rotMap.Get(newEnt).Angle = recentAngle
+					c.Stage.rotMap.Get(newEnt).SetYaw(recentAngle)
 				}
 				if hasRecentCC && c.Stage.cellMap.HasAll(newEnt) {
 					cc := c.Stage.cellMap.Get(newEnt)

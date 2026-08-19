@@ -318,12 +318,12 @@ func (b *qVelocityBinding) schema() BindingSchema {
 	}
 }
 
-// qAngleBinding quantizes Rotation.Angle as uint16.
+// qAngleBinding quantizes the rotation's yaw as uint16.
 type qAngleBinding struct {
 	rotMap *ecs.Map1[component.Rotation]
 }
 
-// QAngle returns a binding that quantizes Rotation.Angle as uint16.
+// QAngle returns a binding that quantizes the rotation's yaw as uint16.
 func QAngle(rotMap *ecs.Map1[component.Rotation]) ComponentBinding {
 	return &qAngleBinding{rotMap: rotMap}
 }
@@ -336,7 +336,7 @@ func (b *qAngleBinding) hash(entity ecs.Entity, h *Hasher, _ *ViewerInfo, _ spat
 		return
 	}
 	rot := b.rotMap.Get(entity)
-	h.Float32(rot.Angle)
+	h.Float32(rot.Yaw())
 }
 
 func (b *qAngleBinding) snapshot(entity ecs.Entity, w *quantize.SnapshotWriter, _ *ViewerInfo, _ spatial.Entry) {
@@ -345,7 +345,7 @@ func (b *qAngleBinding) snapshot(entity ecs.Entity, w *quantize.SnapshotWriter, 
 		return
 	}
 	rot := b.rotMap.Get(entity)
-	w.QAngle(rot.Angle)
+	w.QAngle(rot.Yaw())
 }
 
 func (b *qAngleBinding) hasInitial() bool                                            { return false }

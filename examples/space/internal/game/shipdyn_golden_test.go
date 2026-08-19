@@ -171,10 +171,11 @@ func runShipDynScenario(t *testing.T, sc shipDynScenario) shipDynGoldenCase {
 	}
 
 	const netID uint32 = 7100
+	rotFixture := mmokit.RotationFromYaw(sc.angle)
 	handle := mapper.NewEntity(
 		&mmokit.Position{X: sc.posX, Y: sc.posY},
 		&mmokit.Velocity{X: sc.velX, Y: sc.velY},
-		&mmokit.Rotation{Angle: sc.angle},
+		&rotFixture,
 		&gamecomp.ShipControl{
 			Thrust:     gw.Config.ShipThrust,
 			TurnRate:   gw.Config.ShipTurnRate,
@@ -222,7 +223,7 @@ func runShipDynScenario(t *testing.T, sc shipDynScenario) shipDynGoldenCase {
 			Y:          float64(pos.Y),
 			VelocityX:  float64(vel.X),
 			VelocityY:  float64(vel.Y),
-			Angle:      float64(rot.Angle),
+			Angle:      float64(rot.Yaw()),
 			AngularVel: float64(ship.AngularVel),
 		}
 	}

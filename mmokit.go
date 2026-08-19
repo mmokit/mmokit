@@ -46,6 +46,13 @@ type Vec3 = component.Vec3
 // Rotation is an entity's facing direction (Angle in radians).
 type Rotation = component.Rotation
 
+// Rotation constructors and accessors. Game code reads and writes orientation
+// through these rather than the storage field.
+var (
+	RotationIdentity = component.RotationIdentity
+	RotationFromYaw  = component.RotationFromYaw
+)
+
 // Collider defines a collision shape (circle or oriented rectangle) with a layer byte.
 // For circles use Radius; for rects use Width/Height. Radius doubles as the bounding
 // radius for broad-phase checks on rectangles.

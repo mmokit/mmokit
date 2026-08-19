@@ -67,7 +67,7 @@ func TestCell_DrainInbox_Handoff(t *testing.T) {
 	ecs.NewMap1[component.NetworkID](world).Add(temp, &component.NetworkID{ID: 77})
 	ecs.NewMap1[component.EntityKind](world).Add(temp, &component.EntityKind{Type: 1})
 	ecs.NewMap1[component.Collider](world).Add(temp, &component.Collider{Radius: 4})
-	ecs.NewMap1[component.Rotation](world).Add(temp, &component.Rotation{Angle: 0})
+	ecs.NewMap1[component.Rotation](world).Add(temp, &component.Rotation{})
 	ecs.NewMap1[component.CellCoord](world).Add(temp, &component.CellCoord{CellX: 1, CellY: 0})
 
 	blob, err := cell.Stage.SerializeEntity(temp)
@@ -168,7 +168,7 @@ func TestCell_MsgHandoff_ReplacesExistingReplicaAtCommitTick(t *testing.T) {
 	ecs.NewMap1[component.NetworkID](world).Add(temp, &component.NetworkID{ID: 77})
 	ecs.NewMap1[component.EntityKind](world).Add(temp, &component.EntityKind{Type: 1})
 	ecs.NewMap1[component.Collider](world).Add(temp, &component.Collider{Radius: 4})
-	ecs.NewMap1[component.Rotation](world).Add(temp, &component.Rotation{Angle: 0})
+	ecs.NewMap1[component.Rotation](world).Add(temp, &component.Rotation{})
 	ecs.NewMap1[component.CellCoord](world).Add(temp, &component.CellCoord{CellX: 1, CellY: 0})
 	blob, err := cell.Stage.SerializeEntity(temp)
 	if err != nil {

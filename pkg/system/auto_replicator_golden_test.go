@@ -26,6 +26,12 @@ import (
 // Big-endian throughout, which is the snapshot convention (the UDP packet
 // codec is little-endian — different layers, do not conflate).
 
+// The fixture includes QAngle deliberately. The golden had ZERO rotation
+// coverage, so it could not grade the one binding the quaternion swap edits —
+// and that swap is the only step in phase 1 with a behavioural risk. Pinned
+// here, while the storage is still a scalar and the bytes are provably
+// unchanged, so the swap is measured against a fixed reference.
+
 // goldenScalars exercises every fixed-width encoding a production tag uses.
 type goldenScalars struct {
 	F32   float32 `net:"f32"`
@@ -53,6 +59,7 @@ type goldenInitial struct {
 //	020c      qsize  8           QSize radius     8/500*32767 = 524
 //	0000      qsize  0           QSize width  (unset on the Collider)
 //	0000      qsize  0           QSize height (unset)
+//	945e      qangle 0.5         QAngle: (0.5+pi)/(2pi)*65535 = 37982
 //	3fc00000  f32    1.5         goldenScalars.F32
 //	07        u8     7
 //	0258      u16    600
@@ -60,7 +67,7 @@ type goldenInitial struct {
 //	fed4      i16   -300
 //	01        bool   true
 //	7f        qnorm  0.5         0.5*255 = 127
-const goldenSnapshotHex = "41280000c1a200000028ffaf020c000000003fc0000007025800011170fed4017f"
+const goldenSnapshotHex = "41280000c1a200000028ffaf020c00000000945e3fc0000007025800011170fed4017f"
 
 // Initial payload: u8 length prefix, UTF-8 bytes, then the u8 field.
 //
@@ -72,7 +79,7 @@ const goldenInitialHex = "04676f6c6403"
 // The layout the delta encoder prefix-sums into its offset table. A width here
 // that disagrees with the bytes above shifts every field after it — which is
 // exactly the defect `net:"pos"` was (declared 8, wrote 4).
-var goldenLayout = []int{4, 4, 2, 2, 2, 2, 2, 4, 1, 2, 4, 2, 1, 1}
+var goldenLayout = []int{4, 4, 2, 2, 2, 2, 2, 2, 4, 1, 2, 4, 2, 1, 1}
 
 func goldenReplicator(t *testing.T) (EntityReplicator, spatial.Entry, *ViewerInfo) {
 	t.Helper()
@@ -81,6 +88,7 @@ func goldenReplicator(t *testing.T) (EntityReplicator, spatial.Entry, *ViewerInf
 	initial := ecs.NewMap1[goldenInitial](world)
 	vel := ecs.NewMap1[component.Velocity](world)
 	col := ecs.NewMap1[component.Collider](world)
+	rot := ecs.NewMap1[component.Rotation](world)
 
 	e := scalars.NewEntity(&goldenScalars{
 		F32: 1.5, U8: 7, U16: 600, U32: 70000, I16: -300, Flag: true, QNorm: 0.5,
@@ -88,11 +96,14 @@ func goldenReplicator(t *testing.T) (EntityReplicator, spatial.Entry, *ViewerInf
 	initial.Add(e, &goldenInitial{Label: "gold", Tier: 3})
 	vel.Add(e, &component.Velocity{X: 1.25, Y: -2.5})
 	col.Add(e, &component.Collider{Radius: 8})
+	rotv := component.RotationFromYaw(0.5)
+	rot.Add(e, &rotv)
 
 	rep := AutoReplicator(42,
 		EntryPosition(),
 		QVelocity(vel, 1000),
 		QSize(col, 500),
+		QAngle(rot),
 		Component(scalars),
 		Component(initial),
 	)

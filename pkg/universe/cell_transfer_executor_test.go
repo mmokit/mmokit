@@ -92,7 +92,7 @@ func spawnTestEntity(cell *Cell, netID uint32, x, y float32) ecs.Entity {
 	ecs.NewMap1[component.NetworkID](w).Add(e, &component.NetworkID{ID: netID})
 	ecs.NewMap1[component.EntityKind](w).Add(e, &component.EntityKind{Type: 1})
 	ecs.NewMap1[component.Collider](w).Add(e, &component.Collider{Radius: 4})
-	ecs.NewMap1[component.Rotation](w).Add(e, &component.Rotation{Angle: 0})
+	ecs.NewMap1[component.Rotation](w).Add(e, &component.Rotation{})
 	ecs.NewMap1[component.CellCoord](w).Add(e, &component.CellCoord{CellX: cell.CellID().X, CellY: cell.CellID().Y})
 	cell.Stage.netIDIdx.Enter(netID, e, PresenceLive)
 	return e

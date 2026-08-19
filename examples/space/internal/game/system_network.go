@@ -325,7 +325,7 @@ func (s *NetworkSystem) buildMovementState(entity mmokit.Entity, streamEpoch uin
 		WorldY:            pos.Y + float32(cell.CellY)*cellSize,
 		VelocityX:         vel.X,
 		VelocityY:         vel.Y,
-		Angle:             rot.Angle,
+		Angle:             rot.Yaw(),
 		AngularVelocity:   ship.AngularVel,
 		TargetActive:      target.Active,
 		TargetX:           target.LocalX + float32(target.CellX)*cellSize,

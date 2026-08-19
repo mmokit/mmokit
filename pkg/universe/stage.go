@@ -922,7 +922,7 @@ func (b *Stage) SerializeEntityCore(entity ecs.Entity) *TransferFrame {
 		f.VelX, f.VelY = vel.X, vel.Y
 	}
 	if b.rotMap.HasAll(entity) {
-		f.Rotation = b.rotMap.Get(entity).Angle
+		f.Rotation = b.rotMap.Get(entity).Yaw()
 	}
 	if b.colliderMap.HasAll(entity) {
 		f.Collider = *b.colliderMap.Get(entity)
@@ -1476,7 +1476,7 @@ func (b *Stage) upsertBorderReplica(
 			vel.Y = vy
 		}
 		if b.rotMap.HasAll(ent) {
-			b.rotMap.Get(ent).Angle = angle
+			b.rotMap.Get(ent).SetYaw(angle)
 		}
 		// Refresh the collider radius from the frame. Radius is a per-tick
 		// animatable field (the original WASM pulse demo breathed it), so a

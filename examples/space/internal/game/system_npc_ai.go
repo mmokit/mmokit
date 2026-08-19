@@ -437,7 +437,7 @@ func (s *NPCAISystem) tickEngage(self mmokit.Entity, ai *gamecomp.NPCAI,
 		}
 	}
 
-	if dist <= ai.WeaponRange && angleDelta(rot.Angle, desired) < 0.26 /* ~15° */ {
+	if dist <= ai.WeaponRange && angleDelta(rot.Yaw(), desired) < 0.26 /* ~15° */ {
 		ai.FireCooldown -= dt
 		if ai.FireCooldown <= 0 && ai.FireRate > 0 {
 			ai.FireCooldown = 1.0 / ai.FireRate
@@ -660,7 +660,7 @@ func (s *NPCAISystem) tickLanceWindup(self mmokit.Entity, ai *gamecomp.NPCAI,
 	vel *mmokit.Velocity, rot *mmokit.Rotation, dt float32,
 ) {
 	vel.X, vel.Y = 0, 0
-	rot.Angle = ai.ChargeDirAngle // hold the visual heading
+	rot.SetYaw(ai.ChargeDirAngle) // hold the visual heading
 	ai.WindupRemaining -= dt
 	if ai.WindupRemaining > 0 {
 		return
@@ -689,7 +689,7 @@ func (s *NPCAISystem) tickLanceCharge(self mmokit.Entity, ai *gamecomp.NPCAI,
 	uy := float32(math.Sin(float64(ai.ChargeDirAngle)))
 	vel.X = ux * s.gw.Config.LancerChargeSpeed
 	vel.Y = uy * s.gw.Config.LancerChargeSpeed
-	rot.Angle = ai.ChargeDirAngle
+	rot.SetYaw(ai.ChargeDirAngle)
 
 	if !ai.ChargeHit && ai.TargetNetID != 0 {
 		target := mmokit.EntityByNetID(s.gw.stage, ai.TargetNetID)
@@ -955,18 +955,18 @@ func (s *NPCAISystem) findNearestEnemy(self mmokit.Entity,
 	return best
 }
 
-// turnTowards rotates rot.Angle toward desired by up to turnRate*dt.
+// turnTowards rotates the yaw toward desired by up to turnRate*dt.
 // Returns true if the rotation is within ±15° of desired after the step.
 func turnTowards(rot *mmokit.Rotation, desired, turnRate, dt float32) bool {
-	diff := normalizeAngle(desired - rot.Angle)
+	diff := normalizeAngle(desired - rot.Yaw())
 	maxTurn := turnRate * dt
 	if diff > maxTurn {
 		diff = maxTurn
 	} else if diff < -maxTurn {
 		diff = -maxTurn
 	}
-	rot.Angle += diff
-	return angleDelta(rot.Angle, desired) < 0.26
+	rot.AddYaw(diff)
+	return angleDelta(rot.Yaw(), desired) < 0.26
 }
 
 func angleDelta(a, b float32) float32 {

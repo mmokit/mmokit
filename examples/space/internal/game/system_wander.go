@@ -40,21 +40,22 @@ func (s *WanderSystem) Update(dt float32) {
 			// Vary interval ±50% so NPCs don't move in lockstep.
 			w.Timer = w.Interval * (0.5 + rand.Float32())
 			// Steer within ±90° of current heading for natural-looking paths.
-			w.TargetAngle = rot.Angle + (rand.Float32()-0.5)*math.Pi
+			w.TargetAngle = rot.Yaw() + (rand.Float32()-0.5)*math.Pi
 		}
 
 		// Smoothly turn toward target heading.
-		diff := normalizeAngle(w.TargetAngle - rot.Angle)
+		diff := normalizeAngle(w.TargetAngle - rot.Yaw())
 		maxTurn := w.TurnRate * dt
 		if diff > maxTurn {
 			diff = maxTurn
 		} else if diff < -maxTurn {
 			diff = -maxTurn
 		}
-		rot.Angle += diff
+		rot.AddYaw(diff)
 
 		// Drive velocity from current facing angle.
-		vel.X = w.Speed * float32(math.Cos(float64(rot.Angle)))
-		vel.Y = w.Speed * float32(math.Sin(float64(rot.Angle)))
+		fx, fy := rot.Forward()
+		vel.X = w.Speed * fx
+		vel.Y = w.Speed * fy
 	}
 }

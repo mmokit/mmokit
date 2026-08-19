@@ -41,7 +41,7 @@ func newShipDynamicsFixture(t *testing.T) *shipDynamicsTestFixture {
 	handle := mapper.NewEntity(
 		&mmokit.Position{X: 0, Y: 0},
 		&mmokit.Velocity{X: 0, Y: 0},
-		&mmokit.Rotation{Angle: 0},
+		&mmokit.Rotation{},
 		&gamecomp.ShipControl{
 			Thrust:    gw.Config.ShipThrust,
 			TurnRate:  gw.Config.ShipTurnRate,
@@ -168,7 +168,7 @@ func TestShipTurn_StopsOnTargetWithoutOvershoot(t *testing.T) {
 	ship := f.ship()
 	rot := f.rot()
 	targetAngle := float32(math.Pi / 4)
-	angleDiff := float32(math.Abs(float64(normalizeAngle(rot.Angle - targetAngle))))
+	angleDiff := float32(math.Abs(float64(normalizeAngle(rot.Yaw() - targetAngle))))
 
 	if angleDiff > 0.01 {
 		t.Errorf("final angle diff = %f rad, want < 0.01", angleDiff)
@@ -243,14 +243,14 @@ func TestShipTurn_AlreadyFacingTarget(t *testing.T) {
 
 	ship := f.ship()
 	rot := f.rot()
-	if math.IsNaN(float64(rot.Angle)) || math.IsNaN(float64(ship.AngularVel)) {
+	if math.IsNaN(float64(rot.Yaw())) || math.IsNaN(float64(ship.AngularVel)) {
 		t.Fatal("NaN in angle or AngularVel")
 	}
 	if math.Abs(float64(ship.AngularVel)) > 0.05 {
 		t.Errorf("AngularVel = %f, want ~0 (already facing target)", ship.AngularVel)
 	}
-	if math.Abs(float64(rot.Angle)) > 0.01 {
-		t.Errorf("rot.Angle = %f, want ~0", rot.Angle)
+	if math.Abs(float64(rot.Yaw())) > 0.01 {
+		t.Errorf("rot yaw = %f, want ~0", rot.Yaw())
 	}
 }
 
