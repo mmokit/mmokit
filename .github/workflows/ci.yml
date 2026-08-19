@@ -179,8 +179,27 @@ jobs:
       # Verified by moving both node_modules trees aside: 53 + 147 tests pass.
       # The generated SDKs those suites import (examples/space/web/sdk and
       # examples/4node-basic/web/sdk, 16 files each) are tracked.
+      # Go, so the generate-and-decode gate below can run. The gate is a Go
+      # test that emits a TypeScript SDK and executes it, so it needs both
+      # toolchains — and only this job has bun.
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          cache: true
+
       - name: shared TypeScript codec/interpolation tests
         run: just ts-core-test
+
+      # Pins the BROWSER's reflect decoding to Go's bytes. Lives here rather
+      # than in the go job because it shells out to bun, and a test that skips
+      # for a missing toolchain is not a gate — which is exactly what this
+      # would be in the go job, silently, forever.
+      #
+      # Closes the asymmetry docs/roadmap.md §7.5 records: the Unity client's
+      # decoder was byte-pinned to Go and the browser's was not, which is the
+      # reverse of where the risk sits.
+      - name: TypeScript reflect-codec golden
+        run: go test ./cmd/sdkgen/ -run TestTypeScriptReflect -count=1 -v
 
       # Client prediction, reconciliation and interpolation for both example
       # web clients, including the prediction golden that pairs with the space
