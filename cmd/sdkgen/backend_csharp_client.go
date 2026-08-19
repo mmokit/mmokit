@@ -115,9 +115,12 @@ func (b csharpBackend) genClient(schema ProtocolSchema) string {
 	sb.WriteString("        public async Task ConnectAsync(string baseUrl, string host, int port, string username, string password,\n")
 	sb.WriteString("            bool registerIfMissing = false, string? email = null, int handshakeTimeoutMs = 5000,\n")
 	sb.WriteString("            CancellationToken cancellationToken = default)\n        {\n")
-	sb.WriteString("            UdpKeyCredential cred = await MmokitAuth.FetchUdpKeyAsync(\n")
-	sb.WriteString("                baseUrl, username, password, registerIfMissing, email,\n")
-	sb.WriteString("                MmokitAuth.DefaultCookieName, cancellationToken).ConfigureAwait(false);\n")
+	// The fingerprint is not optional here even though the parameter is: the
+	// server gates /auth/udp-key on it, so omitting it means every connect
+	// answers 409 and no UDP session is ever established.
+	fmt.Fprintf(&sb, "            UdpKeyCredential cred = await MmokitAuth.FetchUdpKeyAsync(\n")
+	fmt.Fprintf(&sb, "                baseUrl, username, password, registerIfMissing, email,\n")
+	fmt.Fprintf(&sb, "                MmokitAuth.DefaultCookieName, cancellationToken, %sProtocol.SchemaFingerprint).ConfigureAwait(false);\n", gameName)
 	sb.WriteString("            Connect(host, port, cred.KeyId, cred.Key, handshakeTimeoutMs);\n")
 	sb.WriteString("        }\n\n")
 
