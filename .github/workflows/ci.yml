@@ -260,6 +260,63 @@ jobs:
       - name: dotnet test
         run: dotnet test csharp/Mmokit.Sdk.slnx --nologo
 
+  # The only job with a database, and the only gate that proves the emitted
+  # protocol has not moved.
+  #
+  # Everything else in this file is DB-free by design, and both the go job and
+  # drift-go say so in their own comments — "no job here provides a database",
+  # and "`just client-sdk` still needs PostgreSQL, so full regeneration remains
+  # a local step". That gap had a cost: the schema field-name defect fixed in
+  # phase 0 step 2 lived in the tree for weeks with every check green, and the
+  # committed golden recorded the wrong names rather than catching them.
+  #
+  # A golden nobody runs automatically is a record, not a gate. This is what
+  # makes it a gate.
+  schema:
+    name: schema
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    services:
+      # Matches docker-compose.yml so a local `just db-up` and this job agree.
+      # The three examples share one database: their migrations are additive
+      # and independently namespaced, which `just schema-check` relies on
+      # locally too.
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: mmo
+          POSTGRES_PASSWORD: mmo
+          POSTGRES_DB: mmo
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - uses: extractions/setup-just@v4
+
+      # Runs each example with --dump-schema and byte-compares against
+      # testdata/schema/. A diff means the client-visible protocol changed:
+      # either regenerate with `just schema-golden` and the SDKs with
+      # `just client-sdk`, or the change was unintended.
+      #
+      # This also gates the CE-009 schema fingerprint, which is derived from
+      # this exact document — so a green here is what says the value clients
+      # present at connection setup still matches what the server expects.
+      - name: schema-check
+        run: just schema-check
+
   drift-go:
     name: drift-go
     runs-on: ubuntu-latest
