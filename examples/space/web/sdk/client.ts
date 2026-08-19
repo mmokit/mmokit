@@ -7,7 +7,7 @@ import { AuthChangePasswordRequest, AuthChangePasswordResponse, AuthLoginRequest
 
 /** Structural fingerprint of the protocol this SDK was generated from.
  *  Sent at connection setup; the server refuses a mismatch. */
-export const SCHEMA_FINGERPRINT = "18b37bba";
+export const SCHEMA_FINGERPRINT = "31bfd4eb";
 
 /** Appends the schema fingerprint to a connect URL, preserving any
  *  query the caller already put there. */

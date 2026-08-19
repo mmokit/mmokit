@@ -515,7 +515,16 @@ func EngineBindings(w *ecs.World, velScale, sizeScale, cellSize float32) Compone
 
 // taggedField holds pre-parsed per-field closures built from struct tags.
 type taggedField struct {
-	index    int // struct field index
+	index int // struct field index
+	// name is the lowercased Go field name, carried HERE rather than in a
+	// parallel list on reflectBinding. It used to be the latter, appended in
+	// declaration order while schema() consumed it as snapshot-fields-then-
+	// initial-fields — orders that agree only when no initial field precedes a
+	// snapshot one. Two components in examples/space interleave, and both had
+	// their names emitted against the wrong fields, so the generated decoder
+	// read the per-tick byte into the initial field's name and vice versa.
+	// A name on the leaf cannot come apart from the field it names.
+	name     string
 	meta     fieldMeta
 	hashFn   hashWriterFunc
 	snapFn   snapshotWriterFunc
@@ -539,7 +548,7 @@ type componentReader struct {
 // reflectBinding is a reflection-based ComponentBinding for arbitrary structs.
 // All entity access is funneled through a componentReader so the same struct
 // serves both the typed Component[T] path and the type-erased ComponentByID
-// path. The pre-computed []taggedField list, layout, fieldNames, and structName
+// path. The pre-computed []taggedField list, layout, and structName
 // are populated from the component type at construction time and consumed by
 // the shared methods below — they do not depend on T.
 type reflectBinding struct {
@@ -549,7 +558,6 @@ type reflectBinding struct {
 	layout     []int         // wire sizes for snapshot fields
 	optional   bool          // write zeros if component absent (vs panic)
 	structName string        // Go struct name (e.g. "DebugInfo"), for schema export
-	fieldNames []string      // Go field names in order (snapshot then initial), lowercased
 }
 
 // Component returns a ComponentBinding that uses reflection to read `net:"..."` tags
@@ -600,6 +608,7 @@ func buildTaggedFields(rb *reflectBinding, t reflect.Type) {
 
 		tf := taggedField{
 			index:    i,
+			name:     lcFirst(f.Name),
 			meta:     fm,
 			wireSize: fm.wireSize,
 		}
@@ -628,7 +637,6 @@ func buildTaggedFields(rb *reflectBinding, t reflect.Type) {
 			rb.layout = append(rb.layout, fm.wireSize)
 		}
 
-		rb.fieldNames = append(rb.fieldNames, lcFirst(f.Name))
 	}
 }
 
@@ -775,28 +783,17 @@ func (rb *reflectBinding) initialHash(entity ecs.Entity, h *Hasher, _ *ViewerInf
 
 func (rb *reflectBinding) schema() BindingSchema {
 	bs := BindingSchema{Type: "component", StructName: rb.structName}
-	nameIdx := 0
 	for _, tf := range rb.fields {
-		name := ""
-		if nameIdx < len(rb.fieldNames) {
-			name = rb.fieldNames[nameIdx]
-		}
-		nameIdx++
 		bs.Fields = append(bs.Fields, BindingSchemaField{
-			Name:     name,
+			Name:     tf.name,
 			Encoding: tf.meta.encoding,
 			Size:     tf.wireSize,
 			Scale:    scaleFromOptions(tf.meta),
 		})
 	}
 	for _, tf := range rb.initials {
-		name := ""
-		if nameIdx < len(rb.fieldNames) {
-			name = rb.fieldNames[nameIdx]
-		}
-		nameIdx++
 		bs.Fields = append(bs.Fields, BindingSchemaField{
-			Name:     name,
+			Name:     tf.name,
 			Encoding: tf.meta.encoding,
 			Size:     tf.wireSize,
 			Scale:    scaleFromOptions(tf.meta),

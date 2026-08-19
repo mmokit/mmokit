@@ -145,9 +145,9 @@ export interface NPCEntity {
   healthMax: number;
   shieldCurrent: number;
   shieldMax: number;
-  archetype: number;
-  angle: number;
   state: number;
+  angle: number;
+  archetype: number;
   statusEffects: NPCStatusEffectsItem[];
 }
 
@@ -177,8 +177,8 @@ export interface POIEntity {
   radius: number;
   width: number;
   height: number;
-  type: number;
   status: number;
+  type: number;
   tier: number;
 }
 

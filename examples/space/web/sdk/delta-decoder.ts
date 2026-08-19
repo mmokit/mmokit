@@ -124,7 +124,7 @@ function decodeNPCEntitySnapshot(snap: Uint8Array, initial: Uint8Array | null, e
   const healthMax = readFloat32(snap, o); o += 4;
   const shieldCurrent = readFloat32(snap, o); o += 4;
   const shieldMax = readFloat32(snap, o); o += 4;
-  const archetype = snap[o]; o += 1;
+  const state = snap[o]; o += 1;
   const angle = unAngle(readUint16(snap, o)); o += 2;
   const statusEffectsByteLen = readUint16(snap, o); o += 2;
   const statusEffectsEnd = o + statusEffectsByteLen;
@@ -135,10 +135,10 @@ function decodeNPCEntitySnapshot(snap: Uint8Array, initial: Uint8Array | null, e
     statusEffects.push({ type, duration });
   }
   let initialOff = 0;
-  const state = initial && initialOff < initial.length ? initial[initialOff] : (existing?.state ?? 0);
+  const archetype = initial && initialOff < initial.length ? initial[initialOff] : (existing?.archetype ?? 0);
   if (initial && initialOff < initial.length) initialOff += 1;
   void initialOff;
-  return { netID: 0, authorityEpoch: 0, producedAtMs: 0, entityType: 4, worldX, worldY, velX, velY, radius, width, height, healthCurrent, healthMax, shieldCurrent, shieldMax, archetype, state, angle, statusEffects };
+  return { netID: 0, authorityEpoch: 0, producedAtMs: 0, entityType: 4, worldX, worldY, velX, velY, radius, width, height, healthCurrent, healthMax, shieldCurrent, shieldMax, state, archetype, angle, statusEffects };
 }
 
 const POIENTITY_FIELD_SIZES = [4, 4, 2, 2, 2, 2, 2, 1];
@@ -153,14 +153,14 @@ function decodePOIEntitySnapshot(snap: Uint8Array, initial: Uint8Array | null, e
   const radius = unVel(readInt16(snap, o), 500); o += 2;
   const width = unVel(readInt16(snap, o), 500); o += 2;
   const height = unVel(readInt16(snap, o), 500); o += 2;
-  const type = snap[o]; o += 1;
+  const status = snap[o]; o += 1;
   let initialOff = 0;
-  const status = initial && initialOff < initial.length ? initial[initialOff] : (existing?.status ?? 0);
+  const type = initial && initialOff < initial.length ? initial[initialOff] : (existing?.type ?? 0);
   if (initial && initialOff < initial.length) initialOff += 1;
   const tier = initial && initialOff < initial.length ? initial[initialOff] : (existing?.tier ?? 0);
   if (initial && initialOff < initial.length) initialOff += 1;
   void initialOff;
-  return { netID: 0, authorityEpoch: 0, producedAtMs: 0, entityType: 5, worldX, worldY, velX, velY, radius, width, height, type, status, tier };
+  return { netID: 0, authorityEpoch: 0, producedAtMs: 0, entityType: 5, worldX, worldY, velX, velY, radius, width, height, status, type, tier };
 }
 
 const AOEMARKERENTITY_FIELD_SIZES = [4, 4, 2, 2, 2, 2, 2, 4, 4, 4, 4, 1, 1, 1];

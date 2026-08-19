@@ -1,7 +1,7 @@
 {
   "game": "space",
   "dimension": "2d",
-  "fingerprint": "18b37bba",
+  "fingerprint": "31bfd4eb",
   "entities": [
     {
       "kind": 0,
@@ -574,12 +574,12 @@
           "type": "component",
           "fields": [
             {
-              "name": "archetype",
+              "name": "state",
               "encoding": "u8",
               "size": 1
             },
             {
-              "name": "state",
+              "name": "archetype",
               "encoding": "u8",
               "size": 1,
               "initial": true
@@ -695,12 +695,12 @@
           "type": "component",
           "fields": [
             {
-              "name": "type",
+              "name": "status",
               "encoding": "u8",
               "size": 1
             },
             {
-              "name": "status",
+              "name": "type",
               "encoding": "u8",
               "size": 1,
               "initial": true
