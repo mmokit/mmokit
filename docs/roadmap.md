@@ -762,6 +762,13 @@ Two live defects were found while planning this phase, and they reorder it. Both
 
 Step 2 goes first: it is a live bug in the reference game, and the fix needs no hand-written client change because `npc.ts` and `poi.ts` were both written against the correct semantics. Every step after it asserts `schema-check` is byte-clean, which only means something once step 2 has corrected what the golden pins.
 
+**Progress.** Steps 1, 2 and 7 are done (`d398a786`, `f46a381f`, `9f077837`) — both live defects closed and the schema gate now runs in CI. Steps 3, 4, 5, 6, 8 and 9 remain.
+
+**Two of the remaining steps are shaped differently than the estimate assumed**, found while starting them:
+
+- **Step 5 needs a mechanism, not just another invariant.** `Invariant.Check(c *Process)` is a point-in-time predicate over Process state, and conservation is inherently a before/after comparison across a commit. Adding a sixth entry to `defaultInvariants` cannot express it. It needs a hook in the commit-plan executor that snapshots the live netID set before the plan runs and compares after, with deliberate departures (entities transferred to a remote host) subtracted — which means the plan has to say which those are. Size it against that, not against writing another predicate.
+- **Step 8 has nothing to pin generically.** There is no shared TypeScript reflect codec: `cmd/sdkgen` inlines a per-type `decode` into each generated class, so `pkg/quantize/ts/` has no equivalent of Go's `ReflectMarshal` or C#'s `ReflectCodec`. Pinning it therefore means a generate-and-decode harness — emit an SDK for a schema shaped like the manifest's `reflect`/`reflectNested` fixtures, then assert the generated decoder reproduces their values — which is the TypeScript analogue of `just csharp-compile-test`, not a unit test. The alternative, hoisting a generic reflect codec into the shared core, would be new code with no production consumer.
+
 #### 7.5.3 Two defects found while planning
 
 **The emitted schema swaps two field names.** `buildTaggedFields` appends `rb.fieldNames` in *declaration* order ([`auto_replicator.go:631`](../pkg/system/auto_replicator.go)); `schema()` consumes that list as *snapshot fields, then initial fields* ([`:776`](../pkg/system/auto_replicator.go)). The two orders agree only when no `initial` field precedes a snapshot field. Exactly two components interleave: `NPCAI` (I,S) and `POI` (I,S,I), both in `examples/space`.
