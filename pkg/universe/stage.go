@@ -922,7 +922,7 @@ func (b *Stage) SerializeEntityCore(entity ecs.Entity) *TransferFrame {
 		f.VelX, f.VelY = vel.X, vel.Y
 	}
 	if b.rotMap.HasAll(entity) {
-		f.Rotation = b.rotMap.Get(entity).Yaw()
+		f.Rotation = *b.rotMap.Get(entity)
 	}
 	if b.colliderMap.HasAll(entity) {
 		f.Collider = *b.colliderMap.Get(entity)
@@ -1012,7 +1012,7 @@ func (b *Stage) SpawnFromTransferCore(data []byte, presence EntityPresence) (ecs
 		&component.CellCoord{CellX: frame.CellX, CellY: frame.CellY},
 	)
 
-	rotFromFrame := component.RotationFromYaw(frame.Rotation)
+	rotFromFrame := frame.Rotation
 	b.rotMap.Add(entity, &rotFromFrame)
 	if frame.ConnID != 0 {
 		b.playerMap.Add(entity, &component.PlayerConn{ConnID: frame.ConnID})
@@ -1583,7 +1583,7 @@ func (b *Stage) upsertBorderReplicaFromTransfer(frame *TransferFrame, sourceCell
 	// ~1 tick later.
 	b.upsertBorderReplica(
 		frame.NetworkID, frame.Epoch, frame.EntityType,
-		frame.PosX, frame.PosY, frame.Collider.Radius, frame.VelX, frame.VelY, frame.Rotation,
+		frame.PosX, frame.PosY, frame.Collider.Radius, frame.VelX, frame.VelY, frame.Rotation.Yaw(),
 		sourceCellID, producedAtMs, nil,
 	)
 }

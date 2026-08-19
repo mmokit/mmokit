@@ -50,13 +50,13 @@ type TransferFrame struct {
 	// registered session so subsequent cell-cross handoffs out of this cell
 	// don't panic in PlayerRepo.Bind on a zero UserID. Zero for non-player
 	// entities.
-	UserID     uuid.UUID
-	PosX, PosY float32
-	VelX, VelY float32
-	Rotation   float32
-	Collider   component.Collider
-	CellX      int32
-	CellY      int32
+	UserID           uuid.UUID
+	PosX, PosY, PosZ float32
+	VelX, VelY, VelZ float32
+	Rotation         component.Rotation
+	Collider         component.Collider
+	CellX            int32
+	CellY            int32
 	// DebugFlags is the bitmask of debug capabilities for the
 	// session this entity belongs to. Carried in the wire format so
 	// per-player debug grants survive cross-cell and cross-host
@@ -83,10 +83,12 @@ type TransferFrame struct {
 //	[16] UserID (raw uuid bytes)
 //	[4] PosX
 //	[4] PosY
+//	[4] PosZ
 //	[4] VelX
 //	[4] VelY
-//	[4] Rotation
-//	[14] Collider (radius[4] + width[4] + height[4] + layer[1] + shape[1])
+//	[4] VelZ
+//	[16] Rotation (unit quaternion: x[4] + y[4] + z[4] + w[4])
+//	[18] Collider (radius[4] + width[4] + height[4] + depth[4] + layer[1] + shape[1])
 //	[4] CellX (int32)
 //	[4] CellY (int32)
 //	[4] DebugFlags (uint32)
@@ -113,7 +115,7 @@ func MarshalTransferFrame(f *TransferFrame) ([]byte, error) {
 
 	// headerSize is the fixed portion — the variable lengths (Username,
 	// GatewayID, component tails) are added on top.
-	const headerSize = 4 + 4 + 4 + 1 + 4 + 1 + 4 + 1 + 16 + 4 + 4 + 4 + 4 + 4 + 14 + 4 + 4 + 4 + 2 // 87
+	const headerSize = 4 + 4 + 4 + 1 + 4 + 1 + 4 + 1 + 16 + 4 + 4 + 4 + 4 + 4 + 4 + 16 + 18 + 4 + 4 + 4 + 2 // 111
 
 	size := headerSize + len(f.Username) + len(f.GatewayID)
 	for _, c := range f.Components {
@@ -149,11 +151,21 @@ func MarshalTransferFrame(f *TransferFrame) ([]byte, error) {
 	off += 4
 	binary.LittleEndian.PutUint32(buf[off:], math.Float32bits(f.PosY))
 	off += 4
+	binary.LittleEndian.PutUint32(buf[off:], math.Float32bits(f.PosZ))
+	off += 4
 	binary.LittleEndian.PutUint32(buf[off:], math.Float32bits(f.VelX))
 	off += 4
 	binary.LittleEndian.PutUint32(buf[off:], math.Float32bits(f.VelY))
 	off += 4
-	binary.LittleEndian.PutUint32(buf[off:], math.Float32bits(f.Rotation))
+	binary.LittleEndian.PutUint32(buf[off:], math.Float32bits(f.VelZ))
+	off += 4
+	binary.LittleEndian.PutUint32(buf[off:], math.Float32bits(f.Rotation.X))
+	off += 4
+	binary.LittleEndian.PutUint32(buf[off:], math.Float32bits(f.Rotation.Y))
+	off += 4
+	binary.LittleEndian.PutUint32(buf[off:], math.Float32bits(f.Rotation.Z))
+	off += 4
+	binary.LittleEndian.PutUint32(buf[off:], math.Float32bits(f.Rotation.W))
 	off += 4
 
 	// Collider: 14 bytes
@@ -162,6 +174,8 @@ func MarshalTransferFrame(f *TransferFrame) ([]byte, error) {
 	binary.LittleEndian.PutUint32(buf[off:], math.Float32bits(f.Collider.Width))
 	off += 4
 	binary.LittleEndian.PutUint32(buf[off:], math.Float32bits(f.Collider.Height))
+	off += 4
+	binary.LittleEndian.PutUint32(buf[off:], math.Float32bits(f.Collider.Depth))
 	off += 4
 	buf[off] = f.Collider.Layer
 	off++
@@ -193,7 +207,7 @@ func MarshalTransferFrame(f *TransferFrame) ([]byte, error) {
 
 // UnmarshalTransferFrame decodes a TransferFrame from binary data.
 func UnmarshalTransferFrame(data []byte) (*TransferFrame, error) {
-	const headerSize = 4 + 4 + 4 + 1 + 4 + 1 + 4 + 1 + 16 + 4 + 4 + 4 + 4 + 4 + 14 + 4 + 4 + 4 + 2 // 87
+	const headerSize = 4 + 4 + 4 + 1 + 4 + 1 + 4 + 1 + 16 + 4 + 4 + 4 + 4 + 4 + 4 + 16 + 18 + 4 + 4 + 4 + 2 // 111
 	if len(data) < headerSize {
 		return nil, fmt.Errorf("transfer frame: need at least %d bytes, got %d", headerSize, len(data))
 	}
@@ -225,7 +239,12 @@ func UnmarshalTransferFrame(data []byte) (*TransferFrame, error) {
 	off += 4
 	nameLen := int(data[off])
 	off++
-	const postUsernameSize = 16 + 4 + 4 + 4 + 4 + 4 + 14 + 4 + 4 + 4 + 2
+	// postUsernameSize is the SOLE bounds guard for every read after the
+	// variable-length username. It must be updated in lockstep with headerSize:
+	// leaving it stale under-reserves, and every subsequent unguarded
+	// binary.LittleEndian.Uint32(data[off:]) becomes an out-of-bounds read on
+	// peer-supplied mesh bytes. The marshal-side header test does not cover it.
+	const postUsernameSize = 16 + 4 + 4 + 4 + 4 + 4 + 4 + 16 + 18 + 4 + 4 + 4 + 2
 	if off+nameLen+postUsernameSize > len(data) {
 		return nil, fmt.Errorf("transfer frame: truncated username (need %d bytes)", nameLen)
 	}
@@ -237,11 +256,21 @@ func UnmarshalTransferFrame(data []byte) (*TransferFrame, error) {
 	off += 4
 	f.PosY = math.Float32frombits(binary.LittleEndian.Uint32(data[off:]))
 	off += 4
+	f.PosZ = math.Float32frombits(binary.LittleEndian.Uint32(data[off:]))
+	off += 4
 	f.VelX = math.Float32frombits(binary.LittleEndian.Uint32(data[off:]))
 	off += 4
 	f.VelY = math.Float32frombits(binary.LittleEndian.Uint32(data[off:]))
 	off += 4
-	f.Rotation = math.Float32frombits(binary.LittleEndian.Uint32(data[off:]))
+	f.VelZ = math.Float32frombits(binary.LittleEndian.Uint32(data[off:]))
+	off += 4
+	f.Rotation.X = math.Float32frombits(binary.LittleEndian.Uint32(data[off:]))
+	off += 4
+	f.Rotation.Y = math.Float32frombits(binary.LittleEndian.Uint32(data[off:]))
+	off += 4
+	f.Rotation.Z = math.Float32frombits(binary.LittleEndian.Uint32(data[off:]))
+	off += 4
+	f.Rotation.W = math.Float32frombits(binary.LittleEndian.Uint32(data[off:]))
 	off += 4
 
 	// Collider: 14 bytes
@@ -250,6 +279,8 @@ func UnmarshalTransferFrame(data []byte) (*TransferFrame, error) {
 	f.Collider.Width = math.Float32frombits(binary.LittleEndian.Uint32(data[off:]))
 	off += 4
 	f.Collider.Height = math.Float32frombits(binary.LittleEndian.Uint32(data[off:]))
+	off += 4
+	f.Collider.Depth = math.Float32frombits(binary.LittleEndian.Uint32(data[off:]))
 	off += 4
 	f.Collider.Layer = data[off]
 	off++

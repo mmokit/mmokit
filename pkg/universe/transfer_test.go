@@ -29,7 +29,7 @@ func TestTransferFrame_EpochRoundtrip(t *testing.T) {
 		EntityType: 1,
 		PosX:       100, PosY: 200,
 		VelX: 1, VelY: 2,
-		Rotation: 0.5,
+		Rotation: component.RotationFromYaw(0.5),
 		Collider: component.Collider{Radius: 10, Width: 20, Height: 30, Layer: 1, Shape: 2},
 		CellX:    3, CellY: 4,
 	}
@@ -166,7 +166,7 @@ func TestTransferFrame_DebugFlagsRoundtrip(t *testing.T) {
 		PosY:          2.5,
 		VelX:          0.1,
 		VelY:          0.2,
-		Rotation:      1.57,
+		Rotation:      component.RotationFromYaw(1.57),
 		Collider:      component.Collider{Radius: 5},
 		CellX:         1,
 		CellY:         2,

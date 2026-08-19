@@ -280,7 +280,7 @@ func TestCell_MsgHandoff_PreservesDebugFlagsOnSession(t *testing.T) {
 		PosY:             60,
 		VelX:             0,
 		VelY:             0,
-		Rotation:         0,
+		Rotation:         component.RotationFromYaw(0),
 		Collider:         component.Collider{Radius: 5},
 		CellX:            1,
 		CellY:            0,

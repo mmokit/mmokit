@@ -1,6 +1,7 @@
 package game
 
 import (
+	"github.com/mmokit/mmokit/pkg/component"
 	"testing"
 
 	"github.com/mlange-42/ark/ecs"
@@ -305,7 +306,7 @@ func TestSpawnFromTransferCore_FiresOnTransferReceived(t *testing.T) {
 		Username:   "transferred",
 		PosX:       10, PosY: 20,
 		CellX: 0, CellY: 0,
-		Rotation: 0,
+		Rotation: component.RotationFromYaw(0),
 		Collider: mmokit.Collider{Radius: 5, Shape: mmokit.ShapeRect},
 	}
 	blob, err := mmokit.MarshalTransferFrame(frame)

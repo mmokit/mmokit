@@ -23,7 +23,7 @@ func TestUpsertBorderReplicaFromTransfer_SeedsReplica(t *testing.T) {
 		PosX:       100,
 		PosY:       200,
 		VelX:       5,
-		Rotation:   1.5,
+		Rotation:   component.RotationFromYaw(1.5),
 		Collider:   component.Collider{Radius: 10},
 	}
 

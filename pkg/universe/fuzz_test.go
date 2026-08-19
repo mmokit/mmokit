@@ -464,7 +464,7 @@ func mustTransferFrameBytes(tb testing.TB) []byte {
 		NetworkID: 42, Epoch: 3, StreamGeneration: 2, EntityType: 1,
 		ConnID: 7, GatewayID: "gw-1", GatewayConnID: 11, Username: "alice",
 		UserID: uuid.MustParse("11111111-2222-3333-4444-555555555555"),
-		PosX:   100.5, PosY: -20.25, VelX: 1, VelY: -1, Rotation: 0.5,
+		PosX:   100.5, PosY: -20.25, VelX: 1, VelY: -1, Rotation: component.RotationFromYaw(0.5),
 		Collider: component.Collider{Radius: 8, Width: 4, Height: 4, Layer: 1, Shape: 0},
 		CellX:    0, CellY: 0, DebugFlags: 0,
 		Components: []ComponentSlice{
