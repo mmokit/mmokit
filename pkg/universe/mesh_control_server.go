@@ -202,6 +202,36 @@ func (s *meshControlServer) Control(stream meshpb.MeshControl_ControlServer) err
 // handleHostControl manages a node's bidi control stream. This is the
 // existing host path extracted from the old Control method; behaviour is
 // unchanged.
+// admitSchemaFingerprint refuses a peer whose client-visible protocol
+// disagrees with the coordinator's.
+//
+// This closes the gap the /ws gate structurally cannot see. That gate
+// validates client<->gateway, but the client's real peer for snapshot bytes is
+// the HOST: a freshly-deployed gateway will happily admit a correctly-built
+// client and forward it to a host still running last week's code, and the
+// client then mis-decodes every WorldDelta with nothing anywhere reporting an
+// error.
+//
+// Zero on either side disables the check — a process with no protocol
+// installed has nothing to compare. It is a real equality test rather than
+// trust-on-first-use because every process derives its fingerprint from its
+// own registry, and that derivation stopped depending on roles in this same
+// unit.
+//
+// This is the one refusal in CE-009 that is deliberately loud on the server
+// console: it means a partial redeploy, which is an operator's problem to fix,
+// not a client's.
+func (s *meshControlServer) admitSchemaFingerprint(kind, id string, peer uint32) error {
+	self := s.coord.SchemaFingerprint()
+	if self == 0 || peer == 0 || self == peer {
+		return nil
+	}
+	err := fmt.Errorf("schema fingerprint mismatch: coordinator=%s %s=%s — %s %q is running a different build; redeploy the cluster together",
+		FormatSchemaFingerprint(self), kind, FormatSchemaFingerprint(peer), kind, id)
+	s.log.Log(CatMeshCell, "coordinator: refusing %s %q: %v", kind, id, err)
+	return err
+}
+
 func (s *meshControlServer) handleHostControl(stream meshpb.MeshControl_ControlServer, reg *meshpb.RegisterHost) error {
 	hostID := reg.HostId
 
@@ -212,6 +242,10 @@ func (s *meshControlServer) handleHostControl(stream meshpb.MeshControl_ControlS
 	// process.
 	if err := s.admitHostRegistration(hostID); err != nil {
 		s.log.Log(CatMeshCell, "coordinator: rejecting RegisterHost for %q: %v", hostID, err)
+		return err
+	}
+
+	if err := s.admitSchemaFingerprint("host", hostID, reg.GetSchemaFingerprint()); err != nil {
 		return err
 	}
 
@@ -647,6 +681,10 @@ func (s *meshControlServer) handleGatewayControl(stream meshpb.MeshControl_Contr
 	// See handleHostControl: admission must precede the map swap.
 	if err := s.admitGatewayRegistration(gatewayID); err != nil {
 		s.log.Log(CatMeshCell, "coordinator: rejecting RegisterGateway for %q: %v", gatewayID, err)
+		return err
+	}
+
+	if err := s.admitSchemaFingerprint("gateway", gatewayID, reg.GetSchemaFingerprint()); err != nil {
 		return err
 	}
 

@@ -80,6 +80,13 @@ message RegisterHost {
   // false (cell-bearing) is backward compatible with hosts that
   // pre-date the field.
   bool   service_only   = 4;
+  // Structural fingerprint of this host's client-visible protocol. The
+  // coordinator refuses registration on disagreement: the /ws gate validates
+  // client<->gateway, but the client's actual peer for snapshot bytes is the
+  // HOST, so a fresh gateway would otherwise admit a correct client and
+  // forward it to a host running last week's build. Zero means the host has
+  // no protocol installed, which disables the check.
+  uint32 schema_fingerprint = 5;
 }
 
 message Heartbeat {
@@ -170,6 +177,10 @@ message RegisterGateway {
   string gateway_id = 1;
   string ws_addr    = 2;
   string grpc_addr  = 3;
+  // See RegisterHost.schema_fingerprint. A gateway that disagrees with the
+  // coordinator is admitting clients against a contract the cluster does not
+  // serve.
+  uint32 schema_fingerprint = 4;
 }
 
 // S6: gateway tells coordinator that a player session is on this gateway.

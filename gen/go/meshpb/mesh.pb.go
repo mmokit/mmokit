@@ -832,9 +832,16 @@ type RegisterHost struct {
 	// assignments — they have no executor, systemDefs, or VCM. Default
 	// false (cell-bearing) is backward compatible with hosts that
 	// pre-date the field.
-	ServiceOnly   bool `protobuf:"varint,4,opt,name=service_only,json=serviceOnly,proto3" json:"service_only,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	ServiceOnly bool `protobuf:"varint,4,opt,name=service_only,json=serviceOnly,proto3" json:"service_only,omitempty"`
+	// Structural fingerprint of this host's client-visible protocol. The
+	// coordinator refuses registration on disagreement: the /ws gate validates
+	// client<->gateway, but the client's actual peer for snapshot bytes is the
+	// HOST, so a fresh gateway would otherwise admit a correct client and
+	// forward it to a host running last week's build. Zero means the host has
+	// no protocol installed, which disables the check.
+	SchemaFingerprint uint32 `protobuf:"varint,5,opt,name=schema_fingerprint,json=schemaFingerprint,proto3" json:"schema_fingerprint,omitempty"`
+	unknownFields     protoimpl.UnknownFields
+	sizeCache         protoimpl.SizeCache
 }
 
 func (x *RegisterHost) Reset() {
@@ -893,6 +900,13 @@ func (x *RegisterHost) GetServiceOnly() bool {
 		return x.ServiceOnly
 	}
 	return false
+}
+
+func (x *RegisterHost) GetSchemaFingerprint() uint32 {
+	if x != nil {
+		return x.SchemaFingerprint
+	}
+	return 0
 }
 
 type Heartbeat struct {
@@ -1588,12 +1602,16 @@ func (x *PlayerHandoff) GetDestCellId() string {
 
 // S6: gateway registration on a MeshControl stream.
 type RegisterGateway struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	GatewayId     string                 `protobuf:"bytes,1,opt,name=gateway_id,json=gatewayId,proto3" json:"gateway_id,omitempty"`
-	WsAddr        string                 `protobuf:"bytes,2,opt,name=ws_addr,json=wsAddr,proto3" json:"ws_addr,omitempty"`
-	GrpcAddr      string                 `protobuf:"bytes,3,opt,name=grpc_addr,json=grpcAddr,proto3" json:"grpc_addr,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state     protoimpl.MessageState `protogen:"open.v1"`
+	GatewayId string                 `protobuf:"bytes,1,opt,name=gateway_id,json=gatewayId,proto3" json:"gateway_id,omitempty"`
+	WsAddr    string                 `protobuf:"bytes,2,opt,name=ws_addr,json=wsAddr,proto3" json:"ws_addr,omitempty"`
+	GrpcAddr  string                 `protobuf:"bytes,3,opt,name=grpc_addr,json=grpcAddr,proto3" json:"grpc_addr,omitempty"`
+	// See RegisterHost.schema_fingerprint. A gateway that disagrees with the
+	// coordinator is admitting clients against a contract the cluster does not
+	// serve.
+	SchemaFingerprint uint32 `protobuf:"varint,4,opt,name=schema_fingerprint,json=schemaFingerprint,proto3" json:"schema_fingerprint,omitempty"`
+	unknownFields     protoimpl.UnknownFields
+	sizeCache         protoimpl.SizeCache
 }
 
 func (x *RegisterGateway) Reset() {
@@ -1645,6 +1663,13 @@ func (x *RegisterGateway) GetGrpcAddr() string {
 		return x.GrpcAddr
 	}
 	return ""
+}
+
+func (x *RegisterGateway) GetSchemaFingerprint() uint32 {
+	if x != nil {
+		return x.SchemaFingerprint
+	}
+	return 0
 }
 
 // S6: gateway tells coordinator that a player session is on this gateway.
@@ -5454,12 +5479,13 @@ const file_meshpb_mesh_proto_rawDesc = "" +
 	"cellRename\x12?\n" +
 	"\x0fcoord_time_sync\x18\x15 \x01(\v2\x15.meshpb.CoordTimeSyncH\x00R\rcoordTimeSync\x12N\n" +
 	"\x14cell_transfer_commit\x18\x16 \x01(\v2\x1a.meshpb.CellTransferCommitH\x00R\x12cellTransferCommitB\x05\n" +
-	"\x03msg\"\x8b\x01\n" +
+	"\x03msg\"\xba\x01\n" +
 	"\fRegisterHost\x12\x17\n" +
 	"\ahost_id\x18\x01 \x01(\tR\x06hostId\x12\x1b\n" +
 	"\tgrpc_addr\x18\x02 \x01(\tR\bgrpcAddr\x12\"\n" +
 	"\rhas_player_db\x18\x03 \x01(\bR\vhasPlayerDb\x12!\n" +
-	"\fservice_only\x18\x04 \x01(\bR\vserviceOnly\"m\n" +
+	"\fservice_only\x18\x04 \x01(\bR\vserviceOnly\x12-\n" +
+	"\x12schema_fingerprint\x18\x05 \x01(\rR\x11schemaFingerprint\"m\n" +
 	"\tHeartbeat\x12\x17\n" +
 	"\ahost_id\x18\x01 \x01(\tR\x06hostId\x12\x12\n" +
 	"\x04tick\x18\x02 \x01(\x04R\x04tick\x123\n" +
@@ -5510,12 +5536,13 @@ const file_meshpb_mesh_proto_rawDesc = "" +
 	"\aconn_id\x18\x02 \x01(\rR\x06connId\x12\x1a\n" +
 	"\busername\x18\x03 \x01(\tR\busername\x12 \n" +
 	"\fdest_cell_id\x18\x04 \x01(\tR\n" +
-	"destCellId\"f\n" +
+	"destCellId\"\x95\x01\n" +
 	"\x0fRegisterGateway\x12\x1d\n" +
 	"\n" +
 	"gateway_id\x18\x01 \x01(\tR\tgatewayId\x12\x17\n" +
 	"\aws_addr\x18\x02 \x01(\tR\x06wsAddr\x12\x1b\n" +
-	"\tgrpc_addr\x18\x03 \x01(\tR\bgrpcAddr\"\xca\x01\n" +
+	"\tgrpc_addr\x18\x03 \x01(\tR\bgrpcAddr\x12-\n" +
+	"\x12schema_fingerprint\x18\x04 \x01(\rR\x11schemaFingerprint\"\xca\x01\n" +
 	"\x0fSessionAnnounce\x12\x1d\n" +
 	"\n" +
 	"gateway_id\x18\x01 \x01(\tR\tgatewayId\x12\x17\n" +

@@ -156,6 +156,19 @@ var cellLayout = map[string]string{
 // 4node-basic system set + World registered. Cells are seeded explicitly
 // (bypassing the 5-second settle window). Returns a testCluster whose
 // Coord + Hosts fields are ready for use.
+// registerNodeProtocol applies the registrations every process in the cluster
+// must agree on. See the note in buildTestCluster: kinds are protocol, and so
+// are the systems whose Configure hooks register wire types.
+func registerNodeProtocol(p *mmokit.Process) {
+	mmokit.RegisterKind[PlayerComponents](p, KindPlayer, "Player")
+	mmokit.RegisterKind[BotComponents](p, KindBot, "Bot")
+	p.AddSystem(mmokit.NewClickToMoveSystem())
+	p.AddSystem(mmokit.NewPhysicsSystem())
+	p.AddSystem(mmokit.NewSpatialSystem())
+	p.AddSystem(mmokit.NewSystem(&BotSystem{}))
+	p.AddSystem(mmokit.NewNetworkSystem())
+}
+
 func buildTestCluster(t *testing.T) *testCluster {
 	t.Helper()
 
@@ -173,6 +186,17 @@ func buildTestCluster(t *testing.T) *testCluster {
 		Logger:              mmokit.NewLogger(),
 		DynamicPartitioning: mmokit.DisabledPartitionConfig(),
 	})
+	// Every process registers the same protocol, whatever its roles — the rule
+	// main.go follows by registering everything on one process. The
+	// coordinator now refuses a peer whose schema fingerprint disagrees, and
+	// registering on the hosts alone made this harness disagree with itself.
+	//
+	// The systems are here for the same reason, which is less obvious: several
+	// SystemDefs carry a Configure hook that registers wire types —
+	// NewClickToMoveSystem installs HandleClient[MoveTargetMsg] — so in this
+	// framework AddSystem is protocol as well as behaviour. Harmless on a
+	// coordinator: it owns no cells, so no system ever runs.
+	registerNodeProtocol(coord)
 	coord.OnResolveSpawn(func(s *mmokit.PlayerSession) mmokit.Location {
 		return mmokit.Location{X: CellSize * 0.85, Y: CellSize * 0.85}
 	})
@@ -204,13 +228,7 @@ func buildTestCluster(t *testing.T) *testCluster {
 			Logger:              mmokit.NewLogger(),
 			DynamicPartitioning: mmokit.DisabledPartitionConfig(),
 		})
-		mmokit.RegisterKind[PlayerComponents](host, KindPlayer, "Player")
-		mmokit.RegisterKind[BotComponents](host, KindBot, "Bot")
-		host.AddSystem(mmokit.NewClickToMoveSystem())
-		host.AddSystem(mmokit.NewPhysicsSystem())
-		host.AddSystem(mmokit.NewSpatialSystem())
-		host.AddSystem(mmokit.NewSystem(&BotSystem{}))
-		host.AddSystem(mmokit.NewNetworkSystem())
+		registerNodeProtocol(host)
 		host.Build()
 		t.Cleanup(host.Shutdown)
 		hosts[hid] = host

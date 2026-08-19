@@ -202,6 +202,9 @@ func (c *meshGatewayClient) runConnection() error {
 				GatewayId: c.gw.id,
 				WsAddr:    wsAddr,
 				GrpcAddr:  grpcAddr,
+				// A gateway that disagrees with the coordinator is admitting
+				// clients against a contract the cluster does not serve.
+				SchemaFingerprint: c.gw.process.SchemaFingerprint(),
 			},
 		},
 	}

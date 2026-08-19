@@ -253,6 +253,10 @@ func (c *meshControlClient) runConnection() error {
 				GrpcAddr:    grpcAddr,
 				HasPlayerDb: c.coord.hasPlayerDB.Load(),
 				ServiceOnly: serviceOnly,
+				// The coordinator refuses a host whose protocol disagrees with
+				// its own — a partial redeploy otherwise shows up as clients
+				// silently mis-decoding snapshots from one host and not another.
+				SchemaFingerprint: c.coord.SchemaFingerprint(),
 			},
 		},
 	}
