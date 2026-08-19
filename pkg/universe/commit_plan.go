@@ -96,6 +96,20 @@ func (c *Process) ExecuteCommitPlan(plan *CommitPlan) error {
 	c.CheckInvariants(defaultInvariants,
 		fmt.Sprintf("commit %d entry (%s)", plan.ID, plan.Kind))
 
+	// Entity conservation brackets the whole plan rather than sitting in
+	// defaultInvariants, because it is a comparison across the commit and an
+	// Invariant only sees one instant. See conservation.go for why the five
+	// existing invariants cannot catch a split that serializes nothing.
+	var censusBefore map[uint32]MeshCellID
+	if c.invariantMode != InvariantOff {
+		var err error
+		if censusBefore, err = c.liveEntityCensus(); err != nil {
+			// A census that cannot be taken is not a violation; say so and
+			// carry on rather than failing a commit over a scan timeout.
+			c.Log.Log(CatInvariant, "commit %d: entity census unavailable at entry: %v", plan.ID, err)
+		}
+	}
+
 	for i, step := range plan.Steps {
 		start := time.Now()
 		err := step.Run(c, plan.Ctx)
@@ -126,6 +140,9 @@ func (c *Process) ExecuteCommitPlan(plan *CommitPlan) error {
 
 	c.CheckInvariants(defaultInvariants,
 		fmt.Sprintf("commit %d exit (%s)", plan.ID, plan.Kind))
+	if censusBefore != nil {
+		c.reportConservation(plan, censusBefore)
+	}
 	c.commitLog.Append(CommitEvent{
 		CommitID: plan.ID, Kind: eventKind, Scenario: plan.Kind,
 		StepIndex: -1, Step: "end", Success: true,
