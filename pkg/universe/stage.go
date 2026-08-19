@@ -1012,7 +1012,8 @@ func (b *Stage) SpawnFromTransferCore(data []byte, presence EntityPresence) (ecs
 		&component.CellCoord{CellX: frame.CellX, CellY: frame.CellY},
 	)
 
-	b.rotMap.Add(entity, &component.Rotation{Angle: frame.Rotation})
+	rotFromFrame := component.RotationFromYaw(frame.Rotation)
+	b.rotMap.Add(entity, &rotFromFrame)
 	if frame.ConnID != 0 {
 		b.playerMap.Add(entity, &component.PlayerConn{ConnID: frame.ConnID})
 	}
@@ -1505,10 +1506,11 @@ func (b *Stage) upsertBorderReplica(
 	for rootCell.Depth > 0 {
 		rootCell = rootCell.Parent()
 	}
+	rotComp := component.RotationFromYaw(angle)
 	ent := b.replicaCreator.NewEntity(
 		&component.Position{X: localX, Y: localY},
 		&component.Velocity{X: vx, Y: vy},
-		&component.Rotation{Angle: angle},
+		&rotComp,
 		&component.Collider{Radius: radius},
 		&component.NetworkID{ID: netID, Epoch: epoch},
 		&component.EntityKind{Type: kind},

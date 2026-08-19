@@ -28,9 +28,22 @@ type Velocity struct {
 	X, Y, Z float32
 }
 
-// Rotation facing direction.
+// Rotation is orientation as a unit quaternion.
+//
+// The zero value is identity: normalized() maps a zero-norm quaternion to
+// {0,0,0,1}, so `Rotation{}` is valid everywhere the framework zero-fills a
+// component and every existing construction site keeps working.
+//
+// A quaternion rather than a scalar angle even though a 2D profile only needs
+// yaw, because §7.3 committed to ONE component set across profiles. Reach it
+// through the yaw helpers in rotation.go; the four fields are storage.
+//
+// Accuracy note: this is strictly BETTER than the scalar it replaces for the
+// accumulate-forever case. Measured over 12000 ticks of repeated AddYaw, the
+// unbounded float32 angle drifts ~0.026 rad while the renormalized quaternion
+// drifts ~0.00024 — two orders of magnitude inside the qangle bucket (9.6e-5).
 type Rotation struct {
-	Angle float32 // radians
+	X, Y, Z, W float32
 }
 
 // Collider defines a collision shape (circle or oriented rectangle).

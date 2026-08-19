@@ -39,7 +39,7 @@ func (gw *GameWorld) SpawnLineTelegraph(
 	return gw.stage.Spawn(
 		mmokit.EntityKind{Type: gamecomp.KindLineTelegraph},
 		mmokit.Position{X: x, Y: y},
-		mmokit.Rotation{Angle: dirAngle},
+		mmokit.RotationFromYaw(dirAngle),
 		mmokit.Lifetime{Remaining: windupTime},
 		mmokit.Collider{Radius: gridRadius, Width: gridRadius * 2, Height: gridRadius * 2, Shape: mmokit.ShapeCircle},
 		gamecomp.LineTelegraphSpec{

@@ -347,7 +347,7 @@ func assertShipDynTick(t *testing.T, caseName string, idx int, got, want shipDyn
 		{"angularVelocity", got.AngularVel, want.AngularVel},
 	} {
 		if math.Abs(f.got-f.want_) > 1e-9 {
-			t.Errorf("%s tick %d: %s = %v, want %v — ship dynamics changed; regenerate with `just shipdyn-golden` AND update examples/space/web/src/prediction.ts to match",
+			t.Errorf("%s tick %d: %s = %v, want %v — ship dynamics changed; regenerate with `cd examples/space && just shipdyn-golden`. Only update examples/space/web/src/prediction.ts if the BEHAVIOUR changed — this check is a 1e-9 self-comparison, while Go/TS parity is toBeCloseTo(..., 4) = 5e-5, so a float-precision drift moves this and not that",
 				caseName, idx, f.name, f.got, f.want_)
 		}
 	}

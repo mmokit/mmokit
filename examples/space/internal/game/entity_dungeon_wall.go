@@ -35,7 +35,7 @@ func (gw *GameWorld) SpawnDungeonWall(x, y, width, height, rotation float32) uin
 	radius := float32(math.Hypot(float64(width)/2, float64(height)/2))
 	e := gw.stage.Spawn(
 		mmokit.Position{X: x, Y: y},
-		mmokit.Rotation{Angle: rotation},
+		mmokit.RotationFromYaw(rotation),
 		mmokit.EntityKind{Type: gamecomp.KindDungeonWall},
 		mmokit.Collider{
 			Radius: radius,

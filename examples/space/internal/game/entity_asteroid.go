@@ -83,7 +83,7 @@ func (gw *GameWorld) spawnAsteroidAt(x, y float32, itemID uint32, radius, angle 
 		mmokit.Position{X: x, Y: y},
 		mmokit.EntityKind{Type: gamecomp.KindAsteroid},
 		mmokit.Collider{Radius: radius, Shape: spatial.ShapeCircle, Layer: layer},
-		mmokit.Rotation{Angle: angle},
+		mmokit.RotationFromYaw(angle),
 		gamecomp.Minable{ItemID: itemID, Remaining: radius * 5},
 	}
 	if placedID != "" {
