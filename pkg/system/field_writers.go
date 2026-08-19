@@ -20,8 +20,13 @@ type initialWriterFunc func(val any, buf []byte) []byte
 // hashWriterFor returns a hash writer closure for the given field metadata.
 func hashWriterFor(fm fieldMeta) (hashWriterFunc, error) {
 	switch fm.encoding {
-	case "f32", "pos":
-		return func(val any, h *Hasher) { h.Float32(val.(float32)) }, nil
+	// toFloat32/toBool/toString rather than a type assertion, matching the
+	// snapshot arm exactly. A hard assertion here made `type Meters float32`
+	// tagged net:"f32" encode fine and PANIC at hash time, on the cell tick
+	// goroutine — the two walks must accept the same values or a named scalar
+	// type is a latent crash.
+	case "f32":
+		return func(val any, h *Hasher) { h.Float32(toFloat32(val)) }, nil
 	case "qvel", "qsize", "qangle", "u16":
 		return func(val any, h *Hasher) { h.Float32(toFloat32(val)) }, nil
 	case "qnorm", "u8":
@@ -31,10 +36,10 @@ func hashWriterFor(fm fieldMeta) (hashWriterFunc, error) {
 	case "i16":
 		return func(val any, h *Hasher) { h.Int32(int32(toInt16(val))) }, nil
 	case "bool":
-		return func(val any, h *Hasher) { h.Bool(val.(bool)) }, nil
+		return func(val any, h *Hasher) { h.Bool(toBool(val)) }, nil
 	case "string":
 		return func(val any, h *Hasher) {
-			s := val.(string)
+			s := toString(val)
 			h.Uint32(uint32(len(s)))
 			for i := 0; i < len(s); i++ {
 				h.Uint8(s[i])
@@ -48,8 +53,6 @@ func hashWriterFor(fm fieldMeta) (hashWriterFunc, error) {
 func snapshotWriterFor(fm fieldMeta) (snapshotWriterFunc, error) {
 	switch fm.encoding {
 	case "f32":
-		return func(val any, w *quantize.SnapshotWriter) { w.Float32(toFloat32(val)) }, nil
-	case "pos":
 		return func(val any, w *quantize.SnapshotWriter) { w.Float32(toFloat32(val)) }, nil
 	case "qvel":
 		scale := float32(1000)
@@ -80,7 +83,7 @@ func snapshotWriterFor(fm fieldMeta) (snapshotWriterFunc, error) {
 	case "i16":
 		return func(val any, w *quantize.SnapshotWriter) { w.Int16(toInt16(val)) }, nil
 	case "bool":
-		return func(val any, w *quantize.SnapshotWriter) { w.Bool(val.(bool)) }, nil
+		return func(val any, w *quantize.SnapshotWriter) { w.Bool(toBool(val)) }, nil
 	}
 	return nil, fmt.Errorf("no snapshot writer for encoding %q", fm.encoding)
 }
@@ -147,7 +150,36 @@ func toFloat32(v any) float32 {
 	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
 		return float32(rv.Uint())
 	}
-	return 0
+	// Unreachable: buildTaggedFields refuses a non-scalar tagged field at
+	// construction. Before it did, this returned 0 and the field encoded as
+	// zeros forever, on every tick, with nothing reporting it.
+	panic(convErr(v, "float32"))
+}
+
+// toBool and toString mirror toFloat32's tolerance for named types, so the hash
+// and snapshot walks accept exactly the same values.
+func toBool(v any) bool {
+	if b, ok := v.(bool); ok {
+		return b
+	}
+	if rv := reflect.ValueOf(v); rv.Kind() == reflect.Bool {
+		return rv.Bool()
+	}
+	panic(convErr(v, "bool"))
+}
+
+func toString(v any) string {
+	if s, ok := v.(string); ok {
+		return s
+	}
+	if rv := reflect.ValueOf(v); rv.Kind() == reflect.String {
+		return rv.String()
+	}
+	panic(convErr(v, "string"))
+}
+
+func convErr(v any, want string) string {
+	return fmt.Sprintf("auto_replicator: cannot convert %T to %s; a tagged field slipped past validation", v, want)
 }
 
 func toUint8(v any) uint8 {
@@ -171,7 +203,7 @@ func toUint8(v any) uint8 {
 	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
 		return uint8(rv.Int())
 	}
-	return 0
+	panic(convErr(v, "uint8"))
 }
 
 func toUint16(v any) uint16 {
@@ -193,7 +225,7 @@ func toUint16(v any) uint16 {
 	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
 		return uint16(rv.Int())
 	}
-	return 0
+	panic(convErr(v, "uint16"))
 }
 
 func toUint32(v any) uint32 {
@@ -215,7 +247,7 @@ func toUint32(v any) uint32 {
 	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
 		return uint32(rv.Int())
 	}
-	return 0
+	panic(convErr(v, "uint32"))
 }
 
 func toInt16(v any) int16 {
@@ -235,5 +267,5 @@ func toInt16(v any) int16 {
 	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
 		return int16(rv.Uint())
 	}
-	return 0
+	panic(convErr(v, "int16"))
 }

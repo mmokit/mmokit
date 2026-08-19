@@ -17,7 +17,6 @@ type fieldMeta struct {
 // encodingWireSize maps encoding names to their fixed wire size.
 // -1 means variable length.
 var encodingWireSize = map[string]int{
-	"pos":    8, // 2x float32
 	"f32":    4,
 	"qvel":   2, // int16
 	"qangle": 2, // uint16

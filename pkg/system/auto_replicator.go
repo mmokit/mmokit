@@ -590,6 +590,27 @@ func OptionalComponentByID(w *ecs.World, id ecs.ID, t reflect.Type) ComponentBin
 	return newReflectBindingByID(w, id, t, true)
 }
 
+// checkTaggedFieldKind rejects a tagged field whose Go kind no writer can
+// encode. The walker is flat by design, so a struct or slice here is a
+// mistake rather than a nested value to descend into — see §7.5.1.
+func checkTaggedFieldKind(ft reflect.Type, encoding string) error {
+	k := ft.Kind()
+	if encoding == "string" {
+		if k != reflect.String {
+			return fmt.Errorf("encoding %q needs a string field, got %s", encoding, k)
+		}
+		return nil
+	}
+	switch k {
+	case reflect.Bool,
+		reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64,
+		reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64,
+		reflect.Float32, reflect.Float64:
+		return nil
+	}
+	return fmt.Errorf("encoding %q cannot encode a %s field; the binding walker is flat, so nested types contribute no wire fields", encoding, k)
+}
+
 // buildTaggedFields parses `net:"..."` struct tags on t and populates rb's
 // snapshot/initial field lists, wire layout, and field names. Panics with a
 // descriptive message if any tag is invalid.
@@ -603,6 +624,17 @@ func buildTaggedFields(rb *reflectBinding, t reflect.Type) {
 		}
 		fm, err := parseNetTag(tag, f.Type.Kind())
 		if err != nil {
+			panic(fmt.Sprintf("auto_replicator: %s.%s: %v", t.Name(), f.Name, err))
+		}
+
+		// Refuse a non-scalar field here rather than letting it through.
+		// The converters used to answer 0 for an unhandled kind, so a struct
+		// or slice tagged net:"u8" passed construction and encoded zeros
+		// forever — silently, every tick. The same field tagged net:"f32"
+		// instead panicked at hash time, on the cell goroutine. Neither is
+		// acceptable, and refusing at construction is the only point where the
+		// message can name the struct and field.
+		if err := checkTaggedFieldKind(f.Type, fm.encoding); err != nil {
 			panic(fmt.Sprintf("auto_replicator: %s.%s: %v", t.Name(), f.Name, err))
 		}
 
@@ -817,7 +849,7 @@ func scaleFromOptions(fm fieldMeta) float64 {
 // zeroForEncoding returns the zero value suitable for a given encoding's writer.
 func zeroForEncoding(enc string) any {
 	switch enc {
-	case "f32", "pos", "qvel", "qangle", "qsize", "qnorm":
+	case "f32", "qvel", "qangle", "qsize", "qnorm":
 		return float32(0)
 	case "u8":
 		return uint8(0)

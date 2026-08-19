@@ -30,7 +30,6 @@ func TestParseNetTag(t *testing.T) {
 		{"u32", "u32", nil, false, 4},
 		{"u8", "u8", nil, false, 1},
 		{"i16", "i16", nil, false, 2},
-		{"pos", "pos", nil, false, 8},
 		{"qangle", "qangle", nil, false, 2},
 		{"qsize,scale=500", "qsize", map[string]string{"scale": "500"}, false, 2},
 	}
