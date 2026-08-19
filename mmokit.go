@@ -58,6 +58,9 @@ var (
 // radius for broad-phase checks on rectangles.
 type Collider = component.Collider
 
+// ShapeKind discriminates a Collider's shape.
+type ShapeKind = component.ShapeKind
+
 // Tint is a render color hint (R, G, B bytes) replicated to clients when the
 // entity kind's bundle includes it. The engine never touches it — game logic
 // (systems, wasm modules) drives it to color entities client-side.
@@ -1027,11 +1030,16 @@ var (
 	// SideSell represents the sell side of an order book.
 	SideSell = orderbook.SideSell
 
+	// ShapeSphere and ShapeBox are the forward names for a Collider's shape.
+	// ShapeCircle/ShapeRect remain as the 2D spellings of the same values.
+	ShapeSphere = component.ShapeSphere
+	ShapeBox    = component.ShapeBox
+
 	// ShapeCircle is the circle collision shape constant.
-	ShapeCircle = spatial.ShapeCircle
+	ShapeCircle = component.ShapeSphere
 
 	// ShapeRect is the oriented rectangle collision shape constant.
-	ShapeRect = spatial.ShapeRect
+	ShapeRect = component.ShapeBox
 
 	// StatePending is the initial player state before login is processed.
 	StatePending = engine.StatePending

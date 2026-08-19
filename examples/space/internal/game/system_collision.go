@@ -85,7 +85,7 @@ func (s *CollisionSystem) Update(dt float32) {
 				Height:   col.Height,
 				Rotation: rotation,
 				Layer:    col.Layer,
-				Shape:    col.Shape,
+				Shape:    uint8(col.Shape),
 			}
 			s.handleTerrainCollision(playerEntry, terrain)
 		}
@@ -108,7 +108,7 @@ func (s *CollisionSystem) handleTerrainCollision(player, terrain mmokit.SpatialE
 	// rotate the player into the rect's local frame, clamp to the box, and
 	// rotate back. Either way we recover an outward normal + overlap.
 	var contactX, contactY, nx, ny, overlap float32
-	if terrain.Shape == spatial.ShapeRect {
+	if terrain.Shape == uint8(mmokit.ShapeRect) {
 		contactX, contactY, nx, ny, overlap = obbContact(
 			playerPos.X, playerPos.Y, player.Radius,
 			terrainPos.X, terrainPos.Y, terrain.Width, terrain.Height, terrain.Rotation,

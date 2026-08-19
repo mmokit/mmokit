@@ -104,8 +104,22 @@ func UnmarshalCollider(data []byte) component.Collider {
 		Width:  getFloat32(data[4:]),
 		Height: getFloat32(data[8:]),
 		Layer:  data[12],
-		Shape:  data[13],
+		// A wire byte becoming the union arm. An out-of-range value is a peer
+		// disagreeing about the protocol, not a shape, and spatial's narrow
+		// phase would silently treat it as a degenerate box — so clamp to the
+		// sphere arm rather than propagate it.
+		Shape: validShape(data[13]),
 	}
+}
+
+// validShape converts a wire byte to a ShapeKind, falling back to ShapeSphere
+// for a value this build does not implement.
+func validShape(b byte) component.ShapeKind {
+	k := component.ShapeKind(b)
+	if !k.Valid() {
+		return component.ShapeSphere
+	}
+	return k
 }
 
 func getFloat32(buf []byte) float32 {

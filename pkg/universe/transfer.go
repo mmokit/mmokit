@@ -165,7 +165,7 @@ func MarshalTransferFrame(f *TransferFrame) ([]byte, error) {
 	off += 4
 	buf[off] = f.Collider.Layer
 	off++
-	buf[off] = f.Collider.Shape
+	buf[off] = byte(f.Collider.Shape)
 	off++
 
 	binary.LittleEndian.PutUint32(buf[off:], uint32(f.CellX))
@@ -253,7 +253,7 @@ func UnmarshalTransferFrame(data []byte) (*TransferFrame, error) {
 	off += 4
 	f.Collider.Layer = data[off]
 	off++
-	f.Collider.Shape = data[off]
+	f.Collider.Shape = validShape(data[off])
 	off++
 
 	f.CellX = int32(binary.LittleEndian.Uint32(data[off:]))

@@ -41,7 +41,7 @@ func (gw *GameWorld) SpawnDungeonWall(x, y, width, height, rotation float32) uin
 			Radius: radius,
 			Width:  width,
 			Height: height,
-			Shape:  spatial.ShapeRect,
+			Shape:  mmokit.ShapeRect,
 			Layer:  spatial.LayerStatic,
 		},
 		gamecomp.DungeonWall{Width: width, Height: height},

@@ -46,15 +46,58 @@ type Rotation struct {
 	X, Y, Z, W float32
 }
 
-// Collider defines a collision shape (circle or oriented rectangle).
-// For circles, use Radius. For rects, use Width (forward) and Height (side).
-// Radius is also used as the bounding radius for broad-phase checks on rects.
+// ShapeKind discriminates a Collider's shape.
+//
+// The values ALIAS pkg/spatial's ShapeCircle/ShapeRect rather than extending
+// the range, and that is deliberate. spatial's narrow phase dispatches the
+// circle/circle, rect/circle and circle/rect pairs and then FALLS THROUGH to
+// the OBB routine for anything else, while the raycast skips a value it does
+// not recognise. So a genuinely new discriminant would ship an entity that
+// silently collides as a degenerate box and is invisible to line-of-sight,
+// with no consumer to notice until collision lands in phase 4. Aliasing makes
+// that failure structurally impossible.
+//
+// Sphere/Box are the forward names; a sphere IS a circle in a 2D profile.
+type ShapeKind uint8
+
+const (
+	ShapeSphere ShapeKind = 0
+	ShapeBox    ShapeKind = 1
+)
+
+// Valid reports whether k is a discriminant this build implements. Checked
+// wherever a wire byte becomes the union arm — an out-of-range value there is
+// a peer disagreeing about the protocol, not a shape.
+func (k ShapeKind) Valid() bool { return k == ShapeSphere || k == ShapeBox }
+
+// String names the shape for diagnostics.
+func (k ShapeKind) String() string {
+	switch k {
+	case ShapeSphere:
+		return "sphere"
+	case ShapeBox:
+		return "box"
+	default:
+		return "unknown"
+	}
+}
+
+// Collider defines a collision shape.
+//
+// For spheres, use Radius. For boxes, use Width (local X, forward), Height
+// (local Y, side) and Depth (local Z, up). Radius is also the bounding radius
+// for broad-phase checks on boxes.
+//
+// Depth is carried by every profile for the reason Position.Z is: one component
+// set across profiles. A 2D profile leaves it zero and no binding emits it —
+// QSize keeps its three fields, so Depth is schema-invisible by construction.
 type Collider struct {
-	Radius float32 // circle radius, or bounding radius for rects
-	Width  float32 // rect extent along local X (forward axis)
-	Height float32 // rect extent along local Y (side axis)
+	Radius float32 // sphere radius, or bounding radius for boxes
+	Width  float32 // box extent along local X (forward axis)
+	Height float32 // box extent along local Y (side axis)
+	Depth  float32 // box extent along local Z (up axis); 0 in a 2D profile
 	Layer  uint8
-	Shape  uint8
+	Shape  ShapeKind
 }
 
 // Tint is a render color hint (one byte per RGB channel) replicated to

@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/mlange-42/ark/ecs"
+	"github.com/mmokit/mmokit/pkg/component"
 )
 
 func TestReplicationRegistry_RegisterAndGet(t *testing.T) {
@@ -39,7 +40,7 @@ func TestUnmarshalCollider(t *testing.T) {
 		0x00, 0x00, 0x00, 0x40, // width = 2.0
 		0x00, 0x00, 0x40, 0x40, // height = 3.0
 		0x01, // layer = 1
-		0x02, // shape = 2
+		0x01, // shape = box
 	})
 
 	if c.Radius != 1.0 {
@@ -54,7 +55,33 @@ func TestUnmarshalCollider(t *testing.T) {
 	if c.Layer != 1 {
 		t.Fatalf("expected layer 1, got %d", c.Layer)
 	}
-	if c.Shape != 2 {
-		t.Fatalf("expected shape 2, got %d", c.Shape)
+	if c.Shape != component.ShapeBox {
+		t.Fatalf("expected ShapeBox, got %v", c.Shape)
+	}
+}
+
+// A shape byte this build does not implement is clamped to the sphere arm
+// rather than carried through.
+//
+// This test previously asserted the opposite — that shape 2 round-trips — using
+// 2 as an arbitrary value rather than a meaningful one. Carrying it through is
+// what the validation exists to stop: pkg/spatial's narrow phase dispatches the
+// circle and rect pairs and then FALLS THROUGH to the OBB routine, so an
+// unimplemented discriminant collides as a degenerate box, while the raycast
+// skips it entirely and the entity becomes invisible to line-of-sight. This
+// byte comes off the mesh, so the value is peer-supplied.
+func TestUnmarshalColliderClampsAnUnknownShape(t *testing.T) {
+	c := UnmarshalCollider([]byte{
+		0x00, 0x00, 0x80, 0x3F,
+		0x00, 0x00, 0x00, 0x40,
+		0x00, 0x00, 0x40, 0x40,
+		0x01,
+		0x02, // not a discriminant this build implements
+	})
+	if c.Shape != component.ShapeSphere {
+		t.Fatalf("unknown shape byte became %v, want ShapeSphere", c.Shape)
+	}
+	if !c.Shape.Valid() {
+		t.Fatal("clamped shape is not Valid()")
 	}
 }
