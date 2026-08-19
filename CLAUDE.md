@@ -94,6 +94,7 @@ Do not revive removed APIs found in historical documents, including:
 - Wire type IDs are `fnv32a(reflect.Type.String())`, which qualifies by package *name*, not import path. Renaming a registered type or its package is breaking; moving its package between directories is not.
 - Regenerate affected SDKs after changing entity bundles, replication tags, client input, events, broadcasts, or operations. `just schema-check` byte-diffs all three examples' `--dump-schema` against `testdata/schema/` and is the gate that catches an unintended one; `just schema-golden` re-pins it after an intended change.
 - Clients remain topology-agnostic and receive absolute world coordinates.
+- Protocol registration is role-independent: every process registers the same client-visible surface whatever its `--mode`. A process that skips it reports a different `--dump-schema`, and the coordinator refuses a peer whose schema fingerprint disagrees. Note that `AddSystem` counts — several `SystemDef`s register wire types from their `Configure` hook.
 - Preserve cluster-clock timestamps, commit-tick authority handoff, and fresh destination snapshots.
 - Cell topology changes go through commit plans. Never update ownership maps as a shortcut.
 - Parse cell IDs at boundaries with `ParseCellID`; do not introduce another syntax.

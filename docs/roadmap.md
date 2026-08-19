@@ -268,15 +268,15 @@ Escape hatches exist (`IncludeAll`, `Without` in `pkg/query/query.go`), but `For
 
 **What remains open under this item is the iteration-consistency half only.**
 
-#### CE-009 — Protocol version and schema fingerprint · **Open** · hard prerequisite for 3D
+#### CE-009 — Protocol version and schema fingerprint · **Done**
 
-Partly advanced by CE-005b Tier 2, which put a version byte on every UDP datagram ([`udpproto.Version`](../pkg/net/udpproto/proto.go), enforced on decode). That versions **one transport's envelope** and nothing else. Still open, and unchanged by it: the WebSocket path negotiates no version at all; the only handshake message, `ServerConfig` ([`event_messages.go:120`](../event_messages.go)), carries a single `TickRate` field; the client frame header has no version byte; and the generated schema has no version or fingerprint.
+Closed by unit 6 of [§6.10](#610-next-phase--prerequisites-and-the-safety-net) — see [§6.10.6](#6106-what-ce-009-landed) for what it landed and what it cost.
 
-**The version byte does not address this item's motivating failure, and cannot.** Type IDs are `fnv32a(reflect.Type.String())`, so a 2D `component.Position` and a 3D one hash identically — the [§7.3](#73-architecture) decision to keep *one* type set across both profiles guarantees it. The mismatch therefore lives inside the sealed body, which is byte-identical on both transports and unversioned on both. **A schema fingerprint, not a version byte, is what rejects a 2D client meeting a 3D server.**
+**The version byte CE-005b Tier 2 added does not address this item's motivating failure, and cannot.** Type IDs are `fnv32a(reflect.Type.String())`, so a 2D `component.Position` and a 3D one hash identically — the [§7.3](#73-architecture) decision to keep *one* type set across both profiles guarantees it. The mismatch lives inside the message body, byte-identical on both transports. That is why the answer is a structural hash over field shapes: `mmokit.SchemaFingerprint` hashes `EntitySchema{Bindings, Layout, VarTail}` and the four message registries, so a binding set emitting three world coordinates instead of two rotates it.
 
 Collision auditing was closed by unit 1 of [§6.10](#610-next-phase--prerequisites-and-the-safety-net) (`8677252d`) and the registries moved in part B: all four now live on [`pkg/universe/wire_registry.go`](../pkg/universe/wire_registry.go), the client-input path panics on a collision instead of silently overwriting, and broadcasts claim their ID in the shared downstream namespace that clients actually dispatch through. Nothing here changes the paragraph above: a fingerprint, not a collision check, is what this item still owes.
 
-Without this, a 2D client connecting to a 3D server decodes valid bytes into the wrong shape instead of being rejected.
+A 2D client connecting to a 3D server is now refused at connection setup on both transports rather than decoding valid bytes into the wrong shape.
 
 #### CE-003 residual — Datagram frame ACKs · **Done (8/8)**
 
@@ -475,14 +475,14 @@ Each of these was found by verifying a plausible plan against source and finding
 
 This phase closed the last open P0 item, so **[§7.1](#71-sequencing-rule)'s gate has lifted** and the 104-day 2D/3D program may begin. Status is derived from source, not from this table.
 
-**The next phase is [§6.10](#610-next-phase--prerequisites-and-the-safety-net)** — the CE-009/CE-010 prerequisites and phase 0's safety net, in the order source says they depend on each other rather than the order [§7.2](#72-prerequisite-gates) originally implied. CE-009's header version byte landed here; its schema fingerprint and the unguarded registries did not.
+**The next phase is [§6.10](#610-next-phase--prerequisites-and-the-safety-net)** — the CE-009/CE-010 prerequisites and phase 0's safety net, in the order source says they depend on each other rather than the order [§7.2](#72-prerequisite-gates) originally implied. CE-009's header version byte landed here; its schema fingerprint and the unguarded registries landed in that following phase.
 
 #### 6.9.1 What it closes
 
 | Item | At phase end |
 | --- | --- |
 | CE-005b Tier 2 | **Closed** — authenticated handshake, AEAD framing, replay enforcement, C# parity, op-channel auth retired |
-| CE-009 | **Partially advanced** — the UDP header version byte only, bundled per §7.1. The schema fingerprint and the two unguarded registries (`registerClientInputType`, `RegisterBroadcastType`) remain open, and are a [§7.2](#72-prerequisite-gates) prerequisite |
+| CE-009 | **Partially advanced here** — the UDP header version byte only, bundled per §7.1. The schema fingerprint and the two unguarded registries were closed later, in [§6.10](#610-next-phase--prerequisites-and-the-safety-net) units 1 and 6 |
 | CE-005b Tier 1 residual | **Closed as a side effect** — the pending-handshake table disappears, taking `sweepPendingLocked` and the 1024-spoofed-address denial window with it |
 
 #### 6.9.2 Design decisions, locked
@@ -540,7 +540,7 @@ every byte on the wire.
 | ACK `0x02` | type(1) ver(1) token(4) counter(8) ‖ sealed(6+16) | 36 |
 | Disconnect `0x05` | type(1) ver(1) token(4) counter(8) ‖ sealed(0+16) | 30 |
 
-- **The version byte is on every packet, not just the handshake** ([CE-009](#ce-009--protocol-version-and-schema-fingerprint--open--hard-prerequisite-for-3d)). It costs one byte per packet and versions **this envelope only**: a peer running a different packet layout is rejected at the first datagram rather than failing further in as a bad AEAD tag. It does not read inside the sealed body, so it does not detect the payload-shape disagreement CE-009 exists to prevent — see the correction in [§6.10.1](#6101-why-the-order-changed), and note the fingerprint is still open. Against v1 it buys nothing either, since a v1 handshake fails `ErrBadProtocolID` regardless. Its value is forward-looking, on the next envelope change. That is a thin return for a byte the item did not need, and it was taken because the wire was already breaking for AEAD — a scheduling argument, not a security one.
+- **The version byte is on every packet, not just the handshake** ([CE-009](#ce-009--protocol-version-and-schema-fingerprint--done)). It costs one byte per packet and versions **this envelope only**: a peer running a different packet layout is rejected at the first datagram rather than failing further in as a bad AEAD tag. It does not read inside the sealed body, so it does not detect the payload-shape disagreement CE-009 exists to prevent — see the correction in [§6.10.1](#6101-why-the-order-changed), and note the fingerprint is still open. Against v1 it buys nothing either, since a v1 handshake fails `ErrBadProtocolID` regardless. Its value is forward-looking, on the next envelope change. That is a thin return for a byte the item did not need, and it was taken because the wire was already breaking for AEAD — a scheduling argument, not a security one.
 - **`ConnConfirm` is new and is what makes the handshake stateless.** The server cannot decrypt a data packet until it knows which key to use, so something must carry the `keyID` before a session exists. Putting it in every data packet would cost 8 bytes forever; putting it in one confirm step costs it once. ConnConfirm also echoes the cookie, so it is the packet that proves return routability, and the pending table disappears with it.
 - **Cleartext headers are all fed to the AEAD as additional authenticated data.** The server must read `token` to find the session before it can decrypt, so those bytes cannot be encrypted — but they must not be malleable either, or a valid body could be moved onto another session or another packet type.
 - **ACKs are sealed.** A forged ACK breaks reliable delivery exactly as effectively as a dropped one: it retires a frame the peer never received. v1 sent them in the clear.
@@ -571,7 +571,7 @@ One correction of substance sits underneath this. **A version byte cannot detect
 | 3 | CE-010 part A — cell geometry becomes injected: delete `coords.CellSize` and its setter, converge ~75 read sites on a process-owned accessor | CE-010 | 5 | med | — | **done** `8981d581`..`cb82506b` |
 | 4 | CE-010 part B — a `WireRegistry` owned by `Process`; the four registries, five hook structs and three `sync.Once` guards go with it | CE-010 | 6 | **high** | 2, 3 | **done** `7323818e`..`6c04ef90` |
 | 5 | The dimension profile itself — `Config.Dimension` + an `EngineBindingSet` selected at construction | §7 phase 2 | 0.5 | low | 4 | **done** `1171a4e8` |
-| 6 | CE-009 — structural schema fingerprint, carried at connection setup on both transports, with rejection semantics | CE-009 | 4 | med | 4 | **open** |
+| 6 | CE-009 — structural schema fingerprint, carried at connection setup on both transports, with rejection semantics | CE-009 | 4 | med | 4 | **done** `b8480ed8`..`af30bf37` — 10 days, not 4; see [§6.10.6](#6106-what-ce-009-landed) |
 
 Unit 1 is deliberately first and deliberately tiny: it is the only unit that changes client framing behaviour, and it must land before anything else adds a byte to a client frame.
 
@@ -635,6 +635,30 @@ Five commits, each green and each byte-diffed against the unit-0 schema goldens:
 
 Unit 0 was not in the original table and is worth recording: `--dump-schema` had nothing pinning it. `just client-sdk` piped it straight into sdkgen, so a wire registration that appeared or vanished surfaced only as a diff in generated files nobody reads. `just schema-golden` / `just schema-check` now pin all three examples; every step of part B was diffed against them.
 
+#### 6.10.6 What CE-009 landed
+
+Seven commits, `b8480ed8`..`af30bf37`. **Ten days against a four-day estimate**, and the overrun is entirely prerequisite work the estimate never contained — recorded here rather than absorbed, because §6.10.1's own precedent is that dependency corrections get written down.
+
+**The estimate missed a hard blocker, and it was measurable.** A fingerprint is only meaningful if every process computes the same one, and two things stopped that. `Protocol.AssembleFromProcess` derived the entity section by iterating `Process.Cells`, so any process owning no cells reported none — and it ran only on the `--dump-schema` path, so at runtime *every* process reported `entities: null`. On top of that, `examples/space` gated `GameSetup` behind `roles.Has(RoleHost)` while its justfile launches the client-terminating process as `--mode=gateway,service`. Measured before touching anything, a space gateway reported **0 of 12 entities, 0 of 6 broadcast types, 2 of 15 client inputs, 7 of 19 server events and 5 of 12 operations**. The gateway is what clients connect to, so a gate there would have rejected every client, always.
+
+**Carriage adds no packet bytes on either transport.** `GET /ws?schema=<8 hex>` and `POST /auth/udp-key?schema=<8 hex>`; `udpproto.Version` stays `0x02`. UDP is gated at key issuance, which is strictly upstream of its handshake — a client cannot complete the handshake without a key, so refusing issuance refuses the session. A query parameter rather than a header because `new WebSocket(url)` cannot set headers.
+
+**Rejection happens before the upgrade**, and that is load-bearing rather than incidental: this repo has no reason-bearing close — `Conn.Close` calls `CloseNow()` and the `websocketConn` interface exposes nothing else — so a gate running after `websocket.Accept` could only hang up silently. Refused at the HTTP layer, the client gets a 409 and never becomes a connection.
+
+**Four decisions worth not re-deriving:**
+
+- **`uint32`, forced not chosen.** sdkgen emits `Number(dv.getBigUint64(…))` for u64, which truncates past 2⁵³ — a u64 fingerprint would be a comparison bug in every browser client. Widening later means fixing sdkgen's u64 path first.
+- **Only `BindingSchema.Type` and `StructName` are excluded**, on the checkable criterion that no generator consumes them: sdkgen discards `structName` at its JSON boundary and none of the ten sites iterating `ent.Bindings` reads `.Type`. Field *names* stay in, because sdkgen emits them as TypeScript property names.
+- **The 409 never echoes the server's fingerprint.** That would make the route an oracle a stale client could read, replay, and pass. The bot clients derive their fingerprint from their own compiled protocol for the same reason.
+- **`ServerConfig.SchemaHash` is the diagnosing half, not the enforcing one.** It covers the case the gate structurally cannot — an *old* server ignores the unknown query parameter and upgrades happily — and it is the only path that yields a useful message in a browser, where a 409 arrives as `onclose(1006)` with no code and no body.
+
+**The step order in the plan was wrong in one place.** It mounted the gate before the SDKs carried a fingerprint, which leaves a commit where `just dev` cannot connect a browser. "Clients send it" folded into the same commit as the gate.
+
+**Two latent defects fell out**, both of the same shape and neither caused by this work:
+
+- `gateway.go`'s `processOpFrame` routes by asking the local registry whether a request typeID is `RouteGatewayLocal`, so a game that gated such an op behind `RoleHost` had it silently forwarded to a host. `examples/space` got away with it only because all its game ops are `RoutePlayerCell`.
+- **`AddSystem` is not purely behaviour.** Several `SystemDef`s carry a `Configure` hook that registers wire types — `NewClickToMoveSystem` installs `HandleClient[MoveTargetMsg]` — so role-gating a system silently changes that process's protocol. The cluster check caught this in our own `mesh_e2e_test.go` harness, which registered kinds and systems on the hosts and nothing on the coordinator.
+
 ---
 
 ## 7. The 2D/3D and multi-genre program
@@ -658,7 +682,7 @@ Two P1 items are hard prerequisites:
 - **CE-010** — **closed for this purpose.** A per-process dimension profile required the injected cell geometry this item describes; `coords.CellSize` could not remain a mutable package global, and part A deleted it. The profile itself landed as unit 5 of [§6.10](#610-next-phase--prerequisites-and-the-safety-net) — `Config.Dimension` selecting a `system.EngineBindingSet` at construction, with `Dimension3D` declared, selectable, and panicking until the bindings exist.
 
   **Correction, verified against source.** This bullet used to also require "the process-owned immutable registries", and that half is **false**. The profile selects bindings, not types (see [§7.3](#73-architecture)), and the binding half of the schema is *already* process-scoped: `Protocol.Schema()` takes `Entities` from a `ReplicatorRegistry` built by `BuildReplicators(w, coord, …)`, which takes a `*Process`. `EngineBindings` has one call site, inside that function, and `viewerRelativePosBinding.snapshotFields()` returning `[]int{4,4}` is the entire dimension-varying wire surface. The four global wire registries hold message *type* lists — exactly what the profile never selects. **Part B is still worth doing, for the reasons in [§6.10](#610-next-phase--prerequisites-and-the-safety-net), but it does not gate 3D.**
-- **CE-009** — without a schema fingerprint, a 2D client meeting a 3D server decodes valid bytes into the wrong shape rather than being rejected. Note that a protocol *version* does not achieve this: one type set across both profiles means identical type IDs and identical hashes, so only a structural hash over field shapes separates them.
+- **CE-009** — **closed.** A 2D client meeting a 3D server is refused at connection setup on both transports. A protocol *version* could not have achieved this — one type set across both profiles means identical type IDs — so the check is a structural hash over field shapes, `mmokit.SchemaFingerprint`. See [§6.10.6](#6106-what-ce-009-landed).
 
 **They are not peers, and phase 0's safety net is not last.** The verified ordering — goldens, then CE-010 part A, then part B, then the fingerprint — is scheduled as [§6.10](#610-next-phase--prerequisites-and-the-safety-net), which supersedes the "schedule both immediately after P0" instruction this section used to carry.
 

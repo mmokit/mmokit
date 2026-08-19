@@ -67,6 +67,7 @@ This is a server-authoritative multiplayer game framework and space-game impleme
 - Typed client input is registered with `mmokit.HandleClient` and is drained by the engine before systems each tick; it is not an input system.
 - Server events use `mmokit.RegisterEvent` plus `mmokit.SendEvent`/`SendEventToAll`. `HandleAll` registers a message handler on current and future stages and broadcasts the result to AoI viewers; use `HandleAllInternal` for server-only messages.
 - Typed request/response operations use `mmokit.RegisterOp` and an appropriate route. Prefer the existing typed registries over ad-hoc wire frames.
+- Register the client-visible protocol on every process regardless of role. `--dump-schema` must be identical across roles, clients present a schema fingerprint at connection setup, and the coordinator refuses a host or gateway whose fingerprint disagrees. `AddSystem` is included: some `SystemDef`s register wire types from `Configure`, so role-gating a system changes that process's protocol.
 
 ## Wire and distributed invariants
 
