@@ -718,7 +718,7 @@ Collision is **new capability, not a port** — the existing separating-axis cod
 | # | Phase | Days | Ends runnable at |
 | --- | --- | ---: | --- |
 | 0 | Safety net and schema truth (pure 2D, byte-stable) — **done**, see [§7.5.4](#754-what-phase-0-landed-and-what-it-did-not) | 14.5 | The unpinned framings byte-pinned; a golden whose bytes come from real `auto_replicator` bindings; the reflect codec pinned from TypeScript; an entity-conservation integrity invariant; `just schema-check` in CI; the schema field-name defect fixed. Full suite green. **The codec collapse is struck — see [§7.5.1](#751-why-the-codec-collapse-is-struck).** |
-| 1 | Widen core types, still 2D only | 13 | Position and velocity gain Z; rotation becomes a quaternion with yaw helpers; collider becomes a shape union. Generated 2D SDK diff is empty. |
+| 1 | Widen core types, still 2D only — **done**, see [§7.5.5](#755-what-phase-1-landed) | 10 | Position and velocity gained Z; rotation is a unit quaternion behind yaw helpers; collider gained Depth and a typed shape union. Generated 2D SDK diff is empty. |
 | 2 | The 3D profile | 12 | Quaternion quantization, dimension-selected bindings, gravity and move modes, cluster dimension agreement. A headless 3D example survives a cell split with a non-zero destination entity count asserted. |
 | 3 | Client SDK and interpolation | 11 | Quaternion decode and slerp in TypeScript and C#, golden vectors. A browser client renders 3D with quaternion orientation. |
 | 4 | Collision | 34 | Capsule characters against static boxes, line-of-sight gating, non-tunneling projectiles. |
@@ -796,6 +796,24 @@ The schema golden added in CE-010 step 0 pins the defect rather than catching it
 **The load-test bot's hand-rolled decoder is misaligned.** [`bot/world.go:312`](../examples/space/internal/bot/world.go) `decodeSnapshot` reads `rotation(2)` where the schema's snapshot stream has `radius(2)`, and reads health as `Uint16` where the schema says four-byte floats. Rotation is not in `EngineBindings` at all, so every field from that point on is shifted. Nothing cross-checks the bot's offsets against the schema, so CI is green.
 
 **A third correction, not a defect.** `QAngle` is **not** in `EngineBindings` — that is `ViewerRelativePos + QVelocity + QSize` ([`auto_replicator.go:504`](../pkg/system/auto_replicator.go)) — and `examples/space` wires rotation per entity kind. So phase 2's "dimension-selected bindings" cannot currently reach rotation. Deliberately not fixed in phase 0: moving `QAngle` into `EngineBindings` would add a rotation field to every entity kind that lacks one and duplicate it for the four space kinds that wire it by hand. That is a design question for phase 2, and it is written here so phase 2 does not discover it on day one.
+
+#### 7.5.5 What phase 1 landed
+
+Six steps, `14ee9e9e`..`03513e25` plus the acceptance close-out. **10 days against the estimated 13.**
+
+**The acceptance criterion held: the generated 2D SDK diff is empty.** Verified after every step by regenerating both committed SDKs, `testdata/schema`, `delta_golden.json` and the binding-walker golden, and diffing. The invariance is structural rather than lucky, and the reason is stronger than "the binding walker is flat": `Position`, `Velocity`, `Rotation` and `CellCoord` are in `transferCoreTypes`, so `RegisterKind` **rejects** them as bundle fields and they never reach the reflect walker at all. **The rule to carry forward is "never put a `net:` tag on a core component field"**, not "never nest a struct". Each engine binding also names the source fields it emits as separate identifiers, so widening a source struct cannot change the emitted schema.
+
+Three things would break that, none of which phase 1 does: moving `QAngle` into the engine binding set, adding `Depth` to `QSize`, or making `Vec3` a nested field. `pkg/system/dimension_acceptance_test.go` pins all three.
+
+**The rotation swap split into two steps and that was the whole risk management.** Step 2 added yaw helpers over the existing scalar and migrated ~48 sites under full compiler verification with byte-identical behaviour; step 3 swapped the storage and touched one file. The compiler then surfaced the class a grep could not — five composite literals rather than field accesses.
+
+**The quaternion is an accuracy improvement, not a risk.** The scalar it replaced accumulated unbounded float32 error; the quaternion renormalizes. 12000 ticks of repeated turning now lands within 1e-3 of the analytic answer against a `qangle` wire bucket of 9.6e-5. Exactly one golden moved — `shipdyn_golden.json`, five fields across two of six scenarios, max drift 3e-8 — and `prediction.ts` needed no change, its 55 parity tests passing untouched.
+
+**The collider discriminant aliases 0/1 rather than extending the range**, because `pkg/spatial` falls through to the OBB routine for any unmatched pair and the raycast skips a value it does not recognise. A genuinely new value would ship an entity that silently collides as a degenerate box and is invisible to line-of-sight, with no consumer until phase 4.
+
+**Two guards worth remembering.** `postUsernameSize` in the transfer frame is the sole bounds check for every read after the variable-length username, and the header-size test cannot cover it — that test derives from the golden bytes and exercises only the marshal side. And the wasm ABI's per-column `ElemSize` check is the layout guard the "phase 1 will add a layout hash" note promised; the note is retired rather than implemented.
+
+**Deferred out of phase 1, deliberately:** the border/view-only replication frame does not carry Z, depth or orientation; persistence gains no `pos_z` column; `QAngle` stays outside `EngineBindings`, which phase 2 must fix before it can dimension-select orientation; capsule shapes and `pkg/spatial`'s own 3D-ification belong to phase 4.
 
 ### 7.6 Validation
 

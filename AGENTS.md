@@ -68,6 +68,7 @@ This is a server-authoritative multiplayer game framework and space-game impleme
 - Server events use `mmokit.RegisterEvent` plus `mmokit.SendEvent`/`SendEventToAll`. `HandleAll` registers a message handler on current and future stages and broadcasts the result to AoI viewers; use `HandleAllInternal` for server-only messages.
 - Typed request/response operations use `mmokit.RegisterOp` and an appropriate route. Prefer the existing typed registries over ad-hoc wire frames.
 - Register the client-visible protocol on every process regardless of role. `--dump-schema` must be identical across roles, clients present a schema fingerprint at connection setup, and the coordinator refuses a host or gateway whose fingerprint disagrees. `AddSystem` is included: some `SystemDef`s register wire types from `Configure`, so role-gating a system changes that process's protocol.
+- Never put a `net:` tag on a core component field (`Position`, `Velocity`, `Rotation`, `Collider`, `CellCoord`). They are in `transferCoreTypes`, so `RegisterKind` rejects them as bundle fields and the framework owns their wire format end to end — which is what lets those types widen (Z, quaternion, Depth) without moving a client byte.
 
 ## Wire and distributed invariants
 
