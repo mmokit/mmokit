@@ -202,6 +202,16 @@ export function connect(state: GameState, callbacks: NetworkCallbacks): void {
         }
       }, 5000);
     },
+    onSchemaMismatch: (server: string, client: string) => {
+      // The gateway refuses a stale CLIENT before the upgrade, so reaching
+      // here means the SERVER is older than this build and ignored the
+      // fingerprint we sent. Say which two disagree — a browser cannot see
+      // the 409 the gate would otherwise have produced.
+      const msg = `Protocol mismatch: server ${server}, client ${client}. Rebuild the client SDK.`;
+      console.error(msg);
+      statusEl.textContent = msg;
+      statusEl.style.color = "#f00";
+    },
     onClose: () => {
       if (pingInterval) {
         clearInterval(pingInterval);

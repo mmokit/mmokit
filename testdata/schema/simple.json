@@ -1,7 +1,7 @@
 {
   "game": "simple",
   "dimension": "2d",
-  "fingerprint": "b9c92f69",
+  "fingerprint": "e163ddbf",
   "entities": null,
   "client_input_types": [
     {
@@ -216,6 +216,11 @@
       "fields": [
         {
           "name": "tickRate",
+          "encoding": "u32",
+          "size": 4
+        },
+        {
+          "name": "schemaHash",
           "encoding": "u32",
           "size": 4
         }

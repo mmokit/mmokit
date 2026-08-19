@@ -7,7 +7,7 @@ import { AuthChangePasswordRequest, AuthChangePasswordResponse, AuthLoginRequest
 
 /** Structural fingerprint of the protocol this SDK was generated from.
  *  Sent at connection setup; the server refuses a mismatch. */
-export const SCHEMA_FINGERPRINT = "d3c55737";
+export const SCHEMA_FINGERPRINT = "7d803a3c";
 
 /** Appends the schema fingerprint to a connect URL, preserving any
  *  query the caller already put there. */
@@ -22,6 +22,11 @@ export interface BasicClientOptions {
   onOpen?: () => void;
   onClose?: (ev: CloseEvent) => void;
   onError?: (ev: Event) => void;
+  /** Fires when the server reports a protocol fingerprint other than the
+   *  one this SDK was generated from. The connection-setup gate refuses a
+   *  stale CLIENT before the upgrade, so reaching here means the SERVER is
+   *  older than this SDK and ignored the fingerprint we sent. */
+  onSchemaMismatch?: (serverFingerprint: string, clientFingerprint: string) => void;
 }
 
 export class BasicClient {
@@ -43,6 +48,12 @@ export class BasicClient {
     if (this.options.onOpen) ws.onopen = this.options.onOpen;
     if (this.options.onClose) ws.onclose = this.options.onClose;
     if (this.options.onError) ws.onerror = this.options.onError;
+    this.typedEvents.on(ServerConfig, (cfg) => {
+      const server = (cfg.schemaHash >>> 0).toString(16).padStart(8, "0");
+      if (cfg.schemaHash !== 0 && server !== SCHEMA_FINGERPRINT) {
+        this.options.onSchemaMismatch?.(server, SCHEMA_FINGERPRINT);
+      }
+    });
     this.transport.onEvent((payload) => this.handleEvent(payload));
     this.transport.onOperation((payload) => this.handleOperation(payload));
   }

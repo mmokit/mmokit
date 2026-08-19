@@ -489,12 +489,14 @@ export class Pong {
 export class ServerConfig {
   static readonly typeID = 0xaa1dd89b;
   tickRate: number = 0;
+  schemaHash: number = 0;
 
   static decode(buf: Uint8Array): ServerConfig {
     const dv = new DataView(buf.buffer, buf.byteOffset, buf.byteLength);
     let off = 0;
     const m = new ServerConfig();
     m.tickRate = dv.getUint32(off, true); off += 4;
+    m.schemaHash = dv.getUint32(off, true); off += 4;
     return m;
   }
 }

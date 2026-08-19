@@ -60,8 +60,11 @@ func bootstrapWire(p *Process) {
 				WorldY:      worldY,
 			})
 		},
-		ServerConfig: func(tickRate uint32) []byte {
-			return pkguniverse.BuildTypedEventFrameRaw(wire, &ServerConfig{TickRate: tickRate})
+		ServerConfig: func(tickRate, schemaHash uint32) []byte {
+			return pkguniverse.BuildTypedEventFrameRaw(wire, &ServerConfig{
+				TickRate:   tickRate,
+				SchemaHash: schemaHash,
+			})
 		},
 	})
 

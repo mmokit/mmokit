@@ -119,6 +119,18 @@ type CellChange struct {
 // gateway on every successful connect handshake.
 type ServerConfig struct {
 	TickRate uint32
+	// SchemaHash is this process's structural protocol fingerprint.
+	//
+	// The connection-setup gate already refuses a client whose fingerprint
+	// disagrees, so this is not the enforcing half. It covers the one case the
+	// gate structurally cannot: an OLD server, which ignores the unknown
+	// ?schema= query parameter and upgrades happily. Only the client can
+	// notice that, and only by being told what the server actually is.
+	//
+	// It is also the only path that can produce a useful message in a browser.
+	// A server-side 409 reaches page script as onclose(1006) with no code and
+	// no body; a value here lets the SDK say which two builds disagree.
+	SchemaHash uint32
 }
 
 // registerEngineTypedEvents registers each engine-level typed event on wire.

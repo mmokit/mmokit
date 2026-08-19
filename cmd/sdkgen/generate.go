@@ -787,6 +787,11 @@ func (g *Generator) genClient() string {
 	b.WriteString("  onOpen?: () => void;\n")
 	b.WriteString("  onClose?: (ev: CloseEvent) => void;\n")
 	b.WriteString("  onError?: (ev: Event) => void;\n")
+	b.WriteString("  /** Fires when the server reports a protocol fingerprint other than the\n")
+	b.WriteString("   *  one this SDK was generated from. The connection-setup gate refuses a\n")
+	b.WriteString("   *  stale CLIENT before the upgrade, so reaching here means the SERVER is\n")
+	b.WriteString("   *  older than this SDK and ignored the fingerprint we sent. */\n")
+	b.WriteString("  onSchemaMismatch?: (serverFingerprint: string, clientFingerprint: string) => void;\n")
 	b.WriteString("}\n\n")
 
 	// Client class.
@@ -820,6 +825,19 @@ func (g *Generator) genClient() string {
 	b.WriteString("    if (this.options.onOpen) ws.onopen = this.options.onOpen;\n")
 	b.WriteString("    if (this.options.onClose) ws.onclose = this.options.onClose;\n")
 	b.WriteString("    if (this.options.onError) ws.onerror = this.options.onError;\n")
+	if hasServerEvent(g.schema, "ServerConfig") {
+		// Compare if received, do not require. sendServerConfig is a silent
+		// no-op when the gateway's tick rate is zero, which every fixture
+		// running at tick rate 0 relies on — treating absence as a mismatch
+		// would break them, and the upstream gate has already refused a stale
+		// client anyway. Absence is silent; disagreement is reported.
+		b.WriteString("    this.typedEvents.on(ServerConfig, (cfg) => {\n")
+		b.WriteString("      const server = (cfg.schemaHash >>> 0).toString(16).padStart(8, \"0\");\n")
+		b.WriteString("      if (cfg.schemaHash !== 0 && server !== SCHEMA_FINGERPRINT) {\n")
+		b.WriteString("        this.options.onSchemaMismatch?.(server, SCHEMA_FINGERPRINT);\n")
+		b.WriteString("      }\n")
+		b.WriteString("    });\n")
+	}
 	b.WriteString("    this.transport.onEvent((payload) => this.handleEvent(payload));\n")
 	if hasTypedOps {
 		b.WriteString("    this.transport.onOperation((payload) => this.handleOperation(payload));\n")

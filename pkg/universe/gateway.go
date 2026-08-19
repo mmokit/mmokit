@@ -463,7 +463,10 @@ func (g *Gateway) sendServerConfig(connID uint32) {
 	if build == nil {
 		return
 	}
-	frame := build(g.tickRate)
+	// Read the fingerprint off the Process at send time rather than caching it
+	// on the Gateway: both Gateway literals are constructed inside Build(),
+	// before the protocol is assembled, so a captured field would be zero.
+	frame := build(g.tickRate, g.process.SchemaFingerprint())
 	if frame == nil {
 		// Encoder guard rejected the payload — already counted and logged.
 		return

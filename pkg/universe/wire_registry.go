@@ -105,8 +105,9 @@ type FrameworkEncoders struct {
 	PlayerEntityAssigned func(netID uint32, worldX, worldY float32) []byte
 
 	// ServerConfig builds the typed-event frame carrying engine-level
-	// configuration (tick rate). Sent on connect by the gateway.
-	ServerConfig func(tickRate uint32) []byte
+	// configuration (tick rate) and this process's schema fingerprint. Sent on
+	// connect by the gateway.
+	ServerConfig func(tickRate, schemaHash uint32) []byte
 }
 
 // A nil *WireRegistry is a valid receiver for every READ method, and reads as
