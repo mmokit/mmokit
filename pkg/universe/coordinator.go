@@ -360,6 +360,15 @@ type Config struct {
 	// with from a command line.
 	Dimension Dimension
 
+	// Gravity is the downward acceleration, in world units per second
+	// squared along -Z, applied to entities whose component.Motion mode is
+	// not MoveFly. Zero disables it.
+	//
+	// It is meaningless in a 2D profile — there is no vertical axis to fall
+	// along — so Build refuses the combination rather than accepting a
+	// setting it will silently ignore.
+	Gravity float32
+
 	// AllowUnfingerprintedClients lets a client connect without presenting a
 	// schema fingerprint at connection setup. Off by default.
 	//
@@ -912,6 +921,17 @@ func New(cfg Config) *Process {
 	// an unimplemented profile panics, and a panic here names Config.Dimension
 	// instead of surfacing several frames into schema assembly.
 	_ = system.EngineBindingsFor(cfg.Dimension)
+
+	// Gravity without a vertical axis is a configuration mistake, not a
+	// no-op worth tolerating: the operator believes entities fall and they
+	// do not. Loud at Build, where the message names the field to change.
+	if cfg.Dimension == Dimension2D && cfg.Gravity != 0 {
+		panic(fmt.Sprintf(
+			"universe.Build: Config.Gravity is %v but Config.Dimension is 2d — "+
+				"gravity acts along -Z and a 2D profile has no vertical axis; "+
+				"set Dimension: Dimension3D or leave Gravity at 0",
+			cfg.Gravity))
+	}
 
 	c.invariantMode = cfg.InvariantMode
 	c.wire = NewWireRegistry()
@@ -2460,7 +2480,7 @@ func (c *Process) startControlPlane() {
 // otherwise it gets a plain cellBridge (zero gRPC overhead).
 func (c *Process) createNode(cell CellID, spatialBucketSize float32, owningHost *Host, fromSplit ...bool) (*Cell, []engine.System) {
 	cfg := c.cfg
-	platformCfg := engine.Config{TickRate: cfg.TickRate}
+	platformCfg := engine.Config{TickRate: cfg.TickRate, Gravity: cfg.Gravity}
 
 	id := string(cell.MeshID())
 	// In remote-host mode, cells use VirtualConnManager as their ConnSender so
@@ -2479,6 +2499,19 @@ func (c *Process) createNode(cell CellID, spatialBucketSize float32, owningHost 
 	events := make(chan net.PlayerEvent, 64)
 
 	base := NewStage(eng, cell, cfg.AoIRadius, nil, c.Wire())
+
+	// The 3D profile owns Motion's survival across a cell boundary.
+	// Registering it here rather than leaving it to the game is deliberate: a
+	// mode silently resetting to MoveFly at every cell line would switch
+	// gravity off on handoff, and that is not a bug a game author would
+	// expect to have to prevent.
+	//
+	// Registered ONLY under Dimension3D, so a 2D process's registry IDs — and
+	// therefore its mesh transfer bytes — are untouched by the 3D profile
+	// existing.
+	if cfg.Dimension == Dimension3D {
+		RegisterComponent(base.ReplicationRegistry(), ecs.NewMap1[component.Motion](eng.ECS))
+	}
 
 	// Wire the typed client-input dispatch path (channel 0x00 post
 	// Plan 1 Phase 5 unification; mmokit.HandleClient). All

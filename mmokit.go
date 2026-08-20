@@ -36,14 +36,16 @@ import (
 // Position is an entity's world-space position (X, Y in world units).
 type Position = component.Position
 
-// Velocity is an entity's movement speed (X, Y in world units per second).
+// Velocity is an entity's movement speed in world units per second. Z is
+// carried by every profile; only the 3D one integrates and replicates it.
 type Velocity = component.Velocity
 
 // Vec3 is the math type for positions, velocities and offsets. Position and
 // Velocity convert to and from it directly.
 type Vec3 = component.Vec3
 
-// Rotation is an entity's facing direction (Angle in radians).
+// Rotation is an entity's orientation, stored as a unit quaternion. Reach it
+// through the yaw helpers below rather than the storage fields.
 type Rotation = component.Rotation
 
 // Rotation constructors and accessors. Game code reads and writes orientation
@@ -60,6 +62,24 @@ type Collider = component.Collider
 
 // ShapeKind discriminates a Collider's shape.
 type ShapeKind = component.ShapeKind
+
+// Motion selects how PhysicsSystem integrates an entity. Optional: an entity
+// without it integrates as MoveFly, which is the behaviour every entity had
+// before move modes existed.
+type Motion = component.Motion
+
+// MoveMode is Motion's integration rule.
+type MoveMode = component.MoveMode
+
+// Move modes. MoveFly is the zero value and applies no gravity; MoveWalk
+// applies gravity and clamps to Motion.GroundZ; MoveBallistic applies gravity
+// and does not clamp. Gravity itself comes from Config.Gravity and is only
+// legal in a 3D profile.
+const (
+	MoveFly       = component.MoveFly
+	MoveWalk      = component.MoveWalk
+	MoveBallistic = component.MoveBallistic
+)
 
 // Tint is a render color hint (R, G, B bytes) replicated to clients when the
 // entity kind's bundle includes it. The engine never touches it — game logic
