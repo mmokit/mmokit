@@ -84,7 +84,9 @@ Each owned cell contains an independent `Stage` backed by an Ark ECS world and `
 5. Run replication and post-system hooks.
 6. Flush authoritative removals and record metrics.
 
-Game systems are single-writer: authoritative ECS mutation belongs on the cell-loop goroutine. Admin, service, and other off-loop work must route through `RunOnLoop`, typed commands, or another sanctioned queue.
+Game systems are single-writer: authoritative ECS mutation belongs on the cell-loop goroutine. Admin, service, and other off-loop work must route through `RunOnLoop`, typed commands, or another sanctioned queue. `RunOnLoop` runs inline when called from the loop itself; a job whose caller's context expires before the loop starts it is abandoned rather than applied later, and once a cell's loop exits it returns `engine.ErrLoopStopped` instead of queueing into a channel nothing drains.
+
+The tick period, the timestep systems integrate, and the cluster-clock quantum are one value derived from `Config.TickRate`, and it is a whole number of milliseconds because `ClusterClock` quantizes a millisecond wall clock by it. Rates that do not divide 1000 round to the nearer achievable period, and the loop logs the requested and effective rates separately at startup.
 
 ### Entity presence
 

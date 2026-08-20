@@ -7,6 +7,31 @@ of [`README.md`](README.md#status) for what that means for API and wire compatib
 
 ### Breaking
 
+- **Three engine API signatures changed with CE-008** (tick timing and
+  loop-job lifecycle). No wire format moves and no client is affected; these
+  are compile errors for a game embedding the framework.
+
+  - `mmokit.Hooks.PreFlush` is now `func(dt float32)` rather than `func()`.
+    It receives the loop's own timestep, which is what stops a system and an
+    `mmokit.OnWorldTick` callback from integrating different values of `dt`
+    inside the same tick.
+  - `Engine.SubmitLoopJob` returns `error` rather than `bool`: `nil`,
+    `ErrLoopQueueFull`, or `ErrLoopStopped`. The old `true` on a stopped loop
+    was indistinguishable from `true` on a live one, so a caller owing a
+    client a response left it pending forever.
+  - `mmokit.NewCellMetrics` takes the tick budget as a `time.Duration` rather
+    than a tick rate as an `int`. Note that an untyped constant call site
+    (`NewCellMetrics("x", 20, ...)`) still compiles and now means 20
+    nanoseconds — check yours.
+
+  Behaviour worth knowing even though it is not a signature change: a tick
+  rate that does not divide 1000 now rounds to the nearer whole-millisecond
+  period instead of truncating, so a configured 60 Hz runs at 58.8 Hz rather
+  than 62.5 Hz. `RunOnLoop` on a loop that has already exited returns
+  `ErrLoopStopped` immediately instead of blocking, and a job whose caller's
+  context expires while it is still queued is now discarded rather than
+  applied on a later tick.
+
 - **The UDP wire format is now version 2, and UDP clients must authenticate
   over HTTPS before they connect.** Every UDP packet changes shape, so a v1
   client cannot talk to a v2 server or the reverse: **redeploy both halves

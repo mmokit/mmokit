@@ -22,6 +22,23 @@ tick counter, player manager, profiler, and optional per-cell metrics.
 `DefaultConfig` currently uses HTTP `:8080`, UDP `:9000`, and a 20 Hz tick
 rate.
 
+### Tick rates quantize to whole milliseconds
+
+The scheduled tick period, the timestep handed to systems, and the
+cluster-clock quantum are one number, derived once from `Config.TickRate`.
+It is a whole number of milliseconds because `ClusterClock.ClusterTick`
+divides a millisecond wall clock by it and `TickTime` multiplies it back to
+stamp outbound replication — the tick stream and the stamp grid have to be the
+same grid, or an authority handoff shows up on the client as interpolation
+jitter.
+
+So only rates that divide 1000 are exact. Others round to the nearer
+achievable period and the startup log names the requested and effective rates
+separately: 60 Hz schedules 17 ms and runs at 58.8 Hz. Rounding closes that
+error rather than eliminating it — 120 Hz still runs at 125 Hz, because 8 ms
+is the only period near it. A rate at or below zero falls back to 50 ms, and a
+rate above 1000 clamps to 1 ms.
+
 ### Network IDs and removal
 
 - `SetNetIDBase` installs the range base granted to the cell.
@@ -52,9 +69,15 @@ Each tick runs in this order:
 2. Drain connection events and queued loop jobs.
 3. Process pending player sessions and typed client input.
 4. Run systems in registration order, calling `AfterSystem` after each one.
-5. Call `PreFlush` and flush queued entity removals.
+5. Call `PreFlush(dt)` and flush queued entity removals.
 6. Call `PostFlush` and `PostTick`.
 7. Record tick, per-system, and optional cell metrics.
+
+`PreFlush` receives the loop's own `dt`, which is how the universe layer fires
+`mmokit.OnWorldTick` and friends on the same timestep the systems integrated.
+
+When `ctx` is cancelled the loop drains the loop-job queue before returning,
+failing everything still queued with `ErrLoopStopped`.
 
 `AfterSystem` is how the universe layer flushes deferred structural commands,
 making changes queued by system N visible to system N+1 in the same tick.
@@ -94,13 +117,30 @@ err := eng.RunOnLoop(ctx, func() error {
 ```
 
 `RunOnLoop` executes inline when called reentrantly from the loop. Otherwise
-it queues the closure and waits for completion or context cancellation. Pass a
-deadline and call it only while `HasLoopRunning` is true.
+it queues the closure and waits. The contract:
 
-`SubmitLoopJob` is the non-blocking, fire-and-forget variant. It returns
-`false` when the bounded queue is full. The loop uses an 8 ms soft drain
-budget per tick and logs jobs taking more than 5 ms; one slow job can exceed
-that budget before the loop stops draining.
+- A loop that has **not started yet** still accepts jobs and runs them once it
+  does. Cells schedule work into that window deliberately.
+- A loop that has **exited** returns `ErrLoopStopped` immediately, and so does
+  every job still queued when it exits. `HasLoopRunning` cannot tell those two
+  states apart — it reads false for both — so do not gate on it to decide
+  whether a job will run.
+- If the caller's context expires while the job is still queued, the job is
+  abandoned and **never runs**.
+- If the loop has already started the job, the caller waits for it to finish
+  even past its own deadline. The deadline is soft by at most one job's
+  runtime, so that a caller cannot tear down state a running closure is still
+  writing.
+
+`SubmitLoopJob` is the non-blocking, fire-and-forget variant. It returns `nil`
+when queued or run inline, `ErrLoopQueueFull` when the bounded queue is full,
+and `ErrLoopStopped` when the loop has exited.
+
+The drain budget is derived from the tick period rather than fixed: a quarter
+of the frame, capped at 8 ms and floored at 1 ms, with a slow-job warning at
+half of that. One slow job can exceed the budget before the loop stops
+draining, because the budget is checked after a job runs — so at least one job
+always makes progress per tick.
 
 ## Console
 
