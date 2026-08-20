@@ -46,6 +46,11 @@ type GameLoop struct {
 	systemNames []string               // profiling labels, parallel to systems
 	eventsCh    <-chan net.PlayerEvent // per-cell events (nil = use ConnMgr.Events())
 
+	// sched is the tick derivation this loop runs on: period, timestep and
+	// loop-job drain allowance. Set in NewGameLoop and refreshed at the top
+	// of Run, so a Config edit between construction and start is picked up.
+	sched tickSchedule
+
 	// newTickSource and now are the loop's only two reads of wall time.
 	// NewGameLoop installs the real implementations; tests substitute
 	// deterministic ones. A GameLoop built as a struct literal must set
@@ -115,6 +120,7 @@ func NewGameLoop(eng *Engine, systems []System, names []string, hooks Hooks) *Ga
 		hooks:       merged,
 		sysTimings:  make([]time.Duration, len(systems)),
 		systemNames: names,
+		sched:       newTickSchedule(eng.Config.TickRate),
 		newTickSource: func(d time.Duration) tickSource {
 			return realTickSource{t: time.NewTicker(d)}
 		},
@@ -173,8 +179,8 @@ func (gl *GameLoop) ReplaceSystemLive(name string, s System) bool {
 
 // Run starts the fixed-timestep game loop. Blocks until ctx is cancelled.
 func (gl *GameLoop) Run(ctx context.Context) {
-	sched := newTickSchedule(gl.engine.Config.TickRate)
-	src := gl.newTickSource(sched.Period)
+	gl.sched = newTickSchedule(gl.engine.Config.TickRate)
+	src := gl.newTickSource(gl.sched.Period)
 	defer src.Stop()
 
 	// Reopen the job queue for this run. A cell's loop can be run again on
@@ -186,7 +192,7 @@ func (gl *GameLoop) Run(ctx context.Context) {
 	gl.engine.loopGID.mark()
 	defer gl.engine.loopGID.clear()
 
-	gl.logSchedule(sched)
+	gl.logSchedule(gl.sched)
 
 	for {
 		select {
@@ -202,7 +208,7 @@ func (gl *GameLoop) Run(ctx context.Context) {
 			}
 			return
 		case <-src.C():
-			gl.tick(sched.Dt)
+			gl.tick(gl.sched.Dt)
 		}
 	}
 }
@@ -299,12 +305,14 @@ func (gl *GameLoop) tick(dt float32) {
 }
 
 // processAdminCmds drains the loop queue with a per-tick time budget. Jobs
-// that overrun loopJobSlowThreshold log a warning; once the cumulative budget
-// is exceeded, the remaining jobs stay queued until next tick. This keeps a
-// slow admin job from eating the entire tick budget while still giving fast
-// interactive commands instant turnaround.
+// that overrun the schedule's SlowJobThreshold log a warning; once the
+// cumulative budget is exceeded, the remaining jobs stay queued until next
+// tick. This keeps a slow admin job from eating the tick while still giving
+// fast interactive commands instant turnaround. Both numbers come from the
+// tick schedule, so they scale with the frame instead of being a fixed 8ms
+// that happened to be sized for 20Hz.
 func (gl *GameLoop) processAdminCmds() {
-	deadline := gl.now().Add(loopJobBudget)
+	deadline := gl.now().Add(gl.sched.DrainBudget)
 	for {
 		select {
 		case job := <-gl.engine.loopQ.ch:
@@ -331,7 +339,7 @@ func (gl *GameLoop) processAdminCmds() {
 			}()
 			job.err = err
 			close(job.done)
-			if d := gl.now().Sub(start); d > loopJobSlowThreshold {
+			if d := gl.now().Sub(start); d > gl.sched.SlowJobThreshold {
 				gl.engine.Log.Log("engine:loop", "slow admin job: %v", d)
 			}
 			if gl.now().After(deadline) {

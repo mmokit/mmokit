@@ -47,8 +47,10 @@ func (c *manualClock) advance(d time.Duration) {
 }
 
 // loopHarness runs a GameLoop against a fake tick source and a manual clock.
-// Tick delivery is a handshake rather than a wait: harness.tick() returns only
-// after the loop has completed that tick.
+// Tick delivery is a handshake rather than a wait: tick() returns only once
+// the loop has run the tick through its PostTick hook, so a test can assert
+// what a single tick did without sleeping. Everything after PostTick — the
+// perf record and the metrics sample — is settled by stop() instead.
 type loopHarness struct {
 	t         *testing.T
 	eng       *Engine
@@ -56,9 +58,9 @@ type loopHarness struct {
 	src       *fakeTickSource
 	clock     *manualClock
 	requested chan time.Duration
+	ticked    chan struct{}
 	cancel    context.CancelFunc
 	done      chan struct{}
-	stoppedAt time.Time
 }
 
 func newLoopHarness(t *testing.T, eng *Engine, systems []System, names []string, hooks Hooks) *loopHarness {
@@ -69,7 +71,18 @@ func newLoopHarness(t *testing.T, eng *Engine, systems []System, names []string,
 		src:       newFakeTickSource(),
 		clock:     newManualClock(),
 		requested: make(chan time.Duration, 1),
+		ticked:    make(chan struct{}),
 		done:      make(chan struct{}),
+	}
+	// Wrap PostTick — the last hook in a tick — so tick() has a completion
+	// barrier. The channel is unbuffered, so the loop waits here until the
+	// test collects the tick.
+	inner := hooks.PostTick
+	hooks.PostTick = func() {
+		if inner != nil {
+			inner()
+		}
+		h.ticked <- struct{}{}
 	}
 	h.gl = NewGameLoop(eng, systems, names, hooks)
 	h.gl.newTickSource = func(d time.Duration) tickSource {
@@ -100,7 +113,8 @@ func (h *loopHarness) start() time.Duration {
 	}
 }
 
-// tick delivers one tick and returns once the loop has finished processing it.
+// tick delivers one tick and returns once the loop has run it through
+// PostTick.
 func (h *loopHarness) tick() {
 	h.t.Helper()
 	select {
@@ -109,6 +123,13 @@ func (h *loopHarness) tick() {
 		h.t.Fatal("loop exited before accepting a tick")
 	case <-time.After(2 * time.Second):
 		h.t.Fatal("loop did not accept a tick")
+	}
+	select {
+	case <-h.ticked:
+	case <-h.done:
+		h.t.Fatal("loop exited mid-tick")
+	case <-time.After(2 * time.Second):
+		h.t.Fatal("loop did not complete a tick")
 	}
 }
 

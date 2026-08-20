@@ -45,7 +45,18 @@ type tickSchedule struct {
 	// Clamped reports that the requested rate was unusable and a substitute
 	// period was installed.
 	Clamped bool
+	// DrainBudget is the soft per-tick allowance the loop spends running
+	// queued loop jobs. Derived from the period rather than fixed, so a
+	// faster tick rate does not hand the admin queue most of the frame.
+	DrainBudget time.Duration
+	// SlowJobThreshold is the per-job wall time above which the drain logs
+	// a warning, for handlers that claim to be fast and are not.
+	SlowJobThreshold time.Duration
 }
+
+// maxDrainBudget caps the drain allowance at its historical value, so slowing
+// the tick rate down does not let admin work grow without bound.
+const maxDrainBudget = 8 * time.Millisecond
 
 // newTickSchedule derives the schedule for tickRate. A rate at or below zero,
 // or above maxTickRate, is clamped; anything else rounds to the nearest whole
@@ -69,6 +80,19 @@ func newTickSchedule(tickRate int) tickSchedule {
 	}
 	s.Period = time.Duration(s.PeriodMs) * time.Millisecond
 	s.Dt = float32(s.PeriodMs) / 1000
+
+	// A quarter of the frame, never more than 8ms and never less than 1ms.
+	// The fixed 8ms this replaces was 16% of a 50ms tick but 80% of the
+	// 10ms tick at 100Hz, and the fixed 5ms warning threshold exceeded the
+	// entire period above 167Hz.
+	s.DrainBudget = s.Period / 4
+	if s.DrainBudget > maxDrainBudget {
+		s.DrainBudget = maxDrainBudget
+	}
+	if s.DrainBudget < time.Millisecond {
+		s.DrainBudget = time.Millisecond
+	}
+	s.SlowJobThreshold = s.DrainBudget / 2
 	return s
 }
 

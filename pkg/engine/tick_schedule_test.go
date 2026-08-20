@@ -54,6 +54,44 @@ func TestNewTickSchedule_Table(t *testing.T) {
 	}
 }
 
+// TestNewTickSchedule_DrainBudget pins the loop-job allowance to the frame.
+// The fixed 8ms it replaces was 16% of a 50ms tick but 80% of the 10ms tick
+// at 100Hz — a rate this repository already runs in op_dispatch_cell_test —
+// and the fixed 5ms warning threshold exceeded the entire period above 167Hz.
+func TestNewTickSchedule_DrainBudget(t *testing.T) {
+	cases := []struct {
+		rate      int
+		budget    time.Duration
+		slowAfter time.Duration
+	}{
+		// 50ms/4 is 12.5ms, capped at the historical 8ms.
+		{rate: 20, budget: 8 * time.Millisecond, slowAfter: 4 * time.Millisecond},
+		{rate: 1, budget: 8 * time.Millisecond, slowAfter: 4 * time.Millisecond},
+		{rate: 100, budget: 2500 * time.Microsecond, slowAfter: 1250 * time.Microsecond},
+		{rate: 60, budget: 4250 * time.Microsecond, slowAfter: 2125 * time.Microsecond},
+		// Floored: a 1ms period would otherwise budget 250us.
+		{rate: 1000, budget: time.Millisecond, slowAfter: 500 * time.Microsecond},
+	}
+	for _, c := range cases {
+		s := newTickSchedule(c.rate)
+		if s.DrainBudget != c.budget {
+			t.Errorf("rate %d: DrainBudget = %v, want %v", c.rate, s.DrainBudget, c.budget)
+		}
+		if s.SlowJobThreshold != c.slowAfter {
+			t.Errorf("rate %d: SlowJobThreshold = %v, want %v", c.rate, s.SlowJobThreshold, c.slowAfter)
+		}
+	}
+	for rate := 1; rate <= maxTickRate; rate++ {
+		s := newTickSchedule(rate)
+		if s.DrainBudget > s.Period && s.PeriodMs > 1 {
+			t.Fatalf("rate %d: drain budget %v exceeds the whole %v frame", rate, s.DrainBudget, s.Period)
+		}
+		if s.DrainBudget < time.Millisecond {
+			t.Fatalf("rate %d: drain budget %v starves the queue", rate, s.DrainBudget)
+		}
+	}
+}
+
 // TestNewTickSchedule_Invariants pins the three properties every consumer
 // relies on, across the whole schedulable range: the period is a usable
 // ticker argument, the timestep is the period, and the duration is the

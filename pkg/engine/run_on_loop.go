@@ -8,7 +8,6 @@ import (
 	"strconv"
 	"sync"
 	"sync/atomic"
-	"time"
 )
 
 // ErrLoopStopped is returned by RunOnLoop / SubmitLoopJob once the engine's
@@ -305,14 +304,3 @@ func currentGoroutineID() uint64 {
 	}
 	return id
 }
-
-// loopJobBudget is the soft per-tick budget the loop spends draining queued
-// jobs. Jobs that overrun this by themselves log a warning; the drain loop
-// stops pulling new jobs once the cumulative budget is exceeded and resumes
-// next tick. Kept generous by default so interactive commands feel instant,
-// but small enough that a slow job does not eat the tick.
-const loopJobBudget = 8 * time.Millisecond
-
-// loopJobSlowThreshold is the per-job wall-time above which the drain loop
-// logs a warning. Used to catch handlers that pretend to be fast but aren't.
-const loopJobSlowThreshold = 5 * time.Millisecond

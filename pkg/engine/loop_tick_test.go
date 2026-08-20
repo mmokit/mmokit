@@ -3,6 +3,7 @@ package engine
 import (
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -168,5 +169,61 @@ func TestGameLoop_PreFlushSeesTheSystemTimestep(t *testing.T) {
 		if want := newTickSchedule(rate).Dt; sysDt[0] != want {
 			t.Errorf("rate %d: dt = %v, want the scheduled %v", rate, sysDt[0], want)
 		}
+	}
+}
+
+// TestProcessAdminCmds_DrainBudgetStopsAtTheDeadline exercises the drain
+// budget for the first time. It was untestable before the clock seam: the
+// only way to overrun an 8ms budget was to burn 8ms of real time inside a
+// job, which is exactly the wall-clock assertion the roadmap names as an
+// antipattern.
+func TestProcessAdminCmds_DrainBudgetStopsAtTheDeadline(t *testing.T) {
+	eng, hook := newRateTestEngine(20)
+	h := newLoopHarness(t, eng, nil, nil, Hooks{})
+
+	if want := 8 * time.Millisecond; h.gl.sched.DrainBudget != want {
+		t.Fatalf("DrainBudget = %v, want %v", h.gl.sched.DrainBudget, want)
+	}
+
+	const jobs = 5
+	var ran atomic.Int32
+	for i := 0; i < jobs; i++ {
+		overrun := i == 0
+		job := &loopJob{done: make(chan struct{})}
+		job.fn = func() error {
+			ran.Add(1)
+			if overrun {
+				// Past the 8ms budget, and past the 4ms warn threshold.
+				h.clock.advance(10 * time.Millisecond)
+			}
+			return nil
+		}
+		eng.loopQ.ch <- job
+	}
+
+	h.start()
+	h.tick()
+
+	// The budget is checked after a job runs, so the overrunning job itself
+	// still completes — the drain stops before pulling the next one.
+	if got := ran.Load(); got != 1 {
+		t.Fatalf("first tick drained %d jobs, want exactly 1", got)
+	}
+	if n := len(eng.loopQ.ch); n != jobs-1 {
+		t.Fatalf("queue holds %d jobs after the budget was spent, want %d", n, jobs-1)
+	}
+	if banner := hook.joined(); !strings.Contains(banner, "slow admin job") {
+		t.Errorf("a 10ms job did not trip the 4ms warning; log was %q", banner)
+	}
+
+	// Nothing advances the clock now, so the remaining jobs all fit.
+	h.tick()
+	h.stop()
+
+	if got := ran.Load(); got != jobs {
+		t.Fatalf("drained %d jobs in total, want %d", got, jobs)
+	}
+	if n := len(eng.loopQ.ch); n != 0 {
+		t.Fatalf("queue still holds %d jobs, want 0", n)
 	}
 }
