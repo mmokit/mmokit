@@ -2673,23 +2673,23 @@ func (c *Process) createNode(cell CellID, spatialBucketSize float32, owningHost 
 	)
 
 	gameHooks := base.Hooks()
-	tickDt := float32(1.0 / float32(platformCfg.TickRate))
 	mergedHooks := engine.Hooks{
 		OnConnect:    gameHooks.OnConnect,
 		OnDisconnect: gameHooks.OnDisconnect,
 		AfterSystem: func() {
 			base.Commands().Flush()
 		},
-		PreFlush: func() {
+		PreFlush: func(dt float32) {
 			// Fire stage-registered per-tick callbacks (mmokit.OnWorldTick /
 			// OnTick / OnTickEach) right after systems run, before
 			// FlushRemovals — same window where game systems' Update
-			// observed the world.
+			// observed the world. dt is the loop's own timestep, so a
+			// callback and a system integrate identically.
 			for _, fn := range base.TickCallbacks() {
-				fn(tickDt)
+				fn(dt)
 			}
 			if gameHooks.PreFlush != nil {
-				gameHooks.PreFlush()
+				gameHooks.PreFlush(dt)
 			}
 		},
 		PostFlush: gameHooks.PostFlush,

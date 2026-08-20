@@ -138,3 +138,35 @@ func TestEngine_TickIntervalMsMatchesScheduledPeriod(t *testing.T) {
 		}
 	}
 }
+
+// TestGameLoop_PreFlushSeesTheSystemTimestep pins the second half of CE-008's
+// timing defect: per-tick callbacks fire from PreFlush, and before this the
+// coordinator handed them its own float32(1.0)/float32(TickRate) while systems
+// integrated the loop's truncated dt. At 60Hz those were 0.0166667 and 0.016 —
+// a 4% divergence between a system and a callback inside the same tick.
+func TestGameLoop_PreFlushSeesTheSystemTimestep(t *testing.T) {
+	for _, rate := range []int{20, 60, 144} {
+		eng, _ := newRateTestEngine(rate)
+		var sysDt, preFlushDt []float32
+		probe := updateFunc(func(dt float32) { sysDt = append(sysDt, dt) })
+		hooks := Hooks{PreFlush: func(dt float32) { preFlushDt = append(preFlushDt, dt) }}
+
+		h := newLoopHarness(t, eng, []System{probe}, []string{"probe"}, hooks)
+		h.start()
+		h.tick()
+		h.tick()
+		h.stop()
+
+		if len(sysDt) != 2 || len(preFlushDt) != 2 {
+			t.Fatalf("rate %d: system ran %d times, PreFlush %d, want 2 each", rate, len(sysDt), len(preFlushDt))
+		}
+		for i := range sysDt {
+			if sysDt[i] != preFlushDt[i] {
+				t.Errorf("rate %d tick %d: system dt %v != PreFlush dt %v", rate, i, sysDt[i], preFlushDt[i])
+			}
+		}
+		if want := newTickSchedule(rate).Dt; sysDt[0] != want {
+			t.Errorf("rate %d: dt = %v, want the scheduled %v", rate, sysDt[0], want)
+		}
+	}
+}

@@ -15,9 +15,13 @@ type Hooks struct {
 	OnDisconnect   func(connID uint32)
 	ClearTickState func()
 	AfterSystem    func() // called after each system's Update returns
-	PreFlush       func()
-	PostFlush      func()
-	PostTick       func()
+	// PreFlush runs after every system and before FlushRemovals. It takes
+	// the loop's dt so per-tick callbacks integrate against the same
+	// timestep the systems did — before CE-008 the coordinator computed
+	// its own and the two disagreed at any rate not dividing 1000.
+	PreFlush  func(dt float32)
+	PostFlush func()
+	PostTick  func()
 }
 
 // tickSource is the loop's tick clock, narrowed to what Run uses so a test
@@ -252,7 +256,7 @@ func (gl *GameLoop) tick(dt float32) {
 
 	// Pre-flush: pre-removal notifications
 	if gl.hooks.PreFlush != nil {
-		gl.hooks.PreFlush()
+		gl.hooks.PreFlush(dt)
 	}
 
 	// Flush entity removals. If replication already sampled this tick's

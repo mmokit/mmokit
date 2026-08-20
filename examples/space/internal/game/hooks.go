@@ -13,7 +13,7 @@ import (
 // OnConnect and OnDisconnect are handled by PlayerManager; login processing is engine-internal.
 func (gw *GameWorld) Hooks() mmokit.Hooks {
 	return mmokit.Hooks{
-		PreFlush: func() {
+		PreFlush: func(float32) {
 			gw.processDockCompletions()
 		},
 		PostFlush:      gw.postFlush,

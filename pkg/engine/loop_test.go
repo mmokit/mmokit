@@ -67,7 +67,7 @@ func TestGameLoop_HookOrder(t *testing.T) {
 		ClearTickState: func() { hookLog = append(hookLog, "ClearTickState") },
 		OnConnect:      func(id uint32) {},
 		OnDisconnect:   func(id uint32) {},
-		PreFlush:       func() { hookLog = append(hookLog, "PreFlush") },
+		PreFlush:       func(float32) { hookLog = append(hookLog, "PreFlush") },
 		PostFlush:      func() { hookLog = append(hookLog, "PostFlush") },
 		PostTick:       func() { hookLog = append(hookLog, "PostTick") },
 	}
