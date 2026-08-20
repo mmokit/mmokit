@@ -461,3 +461,70 @@ func TestLoopQueue_ConcurrentStopRace(t *testing.T) {
 		}
 	}
 }
+
+// unclaimedInQueue drains q and counts jobs nobody ever claimed. Once the
+// queue is stopped nothing will drain it again, so an unclaimed job here is
+// one whose caller was told "queued" for work that will never run.
+func unclaimedInQueue(q *loopQueue) int {
+	stranded := 0
+	for {
+		select {
+		case job := <-q.ch:
+			if !job.claimed.Load() {
+				stranded++
+			}
+		default:
+			return stranded
+		}
+	}
+}
+
+// TestSubmitLoopJob_ConcurrentStopNeverStrandsAJob covers the post-send
+// claim-back, which the rest of the suite does not reach: every other
+// SubmitLoopJob test either has a live loop or stops the queue before
+// submitting, so only the pre-send gate check is exercised.
+//
+// The window is narrow and real. stop() closes the gate before it drains, so
+// a send that lands after the drain has hit its default arm is invisible to
+// the drain — the caller has to reclaim it. Without that reclaim the caller
+// gets nil for a job nobody will ever run, which for op_dispatch_cell means a
+// client's typed-op promise that never settles.
+func TestSubmitLoopJob_ConcurrentStopNeverStrandsAJob(t *testing.T) {
+	for round := 0; round < 200; round++ {
+		eng := newLoopTestEngine()
+
+		const submitters = 32
+		var wg sync.WaitGroup
+		start := make(chan struct{})
+		results := make(chan error, submitters)
+		for i := 0; i < submitters; i++ {
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				<-start
+				results <- eng.SubmitLoopJob(func() error { return nil })
+			}()
+		}
+		var stopWG sync.WaitGroup
+		stopWG.Add(1)
+		go func() {
+			defer stopWG.Done()
+			<-start
+			eng.loopQ.stop()
+		}()
+
+		close(start)
+		wg.Wait()
+		stopWG.Wait()
+		close(results)
+
+		for err := range results {
+			if err != nil && !errors.Is(err, ErrLoopStopped) && !errors.Is(err, ErrLoopQueueFull) {
+				t.Fatalf("round %d: SubmitLoopJob returned %v", round, err)
+			}
+		}
+		if n := unclaimedInQueue(eng.loopQ); n != 0 {
+			t.Fatalf("round %d: %d job(s) stranded in a stopped queue with their caller told nil", round, n)
+		}
+	}
+}

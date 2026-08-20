@@ -179,13 +179,16 @@ func (gl *GameLoop) ReplaceSystemLive(name string, s System) bool {
 
 // Run starts the fixed-timestep game loop. Blocks until ctx is cancelled.
 func (gl *GameLoop) Run(ctx context.Context) {
+	// Reopen the job queue first, before anything observable happens. A
+	// cell's loop can be run again on the same engine after a stop, so the
+	// gate is per-run, not per-engine — and any caller that can see this
+	// loop starting must already see an open gate, or it would be told
+	// ErrLoopStopped by the very run it just watched begin.
+	gl.engine.loopQ.start()
+
 	gl.sched = newTickSchedule(gl.engine.Config.TickRate)
 	src := gl.newTickSource(gl.sched.Period)
 	defer src.Stop()
-
-	// Reopen the job queue for this run. A cell's loop can be run again on
-	// the same engine after a stop, so the gate is per-run, not per-engine.
-	gl.engine.loopQ.start()
 
 	// Stash this goroutine's ID so RunOnLoop can detect reentrance from
 	// handlers already running on the loop and short-circuit safely.
