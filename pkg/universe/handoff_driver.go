@@ -503,8 +503,9 @@ func (hd *HandoffDriver) handleCrossing(evt CrossingEvent, currentClusterTick ui
 		// PosZ is deliberately NOT normalized and NOT wrapped. Partitioning is
 		// horizontal-only by project decision (§7.4), so there is no vertical
 		// cell boundary for Z to cross — it passes through untouched, and a
-		// Z-only motion must never trigger a handoff. SerializeEntityCore
-		// already put the authoritative value on the frame.
+		// Z-only motion must never trigger a handoff. SerializeEntityCore is
+		// what puts the authoritative value on the frame; until phase 2 it did
+		// not, and this comment asserted otherwise.
 	}
 	// Append registered game components (matches SerializeEntity).
 	// Skip IsTransferCore replicators — their values are already carried by the

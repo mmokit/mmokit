@@ -915,11 +915,11 @@ func (b *Stage) SerializeEntityCore(entity ecs.Entity) *TransferFrame {
 	}
 	if b.posMap.HasAll(entity) {
 		pos := b.posMap.Get(entity)
-		f.PosX, f.PosY = pos.X, pos.Y
+		f.PosX, f.PosY, f.PosZ = pos.X, pos.Y, pos.Z
 	}
 	if b.velMap.HasAll(entity) {
 		vel := b.velMap.Get(entity)
-		f.VelX, f.VelY = vel.X, vel.Y
+		f.VelX, f.VelY, f.VelZ = vel.X, vel.Y, vel.Z
 	}
 	if b.rotMap.HasAll(entity) {
 		f.Rotation = *b.rotMap.Get(entity)
@@ -1004,8 +1004,8 @@ func (b *Stage) SpawnFromTransferCore(data []byte, presence EntityPresence) (ecs
 	}
 
 	entity := b.spawner.NewEntity(
-		&component.Position{X: frame.PosX, Y: frame.PosY},
-		&component.Velocity{X: frame.VelX, Y: frame.VelY},
+		&component.Position{X: frame.PosX, Y: frame.PosY, Z: frame.PosZ},
+		&component.Velocity{X: frame.VelX, Y: frame.VelY, Z: frame.VelZ},
 		&component.NetworkID{ID: frame.NetworkID, Epoch: frame.Epoch},
 		&component.EntityKind{Type: frame.EntityType},
 		&frame.Collider,
