@@ -2,12 +2,14 @@ package universe
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sort"
 	"time"
 
 	"github.com/mlange-42/ark/ecs"
 	"github.com/mmokit/mmokit/pkg/component"
+	"github.com/mmokit/mmokit/pkg/engine"
 )
 
 // Entity conservation across a topology commit.
@@ -71,6 +73,11 @@ func (c *Process) liveEntityCensus() (map[uint32]MeshCellID, error) {
 			return nil
 		})
 		cancel()
+		if errors.Is(err, engine.ErrLoopStopped) {
+			// Retired between the c.Cells snapshot and the scan. Its
+			// entities are accounted for by the commit that retired it.
+			continue
+		}
 		if err != nil {
 			return nil, fmt.Errorf("cell %q: census scan failed: %w", cellKey, err)
 		}

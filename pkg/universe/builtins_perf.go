@@ -2,6 +2,7 @@ package universe
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -158,7 +159,13 @@ func registerPerfSnapshotWorker(reg *cmdsys.Registry, coord *Process) error {
 						snap = buildPerfCellSnapshot(cell, cellHost[cell])
 						return nil
 					})
-					if err != nil {
+					// The loop can exit between the check above and the
+					// enqueue. Take the direct path rather than failing the
+					// verb — returning here dropped every other cell's row
+					// because one cell retired mid-poll.
+					if errors.Is(err, engine.ErrLoopStopped) {
+						snap = buildPerfCellSnapshot(cell, cellHost[cell])
+					} else if err != nil {
 						return nil, err
 					}
 				} else {
@@ -217,7 +224,11 @@ func registerPerfResetWorker(reg *cmdsys.Registry, coord *Process) error {
 						cell.Engine.Perf.Reset()
 						return nil
 					})
-					if err != nil {
+					// Same race as perf.snapshot: a loop that exited has no
+					// concurrent writer left, so reset the profile here.
+					if errors.Is(err, engine.ErrLoopStopped) {
+						cell.Engine.Perf.Reset()
+					} else if err != nil {
 						return nil, err
 					}
 				} else {

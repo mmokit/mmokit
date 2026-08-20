@@ -177,6 +177,10 @@ func (gl *GameLoop) Run(ctx context.Context) {
 	src := gl.newTickSource(sched.Period)
 	defer src.Stop()
 
+	// Reopen the job queue for this run. A cell's loop can be run again on
+	// the same engine after a stop, so the gate is per-run, not per-engine.
+	gl.engine.loopQ.start()
+
 	// Stash this goroutine's ID so RunOnLoop can detect reentrance from
 	// handlers already running on the loop and short-circuit safely.
 	gl.engine.loopGID.mark()
@@ -187,7 +191,15 @@ func (gl *GameLoop) Run(ctx context.Context) {
 	for {
 		select {
 		case <-ctx.Done():
-			gl.engine.Log.Log("engine:loop", "game loop stopped")
+			// Drain before the deferred loopGID.clear() so the loop is
+			// still identifiable as itself while it settles the queue.
+			failed := gl.engine.loopQ.stop()
+			if failed > 0 {
+				gl.engine.Log.Log("engine:loop",
+					"game loop stopped: %d queued job(s) failed with %v", failed, ErrLoopStopped)
+			} else {
+				gl.engine.Log.Log("engine:loop", "game loop stopped")
+			}
 			return
 		case <-src.C():
 			gl.tick(sched.Dt)

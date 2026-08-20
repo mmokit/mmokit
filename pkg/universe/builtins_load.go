@@ -2,10 +2,12 @@ package universe
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
 	"github.com/mmokit/mmokit/pkg/cmdsys"
+	"github.com/mmokit/mmokit/pkg/engine"
 )
 
 type loadArgs struct{}
@@ -56,6 +58,9 @@ func registerLoadBuiltins(reg *cmdsys.Registry, coord *Process) error {
 				)
 				return nil
 			})
+			if errors.Is(err, engine.ErrLoopStopped) {
+				return perfResult{Output: "  cell loop stopped\n"}, nil
+			}
 			if err != nil {
 				return nil, err
 			}

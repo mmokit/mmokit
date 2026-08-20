@@ -319,7 +319,7 @@ func (e *cellTransferExecutor) reactivateSourceViewers(cell *Cell) {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), executorAdminTimeout)
 	defer cancel()
-	_ = cell.Engine.RunOnLoop(ctx, func() error {
+	err := cell.Engine.RunOnLoop(ctx, func() error {
 		// Destination preparation may have pointed a shared same-host VCM
 		// record and the reconnect index at the speculative destination. Restore
 		// both before the source viewer becomes visible again. Cross-host source
@@ -342,6 +342,19 @@ func (e *cellTransferExecutor) reactivateSourceViewers(cell *Cell) {
 		cell.Stage.ReactivateTransferViewers()
 		return nil
 	})
+	if err != nil {
+		// Discarding this was hiding two different failures. ErrLoopStopped
+		// means the source cell is gone, so there are no viewers left to
+		// reactivate and the rollback is complete; anything else means live
+		// viewers stayed deactivated and are now invisible to themselves.
+		if errors.Is(err, engine.ErrLoopStopped) {
+			e.coord.Log.Log(CatMeshCell,
+				"executor: source cell %s retired before viewer reactivation", cell.MeshID())
+		} else {
+			e.coord.Log.Log(CatMeshCell,
+				"executor: reactivating source viewers on %s failed: %v", cell.MeshID(), err)
+		}
+	}
 }
 
 // shipToDestination routes a populated CellTransfer to the destination host.

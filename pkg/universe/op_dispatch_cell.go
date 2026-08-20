@@ -87,7 +87,7 @@ func (p *Process) DispatchCellRoutedOp(
 	// (this file) for the contract; mmokit re-exports the helper.
 	ctx.Bag().Store(opContextStageKey, cell.Stage)
 
-	queued := eng.SubmitLoopJob(func() error {
+	submitErr := eng.SubmitLoopJob(func() error {
 		// Decode the request on the loop goroutine. We could decode
 		// off-loop and capture the *Req pointer, but reflection-based
 		// decode is the same cost either way and keeping it on-loop
@@ -143,13 +143,15 @@ func (p *Process) DispatchCellRoutedOp(
 		return nil
 	})
 
-	if !queued {
-		// Loop queue full — handler did not run. Surface as
-		// OperationError so the client doesn't hang on its pending
-		// promise indefinitely.
+	if submitErr != nil {
+		// The handler did not run and will not run. Surface it as an
+		// OperationError so the client does not hang on a pending promise.
+		// The two causes are worth distinguishing in the message: a full
+		// queue is backpressure and retryable, a stopped loop means the
+		// cell is gone and the client should re-resolve it.
 		return encodeOpError(p.Wire(), requestID, opErrorHandlerFailed,
-			fmt.Sprintf("op %s: cell %s loop queue full",
-				reqType.String(), cellID))
+			fmt.Sprintf("op %s: cell %s not dispatched: %v",
+				reqType.String(), cellID, submitErr))
 	}
 
 	// Successful async dispatch — the cell engine will send the response

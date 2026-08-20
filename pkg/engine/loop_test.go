@@ -2,6 +2,7 @@ package engine
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 
@@ -166,6 +167,12 @@ func TestGameLoop_ContextCancellation(t *testing.T) {
 	eng := newLoopTestEngine()
 	gl := NewGameLoop(eng, nil, nil, Hooks{})
 
+	// A job queued before the loop exits must be resolved by the shutdown
+	// drain rather than left in the buffer with its caller blocked. This
+	// caller passes no deadline, so an orphan hangs the test.
+	job := &loopJob{fn: func() error { return nil }, done: make(chan struct{})}
+	eng.loopQ.ch <- job
+
 	ctx, cancel := context.WithCancel(context.Background())
 
 	done := make(chan struct{})
@@ -182,6 +189,15 @@ func TestGameLoop_ContextCancellation(t *testing.T) {
 		// success
 	case <-time.After(2 * time.Second):
 		t.Fatal("Run did not return after context cancellation")
+	}
+
+	select {
+	case <-job.done:
+		if !errors.Is(job.err, ErrLoopStopped) {
+			t.Fatalf("queued job err = %v, want ErrLoopStopped", job.err)
+		}
+	default:
+		t.Fatal("queued job was orphaned when the loop exited")
 	}
 }
 

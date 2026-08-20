@@ -186,8 +186,8 @@ func TestSubmitLoopJob_NeverAbandoned(t *testing.T) {
 	h.start()
 
 	var ran atomic.Int32
-	if ok := eng.SubmitLoopJob(func() error { ran.Add(1); return nil }); !ok {
-		t.Fatal("SubmitLoopJob reported the job was not queued")
+	if err := eng.SubmitLoopJob(func() error { ran.Add(1); return nil }); err != nil {
+		t.Fatalf("SubmitLoopJob returned %v, want nil", err)
 	}
 	waitForQueued(t, eng, 1)
 	h.tick()
@@ -195,5 +195,269 @@ func TestSubmitLoopJob_NeverAbandoned(t *testing.T) {
 
 	if got := ran.Load(); got != 1 {
 		t.Fatalf("submitted job ran %d times, want 1", got)
+	}
+}
+
+// TestRunOnLoop_StoppedLoopReturnsErrLoopStopped uses context.Background()
+// deliberately. Four production callers — internal/tunectl and
+// internal/wasmctl — pass no deadline at all, so before the gate existed
+// their jobs queued into a channel nobody would ever drain and the caller
+// blocked forever. With no deadline here, a regression hangs to the go test
+// timeout instead of passing quietly.
+func TestRunOnLoop_StoppedLoopReturnsErrLoopStopped(t *testing.T) {
+	eng := newLoopTestEngine()
+	h := newLoopHarness(t, eng, nil, nil, Hooks{})
+	h.start()
+	h.tick()
+	h.stop()
+
+	var ran atomic.Int32
+	err := eng.RunOnLoop(context.Background(), func() error {
+		ran.Add(1)
+		return nil
+	})
+	if !errors.Is(err, ErrLoopStopped) {
+		t.Fatalf("RunOnLoop returned %v, want ErrLoopStopped", err)
+	}
+	if got := ran.Load(); got != 0 {
+		t.Fatalf("job ran %d times on a stopped loop, want 0", got)
+	}
+
+	if err := eng.SubmitLoopJob(func() error { ran.Add(1); return nil }); !errors.Is(err, ErrLoopStopped) {
+		t.Fatalf("SubmitLoopJob returned %v, want ErrLoopStopped", err)
+	}
+	if got := ran.Load(); got != 0 {
+		t.Fatalf("job ran %d times on a stopped loop, want 0", got)
+	}
+}
+
+// TestRunOnLoop_NeverStartedStillQueues pins the other half of the
+// distinction. Cells schedule work into the window between construction and
+// the first tick on purpose — cell_transfer_executor's populate closure and
+// partition's rewire directives both do — so "no loop running" must not mean
+// "will never run". A caller here waits for its context, not ErrLoopStopped.
+func TestRunOnLoop_NeverStartedStillQueues(t *testing.T) {
+	eng := newLoopTestEngine()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	errCh := make(chan error, 1)
+	go func() {
+		errCh <- eng.RunOnLoop(ctx, func() error { return nil })
+	}()
+	waitForQueued(t, eng, 1)
+	cancel()
+
+	if err := <-errCh; !errors.Is(err, context.Canceled) {
+		t.Fatalf("RunOnLoop on a never-started loop returned %v, want context.Canceled", err)
+	}
+	if errors.Is(<-func() chan error {
+		c := make(chan error, 1)
+		c <- eng.SubmitLoopJob(func() error { return nil })
+		return c
+	}(), ErrLoopStopped) {
+		t.Fatal("SubmitLoopJob refused a never-started loop; it must queue")
+	}
+}
+
+// TestLoopQueue_StopFailsQueuedJobs covers the shutdown drain itself, with no
+// callers racing it: every job still queued when the loop exits is failed
+// with ErrLoopStopped, not silently orphaned and not run. Before this,
+// ErrLoopStopped was declared and returned by nothing.
+func TestLoopQueue_StopFailsQueuedJobs(t *testing.T) {
+	q := newLoopQueue(8)
+	var ran atomic.Int32
+	jobs := make([]*loopJob, 3)
+	for i := range jobs {
+		jobs[i] = &loopJob{fn: func() error { ran.Add(1); return nil }, done: make(chan struct{})}
+		q.ch <- jobs[i]
+	}
+
+	if n := q.stop(); n != 3 {
+		t.Fatalf("stop() failed %d jobs, want 3", n)
+	}
+	for i, job := range jobs {
+		select {
+		case <-job.done:
+		default:
+			t.Fatalf("job %d was left unresolved by the drain", i)
+		}
+		if !errors.Is(job.err, ErrLoopStopped) {
+			t.Errorf("job %d err = %v, want ErrLoopStopped", i, job.err)
+		}
+	}
+	if got := ran.Load(); got != 0 {
+		t.Fatalf("%d queued jobs ran during shutdown, want 0", got)
+	}
+}
+
+// TestLoopQueue_StopReleasesWaiters is the same shutdown seen from the
+// callers' side. It deliberately does not assert stop()'s return: a caller
+// whose post-send gate re-check fires first reclaims its own job, so the
+// drain's count is a lower bound. What must hold is that every waiter is
+// released with ErrLoopStopped and no closure runs.
+func TestLoopQueue_StopReleasesWaiters(t *testing.T) {
+	eng := newLoopTestEngine()
+
+	const waiters = 3
+	var ran atomic.Int32
+	errs := make(chan error, waiters)
+	for i := 0; i < waiters; i++ {
+		go func() {
+			errs <- eng.RunOnLoop(context.Background(), func() error {
+				ran.Add(1)
+				return nil
+			})
+		}()
+	}
+	waitForQueued(t, eng, waiters)
+
+	eng.loopQ.stop()
+	for i := 0; i < waiters; i++ {
+		if err := <-errs; !errors.Is(err, ErrLoopStopped) {
+			t.Fatalf("waiter %d returned %v, want ErrLoopStopped", i, err)
+		}
+	}
+	if got := ran.Load(); got != 0 {
+		t.Fatalf("%d queued jobs ran during shutdown, want 0", got)
+	}
+}
+
+// TestLoopQueue_StopSkipsAbandonedJobs — the drain must not resolve a job its
+// caller already claimed; doing so would close an already-settled done.
+func TestLoopQueue_StopSkipsAbandonedJobs(t *testing.T) {
+	eng := newLoopTestEngine()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	errCh := make(chan error, 1)
+	go func() {
+		errCh <- eng.RunOnLoop(ctx, func() error { return nil })
+	}()
+	waitForQueued(t, eng, 1)
+	cancel()
+	if err := <-errCh; !errors.Is(err, context.Canceled) {
+		t.Fatalf("caller returned %v, want context.Canceled", err)
+	}
+
+	if n := eng.loopQ.stop(); n != 0 {
+		t.Fatalf("stop() failed %d jobs, want 0 — the caller already owned it", n)
+	}
+}
+
+// TestSubmitLoopJob_ErrorsOnStoppedAndFull pins the reason this returns an
+// error rather than a bool. The dangerous old answer was `true` on a dead
+// engine: op_dispatch_cell read it as queued and left the client's typed-op
+// promise pending forever.
+func TestSubmitLoopJob_ErrorsOnStoppedAndFull(t *testing.T) {
+	eng := newLoopTestEngine()
+	eng.loopQ = newLoopQueue(1)
+
+	if err := eng.SubmitLoopJob(func() error { return nil }); err != nil {
+		t.Fatalf("first submit returned %v, want nil", err)
+	}
+	if err := eng.SubmitLoopJob(func() error { return nil }); !errors.Is(err, ErrLoopQueueFull) {
+		t.Fatalf("submit into a full queue returned %v, want ErrLoopQueueFull", err)
+	}
+
+	eng.loopQ.stop()
+	if err := eng.SubmitLoopJob(func() error { return nil }); !errors.Is(err, ErrLoopStopped) {
+		t.Fatalf("submit into a stopped queue returned %v, want ErrLoopStopped", err)
+	}
+}
+
+// TestLoopQueue_RestartAfterStop — Cell.Run is re-entered on the same engine,
+// so the gate is per-run. A per-engine latch would leave a restarted cell
+// permanently refusing jobs.
+func TestLoopQueue_RestartAfterStop(t *testing.T) {
+	eng := newLoopTestEngine()
+
+	h := newLoopHarness(t, eng, nil, nil, Hooks{})
+	h.start()
+	h.stop()
+	if err := eng.RunOnLoop(context.Background(), func() error { return nil }); !errors.Is(err, ErrLoopStopped) {
+		t.Fatalf("after stop, RunOnLoop returned %v, want ErrLoopStopped", err)
+	}
+
+	h2 := newLoopHarness(t, eng, nil, nil, Hooks{})
+	h2.start()
+	var ran atomic.Int32
+	errCh := make(chan error, 1)
+	go func() {
+		errCh <- eng.RunOnLoop(context.Background(), func() error { ran.Add(1); return nil })
+	}()
+	waitForQueued(t, eng, 1)
+	h2.tick()
+	if err := <-errCh; err != nil {
+		t.Fatalf("after restart, RunOnLoop returned %v, want nil", err)
+	}
+	h2.stop()
+	if got := ran.Load(); got != 1 {
+		t.Fatalf("job ran %d times after restart, want 1", got)
+	}
+}
+
+// TestRunOnLoop_NilQueue — six Engines in this repository are built as struct
+// literals and carry no queue. They reach RunOnLoop only through gates today;
+// answering ErrLoopStopped is cheaper than a nil dereference behind a gate.
+func TestRunOnLoop_NilQueue(t *testing.T) {
+	eng := &Engine{}
+	if err := eng.RunOnLoop(context.Background(), func() error { return nil }); !errors.Is(err, ErrLoopStopped) {
+		t.Fatalf("RunOnLoop on a queueless engine returned %v, want ErrLoopStopped", err)
+	}
+	if err := eng.SubmitLoopJob(func() error { return nil }); !errors.Is(err, ErrLoopStopped) {
+		t.Fatalf("SubmitLoopJob on a queueless engine returned %v, want ErrLoopStopped", err)
+	}
+}
+
+// TestLoopQueue_ConcurrentStopRace races callers against the drain with no
+// deadline anywhere, so a caller that fails to resolve hangs the test rather
+// than reporting a plausible error. Aimed at the -race gate.
+func TestLoopQueue_ConcurrentStopRace(t *testing.T) {
+	for round := 0; round < 20; round++ {
+		eng := newLoopTestEngine()
+		var ranAfterStop atomic.Int32
+		var stopped atomic.Bool
+
+		const callers = 64
+		var wg sync.WaitGroup
+		start := make(chan struct{})
+		results := make(chan error, callers)
+		for i := 0; i < callers; i++ {
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				<-start
+				results <- eng.RunOnLoop(context.Background(), func() error {
+					if stopped.Load() {
+						ranAfterStop.Add(1)
+					}
+					return nil
+				})
+			}()
+		}
+		var stopWG sync.WaitGroup
+		stopWG.Add(1)
+		go func() {
+			defer stopWG.Done()
+			<-start
+			eng.loopQ.stop()
+			stopped.Store(true)
+		}()
+		close(start)
+		stopWG.Wait()
+		// No second stop() and no drain: a caller whose send won the race
+		// against the closed gate has to resolve itself, via the post-send
+		// re-check or the gate arm of its wait select. If it cannot, this
+		// hangs to the test timeout.
+		wg.Wait()
+		close(results)
+
+		for err := range results {
+			if err != nil && !errors.Is(err, ErrLoopStopped) {
+				t.Fatalf("round %d: caller returned %v, want nil or ErrLoopStopped", round, err)
+			}
+		}
+		if got := ranAfterStop.Load(); got != 0 {
+			t.Fatalf("round %d: %d jobs ran after stop() returned", round, got)
+		}
 	}
 }

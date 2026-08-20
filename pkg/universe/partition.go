@@ -349,11 +349,13 @@ func (c *Process) computeRewireDirectivesLocked(affected []CellID) []rewireDirec
 // Each directive also invalidates the cell's cached BorderDispatcher so
 // the next tick rebuilds its CellViewer set from the new neighbor map.
 //
-// If a cell's game loop is not actively running (e.g. unit-test fixtures
-// that build a Process without calling cell.Run), the bounded loop-job queue
-// can still accept the closure, but it will not execute until a loop drains
-// it. Tests that drive the flow synchronously run at least one tick before
-// asserting.
+// If a cell's game loop has not started yet (e.g. unit-test fixtures that
+// build a Process without calling cell.Run), the bounded loop-job queue still
+// accepts the closure and the loop drains it once it starts. Tests that drive
+// the flow synchronously run at least one tick before asserting. A cell whose
+// loop has already exited is a different case: SubmitLoopJob returns
+// ErrLoopStopped and the directive is logged as dropped rather than silently
+// queued into a channel nobody will drain.
 func (c *Process) applyRewireDirectives(dirs []rewireDirective) {
 	for _, d := range dirs {
 		if d.cell == nil || d.cell.Engine == nil {
@@ -363,7 +365,7 @@ func (c *Process) applyRewireDirectives(dirs []rewireDirective) {
 		target := d.cell
 		// Fire-and-forget: rewire directives are idempotent and the next
 		// full rewireNeighbors pass will converge if this one is dropped.
-		if !target.Engine.SubmitLoopJob(func() error {
+		if err := target.Engine.SubmitLoopJob(func() error {
 			c.mu.Lock()
 			defer c.mu.Unlock()
 			for k := range target.Neighbors {
@@ -376,8 +378,8 @@ func (c *Process) applyRewireDirectives(dirs []rewireDirective) {
 				nb.invalidateBorderDispatcher()
 			}
 			return nil
-		}) {
-			c.Log.Log(CatMeshCell, "coordinator: rewire directive for %s dropped (admin queue full)", target.MeshID())
+		}); err != nil {
+			c.Log.Log(CatMeshCell, "coordinator: rewire directive for %s dropped: %v", target.MeshID(), err)
 		}
 	}
 }

@@ -2,11 +2,13 @@ package universe
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
 	"github.com/mlange-42/ark/ecs"
 	"github.com/mmokit/mmokit/pkg/component"
+	"github.com/mmokit/mmokit/pkg/engine"
 )
 
 // InvariantMode controls how invariant violations are handled.
@@ -268,6 +270,13 @@ var invNoDuplicatePresencePerCell = Invariant{
 				return nil
 			})
 			cancel()
+			if errors.Is(runErr, engine.ErrLoopStopped) {
+				// The cell retired between the snapshot of c.Cells and the
+				// scan. An unscannable cell is not a duplicate-presence
+				// violation, and under InvariantPanic calling it one would
+				// take the process down for an ordinary shutdown race.
+				continue
+			}
 			if runErr != nil {
 				return fmt.Errorf("cell %q: scan failed: %w", cellKey, runErr)
 			}
