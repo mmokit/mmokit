@@ -51,8 +51,9 @@ type WireSource interface {
 // and later which systems and validators run — and never selects types.
 type Dimension = pkguniverse.Dimension
 
-// Dimension profiles. Dimension3D is selectable and not yet implemented:
-// constructing a process with it panics rather than falling back to 2D.
+// Dimension profiles. Selecting an unimplemented one panics at construction
+// rather than falling back to 2D, which would encode two coordinates while
+// the operator believed it encoded three.
 const (
 	Dimension2D = pkguniverse.Dimension2D
 	Dimension3D = pkguniverse.Dimension3D

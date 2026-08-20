@@ -1117,7 +1117,27 @@ func BuildReplicators(w *ecs.World, coord *universe.Process, defs ...universe.En
 	replicators := system.NewReplicatorRegistry()
 	for _, def := range defs {
 		var bindings []system.ComponentBinding
-		bindings = append(bindings, engine.Bindings(w, velScale, sizeScale, cellSize))
+		engineBinding := engine.Bindings(w, velScale, sizeScale, cellSize)
+		bindings = append(bindings, engineBinding)
+
+		// Refuse the one composition that silently produces garbage: a
+		// profile whose engine set already emits orientation, plus a game
+		// that also attaches its own. The 3D set owns orientation; a game
+		// ported from the 2D profile keeps its per-kind QAngle, and the two
+		// together would put a second orientation field in every snapshot
+		// that no generated client reads. This is the only site that can see
+		// both halves.
+		if system.ProvidesOrientation(engineBinding) {
+			for _, cb := range def.NetworkBindings {
+				if system.ProvidesOrientation(cb) {
+					panic(fmt.Sprintf(
+						"mmokit.BuildReplicators: entity kind %d attaches its own orientation binding, "+
+							"but the %s profile's engine bindings already emit orientation — "+
+							"drop the WithExtraBinding(QAngle(...)) from this kind",
+						def.Kind, dimension))
+				}
+			}
+		}
 
 		// Partition game bindings: var-tail bindings go to the end.
 		var regular, varTails []system.ComponentBinding

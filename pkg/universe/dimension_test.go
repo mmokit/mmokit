@@ -30,13 +30,18 @@ func TestNewDefaultsTo2D(t *testing.T) {
 	}
 }
 
-// An unimplemented profile fails at construction, where the panic names the
-// config field — not several frames into schema assembly.
-func TestNewPanicsOnUnimplementedDimension(t *testing.T) {
-	defer func() {
-		if recover() == nil {
-			t.Fatal("New with Dimension3D should panic until the 3D profile exists")
-		}
-	}()
-	New(Config{CellsX: 1, CellsY: 1, Headless: true, Dimension: Dimension3D})
+// The concern this replaces was that an unimplemented profile must fail at
+// construction, where the panic names the config field, rather than several
+// frames into schema assembly. Phase 2 implemented 3D, so the assertion
+// becomes its forward form: constructing with Dimension3D succeeds and the
+// process reports the profile it was actually given.
+//
+// The loud-failure guarantee itself is not lost — TestEngineBindingsForUnknown
+// Panics in pkg/system still covers a dimension with no binding set, which is
+// what a future profile would be.
+func TestNewAcceptsDimension3D(t *testing.T) {
+	c := New(Config{CellsX: 1, CellsY: 1, Headless: true, Dimension: Dimension3D})
+	if got := c.Dimension(); got != Dimension3D {
+		t.Fatalf("Process.Dimension() = %v, want 3d", got)
+	}
 }

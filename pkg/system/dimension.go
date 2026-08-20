@@ -33,11 +33,9 @@ const (
 	// profile implemented today.
 	Dimension2D Dimension = iota
 
-	// Dimension3D is declared, selectable, and not yet implemented — see
-	// EngineBindingsFor. It exists as a value so the selection mechanism has
-	// something to reject loudly rather than something to silently round down
-	// to 2D, which would ship exactly the "valid bytes decoded into the wrong
-	// shape" failure a schema fingerprint exists to prevent.
+	// Dimension3D replicates position as three f32 world coordinates,
+	// velocity and collider extents on three axes, and full orientation as a
+	// smallest-three quaternion. See EngineBindings3D.
 	Dimension3D
 )
 
@@ -81,10 +79,7 @@ func EngineBindingsFor(d Dimension) EngineBindingSet {
 	case Dimension2D:
 		return EngineBindingSet{Dimension: Dimension2D, Bindings: EngineBindings}
 	case Dimension3D:
-		panic("system.EngineBindingsFor: the 3d profile is not implemented yet — " +
-			"the core types are widened (phase 1) but no 3D binding set emits Z, " +
-			"and QAngle still sits outside EngineBindings so orientation is not " +
-			"dimension-selected (see docs/roadmap.md §7.5 phase 2)")
+		return EngineBindingSet{Dimension: Dimension3D, Bindings: EngineBindings3D}
 	default:
 		panic(fmt.Sprintf("system.EngineBindingsFor: unknown dimension %d", uint8(d)))
 	}

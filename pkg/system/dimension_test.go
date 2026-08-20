@@ -1,8 +1,9 @@
 package system
 
 import (
-	"strings"
 	"testing"
+
+	"github.com/mlange-42/ark/ecs"
 )
 
 func TestDimensionString(t *testing.T) {
@@ -33,26 +34,32 @@ func TestDimensionZeroValueIs2D(t *testing.T) {
 	}
 }
 
-// Selecting 3D must fail loudly rather than fall back to 2D. A silent fallback
-// produces a server that encodes two coordinates while its operator believes it
-// encodes three, and nothing downstream can detect that: one component set
-// across profiles means a 2D and a 3D Position have identical type IDs.
-func TestEngineBindingsFor3DPanicsRatherThanFallingBack(t *testing.T) {
-	defer func() {
-		r := recover()
-		if r == nil {
-			t.Fatal("EngineBindingsFor(Dimension3D) returned instead of panicking — " +
-				"a 2D fallback here is the exact undetectable mismatch the profile exists to prevent")
-		}
-		msg, ok := r.(string)
-		if !ok {
-			t.Fatalf("panic value is %T, want string", r)
-		}
-		if !strings.Contains(msg, "not implemented") {
-			t.Errorf("panic message does not say the profile is unimplemented: %q", msg)
-		}
-	}()
-	EngineBindingsFor(Dimension3D)
+// The concern this replaces was that selecting 3D must fail loudly rather than
+// fall back to 2D, because a silent fallback produces a server that encodes two
+// coordinates while its operator believes it encodes three — and nothing
+// downstream can detect that, since one component set across profiles means a
+// 2D and a 3D Position have identical type IDs.
+//
+// Phase 2 implemented the profile, so "panics" is no longer the assertion. The
+// concern is unchanged, and this is its forward form: selecting 3D must return
+// a set that is genuinely 3D. A fallback would now be silent rather than loud,
+// which is strictly worse than the panic it replaced — so it is pinned here.
+func TestEngineBindingsFor3DIsNotTheTwoDSet(t *testing.T) {
+	set := EngineBindingsFor(Dimension3D)
+	if set.Dimension != Dimension3D {
+		t.Fatalf("EngineBindingsFor(Dimension3D).Dimension = %v, want Dimension3D", set.Dimension)
+	}
+	if set.Bindings == nil {
+		t.Fatal("EngineBindingsFor(Dimension3D) has no bindings")
+	}
+
+	world := ecs.NewWorld()
+	got3D := set.Bindings(world, 1000, 500, 2000).snapshotFields()
+	got2D := EngineBindingsFor(Dimension2D).Bindings(world, 1000, 500, 2000).snapshotFields()
+	if len(got3D) == len(got2D) {
+		t.Fatalf("3D and 2D emit the same %d fields (%v vs %v) — 3D fell back to 2D",
+			len(got3D), got3D, got2D)
+	}
 }
 
 func TestEngineBindingsForUnknownPanics(t *testing.T) {

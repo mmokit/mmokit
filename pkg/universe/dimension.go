@@ -9,8 +9,7 @@ import "github.com/mmokit/mmokit/pkg/system"
 // CE-010 part A deleted from the cell geometry.
 type Dimension = system.Dimension
 
-// Dimension profiles. Dimension3D is selectable and not yet implemented; see
-// system.EngineBindingsFor.
+// Dimension profiles. See system.EngineBindingsFor for what each selects.
 const (
 	Dimension2D = system.Dimension2D
 	Dimension3D = system.Dimension3D
