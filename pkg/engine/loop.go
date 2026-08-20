@@ -20,6 +20,19 @@ type Hooks struct {
 	PostTick       func()
 }
 
+// tickSource is the loop's tick clock, narrowed to what Run uses so a test
+// can drive ticks explicitly instead of waiting for wall time.
+type tickSource interface {
+	C() <-chan time.Time
+	Stop()
+}
+
+// realTickSource is the production implementation: a plain time.Ticker.
+type realTickSource struct{ t *time.Ticker }
+
+func (r realTickSource) C() <-chan time.Time { return r.t.C }
+func (r realTickSource) Stop()               { r.t.Stop() }
+
 // GameLoop runs the fixed-timestep tick loop.
 type GameLoop struct {
 	engine      *Engine
@@ -28,6 +41,13 @@ type GameLoop struct {
 	sysTimings  []time.Duration        // reusable scratch buffer
 	systemNames []string               // profiling labels, parallel to systems
 	eventsCh    <-chan net.PlayerEvent // per-cell events (nil = use ConnMgr.Events())
+
+	// newTickSource and now are the loop's only two reads of wall time.
+	// NewGameLoop installs the real implementations; tests substitute
+	// deterministic ones. A GameLoop built as a struct literal must set
+	// both before it ticks.
+	newTickSource func(time.Duration) tickSource
+	now           func() time.Time
 }
 
 // SetEventsCh sets a per-cell events channel. When set, processEvents
@@ -91,6 +111,10 @@ func NewGameLoop(eng *Engine, systems []System, names []string, hooks Hooks) *Ga
 		hooks:       merged,
 		sysTimings:  make([]time.Duration, len(systems)),
 		systemNames: names,
+		newTickSource: func(d time.Duration) tickSource {
+			return realTickSource{t: time.NewTicker(d)}
+		},
+		now: time.Now,
 	}
 }
 
@@ -147,8 +171,8 @@ func (gl *GameLoop) ReplaceSystemLive(name string, s System) bool {
 func (gl *GameLoop) Run(ctx context.Context) {
 	tickInterval := time.Duration(1000/gl.engine.Config.TickRate) * time.Millisecond
 	dt := float32(tickInterval.Seconds())
-	ticker := time.NewTicker(tickInterval)
-	defer ticker.Stop()
+	src := gl.newTickSource(tickInterval)
+	defer src.Stop()
 
 	// Stash this goroutine's ID so RunOnLoop can detect reentrance from
 	// handlers already running on the loop and short-circuit safely.
@@ -162,14 +186,14 @@ func (gl *GameLoop) Run(ctx context.Context) {
 		case <-ctx.Done():
 			gl.engine.Log.Log("engine:loop", "game loop stopped")
 			return
-		case <-ticker.C:
+		case <-src.C():
 			gl.tick(dt)
 		}
 	}
 }
 
 func (gl *GameLoop) tick(dt float32) {
-	tickStart := time.Now()
+	tickStart := gl.now()
 	eng := gl.engine
 	eng.Tick++
 	eng.BeginRemovalTick()
@@ -199,12 +223,12 @@ func (gl *GameLoop) tick(dt float32) {
 
 	// Run all systems in order, measuring each
 	for i, sys := range gl.systems {
-		sysStart := time.Now()
+		sysStart := gl.now()
 		sys.Update(dt)
 		if gl.hooks.AfterSystem != nil {
 			gl.hooks.AfterSystem()
 		}
-		gl.sysTimings[i] = time.Since(sysStart)
+		gl.sysTimings[i] = gl.now().Sub(sysStart)
 	}
 
 	// Pre-flush: pre-removal notifications
@@ -227,7 +251,7 @@ func (gl *GameLoop) tick(dt float32) {
 		gl.hooks.PostTick()
 	}
 
-	tickTotal := time.Since(tickStart)
+	tickTotal := gl.now().Sub(tickStart)
 	eng.Perf.Record(gl.sysTimings, tickTotal)
 
 	if eng.Metrics != nil {
@@ -245,11 +269,11 @@ func (gl *GameLoop) tick(dt float32) {
 // slow admin job from eating the entire tick budget while still giving fast
 // interactive commands instant turnaround.
 func (gl *GameLoop) processAdminCmds() {
-	deadline := time.Now().Add(loopJobBudget)
+	deadline := gl.now().Add(loopJobBudget)
 	for {
 		select {
 		case job := <-gl.engine.loopQ.ch:
-			start := time.Now()
+			start := gl.now()
 			var err error
 			func() {
 				defer func() {
@@ -263,10 +287,10 @@ func (gl *GameLoop) processAdminCmds() {
 			}()
 			job.err = err
 			close(job.done)
-			if d := time.Since(start); d > loopJobSlowThreshold {
+			if d := gl.now().Sub(start); d > loopJobSlowThreshold {
 				gl.engine.Log.Log("engine:loop", "slow admin job: %v", d)
 			}
-			if time.Now().After(deadline) {
+			if gl.now().After(deadline) {
 				return
 			}
 		default:
