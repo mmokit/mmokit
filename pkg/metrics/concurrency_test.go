@@ -38,7 +38,7 @@ func TestEWMAConcurrentUpdateAndValue(t *testing.T) {
 }
 
 func TestCellMetricsConcurrentRecordSnapshotAndRename(t *testing.T) {
-	nm := NewCellMetrics("cell_0_0", 20, nil, nil)
+	nm := NewCellMetrics("cell_0_0", 50*time.Millisecond, nil, nil)
 
 	const iterations = 5000
 	start := make(chan struct{})

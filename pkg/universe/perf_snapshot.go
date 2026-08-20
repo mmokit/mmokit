@@ -96,10 +96,10 @@ func buildPerfCellSnapshot(cell *Cell, hostID string) PerfCellSnapshot {
 // run off the game-loop goroutine.
 func buildPerfCellSnapshotFromStats(cell *Cell, hostID string, stats engine.PerfStats) PerfCellSnapshot {
 	eng := cell.Engine
-	budgetMS := 0
-	if eng.Config.TickRate > 0 {
-		budgetMS = 1000 / eng.Config.TickRate
-	}
+	// The displayed budget is the period the loop actually schedules, not
+	// a second derivation from TickRate — Engine.TickIntervalMs never
+	// returns zero, so the old TickRate > 0 guard is gone with it.
+	budgetMS := int(eng.TickIntervalMs())
 	out := PerfCellSnapshot{
 		HostID:   hostID,
 		CellID:   string(cell.MeshID()),

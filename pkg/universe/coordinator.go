@@ -2730,7 +2730,7 @@ func (c *Process) createNode(cell CellID, spatialBucketSize float32, owningHost 
 	}
 	eng.EntityCounter = makeEntityCounter(eng.ECS)
 
-	nm := metrics.NewCellMetrics(id, platformCfg.TickRate, tickStatsFn, networkStatsFn)
+	nm := metrics.NewCellMetrics(id, time.Duration(eng.TickIntervalMs())*time.Millisecond, tickStatsFn, networkStatsFn)
 	node.Metrics = nm
 	eng.Metrics = nm
 

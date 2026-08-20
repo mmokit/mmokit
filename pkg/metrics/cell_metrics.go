@@ -56,18 +56,24 @@ type CellMetrics struct {
 
 // NewCellMetrics creates a per-node metrics collector.
 //
+// tickBudget is the loop's scheduled tick period — Engine.TickIntervalMs
+// converted to a Duration. It is taken rather than derived from a rate
+// because pkg/engine imports this package, so metrics cannot read the
+// engine's tick schedule back, and a private division here is exactly the
+// kind of drift CE-008 removed. It is load-bearing: it is the denominator
+// of CompositeLoad, which drives split and rebalance decisions.
+//
 // tickStatsFn returns tick profiling stats (from TickProfile.Stats()).
 // networkStatsFn returns cumulative bytes sent/recv and connection count.
 // Both callbacks are called only on Snapshot() — not on every tick.
 func NewCellMetrics(
 	cellID string,
-	tickRate int,
+	tickBudget time.Duration,
 	tickStatsFn func() TickStats,
 	networkStatsFn func() (bytesSent, bytesRecv uint64, connCount int),
 ) *CellMetrics {
-	budget := time.Duration(1000/tickRate) * time.Millisecond
 	nm := &CellMetrics{
-		tickBudget:     budget,
+		tickBudget:     tickBudget,
 		loadEWMA:       NewEWMA(0.1),
 		tickRateEWMA:   NewEWMA(0.1),
 		tickStatsFn:    tickStatsFn,

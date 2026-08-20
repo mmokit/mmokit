@@ -48,7 +48,7 @@ func registerLoadBuiltins(reg *cmdsys.Registry, coord *Process) error {
 					return nil
 				}
 				snap := eng.Metrics.Snapshot()
-				tickBudget := time.Duration(1000/eng.Config.TickRate) * time.Millisecond
+				tickBudget := time.Duration(eng.TickIntervalMs()) * time.Millisecond
 				output = fmt.Sprintf("  load: %.2f (tick=%.1f%% entity=%.1f%%)\n",
 					snap.CompositeLoad,
 					float64(snap.Tick.AvgDuration)/float64(tickBudget)*100,

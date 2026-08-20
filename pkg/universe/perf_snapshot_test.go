@@ -91,3 +91,34 @@ func TestPerfCellSnapshotToText(t *testing.T) {
 		t.Errorf("entities not copied: %d", text.EntitiesReal)
 	}
 }
+
+// TestBuildPerfCellSnapshotBudgetTracksScheduledPeriod pins the admin-visible
+// budget to the period the loop actually schedules rather than to a second
+// truncating derivation from TickRate. At 60Hz the loop schedules 17ms; a
+// snapshot claiming a 16ms budget would report every tick as nearly
+// overbudget against a period the loop never runs.
+func TestBuildPerfCellSnapshotBudgetTracksScheduledPeriod(t *testing.T) {
+	for _, c := range []struct {
+		rate     int
+		budgetMS int
+	}{
+		{rate: 20, budgetMS: 50},
+		{rate: 60, budgetMS: 17},
+		{rate: 0, budgetMS: 50},
+	} {
+		eng := &engine.Engine{
+			Config: engine.Config{TickRate: c.rate},
+			Perf:   engine.NewTickProfile(nil),
+		}
+		cell := NewCell("0_0", CellID{})
+		cell.Engine = eng
+
+		snap := buildPerfCellSnapshot(cell, "host-a")
+		if snap.BudgetMS != c.budgetMS {
+			t.Errorf("rate %d: BudgetMS = %d, want %d", c.rate, snap.BudgetMS, c.budgetMS)
+		}
+		if snap.BudgetMS != int(eng.TickIntervalMs()) {
+			t.Errorf("rate %d: BudgetMS %d != TickIntervalMs %d", c.rate, snap.BudgetMS, eng.TickIntervalMs())
+		}
+	}
+}

@@ -6,7 +6,7 @@ import (
 )
 
 func TestCellMetrics_RecordTick(t *testing.T) {
-	nm := NewCellMetrics("test_node", 20,
+	nm := NewCellMetrics("test_node", 50*time.Millisecond,
 		func() TickStats {
 			return TickStats{
 				Total: TimingStats{Avg: 3 * time.Millisecond, P95: 8 * time.Millisecond},
@@ -56,7 +56,7 @@ func TestCellMetrics_RecordTick(t *testing.T) {
 }
 
 func TestCellMetrics_Overbudget(t *testing.T) {
-	nm := NewCellMetrics("test", 20, nil, nil)
+	nm := NewCellMetrics("test", 50*time.Millisecond, nil, nil)
 
 	// 20Hz = 50ms budget. Record an 80ms tick.
 	nm.RecordTick(80*time.Millisecond, 0, 0, 0, 0)
@@ -76,7 +76,7 @@ func TestCellMetrics_Overbudget(t *testing.T) {
 }
 
 func TestCellMetrics_ByteCounters(t *testing.T) {
-	nm := NewCellMetrics("test", 20, nil, nil)
+	nm := NewCellMetrics("test", 50*time.Millisecond, nil, nil)
 
 	nm.AddBytesSent(100)
 	nm.AddBytesSent(200)
@@ -91,7 +91,7 @@ func TestCellMetrics_ByteCounters(t *testing.T) {
 }
 
 func TestCellMetrics_InterCellCounters(t *testing.T) {
-	nm := NewCellMetrics("test", 20, nil, nil)
+	nm := NewCellMetrics("test", 50*time.Millisecond, nil, nil)
 
 	// Fresh state: all counters zero.
 	snap := nm.InterNodeSnapshot()
@@ -129,7 +129,7 @@ func TestCellMetrics_InterNodeCountersNilSafe(t *testing.T) {
 }
 
 func TestCellMetrics_NilCallbacks(t *testing.T) {
-	nm := NewCellMetrics("test", 20, nil, nil)
+	nm := NewCellMetrics("test", 50*time.Millisecond, nil, nil)
 	nm.RecordTick(5*time.Millisecond, 10, 0, 0, 2)
 
 	// Should not panic
