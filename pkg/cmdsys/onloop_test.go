@@ -47,7 +47,12 @@ func TestOnLoop_PropagatesInnerError(t *testing.T) {
 }
 
 // fakeRunOnLoopFailingRunner returns an error from RunOnLoop itself —
-// e.g. context cancelled before the loop fired.
+// e.g. context cancelled before the loop fired, or the loop already
+// stopped. TestOnLoop_PropagatesRunnerError asserts fn does not run in
+// that case. That was aspirational before CE-008 unit 6: the real
+// RunOnLoop returned the context error while leaving the closure queued,
+// and it ran on a later tick. The per-job claim makes this fake's
+// behaviour the production contract.
 type fakeFailingRunner struct{}
 
 func (f *fakeFailingRunner) RunOnLoop(ctx context.Context, fn func() error) error {

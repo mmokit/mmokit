@@ -16,13 +16,24 @@ import (
 var ErrLoopStopped = errors.New("engine: game loop not running")
 
 // loopJob is a single unit of work queued for execution on the game loop.
-// done is closed after fn has run (or the job was abandoned); err carries
-// the result back to the caller.
+// done is closed after fn has run; err carries the result back to the caller.
+//
+// claimed is the ownership handshake between the waiting caller and the
+// drain. Exactly one of them wins it. The winner decides the job's fate: the
+// loop runs fn and closes done, or the caller abandons the job and the drain
+// skips it. Without it a caller whose context expired returned to its own
+// error handling while its closure stayed queued and ran a tick later,
+// mutating ECS state on behalf of a request that had already given up.
 type loopJob struct {
-	fn   func() error
-	done chan struct{}
-	err  error
+	fn      func() error
+	done    chan struct{}
+	err     error
+	claimed atomic.Bool
 }
+
+// claim takes ownership of the job. It returns true exactly once, to
+// whichever of the caller and the loop gets there first.
+func (j *loopJob) claim() bool { return j.claimed.CompareAndSwap(false, true) }
 
 // loopQueue is the unexported channel the game loop drains every tick.
 // External callers go through RunOnLoop / SubmitLoopJob instead of posting
@@ -69,7 +80,17 @@ func (e *Engine) RunOnLoop(ctx context.Context, fn func() error) error {
 	case <-job.done:
 		return job.err
 	case <-ctx.Done():
-		return ctx.Err()
+		// Abandon the job if the loop has not started it. If the loop got
+		// there first the job is already running and its writes must
+		// complete before this caller proceeds — returning early here is
+		// what let a cancelled transfer tear a cell down underneath a
+		// closure still writing to it. So the deadline is soft by at most
+		// one job's runtime, deliberately.
+		if job.claim() {
+			return ctx.Err()
+		}
+		<-job.done
+		return job.err
 	}
 }
 

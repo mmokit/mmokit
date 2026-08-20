@@ -296,6 +296,15 @@ func (gl *GameLoop) processAdminCmds() {
 	for {
 		select {
 		case job := <-gl.engine.loopQ.ch:
+			if !job.claim() {
+				// The caller's context expired and it abandoned the job.
+				// Running it now would apply a mutation nobody is waiting
+				// for. Skip it, but still respect the drain budget.
+				if gl.now().After(deadline) {
+					return
+				}
+				continue
+			}
 			start := gl.now()
 			var err error
 			func() {
