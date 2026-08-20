@@ -545,7 +545,11 @@ func FormatPerfSnapshotText(s PerfSnapshotText) string {
 	var b strings.Builder
 	budgetMs := s.BudgetMS
 	if budgetMs == 0 && s.TickHz > 0 {
-		budgetMs = 1000 / s.TickHz
+		// FormatPerfSnapshotText is pure over its argument and holds no
+		// engine, so this is the one tick-period derivation that cannot
+		// read Engine.TickIntervalMs. It still goes through the same
+		// schedule so the displayed budget matches the scheduled period.
+		budgetMs = int(newTickSchedule(s.TickHz).PeriodMs)
 	}
 	fmt.Fprintf(&b, "  Tick (%dHz, budget %dms):\n", s.TickHz, budgetMs)
 	fmt.Fprintf(&b, "    avg %s  p50 %s  p95 %s  p99 %s  max %s\n",

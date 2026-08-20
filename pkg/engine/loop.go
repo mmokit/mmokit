@@ -169,9 +169,8 @@ func (gl *GameLoop) ReplaceSystemLive(name string, s System) bool {
 
 // Run starts the fixed-timestep game loop. Blocks until ctx is cancelled.
 func (gl *GameLoop) Run(ctx context.Context) {
-	tickInterval := time.Duration(1000/gl.engine.Config.TickRate) * time.Millisecond
-	dt := float32(tickInterval.Seconds())
-	src := gl.newTickSource(tickInterval)
+	sched := newTickSchedule(gl.engine.Config.TickRate)
+	src := gl.newTickSource(sched.Period)
 	defer src.Stop()
 
 	// Stash this goroutine's ID so RunOnLoop can detect reentrance from
@@ -179,7 +178,7 @@ func (gl *GameLoop) Run(ctx context.Context) {
 	gl.engine.loopGID.mark()
 	defer gl.engine.loopGID.clear()
 
-	gl.engine.Log.Log("engine:loop", "game loop started: %dHz (%.0fms per tick)", gl.engine.Config.TickRate, tickInterval.Seconds()*1000)
+	gl.logSchedule(sched)
 
 	for {
 		select {
@@ -187,9 +186,29 @@ func (gl *GameLoop) Run(ctx context.Context) {
 			gl.engine.Log.Log("engine:loop", "game loop stopped")
 			return
 		case <-src.C():
-			gl.tick(dt)
+			gl.tick(sched.Dt)
 		}
 	}
+}
+
+// logSchedule reports what the loop will actually run at. It names the
+// requested rate and the effective one separately whenever they differ,
+// because a line that prints only the configured rate next to a rounded
+// period states a contradiction and invites the reader past it.
+func (gl *GameLoop) logSchedule(s tickSchedule) {
+	switch {
+	case s.Clamped:
+		gl.engine.Log.Log("engine:loop",
+			"game loop: tick rate %d is out of range; substituting %.0fHz (%dms per tick)",
+			s.Rate, s.EffectiveRate(), s.PeriodMs)
+	case !s.Exact:
+		gl.engine.Log.Log("engine:loop",
+			"game loop started: %dHz requested -> %.2fHz effective (%dms per tick, dt=%.6f); tick periods quantize to whole milliseconds",
+			s.Rate, s.EffectiveRate(), s.PeriodMs, s.Dt)
+		return
+	}
+	gl.engine.Log.Log("engine:loop", "game loop started: %.0fHz (%dms per tick, dt=%.6f)",
+		s.EffectiveRate(), s.PeriodMs, s.Dt)
 }
 
 func (gl *GameLoop) tick(dt float32) {
