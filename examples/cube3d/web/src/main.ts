@@ -3,7 +3,7 @@ import { Cube3dDeltaDecoder } from "../sdk/delta-decoder.js";
 import type { WorldDelta, PlayerEntityAssigned } from "../sdk/broadcasts.js";
 import { FlyInput } from "../sdk/inputs.js";
 import { AdaptivePlaybackController } from "../sdk/_core/playback-controller.js";
-import { classify, cellAt, type CellRect, type Topology } from "./topology";
+import { classify, cellAt, type CellRect, type EntityClass, type Topology } from "./topology";
 import {
   updateEntityFromServer,
   interpolateEntities,
@@ -13,10 +13,13 @@ import {
 } from "./interpolation";
 import { Scene3D, type Renderable } from "./render3d";
 import { axesFromKeys, applyLook, NO_KEYS, type KeyState, type Look } from "./flycontrol";
+import { FpsMeter, countByClass, hudRows, cellLegend, paintHud } from "./hud";
 
 const canvas = document.getElementById("view") as HTMLCanvasElement;
 const status = document.getElementById("status") as HTMLElement;
 const help = document.getElementById("help") as HTMLElement;
+const hud = document.getElementById("hud") as HTMLElement;
+const legend = document.getElementById("cells") as HTMLElement;
 const scene = new Scene3D(canvas);
 
 const keys: KeyState = { ...NO_KEYS };
@@ -26,6 +29,15 @@ let look: Look = { yaw: 0, pitch: -0.6 };
 let myNetID: number | null = null;
 let topology: Topology | null = null;
 let myCell: CellRect | null = null;
+let aoiRadius = 0;
+let lastSeq: number | null = null;
+let connected = false;
+const fps = new FpsMeter();
+
+// On by default, and the reason cube3d exists: this example is a framework
+// fixture you look at, so the state of the mesh is the content. F3 matches
+// what the genre trained everyone to press.
+let debugVisible = true;
 
 /** Per-entity sample ring plus its interpolated render pose. */
 const world = new Map<number, RenderEntity>();
@@ -44,6 +56,14 @@ const KEY_MAP: Record<string, keyof KeyState> = {
 };
 
 addEventListener("keydown", (e) => {
+  if (e.code === "F3") {
+    debugVisible = !debugVisible;
+    scene.setDebugVisible(debugVisible);
+    hud.classList.toggle("hidden", !debugVisible);
+    legend.classList.toggle("hidden", !debugVisible);
+    e.preventDefault();
+    return;
+  }
   const k = KEY_MAP[e.code];
   if (k) { keys[k] = true; e.preventDefault(); }
 });
@@ -67,8 +87,8 @@ scene.resize(innerWidth, innerHeight);
 
 const client = new Cube3dClient({
   url: `ws://${location.host}/ws`,
-  onOpen: () => (status.textContent = "connected"),
-  onClose: () => (status.textContent = "disconnected"),
+  onOpen: () => { connected = true; status.textContent = "connected"; },
+  onClose: () => { connected = false; status.textContent = "disconnected"; },
   onSchemaMismatch: (server, mine) =>
     (status.textContent = `schema mismatch: server ${server}, client ${mine} — regenerate the SDK`),
 });
@@ -82,7 +102,9 @@ client.onPlayerEntityAssigned((msg: PlayerEntityAssigned) => {
 // would be guessing at both.
 client.onDebugInfo((msg) => {
   topology = { cells: msg.topology.cells, baseCellSize: msg.topology.baseCellSize };
+  aoiRadius = msg.aoIRadius;
   scene.setTopology(topology);
+  scene.setAoIRadius(aoiRadius);
 });
 
 // WorldDelta is the typed EVENT carrying raw frame bytes; the decoder owns
@@ -91,6 +113,7 @@ const deltaDecoder = new Cube3dDeltaDecoder();
 client.onWorldDelta((msg: WorldDelta) => {
   const update = deltaDecoder.decode(msg.body, msg.streamEpoch);
   if (!update) return;
+  lastSeq = update.seq;
 
   const arriveMs = performance.now();
   let newest = 0;
@@ -150,8 +173,11 @@ function frame(): void {
   interpolateEntities(world, playback, performance.now());
 
   const renderables: Renderable[] = [];
+  const classes: EntityClass[] = [];
   for (const ent of world.values()) {
     const any = ent.current as any;
+    const kind = classify(topology, myCell, any.netID, ent.renderX, ent.renderY, myNetID);
+    classes.push(kind);
     renderables.push({
       netID: any.netID,
       // The INTERPOLATED pose, not ent.current — rendering the raw snapshot
@@ -161,7 +187,7 @@ function frame(): void {
       worldZ: ent.renderZ,
       rot: ent.renderQuat,
       size: any.width ? any.width / 2 : 10,
-      kind: classify(topology, myCell, any.netID, ent.renderX, ent.renderY, myNetID),
+      kind,
     });
   }
   scene.sync(renderables);
@@ -174,6 +200,31 @@ function frame(): void {
   // while everything in it is smooth.
   if (me) scene.setCamera(me.renderX, me.renderY, me.renderZ, look);
   scene.render();
+
+  // Sampled every frame, not only while the overlay is up: an FPS meter that
+  // only counts the frames you are watching reads high for the first second
+  // after you press F3.
+  const rate = fps.sample(performance.now());
+  if (debugVisible) {
+    const m = playback.metrics;
+    paintHud(hud, hudRows({
+      connected,
+      fps: rate,
+      seq: lastSeq,
+      delayMs: m.currentDelayMs,
+      jitterMs: m.jitterMs,
+      lossRate: m.lossRate,
+      myNetID,
+      myCell,
+      pos: me ? { x: me.renderX, y: me.renderY, z: me.renderZ } : null,
+      counts: countByClass(classes),
+      topology,
+      aoiRadius,
+    }));
+    // Repainted per frame rather than on the topology push: the ▸ marks the
+    // cell YOU are in, and that changes as you fly, not as the mesh changes.
+    paintHud(legend, cellLegend(topology, myCell));
+  }
   requestAnimationFrame(frame);
 }
 requestAnimationFrame(frame);

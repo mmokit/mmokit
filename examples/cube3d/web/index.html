@@ -24,6 +24,20 @@
         background: #1b2430; color: #cfe0f0;
       }
       #help .hint { color: #6d8098; }
+      /* The debug overlay. Fixed-width columns so a value changing sixty
+         times a second does not reflow the panel under your eyes. */
+      #hud, #cells {
+        position: fixed; right: 12px;
+        font: 12px/1.55 ui-monospace, monospace; color: #b7cbe0;
+        background: rgba(0,0,0,.5); padding: 8px 11px; border-radius: 4px;
+        pointer-events: none;
+      }
+      #hud   { top: 10px; min-width: 232px; }
+      #cells { bottom: 12px; min-width: 232px; }
+      .hud-row { display: flex; justify-content: space-between; gap: 14px; white-space: pre; }
+      .hud-row span:first-child { color: #6d8098; }
+      .hud-row.warn span:last-child { color: #e8a44a; }
+      #hud.hidden, #cells.hidden { display: none; }
       /* Dimmed until the pointer is captured, so the first thing you do is
          obvious: the keys do nothing before you click. */
       #help.inactive { opacity: .55; }
@@ -32,17 +46,20 @@
   <body>
     <canvas id="view"></canvas>
     <div id="status">connecting…</div>
+    <div id="hud"></div>
+    <div id="cells"></div>
     <div id="help" class="inactive">
       <div><strong>Click the view first</strong> <span class="hint">— captures the mouse</span></div>
       <div><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> fly <span class="hint">(any one on its own)</span></div>
       <div><kbd>Space</kbd> up &nbsp; <kbd>Shift</kbd> down <span class="hint">(world-vertical)</span></div>
-      <div><kbd>Mouse</kbd> look &nbsp; <kbd>Esc</kbd> release</div>
+      <div><kbd>Mouse</kbd> look &nbsp; <kbd>Esc</kbd> release &nbsp; <kbd>F3</kbd> debug overlay</div>
       <div style="margin-top:6px">
         <span style="color:#e06666">■</span> you &nbsp;
         <span style="color:#6fa8dc">■</span> your cell &nbsp;
         <span style="color:#e8b44a">■</span> another cell
         <span class="hint">(replicated to you across a border)</span>
       </div>
+      <div><span class="hint">bouncing cubes show gravity; drifting ones cross cell lines and change colour when they do</span></div>
     </div>
     <script type="module" src="/src/main.ts"></script>
   </body>
