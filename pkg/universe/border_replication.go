@@ -4,11 +4,9 @@ import (
 	"bytes"
 	"encoding/binary"
 	"iter"
-	"math"
 
 	"github.com/mlange-42/ark/ecs"
 	"github.com/mmokit/mmokit/pkg/component"
-	"github.com/mmokit/mmokit/pkg/quantize"
 	"github.com/mmokit/mmokit/pkg/replication"
 )
 
@@ -150,27 +148,30 @@ func (bd *BorderDispatcher) candidatesFor(nv *CellViewer, currentTick uint64) it
 				continue
 			}
 			// Snapshot values by value so the closure captures stable copies.
-			px, py := pos.X, pos.Y
+			px, py, pz := pos.X, pos.Y, pos.Z
 			radius := collider.Radius
 			nid := *netID
 			ent := entity
 
 			// Read velocity for dead-reckoning (optional — zero if absent).
-			var vx, vy float32
+			var vx, vy, vz float32
 			if velMap.HasAll(entity) {
 				vel := velMap.Get(entity)
-				vx, vy = vel.X, vel.Y
+				vx, vy, vz = vel.X, vel.Y, vel.Z
 			}
 
-			// Read rotation (optional — zero if absent). Carried in the
-			// fixed border header as a 2-byte qangle so neighbor cells
-			// can keep their replica entities in sync with the
-			// authority's facing direction. Without this, a replica
-			// promoted to Live at handoff inherits Rotation=0 and the
-			// entity visibly snaps east on every cell crossing.
-			var rotAngle float32
+			// Read rotation (optional — identity if absent). Carried in
+			// the fixed border header so neighbor cells keep their
+			// replicas in sync with the authority's facing. Without it, a
+			// replica promoted to Live at handoff inherits Rotation=0 and
+			// the entity visibly snaps east on every cell crossing.
+			//
+			// A 2D profile flattens this to a 2-byte yaw, as it always
+			// has; a 3D profile carries the whole quaternion, because
+			// flattening would destroy pitch and roll at every cell line.
+			rot := component.RotationIdentity()
 			if rotMap.HasAll(entity) {
-				rotAngle = rotMap.Get(entity).Yaw()
+				rot = *rotMap.Get(entity)
 			}
 
 			ref := replication.EntityRef{
@@ -186,12 +187,6 @@ func (bd *BorderDispatcher) candidatesFor(nv *CellViewer, currentTick uint64) it
 					nv.MarkInSet(nid.ID)
 					worldX := cellOriginX + px
 					worldY := cellOriginY + py
-					dst = binary.LittleEndian.AppendUint32(dst, math.Float32bits(worldX))
-					dst = binary.LittleEndian.AppendUint32(dst, math.Float32bits(worldY))
-					dst = binary.LittleEndian.AppendUint32(dst, math.Float32bits(radius))
-					dst = binary.LittleEndian.AppendUint16(dst, uint16(quantizeVelI16(vx, 2000)))
-					dst = binary.LittleEndian.AppendUint16(dst, uint16(quantizeVelI16(vy, 2000)))
-					dst = binary.LittleEndian.AppendUint16(dst, quantize.Angle(rotAngle))
 					// Stamp the authoritative producer's tick-aligned cluster
 					// clock so the destination cell caches it on
 					// Replica.ProducedAtMs and relays it verbatim through its
@@ -204,7 +199,8 @@ func (bd *BorderDispatcher) candidatesFor(nv *CellViewer, currentTick uint64) it
 					if bd.base.clusterClock != nil {
 						producedAtMs = bd.base.clusterClock.TickTime(bd.base.eng.TickIntervalMs())
 					}
-					dst = binary.LittleEndian.AppendUint64(dst, producedAtMs)
+					dst = appendBorderHeader(dst, bd.base.Dimension(),
+						worldX, worldY, pz, radius, vx, vy, vz, rot, producedAtMs)
 
 					// Serialize the per-component tail into scratch so we
 					// can compare it against the last-sent tail for this

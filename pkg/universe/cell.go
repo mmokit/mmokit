@@ -9,6 +9,7 @@ import (
 
 	"github.com/google/uuid"
 
+	"github.com/mmokit/mmokit/pkg/component"
 	"github.com/mmokit/mmokit/pkg/engine"
 	"github.com/mmokit/mmokit/pkg/logger"
 	"github.com/mmokit/mmokit/pkg/metrics"
@@ -369,9 +370,11 @@ func (c *Cell) drainPendingPromotes(currentClusterTick uint64) {
 				hasRecent      bool
 				recentPosX     float32
 				recentPosY     float32
+				recentPosZ     float32
 				recentVelX     float32
 				recentVelY     float32
-				recentAngle    float32
+				recentVelZ     float32
+				recentRot      component.Rotation
 				hasRecentRot   bool
 				recentCellX    int32
 				recentCellY    int32
@@ -395,15 +398,21 @@ func (c *Cell) drainPendingPromotes(currentClusterTick uint64) {
 					pos := c.Stage.posMap.Get(ent)
 					recentPosX = pos.X
 					recentPosY = pos.Y
+					recentPosZ = pos.Z
 					hasRecent = true
 				}
 				if c.Stage.velMap.HasAll(ent) {
 					vel := c.Stage.velMap.Get(ent)
 					recentVelX = vel.X
 					recentVelY = vel.Y
+					recentVelZ = vel.Z
 				}
 				if c.Stage.rotMap.HasAll(ent) {
-					recentAngle = c.Stage.rotMap.Get(ent).Yaw()
+					// The WHOLE rotation, not its yaw. Capturing yaw here and
+					// SetYaw-ing it below destroyed pitch and roll on every
+					// boundary handoff — invisible in a 2D profile, total
+					// orientation loss at every cell line in a 3D one.
+					recentRot = *c.Stage.rotMap.Get(ent)
 					hasRecentRot = true
 				}
 				if c.Stage.cellMap.HasAll(ent) {
@@ -475,26 +484,30 @@ func (c *Cell) drainPendingPromotes(currentClusterTick uint64) {
 			if hasRecent {
 				posX := recentPosX
 				posY := recentPosY
+				posZ := recentPosZ
 				if hasRecentStamp && c.Stage.clusterClock != nil {
 					now := c.Stage.clusterClock.TickTime(c.Stage.eng.TickIntervalMs())
 					if now > recentStampMs {
 						aheadS := float32(now-recentStampMs) / 1000.0
 						posX += recentVelX * aheadS
 						posY += recentVelY * aheadS
+						posZ += recentVelZ * aheadS
 					}
 				}
 				if c.Stage.posMap.HasAll(newEnt) {
 					pos := c.Stage.posMap.Get(newEnt)
 					pos.X = posX
 					pos.Y = posY
+					pos.Z = posZ
 				}
 				if c.Stage.velMap.HasAll(newEnt) {
 					vel := c.Stage.velMap.Get(newEnt)
 					vel.X = recentVelX
 					vel.Y = recentVelY
+					vel.Z = recentVelZ
 				}
 				if hasRecentRot && c.Stage.rotMap.HasAll(newEnt) {
-					c.Stage.rotMap.Get(newEnt).SetYaw(recentAngle)
+					*c.Stage.rotMap.Get(newEnt) = recentRot
 				}
 				if hasRecentCC && c.Stage.cellMap.HasAll(newEnt) {
 					cc := c.Stage.cellMap.Get(newEnt)

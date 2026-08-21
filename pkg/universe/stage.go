@@ -1,9 +1,7 @@
 package universe
 
 import (
-	"encoding/binary"
 	"fmt"
-	"math"
 	"reflect"
 	"sync"
 	"sync/atomic"
@@ -15,7 +13,6 @@ import (
 	"github.com/mmokit/mmokit/pkg/component"
 	"github.com/mmokit/mmokit/pkg/coords"
 	"github.com/mmokit/mmokit/pkg/engine"
-	"github.com/mmokit/mmokit/pkg/quantize"
 	"github.com/mmokit/mmokit/pkg/replication"
 	"github.com/mmokit/mmokit/pkg/spatial"
 )
@@ -571,6 +568,21 @@ func (b *Stage) SetSpatialGrid(g *spatial.HashGrid) { b.spatialGrid = g }
 
 // ReplicaNetIDs returns the map tracking replica entities by network ID.
 func (b *Stage) ReplicaNetIDs() map[uint32]ecs.Entity { return b.replicaNetIDs }
+
+// Dimension reports the spatial profile this stage's process was built with,
+// defaulting to Dimension2D for a Stage constructed outside a Process — which
+// is every test fixture, and which is the profile they have always had.
+//
+// It selects the border frame's header layout. That is safe to read locally
+// rather than negotiate because a cluster cannot be mixed: the dimension is
+// part of the schema fingerprint and mesh admission refuses a peer whose
+// fingerprint disagrees.
+func (b *Stage) Dimension() Dimension {
+	if b.coord == nil {
+		return Dimension2D
+	}
+	return b.coord.Dimension()
+}
 
 // ReplicationRegistry returns the registry used for replica scanning.
 func (b *Stage) ReplicationRegistry() *ReplicationRegistry { return b.replRegistry }
@@ -1325,25 +1337,19 @@ func (b *Stage) ApplyBorderFrame(frame replication.Frame, sourceCellID MeshCellI
 	currentSet := make(map[uint32]struct{}, len(frame.Entries))
 	for _, entry := range frame.Entries {
 		currentSet[entry.NetID.ID] = struct{}{}
-		if len(entry.DeltaBuf) < 28 {
+		h, componentTail, ok := parseBorderHeader(entry.DeltaBuf, b.Dimension())
+		if !ok {
 			continue
 		}
-		worldX := math.Float32frombits(binary.LittleEndian.Uint32(entry.DeltaBuf[0:4]))
-		worldY := math.Float32frombits(binary.LittleEndian.Uint32(entry.DeltaBuf[4:8]))
-		radius := math.Float32frombits(binary.LittleEndian.Uint32(entry.DeltaBuf[8:12]))
-		qvx := int16(binary.LittleEndian.Uint16(entry.DeltaBuf[12:14]))
-		qvy := int16(binary.LittleEndian.Uint16(entry.DeltaBuf[14:16]))
-		qangle := binary.LittleEndian.Uint16(entry.DeltaBuf[16:18])
-		producedAtMs := binary.LittleEndian.Uint64(entry.DeltaBuf[18:26])
-		componentTail := entry.DeltaBuf[26:]
-		vx := dequantizeVelI16(qvx, 2000)
-		vy := dequantizeVelI16(qvy, 2000)
-		angle := quantize.UnAngle(qangle)
 
-		localX := worldX - recvCellX
-		localY := worldY - recvCellY
+		localX := h.WorldX - recvCellX
+		localY := h.WorldY - recvCellY
+		// Z has no cell term: partitioning is horizontal-only, so the
+		// value on the wire is already world-absolute.
 
-		b.upsertBorderReplica(entry.NetID.ID, entry.NetID.Epoch, uint8(entry.Kind), localX, localY, radius, vx, vy, angle, sourceCellID, producedAtMs, componentTail)
+		b.upsertBorderReplica(entry.NetID.ID, entry.NetID.Epoch, uint8(entry.Kind),
+			localX, localY, h.WorldZ, h.Radius, h.VX, h.VY, h.VZ, h.Rot,
+			sourceCellID, h.ProducedAtMs, componentTail)
 	}
 
 	// Diff against the previous snapshot from this source. Any netID we
@@ -1420,7 +1426,8 @@ func serialUint32After(candidate, current uint32) bool {
 // the ReplicationRegistry after fixed-field updates.
 func (b *Stage) upsertBorderReplica(
 	netID uint32, epoch uint32, kind uint8,
-	localX, localY, radius, vx, vy, angle float32,
+	localX, localY, localZ, radius, vx, vy, vz float32,
+	rot component.Rotation,
 	sourceCellID MeshCellID,
 	producedAtMs uint64,
 	componentTail []byte,
@@ -1470,14 +1477,21 @@ func (b *Stage) upsertBorderReplica(
 			pos := b.posMap.Get(ent)
 			pos.X = localX
 			pos.Y = localY
+			pos.Z = localZ
 		}
 		if b.velMap.HasAll(ent) {
 			vel := b.velMap.Get(ent)
 			vel.X = vx
 			vel.Y = vy
+			vel.Z = vz
 		}
 		if b.rotMap.HasAll(ent) {
-			b.rotMap.Get(ent).SetYaw(angle)
+			// Assign the whole rotation rather than SetYaw. SetYaw rebuilds
+			// the quaternion from yaw alone, so it destroyed pitch and roll
+			// on every border update — invisible in a 2D profile, where yaw
+			// is all there is, and total orientation loss at every cell line
+			// in a 3D one.
+			*b.rotMap.Get(ent) = rot
 		}
 		// Refresh the collider radius from the frame. Radius is a per-tick
 		// animatable field (the original WASM pulse demo breathed it), so a
@@ -1506,10 +1520,10 @@ func (b *Stage) upsertBorderReplica(
 	for rootCell.Depth > 0 {
 		rootCell = rootCell.Parent()
 	}
-	rotComp := component.RotationFromYaw(angle)
+	rotComp := rot
 	ent := b.replicaCreator.NewEntity(
-		&component.Position{X: localX, Y: localY},
-		&component.Velocity{X: vx, Y: vy},
+		&component.Position{X: localX, Y: localY, Z: localZ},
+		&component.Velocity{X: vx, Y: vy, Z: vz},
 		&rotComp,
 		&component.Collider{Radius: radius},
 		&component.NetworkID{ID: netID, Epoch: epoch},
@@ -1583,7 +1597,8 @@ func (b *Stage) upsertBorderReplicaFromTransfer(frame *TransferFrame, sourceCell
 	// ~1 tick later.
 	b.upsertBorderReplica(
 		frame.NetworkID, frame.Epoch, frame.EntityType,
-		frame.PosX, frame.PosY, frame.Collider.Radius, frame.VelX, frame.VelY, frame.Rotation.Yaw(),
+		frame.PosX, frame.PosY, frame.PosZ, frame.Collider.Radius,
+		frame.VelX, frame.VelY, frame.VelZ, frame.Rotation,
 		sourceCellID, producedAtMs, nil,
 	)
 }

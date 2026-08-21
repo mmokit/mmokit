@@ -16,7 +16,7 @@ func TestRemoveReplicaByNetID_UsesLocalCleanupWithoutTombstone(t *testing.T) {
 	base.Engine().BeginRemovalTick()
 
 	const netID uint32 = 42
-	base.upsertBorderReplica(netID, 1, 3, 10, 20, 4, 1, 2, 0, "cell_1_0", 1000, nil)
+	base.upsertBorderReplica(netID, 1, 3, 10, 20, 0, 4, 1, 2, 0, component.RotationIdentity(), "cell_1_0", 1000, nil)
 	entity, ok := base.replicaNetIDs[netID]
 	if !ok {
 		t.Fatal("replica was not created")
@@ -59,7 +59,7 @@ func TestExpireReplicas_DeferredCleanupIsLocalOnly(t *testing.T) {
 	base.Engine().BeginRemovalTick()
 
 	const netID uint32 = 51
-	base.upsertBorderReplica(netID, 1, 3, 10, 20, 4, 0, 0, 0, "cell_1_0", 1000, nil)
+	base.upsertBorderReplica(netID, 1, 3, 10, 20, 0, 4, 0, 0, 0, component.RotationIdentity(), "cell_1_0", 1000, nil)
 	entity := base.replicaNetIDs[netID]
 	base.replicaMap.Get(entity).TTL = 1
 	grid.Register(spatial.Entry{Entity: entity, X: 10, Y: 20, Radius: 4})

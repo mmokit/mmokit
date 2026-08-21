@@ -153,7 +153,7 @@ func TestCell_MsgHandoff_ReplacesExistingReplicaAtCommitTick(t *testing.T) {
 	world := cell.Engine.ECS
 
 	// Stand up a border-replica for netID=77 via the normal upsert path.
-	cell.Stage.upsertBorderReplica(77, 1, 1, 50, 60, 4, 1, 2, 0, "source", 0, nil)
+	cell.Stage.upsertBorderReplica(77, 1, 1, 50, 60, 0, 4, 1, 2, 0, component.RotationIdentity(), "source", 0, nil)
 
 	// Precondition: replica exists.
 	replicaEnt, presence, ok := cell.Stage.LookupNetID(77)
