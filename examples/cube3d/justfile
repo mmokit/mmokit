@@ -1,0 +1,88 @@
+root := `git rev-parse --show-toplevel`
+bin  := root + "/bin/cube3d"
+
+# cube3d is DB-FREE, and every recipe here keeps it that way — there is no
+# db-up dependency and the schema dump passes an empty --postgres-url. The
+# admin dashboard needs a database, so it is disabled for this example and
+# `admin-build` is deliberately not a dependency of anything below: skipping
+# it is most of the difference between a two-second `just dev` and a slow one.
+# /metrics, /commands and /events are still served on :9101.
+
+# Not delegated to the root `just client-sdk`: that recipe passes a real
+# POSTGRES_URL, and a non-empty one makes Build open the database during
+# --dump-schema. Passing it empty is what keeps this example runnable with no
+# Postgres at all.
+#
+# generate the typed TS client SDK from this example's own schema
+sdk:
+    cd {{root}} && go run ./examples/cube3d --dump-schema --control-listen= --admin-listen= --postgres-url= \
+        | go run ./cmd/sdkgen --out examples/cube3d/web/sdk --core pkg/quantize/ts/delta-decoder-core.ts
+
+# build the Go binary
+build-go:
+    cd {{root}} && go build -o bin/cube3d ./examples/cube3d
+
+# Required, and easy to forget: the client imports three.js at runtime. The
+# repo's TypeScript test suites deliberately need no install — CI verifies
+# that — so nothing else in the tree will have created node_modules for you.
+# `bun install` is idempotent and takes about a second, so `dev` depends on it
+# rather than failing with a module-resolution error.
+#
+# install the web client's dependencies (three.js)
+web-deps:
+    cd {{root}}/examples/cube3d/web && bun install
+
+# build the web client (vite build → web/dist)
+build-web: web-deps
+    cd {{root}}/examples/cube3d/web && bun run build
+
+# regenerate the SDK, then build the web client and the Go binary
+build: sdk build-web build-go
+
+# The binary runs in the FOREGROUND and vite goes to a detached tmux session,
+# which is the same shape the other examples use — and here it is load-bearing
+# rather than stylistic. A non-headless process starts an interactive console;
+# without a TTY its stdin hits EOF immediately and the process shuts itself
+# down. Foreground keeps the console usable, which is where you type
+# `cell split 0_0` to watch a split from the browser. Pass --headless to run
+# without a console (backgrounding, scripts, CI).
+#
+# build + run with the vite dev server (HMR on :5173, Go backend on :8080)
+dev *ARGS: web-deps build-go
+    #!/usr/bin/env bash
+    set -euo pipefail
+    tmux kill-session -t cube3d-vite 2>/dev/null || true
+    tmux new-session -d -s cube3d-vite -c "{{root}}/examples/cube3d/web" 'bun run dev'
+    trap 'tmux kill-session -t cube3d-vite 2>/dev/null' INT TERM EXIT
+    echo "cube3d: vite on http://localhost:5173, backend on :8080, metrics on :9101"
+    {{bin}} {{ARGS}}
+
+# build + run against the built client (web/dist) on :5174 instead of vite
+run *ARGS: build
+    #!/usr/bin/env bash
+    set -euo pipefail
+    tmux kill-session -t cube3d-web 2>/dev/null || true
+    tmux new-session -d -s cube3d-web -c "{{root}}/examples/cube3d/web/dist" 'bunx serve . --single --listen 5174'
+    trap 'tmux kill-session -t cube3d-web 2>/dev/null' INT TERM EXIT
+    echo "cube3d: client on http://localhost:5174, backend on :8080"
+    {{bin}} --cors-origins=http://localhost:5174 {{ARGS}}
+
+# A matching schema fingerprint upgrades (426); a stale one is refused before
+# the upgrade (409), which is the schema gate doing its job.
+#
+# probe a RUNNING server's connection setup
+verify:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    fp="$(grep -oE 'SCHEMA_FINGERPRINT = "[0-9a-f]+"' {{root}}/examples/cube3d/web/sdk/client.ts | grep -oE '[0-9a-f]{8}')"
+    echo "SDK fingerprint: $fp"
+    printf '  /ws?schema=%s -> ' "$fp"
+    curl -s -o /dev/null -w '%{http_code} (want 426 Upgrade Required)\n' "http://localhost:8080/ws?schema=$fp"
+    printf '  /ws?schema=deadbeef -> '
+    curl -s -o /dev/null -w '%{http_code} (want 409 Conflict — the schema gate)\n' "http://localhost:8080/ws?schema=deadbeef"
+    printf '  :9101/metrics -> '
+    curl -s -o /dev/null -w '%{http_code} (want 200)\n' http://localhost:9101/metrics
+
+# remove the Go binary
+clean:
+    rm -f {{root}}/bin/cube3d

@@ -11,11 +11,26 @@ binding set, and survive a cell split with their vertical state intact.
 ## Running it
 
 ```bash
-go run ./examples/cube3d
+cd examples/cube3d && just dev
 ```
 
-No database, no frontend, no client — and that is a property worth keeping,
-because it means the 3D acceptance test runs anywhere `go test` runs:
+Vite serves the browser client on <http://localhost:5173> with HMR; the Go
+backend is on `:8080` and metrics on `:9101`. The server runs in the
+foreground so its console is usable — type `cell split 0_0` there and watch
+the split from the browser. `just run` builds the client instead and serves it
+on `:5174`.
+
+**The server needs a TTY.** A non-headless process starts an interactive
+console, so backgrounded or piped its stdin hits EOF and it shuts down
+immediately. Pass `--headless` when you want it without a console:
+`just dev --headless`.
+
+With a server running, `just verify` probes connection setup — a matching
+schema fingerprint upgrades (426), a stale one is refused before the upgrade
+(409).
+
+**No database.** Every recipe here keeps it that way, which is also why the
+acceptance test runs anywhere `go test` runs:
 
 ```bash
 go test ./examples/cube3d/
