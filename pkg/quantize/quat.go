@@ -56,7 +56,7 @@ const (
 // never transmitted.
 const quatRange = math.Sqrt2 / 2
 
-// Quat encodes a quaternion as a 48-bit smallest-three value.
+// Quat encodes a quaternion as a 56-bit smallest-three value.
 //
 // The input need not be normalized; a zero-norm quaternion encodes as
 // identity, matching component.Rotation's zero value.
@@ -110,7 +110,7 @@ func Quat(x, y, z, w float32) uint64 {
 	return out
 }
 
-// UnQuat decodes a 48-bit smallest-three value back to a unit quaternion.
+// UnQuat decodes a 56-bit smallest-three value back to a unit quaternion.
 func UnQuat(v uint64) (x, y, z, w float32) {
 	largest := int((v >> 54) & 0x3)
 

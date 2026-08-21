@@ -119,3 +119,73 @@ func (r Rotation) Mul(o Rotation) Rotation {
 func (r Rotation) RotateAxis(x, y, z, angle float32) Rotation {
 	return r.Mul(RotationFromAxisAngle(x, y, z, angle))
 }
+
+// SlerpDotThreshold is the |dot| above which Slerp falls back to a
+// normalized linear interpolation.
+//
+// Exported because it is the single most port-divergent line in the whole
+// orientation path: a TypeScript or C# implementation that picks a different
+// threshold produces visibly different intermediate frames near the seam, and
+// nothing else would catch it. The client cores use this value.
+const SlerpDotThreshold = 0.9995
+
+// Slerp interpolates from r to o along the shortest arc.
+//
+// The contract is pinned in unusual detail because three independent
+// implementations of it exist — here, in the TypeScript SDK, and in the C#
+// SDK — and every clause below is somewhere the three could disagree:
+//
+//   - t is clamped to [0,1] inside, so an extrapolating caller gets an
+//     endpoint rather than a quaternion off the arc.
+//   - A negative dot negates o (and the dot) first. q and -q are the same
+//     rotation, so without this the interpolation takes the long way round —
+//     up to a full turn where a fraction of one was intended.
+//   - Above SlerpDotThreshold the arc is short enough that sin(theta)
+//     underflows toward zero and the trigonometric form loses precision, so
+//     it degrades to a normalized lerp. The two branches agree to well within
+//     the quaternion wire quantum at the seam.
+//   - The result is always normalized, and a zero-norm input is identity,
+//     matching the convention quantize.Quat and Rotation.normalized already
+//     use.
+//
+// float64 internals, float32 out, for the reason RotationFromYaw documents.
+func (r Rotation) Slerp(o Rotation, t float32) Rotation {
+	if t <= 0 {
+		return r.normalized()
+	}
+	if t >= 1 {
+		return o.normalized()
+	}
+	a := r.normalized()
+	b := o.normalized()
+
+	ax, ay, az, aw := float64(a.X), float64(a.Y), float64(a.Z), float64(a.W)
+	bx, by, bz, bw := float64(b.X), float64(b.Y), float64(b.Z), float64(b.W)
+
+	dot := ax*bx + ay*by + az*bz + aw*bw
+	if dot < 0 {
+		bx, by, bz, bw = -bx, -by, -bz, -bw
+		dot = -dot
+	}
+	if dot > 1 {
+		dot = 1
+	}
+
+	ft := float64(t)
+	var wa, wb float64
+	if dot > SlerpDotThreshold {
+		wa, wb = 1-ft, ft
+	} else {
+		theta := math.Acos(dot)
+		sin := math.Sin(theta)
+		wa = math.Sin((1-ft)*theta) / sin
+		wb = math.Sin(ft*theta) / sin
+	}
+
+	return Rotation{
+		X: float32(wa*ax + wb*bx),
+		Y: float32(wa*ay + wb*by),
+		Z: float32(wa*az + wb*bz),
+		W: float32(wa*aw + wb*bw),
+	}.normalized()
+}
