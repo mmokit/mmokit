@@ -67,6 +67,85 @@ export function unVel(q: number, scale: number): number {
   return (q / 32767) * scale;
 }
 
+/** Wire width of a smallest-three quaternion, in bytes. */
+export const QUAT_WIRE_SIZE = 7;
+
+/** A unit quaternion. */
+export interface Quat {
+  x: number;
+  y: number;
+  z: number;
+  w: number;
+}
+
+/** The zero rotation. */
+export const QUAT_IDENTITY: Quat = { x: 0, y: 0, z: 0, w: 1 };
+
+/** Bits per transmitted component; 2 + 3*18 = 56 = QUAT_WIRE_SIZE bytes. */
+const QUAT_BITS = 18;
+/** The code assigned to 0.0, and the number of steps either side of it. */
+const QUAT_HALF = (1 << (QUAT_BITS - 1)) - 1; // 131071
+/** Bound on the three transmitted components: the largest is never sent. */
+const QUAT_RANGE = Math.SQRT2 / 2;
+
+function unQuatComponent(code: number): number {
+  return ((code - QUAT_HALF) / QUAT_HALF) * QUAT_RANGE;
+}
+
+/**
+ * Decode a smallest-three quaternion from `QUAT_WIRE_SIZE` big-endian bytes.
+ *
+ * The largest-magnitude component is not transmitted; it is reconstructed from
+ * the unit-length constraint, and is always non-negative because the encoder
+ * sign-canonicalizes (q and -q are the same rotation, so it is free).
+ *
+ * Read PER BYTE, deliberately. The packed value is 56 bits, which exceeds
+ * JavaScript's 2^53 safe integer range — assembling it into one Number would
+ * silently lose the low bits, and BigInt would allocate on a per-entity,
+ * per-tick path. Each extracted component is 18 bits, comfortably inside the
+ * 32-bit range the bitwise operators work in.
+ *
+ * Every output is passed through Math.fround: the server's authority is
+ * float32, and the cross-language golden compares exact bit patterns.
+ */
+export function unQuat(data: Uint8Array, offset: number): Quat {
+  const b0 = data[offset];
+  const b1 = data[offset + 1];
+  const b2 = data[offset + 2];
+  const b3 = data[offset + 3];
+  const b4 = data[offset + 4];
+  const b5 = data[offset + 5];
+  const b6 = data[offset + 6];
+
+  const largest = b0 >>> 6;
+  const c0 = ((b0 & 0x3f) << 12) | (b1 << 4) | (b2 >>> 4);
+  const c1 = ((b2 & 0x0f) << 14) | (b3 << 6) | (b4 >>> 2);
+  const c2 = ((b4 & 0x03) << 16) | (b5 << 8) | b6;
+
+  const q = [0, 0, 0, 0];
+  const codes = [c0, c1, c2];
+  let ci = 0;
+  let sumSq = 0;
+  for (let i = 0; i < 4; i++) {
+    if (i === largest) continue;
+    const v = unQuatComponent(codes[ci++]);
+    q[i] = v;
+    sumSq += v * v;
+  }
+  // Clamped, not bare: a value no encoder emits can push sumSq past 1, and
+  // sqrt of a negative is NaN. The golden corpus carries one such case.
+  q[largest] = Math.sqrt(Math.max(0, 1 - sumSq));
+
+  const n = Math.sqrt(q[0] * q[0] + q[1] * q[1] + q[2] * q[2] + q[3] * q[3]);
+  if (n === 0) return { ...QUAT_IDENTITY };
+  return {
+    x: Math.fround(q[0] / n),
+    y: Math.fround(q[1] / n),
+    z: Math.fround(q[2] / n),
+    w: Math.fround(q[3] / n),
+  };
+}
+
 /**
  * Dequantize a signed int16 relative position back to [-halfRange, halfRange].
  * `q` should already be sign-extended (use readInt16).

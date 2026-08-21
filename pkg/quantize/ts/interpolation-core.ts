@@ -16,6 +16,8 @@
  * fields below; games may store a richer per-entity record so long
  * as it carries a `samples: Sample[]` ring.
  */
+import type { Quat } from "./delta-decoder-core.js";
+
 export interface Sample {
   worldX: number;
   worldY: number;
@@ -23,6 +25,15 @@ export interface Sample {
   velY: number;
   rotation: number;
   producedAtMs: number;
+  /**
+   * Optional 3D state. A 2D profile omits all three and every path below
+   * behaves exactly as it did — which is what keeps a 2D client's render
+   * loop untouched by the 3D profile existing.
+   */
+  worldZ?: number;
+  velZ?: number;
+  /** Full orientation. Takes precedence over `rotation` when present. */
+  quat?: Quat;
   /**
    * Optional authority generation for this entity. When present, newer
    * generations supersede older in-flight samples even if those samples
@@ -43,6 +54,9 @@ export interface InterpolationResult {
   renderX: number;
   renderY: number;
   renderRot: number;
+  /** Present only when the samples carried 3D state. */
+  renderZ?: number;
+  renderQuat?: Quat;
   /** How the returned pose was produced. */
   mode: "interpolate" | "extrapolate" | "hold";
   /** Velocity-projection time used by the returned pose. */
@@ -70,6 +84,68 @@ function authorityEpochRelation(
 }
 
 /** Linear interpolation between a and b at fraction t in [0, 1]. */
+/**
+ * The |dot| above which slerpQuat falls back to a normalized lerp.
+ *
+ * Kept identical to component.SlerpDotThreshold in the Go reference, which
+ * exports it for exactly this reason: it is the single most port-divergent
+ * line in the orientation path, and a client that picked a different value
+ * would produce visibly different intermediate frames near the seam with
+ * nothing else to catch it.
+ */
+export const SLERP_DOT_THRESHOLD = 0.9995;
+
+/**
+ * Interpolate from a to b along the shortest arc.
+ *
+ * Mirrors component.Rotation.Slerp clause for clause: t clamps to [0,1]; a
+ * negative dot negates the target first, because q and -q are the same
+ * rotation and without it the interpolation takes the long way round; above
+ * SLERP_DOT_THRESHOLD it degrades to a normalized lerp, where sin(theta)
+ * underflows and the trigonometric form loses precision; the result is always
+ * normalized and a zero-norm input is identity.
+ */
+export function slerpQuat(a: Quat, b: Quat, t: number): Quat {
+  if (t <= 0) return normalizeQuat(a);
+  if (t >= 1) return normalizeQuat(b);
+
+  const na = normalizeQuat(a);
+  const nb = normalizeQuat(b);
+
+  let bx = nb.x, by = nb.y, bz = nb.z, bw = nb.w;
+  let dot = na.x * bx + na.y * by + na.z * bz + na.w * bw;
+  if (dot < 0) {
+    bx = -bx; by = -by; bz = -bz; bw = -bw;
+    dot = -dot;
+  }
+  if (dot > 1) dot = 1;
+
+  let wa: number;
+  let wb: number;
+  if (dot > SLERP_DOT_THRESHOLD) {
+    wa = 1 - t;
+    wb = t;
+  } else {
+    const theta = Math.acos(dot);
+    const sin = Math.sin(theta);
+    wa = Math.sin((1 - t) * theta) / sin;
+    wb = Math.sin(t * theta) / sin;
+  }
+
+  return normalizeQuat({
+    x: wa * na.x + wb * bx,
+    y: wa * na.y + wb * by,
+    z: wa * na.z + wb * bz,
+    w: wa * na.w + wb * bw,
+  });
+}
+
+function normalizeQuat(q: Quat): Quat {
+  const n = Math.sqrt(q.x * q.x + q.y * q.y + q.z * q.z + q.w * q.w);
+  if (n === 0) return { x: 0, y: 0, z: 0, w: 1 };
+  return { x: q.x / n, y: q.y / n, z: q.z / n, w: q.w / n };
+}
+
 export function lerp(a: number, b: number, t: number): number {
   return a + (b - a) * t;
 }
@@ -202,6 +278,8 @@ export function interpolateRing(
       renderX: s.worldX,
       renderY: s.worldY,
       renderRot: s.rotation,
+      ...(s.worldZ !== undefined ? { renderZ: s.worldZ } : {}),
+      ...(s.quat !== undefined ? { renderQuat: s.quat } : {}),
       mode: "hold",
       extrapolatedMs: 0,
     };
@@ -223,6 +301,8 @@ export function interpolateRing(
       renderX: s0.worldX,
       renderY: s0.worldY,
       renderRot: s0.rotation,
+      ...(s0.worldZ !== undefined ? { renderZ: s0.worldZ } : {}),
+      ...(s0.quat !== undefined ? { renderQuat: s0.quat } : {}),
       mode: "hold",
       extrapolatedMs: 0,
     };
@@ -235,6 +315,11 @@ export function interpolateRing(
       renderX: s1.worldX + s1.velX * extS,
       renderY: s1.worldY + s1.velY * extS,
       renderRot: s1.rotation,
+      // Orientation is HELD rather than extrapolated, matching renderRot.
+      // Projecting a rotation forward needs an angular velocity the wire
+      // does not carry, and guessing one produces visible overshoot.
+      ...(s1.worldZ !== undefined ? { renderZ: s1.worldZ + (s1.velZ ?? 0) * extS } : {}),
+      ...(s1.quat !== undefined ? { renderQuat: s1.quat } : {}),
       mode: extMs > 0 && requestedMs <= maxExtrapolateMs ? "extrapolate" : "hold",
       extrapolatedMs: extMs,
     };
@@ -244,6 +329,12 @@ export function interpolateRing(
     renderX: lerp(s0.worldX, s1.worldX, t),
     renderY: lerp(s0.worldY, s1.worldY, t),
     renderRot: lerpAngle(s0.rotation, s1.rotation, t),
+    ...(s0.worldZ !== undefined && s1.worldZ !== undefined
+      ? { renderZ: lerp(s0.worldZ, s1.worldZ, t) }
+      : {}),
+    ...(s0.quat !== undefined && s1.quat !== undefined
+      ? { renderQuat: slerpQuat(s0.quat, s1.quat, t) }
+      : {}),
     mode: "interpolate",
     extrapolatedMs: 0,
   };
