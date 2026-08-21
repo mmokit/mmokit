@@ -17,6 +17,8 @@ namespace Mmokit.Sdk.Core.Tests
         public FrameCase InputAckFrame { get; set; } = new();
         public PlaybackCase Playback { get; set; } = new();
         public PredictionCase Prediction { get; set; } = new();
+        public QuatCase[] Quat { get; set; } = Array.Empty<QuatCase>();
+        public SlerpCase[] Slerp { get; set; } = Array.Empty<SlerpCase>();
     }
 
     /// Cross-language pin for AdaptivePlaybackController. Every step feeds one
@@ -65,6 +67,36 @@ namespace Mmokit.Sdk.Core.Tests
 
     /// Cross-language pin for PredictionBuffer, including the uint32 wrap and
     /// capacity overflow.
+    /// <summary>
+    /// One smallest-three quaternion decode. Bits carries the exact float32
+    /// bit patterns of the reference output, so a port is compared on exact
+    /// identity rather than a tolerance — a tolerance would hide precisely
+    /// the rounding disagreement this corpus exists to catch.
+    /// </summary>
+    public class QuatCase
+    {
+        public string Name { get; set; } = "";
+        /// <summary>The 7 wire bytes, big-endian, as the server emits them.</summary>
+        public string Hex { get; set; } = "";
+        /// <summary>The same value as a 56-bit integer. Documentation only.</summary>
+        public ulong Packed { get; set; }
+        public double X { get; set; }
+        public double Y { get; set; }
+        public double Z { get; set; }
+        public double W { get; set; }
+        public uint[] Bits { get; set; } = Array.Empty<uint>();
+    }
+
+    /// <summary>One orientation interpolation; a and b are {x,y,z,w}.</summary>
+    public class SlerpCase
+    {
+        public string Name { get; set; } = "";
+        public double[] A { get; set; } = Array.Empty<double>();
+        public double[] B { get; set; } = Array.Empty<double>();
+        public double T { get; set; }
+        public double[] Out { get; set; } = Array.Empty<double>();
+    }
+
     public class PredictionCase
     {
         public int MaxPending { get; set; }

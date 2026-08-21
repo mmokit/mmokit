@@ -9,10 +9,14 @@ import (
 	"encoding/binary"
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"log"
 	"math"
+	"math/rand/v2"
 	"os"
 	"path/filepath"
+
+	"github.com/mmokit/mmokit/pkg/component"
 
 	"github.com/mmokit/mmokit/pkg/net/udpproto"
 	"github.com/mmokit/mmokit/pkg/quantize"
@@ -40,6 +44,44 @@ type Manifest struct {
 	ClockSync     ClockSyncCase     `json:"clockSync"`
 	Playback      PlaybackCase      `json:"playback"`
 	Prediction    PredictionCase    `json:"prediction"`
+	// Quat and Slerp pin the 3D orientation path. Three independent
+	// implementations of smallest-three decode and of slerp exist — Go,
+	// TypeScript and C# — and the two places they diverge first are the
+	// positive-root reconstruction of the dropped component and slerp's
+	// threshold branch. Both are corpus'd deliberately below.
+	Quat  []QuatCase  `json:"quat"`
+	Slerp []SlerpCase `json:"slerp"`
+}
+
+// QuatCase pins one smallest-three decode.
+//
+// Bits carries math.Float32bits of each output component, so a port is
+// compared on EXACT float32 identity rather than a tolerance. A tolerance
+// would hide precisely the rounding disagreement this corpus exists to catch.
+type QuatCase struct {
+	Name string `json:"name"`
+	// Hex is the 7 wire bytes, big-endian, as SnapshotWriter.QQuat emits them.
+	Hex string `json:"hex"`
+	// Packed is the same value as a 56-bit integer. Documentation only — a
+	// port should decode Hex, because that is what arrives on the wire.
+	Packed uint64 `json:"packed"`
+
+	X float64 `json:"x"`
+	Y float64 `json:"y"`
+	Z float64 `json:"z"`
+	W float64 `json:"w"`
+
+	Bits [4]uint32 `json:"bits"`
+}
+
+// SlerpCase pins one interpolation. a and b are unit quaternions in
+// {x,y,z,w} order; out is component.Rotation.Slerp(a, b, t).
+type SlerpCase struct {
+	Name string     `json:"name"`
+	A    [4]float64 `json:"a"`
+	B    [4]float64 `json:"b"`
+	T    float64    `json:"t"`
+	Out  [4]float64 `json:"out"`
 }
 
 // ClockSyncCase pins the sliding-window-max offset estimator across langs.
@@ -272,8 +314,126 @@ func be16(v uint16) []byte { b := make([]byte, 2); binary.BigEndian.PutUint16(b,
 func be32(v uint32) []byte { b := make([]byte, 4); binary.BigEndian.PutUint32(b, v); return b }
 func be64(v uint64) []byte { b := make([]byte, 8); binary.BigEndian.PutUint64(b, v); return b }
 
+// quatCase builds one QuatCase from a packed 56-bit value.
+func quatCase(name string, packed uint64) QuatCase {
+	x, y, z, w := quantize.UnQuat(packed)
+	var buf [8]byte
+	binary.BigEndian.PutUint64(buf[:], packed<<8) // left-align 56 bits into 7 bytes
+	return QuatCase{
+		Name:   name,
+		Hex:    hex.EncodeToString(buf[:quantize.QuatWireSize]),
+		Packed: packed,
+		X:      float64(x), Y: float64(y), Z: float64(z), W: float64(w),
+		Bits: [4]uint32{
+			math.Float32bits(x), math.Float32bits(y),
+			math.Float32bits(z), math.Float32bits(w),
+		},
+	}
+}
+
+// quatCaseFrom builds a QuatCase by encoding a rotation first.
+func quatCaseFrom(name string, x, y, z, w float32) QuatCase {
+	return quatCase(name, quantize.Quat(x, y, z, w))
+}
+
+// shoemakeRotation returns a uniformly-distributed random rotation.
+func shoemakeRotation(rng *rand.Rand) (float32, float32, float32, float32) {
+	u1, u2, u3 := rng.Float64(), rng.Float64(), rng.Float64()
+	s1, s2 := math.Sqrt(1-u1), math.Sqrt(u1)
+	return float32(s1 * math.Sin(2*math.Pi*u2)),
+		float32(s1 * math.Cos(2*math.Pi*u2)),
+		float32(s2 * math.Sin(2*math.Pi*u3)),
+		float32(s2 * math.Cos(2*math.Pi*u3))
+}
+
+func slerpCase(name string, a, b component.Rotation, t float64) SlerpCase {
+	out := a.Slerp(b, float32(t))
+	return SlerpCase{
+		Name: name,
+		A:    [4]float64{float64(a.X), float64(a.Y), float64(a.Z), float64(a.W)},
+		B:    [4]float64{float64(b.X), float64(b.Y), float64(b.Z), float64(b.W)},
+		T:    t,
+		Out:  [4]float64{float64(out.X), float64(out.Y), float64(out.Z), float64(out.W)},
+	}
+}
+
+// buildQuatCases assembles the smallest-three corpus.
+func buildQuatCases() []QuatCase {
+	var out []QuatCase
+
+	// The four vectors pinned in pkg/quantize/quat_test.go, which cover
+	// dropped-component indices 3, 0, 2 and 0.
+	out = append(out,
+		quatCaseFrom("identity", 0, 0, 0, 1),
+		quatCaseFrom("180-about-x", 1, 0, 0, 0),
+		quatCaseFrom("90-about-z", 0, 0, 0.70710678, 0.70710678),
+		quatCaseFrom("120-about-1,1,1", 0.5, 0.5, 0.5, 0.5),
+		// Index 1 is unreachable from the four above, so a port that
+		// mis-shifts the Y slot would pass without this.
+		quatCaseFrom("180-about-y", 0, 1, 0, 0),
+		// Sign canonicalization: w=-1 is the same rotation as identity and
+		// must produce identity's bytes exactly.
+		quatCaseFrom("negated-identity", 0, 0, 0, -1),
+		// The component range endpoints, where the quantizer clamps.
+		quatCaseFrom("half-sqrt2-positive", 0, 0, 0.7071068, 0.7071068),
+		quatCaseFrom("half-sqrt2-negative", 0, 0, -0.7071068, 0.7071068),
+		// Hostile: no encoder emits this, and it makes sumSq exceed 1 so the
+		// dropped component's radicand goes negative. A port that calls sqrt
+		// on it returns NaN and fails the bit compare; the reference clamps
+		// to zero.
+		quatCase("saturated-all-ones", 0x00ffffffffffff),
+	)
+
+	rng := rand.New(rand.NewPCG(0x5EED, 0xC0FFEE))
+	for i := 0; i < 128; i++ {
+		x, y, z, w := shoemakeRotation(rng)
+		out = append(out, quatCaseFrom(fmt.Sprintf("uniform-%03d", i), x, y, z, w))
+	}
+	return out
+}
+
+// buildSlerpCases assembles the interpolation corpus.
+func buildSlerpCases() []SlerpCase {
+	identity := component.RotationIdentity()
+	about180X := component.RotationFromAxisAngle(1, 0, 0, math.Pi)
+
+	var out []SlerpCase
+	for _, t := range []float64{0, 0.25, 0.5, 0.75, 1, -0.5, 1.5} {
+		out = append(out, slerpCase(fmt.Sprintf("identity-to-180x-t%g", t), identity, about180X, t))
+	}
+
+	// Opposite hemispheres: dot < 0, so the shortest-arc negation fires. A
+	// port missing it sweeps nearly a full turn instead of a fraction.
+	near := component.RotationFromAxisAngle(0, 0, 1, 0.4)
+	flipped := component.Rotation{X: -near.X, Y: -near.Y, Z: -near.Z, W: -near.W}
+	out = append(out, slerpCase("opposite-hemisphere", identity, flipped, 0.5))
+
+	// Either side of SlerpDotThreshold — the branch seam, and the single most
+	// port-divergent line in the orientation path.
+	for _, dot := range []float64{0.99949, 0.99951} {
+		theta := 2 * math.Acos(dot)
+		b := component.RotationFromAxisAngle(0, 0, 1, float32(theta))
+		out = append(out, slerpCase(fmt.Sprintf("threshold-dot-%g", dot), identity, b, 0.5))
+	}
+
+	rng := rand.New(rand.NewPCG(0xA11CE, 0xB0B))
+	for i := 0; i < 64; i++ {
+		ax, ay, az, aw := shoemakeRotation(rng)
+		bx, by, bz, bw := shoemakeRotation(rng)
+		out = append(out, slerpCase(
+			fmt.Sprintf("uniform-pair-%02d", i),
+			component.Rotation{X: ax, Y: ay, Z: az, W: aw},
+			component.Rotation{X: bx, Y: by, Z: bz, W: bw},
+			0.37,
+		))
+	}
+	return out
+}
+
 func main() {
 	m := Manifest{}
+	m.Quat = buildQuatCases()
+	m.Slerp = buildSlerpCases()
 
 	// --- Dequant cases: quantize a known float in Go, record q + expected un* ---
 	angQ := quantize.Angle(1.0)
