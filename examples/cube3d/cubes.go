@@ -77,6 +77,11 @@ func spawnDrifter(stage *mmokit.Stage, i int, x, y float32) {
 		// one height while it crosses cell lines, so that a Z arriving wrong
 		// on the far side of a handoff is unambiguous.
 		mmokit.Motion{Mode: mmokit.MoveFly},
+		// Zero Launch: this cube does not bounce. Explicit because it would
+		// arrive with one anyway after its first cell crossing — see
+		// CubeBundle — and a component that appears from nowhere partway
+		// through a session is worse than one that was always there.
+		Bounce{},
 		Spin{X: 0.9, Y: 0.2, Z: 0.4},
 	)
 }

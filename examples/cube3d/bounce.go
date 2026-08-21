@@ -92,6 +92,12 @@ type BounceSystem struct {
 
 func (s *BounceSystem) Update(dt float32) {
 	for _, cube := range s.cubes.Iter {
+		// A zero Launch is a cube that does not bounce. Every cube carries
+		// the component — a kind's component set is uniform after a transfer
+		// — so this, not the component's presence, is the test.
+		if cube.Bounce.Launch <= 0 {
+			continue
+		}
 		// Rising, or still above the plane: nothing to do. The velocity
 		// test is not redundant with the height test — without it the tick
 		// immediately after a re-launch, when the cube is still at ground

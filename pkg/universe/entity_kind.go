@@ -17,6 +17,18 @@ import (
 //     (used for transfer-preserved server-side bookkeeping like PlacedID).
 //   - KindComponentLocal: NOT registered for cross-cell transfer; auto-added with
 //     zero value on transfer receive (used for transient host-local state).
+//
+// A KIND'S COMPONENT SET IS UNIFORM AFTER A TRANSFER, whatever the mode. The
+// destination calls Stage.EnsureEntityKindComponents, which adds a zero value
+// for every component the kind declares. So Optional means "the caller may omit
+// this at spawn", NOT "an entity of this kind may lack this". An entity spawned
+// without one acquires it, silently, the first time it crosses a cell line —
+// and only the entities that happened to cross, so half a population diverges
+// from the other half with nothing in the logs.
+//
+// Model "some entities of this kind are special" with a value inside the
+// component (a zero field that means "not this one"), never with the
+// component's absence.
 type KindComponentMode uint8
 
 const (

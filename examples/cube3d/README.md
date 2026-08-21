@@ -129,6 +129,15 @@ test green.
   wire bytes, though it does rotate the schema fingerprint: that hash gates
   mesh admission as well as client decoding, and for the mesh half the
   component table matters even at zero bytes.
+- **Every cube carries a `Bounce`, and a zero `Launch` means "does not
+  bounce".** A kind's component set is uniform after a transfer: the
+  destination calls `EnsureEntityKindComponents`, which adds a zero value for
+  every component the kind declares. `mmokit:"optional"` therefore means "the
+  caller may omit it at spawn", not "this entity may lack it". Marking `Bounce`
+  optional and omitting it for drifters is how this was first written, and
+  within two seconds the eight drifters that had crossed a boundary were
+  carrying a `Bounce` nobody spawned — while the ones that had not crossed were
+  not. `TestCube3D_EveryCubeCarriesBounce` pins the fix.
 - **Drift headings come from the golden angle, not from `rand`.** Every host
   bootstraps its own cells, and a random heading would give the same cube a
   different one on each host in a distributed run.

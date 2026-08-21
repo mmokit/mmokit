@@ -61,14 +61,23 @@ type Spin struct {
 // Position, Velocity, Rotation and Collider are framework-owned and
 // RegisterKind rejects them as bundle fields.
 //
-// Bounce is OPTIONAL because only half the field bounces, and it is a
-// registered kind component rather than local state because a cube must keep
-// its apex across a cell boundary. It has no net: tag, so it costs nothing on
-// the wire — this bundle's client-visible layout is Spin's three fields, the
-// same as before it was added.
+// Bounce is on EVERY cube, including the drifting half that never bounces,
+// and a zero Launch is what "does not bounce" means. That is not a style
+// choice: a kind's component set is uniform after a transfer. The destination
+// calls Stage.EnsureEntityKindComponents, which adds a zero value for every
+// component the kind declares — so declaring Bounce `mmokit:"optional"` and
+// omitting it at spawn does NOT keep a drifter without one. It keeps it
+// without one until the first time it crosses a cell line, and then eight of
+// them silently acquire a Bounce nobody spawned. Making the field's zero mean
+// something is the version where both states are reachable on purpose.
+//
+// It is a registered kind component rather than local state because a bouncing
+// cube must keep its own apex across a boundary. It has no net: tag, so it
+// costs nothing on the wire — this bundle's client-visible layout is Spin's
+// three fields, the same as before it was added.
 type CubeBundle struct {
 	Spin   *Spin
-	Bounce *Bounce `mmokit:"optional"`
+	Bounce *Bounce
 }
 
 // NewProcess builds the cube3d process.

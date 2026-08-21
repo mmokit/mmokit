@@ -442,3 +442,77 @@ func TestCube3D_GravityMovesTheBouncers(t *testing.T) {
 		t.Fatal("cubes fell but none came back up — BounceSystem is not running, or runs before physics")
 	}
 }
+
+// TestCube3D_EveryCubeCarriesBounce pins a framework behaviour that is easy to
+// design against by accident.
+//
+// A kind's component set is UNIFORM after a transfer: the destination calls
+// Stage.EnsureEntityKindComponents, which adds a zero value for every
+// component the kind declares. So `mmokit:"optional"` means "the caller may
+// omit it at spawn", not "this entity may lack it" — an entity spawned without
+// one acquires it, silently, the first time it crosses a cell line.
+//
+// cube3d hit exactly that: Bounce was optional and omitted for drifting cubes,
+// and within two seconds the eight drifters that had crossed a boundary were
+// carrying a Bounce nobody spawned. The fix is for the zero value to mean
+// something, which is only safe if every cube really does start with one.
+func TestCube3D_EveryCubeCarriesBounce(t *testing.T) {
+	process, stop := runProcess(t)
+	defer stop()
+
+	var ids []mmokit.MeshCellID
+	process.Control.AllOwnedCells(func(cellKey, _ string) bool {
+		ids = append(ids, mmokit.MeshCellID(cellKey))
+		return true
+	})
+
+	cubes, withBounce, bouncers := 0, 0, 0
+	for _, id := range ids {
+		cell := process.CellByID(id)
+		if cell == nil || cell.Stage == nil || cell.Engine == nil {
+			continue
+		}
+		stage := cell.Stage
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		err := cell.Engine.RunOnLoop(ctx, func() error {
+			w := stage.ECSWorld()
+			spinMap := ecs.NewMap1[Spin](w)
+			bounceMap := ecs.NewMap1[Bounce](w)
+			filter := ecs.NewFilter1[component.Position](w).
+				Without(ecs.C[component.Ghost](), ecs.C[component.Replica]())
+			q := filter.Query()
+			defer q.Close()
+			for q.Next() {
+				e := q.Entity()
+				if !spinMap.HasAll(e) {
+					continue
+				}
+				cubes++
+				if !bounceMap.HasAll(e) {
+					continue
+				}
+				withBounce++
+				if bounceMap.Get(e).Launch > 0 {
+					bouncers++
+				}
+			}
+			return nil
+		})
+		cancel()
+		if err != nil {
+			t.Fatalf("scan on %s: %v", id, err)
+		}
+	}
+
+	if cubes == 0 {
+		t.Fatal("no cubes exist")
+	}
+	if withBounce != cubes {
+		t.Errorf("%d of %d cubes carry a Bounce — a drifter would acquire one on its first "+
+			"cell crossing instead of starting with it", withBounce, cubes)
+	}
+	// Both roles must be represented, or the uniformity above is vacuous.
+	if bouncers == 0 || bouncers == cubes {
+		t.Errorf("%d of %d cubes have a non-zero launch — want a mix of both roles", bouncers, cubes)
+	}
+}

@@ -1,8 +1,15 @@
 package main
 
 import (
+	"context"
 	"math"
 	"testing"
+	"time"
+
+	"github.com/mmokit/mmokit"
+	"github.com/mmokit/mmokit/pkg/component"
+
+	"github.com/mlange-42/ark/ecs"
 )
 
 func TestDriftVelocity_IsAlwaysFullSpeed(t *testing.T) {
@@ -152,4 +159,109 @@ func TestDrift_CrossesACellLine(t *testing.T) {
 	if crossed == 0 {
 		t.Fatal("no drifting cube left its cell within 30 seconds — handoff is never exercised")
 	}
+}
+
+// TestCube3D_DriftersCrossCellBoundaries is the drift feature's acceptance
+// criterion: a cube leaves the cell it was bootstrapped into and arrives,
+// intact, in the cell that owns where it went.
+//
+// Nothing else here asserts that. ReflectAxis is a pure function tested
+// against arithmetic; the split test proves cubes survive a topology change
+// the OPERATOR triggered. This is the only test covering the handoff an
+// entity triggers by itself, which is the one thing a viewer watching this
+// example is meant to see happen without touching anything.
+func TestCube3D_DriftersCrossCellBoundaries(t *testing.T) {
+	process, stop := runProcess(t)
+	defer stop()
+
+	start := cubeCells(t, process)
+	if len(start) == 0 {
+		t.Fatal("no cubes exist")
+	}
+
+	// The lattice is inset 100 units from the cell edge, so the earliest a
+	// well-aimed cube can reach a boundary is under two seconds. The deadline
+	// is generous because the headings are fixed and some cubes start by
+	// moving inward.
+	deadline := time.Now().Add(20 * time.Second)
+	for time.Now().Before(deadline) {
+		time.Sleep(100 * time.Millisecond)
+		now := cubeCells(t, process)
+		for id, at := range now {
+			was, ok := start[id]
+			if !ok || was.cell == at.cell {
+				continue
+			}
+			// It crossed. It must also still be at the height it left with:
+			// a drifter's Z never changes, so a cube that arrives at a
+			// different one lost it in transit — the exact silent failure
+			// this example exists to catch, in the path the split test does
+			// not cover.
+			if at.z != was.z {
+				t.Fatalf("cube %d crossed %s -> %s and arrived at Z=%v, want %v",
+					id, was.cell, at.cell, at.z, was.z)
+			}
+			return
+		}
+	}
+	t.Fatal("no cube changed cells in 20 seconds — entity handoff is never exercised")
+}
+
+// cubeWhere is where one cube is: which cell holds it, and at what height.
+type cubeWhere struct {
+	cell string
+	z    float32
+}
+
+// cubeCells maps every live cube's NetworkID to where it currently is.
+func cubeCells(t *testing.T, process *mmokit.Process) map[uint32]cubeWhere {
+	t.Helper()
+
+	var ids []mmokit.MeshCellID
+	process.Control.AllOwnedCells(func(cellKey, _ string) bool {
+		ids = append(ids, mmokit.MeshCellID(cellKey))
+		return true
+	})
+
+	out := make(map[uint32]cubeWhere)
+	for _, id := range ids {
+		cell := process.CellByID(id)
+		if cell == nil || cell.Stage == nil || cell.Engine == nil {
+			continue
+		}
+		stage := cell.Stage
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		err := cell.Engine.RunOnLoop(ctx, func() error {
+			w := stage.ECSWorld()
+			posMap := ecs.NewMap1[component.Position](w)
+			netMap := ecs.NewMap1[component.NetworkID](w)
+			bounceMap := ecs.NewMap1[Bounce](w)
+			spinMap := ecs.NewMap1[Spin](w)
+			filter := ecs.NewFilter1[component.Position](w).
+				Without(ecs.C[component.Ghost](), ecs.C[component.Replica]())
+			q := filter.Query()
+			defer q.Close()
+			for q.Next() {
+				e := q.Entity()
+				// Drifters only: a bouncer's height changes every tick, so
+				// including one would make the Z comparison below fail for
+				// a reason that has nothing to do with a transfer. Selected
+				// by a zero Launch rather than by the component's absence,
+				// because every cube carries one.
+				if !spinMap.HasAll(e) || !netMap.HasAll(e) {
+					continue
+				}
+				if bounceMap.HasAll(e) && bounceMap.Get(e).Launch > 0 {
+					continue
+				}
+				out[netMap.Get(e).ID] = cubeWhere{cell: string(id), z: posMap.Get(e).Z}
+			}
+			return nil
+		})
+		cancel()
+		if err != nil {
+			t.Fatalf("cell scan on %s: %v", id, err)
+		}
+	}
+	return out
 }
