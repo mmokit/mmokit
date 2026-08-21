@@ -678,3 +678,52 @@ func TestHostNetworkDropPeerIdempotent(t *testing.T) {
 		t.Error("peer2 still in map after explicit dropPeer(peer2)")
 	}
 }
+
+// TestConnectPeerAfterShutdownDoesNotPanic covers the window between
+// ConnectPeer opening its stream and writing the peer into the map.
+//
+// The production interleaving: reconnectPeer checks n.ctx.Err() and dials,
+// the dial and stream-open succeed while the network is still live, the
+// goroutine is descheduled, Shutdown runs to completion — cancelling the root
+// context AND nilling the peers map, both under the same lock — and ConnectPeer
+// then resumes at its map write. That write panicked with "assignment to entry
+// in nil map", reproducing roughly one run in three under
+// `go test -race ./pkg/universe ./examples/cube3d`.
+//
+// The test nils the map directly rather than calling Shutdown, and that is
+// deliberate: Shutdown cancels the context first, so a post-Shutdown
+// ConnectPeer fails at stream-open and never reaches the guard. Only the
+// intermediate state — stream opened, map gone — exercises it, and ordering
+// that against a real Shutdown needs a hook in production code that exists
+// solely for the test.
+func TestConnectPeerAfterShutdownDoesNotPanic(t *testing.T) {
+	hostA := NewHost("host-a")
+	hostB := NewHost("host-b")
+
+	netA, err := NewHostNetwork(hostA, ":0", testHostNetworkLogger(t), 50*time.Millisecond, testMeshTLS(t), "")
+	if err != nil {
+		t.Fatalf("NewHostNetwork A: %v", err)
+	}
+	netB, err := NewHostNetwork(hostB, ":0", testHostNetworkLogger(t), 50*time.Millisecond, testMeshTLS(t), "")
+	if err != nil {
+		t.Fatalf("NewHostNetwork B: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = netA.Shutdown()
+		_ = netB.Shutdown()
+	})
+
+	netA.mu.Lock()
+	netA.peers = nil
+	netA.mu.Unlock()
+
+	defer func() {
+		if r := recover(); r != nil {
+			t.Fatalf("ConnectPeer panicked on a shut-down network: %v", r)
+		}
+	}()
+	err = netA.ConnectPeer("host-b", netB.Addr(), peerKindNode)
+	if !errors.Is(err, ErrHostNetworkClosed) {
+		t.Fatalf("ConnectPeer returned %v, want ErrHostNetworkClosed", err)
+	}
+}

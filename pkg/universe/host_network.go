@@ -125,6 +125,12 @@ type outboundFrame struct {
 	result chan<- error
 }
 
+// ErrHostNetworkClosed is returned by ConnectPeer when the HostNetwork has
+// already shut down. Callers that retry — reconnectPeer is the only one —
+// must treat it as terminal rather than backing off, because it can never
+// succeed afterwards.
+var ErrHostNetworkClosed = errors.New("universe: host network closed")
+
 // NewHostNetwork binds a listener, constructs the gRPC server with
 // keepalive + 16MB max-message caps, and starts serving in a goroutine.
 // Addr() returns the bound address (useful when grpcAddr was ":0").
@@ -283,6 +289,19 @@ func (n *HostNetwork) ConnectPeer(hostID, grpcAddr string, kind peerKind) error 
 	}
 
 	n.mu.Lock()
+	if n.peers == nil {
+		// Shutdown ran while we were dialing. It nils the map under this
+		// same lock, so this is the one place the check is race-free —
+		// and the dial above is slow enough that the window is real, not
+		// theoretical: reconnectPeer's n.ctx.Err() check happens BEFORE
+		// the dial, so a peer that died just before shutdown reliably
+		// arrives here afterwards. Writing to the nil map panicked, which
+		// under -race showed up as roughly one run in three.
+		n.mu.Unlock()
+		cancel()
+		_ = conn.Close()
+		return ErrHostNetworkClosed
+	}
 	if old, ok := n.peers[hostID]; ok {
 		old.cancel()
 		_ = old.conn.Close()
@@ -427,6 +446,10 @@ func (n *HostNetwork) reconnectPeer(hostID, grpcAddr string, kind peerKind) {
 		}
 		if err := n.ConnectPeer(hostID, grpcAddr, kind); err == nil {
 			n.log.Log(CatMeshMsg, "[%s] reconnected to %s (%s)", n.hostID, hostID, grpcAddr)
+			return
+		} else if errors.Is(err, ErrHostNetworkClosed) {
+			// Terminal, not transient: shutdown completed while we were
+			// dialing, and no amount of backoff makes that succeed.
 			return
 		} else {
 			n.log.Log(CatMeshMsg, "[%s] reconnect to %s (%s) failed: %v — retrying in %s", n.hostID, hostID, grpcAddr, err, backoff)
