@@ -25,6 +25,10 @@ func (b csharpBackend) CoreFiles() []CoreFile {
 	names := []string{
 		"DeltaDecoderCore.cs",
 		"InterpolationCore.cs",
+		// Quat is referenced by both of the above, so an SDK without it does
+		// not compile — in EITHER profile, because the core files are copied
+		// verbatim regardless of what the schema uses.
+		"Quat.cs",
 		"ClockSync.cs",
 		"InterpolationBuffer.cs",
 		"AdaptivePlaybackController.cs",

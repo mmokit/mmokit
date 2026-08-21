@@ -132,8 +132,8 @@ func TestCsharpBackend_OutputFiles_SkipsWhenNoEntities(t *testing.T) {
 
 func TestCsharpBackend_CoreFiles(t *testing.T) {
 	core := csharpBackend{coreDir: "x/core"}.CoreFiles()
-	if len(core) != 15 {
-		t.Fatalf("CoreFiles len = %d, want 15", len(core))
+	if len(core) != 16 {
+		t.Fatalf("CoreFiles len = %d, want 16", len(core))
 	}
 	// Dst basenames are what the SDK compiles; Src is threaded from coreDir.
 	if core[0].Dst != "DeltaDecoderCore.cs" || core[0].Src != "x/core/DeltaDecoderCore.cs" {
@@ -148,6 +148,11 @@ func TestCsharpBackend_CoreFiles(t *testing.T) {
 	// MmokitAuth.cs is in that list for the same reason: the generated client's
 	// ConnectAsync draws its UDP key through it, so a generated SDK without it
 	// does not compile.
+	// Quat.cs joined for exactly that reason too: DeltaDecoderCore and
+	// InterpolationCore both reference it, so an SDK missing it fails to
+	// compile in EITHER profile — the core files are copied verbatim
+	// regardless of what the schema uses. csharp-test alone did not catch it;
+	// csharp-compile-test did.
 	for _, want := range []string{"ReflectCodec.cs", "ReconciliationGate.cs",
 		"ChaCha20Poly1305.cs", "UdpCrypto.cs", "UdpSession.cs", "MmokitAuth.cs"} {
 		var found bool
