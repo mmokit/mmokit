@@ -757,6 +757,14 @@ func (b *Stage) PositionMap() *ecs.Map1[component.Position] { return b.posMap }
 func (b *Stage) VelocityMap() *ecs.Map1[component.Velocity] { return b.velMap }
 
 // NetworkIDMap returns the NetworkID component mapper.
+// RotationMap returns the orientation map.
+//
+// Position, Velocity, Collider and the rest have had accessors since the
+// framework was 2D; Rotation did not, because a 2D game reaches facing
+// through MoveTarget and the engine's own yaw binding. A 3D game writes
+// orientation directly, so it needs one.
+func (b *Stage) RotationMap() *ecs.Map1[component.Rotation] { return b.rotMap }
+
 func (b *Stage) NetworkIDMap() *ecs.Map1[component.NetworkID] { return b.netIDMap }
 
 // EntityKindMap returns the EntityKind component mapper.

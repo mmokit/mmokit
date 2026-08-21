@@ -1,7 +1,7 @@
 {
   "game": "cube3d",
   "dimension": "3d",
-  "fingerprint": "b54bdd25",
+  "fingerprint": "b6b9ce73",
   "entities": [
     {
       "kind": 1,
@@ -112,9 +112,139 @@
         2,
         2
       ]
+    },
+    {
+      "kind": 2,
+      "name": "Viewer",
+      "bindings": [
+        {
+          "type": "engine_bindings",
+          "fields": [
+            {
+              "name": "worldX",
+              "encoding": "f32",
+              "size": 4
+            },
+            {
+              "name": "worldY",
+              "encoding": "f32",
+              "size": 4
+            },
+            {
+              "name": "worldZ",
+              "encoding": "f32",
+              "size": 4
+            },
+            {
+              "name": "velX",
+              "encoding": "qvel",
+              "size": 2,
+              "scale": 2000
+            },
+            {
+              "name": "velY",
+              "encoding": "qvel",
+              "size": 2,
+              "scale": 2000
+            },
+            {
+              "name": "velZ",
+              "encoding": "qvel",
+              "size": 2,
+              "scale": 2000
+            },
+            {
+              "name": "radius",
+              "encoding": "qvel",
+              "size": 2,
+              "scale": 500
+            },
+            {
+              "name": "width",
+              "encoding": "qvel",
+              "size": 2,
+              "scale": 500
+            },
+            {
+              "name": "height",
+              "encoding": "qvel",
+              "size": 2,
+              "scale": 500
+            },
+            {
+              "name": "depth",
+              "encoding": "qvel",
+              "size": 2,
+              "scale": 500
+            },
+            {
+              "name": "rot",
+              "encoding": "qquat",
+              "size": 7
+            }
+          ]
+        },
+        {
+          "type": "component",
+          "fields": [
+            {
+              "name": "name",
+              "encoding": "string",
+              "size": -1,
+              "initial": true
+            }
+          ],
+          "structName": "ViewerName"
+        }
+      ],
+      "layout": [
+        4,
+        4,
+        4,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        7
+      ],
+      "initialData": "length_prefixed_string_u8"
     }
   ],
   "client_input_types": [
+    {
+      "name": "main.FlyInput",
+      "type_id": 2816286361,
+      "fields": [
+        {
+          "name": "forward",
+          "encoding": "f32",
+          "size": 4
+        },
+        {
+          "name": "strafe",
+          "encoding": "f32",
+          "size": 4
+        },
+        {
+          "name": "lift",
+          "encoding": "f32",
+          "size": 4
+        },
+        {
+          "name": "yaw",
+          "encoding": "f32",
+          "size": 4
+        },
+        {
+          "name": "pitch",
+          "encoding": "f32",
+          "size": 4
+        }
+      ]
+    },
     {
       "name": "mmokit.Ping",
       "type_id": 2350322182,

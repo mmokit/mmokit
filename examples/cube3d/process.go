@@ -64,8 +64,12 @@ type CubeBundle struct {
 // process's schema fingerprint is 0 — which the mesh admission treats as
 // "no protocol" and which would silently opt this example out of the
 // dimension-agreement gate that phase 2 unit 5 added.
-func NewProcess() *mmokit.Process {
-	process := mmokit.New(mmokit.Config{
+// headless is what separates the acceptance test from the binary: the test
+// wants no listeners at all, while `go run ./examples/cube3d` has to serve a
+// browser. One constructor either way, so the two cannot drift in anything
+// else — which is the property the split test depends on.
+func NewProcess(headless bool) *mmokit.Process {
+	cfg := mmokit.Config{
 		Name:      "cube3d",
 		Dimension: mmokit.Dimension3D,
 		Gravity:   Gravity,
@@ -74,15 +78,30 @@ func NewProcess() *mmokit.Process {
 		CellSize:  CellSize,
 		TickRate:  TickRate,
 		AoIRadius: AoIRadius,
-		Headless:  true,
-		HTTPPort:  -1,
 
 		AnonymousAuth: true,
-	})
+	}
+	if headless {
+		cfg.Headless = true
+		cfg.HTTPPort = -1
+	}
+	process := mmokit.New(cfg)
 
 	mmokit.RegisterKind[CubeBundle](process, KindCube, "Cube")
+	registerViewer(process)
+
+	// System order is semantic and Network stays last, matching the rule
+	// examples/space/internal/game/factory.go documents.
+	//
+	// Spatial and Network were BOTH missing until phase 3 unit 6: cube3d
+	// simulated 3D correctly and replicated nothing at all, so the 3D engine
+	// binding set was schema-pinned but had never produced a byte on the
+	// wire. The split acceptance test did not catch it, because a cell
+	// transfer travels through TransferFrame rather than through replication.
 	process.AddSystem(mmokit.NewPhysicsSystem())
 	process.AddSystem(mmokit.NewSystem(&TumbleSystem{}))
+	process.AddSystem(mmokit.NewSpatialSystem())
+	process.AddSystem(mmokit.NewNetworkSystem())
 
 	process.OnStageInit(func(stage *mmokit.Stage) {
 		// A split-created stage receives its entities by transfer. Spawning
