@@ -1,4 +1,6 @@
 import { Cube3dClient } from "../sdk/client.js";
+import { Cube3dDeltaDecoder } from "../sdk/delta-decoder.js";
+import type { WorldDelta, PlayerEntityAssigned } from "../sdk/broadcasts.js";
 import { FlyInput } from "../sdk/inputs.js";
 import type { AnyEntity } from "../sdk/entities.js";
 import { Scene3D, type Renderable } from "./render3d";
@@ -45,14 +47,21 @@ const client = new Cube3dClient({
     (status.textContent = `schema mismatch: server ${server}, client ${mine} — regenerate the SDK`),
 });
 
-client.onPlayerEntityAssigned((msg) => { myNetID = msg.netID; });
+client.onPlayerEntityAssigned((msg: PlayerEntityAssigned) => {
+  myNetID = msg.entityNetID;
+});
 
-client.onWorldDelta((msg) => {
-  if (msg.freshSnapshot) world.clear();
-  for (const e of msg.entered) world.set(e.netID, e);
-  for (const e of msg.updated) world.set(e.netID, e);
-  for (const id of msg.removed) world.delete(id);
-  for (const id of msg.exited) world.delete(id);
+// WorldDelta is the typed EVENT carrying raw frame bytes; the decoder owns
+// the per-baseline state for this connection and turns them into entities.
+const deltaDecoder = new Cube3dDeltaDecoder();
+client.onWorldDelta((msg: WorldDelta) => {
+  const update = deltaDecoder.decode(msg.body, msg.streamEpoch);
+  if (!update) return;
+  if (update.freshSnapshot) world.clear();
+  for (const e of update.entered) world.set(e.netID, e);
+  for (const e of update.updated) world.set(e.netID, e);
+  for (const id of update.removed) world.delete(id);
+  for (const id of update.exited) world.delete(id);
 });
 
 client.connect();
