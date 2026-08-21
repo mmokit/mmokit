@@ -235,9 +235,15 @@ func encodingToCSharpType(enc string) string {
 		return "long"
 	case "f32", "qvel", "qangle", "qnorm":
 		return "float"
+	case "qquat":
+		// Deliberately Mmokit's own Quat, not System.Numerics.Quaternion:
+		// the SDK's primary consumer is Unity, where that name is ambiguous
+		// against UnityEngine.Quaternion.
+		return "Quat"
 	default:
-		// Unknown encodings decode to a float scalar, mirroring the TS
-		// `number` fallback. New encodings should be added explicitly.
-		return "float"
+		// Loud, not float. A new encoding silently decoding as a float
+		// scalar in every generated Unity client is the failure this
+		// prevents; the TS mapper now panics for the same reason.
+		panic(fmt.Sprintf("sdkgen: unsupported field encoding %q — add it to encodingToCSharpType", enc))
 	}
 }

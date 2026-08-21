@@ -244,6 +244,8 @@ func writeCsFixedFieldDecode(sb *strings.Builder, target string, f BindingSchema
 		fmt.Fprintf(sb, "%s%s = (float)DeltaDecoderCore.UnVel(DeltaDecoderCore.ReadInt16(snap, o), %g); o += 2;\n", indent, target, f.Scale)
 	case "qangle":
 		fmt.Fprintf(sb, "%s%s = (float)DeltaDecoderCore.UnAngle(DeltaDecoderCore.ReadUint16(snap, o)); o += 2;\n", indent, target)
+	case "qquat":
+		fmt.Fprintf(sb, "%s%s = DeltaDecoderCore.UnQuat(snap, o); o += DeltaDecoderCore.QuatWireSize;\n", indent, target)
 	case "qnorm":
 		fmt.Fprintf(sb, "%s%s = (float)DeltaDecoderCore.UnNorm(snap[o]); o += 1;\n", indent, target)
 	case "u8":
@@ -282,6 +284,8 @@ func writeCsInitialFieldDecode(sb *strings.Builder, target, fallback string, f B
 	case "bool":
 		fmt.Fprintf(sb, "        if (initial != null && initialOff < initial.Length) { %s = initial[initialOff] != 0; initialOff += 1; } else { %s = %s ?? false; }\n", target, target, fallback)
 	default:
-		fmt.Fprintf(sb, "        %s = %s ?? default;\n", target, fallback)
+		// The old fallback assigned a default and NEVER advanced initialOff,
+		// desynchronizing every initial field after it.
+		panic(fmt.Sprintf("sdkgen: unsupported initial-field encoding %q for %q", f.Encoding, target))
 	}
 }
