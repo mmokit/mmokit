@@ -79,11 +79,14 @@ type PlayerRepository interface {
 // etc.) lives in a separate game-owned table joined by user_id; see
 // the reference game's persist package for its PlayerStateSnapshot.
 type PlayerSnapshot struct {
-	UserID    uuid.UUID
-	Username  string
-	CellID    string // e.g. "cell_2_1"
-	PosX      float32
-	PosY      float32
+	UserID   uuid.UUID
+	Username string
+	CellID   string // e.g. "cell_2_1"
+	PosX     float32
+	PosY     float32
+	// PosZ is the player's height. Written and read by every profile;
+	// only a 3D one ever sets it to something other than zero.
+	PosZ      float32
 	CreatedAt time.Time
 	LastLogin time.Time
 	// DebugFlags is the persisted set of enabled debug capability

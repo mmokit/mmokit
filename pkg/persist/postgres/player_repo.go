@@ -19,7 +19,7 @@ type playerRepo struct {
 
 var _ persist.PlayerRepository = (*playerRepo)(nil)
 
-const playerSelectColumns = `user_id, username, cell_id, pos_x, pos_y, created_at, last_login, debug_flags`
+const playerSelectColumns = `user_id, username, cell_id, pos_x, pos_y, pos_z, created_at, last_login, debug_flags`
 
 func (r *playerRepo) Load(ctx context.Context, userID uuid.UUID) (*persist.PlayerSnapshot, error) {
 	row := r.pool.QueryRow(ctx,
@@ -89,17 +89,18 @@ func (r *playerRepo) SaveBatchTx(ctx context.Context, tx pgx.Tx, snapshots []*pe
 		}
 		batch.Queue(`
 			INSERT INTO engine.players (
-				user_id, username, cell_id, pos_x, pos_y, created_at, last_login, debug_flags, updated_at
-			) VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb, NOW())
+				user_id, username, cell_id, pos_x, pos_y, pos_z, created_at, last_login, debug_flags, updated_at
+			) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::jsonb, NOW())
 			ON CONFLICT (user_id) DO UPDATE SET
 			    username = EXCLUDED.username,
 			    cell_id = EXCLUDED.cell_id,
 			    pos_x = EXCLUDED.pos_x,
 			    pos_y = EXCLUDED.pos_y,
+			    pos_z = EXCLUDED.pos_z,
 			    last_login = EXCLUDED.last_login,
 			    debug_flags = EXCLUDED.debug_flags,
 			    updated_at = NOW()`,
-			snap.UserID, snap.Username, snap.CellID, snap.PosX, snap.PosY,
+			snap.UserID, snap.Username, snap.CellID, snap.PosX, snap.PosY, snap.PosZ,
 			snap.CreatedAt, snap.LastLogin, flagsJSON,
 		)
 	}
@@ -222,6 +223,7 @@ func scanPlayerRow(row pgxScanner) (*persist.PlayerSnapshot, error) {
 		&snap.CellID,
 		&snap.PosX,
 		&snap.PosY,
+		&snap.PosZ,
 		&snap.CreatedAt,
 		&snap.LastLogin,
 		&flagsBytes,

@@ -53,11 +53,15 @@ func TestPlayerRepo_RoundTrip(t *testing.T) {
 
 	now := time.Now().UTC().Truncate(time.Microsecond)
 	snap := &persist.PlayerSnapshot{
-		UserID:    uuid.New(),
-		Username:  "alice",
-		CellID:    "cell_2_1",
-		PosX:      123.5,
-		PosY:      -45.25,
+		UserID:   uuid.New(),
+		Username: "alice",
+		CellID:   "cell_2_1",
+		PosX:     123.5,
+		PosY:     -45.25,
+		// Non-zero on purpose: a height that round-trips as 0 is
+		// indistinguishable from a column that was never written, which is
+		// exactly the failure pos_z exists to prevent.
+		PosZ:      67.75,
 		CreatedAt: now.Add(-1 * time.Hour),
 		LastLogin: now,
 	}
@@ -83,6 +87,9 @@ func TestPlayerRepo_RoundTrip(t *testing.T) {
 	}
 	if loaded.PosY != snap.PosY {
 		t.Errorf("PosY = %v, want %v", loaded.PosY, snap.PosY)
+	}
+	if loaded.PosZ != snap.PosZ {
+		t.Errorf("PosZ = %v, want %v — a 3D player's height was lost across save/load", loaded.PosZ, snap.PosZ)
 	}
 	if !loaded.LastLogin.Equal(snap.LastLogin) {
 		t.Errorf("LastLogin = %v, want %v", loaded.LastLogin, snap.LastLogin)
