@@ -864,7 +864,7 @@ Eight units, `c1358e19`..`f83fce9f`, against the seven this phase was planned as
 - **`pkg/spatial` is still 2D**, so 3D broad- and narrow-phase, AoI in three dimensions, and capsules remain phase 4. A 3D game today collides as though flattened.
 - **No client can render this.** Quaternion decode and slerp in TypeScript and C# are phase 3; `cube3d.json` is the only pin on the 3D layout until a generated SDK cross-checks it.
 - **`UnmarshalCollider` still decodes the pre-`Depth` 14-byte layout** while `MarshalTransferFrame` writes 18. Leftover from phase 1 with no in-tree production caller.
-- **A pre-existing nil-map panic**, found by this phase's `-race` runs and not fixed by it: `HostNetwork.Shutdown` sets `n.peers = nil` while `ConnectPeer` writes `n.peers[hostID]` with no nil check, so a `reconnectPeer` goroutine spawned by `peerDied` can land after shutdown. Reproduces roughly one run in three under `go test -race ./pkg/universe ./examples/cube3d`, and confirmed pre-existing by reproducing it at `27420883`. It belongs to the adjacent-teardown family [§6.4](#64-p1--quality-and-protocol) already names.
+- ~~**A pre-existing nil-map panic**~~ — **closed in `63616cea`**, immediately after the phase. `HostNetwork.Shutdown` nils `n.peers` while `ConnectPeer` writes `n.peers[hostID]`; a reconnect whose dial straddled shutdown panicked, roughly one run in three under `go test -race ./pkg/universe ./examples/cube3d`, and 6/6 clean after. Found by this phase's `-race` runs, confirmed pre-existing at `27420883`, and fixed in its own commit rather than inside a wire-format one. Worth carrying forward: the panic fired while holding `n.mu`, so anything that recovers from it deadlocks at the next `Shutdown` instead of crashing.
 
 ### 7.6 Validation
 
