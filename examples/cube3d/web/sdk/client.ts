@@ -6,7 +6,7 @@ import { TypedDispatcher, CellChange, DebugInfo, OperationError, PlayerEntityAss
 
 /** Structural fingerprint of the protocol this SDK was generated from.
  *  Sent at connection setup; the server refuses a mismatch. */
-export const SCHEMA_FINGERPRINT = "b6b9ce73";
+export const SCHEMA_FINGERPRINT = "73007764";
 
 /** Appends the schema fingerprint to a connect URL, preserving any
  *  query the caller already put there. */

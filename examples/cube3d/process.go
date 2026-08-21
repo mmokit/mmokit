@@ -26,15 +26,23 @@ const (
 	// outside AoI, so most of the scene simply never arrives.
 	AoIRadius = 1500
 
-	// Gravity is Earth-ish. The exact value does not matter; that it is
-	// non-zero is what makes this a 3D process — Build refuses gravity in a
-	// 2D profile.
-	Gravity = -9.81
+	// Gravity, in world units per second squared.
+	//
+	// Earth-ish AT THIS WORLD'S SCALE, which is the part that matters and
+	// which -9.81 got wrong. A cube is 40 units across and reads as roughly
+	// a metre of object, so a unit is about 2.5 cm and Earth is ~400 u/s².
+	// At 9.81 a cube dropped from 490 units takes ten seconds to land: the
+	// physics is right, and what you see is a scene drifting downward rather
+	// than anything falling. Non-zero is what makes this a 3D process — Build
+	// refuses gravity in a 2D profile — but only a scale-correct value makes
+	// gravity legible.
+	Gravity = -400
 
 	// GroundZ is the plane MoveWalk clamps to.
 	GroundZ = 0
 
-	// CubesPerCell is how many cubes each cell bootstraps.
+	// CubesPerCell is how many cubes each cell bootstraps, split evenly
+	// between the bouncing and drifting roles — see bootstrapCubes.
 	CubesPerCell = 16
 
 	// KindCube is the only entity kind.
@@ -52,8 +60,15 @@ type Spin struct {
 // CubeBundle is the entity kind's bundle. It carries no core component:
 // Position, Velocity, Rotation and Collider are framework-owned and
 // RegisterKind rejects them as bundle fields.
+//
+// Bounce is OPTIONAL because only half the field bounces, and it is a
+// registered kind component rather than local state because a cube must keep
+// its apex across a cell boundary. It has no net: tag, so it costs nothing on
+// the wire — this bundle's client-visible layout is Spin's three fields, the
+// same as before it was added.
 type CubeBundle struct {
-	Spin *Spin
+	Spin   *Spin
+	Bounce *Bounce `mmokit:"optional"`
 }
 
 // NewProcess builds the cube3d process.
@@ -103,6 +118,13 @@ func NewProcess(headless bool) *mmokit.Process {
 	// transfer travels through TransferFrame rather than through replication.
 	process.AddSystem(mmokit.NewPhysicsSystem())
 	process.AddSystem(mmokit.NewSystem(&TumbleSystem{}))
+	// Both run AFTER physics and both correct what integration just did:
+	// Bounce reflects a cube that has been pushed below the ground plane,
+	// Drift turns one around before it would leave the world. Ordering them
+	// before physics would act on a position a tick out of date, which at
+	// 600 u/s is 30 units of overshoot per bounce.
+	process.AddSystem(mmokit.NewSystem(&BounceSystem{}))
+	process.AddSystem(mmokit.NewSystem(&DriftSystem{}))
 	process.AddSystem(mmokit.NewSpatialSystem())
 	// Broadcasts the cell topology to viewers holding the "topology" debug
 	// grant. The client draws its grid from that rather than guessing, and

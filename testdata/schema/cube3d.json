@@ -1,7 +1,7 @@
 {
   "game": "cube3d",
   "dimension": "3d",
-  "fingerprint": "b6b9ce73",
+  "fingerprint": "73007764",
   "entities": [
     {
       "kind": 1,
@@ -94,6 +94,11 @@
             }
           ],
           "structName": "Spin"
+        },
+        {
+          "type": "component",
+          "fields": null,
+          "structName": "Bounce"
         }
       ],
       "layout": [

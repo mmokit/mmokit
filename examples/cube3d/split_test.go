@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"sort"
 	"testing"
 	"time"
 
@@ -39,8 +40,25 @@ func runProcess(t *testing.T) (*mmokit.Process, func()) {
 	}
 }
 
-// cubeCensus counts live cubes across every owned cell and reports how many
-// carry a non-zero Z.
+// census is one instant's view of the cluster's cube population.
+//
+// drifterZ is sorted so two censuses compare as multisets: which cell a cube
+// is in changes constantly now that the drifting half roams, and a comparison
+// that depended on cell order would fail for a cube that merely moved.
+type census struct {
+	total    int
+	drifterZ []float32
+}
+
+// cubeCensus counts live cubes across every owned cell and records the height
+// of every drifting one.
+//
+// The drifters are the assertion's anchor because their Z is CONSTANT: they
+// are MoveFly at their spawn height and nothing ever changes it, so a
+// difference across a split is a dropped or corrupted Z and nothing else. The
+// bouncing half is deliberately excluded — its Z is a function of time, so it
+// can prove that gravity runs (TestCube3D_GravityMovesTheBouncers) but not
+// that a transfer preserved anything.
 //
 // Cells are reached through Control.AllOwnedCells and Process.CellByID rather
 // than by ranging Process.Cells directly. That field is exported but the
@@ -51,7 +69,7 @@ func runProcess(t *testing.T) (*mmokit.Process, func()) {
 // Each cell's scan runs on that cell's own loop goroutine, which is separately
 // required: iterating a cell's world from here while its loop writes trips
 // Ark's world-lock guard.
-func cubeCensus(t *testing.T, process *mmokit.Process) (total, aloft int) {
+func cubeCensus(t *testing.T, process *mmokit.Process) census {
 	t.Helper()
 
 	var ids []mmokit.MeshCellID
@@ -60,6 +78,7 @@ func cubeCensus(t *testing.T, process *mmokit.Process) (total, aloft int) {
 		return true
 	})
 
+	var out census
 	for _, id := range ids {
 		cell := process.CellByID(id)
 		if cell == nil || cell.Stage == nil || cell.Engine == nil {
@@ -70,14 +89,24 @@ func cubeCensus(t *testing.T, process *mmokit.Process) (total, aloft int) {
 		err := cell.Engine.RunOnLoop(ctx, func() error {
 			w := stage.ECSWorld()
 			posMap := ecs.NewMap1[component.Position](w)
+			motionMap := ecs.NewMap1[component.Motion](w)
+			spinMap := ecs.NewMap1[Spin](w)
 			filter := ecs.NewFilter1[component.Position](w).
 				Without(ecs.C[component.Ghost](), ecs.C[component.Replica]())
 			q := filter.Query()
 			defer q.Close()
 			for q.Next() {
-				total++
-				if posMap.Get(q.Entity()).Z != 0 {
-					aloft++
+				e := q.Entity()
+				// Spin is the cube marker: a viewer has none. Headless runs
+				// have no players today, but a census that silently counted
+				// one would make every number here wrong by an amount that
+				// depends on who is connected.
+				if !spinMap.HasAll(e) {
+					continue
+				}
+				out.total++
+				if motionMap.HasAll(e) && motionMap.Get(e).Mode == component.MoveFly {
+					out.drifterZ = append(out.drifterZ, posMap.Get(e).Z)
 				}
 			}
 			return nil
@@ -87,7 +116,32 @@ func cubeCensus(t *testing.T, process *mmokit.Process) (total, aloft int) {
 			t.Fatalf("census on %s: %v", id, err)
 		}
 	}
-	return total, aloft
+	sort.Slice(out.drifterZ, func(i, j int) bool { return out.drifterZ[i] < out.drifterZ[j] })
+	return out
+}
+
+// awaitCensus polls until the cluster holds exactly want cubes.
+//
+// The retry is not papering over a flake, it is what makes the count
+// meaningful now that cubes cross cell lines on their own. A cube in flight
+// between two cells is Live in neither for the tick the handoff takes, and the
+// census walks cells one at a time — so an instantaneous count is legitimately
+// allowed to be short. "Converges to want" is the property; a cube actually
+// lost never converges and this still fails.
+func awaitCensus(t *testing.T, process *mmokit.Process, want int) census {
+	t.Helper()
+	deadline := time.Now().Add(5 * time.Second)
+	var last census
+	for {
+		last = cubeCensus(t, process)
+		if last.total == want {
+			return last
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("cluster settled at %d cubes, want %d", last.total, want)
+		}
+		time.Sleep(25 * time.Millisecond)
+	}
 }
 
 // TestCube3D_SurvivesCellSplitWithZ is phase 2's acceptance criterion, made
@@ -105,14 +159,15 @@ func TestCube3D_SurvivesCellSplitWithZ(t *testing.T) {
 	defer stop()
 
 	wantTotal := CellsX * CellsY * CubesPerCell
-	total, aloft := cubeCensus(t, process)
-	if total != wantTotal {
-		t.Fatalf("before split: %d cubes, want %d", total, wantTotal)
+	before := awaitCensus(t, process, wantTotal)
+	if len(before.drifterZ) == 0 {
+		t.Fatal("before split: no drifting cubes — the fixture cannot detect a dropped Z")
 	}
-	if aloft == 0 {
-		t.Fatal("before split: every cube is at Z=0 — the fixture cannot detect a dropped Z")
+	for _, z := range before.drifterZ {
+		if z == 0 {
+			t.Fatal("before split: a drifter is at Z=0 — indistinguishable from a dropped Z")
+		}
 	}
-	beforeAloft := aloft
 
 	parent := mmokit.CellID{X: 0, Y: 0}
 	if err := process.SplitCell(parent, true); err != nil {
@@ -122,16 +177,19 @@ func TestCube3D_SurvivesCellSplitWithZ(t *testing.T) {
 	// The destination cells are the four children. Assert against the whole
 	// cluster so a cube lost in transit fails here rather than being masked
 	// by a sibling cell's population.
-	total, aloft = cubeCensus(t, process)
-	if total != wantTotal {
-		t.Errorf("after split: %d cubes, want %d — entities were lost or duplicated", total, wantTotal)
+	after := awaitCensus(t, process, wantTotal)
+	if len(after.drifterZ) != len(before.drifterZ) {
+		t.Fatalf("after split: %d drifters, want %d", len(after.drifterZ), len(before.drifterZ))
 	}
-	if total == 0 {
-		t.Fatal("after split: destination entity count is zero")
-	}
-	if aloft != beforeAloft {
-		t.Errorf("after split: %d cubes aloft, want %d — Z was dropped crossing a cell boundary",
-			aloft, beforeAloft)
+	// Every drifter's exact height, not a count of non-zero ones. A count
+	// survives a Z that arrives merely WRONG rather than zeroed, which is
+	// what a mis-sized transfer field produces.
+	for i := range after.drifterZ {
+		if after.drifterZ[i] != before.drifterZ[i] {
+			t.Errorf("after split: drifter heights changed: %v, want %v — Z was corrupted crossing a cell boundary",
+				after.drifterZ, before.drifterZ)
+			break
+		}
 	}
 
 	// The parent must be gone and its children owned.
@@ -285,4 +343,102 @@ func cubeKindDefs(t *testing.T, process *mmokit.Process) []pkguniverse.EntityKin
 		t.Fatalf("expected 2 entity kinds, got %d", len(out))
 	}
 	return out
+}
+
+// bouncerHeights samples every bouncing cube's height, keyed by NetworkID so
+// samples taken at different instants describe the same cubes.
+func bouncerHeights(t *testing.T, process *mmokit.Process) map[uint32]float32 {
+	t.Helper()
+
+	var ids []mmokit.MeshCellID
+	process.Control.AllOwnedCells(func(cellKey, _ string) bool {
+		ids = append(ids, mmokit.MeshCellID(cellKey))
+		return true
+	})
+
+	out := make(map[uint32]float32)
+	for _, id := range ids {
+		cell := process.CellByID(id)
+		if cell == nil || cell.Stage == nil || cell.Engine == nil {
+			continue
+		}
+		stage := cell.Stage
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		err := cell.Engine.RunOnLoop(ctx, func() error {
+			w := stage.ECSWorld()
+			posMap := ecs.NewMap1[component.Position](w)
+			netMap := ecs.NewMap1[component.NetworkID](w)
+			bounceMap := ecs.NewMap1[Bounce](w)
+			filter := ecs.NewFilter1[component.Position](w).
+				Without(ecs.C[component.Ghost](), ecs.C[component.Replica]())
+			q := filter.Query()
+			defer q.Close()
+			for q.Next() {
+				e := q.Entity()
+				if !bounceMap.HasAll(e) || !netMap.HasAll(e) {
+					continue
+				}
+				out[netMap.Get(e).ID] = posMap.Get(e).Z
+			}
+			return nil
+		})
+		cancel()
+		if err != nil {
+			t.Fatalf("bouncer sample on %s: %v", id, err)
+		}
+	}
+	return out
+}
+
+// TestCube3D_GravityMovesTheBouncers asserts the thing a reader of this
+// example is meant to see: cubes fall, hit the ground, and come back up.
+//
+// Nothing else here can. The split test's drifters deliberately hold their
+// height, and BounceSystem's arithmetic is unit-tested in isolation — this is
+// the only assertion that the system is REGISTERED, runs after physics, and
+// that its cubes were spawned MoveBallistic. Registering it before physics, or
+// spawning bouncers MoveWalk, leaves every unit test green.
+func TestCube3D_GravityMovesTheBouncers(t *testing.T) {
+	process, stop := runProcess(t)
+	defer stop()
+
+	first := bouncerHeights(t, process)
+	if len(first) == 0 {
+		t.Fatal("no bouncing cubes exist")
+	}
+
+	fell := make(map[uint32]bool)
+	rose := false
+	prev := first
+	// The lowest bouncer's apex is CubeHeight(1) = 70, which under this
+	// gravity is a 0.6 s fall — so two seconds covers a fall and a bounce
+	// with room to spare even on a loaded machine.
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) && !rose {
+		time.Sleep(25 * time.Millisecond)
+		now := bouncerHeights(t, process)
+		for id, z := range now {
+			p, ok := prev[id]
+			if !ok {
+				continue
+			}
+			switch {
+			case z < p:
+				fell[id] = true
+			case z > p && fell[id]:
+				// Fell, then climbed: that is a bounce, and it can only
+				// happen if BounceSystem ran on a position physics had
+				// already pushed below the plane.
+				rose = true
+			}
+		}
+		prev = now
+	}
+
+	if len(fell) == 0 {
+		t.Fatal("no bouncing cube ever lost height — gravity is not reaching them")
+	}
+	if !rose {
+		t.Fatal("cubes fell but none came back up — BounceSystem is not running, or runs before physics")
+	}
 }
