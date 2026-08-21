@@ -7,6 +7,19 @@ of [`README.md`](README.md#status) for what that means for API and wire compatib
 
 ### Added
 
+- **The 3D profile reaches the client.** The TypeScript and C# SDKs decode
+  quaternion orientation and interpolate it with slerp, `sdkgen` emits the
+  `qquat` encoding, and `examples/cube3d` gains a three.js browser client
+  with a 6DOF fly camera. All three implementations — Go, TypeScript, C# —
+  are pinned to a shared 137-vector corpus on exact float32 bit identity.
+
+  A 2D game is unaffected on the wire. Its generated SDK does pick up the
+  quaternion helpers in `_core`, because core files are copied verbatim
+  regardless of schema; that is bundle size, not bytes on the wire.
+
+  Not yet covered: no prediction or reconciliation for 3D input, and
+  `pkg/spatial` is still 2D, so a 3D game's AoI and collision remain flat.
+
 - **The 3D dimension profile is implemented.** `Config.Dimension:
   Dimension3D` selects a process that replicates three world coordinates,
   three velocity axes, collider depth and full quaternion orientation, and

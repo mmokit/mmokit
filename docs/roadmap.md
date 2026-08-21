@@ -740,7 +740,7 @@ Collision is **new capability, not a port** — the existing separating-axis cod
 | 0 | Safety net and schema truth (pure 2D, byte-stable) — **done**, see [§7.5.4](#754-what-phase-0-landed-and-what-it-did-not) | 14.5 | The unpinned framings byte-pinned; a golden whose bytes come from real `auto_replicator` bindings; the reflect codec pinned from TypeScript; an entity-conservation integrity invariant; `just schema-check` in CI; the schema field-name defect fixed. Full suite green. **The codec collapse is struck — see [§7.5.1](#751-why-the-codec-collapse-is-struck).** |
 | 1 | Widen core types, still 2D only — **done**, see [§7.5.5](#755-what-phase-1-landed) | 10 | Position and velocity gained Z; rotation is a unit quaternion behind yaw helpers; collider gained Depth and a typed shape union. Generated 2D SDK diff is empty. |
 | 2 | The 3D profile — **done**, see [§7.5.6](#756-what-phase-2-landed) | 12 | Quaternion quantization, dimension-selected bindings, gravity and move modes, cluster dimension agreement. A headless 3D example survives a cell split with a non-zero destination entity count asserted. |
-| 3 | Client SDK and interpolation | 11 | Quaternion decode and slerp in TypeScript and C#, golden vectors. A browser client renders 3D with quaternion orientation. |
+| 3 | Client SDK and interpolation — **done**, see [§7.5.7](#757-what-phase-3-landed) | 11 | Quaternion decode and slerp in TypeScript and C#, golden vectors. A browser client renders 3D with quaternion orientation. |
 | 4 | Collision | 34 | Capsule characters against static boxes, line-of-sight gating, non-tunneling projectiles. |
 | 5 | Parity fixtures and hardening | 11 | Both profiles covered in one test binary at the pre-existing race baseline. |
 
@@ -865,6 +865,31 @@ Eight units, `c1358e19`..`f83fce9f`, against the seven this phase was planned as
 - **No client can render this.** Quaternion decode and slerp in TypeScript and C# are phase 3; `cube3d.json` is the only pin on the 3D layout until a generated SDK cross-checks it.
 - **`UnmarshalCollider` still decodes the pre-`Depth` 14-byte layout** while `MarshalTransferFrame` writes 18. Leftover from phase 1 with no in-tree production caller.
 - ~~**A pre-existing nil-map panic**~~ — **closed in `63616cea`**, immediately after the phase. `HostNetwork.Shutdown` nils `n.peers` while `ConnectPeer` writes `n.peers[hostID]`; a reconnect whose dial straddled shutdown panicked, roughly one run in three under `go test -race ./pkg/universe ./examples/cube3d`, and 6/6 clean after. Found by this phase's `-race` runs, confirmed pre-existing at `27420883`, and fixed in its own commit rather than inside a wire-format one. Worth carrying forward: the panic fired while holding `n.mu`, so anything that recovers from it deadlocks at the next `Shutdown` instead of crashing.
+
+
+#### 7.5.7 What phase 3 landed
+
+Nine units, `c5960979`..`bc0380e4`. A browser renders cube3d in three dimensions with quaternion orientation and a 6DOF fly camera, and the orientation path now has three independent implementations that are proven to agree.
+
+**The corpus is the deliverable, not the decoders.** Three ports of smallest-three decode and of slerp is three chances to disagree, and the roadmap already recorded that the browser's delta decoder was historically *not* pinned to Go's bytes while the Unity one was. 137 quat cases and 74 slerp cases now live in the manifest all three languages already consume, and Go, TypeScript and C# each reproduce every vector on **exact float32 bit identity** — not a tolerance, which would hide precisely the rounding disagreement the corpus exists to catch. The corpus is chosen against failure modes rather than for coverage: `180-about-y` because the four vectors phase 2 pinned never exercise dropped-index 1; `negated-identity`, which must reproduce identity's bytes and does; and a hostile `0x00ffffffffffff` that no encoder emits, where `sumSq > 1` makes the radicand negative and a port calling `sqrt` returns `NaN`.
+
+**What shipped:**
+
+- **`Rotation.Slerp`**, with `SlerpDotThreshold` exported rather than private. It is the single most port-divergent line in the orientation path, so both client cores read that number instead of restating it, and both assert they agree.
+- **`qquat` through sdkgen**, the first non-scalar encoding it has ever emitted. It stays ONE schema field with one bound name and gains an object type — `Quat` in both languages — because splitting it into four synthesized scalars would force the generator to invent names the schema does not carry. In C# it is Mmokit's own `Quat`, not `System.Numerics.Quaternion`, which is ambiguous against `UnityEngine.Quaternion` for the SDK's primary consumer.
+- **Four silent encoding fallbacks became panics.** `encodingToTSType` returned `"number"` and `encodingToCSharpType` returned `"float"`, so a `qquat` field added without this phase would have compiled cleanly as `public float rot;`. Worse, *both* initial-field decoders assigned a default without advancing the offset, desynchronizing every initial field after it — a corruption that reads as plausible values rather than as an error.
+- **TypeScript and C# decode and slerp**, with `unQuat` reading per byte in both: the packed value is 56 bits, past JavaScript's 2^53 safe range, and `BigInt` would allocate on a per-entity, per-tick path. 3D interpolation is optional on the sample and **absent inputs produce absent outputs** — a renderer seeing `renderZ: 0` on a 2D entity would apply it.
+- **A generate-and-decode gate** that runs server bytes through the real generated SDK, closing the hole [§7.5.6](#756-what-phase-2-landed) named. Its fixture puts a field *after* the quaternion deliberately, because a quaternion consuming the wrong width still decodes plausibly on its own and only a trailing field exposes the misaligned cursor.
+- **`examples/cube3d/web`**, three.js, with `Object3D.DEFAULT_UP` set to (0,0,1).
+
+**cube3d did not replicate at all, and phase 2 did not know it.** It registered neither `NewSpatialSystem` nor `NewNetworkSystem`, so the 3D binding set was schema-pinned and had never produced a byte on the wire. Two gates could have caught it and neither can: `schema-check` cannot, because removing `NewNetworkSystem` leaves the fingerprint at `b6b9ce73` byte for byte — `--dump-schema` pins the *layout*, not whether anything emits it — and the split acceptance test cannot, because a cell transfer travels through `TransferFrame` rather than through replication. The new test walks a built cell's actual system list instead of its schema.
+
+**Left undone, deliberately and named rather than implied:**
+
+- **The 2D clients gained the 3D code and use none of it.** Both 2D SDKs now carry `unQuat`, `slerpQuat` and `Quat.cs` in their `_core`, because core files are copied verbatim regardless of what a schema uses. It costs bytes in a bundle, not on the wire, and the alternative — conditional core files — would make an SDK's contents depend on its schema in a way nothing else does.
+- **`examples/space` is still 2D**, so nothing exercises the 3D path at the scale the reference game runs at. cube3d spawns 64 cubes; the space example runs hundreds of entities with bots.
+- **No prediction or reconciliation for the 3D profile.** `FlyInput` is unsequenced and unreconciled, so the viewer is server-authoritative with no local prediction — acceptable for a spectator camera, not for a character.
+- **`pkg/spatial` is still 2D**, unchanged from phase 2: AoI and collision remain flat. That is phase 4.
 
 ### 7.6 Validation
 
