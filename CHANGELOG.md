@@ -5,6 +5,40 @@ of [`README.md`](README.md#status) for what that means for API and wire compatib
 
 ## Unreleased
 
+### Added
+
+- **The 3D dimension profile is implemented.** `Config.Dimension:
+  Dimension3D` selects a process that replicates three world coordinates,
+  three velocity axes, collider depth and full quaternion orientation, and
+  integrates and transfers all of it. It was previously declared and
+  panicked at construction. See `examples/cube3d` for the smallest working
+  3D process, and `docs/roadmap.md` §7.5.6 for what it does and does not
+  cover.
+
+  A **2D game is unaffected and pays no additional wire bytes**, on the
+  client wire or the mesh: the 2D engine binding set and the 2D border
+  frame header are byte-identical, which the committed schema goldens
+  pin.
+
+  Notable pieces: a 7-byte smallest-three quaternion encoding in
+  `pkg/quantize`; `component.Motion` with `MoveFly` / `MoveWalk` /
+  `MoveBallistic` plus `Config.Gravity`; and `component.Rotation` gaining
+  `RotationFromAxisAngle`, `Mul` and `RotateAxis`, without which no game
+  could express pitch or roll.
+
+  Not yet covered: no client can render it — quaternion decode and slerp
+  in TypeScript and C# are the next phase — and `pkg/spatial` is still 2D,
+  so a 3D game collides as though flattened.
+
+### Fixed
+
+- **Entity height survived neither a cell boundary nor a reconnect.** The
+  mesh transfer frame reserved `PosZ`/`VelZ` and round-tripped them in its
+  codec, but nothing ever wrote or read them, so Z was dropped at both
+  ends of every split, merge and migrate. `engine.players` likewise had no
+  `pos_z`. Both are fixed; migration 002 adds the column with a default of
+  0, so a 2D deployment needs no action.
+
 ### Breaking
 
 - **Three engine API signatures changed with CE-008** (tick timing and
