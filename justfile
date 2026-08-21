@@ -37,7 +37,7 @@ client-sdk GAME:
 # it reads sorts by reflect.Type.String() before emitting.
 #
 # Both need PostgreSQL for space and 4node-basic (`just db-up`); those two open
-# their database before --dump-schema exits.
+# their database before --dump-schema exits. simple and cube3d are DB-free.
 
 schema_pg := env('POSTGRES_URL', 'postgres://mmo:mmo@localhost:5432/mmo?sslmode=disable')
 
@@ -52,12 +52,13 @@ schema-dump DIR:
             "--postgres-url={{ schema_pg }}" > "{{ DIR }}/$2.json"
     }
     dump simple      simple
+    dump cube3d      cube3d
     dump 4node-basic 4node
     dump space       space
 
 # rewrite the pinned protocol-schema goldens in testdata/schema/
 schema-golden: (schema-dump "testdata/schema")
-    @echo "wrote testdata/schema/{simple,4node,space}.json"
+    @echo "wrote testdata/schema/{simple,cube3d,4node,space}.json"
 
 # fail if any example's --dump-schema output has drifted from its golden
 schema-check:
@@ -67,7 +68,7 @@ schema-check:
     trap 'rm -rf "$out"' EXIT
     just schema-dump "$out"
     rc=0
-    for n in simple 4node space; do
+    for n in simple cube3d 4node space; do
         if ! diff -u "testdata/schema/$n.json" "$out/$n.json"; then
             echo "schema-check: $n drifted from testdata/schema/$n.json" >&2
             rc=1
@@ -77,7 +78,7 @@ schema-check:
         echo "schema-check: the client-visible protocol changed. If intended, run 'just schema-golden' and regenerate the SDKs." >&2
         exit 1
     fi
-    echo "schema-check: all three schemas match their goldens"
+    echo "schema-check: all four schemas match their goldens"
 
 # remove bin/
 clean:

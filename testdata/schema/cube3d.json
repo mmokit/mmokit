@@ -1,0 +1,329 @@
+{
+  "game": "cube3d",
+  "dimension": "3d",
+  "fingerprint": "b54bdd25",
+  "entities": [
+    {
+      "kind": 1,
+      "name": "Cube",
+      "bindings": [
+        {
+          "type": "engine_bindings",
+          "fields": [
+            {
+              "name": "worldX",
+              "encoding": "f32",
+              "size": 4
+            },
+            {
+              "name": "worldY",
+              "encoding": "f32",
+              "size": 4
+            },
+            {
+              "name": "worldZ",
+              "encoding": "f32",
+              "size": 4
+            },
+            {
+              "name": "velX",
+              "encoding": "qvel",
+              "size": 2,
+              "scale": 2000
+            },
+            {
+              "name": "velY",
+              "encoding": "qvel",
+              "size": 2,
+              "scale": 2000
+            },
+            {
+              "name": "velZ",
+              "encoding": "qvel",
+              "size": 2,
+              "scale": 2000
+            },
+            {
+              "name": "radius",
+              "encoding": "qvel",
+              "size": 2,
+              "scale": 500
+            },
+            {
+              "name": "width",
+              "encoding": "qvel",
+              "size": 2,
+              "scale": 500
+            },
+            {
+              "name": "height",
+              "encoding": "qvel",
+              "size": 2,
+              "scale": 500
+            },
+            {
+              "name": "depth",
+              "encoding": "qvel",
+              "size": 2,
+              "scale": 500
+            },
+            {
+              "name": "rot",
+              "encoding": "qquat",
+              "size": 7
+            }
+          ]
+        },
+        {
+          "type": "component",
+          "fields": [
+            {
+              "name": "x",
+              "encoding": "qvel",
+              "size": 2
+            },
+            {
+              "name": "y",
+              "encoding": "qvel",
+              "size": 2
+            },
+            {
+              "name": "z",
+              "encoding": "qvel",
+              "size": 2
+            }
+          ],
+          "structName": "Spin"
+        }
+      ],
+      "layout": [
+        4,
+        4,
+        4,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        7,
+        2,
+        2,
+        2
+      ]
+    }
+  ],
+  "client_input_types": [
+    {
+      "name": "mmokit.Ping",
+      "type_id": 2350322182,
+      "fields": [
+        {
+          "name": "clientTime",
+          "encoding": "i64",
+          "size": 8
+        }
+      ]
+    },
+    {
+      "name": "mmokit.ReplicationAck",
+      "type_id": 3976019817,
+      "fields": [
+        {
+          "name": "streamEpoch",
+          "encoding": "u32",
+          "size": 4
+        },
+        {
+          "name": "seq",
+          "encoding": "u32",
+          "size": 4
+        }
+      ]
+    }
+  ],
+  "server_event_types": [
+    {
+      "name": "mmokit.CellChange",
+      "type_id": 1196329874,
+      "fields": [
+        {
+          "name": "cellX",
+          "encoding": "i32",
+          "size": 4
+        },
+        {
+          "name": "cellY",
+          "encoding": "i32",
+          "size": 4
+        }
+      ]
+    },
+    {
+      "name": "mmokit.DebugInfo",
+      "type_id": 2213731489,
+      "fields": [
+        {
+          "name": "topology",
+          "encoding": "struct",
+          "size": 0,
+          "fields": [
+            {
+              "name": "cells",
+              "encoding": "slice",
+              "size": 0,
+              "item": {
+                "name": "",
+                "encoding": "struct",
+                "size": 0,
+                "fields": [
+                  {
+                    "name": "cellX",
+                    "encoding": "i32",
+                    "size": 4
+                  },
+                  {
+                    "name": "cellY",
+                    "encoding": "i32",
+                    "size": 4
+                  },
+                  {
+                    "name": "depth",
+                    "encoding": "u32",
+                    "size": 4
+                  },
+                  {
+                    "name": "size",
+                    "encoding": "f32",
+                    "size": 4
+                  },
+                  {
+                    "name": "originX",
+                    "encoding": "f32",
+                    "size": 4
+                  },
+                  {
+                    "name": "originY",
+                    "encoding": "f32",
+                    "size": 4
+                  },
+                  {
+                    "name": "nodeID",
+                    "encoding": "string",
+                    "size": 0
+                  }
+                ]
+              }
+            },
+            {
+              "name": "gridW",
+              "encoding": "i32",
+              "size": 4
+            },
+            {
+              "name": "gridH",
+              "encoding": "i32",
+              "size": 4
+            },
+            {
+              "name": "baseCellSize",
+              "encoding": "f32",
+              "size": 4
+            }
+          ]
+        },
+        {
+          "name": "aoIRadius",
+          "encoding": "f32",
+          "size": 4
+        }
+      ]
+    },
+    {
+      "name": "mmokit.OperationError",
+      "type_id": 1032367819,
+      "fields": [
+        {
+          "name": "code",
+          "encoding": "u32",
+          "size": 4
+        },
+        {
+          "name": "message",
+          "encoding": "string",
+          "size": 0
+        }
+      ]
+    },
+    {
+      "name": "mmokit.PlayerEntityAssigned",
+      "type_id": 44496856,
+      "fields": [
+        {
+          "name": "entityNetID",
+          "encoding": "u32",
+          "size": 4
+        },
+        {
+          "name": "worldX",
+          "encoding": "f32",
+          "size": 4
+        },
+        {
+          "name": "worldY",
+          "encoding": "f32",
+          "size": 4
+        }
+      ]
+    },
+    {
+      "name": "mmokit.Pong",
+      "type_id": 2233975548,
+      "fields": [
+        {
+          "name": "clientTime",
+          "encoding": "i64",
+          "size": 8
+        },
+        {
+          "name": "serverTime",
+          "encoding": "i64",
+          "size": 8
+        }
+      ]
+    },
+    {
+      "name": "mmokit.ServerConfig",
+      "type_id": 2854082715,
+      "fields": [
+        {
+          "name": "tickRate",
+          "encoding": "u32",
+          "size": 4
+        },
+        {
+          "name": "schemaHash",
+          "encoding": "u32",
+          "size": 4
+        }
+      ]
+    },
+    {
+      "name": "mmokit.WorldDelta",
+      "type_id": 106632948,
+      "fields": [
+        {
+          "name": "body",
+          "encoding": "bytes",
+          "size": 0
+        },
+        {
+          "name": "streamEpoch",
+          "encoding": "u32",
+          "size": 4
+        }
+      ]
+    }
+  ]
+}

@@ -142,11 +142,11 @@ jobs:
       # DB-free compile of every example's composition root. Written outside
       # the tree on purpose (AGENTS.md forbids building binaries into package
       # roots). This replaces a single `go build ./cmd/server`: two of the
-      # three examples were never built by CI at all.
+      # examples were never built by CI at all.
       - name: build every example
         run: |
           set -euo pipefail
-          for ex in simple 4node-basic space; do
+          for ex in simple cube3d 4node-basic space; do
             echo "building examples/$ex"
             go build -o "/tmp/example-$ex" "./examples/$ex"
           done

@@ -51,8 +51,9 @@ type Rotation = component.Rotation
 // Rotation constructors and accessors. Game code reads and writes orientation
 // through these rather than the storage field.
 var (
-	RotationIdentity = component.RotationIdentity
-	RotationFromYaw  = component.RotationFromYaw
+	RotationIdentity      = component.RotationIdentity
+	RotationFromYaw       = component.RotationFromYaw
+	RotationFromAxisAngle = component.RotationFromAxisAngle
 )
 
 // Collider defines a collision shape (circle or oriented rectangle) with a layer byte.

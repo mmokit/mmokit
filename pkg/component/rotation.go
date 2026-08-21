@@ -71,3 +71,51 @@ func (r Rotation) Forward() (x, y float32) {
 	yaw := float64(r.Yaw())
 	return float32(math.Cos(yaw)), float32(math.Sin(yaw))
 }
+
+// RotationFromAxisAngle builds a rotation of angle radians about the given
+// axis. The axis need not be unit length; a zero-length axis yields identity.
+//
+// Phase 1 gave Rotation quaternion storage but only yaw accessors, which is
+// all a 2D profile needs. A 3D profile needs to express pitch and roll, and
+// without a general constructor a game cannot produce any orientation the yaw
+// helpers cannot — so the 3D orientation wire path would be unreachable from
+// game code.
+//
+// float64 intermediates for the same reason RotationFromYaw uses them.
+func RotationFromAxisAngle(x, y, z, angle float32) Rotation {
+	n := math.Sqrt(float64(x)*float64(x) + float64(y)*float64(y) + float64(z)*float64(z))
+	if n == 0 {
+		return Rotation{W: 1}
+	}
+	h := float64(angle) / 2
+	s := math.Sin(h) / n
+	return Rotation{
+		X: float32(float64(x) * s),
+		Y: float32(float64(y) * s),
+		Z: float32(float64(z) * s),
+		W: float32(math.Cos(h)),
+	}
+}
+
+// Mul composes two rotations: the result applies o first, then r.
+//
+// Quaternion multiplication does not commute, and the order chosen here is the
+// one that reads correctly at a call site — r.Mul(delta) means "r, then a
+// further delta" only if delta is applied in r's frame. Renormalized on the
+// way out, because repeated composition is exactly where a float32 quaternion
+// drifts off the unit sphere.
+func (r Rotation) Mul(o Rotation) Rotation {
+	rx, ry, rz, rw := float64(r.X), float64(r.Y), float64(r.Z), float64(r.W)
+	ox, oy, oz, ow := float64(o.X), float64(o.Y), float64(o.Z), float64(o.W)
+	return Rotation{
+		X: float32(rw*ox + rx*ow + ry*oz - rz*oy),
+		Y: float32(rw*oy - rx*oz + ry*ow + rz*ox),
+		Z: float32(rw*oz + rx*oy - ry*ox + rz*ow),
+		W: float32(rw*ow - rx*ox - ry*oy - rz*oz),
+	}.normalized()
+}
+
+// RotateAxis returns r turned by angle radians about the given axis.
+func (r Rotation) RotateAxis(x, y, z, angle float32) Rotation {
+	return r.Mul(RotationFromAxisAngle(x, y, z, angle))
+}
