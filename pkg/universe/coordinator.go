@@ -360,9 +360,9 @@ type Config struct {
 	// with from a command line.
 	Dimension Dimension
 
-	// Gravity is the downward acceleration, in world units per second
-	// squared along -Z, applied to entities whose component.Motion mode is
-	// not MoveFly. Zero disables it.
+	// Gravity is the SIGNED acceleration along Z, in world units per second
+	// squared, applied to entities whose component.Motion mode is not
+	// MoveFly. NEGATIVE pulls down: Earth is about -9.81. Zero disables it.
 	//
 	// It is meaningless in a 2D profile — there is no vertical axis to fall
 	// along — so Build refuses the combination rather than accepting a

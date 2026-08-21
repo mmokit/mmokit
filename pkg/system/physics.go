@@ -53,7 +53,7 @@ func (s *PhysicsSystem) Update(dt float32) {
 		// Gravity acts on velocity before it is integrated, so a tick's
 		// displacement reflects the acceleration applied during that tick.
 		if gravity != 0 && b.Motion != nil && b.Motion.Mode != component.MoveFly {
-			b.Vel.Z -= gravity * effDt
+			b.Vel.Z += gravity * effDt
 		}
 
 		b.Pos.X += b.Vel.X * effDt

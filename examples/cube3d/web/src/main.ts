@@ -11,7 +11,9 @@ const status = document.getElementById("status") as HTMLElement;
 const scene = new Scene3D(canvas);
 
 const keys: KeyState = { ...NO_KEYS };
-let look: Look = { yaw: 0, pitch: -0.2 };
+// Pitched down enough that the cube field is in frame from the spawn height
+// rather than 1300 units away on the horizon.
+let look: Look = { yaw: 0, pitch: -0.6 };
 let myNetID: number | null = null;
 
 /** Latest known state per netID, keyed as the server sends it. */

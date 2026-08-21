@@ -13,6 +13,9 @@ import (
 
 // newPhysicsFixture wires a PhysicsSystem against a world with the given
 // gravity, and returns the world plus the system.
+//
+// Gravity is SIGNED: negative pulls down. Passing a positive magnitude here
+// makes entities rise, which is exactly the bug examples/cube3d shipped with.
 func newPhysicsFixture(t *testing.T, gravity float32) (*ecs.World, *PhysicsSystem) {
 	t.Helper()
 	world := ecs.NewWorld()
@@ -73,7 +76,7 @@ func TestPhysics_TwoDIsUnaffected(t *testing.T) {
 // untouched even in a process configured with gravity, which is what lets one
 // process mix falling characters with flying ships.
 func TestPhysics_GravityRequiresOptIn(t *testing.T) {
-	world, sys := newPhysicsFixture(t, 10)
+	world, sys := newPhysicsFixture(t, -10)
 	posMap := ecs.NewMap1[component.Position](world)
 	velMap := ecs.NewMap1[component.Velocity](world)
 	motionMap := ecs.NewMap1[component.Motion](world)
@@ -109,7 +112,7 @@ func TestPhysics_GravityRequiresOptIn(t *testing.T) {
 // TestPhysics_WalkClampsToGround covers the mode that has a ground plane, plus
 // the Grounded flag games gate jumping on.
 func TestPhysics_WalkClampsToGround(t *testing.T) {
-	world, sys := newPhysicsFixture(t, 10)
+	world, sys := newPhysicsFixture(t, -10)
 	posMap := ecs.NewMap1[component.Position](world)
 	velMap := ecs.NewMap1[component.Velocity](world)
 	motionMap := ecs.NewMap1[component.Motion](world)
@@ -147,7 +150,7 @@ func TestPhysics_WalkClampsToGround(t *testing.T) {
 // TestPhysics_BallisticDoesNotClamp — the difference between the two gravity
 // modes is exactly the ground clamp.
 func TestPhysics_BallisticDoesNotClamp(t *testing.T) {
-	world, sys := newPhysicsFixture(t, 10)
+	world, sys := newPhysicsFixture(t, -10)
 	posMap := ecs.NewMap1[component.Position](world)
 	velMap := ecs.NewMap1[component.Velocity](world)
 	motionMap := ecs.NewMap1[component.Motion](world)
@@ -182,5 +185,43 @@ func TestPhysics_ZeroGravityIgnoresMotion(t *testing.T) {
 
 	if got := posMap.Get(e).Z; got != 50 {
 		t.Errorf("entity moved to %v with gravity 0", got)
+	}
+}
+
+// TestPhysics_GravitySignIsDownForNegative pins the sign convention itself.
+//
+// It exists because the convention was ambiguous and the ambiguity shipped:
+// the integrator read Config.Gravity as a positive MAGNITUDE while
+// examples/cube3d passed -9.81 as a vector COMPONENT, so every cube
+// accelerated upward and flew off the map. Every other physics test here
+// passes a negative value and asserts falling, which cannot distinguish the
+// two readings — only asserting BOTH directions can.
+func TestPhysics_GravitySignIsDownForNegative(t *testing.T) {
+	for _, c := range []struct {
+		name    string
+		gravity float32
+		wantZ   float32
+	}{
+		// v += g*dt = -10, then z += v*dt: 100 - 10 = 90.
+		{name: "negative pulls down", gravity: -10, wantZ: 90},
+		// The mirror. A positive value is almost certainly a caller mistake,
+		// but the framework must be predictable rather than protective.
+		{name: "positive pushes up", gravity: 10, wantZ: 110},
+	} {
+		world, sys := newPhysicsFixture(t, c.gravity)
+		posMap := ecs.NewMap1[component.Position](world)
+		velMap := ecs.NewMap1[component.Velocity](world)
+		motionMap := ecs.NewMap1[component.Motion](world)
+
+		e := world.NewEntity()
+		posMap.Add(e, &component.Position{Z: 100})
+		velMap.Add(e, &component.Velocity{})
+		motionMap.Add(e, &component.Motion{Mode: component.MoveBallistic})
+
+		sys.Update(1)
+
+		if got := posMap.Get(e).Z; got != c.wantZ {
+			t.Errorf("%s: gravity %v put the entity at %v, want %v", c.name, c.gravity, got, c.wantZ)
+		}
 	}
 }

@@ -51,6 +51,15 @@ type FlyInput struct {
 // FlySpeed is how fast a viewer moves, in world units per second.
 const FlySpeed = 220
 
+// ViewerSpawnZ is how high above the ground plane a viewer starts.
+//
+// Not zero, which is what SpawnPlayer gives it: the cubes settle onto z=0 and
+// are 20 units tall, so a camera at z=0 sits at their mid-height and sees the
+// scene edge-on — a horizontal band and the grid as a line. Starting above the
+// tallest cube's rest height means the first frame looks like a 3D scene
+// rather than a horizon.
+const ViewerSpawnZ = 260
+
 // clampAxis keeps a hostile client from flying at arbitrary speed. The
 // framework does not validate game input for the game.
 func clampAxis(v float32) float32 {
@@ -71,7 +80,7 @@ func registerViewer(process *mmokit.Process) {
 	mmokit.RegisterKind[ViewerBundle](process, KindViewer, "Viewer")
 
 	process.OnPlayerJoin(func(session *mmokit.PlayerSession, stage *mmokit.Stage) {
-		stage.SpawnPlayer(session,
+		viewer := stage.SpawnPlayer(session,
 			mmokit.EntityKind{Type: KindViewer},
 			mmokit.Collider{
 				Shape:  mmokit.ShapeSphere,
@@ -85,6 +94,13 @@ func registerViewer(process *mmokit.Process) {
 			mmokit.Motion{Mode: mmokit.MoveFly},
 			ViewerName{Name: session.Username},
 		)
+
+		// SpawnPlayer positions from the session's 2D spawn location, so Z is
+		// 0. Lift the viewer after the fact — there is no 3D spawn resolver,
+		// and adding one for a camera would be a wire change for no gain.
+		if h := viewer.Handle(); stage.PositionMap().HasAll(h) {
+			stage.PositionMap().Get(h).Z = ViewerSpawnZ
+		}
 	})
 
 	mmokit.HandleClient(process, func(player mmokit.Entity, msg *FlyInput) {

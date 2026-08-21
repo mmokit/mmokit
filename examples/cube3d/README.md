@@ -36,6 +36,16 @@ acceptance test runs anywhere `go test` runs:
 go test ./examples/cube3d/
 ```
 
+## What you should see
+
+A lattice of tumbling cubes hanging in the air between z=0 and roughly z=460,
+half of them falling to rest on the ground grid and half hovering. Your own
+viewer is red and starts about 260 units up, pitched down at the field.
+
+If you see a horizontal line and a few dots, something is wrong with the
+camera or with gravity's sign — that is exactly what the first version of this
+example looked like.
+
 ## What it pins
 
 `TestCube3D_SurvivesCellSplitWithZ` spawns 16 cubes per cell across a 2×2 grid,

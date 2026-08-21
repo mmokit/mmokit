@@ -17,11 +17,14 @@ import (
 // World geometry. Small and even so a split produces four children whose
 // quadrants are trivial to reason about in the acceptance test.
 const (
-	CellsX    = 2
-	CellsY    = 2
-	CellSize  = 1000
-	TickRate  = 20
-	AoIRadius = 500
+	CellsX   = 2
+	CellsY   = 2
+	CellSize = 1000
+	TickRate = 20
+	// Wide enough to see the whole 2000x2000 world from the middle of it.
+	// At 500 the viewer's OWN cell corners are 566 units away and fall
+	// outside AoI, so most of the scene simply never arrives.
+	AoIRadius = 1500
 
 	// Gravity is Earth-ish. The exact value does not matter; that it is
 	// non-zero is what makes this a 3D process — Build refuses gravity in a
