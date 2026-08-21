@@ -85,6 +85,68 @@ namespace Mmokit.Sdk.Core
             => BitConverter.Int32BitsToSingle((int)ReadUint32(data, offset));
 
         // --- dequantizers (match pkg/quantize/quantize.go) ---
+        /// <summary>Wire width of a smallest-three quaternion, in bytes.</summary>
+        public const int QuatWireSize = 7;
+
+        // 2 + 3*18 = 56 bits = QuatWireSize bytes.
+        private const int QuatBits = 18;
+        // The code assigned to 0.0, and the number of steps either side of it.
+        private const int QuatHalf = (1 << (QuatBits - 1)) - 1; // 131071
+        // Bound on the three transmitted components: the largest is never sent.
+        private static readonly double QuatRange = Math.Sqrt(2.0) / 2.0;
+
+        private static double UnQuatComponent(int code) =>
+            ((code - QuatHalf) / (double)QuatHalf) * QuatRange;
+
+        /// <summary>
+        /// Decode a smallest-three quaternion from QuatWireSize big-endian bytes.
+        ///
+        /// The largest-magnitude component is not transmitted; it is
+        /// reconstructed from the unit-length constraint and is always
+        /// non-negative, because the encoder sign-canonicalizes (q and -q are
+        /// the same rotation, so it is free).
+        ///
+        /// Read per byte to mirror the TypeScript port exactly. Each extracted
+        /// component is 18 bits, well inside int range.
+        ///
+        /// Outputs are float, not double: the server's authority is float32 and
+        /// the cross-language golden compares exact bit patterns.
+        /// </summary>
+        public static Quat UnQuat(byte[] data, int offset)
+        {
+            int b0 = data[offset];
+            int b1 = data[offset + 1];
+            int b2 = data[offset + 2];
+            int b3 = data[offset + 3];
+            int b4 = data[offset + 4];
+            int b5 = data[offset + 5];
+            int b6 = data[offset + 6];
+
+            int largest = b0 >> 6;
+            int c0 = ((b0 & 0x3F) << 12) | (b1 << 4) | (b2 >> 4);
+            int c1 = ((b2 & 0x0F) << 14) | (b3 << 6) | (b4 >> 2);
+            int c2 = ((b4 & 0x03) << 16) | (b5 << 8) | b6;
+
+            var q = new double[4];
+            var codes = new[] { c0, c1, c2 };
+            int ci = 0;
+            double sumSq = 0;
+            for (int i = 0; i < 4; i++)
+            {
+                if (i == largest) continue;
+                double v = UnQuatComponent(codes[ci++]);
+                q[i] = v;
+                sumSq += v * v;
+            }
+            // Clamped, not bare: a value no encoder emits can push sumSq past
+            // 1, and Sqrt of a negative is NaN. The golden corpus carries one.
+            q[largest] = Math.Sqrt(Math.Max(0.0, 1.0 - sumSq));
+
+            double n = Math.Sqrt(q[0] * q[0] + q[1] * q[1] + q[2] * q[2] + q[3] * q[3]);
+            if (n == 0) return Quat.Identity;
+            return new Quat((float)(q[0] / n), (float)(q[1] / n), (float)(q[2] / n), (float)(q[3] / n));
+        }
+
         public static double UnAngle(int q) => (q / 65535.0) * 2.0 * Math.PI - Math.PI;
         public static double UnNorm(int q) => q / 255.0;
         public static double UnVel(int q, double scale) => (q / 32767.0) * scale;

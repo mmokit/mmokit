@@ -13,6 +13,12 @@ namespace Mmokit.Sdk.Core
         public double VelY;
         public double Rotation;
         public double ProducedAtMs;
+        /// Optional 3D state. A 2D profile leaves all three null and every
+        /// path below behaves exactly as it did.
+        public double? WorldZ;
+        public double? VelZ;
+        /// Full orientation. Takes precedence over Rotation when present.
+        public Quat? Quat;
         /// Authority epoch carried by the replication entry. Null keeps the
         /// pre-epoch behavior for callers that construct samples manually.
         public uint? AuthorityEpoch;
@@ -31,6 +37,10 @@ namespace Mmokit.Sdk.Core
         public double RenderX;
         public double RenderY;
         public double RenderRot;
+        /// Present only when the samples carried 3D state. Null rather than 0
+        /// so a renderer cannot mistake "no data" for "at the origin".
+        public double? RenderZ;
+        public Quat? RenderQuat;
         public InterpolationMode Mode;
         /// Producer-time distance applied to the newest sample's velocity.
         /// This remains populated at the extrapolation cap even when Mode is
@@ -69,6 +79,63 @@ namespace Mmokit.Sdk.Core
     {
         /// Linear interpolation between a and b at fraction t in [0,1].
         public static double Lerp(double a, double b, double t) => a + (b - a) * t;
+
+        /// <summary>
+        /// The |dot| above which SlerpQuat falls back to a normalized lerp.
+        ///
+        /// Identical to component.SlerpDotThreshold in the Go reference, which
+        /// exports it for this reason: it is the single most port-divergent
+        /// line in the orientation path, and a client picking a different
+        /// value produces visibly different intermediate frames near the seam
+        /// with nothing else to catch it.
+        /// </summary>
+        public const double SlerpDotThreshold = 0.9995;
+
+        /// <summary>
+        /// Interpolate from a to b along the shortest arc. Mirrors
+        /// component.Rotation.Slerp clause for clause.
+        /// </summary>
+        public static Quat SlerpQuat(Quat a, Quat b, double t)
+        {
+            if (t <= 0) return a.Normalized();
+            if (t >= 1) return b.Normalized();
+
+            Quat na = a.Normalized();
+            Quat nb = b.Normalized();
+
+            double ax = na.X, ay = na.Y, az = na.Z, aw = na.W;
+            double bx = nb.X, by = nb.Y, bz = nb.Z, bw = nb.W;
+
+            double dot = ax * bx + ay * by + az * bz + aw * bw;
+            if (dot < 0)
+            {
+                // q and -q are the same rotation; without this the
+                // interpolation takes the long way round.
+                bx = -bx; by = -by; bz = -bz; bw = -bw;
+                dot = -dot;
+            }
+            if (dot > 1) dot = 1;
+
+            double wa, wb;
+            if (dot > SlerpDotThreshold)
+            {
+                wa = 1 - t;
+                wb = t;
+            }
+            else
+            {
+                double theta = Math.Acos(dot);
+                double sin = Math.Sin(theta);
+                wa = Math.Sin((1 - t) * theta) / sin;
+                wb = Math.Sin(t * theta) / sin;
+            }
+
+            return new Quat(
+                (float)(wa * ax + wb * bx),
+                (float)(wa * ay + wb * by),
+                (float)(wa * az + wb * bz),
+                (float)(wa * aw + wb * bw)).Normalized();
+        }
 
         /// Angle lerp taking the shortest path around the unit circle.
         public static double LerpAngle(double a, double b, double t)
@@ -197,6 +264,8 @@ namespace Mmokit.Sdk.Core
                 result = new InterpolationResult
                 {
                     RenderX = only.WorldX,
+                    RenderZ = only.WorldZ,
+                    RenderQuat = only.Quat,
                     RenderY = only.WorldY,
                     RenderRot = only.Rotation,
                     Mode = InterpolationMode.Hold,
@@ -223,6 +292,8 @@ namespace Mmokit.Sdk.Core
                 result = new InterpolationResult
                 {
                     RenderX = s0.WorldX,
+                    RenderZ = s0.WorldZ,
+                    RenderQuat = s0.Quat,
                     RenderY = s0.WorldY,
                     RenderRot = s0.Rotation,
                     Mode = InterpolationMode.Hold,
@@ -238,6 +309,11 @@ namespace Mmokit.Sdk.Core
                 result = new InterpolationResult
                 {
                     RenderX = s1.WorldX + s1.VelX * extS,
+                    RenderZ = s1.WorldZ.HasValue ? s1.WorldZ.Value + (s1.VelZ ?? 0) * extS : (double?)null,
+                    // Orientation HOLDS rather than extrapolating, matching
+                    // RenderRot: projecting a rotation forward needs an
+                    // angular velocity the wire does not carry.
+                    RenderQuat = s1.Quat,
                     RenderY = s1.WorldY + s1.VelY * extS,
                     RenderRot = s1.Rotation,
                     Mode = extMs > 0 && requestedExtMs <= maxExtrapolateMs
@@ -251,6 +327,12 @@ namespace Mmokit.Sdk.Core
             result = new InterpolationResult
             {
                 RenderX = Lerp(s0.WorldX, s1.WorldX, t),
+                RenderZ = s0.WorldZ.HasValue && s1.WorldZ.HasValue
+                    ? Lerp(s0.WorldZ.Value, s1.WorldZ.Value, t)
+                    : (double?)null,
+                RenderQuat = s0.Quat.HasValue && s1.Quat.HasValue
+                    ? SlerpQuat(s0.Quat.Value, s1.Quat.Value, t)
+                    : (Quat?)null,
                 RenderY = Lerp(s0.WorldY, s1.WorldY, t),
                 RenderRot = LerpAngle(s0.Rotation, s1.Rotation, t),
                 Mode = InterpolationMode.Interpolate,
