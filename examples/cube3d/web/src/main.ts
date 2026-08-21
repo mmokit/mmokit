@@ -8,6 +8,7 @@ import { axesFromKeys, applyLook, NO_KEYS, type KeyState, type Look } from "./fl
 
 const canvas = document.getElementById("view") as HTMLCanvasElement;
 const status = document.getElementById("status") as HTMLElement;
+const help = document.getElementById("help") as HTMLElement;
 const scene = new Scene3D(canvas);
 
 const keys: KeyState = { ...NO_KEYS };
@@ -34,6 +35,11 @@ addEventListener("keyup", (e) => {
 });
 
 canvas.addEventListener("click", () => canvas.requestPointerLock());
+// The legend dims until the pointer is captured, because until then the keys
+// genuinely do nothing and there is no other signal saying so.
+document.addEventListener("pointerlockchange", () => {
+  help.classList.toggle("inactive", document.pointerLockElement !== canvas);
+});
 addEventListener("mousemove", (e) => {
   if (document.pointerLockElement !== canvas) return;
   look = applyLook(look, e.movementX, e.movementY);
@@ -43,7 +49,7 @@ scene.resize(innerWidth, innerHeight);
 
 const client = new Cube3dClient({
   url: `ws://${location.host}/ws`,
-  onOpen: () => (status.textContent = "connected — click to look, WASD + space/shift to fly"),
+  onOpen: () => (status.textContent = "connected"),
   onClose: () => (status.textContent = "disconnected"),
   onSchemaMismatch: (server, mine) =>
     (status.textContent = `schema mismatch: server ${server}, client ${mine} — regenerate the SDK`),

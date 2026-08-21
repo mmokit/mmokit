@@ -11,11 +11,33 @@
         font: 13px ui-monospace, monospace; color: #9fb3c8;
         background: rgba(0,0,0,.45); padding: 5px 9px; border-radius: 4px;
       }
+      #help {
+        position: fixed; bottom: 12px; left: 12px;
+        font: 12px ui-monospace, monospace; color: #8fa4b8;
+        background: rgba(0,0,0,.45); padding: 8px 11px; border-radius: 4px;
+        line-height: 1.6;
+      }
+      #help kbd {
+        display: inline-block; min-width: 1.1em; text-align: center;
+        padding: 1px 5px; margin-right: 2px;
+        border: 1px solid #3a4757; border-bottom-width: 2px; border-radius: 3px;
+        background: #1b2430; color: #cfe0f0;
+      }
+      #help .hint { color: #6d8098; }
+      /* Dimmed until the pointer is captured, so the first thing you do is
+         obvious: the keys do nothing before you click. */
+      #help.inactive { opacity: .55; }
     </style>
   </head>
   <body>
     <canvas id="view"></canvas>
     <div id="status">connecting…</div>
+    <div id="help" class="inactive">
+      <div><strong>Click the view first</strong> <span class="hint">— captures the mouse</span></div>
+      <div><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> fly <span class="hint">(any one on its own)</span></div>
+      <div><kbd>Space</kbd> up &nbsp; <kbd>Shift</kbd> down <span class="hint">(world-vertical)</span></div>
+      <div><kbd>Mouse</kbd> look &nbsp; <kbd>Esc</kbd> release</div>
+    </div>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>

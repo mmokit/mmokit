@@ -46,6 +46,12 @@ If you see a horizontal line and a few dots, something is wrong with the
 camera or with gravity's sign — that is exactly what the first version of this
 example looked like.
 
+**Click the view first.** The keys do nothing until the pointer is captured;
+the on-screen legend dims until it is. Then <kbd>W</kbd>/<kbd>A</kbd>/
+<kbd>S</kbd>/<kbd>D</kbd> fly (each works on its own), <kbd>Space</kbd> and
+<kbd>Shift</kbd> move world-vertically whatever the camera is pitched at, and
+<kbd>Esc</kbd> releases the mouse.
+
 ## What it pins
 
 `TestCube3D_SurvivesCellSplitWithZ` spawns 16 cubes per cell across a 2×2 grid,

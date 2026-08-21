@@ -60,6 +60,39 @@ const FlySpeed = 220
 // rather than a horizon.
 const ViewerSpawnZ = 260
 
+// FlyVelocity is the world-space velocity a fly input asks for.
+//
+// A pure function so it can be tested without a live connection. The bug it
+// replaces was invisible precisely because the maths was buried in a handler
+// nothing could call.
+//
+// Forward and strafe act in the YAW PLANE only; lift is world-vertical, so
+// "up" stays up no matter where the camera is pitched. That is what makes a
+// fly camera feel predictable rather than tumbling.
+func FlyVelocity(msg *FlyInput) mmokit.Velocity {
+	fwd := clampAxis(msg.Forward)
+	strafe := clampAxis(msg.Strafe)
+	lift := clampAxis(msg.Lift)
+
+	// Right is forward x up. Facing +X with up +Z, that is -Y — so strafing
+	// right SUBTRACTS from Y. The obvious-looking sign pair (+strafe*cos on
+	// Y) inverts it and makes D move you left, which is what this shipped
+	// with until a unit test on this function caught it.
+	sin, cos := sinCos(msg.Yaw)
+	return mmokit.Velocity{
+		X: (fwd*cos + strafe*sin) * FlySpeed,
+		Y: (fwd*sin - strafe*cos) * FlySpeed,
+		Z: lift * FlySpeed,
+	}
+}
+
+// FlyRotation is the orientation a fly input asks for: yaw about Z, then
+// pitch about the camera's own X.
+func FlyRotation(msg *FlyInput) mmokit.Rotation {
+	return mmokit.RotationFromAxisAngle(0, 0, 1, msg.Yaw).
+		RotateAxis(1, 0, 0, msg.Pitch)
+}
+
 // clampAxis keeps a hostile client from flying at arbitrary speed. The
 // framework does not validate game input for the game.
 func clampAxis(v float32) float32 {
@@ -92,6 +125,10 @@ func registerViewer(process *mmokit.Process) {
 			// MoveFly: the viewer flies, so gravity must not act on it even
 			// though the process configures gravity for the cubes.
 			mmokit.Motion{Mode: mmokit.MoveFly},
+			// Explicit, because Stage.Spawn does not add one. Without it the
+			// 3D engine binding set emits identity for this entity forever
+			// and the viewer never appears to turn.
+			mmokit.RotationIdentity(),
 			ViewerName{Name: session.Username},
 		)
 
@@ -109,30 +146,24 @@ func registerViewer(process *mmokit.Process) {
 			return
 		}
 		h := player.Handle()
+
+		// Velocity only. Rotation is written separately BELOW and its absence
+		// must never block movement — requiring both here is what made every
+		// input a no-op: Stage.Spawn auto-adds a zero Velocity but does NOT
+		// add a Rotation, so `rot.HasAll(h)` was false for the viewer and the
+		// handler returned before touching anything.
 		vel := stage.VelocityMap()
-		rot := stage.RotationMap()
-		if !vel.HasAll(h) || !rot.HasAll(h) {
+		if !vel.HasAll(h) {
 			return
 		}
+		*vel.Get(h) = FlyVelocity(msg)
 
 		// Orientation is authoritative from the client's look angles: this is
 		// a spectator camera, not a contested entity, so there is nothing to
 		// cheat at and round-tripping it keeps the view responsive.
-		orient := mmokit.RotationFromAxisAngle(0, 0, 1, msg.Yaw).
-			RotateAxis(1, 0, 0, msg.Pitch)
-		*rot.Get(h) = orient
-
-		fwd := clampAxis(msg.Forward)
-		strafe := clampAxis(msg.Strafe)
-		lift := clampAxis(msg.Lift)
-
-		// Forward and strafe act in the yaw plane; lift is world-vertical so
-		// "up" stays up regardless of where the camera is pitched.
-		sin, cos := sinCos(msg.Yaw)
-		v := vel.Get(h)
-		v.X = (fwd*cos - strafe*sin) * FlySpeed
-		v.Y = (fwd*sin + strafe*cos) * FlySpeed
-		v.Z = lift * FlySpeed
+		if rot := stage.RotationMap(); rot.HasAll(h) {
+			*rot.Get(h) = FlyRotation(msg)
+		}
 	})
 }
 
