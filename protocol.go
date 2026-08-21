@@ -3,6 +3,7 @@ package mmokit
 import (
 	"encoding/json"
 	"io"
+	"sync/atomic"
 
 	"github.com/mlange-42/ark/ecs"
 	"github.com/mmokit/mmokit/pkg/system"
@@ -79,7 +80,10 @@ type Protocol struct {
 	// fingerprint is computed once, by AssembleFromProcess, because the
 	// connection-setup gates consult it per request and hashing the whole
 	// schema on every WebSocket upgrade would be absurd.
-	fingerprint uint32
+	// Atomic because Build assembles it AFTER the control-plane goroutines
+	// have spawned — see the comment at the assembleProtocol call site — so a
+	// registering peer's goroutine can read it concurrently with the write.
+	fingerprint atomic.Uint32
 }
 
 // NewProtocol creates a Protocol exporting p's registry under the given game
@@ -111,7 +115,7 @@ func (p *Protocol) Schema() ProtocolSchema {
 	ps := ProtocolSchema{
 		Game:        p.game,
 		Dimension:   p.dimension,
-		Fingerprint: FormatSchemaFingerprint(p.fingerprint),
+		Fingerprint: FormatSchemaFingerprint(p.fingerprint.Load()),
 	}
 	if p.replicators != nil {
 		ps.Entities = p.replicators.Schema()
@@ -213,9 +217,9 @@ func (p *Protocol) AssembleFromProcess(proc *universe.Process) {
 // Fingerprint field, so hashing a schema that already carries one yields the
 // same value.
 func (p *Protocol) recomputeFingerprint() {
-	p.fingerprint = SchemaFingerprint(p.Schema())
+	p.fingerprint.Store(SchemaFingerprint(p.Schema()))
 }
 
 // SchemaFingerprint returns the structural hash of this process's protocol, or
 // 0 before AssembleFromProcess has run.
-func (p *Protocol) SchemaFingerprint() uint32 { return p.fingerprint }
+func (p *Protocol) SchemaFingerprint() uint32 { return p.fingerprint.Load() }

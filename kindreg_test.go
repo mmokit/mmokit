@@ -38,6 +38,16 @@ type kindRegTestBundle struct {
 // Test harness
 // ---------------------------------------------------------------------------
 
+// frameworkTransferComponents is how many components the framework itself
+// registers into every stage's transfer registry, independent of the game:
+// component.Motion, so a move mode survives a cell boundary.
+//
+// It is registered in BOTH dimension profiles on purpose. Gating it on 3D
+// would shift every game component's ID by one between profiles, and the
+// transfer and border tails resolve purely by number — a mixed pair would
+// cross-decode in silence.
+const frameworkTransferComponents = 1
+
 func newTestProcess(t *testing.T) *universe.Process {
 	t.Helper()
 	mmo := New(Config{
@@ -159,8 +169,9 @@ func TestRegisterKind_LocalOnlyTag(t *testing.T) {
 		t.Errorf("expected 1 NetworkBinding (Name only; Input is local), got %d", len(def.NetworkBindings))
 	}
 	// The transfer registry should have only the Name component (Input is local-only).
-	if reg := cell.Stage.ReplicationRegistry(); reg.Len() != 1 {
-		t.Errorf("expected 1 component in transfer registry (Name only), got %d", reg.Len())
+	if reg := cell.Stage.ReplicationRegistry(); reg.Len() != frameworkTransferComponents+1 {
+		t.Errorf("expected %d components in transfer registry (framework + Name only), got %d",
+			frameworkTransferComponents+1, reg.Len())
 	}
 }
 
@@ -184,8 +195,9 @@ func TestRegisterKind_LocalOnlyOption(t *testing.T) {
 	if len(def.NetworkBindings) != 1 {
 		t.Errorf("expected 1 NetworkBinding (Name only; Input is local), got %d", len(def.NetworkBindings))
 	}
-	if reg := cell.Stage.ReplicationRegistry(); reg.Len() != 1 {
-		t.Errorf("expected 1 component in transfer registry (Name only), got %d", reg.Len())
+	if reg := cell.Stage.ReplicationRegistry(); reg.Len() != frameworkTransferComponents+1 {
+		t.Errorf("expected %d components in transfer registry (framework + Name only), got %d",
+			frameworkTransferComponents+1, reg.Len())
 	}
 }
 
@@ -356,8 +368,9 @@ func TestRegisterKind_OptionalTag(t *testing.T) {
 	}
 	// Optional fields ARE registered for transfer codec — the whole point is
 	// that they survive cell transfer when present.
-	if reg := cell.Stage.ReplicationRegistry(); reg.Len() != 2 {
-		t.Errorf("expected 2 components in transfer registry (Name + Tagging), got %d", reg.Len())
+	if reg := cell.Stage.ReplicationRegistry(); reg.Len() != frameworkTransferComponents+2 {
+		t.Errorf("expected %d components in transfer registry (framework + Name + Tagging), got %d",
+			frameworkTransferComponents+2, reg.Len())
 	}
 	if len(def.NetworkBindings) != 2 {
 		t.Fatalf("expected 2 NetworkBindings, got %d", len(def.NetworkBindings))
@@ -408,8 +421,9 @@ func TestRegisterKind_DashTag(t *testing.T) {
 	if len(def.NetworkBindings) != 1 {
 		t.Errorf("expected 1 NetworkBinding (Skipped excluded), got %d", len(def.NetworkBindings))
 	}
-	if reg := cell.Stage.ReplicationRegistry(); reg.Len() != 1 {
-		t.Errorf("expected 1 component in transfer registry, got %d", reg.Len())
+	if reg := cell.Stage.ReplicationRegistry(); reg.Len() != frameworkTransferComponents+1 {
+		t.Errorf("expected %d components in transfer registry (framework + 1 game), got %d",
+			frameworkTransferComponents+1, reg.Len())
 	}
 }
 

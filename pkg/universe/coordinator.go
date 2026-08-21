@@ -2151,7 +2151,21 @@ func (c *Process) Build() {
 	if c.bus != nil {
 		c.bus.SetProcessID(c.processID())
 	}
-
+	// Assembly stays LAST, and that is load-bearing rather than incidental:
+	// Build registers schema-affecting state after every control-plane
+	// goroutine has already spawned — the embedded gateway among it — so
+	// assembling earlier hashes an incomplete protocol. Measured, not
+	// assumed: hoisting this above the control-plane block rotates
+	// examples/simple's fingerprint from e163ddbf to d1c0d1f0 while its
+	// schema body stays byte-identical, which is exactly the signature of a
+	// hash taken too early.
+	//
+	// The consequence is that a peer CAN register before this runs and then
+	// see fingerprint 0. That is handled where it is observed rather than by
+	// reordering: Protocol.fingerprint is atomic so the read is not a data
+	// race, and admitSchemaFingerprint refuses a zero on either side instead
+	// of waving it through, so an early peer is told to retry rather than
+	// silently admitted unchecked.
 	c.assembleProtocol()
 }
 
@@ -2500,18 +2514,23 @@ func (c *Process) createNode(cell CellID, spatialBucketSize float32, owningHost 
 
 	base := NewStage(eng, cell, cfg.AoIRadius, nil, c.Wire())
 
-	// The 3D profile owns Motion's survival across a cell boundary.
-	// Registering it here rather than leaving it to the game is deliberate: a
-	// mode silently resetting to MoveFly at every cell line would switch
-	// gravity off on handoff, and that is not a bug a game author would
-	// expect to have to prevent.
+	// Motion survives a cell boundary. Registering it here rather than
+	// leaving it to the game is deliberate: a mode silently resetting to
+	// MoveFly at every cell line would switch gravity off on handoff, and
+	// that is not a bug a game author would expect to have to prevent.
 	//
-	// Registered ONLY under Dimension3D, so a 2D process's registry IDs — and
-	// therefore its mesh transfer bytes — are untouched by the 3D profile
-	// existing.
-	if cfg.Dimension == Dimension3D {
-		RegisterComponent(base.ReplicationRegistry(), ecs.NewMap1[component.Motion](eng.ECS))
-	}
+	// Registered UNCONDITIONALLY, and first, so the component-ID table is
+	// identical in both profiles. Gating it on Dimension3D — as this did
+	// briefly — shifts every game component's ID by one between profiles,
+	// and the transfer and border tails resolve purely by number, so a
+	// mixed pair would cross-decode in silence. That would make the profile
+	// select TYPES, which pkg/system/dimension.go's charter says it must
+	// never do.
+	//
+	// It costs a 2D cluster nothing: ComponentReplicator.Scan returns nil
+	// for an entity lacking the component and both emit loops skip nil, so
+	// an entity with no Motion contributes no bytes to either tail.
+	RegisterComponent(base.ReplicationRegistry(), ecs.NewMap1[component.Motion](eng.ECS))
 
 	// Wire the typed client-input dispatch path (channel 0x00 post
 	// Plan 1 Phase 5 unification; mmokit.HandleClient). All

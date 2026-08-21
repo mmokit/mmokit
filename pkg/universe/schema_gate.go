@@ -82,9 +82,12 @@ func (c *Process) schemaGate(next http.HandlerFunc) http.HandlerFunc {
 // beside the origin-check failure the upgrade path can also produce.
 func (c *Process) rejectSchema(w http.ResponseWriter, r *http.Request, want uint32, got, kind string) {
 	metrics.Ingress().RecordRejected(metrics.SurfaceClient, metrics.ReasonSchemaMismatch)
+	// The profile goes in the LOG only, never in the response: rejectSchema's
+	// contract is that the 409 echoes no server schema fact a stale client
+	// could read back, and the dimension is a schema fact.
 	c.Log.Log(CatNetConn,
-		"schema gate: refused %s %s from %s — client fingerprint %s (%s), this process is %s; regenerate the SDK against this build",
-		r.Method, r.URL.Path, r.RemoteAddr, quotedOrNone(got), kind, FormatSchemaFingerprint(want))
+		"schema gate: refused %s %s from %s — client fingerprint %s (%s), this process is %s (%s profile); regenerate the SDK against this build",
+		r.Method, r.URL.Path, r.RemoteAddr, quotedOrNone(got), kind, FormatSchemaFingerprint(want), c.Dimension())
 	http.Error(w, "schema fingerprint mismatch", http.StatusConflict)
 }
 

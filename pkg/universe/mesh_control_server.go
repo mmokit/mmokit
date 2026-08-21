@@ -223,12 +223,45 @@ func (s *meshControlServer) Control(stream meshpb.MeshControl_ControlServer) err
 // not a client's.
 func (s *meshControlServer) admitSchemaFingerprint(kind, id string, peer uint32) error {
 	self := s.coord.SchemaFingerprint()
-	if self == 0 || peer == 0 || self == peer {
+	if self == peer {
+		// Subsumes the both-zero case, which is every fixture that builds a
+		// Process through universe.New without the facade. Those have no
+		// protocol on either side and nothing to compare.
 		return nil
 	}
-	err := fmt.Errorf("schema fingerprint mismatch: coordinator=%s %s=%s — %s %q is running a different build; redeploy the cluster together",
-		FormatSchemaFingerprint(self), kind, FormatSchemaFingerprint(peer), kind, id)
-	s.log.Log(CatMeshCell, "coordinator: refusing %s %q: %v", kind, id, err)
+
+	var err error
+	switch {
+	case peer == 0:
+		// Previously admitted, by an escape that read `self == 0 || peer == 0`.
+		// This is the shape a lost assembly race produced, so it must refuse
+		// rather than wave through a peer whose protocol is unknown.
+		err = fmt.Errorf("schema fingerprint missing: coordinator=%s but %s %q presented none — "+
+			"it registered before its protocol was assembled, or was built through pkg/universe "+
+			"without the mmokit facade",
+			FormatSchemaFingerprint(self), kind, id)
+	case self == 0:
+		// Two causes, and the peer should retry for one of them: this
+		// coordinator has not finished Build (protocol assembly is its last
+		// step, deliberately — see the call site), or it was built through
+		// pkg/universe without the mmokit facade and has no protocol at all.
+		err = fmt.Errorf("schema fingerprint missing: %s %q presented %s but this coordinator has none "+
+			"yet — it is still starting up, or was built through pkg/universe without the mmokit facade",
+			kind, id, FormatSchemaFingerprint(peer))
+	default:
+		// A real disagreement. The dimension profile is part of this hash, so
+		// name our own — the peer's is unrecoverable from a 32-bit digest,
+		// and sending an operator to look for a version skew that does not
+		// exist is the failure this message exists to avoid.
+		err = fmt.Errorf("schema fingerprint mismatch: coordinator=%s (%s profile) %s %q=%s — "+
+			"the two processes disagree on the client-visible protocol, and the dimension profile "+
+			"is part of that hash. If the peer was built with a different Config.Dimension this is a "+
+			"configuration mismatch and redeploying will not fix it; otherwise the peer is running a "+
+			"different build. Compare \"dimension\" and \"fingerprint\" in --dump-schema on both processes",
+			FormatSchemaFingerprint(self), s.coord.Dimension(), kind, id, FormatSchemaFingerprint(peer))
+	}
+	// err already names the kind and the id; repeating them here printed both twice.
+	s.log.Log(CatMeshCell, "coordinator: %v", err)
 	return err
 }
 
