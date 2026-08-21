@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>cube3d</title>
+    <style>
+      html, body { margin: 0; height: 100%; overflow: hidden; background: #11131a; }
+      #view { display: block; width: 100vw; height: 100vh; }
+      #status {
+        position: fixed; top: 10px; left: 12px;
+        font: 13px ui-monospace, monospace; color: #9fb3c8;
+        background: rgba(0,0,0,.45); padding: 5px 9px; border-radius: 4px;
+      }
+    </style>
+  </head>
+  <body>
+    <canvas id="view"></canvas>
+    <div id="status">connecting…</div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

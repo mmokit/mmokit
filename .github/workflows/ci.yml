@@ -173,10 +173,17 @@ jobs:
           bun-version: "1.3.11"
 
       # No `bun install` before these two. pkg/quantize/ts has no package.json
-      # at all, and the only bare specifier reachable from the two example web
-      # test trees is a type-only `import type { Container } from "pixi.js"` in
-      # examples/space/web/src/types.ts, which bun erases before resolution.
+      # at all, and the only bare specifier reachable from the three example
+      # web test trees is a type-only `import type { Container } from "pixi.js"`
+      # in examples/space/web/src/types.ts, which bun erases before resolution.
       # Verified by moving both node_modules trees aside: 53 + 147 tests pass.
+      #
+      # examples/cube3d depends on three.js at RUNTIME and has no node_modules
+      # here at all. Its suite stays reachable because flycontrol.ts — the only
+      # module its tests import — imports nothing, and render3d.ts, which does
+      # import three, is imported by no test. Keep it that way: moving the
+      # quaternion maths into the renderer would put the first
+      # install-requiring specifier into a required check.
       # The generated SDKs those suites import (examples/space/web/sdk and
       # examples/4node-basic/web/sdk, 16 files each) are tracked.
       # Go, so the generate-and-decode gate below can run. The gate is a Go

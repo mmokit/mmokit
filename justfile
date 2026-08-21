@@ -211,7 +211,7 @@ ts-core-test:
 # every example's web-client TS suite (bun). These are the client-prediction,
 # reconciliation and interpolation tests, which ts-core-test does not cover.
 web-test:
-    bun test examples/space/web/src/__tests__/ examples/4node-basic/web/src/__tests__/
+    bun test examples/space/web/src/__tests__/ examples/4node-basic/web/src/__tests__/ examples/cube3d/web/src/__tests__/
 
 # every TypeScript suite in the repo
 client-test: ts-core-test web-test
