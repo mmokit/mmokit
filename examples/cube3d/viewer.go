@@ -1,6 +1,7 @@
 package main
 
 import (
+	"log"
 	"math"
 
 	"github.com/mmokit/mmokit"
@@ -113,6 +114,12 @@ func registerViewer(process *mmokit.Process) {
 	mmokit.RegisterKind[ViewerBundle](process, KindViewer, "Viewer")
 
 	process.OnPlayerJoin(func(session *mmokit.PlayerSession, stage *mmokit.Stage) {
+		// Every viewer here is a developer looking at the mesh, so the
+		// topology grant is unconditional. A real game would gate it.
+		if err := mmokit.GrantDebug(process, session, "topology"); err != nil {
+			log.Printf("cube3d: grant topology for %s: %v", session.Username, err)
+		}
+
 		viewer := stage.SpawnPlayer(session,
 			mmokit.EntityKind{Type: KindViewer},
 			mmokit.Collider{

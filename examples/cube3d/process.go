@@ -104,6 +104,13 @@ func NewProcess(headless bool) *mmokit.Process {
 	process.AddSystem(mmokit.NewPhysicsSystem())
 	process.AddSystem(mmokit.NewSystem(&TumbleSystem{}))
 	process.AddSystem(mmokit.NewSpatialSystem())
+	// Broadcasts the cell topology to viewers holding the "topology" debug
+	// grant. The client draws its grid from that rather than guessing, and
+	// colours entities by which cell they are in. Adding it changes no
+	// schema: DebugInfo and CellChange are engine-default server events and
+	// were already in cube3d's protocol — the broadcaster only makes them
+	// actually get sent.
+	process.AddSystem(mmokit.NewDebugBroadcaster())
 	process.AddSystem(mmokit.NewNetworkSystem())
 
 	process.OnStageInit(func(stage *mmokit.Stage) {

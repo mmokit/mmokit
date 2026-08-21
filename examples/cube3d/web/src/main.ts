@@ -3,6 +3,7 @@ import { Cube3dDeltaDecoder } from "../sdk/delta-decoder.js";
 import type { WorldDelta, PlayerEntityAssigned } from "../sdk/broadcasts.js";
 import { FlyInput } from "../sdk/inputs.js";
 import { AdaptivePlaybackController } from "../sdk/_core/playback-controller.js";
+import { classify, cellAt, type CellRect, type Topology } from "./topology";
 import {
   updateEntityFromServer,
   interpolateEntities,
@@ -23,6 +24,8 @@ const keys: KeyState = { ...NO_KEYS };
 // rather than 1300 units away on the horizon.
 let look: Look = { yaw: 0, pitch: -0.6 };
 let myNetID: number | null = null;
+let topology: Topology | null = null;
+let myCell: CellRect | null = null;
 
 /** Per-entity sample ring plus its interpolated render pose. */
 const world = new Map<number, RenderEntity>();
@@ -74,6 +77,14 @@ client.onPlayerEntityAssigned((msg: PlayerEntityAssigned) => {
   myNetID = msg.entityNetID;
 });
 
+// Requires the "topology" debug grant, which cube3d gives every viewer. The
+// grid and the entity colouring both come from this; without it the client
+// would be guessing at both.
+client.onDebugInfo((msg) => {
+  topology = { cells: msg.topology.cells, baseCellSize: msg.topology.baseCellSize };
+  scene.setTopology(topology);
+});
+
 // WorldDelta is the typed EVENT carrying raw frame bytes; the decoder owns
 // the per-baseline state for this connection and turns them into entities.
 const deltaDecoder = new Cube3dDeltaDecoder();
@@ -96,7 +107,18 @@ client.onWorldDelta((msg: WorldDelta) => {
     producedAtMs: newest > 0 ? newest : undefined,
   });
 
-  if (update.freshSnapshot) world.clear();
+  if (update.freshSnapshot) {
+    // PRUNE, never clear. A fresh snapshot arrives on every cross-cell
+    // handoff, and clearing destroys each surviving entity's interpolation
+    // ring — so every entity restarts from a single sample and visibly jumps.
+    // Delete only what this frame says is gone.
+    const visible = new Set<number>();
+    for (const e of [...update.entered, ...update.updated]) visible.add(e.netID);
+    if (myNetID !== null) visible.add(myNetID);
+    for (const id of [...world.keys()]) {
+      if (!visible.has(id)) world.delete(id);
+    }
+  }
   for (const e of [...update.entered, ...update.updated]) {
     const any = e as any;
     if (any.rot === undefined) continue; // no orientation: not a 3D entity
@@ -139,12 +161,15 @@ function frame(): void {
       worldZ: ent.renderZ,
       rot: ent.renderQuat,
       size: any.width ? any.width / 2 : 10,
-      isViewer: any.netID === myNetID,
+      kind: classify(topology, myCell, any.netID, ent.renderX, ent.renderY, myNetID),
     });
   }
   scene.sync(renderables);
 
   const me = myNetID !== null ? world.get(myNetID) : undefined;
+  // Recomputed from the viewer's own interpolated position rather than from
+  // CellChange, so it stays correct between handoff events.
+  myCell = me && topology ? cellAt(topology, me.renderX, me.renderY) : myCell;
   // The camera follows the interpolated pose too, or your own view judders
   // while everything in it is smooth.
   if (me) scene.setCamera(me.renderX, me.renderY, me.renderZ, look);
