@@ -888,8 +888,10 @@ Nine units, `c5960979`..`bc0380e4`. A browser renders cube3d in three dimensions
 
 - **The 2D clients gained the 3D code and use none of it.** Both 2D SDKs now carry `unQuat`, `slerpQuat` and `Quat.cs` in their `_core`, because core files are copied verbatim regardless of what a schema uses. It costs bytes in a bundle, not on the wire, and the alternative — conditional core files — would make an SDK's contents depend on its schema in a way nothing else does.
 - **`examples/space` is still 2D**, so nothing exercises the 3D path at the scale the reference game runs at. cube3d spawns 64 cubes; the space example runs hundreds of entities with bots.
-- **No prediction or reconciliation for the 3D profile.** `FlyInput` is unsequenced and unreconciled, so the viewer is server-authoritative with no local prediction — acceptable for a spectator camera, not for a character.
+- **No prediction or reconciliation for the 3D profile.** `FlyInput` is unsequenced and unreconciled, so the viewer is server-authoritative with no local prediction — acceptable for a spectator camera, not for a character. Snapshot *interpolation* is a different thing and is now wired (see the correction below); prediction is not.
 - **`pkg/spatial` is still 2D**, unchanged from phase 2: AoI and collision remain flat. That is phase 4.
+
+**Correction, and it should have been in this list from the start.** Phase 3 shipped the interpolation primitives — `slerpQuat`, and `interpolateRing` returning `renderZ`/`renderQuat`, both golden-tested across three languages — and then wired a demo client that ignored them, rendering raw 20 Hz snapshots. The row is titled "Client SDK and interpolation"; only the SDK half was finished, and the residual list named *prediction* while saying nothing about this. It was reported as jitter and is now wired: `examples/cube3d/web/src/interpolation.ts` gives each entity an `InterpolationBuffer` and renders at producer-time minus 100 ms. No SDK change was needed — `InterpolationBuffer` stores whole `Sample`s and the 3D fields are optional members of `Sample`, so height and orientation already rode through the existing ring.
 
 ### 7.6 Validation
 
