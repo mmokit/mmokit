@@ -205,8 +205,13 @@ jobs:
       # Closes the asymmetry docs/roadmap.md §7.5 records: the Unity client's
       # decoder was byte-pinned to Go and the browser's was not, which is the
       # reverse of where the risk sits.
-      - name: TypeScript reflect-codec golden
-        run: go test ./cmd/sdkgen/ -run TestTypeScriptReflect -count=1 -v
+      - name: TypeScript codec goldens (reflect + quaternion)
+        # -run TestTypeScript, not TestTypeScriptReflect. The narrower filter
+        # silently excluded TestTypeScriptQuatDecoder_MatchesServerBytes, which
+        # is the ONLY test pinning the browser's 7-byte smallest-three decoding
+        # to the server's bytes — so §7.5 phase 3 shipped a quaternion gate
+        # that had never executed on a CI machine.
+        run: go test ./cmd/sdkgen/ -run TestTypeScript -count=1 -v
 
       # Client prediction, reconciliation and interpolation for both example
       # web clients, including the prediction golden that pairs with the space
