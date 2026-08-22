@@ -72,21 +72,7 @@ func (s *CollisionSystem) Update(dt float32) {
 				continue
 			}
 
-			var rotation float32
-			if rot := mmokit.Get[mmokit.Rotation](entity); rot != nil {
-				rotation = rot.Yaw()
-			}
-			playerEntry := mmokit.SpatialEntry{
-				Entity: sess.Entity,
-				X:      pos.X,
-				Y:      pos.Y,
-				Radius: col.Radius,
-				Width:  col.Width,
-				Height: col.Height,
-				Yaw:    rotation,
-				Layer:  col.Layer,
-				Shape:  col.Shape,
-			}
+			playerEntry := mmokit.EntryFrom(sess.Entity, pos, col, mmokit.Get[mmokit.Rotation](entity))
 			s.handleTerrainCollision(playerEntry, terrain)
 		}
 	})

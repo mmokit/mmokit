@@ -920,6 +920,10 @@ var (
 	// NewReplicationRegistry creates an empty registry for cross-cell component replication.
 	NewReplicationRegistry = universe.NewReplicationRegistry
 
+	// EntryFrom builds a spatial grid entry from an entity's components. The
+	// one place components become an Entry — see pkg/spatial/entry.go.
+	EntryFrom = spatial.EntryFrom
+
 	// UnmarshalCollider deserializes a Collider from bytes.
 	UnmarshalCollider = universe.UnmarshalCollider
 

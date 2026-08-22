@@ -50,19 +50,7 @@ func (s *SpatialSystem) Update(dt float32) {
 	}
 
 	for e, b := range s.entities.Iter {
-		entry := spatial.Entry{
-			Entity: e,
-			X:      b.Pos.X,
-			Y:      b.Pos.Y,
-			Radius: b.Col.Radius,
-			Width:  b.Col.Width,
-			Height: b.Col.Height,
-			Layer:  b.Col.Layer,
-			Shape:  b.Col.Shape,
-		}
-		if b.Rot != nil {
-			entry.Yaw = b.Rot.Yaw()
-		}
+		entry := spatial.EntryFrom(e, b.Pos, b.Col, b.Rot)
 
 		if s.grid.IsRegistered(e) {
 			s.grid.Update(entry)
