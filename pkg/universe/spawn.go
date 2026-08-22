@@ -49,7 +49,10 @@ func (b *Stage) Spawn(components ...any) Entity {
 		hasPos      bool
 		kind        component.EntityKind
 		hasKind     bool
+		col         component.Collider
 		hasCollider bool
+		rot         component.Rotation
+		hasRot      bool
 	)
 	seen := make(map[reflect.Type]struct{}, len(components))
 	for _, c := range components {
@@ -66,7 +69,11 @@ func (b *Stage) Spawn(components ...any) Entity {
 			kind = v
 			hasKind = true
 		case component.Collider:
+			col = v
 			hasCollider = true
+		case component.Rotation:
+			rot = v
+			hasRot = true
 		}
 	}
 	if !hasPos {
@@ -95,16 +102,17 @@ func (b *Stage) Spawn(components ...any) Entity {
 	}
 
 	if hasCollider && b.spatialGrid != nil {
-		var radius float32
-		if b.colliderMap.HasAll(entity) {
-			radius = b.colliderMap.Get(entity).Radius
+		// Through EntryFrom, so this entry is identical to the one
+		// SpatialSystem writes a tick later. It used to carry Entity, X, Y
+		// and Radius alone, which left Layer at zero — and a zero layer is
+		// invisible to every layer-masked query, so a wall spawned here
+		// blocked nothing until the next tick, and nothing ever in a process
+		// with no SpatialSystem.
+		var rotPtr *component.Rotation
+		if hasRot {
+			rotPtr = &rot
 		}
-		b.spatialGrid.Register(spatial.Entry{
-			Entity: entity,
-			X:      pos.X,
-			Y:      pos.Y,
-			Radius: radius,
-		})
+		b.spatialGrid.Register(spatial.EntryFrom(entity, &pos, &col, rotPtr))
 	}
 	if hasKind && b.coord != nil && b.coord.invariantMode == InvariantPanic {
 		if def, ok := b.entityKinds[kind.Type]; ok {
