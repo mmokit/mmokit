@@ -18,7 +18,7 @@ func TestRaycast_CircleHit(t *testing.T) {
 		Radius: 50, Shape: component.ShapeSphere, Layer: LayerStatic,
 	})
 	// ray from origin straight along +X
-	hit, hitPt, dist, ok := g.Raycast(Vec2{0, 0}, Vec2{500, 0}, LayerStatic)
+	hit, hitPt, dist, ok := g.RaycastXY(Vec2{0, 0}, Vec2{500, 0}, LayerStatic)
 	if !ok {
 		t.Fatal("expected hit, got miss")
 	}
@@ -43,7 +43,7 @@ func TestRaycast_LayerMaskFiltering(t *testing.T) {
 		Entity: e, X: 200, Y: 0,
 		Radius: 50, Shape: component.ShapeSphere, Layer: LayerProp,
 	})
-	_, _, _, ok := g.Raycast(Vec2{0, 0}, Vec2{500, 0}, LayerStatic)
+	_, _, _, ok := g.RaycastXY(Vec2{0, 0}, Vec2{500, 0}, LayerStatic)
 	if ok {
 		t.Fatal("expected miss when layer mask excludes entity")
 	}
@@ -51,7 +51,7 @@ func TestRaycast_LayerMaskFiltering(t *testing.T) {
 
 func TestRaycast_Miss(t *testing.T) {
 	g := NewHashGrid(100)
-	_, _, _, ok := g.Raycast(Vec2{0, 0}, Vec2{500, 0}, LayerStatic)
+	_, _, _, ok := g.RaycastXY(Vec2{0, 0}, Vec2{500, 0}, LayerStatic)
 	if ok {
 		t.Fatal("expected miss on empty grid")
 	}
@@ -69,7 +69,7 @@ func TestRaycast_NegativeCoordinates(t *testing.T) {
 		Entity: e, X: -200, Y: 0,
 		Radius: 50, Shape: component.ShapeSphere, Layer: LayerStatic,
 	})
-	hit, hitPt, dist, ok := g.Raycast(Vec2{0, 0}, Vec2{-500, 0}, LayerStatic)
+	hit, hitPt, dist, ok := g.RaycastXY(Vec2{0, 0}, Vec2{-500, 0}, LayerStatic)
 	if !ok {
 		t.Fatal("expected hit at negative-X circle, got miss")
 	}
@@ -92,10 +92,10 @@ func TestRaycast_AxisAlignedRect(t *testing.T) {
 	// OBB extents are (40,20); surface along ray at X=160.
 	g.Register(Entry{
 		Entity: e, X: 200, Y: 0,
-		Radius: 50, Width: 80, Height: 40, Rotation: 0,
+		Radius: 50, Width: 80, Height: 40, Yaw: 0,
 		Shape: component.ShapeBox, Layer: LayerStatic,
 	})
-	_, hitPt, dist, ok := g.Raycast(Vec2{0, 0}, Vec2{500, 0}, LayerStatic)
+	_, hitPt, dist, ok := g.RaycastXY(Vec2{0, 0}, Vec2{500, 0}, LayerStatic)
 	if !ok {
 		t.Fatal("expected hit")
 	}
@@ -116,10 +116,10 @@ func TestRaycast_RotatedRect(t *testing.T) {
 	g.Register(Entry{
 		Entity: e, X: 200, Y: 0,
 		Radius: 50, Width: 80, Height: 40,
-		Rotation: float32(math.Pi / 2),
+		Yaw: float32(math.Pi / 2),
 		Shape:    component.ShapeBox, Layer: LayerStatic,
 	})
-	_, hitPt, _, ok := g.Raycast(Vec2{0, 0}, Vec2{500, 0}, LayerStatic)
+	_, hitPt, _, ok := g.RaycastXY(Vec2{0, 0}, Vec2{500, 0}, LayerStatic)
 	if !ok {
 		t.Fatal("expected hit")
 	}

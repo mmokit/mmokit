@@ -3,7 +3,7 @@ package pathfinding
 import "testing"
 
 // LOSChecker is a minimal interface so smooth doesn't depend on pkg/spatial.
-// Real callers wrap spatial.HashGrid.Raycast in a closure that returns
+// Real callers wrap spatial.HashGrid.RaycastXY in a closure that returns
 // true on clear LOS, false if blocked.
 type fakeLOS struct {
 	blocks []struct{ a, b Vec2 }

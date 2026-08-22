@@ -61,7 +61,7 @@ func (s *SpatialSystem) Update(dt float32) {
 			Shape:  b.Col.Shape,
 		}
 		if b.Rot != nil {
-			entry.Rotation = b.Rot.Yaw()
+			entry.Yaw = b.Rot.Yaw()
 		}
 
 		if s.grid.IsRegistered(e) {

@@ -13,13 +13,19 @@ type Vec2 struct {
 	X, Y float32
 }
 
-// Raycast walks the spatial hash buckets along the segment from→to and
+// RaycastXY walks the spatial hash buckets along the segment from→to and
 // returns the nearest collider whose Layer&layerMask != 0.
+//
+// PLANAR, and the name says so. It takes Vec2, it ignores Entry.Z entirely,
+// and it reads Entry.Yaw rather than an orientation — so a wall five hundred
+// units below the ray still blocks it. That is correct for a 2D game and
+// wrong for a 3D one; a true 3D raycast is phase 4b, and the XY suffix is
+// what stops it being called by mistake in the meantime.
 //
 // hitPoint is the precise contact point on the collider surface. dist
 // is the distance from `from` to hitPoint. ok is false on miss; the
 // other return values are zero on miss.
-func (g *HashGrid) Raycast(from, to Vec2, layerMask uint8) (ecs.Entity, Vec2, float32, bool) {
+func (g *HashGrid) RaycastXY(from, to Vec2, layerMask uint8) (ecs.Entity, Vec2, float32, bool) {
 	dx := to.X - from.X
 	dy := to.Y - from.Y
 	rayLen := float32(math.Sqrt(float64(dx*dx + dy*dy)))
@@ -169,8 +175,8 @@ func rayCircleHit(from, to Vec2, cx, cy, r float32) (float32, bool) {
 // rayRectHit returns t∈[0,1] for the nearest ray-vs-OBB entry, or false.
 // Transforms the ray into the rect's local frame and runs a 2D slab test.
 func rayRectHit(from, to Vec2, e Entry) (float32, bool) {
-	cosA := float32(math.Cos(float64(-e.Rotation)))
-	sinA := float32(math.Sin(float64(-e.Rotation)))
+	cosA := float32(math.Cos(float64(-e.Yaw)))
+	sinA := float32(math.Sin(float64(-e.Yaw)))
 	fx := from.X - e.X
 	fy := from.Y - e.Y
 	tx := to.X - e.X

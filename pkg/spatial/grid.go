@@ -20,7 +20,7 @@ type Entry struct {
 	Radius   float32 // bounding radius (used for broad-phase and circle shape)
 	Width    float32 // rect width (forward axis), 0 for circles
 	Height   float32 // rect height (side axis), 0 for circles
-	Rotation float32 // entity rotation (needed for OBB narrow-phase)
+	Yaw      float32 // rotation about Z, radians; the 2D narrow phase's only orientation input
 	Layer    uint8
 	Shape    component.ShapeKind
 }
@@ -302,8 +302,8 @@ func checkCollision(a, b Entry, matrix map[uint8]uint8, fn func(a, b Entry)) {
 // obbCircleCollision tests an oriented bounding box against a circle.
 func obbCircleCollision(rect, circle Entry) bool {
 	// Transform circle center into rect's local space
-	cos := float32(math.Cos(float64(-rect.Rotation)))
-	sin := float32(math.Sin(float64(-rect.Rotation)))
+	cos := float32(math.Cos(float64(-rect.Yaw)))
+	sin := float32(math.Sin(float64(-rect.Yaw)))
 	dx := circle.X - rect.X
 	dy := circle.Y - rect.Y
 	localX := dx*cos - dy*sin
@@ -324,10 +324,10 @@ func obbCircleCollision(rect, circle Entry) bool {
 // obbOBBCollision tests two oriented bounding boxes using the Separating Axis Theorem.
 func obbOBBCollision(a, b Entry) bool {
 	// Get the 4 axes to test (2 per rect)
-	cosA := float32(math.Cos(float64(a.Rotation)))
-	sinA := float32(math.Sin(float64(a.Rotation)))
-	cosB := float32(math.Cos(float64(b.Rotation)))
-	sinB := float32(math.Sin(float64(b.Rotation)))
+	cosA := float32(math.Cos(float64(a.Yaw)))
+	sinA := float32(math.Sin(float64(a.Yaw)))
+	cosB := float32(math.Cos(float64(b.Yaw)))
+	sinB := float32(math.Sin(float64(b.Yaw)))
 
 	// Axes for rect A: forward (cosA, sinA) and right (−sinA, cosA)
 	// Axes for rect B: forward (cosB, sinB) and right (−sinB, cosB)

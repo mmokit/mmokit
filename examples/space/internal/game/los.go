@@ -17,11 +17,11 @@ func vec2(x, y float32) spatial.Vec2 { return spatial.Vec2{X: x, Y: y} }
 // the zero mmokit.EntityHandle if there's no caller entity to ignore
 // (e.g. pathfinding LOS smoothing).
 //
-// Wraps spatial.HashGrid.Raycast for the common "sight / lock / aggro"
+// Wraps spatial.HashGrid.RaycastXY for the common "sight / lock / aggro"
 // case. For projectile/beam checks (which also block on props), call
 // hasShotLOSOnGrid (wider mask) or Raycast directly.
 func hasLOSOnGrid(g *spatial.HashGrid, from, to spatial.Vec2, self mmokit.EntityHandle) bool {
-	hitE, _, _, hit := g.Raycast(from, to, spatial.LayerStatic)
+	hitE, _, _, hit := g.RaycastXY(from, to, spatial.LayerStatic)
 	if !hit {
 		return true
 	}
@@ -42,7 +42,7 @@ func hasLOSOnGrid(g *spatial.HashGrid, from, to spatial.Vec2, self mmokit.Entity
 // Use this for sustained-beam and hitscan damage gating; for the
 // generic sight check (aggro / lock), use hasLOSOnGrid.
 func hasShotLOSOnGrid(g *spatial.HashGrid, from, to spatial.Vec2, source, target mmokit.EntityHandle) bool {
-	hitE, _, _, hit := g.Raycast(from, to, spatial.LayerStatic|spatial.LayerProp)
+	hitE, _, _, hit := g.RaycastXY(from, to, spatial.LayerStatic|spatial.LayerProp)
 	if !hit {
 		return true
 	}

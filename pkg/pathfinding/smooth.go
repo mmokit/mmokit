@@ -1,7 +1,7 @@
 package pathfinding
 
 // LOSChecker reports whether a straight line from a to b is unobstructed.
-// In production callers pass a closure that wraps spatial.HashGrid.Raycast
+// In production callers pass a closure that wraps spatial.HashGrid.RaycastXY
 // with the appropriate layer mask.
 type LOSChecker interface {
 	Clear(a, b Vec2) bool

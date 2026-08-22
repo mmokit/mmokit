@@ -8,7 +8,7 @@ import (
 	"github.com/mmokit/mmokit/pkg/spatial"
 )
 
-// hasLOSOnGrid wraps spatial.HashGrid.Raycast with the LayerStatic mask.
+// hasLOSOnGrid wraps spatial.HashGrid.RaycastXY with the LayerStatic mask.
 // This test exercises the wrapper without needing a full GameWorld — we
 // build the grid directly and place a wall in the path.
 func TestHasLOS_ClearAndBlocked(t *testing.T) {
@@ -21,7 +21,7 @@ func TestHasLOS_ClearAndBlocked(t *testing.T) {
 	e := w.NewEntity()
 	g.Register(spatial.Entry{
 		Entity: e, X: 250, Y: 0,
-		Radius: 60, Width: 80, Height: 40, Rotation: 0,
+		Radius: 60, Width: 80, Height: 40, Yaw: 0,
 		Shape: mmokit.ShapeBox, Layer: spatial.LayerStatic,
 	})
 	if hasLOSOnGrid(g, vec2(0, 0), vec2(500, 0), ecs.Entity{}) {
@@ -51,7 +51,7 @@ func TestLOS_ShipColliderDoesNotSelfBlock(t *testing.T) {
 	// collider from blocking.
 	g.Register(spatial.Entry{
 		Entity: caster, X: 0, Y: 0,
-		Radius: 20, Width: 40, Height: 20, Rotation: 0,
+		Radius: 20, Width: 40, Height: 20, Yaw: 0,
 		Shape: mmokit.ShapeBox, Layer: spatial.LayerEntity,
 	})
 	if !hasLOSOnGrid(g, vec2(0, 0), vec2(500, 0), caster) {

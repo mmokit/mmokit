@@ -77,15 +77,15 @@ func (s *CollisionSystem) Update(dt float32) {
 				rotation = rot.Yaw()
 			}
 			playerEntry := mmokit.SpatialEntry{
-				Entity:   sess.Entity,
-				X:        pos.X,
-				Y:        pos.Y,
-				Radius:   col.Radius,
-				Width:    col.Width,
-				Height:   col.Height,
-				Rotation: rotation,
-				Layer:    col.Layer,
-				Shape:    col.Shape,
+				Entity: sess.Entity,
+				X:      pos.X,
+				Y:      pos.Y,
+				Radius: col.Radius,
+				Width:  col.Width,
+				Height: col.Height,
+				Yaw:    rotation,
+				Layer:  col.Layer,
+				Shape:  col.Shape,
 			}
 			s.handleTerrainCollision(playerEntry, terrain)
 		}
@@ -111,7 +111,7 @@ func (s *CollisionSystem) handleTerrainCollision(player, terrain mmokit.SpatialE
 	if terrain.Shape == mmokit.ShapeBox {
 		contactX, contactY, nx, ny, overlap = obbContact(
 			playerPos.X, playerPos.Y, player.Radius,
-			terrainPos.X, terrainPos.Y, terrain.Width, terrain.Height, terrain.Rotation,
+			terrainPos.X, terrainPos.Y, terrain.Width, terrain.Height, terrain.Yaw,
 		)
 	} else {
 		contactX, contactY, nx, ny, overlap = circleContact(

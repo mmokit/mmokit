@@ -78,14 +78,16 @@ For rectangles, `Radius` is the broad-phase bounding radius; `Width`,
 ## Raycasts
 
 ```go
-entity, point, distance, ok := grid.Raycast(
+entity, point, distance, ok := grid.RaycastXY(
     spatial.Vec2{X: 0, Y: 0},
     spatial.Vec2{X: 500, Y: 0},
     spatial.LayerStatic|spatial.LayerProp,
 )
 ```
 
-`Raycast` walks buckets touched by the segment and returns the nearest circle
+`RaycastXY` is planar: it takes `Vec2`, ignores `Entry.Z`, and reads
+`Entry.Yaw` rather than a full orientation, so a wall well below the ray still
+blocks it. It walks buckets touched by the segment and returns the nearest circle
 or oriented-rectangle surface whose `Entry.Layer` intersects the mask.
 Raycasts currently inspect tracked entries only, not transient entries.
 

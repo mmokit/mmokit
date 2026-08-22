@@ -844,7 +844,7 @@ func (s *AbilitySystem) tickChannels(dt float32) {
 			// through the wall to full range.
 			vpos := mmokit.Get[mmokit.Position](victim)
 			if vpos != nil {
-				hitE, hitPt, _, hit := gw.Spatial.Raycast(
+				hitE, hitPt, _, hit := gw.Spatial.RaycastXY(
 					spatial.Vec2{X: casterPos.X, Y: casterPos.Y},
 					spatial.Vec2{X: vpos.X, Y: vpos.Y},
 					spatial.LayerStatic|spatial.LayerProp,
