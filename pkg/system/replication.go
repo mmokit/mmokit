@@ -36,11 +36,22 @@ type ClusterClock interface {
 }
 
 // ViewerInfo describes a connection that receives replicated entity state.
+//
+// X, Y and Z are the point area-of-interest is measured FROM. Z is separate
+// from X, Y rather than folded into a Vec3 because 58 literals across the
+// tree construct this, and a type change there is churn without a payoff;
+// Center() is for the handful of places that want the vector.
 type ViewerInfo struct {
 	ConnID      uint32
 	Entity      ecs.Entity
-	X, Y        float32
+	X, Y, Z     float32
 	StreamEpoch uint32 // generation that scopes this viewer's whole frame stream
+}
+
+// Center is the viewer's position as a vector, for the spatial queries that
+// take one.
+func (v ViewerInfo) Center() component.Vec3 {
+	return component.Vec3{X: v.X, Y: v.Y, Z: v.Z}
 }
 
 // FullPayload is a full entity snapshot for new or keyframe entities.

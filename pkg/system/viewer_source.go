@@ -57,6 +57,12 @@ func (s *PlayerViewerSource) ActiveViewers() []ViewerInfo {
 				Entity: entity,
 				X:      pos.X,
 				Y:      pos.Y,
+				// Z is what makes area of interest a sphere rather than a
+				// sphere centred on the ground. Omitting it compiles, passes
+				// every 2D fixture, and leaves every viewer querying from
+				// Z=0 — so the effective horizontal AoI silently becomes
+				// sqrt(R^2 - z^2) and shrinks as the world gets taller.
+				Z: pos.Z,
 			})
 		})
 	}
