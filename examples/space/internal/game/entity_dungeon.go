@@ -88,7 +88,7 @@ func (gw *GameWorld) SpawnDungeon(x, y float32, d gamecomp.Dungeon) uint32 {
 		mmokit.EntityKind{Type: gamecomp.KindDungeon},
 		mmokit.Collider{
 			Radius: d.OuterRadius,
-			Shape:  mmokit.ShapeCircle,
+			Shape:  mmokit.ShapeSphere,
 			Layer:  spatial.LayerEntity,
 		},
 		d,

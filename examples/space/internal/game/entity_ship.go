@@ -110,7 +110,7 @@ func (gw *GameWorld) SpawnPlayer(s *mmokit.PlayerSession) {
 			Width:  gw.Config.ShipWidth,
 			Height: gw.Config.ShipHeight,
 			Layer:  spatial.LayerEntity,
-			Shape:  mmokit.ShapeRect,
+			Shape:  mmokit.ShapeBox,
 			Radius: br,
 		},
 		mmokit.Rotation{},

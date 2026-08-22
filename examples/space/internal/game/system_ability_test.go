@@ -380,7 +380,7 @@ func TestAbility_BeamClipsAtLOSWall(t *testing.T) {
 				Entity: wallE,
 				X:      10, Y: 0,
 				Radius: 12, Width: 10, Height: 20,
-				Shape: spatial.ShapeRect, Layer: spatial.LayerStatic,
+				Shape: mmokit.ShapeBox, Layer: spatial.LayerStatic,
 			})
 		}
 

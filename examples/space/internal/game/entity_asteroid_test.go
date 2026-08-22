@@ -41,7 +41,7 @@ func TestAsteroid_HasLayerProp(t *testing.T) {
 	if col.Layer != spatial.LayerProp {
 		t.Errorf("asteroid Collider.Layer = %d, want %d (LayerProp)", col.Layer, spatial.LayerProp)
 	}
-	if col.Shape != mmokit.ShapeCircle {
-		t.Errorf("asteroid Collider.Shape = %d, want %d (ShapeCircle)", col.Shape, mmokit.ShapeCircle)
+	if col.Shape != mmokit.ShapeSphere {
+		t.Errorf("asteroid Collider.Shape = %d, want %d (ShapeCircle)", col.Shape, mmokit.ShapeSphere)
 	}
 }

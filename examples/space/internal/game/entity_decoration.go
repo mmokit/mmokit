@@ -25,7 +25,7 @@ func (gw *GameWorld) SpawnDecoration(localX, localY float32, def world.Decoratio
 	e := gw.stage.Spawn(
 		mmokit.Position{X: localX, Y: localY},
 		mmokit.EntityKind{Type: gamecomp.KindDecoration},
-		mmokit.Collider{Radius: 0, Shape: mmokit.ShapeCircle, Layer: 0},
+		mmokit.Collider{Radius: 0, Shape: mmokit.ShapeSphere, Layer: 0},
 		gamecomp.Decoration{Kind: def.Kind, Variant: def.Variant},
 		gamecomp.PlacedID{ID: def.ID},
 	)

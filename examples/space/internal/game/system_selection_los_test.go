@@ -59,7 +59,7 @@ func TestSelectionLOS_ClearsOnSustainedLoss(t *testing.T) {
 		Entity: wallE,
 		X:      100, Y: 0,
 		Radius: 22, Width: 10, Height: 40,
-		Shape: spatial.ShapeRect, Layer: spatial.LayerStatic,
+		Shape: mmokit.ShapeBox, Layer: spatial.LayerStatic,
 	})
 
 	const dt = float32(0.05)
@@ -113,7 +113,7 @@ func TestSelectionLOS_ResetsLatchOnClearLOS(t *testing.T) {
 		Entity: wallE,
 		X:      100, Y: 0,
 		Radius: 22, Width: 10, Height: 40,
-		Shape: spatial.ShapeRect, Layer: spatial.LayerStatic,
+		Shape: mmokit.ShapeBox, Layer: spatial.LayerStatic,
 	}
 	gw.Spatial.Register(wallEntry)
 

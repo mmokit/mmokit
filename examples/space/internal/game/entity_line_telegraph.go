@@ -41,7 +41,7 @@ func (gw *GameWorld) SpawnLineTelegraph(
 		mmokit.Position{X: x, Y: y},
 		mmokit.RotationFromYaw(dirAngle),
 		mmokit.Lifetime{Remaining: windupTime},
-		mmokit.Collider{Radius: gridRadius, Width: gridRadius * 2, Height: gridRadius * 2, Shape: mmokit.ShapeCircle},
+		mmokit.Collider{Radius: gridRadius, Width: gridRadius * 2, Height: gridRadius * 2, Shape: mmokit.ShapeSphere},
 		gamecomp.LineTelegraphSpec{
 			Length:     length,
 			HalfWidth:  halfWidth,

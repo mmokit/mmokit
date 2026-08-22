@@ -4,12 +4,8 @@ import (
 	"math"
 
 	"github.com/mlange-42/ark/ecs"
-)
 
-// Collision shape types.
-const (
-	ShapeCircle uint8 = 0
-	ShapeRect   uint8 = 1
+	"github.com/mmokit/mmokit/pkg/component"
 )
 
 // BucketKey identifies a bucket in the spatial hash grid.
@@ -26,7 +22,7 @@ type Entry struct {
 	Height   float32 // rect height (side axis), 0 for circles
 	Rotation float32 // entity rotation (needed for OBB narrow-phase)
 	Layer    uint8
-	Shape    uint8 // ShapeCircle or ShapeRect
+	Shape    component.ShapeKind
 }
 
 // bucket holds both tracked (persistent) and transient (per-tick) entries.
@@ -277,20 +273,20 @@ func checkCollision(a, b Entry, matrix map[uint8]uint8, fn func(a, b Entry)) {
 	}
 
 	// Narrow-phase: shape-aware check
-	if a.Shape == ShapeCircle && b.Shape == ShapeCircle {
+	if a.Shape == component.ShapeSphere && b.Shape == component.ShapeSphere {
 		// Already passed broad-phase circle-circle
 		fn(a, b)
 		return
 	}
 
-	if a.Shape == ShapeRect && b.Shape == ShapeCircle {
+	if a.Shape == component.ShapeBox && b.Shape == component.ShapeSphere {
 		if obbCircleCollision(a, b) {
 			fn(a, b)
 		}
 		return
 	}
 
-	if a.Shape == ShapeCircle && b.Shape == ShapeRect {
+	if a.Shape == component.ShapeSphere && b.Shape == component.ShapeBox {
 		if obbCircleCollision(b, a) {
 			fn(a, b)
 		}

@@ -41,7 +41,7 @@ func TestStation_HasLayerStatic(t *testing.T) {
 	if col.Layer != spatial.LayerStatic {
 		t.Errorf("station Collider.Layer = %d, want %d (LayerStatic)", col.Layer, spatial.LayerStatic)
 	}
-	if col.Shape != mmokit.ShapeCircle {
-		t.Errorf("station Collider.Shape = %d, want %d (ShapeCircle)", col.Shape, mmokit.ShapeCircle)
+	if col.Shape != mmokit.ShapeSphere {
+		t.Errorf("station Collider.Shape = %d, want %d (ShapeCircle)", col.Shape, mmokit.ShapeSphere)
 	}
 }

@@ -130,7 +130,7 @@ func TestNPCAI_LOSBlockedTargetNotAcquired(t *testing.T) {
 		Entity: wallE,
 		X:      10, Y: 0,
 		Radius: 12, Width: 10, Height: 20,
-		Shape: spatial.ShapeRect, Layer: spatial.LayerStatic,
+		Shape: mmokit.ShapeBox, Layer: spatial.LayerStatic,
 	})
 
 	const dt = float32(0.05)
@@ -175,7 +175,7 @@ func TestNPCAI_LOSLostDropsTargetAfterTimeout(t *testing.T) {
 		Entity: wallE,
 		X:      10, Y: 0,
 		Radius: 12, Width: 10, Height: 20,
-		Shape: spatial.ShapeRect, Layer: spatial.LayerStatic,
+		Shape: mmokit.ShapeBox, Layer: spatial.LayerStatic,
 	})
 
 	// Also park the player so the brawler doesn't follow it out from

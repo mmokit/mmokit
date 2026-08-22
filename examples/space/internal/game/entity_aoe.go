@@ -40,7 +40,7 @@ func (gw *GameWorld) SpawnAoEMarker(
 		// spatial grid → not replicated → client never sees the
 		// telegraph. Layer is informational; Shape=Circle keeps the
 		// math consistent with the AoESystem radius check.
-		mmokit.Collider{Radius: radius, Width: radius * 2, Height: radius * 2, Shape: mmokit.ShapeCircle},
+		mmokit.Collider{Radius: radius, Width: radius * 2, Height: radius * 2, Shape: mmokit.ShapeSphere},
 		gamecomp.AoESpec{
 			Radius:      radius,
 			Damage:      damage,

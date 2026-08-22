@@ -36,7 +36,7 @@ func (gw *GameWorld) SpawnProjectile(
 		// finds it and the client never sees the projectile. A small
 		// 1u radius is enough for indexing; non-terrain layer keeps it
 		// out of CollisionSystem's player↔terrain checks.
-		mmokit.Collider{Radius: 1, Width: 2, Height: 2, Shape: mmokit.ShapeCircle},
+		mmokit.Collider{Radius: 1, Width: 2, Height: 2, Shape: mmokit.ShapeSphere},
 		spec,
 	)
 }

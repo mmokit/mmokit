@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/mlange-42/ark/ecs"
+	"github.com/mmokit/mmokit"
 	"github.com/mmokit/mmokit/pkg/spatial"
 )
 
@@ -21,7 +22,7 @@ func TestHasLOS_ClearAndBlocked(t *testing.T) {
 	g.Register(spatial.Entry{
 		Entity: e, X: 250, Y: 0,
 		Radius: 60, Width: 80, Height: 40, Rotation: 0,
-		Shape: spatial.ShapeRect, Layer: spatial.LayerStatic,
+		Shape: mmokit.ShapeBox, Layer: spatial.LayerStatic,
 	})
 	if hasLOSOnGrid(g, vec2(0, 0), vec2(500, 0), ecs.Entity{}) {
 		t.Fatal("expected blocked LOS through wall")
@@ -51,7 +52,7 @@ func TestLOS_ShipColliderDoesNotSelfBlock(t *testing.T) {
 	g.Register(spatial.Entry{
 		Entity: caster, X: 0, Y: 0,
 		Radius: 20, Width: 40, Height: 20, Rotation: 0,
-		Shape: spatial.ShapeRect, Layer: spatial.LayerEntity,
+		Shape: mmokit.ShapeBox, Layer: spatial.LayerEntity,
 	})
 	if !hasLOSOnGrid(g, vec2(0, 0), vec2(500, 0), caster) {
 		t.Fatal("expected clear LOS — caster's own LayerEntity collider must not self-block sight check")
@@ -75,7 +76,7 @@ func TestLOS_AsteroidPropDoesNotBlockSight(t *testing.T) {
 	asteroid := w.NewEntity()
 	g.Register(spatial.Entry{
 		Entity: asteroid, X: 250, Y: 0,
-		Radius: 40, Shape: spatial.ShapeCircle, Layer: spatial.LayerProp,
+		Radius: 40, Shape: mmokit.ShapeSphere, Layer: spatial.LayerProp,
 	})
 	if !hasLOSOnGrid(g, vec2(0, 0), vec2(500, 0), ecs.Entity{}) {
 		t.Fatal("asteroid (LayerProp) must not block plain sight")

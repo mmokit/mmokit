@@ -128,7 +128,7 @@ func (gw *GameWorld) SpawnNPC(x, y float32, archetype uint8, poiNetID uint32, mo
 			Width:  gw.Config.NpcWidth,
 			Height: gw.Config.NpcHeight,
 			Layer:  spatial.LayerEntity,
-			Shape:  mmokit.ShapeRect,
+			Shape:  mmokit.ShapeBox,
 			Radius: boundingRadius(gw.Config.NpcWidth, gw.Config.NpcHeight),
 		},
 		mmokit.Rotation{},

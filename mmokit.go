@@ -1051,16 +1051,11 @@ var (
 	// SideSell represents the sell side of an order book.
 	SideSell = orderbook.SideSell
 
-	// ShapeSphere and ShapeBox are the forward names for a Collider's shape.
-	// ShapeCircle/ShapeRect remain as the 2D spellings of the same values.
+	// ShapeSphere and ShapeBox are a Collider's shapes. A sphere IS a circle
+	// in a 2D profile, so these are the only spellings — the older
+	// ShapeCircle/ShapeRect pair is gone rather than aliased.
 	ShapeSphere = component.ShapeSphere
 	ShapeBox    = component.ShapeBox
-
-	// ShapeCircle is the circle collision shape constant.
-	ShapeCircle = component.ShapeSphere
-
-	// ShapeRect is the oriented rectangle collision shape constant.
-	ShapeRect = component.ShapeBox
 
 	// StatePending is the initial player state before login is processed.
 	StatePending = engine.StatePending

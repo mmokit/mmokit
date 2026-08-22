@@ -58,7 +58,7 @@ func (s *SpatialSystem) Update(dt float32) {
 			Width:  b.Col.Width,
 			Height: b.Col.Height,
 			Layer:  b.Col.Layer,
-			Shape:  uint8(b.Col.Shape),
+			Shape:  b.Col.Shape,
 		}
 		if b.Rot != nil {
 			entry.Rotation = b.Rot.Yaw()

@@ -21,7 +21,7 @@ func (gw *GameWorld) FinishTransferSpawn(handle mmokit.EntityHandle, frame *mmok
 			col.Width = gw.Config.ShipWidth
 			col.Height = gw.Config.ShipHeight
 			col.Layer = spatial.LayerEntity
-			col.Shape = mmokit.ShapeRect
+			col.Shape = mmokit.ShapeBox
 		}
 		gw.ApplyEquipmentStats(entity)
 
@@ -31,7 +31,7 @@ func (gw *GameWorld) FinishTransferSpawn(handle mmokit.EntityHandle, frame *mmok
 			col.Width = gw.Config.NpcWidth
 			col.Height = gw.Config.NpcHeight
 			col.Layer = spatial.LayerEntity
-			col.Shape = mmokit.ShapeRect
+			col.Shape = mmokit.ShapeBox
 		}
 	}
 }

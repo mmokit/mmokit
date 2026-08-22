@@ -5,6 +5,8 @@ import (
 	"testing"
 
 	"github.com/mlange-42/ark/ecs"
+
+	"github.com/mmokit/mmokit/pkg/component"
 )
 
 func TestRaycast_CircleHit(t *testing.T) {
@@ -13,7 +15,7 @@ func TestRaycast_CircleHit(t *testing.T) {
 	e := w.NewEntity()
 	g.Register(Entry{
 		Entity: e, X: 200, Y: 0,
-		Radius: 50, Shape: ShapeCircle, Layer: LayerStatic,
+		Radius: 50, Shape: component.ShapeSphere, Layer: LayerStatic,
 	})
 	// ray from origin straight along +X
 	hit, hitPt, dist, ok := g.Raycast(Vec2{0, 0}, Vec2{500, 0}, LayerStatic)
@@ -39,7 +41,7 @@ func TestRaycast_LayerMaskFiltering(t *testing.T) {
 	e := w.NewEntity()
 	g.Register(Entry{
 		Entity: e, X: 200, Y: 0,
-		Radius: 50, Shape: ShapeCircle, Layer: LayerProp,
+		Radius: 50, Shape: component.ShapeSphere, Layer: LayerProp,
 	})
 	_, _, _, ok := g.Raycast(Vec2{0, 0}, Vec2{500, 0}, LayerStatic)
 	if ok {
@@ -65,7 +67,7 @@ func TestRaycast_NegativeCoordinates(t *testing.T) {
 	e := w.NewEntity()
 	g.Register(Entry{
 		Entity: e, X: -200, Y: 0,
-		Radius: 50, Shape: ShapeCircle, Layer: LayerStatic,
+		Radius: 50, Shape: component.ShapeSphere, Layer: LayerStatic,
 	})
 	hit, hitPt, dist, ok := g.Raycast(Vec2{0, 0}, Vec2{-500, 0}, LayerStatic)
 	if !ok {
@@ -91,7 +93,7 @@ func TestRaycast_AxisAlignedRect(t *testing.T) {
 	g.Register(Entry{
 		Entity: e, X: 200, Y: 0,
 		Radius: 50, Width: 80, Height: 40, Rotation: 0,
-		Shape: ShapeRect, Layer: LayerStatic,
+		Shape: component.ShapeBox, Layer: LayerStatic,
 	})
 	_, hitPt, dist, ok := g.Raycast(Vec2{0, 0}, Vec2{500, 0}, LayerStatic)
 	if !ok {
@@ -115,7 +117,7 @@ func TestRaycast_RotatedRect(t *testing.T) {
 		Entity: e, X: 200, Y: 0,
 		Radius: 50, Width: 80, Height: 40,
 		Rotation: float32(math.Pi / 2),
-		Shape:    ShapeRect, Layer: LayerStatic,
+		Shape:    component.ShapeBox, Layer: LayerStatic,
 	})
 	_, hitPt, _, ok := g.Raycast(Vec2{0, 0}, Vec2{500, 0}, LayerStatic)
 	if !ok {

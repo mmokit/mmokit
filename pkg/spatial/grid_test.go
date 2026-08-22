@@ -4,6 +4,8 @@ import (
 	"testing"
 
 	"github.com/mlange-42/ark/ecs"
+
+	"github.com/mmokit/mmokit/pkg/component"
 )
 
 func makeWorld() *ecs.World {
@@ -18,7 +20,7 @@ func TestRegister_QueryRadius(t *testing.T) {
 	w := makeWorld()
 	g := NewHashGrid(100)
 	e := newEntity(w)
-	g.Register(Entry{Entity: e, X: 50, Y: 50, Radius: 5, Layer: 1, Shape: ShapeCircle})
+	g.Register(Entry{Entity: e, X: 50, Y: 50, Radius: 5, Layer: 1, Shape: component.ShapeSphere})
 
 	tests := []struct {
 		name    string
@@ -52,9 +54,9 @@ func TestQueryRadius_EmptyGrid(t *testing.T) {
 func TestQueryRadius_MultipleEntries(t *testing.T) {
 	w := makeWorld()
 	g := NewHashGrid(100)
-	g.Register(Entry{Entity: newEntity(w), X: 10, Y: 10, Radius: 5, Shape: ShapeCircle})
-	g.Register(Entry{Entity: newEntity(w), X: 20, Y: 20, Radius: 5, Shape: ShapeCircle})
-	g.Register(Entry{Entity: newEntity(w), X: 500, Y: 500, Radius: 5, Shape: ShapeCircle})
+	g.Register(Entry{Entity: newEntity(w), X: 10, Y: 10, Radius: 5, Shape: component.ShapeSphere})
+	g.Register(Entry{Entity: newEntity(w), X: 20, Y: 20, Radius: 5, Shape: component.ShapeSphere})
+	g.Register(Entry{Entity: newEntity(w), X: 500, Y: 500, Radius: 5, Shape: component.ShapeSphere})
 
 	results := g.QueryRadius(15, 15, 20, nil)
 	if len(results) != 2 {
@@ -66,7 +68,7 @@ func TestQueryRadius_CellBoundary(t *testing.T) {
 	w := makeWorld()
 	g := NewHashGrid(100)
 	e := newEntity(w)
-	g.Register(Entry{Entity: e, X: 99.9, Y: 50, Radius: 5, Shape: ShapeCircle})
+	g.Register(Entry{Entity: e, X: 99.9, Y: 50, Radius: 5, Shape: component.ShapeSphere})
 
 	tests := []struct {
 		name    string
@@ -94,7 +96,7 @@ func TestQueryRadius_LargeRadius(t *testing.T) {
 	count := 0
 	for x := float32(0); x < 1000; x += 150 {
 		for y := float32(0); y < 1000; y += 150 {
-			g.Register(Entry{Entity: newEntity(w), X: x, Y: y, Radius: 5, Shape: ShapeCircle})
+			g.Register(Entry{Entity: newEntity(w), X: x, Y: y, Radius: 5, Shape: component.ShapeSphere})
 			count++
 		}
 	}
@@ -109,9 +111,9 @@ func TestUpdate_SameCell(t *testing.T) {
 	w := makeWorld()
 	g := NewHashGrid(100)
 	e := newEntity(w)
-	g.Register(Entry{Entity: e, X: 10, Y: 10, Radius: 5, Shape: ShapeCircle})
+	g.Register(Entry{Entity: e, X: 10, Y: 10, Radius: 5, Shape: component.ShapeSphere})
 
-	changed := g.Update(Entry{Entity: e, X: 15, Y: 15, Radius: 10, Shape: ShapeCircle})
+	changed := g.Update(Entry{Entity: e, X: 15, Y: 15, Radius: 10, Shape: component.ShapeSphere})
 	if changed {
 		t.Fatal("expected no cell change")
 	}
@@ -129,9 +131,9 @@ func TestUpdate_CrossCell(t *testing.T) {
 	w := makeWorld()
 	g := NewHashGrid(100)
 	e := newEntity(w)
-	g.Register(Entry{Entity: e, X: 10, Y: 10, Radius: 5, Shape: ShapeCircle})
+	g.Register(Entry{Entity: e, X: 10, Y: 10, Radius: 5, Shape: component.ShapeSphere})
 
-	changed := g.Update(Entry{Entity: e, X: 210, Y: 210, Radius: 5, Shape: ShapeCircle})
+	changed := g.Update(Entry{Entity: e, X: 210, Y: 210, Radius: 5, Shape: component.ShapeSphere})
 	if !changed {
 		t.Fatal("expected cell change")
 	}
@@ -153,7 +155,7 @@ func TestDeregister(t *testing.T) {
 	w := makeWorld()
 	g := NewHashGrid(100)
 	e := newEntity(w)
-	g.Register(Entry{Entity: e, X: 50, Y: 50, Radius: 5, Shape: ShapeCircle})
+	g.Register(Entry{Entity: e, X: 50, Y: 50, Radius: 5, Shape: component.ShapeSphere})
 
 	g.Deregister(e)
 
@@ -184,9 +186,9 @@ func TestDeregister_SwapDeleteCorrectness(t *testing.T) {
 	e1 := newEntity(w)
 	e2 := newEntity(w)
 	e3 := newEntity(w)
-	g.Register(Entry{Entity: e1, X: 10, Y: 10, Radius: 5, Shape: ShapeCircle})
-	g.Register(Entry{Entity: e2, X: 20, Y: 20, Radius: 5, Shape: ShapeCircle})
-	g.Register(Entry{Entity: e3, X: 30, Y: 30, Radius: 5, Shape: ShapeCircle})
+	g.Register(Entry{Entity: e1, X: 10, Y: 10, Radius: 5, Shape: component.ShapeSphere})
+	g.Register(Entry{Entity: e2, X: 20, Y: 20, Radius: 5, Shape: component.ShapeSphere})
+	g.Register(Entry{Entity: e3, X: 30, Y: 30, Radius: 5, Shape: component.ShapeSphere})
 
 	// Remove the first — triggers swap-delete.
 	g.Deregister(e1)
@@ -206,8 +208,8 @@ func TestDeregister_SwapDeleteCorrectness(t *testing.T) {
 	}
 
 	// e2 and e3 should still be updatable.
-	g.Update(Entry{Entity: e2, X: 25, Y: 25, Radius: 5, Shape: ShapeCircle})
-	g.Update(Entry{Entity: e3, X: 35, Y: 35, Radius: 5, Shape: ShapeCircle})
+	g.Update(Entry{Entity: e2, X: 25, Y: 25, Radius: 5, Shape: component.ShapeSphere})
+	g.Update(Entry{Entity: e3, X: 35, Y: 35, Radius: 5, Shape: component.ShapeSphere})
 
 	results = g.QueryRadius(25, 25, 1, nil)
 	if len(results) != 1 {
@@ -221,11 +223,11 @@ func TestInsertTransient_ClearTransient(t *testing.T) {
 
 	// Register a tracked entity.
 	e := newEntity(w)
-	g.Register(Entry{Entity: e, X: 50, Y: 50, Radius: 5, Shape: ShapeCircle})
+	g.Register(Entry{Entity: e, X: 50, Y: 50, Radius: 5, Shape: component.ShapeSphere})
 
 	// Add transient entries.
-	g.InsertTransient(Entry{X: 55, Y: 55, Radius: 3, Shape: ShapeCircle})
-	g.InsertTransient(Entry{X: 60, Y: 60, Radius: 3, Shape: ShapeCircle})
+	g.InsertTransient(Entry{X: 55, Y: 55, Radius: 3, Shape: component.ShapeSphere})
+	g.InsertTransient(Entry{X: 60, Y: 60, Radius: 3, Shape: component.ShapeSphere})
 
 	// QueryRadius should find both tracked and transient.
 	results := g.QueryRadius(50, 50, 20, nil)
@@ -249,8 +251,8 @@ func TestInsertTransient_ClearTransient(t *testing.T) {
 func TestReset(t *testing.T) {
 	w := makeWorld()
 	g := NewHashGrid(100)
-	g.Register(Entry{Entity: newEntity(w), X: 10, Y: 10, Radius: 5, Shape: ShapeCircle})
-	g.InsertTransient(Entry{X: 20, Y: 20, Radius: 5, Shape: ShapeCircle})
+	g.Register(Entry{Entity: newEntity(w), X: 10, Y: 10, Radius: 5, Shape: component.ShapeSphere})
+	g.InsertTransient(Entry{X: 20, Y: 20, Radius: 5, Shape: component.ShapeSphere})
 
 	g.Reset()
 
@@ -267,14 +269,14 @@ func TestDoubleRegister_Panics(t *testing.T) {
 	w := makeWorld()
 	g := NewHashGrid(100)
 	e := newEntity(w)
-	g.Register(Entry{Entity: e, X: 10, Y: 10, Radius: 5, Shape: ShapeCircle})
+	g.Register(Entry{Entity: e, X: 10, Y: 10, Radius: 5, Shape: component.ShapeSphere})
 
 	defer func() {
 		if r := recover(); r == nil {
 			t.Fatal("expected panic on double register")
 		}
 	}()
-	g.Register(Entry{Entity: e, X: 20, Y: 20, Radius: 5, Shape: ShapeCircle})
+	g.Register(Entry{Entity: e, X: 20, Y: 20, Radius: 5, Shape: component.ShapeSphere})
 }
 
 func TestTrackedCount(t *testing.T) {
@@ -286,8 +288,8 @@ func TestTrackedCount(t *testing.T) {
 
 	e1 := newEntity(w)
 	e2 := newEntity(w)
-	g.Register(Entry{Entity: e1, X: 10, Y: 10, Radius: 5, Shape: ShapeCircle})
-	g.Register(Entry{Entity: e2, X: 20, Y: 20, Radius: 5, Shape: ShapeCircle})
+	g.Register(Entry{Entity: e1, X: 10, Y: 10, Radius: 5, Shape: component.ShapeSphere})
+	g.Register(Entry{Entity: e2, X: 20, Y: 20, Radius: 5, Shape: component.ShapeSphere})
 	if g.TrackedCount() != 2 {
 		t.Fatalf("after 2 registers: TrackedCount=%d, want 2", g.TrackedCount())
 	}
@@ -305,10 +307,10 @@ func TestQueryCollisions_BothLayers(t *testing.T) {
 	matrix := map[uint8]uint8{1: 2}
 
 	// Tracked: layer 1.
-	g.Register(Entry{Entity: newEntity(w), X: 10, Y: 10, Radius: 20, Layer: 1, Shape: ShapeCircle})
+	g.Register(Entry{Entity: newEntity(w), X: 10, Y: 10, Radius: 20, Layer: 1, Shape: component.ShapeSphere})
 
 	// Transient: layer 2, overlapping.
-	g.InsertTransient(Entry{X: 15, Y: 10, Radius: 20, Layer: 2, Shape: ShapeCircle})
+	g.InsertTransient(Entry{X: 15, Y: 10, Radius: 20, Layer: 2, Shape: component.ShapeSphere})
 
 	pairs := 0
 	g.QueryCollisions(matrix, func(a, b Entry) {
@@ -333,16 +335,16 @@ func TestQueryCollisions_CircleCircle(t *testing.T) {
 		{
 			name: "overlapping pair",
 			entries: []Entry{
-				{X: 10, Y: 10, Radius: 20, Layer: 1, Shape: ShapeCircle},
-				{X: 25, Y: 10, Radius: 20, Layer: 1, Shape: ShapeCircle},
+				{X: 10, Y: 10, Radius: 20, Layer: 1, Shape: component.ShapeSphere},
+				{X: 25, Y: 10, Radius: 20, Layer: 1, Shape: component.ShapeSphere},
 			},
 			wantPairs: 1,
 		},
 		{
 			name: "non-overlapping pair",
 			entries: []Entry{
-				{X: 0, Y: 0, Radius: 5, Layer: 1, Shape: ShapeCircle},
-				{X: 100, Y: 100, Radius: 5, Layer: 1, Shape: ShapeCircle},
+				{X: 0, Y: 0, Radius: 5, Layer: 1, Shape: component.ShapeSphere},
+				{X: 100, Y: 100, Radius: 5, Layer: 1, Shape: component.ShapeSphere},
 			},
 			wantPairs: 0,
 		},
@@ -374,8 +376,8 @@ func TestQueryCollisions_LayerMatrix(t *testing.T) {
 	// Layer 1 collides with layer 2, but not with itself.
 	matrix := map[uint8]uint8{1: 2}
 
-	g.Register(Entry{Entity: newEntity(w), X: 10, Y: 10, Radius: 20, Layer: 1, Shape: ShapeCircle})
-	g.Register(Entry{Entity: newEntity(w), X: 15, Y: 10, Radius: 20, Layer: 1, Shape: ShapeCircle})
+	g.Register(Entry{Entity: newEntity(w), X: 10, Y: 10, Radius: 20, Layer: 1, Shape: component.ShapeSphere})
+	g.Register(Entry{Entity: newEntity(w), X: 15, Y: 10, Radius: 20, Layer: 1, Shape: component.ShapeSphere})
 
 	pairs := 0
 	g.QueryCollisions(matrix, func(a, b Entry) {
@@ -385,7 +387,7 @@ func TestQueryCollisions_LayerMatrix(t *testing.T) {
 		t.Fatalf("same-layer should not collide: got %d pairs", pairs)
 	}
 
-	g.Register(Entry{Entity: newEntity(w), X: 12, Y: 10, Radius: 20, Layer: 2, Shape: ShapeCircle})
+	g.Register(Entry{Entity: newEntity(w), X: 12, Y: 10, Radius: 20, Layer: 2, Shape: component.ShapeSphere})
 
 	pairs = 0
 	g.QueryCollisions(matrix, func(a, b Entry) {
@@ -405,7 +407,7 @@ func TestIsRegistered(t *testing.T) {
 		t.Fatal("should not be registered before Register")
 	}
 
-	g.Register(Entry{Entity: e, X: 10, Y: 10, Radius: 5, Shape: ShapeCircle})
+	g.Register(Entry{Entity: e, X: 10, Y: 10, Radius: 5, Shape: component.ShapeSphere})
 	if !g.IsRegistered(e) {
 		t.Fatal("should be registered after Register")
 	}
@@ -422,11 +424,11 @@ func TestUpdate_CrossCell_MultipleEntities(t *testing.T) {
 
 	e1 := newEntity(w)
 	e2 := newEntity(w)
-	g.Register(Entry{Entity: e1, X: 10, Y: 10, Radius: 5, Shape: ShapeCircle})
-	g.Register(Entry{Entity: e2, X: 20, Y: 20, Radius: 5, Shape: ShapeCircle})
+	g.Register(Entry{Entity: e1, X: 10, Y: 10, Radius: 5, Shape: component.ShapeSphere})
+	g.Register(Entry{Entity: e2, X: 20, Y: 20, Radius: 5, Shape: component.ShapeSphere})
 
 	// Move e1 to a different cell.
-	g.Update(Entry{Entity: e1, X: 210, Y: 210, Radius: 5, Shape: ShapeCircle})
+	g.Update(Entry{Entity: e1, X: 210, Y: 210, Radius: 5, Shape: component.ShapeSphere})
 
 	// e2 should still be in original position.
 	results := g.QueryRadius(20, 20, 5, nil)

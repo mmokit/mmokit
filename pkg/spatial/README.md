@@ -17,7 +17,7 @@ grid.Register(spatial.Entry{
     Y:      200,
     Radius: 12,
     Layer:  spatial.LayerEntity,
-    Shape:  spatial.ShapeCircle,
+    Shape:  component.ShapeSphere,
 })
 
 movedBucket := grid.Update(updatedEntry)
@@ -106,4 +106,5 @@ type Entry struct {
 
 `Layer` is a bit mask. The package reserves zero for no membership and
 provides `LayerStatic`, `LayerProp`, and `LayerEntity`. `Shape` is either
-`ShapeCircle` or `ShapeRect`.
+`component.ShapeSphere` or `component.ShapeBox` — `pkg/spatial` reads the one
+shape enum from `pkg/component` rather than carrying a parallel copy.

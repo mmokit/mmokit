@@ -46,18 +46,19 @@ type Rotation struct {
 	X, Y, Z, W float32
 }
 
-// ShapeKind discriminates a Collider's shape.
+// ShapeKind discriminates a Collider's shape. A sphere IS a circle in a 2D
+// profile, which is why the forward names are the only names.
 //
-// The values ALIAS pkg/spatial's ShapeCircle/ShapeRect rather than extending
-// the range, and that is deliberate. spatial's narrow phase dispatches the
-// circle/circle, rect/circle and circle/rect pairs and then FALLS THROUGH to
-// the OBB routine for anything else, while the raycast skips a value it does
-// not recognise. So a genuinely new discriminant would ship an entity that
-// silently collides as a degenerate box and is invisible to line-of-sight,
-// with no consumer to notice until collision lands in phase 4. Aliasing makes
-// that failure structurally impossible.
+// This is now the ONE definition. pkg/spatial carried a parallel
+// ShapeCircle/ShapeRect pair whose values were kept equal to these by a
+// comment; pkg/spatial reads this type directly instead.
 //
-// Sphere/Box are the forward names; a sphere IS a circle in a 2D profile.
+// A THIRD discriminant needs both dispatch sites updated, and neither will
+// tell you: spatial's narrow phase dispatches the sphere/sphere, box/sphere
+// and sphere/box pairs and then FALLS THROUGH to the OBB routine for anything
+// else, while the raycast SKIPS a value it does not recognise. So a new shape
+// added here alone ships an entity that silently collides as a degenerate box
+// and is invisible to line-of-sight.
 type ShapeKind uint8
 
 const (

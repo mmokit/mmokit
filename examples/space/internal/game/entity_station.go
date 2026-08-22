@@ -34,7 +34,7 @@ func (gw *GameWorld) SpawnStation(localX, localY float32, def world.Station) uin
 		mmokit.EntityKind{Type: gamecomp.KindStation},
 		mmokit.Collider{
 			Radius: radius,
-			Shape:  mmokit.ShapeCircle,
+			Shape:  mmokit.ShapeSphere,
 			Layer:  spatial.LayerStatic,
 		},
 		gamecomp.Station{Name: def.Name},

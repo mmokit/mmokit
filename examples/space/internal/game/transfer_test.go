@@ -307,7 +307,7 @@ func TestSpawnFromTransferCore_FiresOnTransferReceived(t *testing.T) {
 		PosX:       10, PosY: 20,
 		CellX: 0, CellY: 0,
 		Rotation: component.RotationFromYaw(0),
-		Collider: mmokit.Collider{Radius: 5, Shape: mmokit.ShapeRect},
+		Collider: mmokit.Collider{Radius: 5, Shape: mmokit.ShapeBox},
 	}
 	blob, err := mmokit.MarshalTransferFrame(frame)
 	if err != nil {

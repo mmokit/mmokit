@@ -4,6 +4,8 @@ import (
 	"math"
 
 	"github.com/mlange-42/ark/ecs"
+
+	"github.com/mmokit/mmokit/pkg/component"
 )
 
 // Vec2 is a 2D vector in world coordinates.
@@ -41,7 +43,7 @@ func (g *HashGrid) Raycast(from, to Vec2, layerMask uint8) (ecs.Entity, Vec2, fl
 			if e.Layer&layerMask == 0 {
 				continue
 			}
-			if e.Shape == ShapeCircle {
+			if e.Shape == component.ShapeSphere {
 				t, hitOK := rayCircleHit(from, to, e.X, e.Y, e.Radius)
 				if !hitOK {
 					continue
@@ -53,7 +55,7 @@ func (g *HashGrid) Raycast(from, to Vec2, layerMask uint8) (ecs.Entity, Vec2, fl
 					found = true
 				}
 			}
-			if e.Shape == ShapeRect {
+			if e.Shape == component.ShapeBox {
 				t, hitOK := rayRectHit(from, to, e)
 				if !hitOK {
 					continue
