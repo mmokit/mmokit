@@ -116,8 +116,8 @@ func TestRaycast_RotatedRect(t *testing.T) {
 	g.Register(Entry{
 		Entity: e, X: 200, Y: 0,
 		Radius: 50, Width: 80, Height: 40,
-		Yaw: float32(math.Pi / 2),
-		Shape:    component.ShapeBox, Layer: LayerStatic,
+		Yaw:   float32(math.Pi / 2),
+		Shape: component.ShapeBox, Layer: LayerStatic,
 	})
 	_, hitPt, _, ok := g.RaycastXY(Vec2{0, 0}, Vec2{500, 0}, LayerStatic)
 	if !ok {

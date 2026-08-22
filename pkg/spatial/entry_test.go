@@ -26,8 +26,8 @@ func TestEntryFrom_CarriesEveryColliderField(t *testing.T) {
 	if got.Entity != e {
 		t.Errorf("Entity = %v, want %v", got.Entity, e)
 	}
-	if got.X != 10 || got.Y != 20 {
-		t.Errorf("position = (%v, %v), want (10, 20)", got.X, got.Y)
+	if got.X != 10 || got.Y != 20 || got.Z != 30 {
+		t.Errorf("position = (%v, %v, %v), want (10, 20, 30)", got.X, got.Y, got.Z)
 	}
 	if got.Radius != 5 || got.Width != 8 || got.Height != 9 {
 		t.Errorf("extents = (%v, %v, %v), want (5, 8, 9)", got.Radius, got.Width, got.Height)

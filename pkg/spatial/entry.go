@@ -22,6 +22,7 @@ func EntryFrom(e ecs.Entity, pos *component.Position, col *component.Collider, r
 	if pos != nil {
 		entry.X = pos.X
 		entry.Y = pos.Y
+		entry.Z = pos.Z
 	}
 	if col != nil {
 		entry.Radius = col.Radius

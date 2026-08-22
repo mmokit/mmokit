@@ -14,15 +14,32 @@ type BucketKey struct {
 }
 
 // Entry stores an entity with its position, shape, and collision layer.
+//
+// X, Y and Z are WORLD-ABSOLUTE. Partitioning is horizontal-only, so unlike a
+// component.Position — which is local to its base cell — Z carries no cell
+// term and never will: there is no vertical cell boundary for one to be
+// relative to.
+//
+// BUCKETS ARE 2D COLUMNS. bucketKey hashes X and Y alone, and Z is filtered
+// inside the bucket scan rather than partitioning it. That is a deliberate
+// choice, not an unfinished one — see bucketKey — and it has a property worth
+// relying on: a spherical query over column buckets can only ever NARROW the
+// result set relative to the old cylindrical test, never widen it.
+//
+// There is no Depth field. The broad phase reads only Radius; box depth is
+// narrow-phase state with no consumer until phase 4b, and EntryFrom makes
+// adding it a one-line change then. Note also that an Entry.Depth would sit
+// one grep away from CellID.Depth, which is a quadtree level and utterly
+// unrelated.
 type Entry struct {
-	Entity   ecs.Entity
-	X, Y     float32
-	Radius   float32 // bounding radius (used for broad-phase and circle shape)
-	Width    float32 // rect width (forward axis), 0 for circles
-	Height   float32 // rect height (side axis), 0 for circles
-	Yaw      float32 // rotation about Z, radians; the 2D narrow phase's only orientation input
-	Layer    uint8
-	Shape    component.ShapeKind
+	Entity  ecs.Entity
+	X, Y, Z float32
+	Radius  float32 // bounding radius; must bound the shape in every axis the profile uses
+	Width   float32 // box extent along local X (forward), 0 for spheres
+	Height  float32 // box extent along local Y (side), 0 for spheres
+	Yaw     float32 // rotation about Z, radians; the 2D narrow phase's only orientation input
+	Layer   uint8
+	Shape   component.ShapeKind
 }
 
 // bucket holds both tracked (persistent) and transient (per-tick) entries.
