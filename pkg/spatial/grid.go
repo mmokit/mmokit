@@ -306,10 +306,23 @@ func checkCollision(a, b Entry, matrix map[uint8]uint8, fn func(a, b Entry)) {
 		return
 	}
 
-	// Broad-phase: bounding circle check
+	// Broad-phase: bounding SPHERE check.
+	//
+	// Radius must therefore bound the shape in every axis the profile uses,
+	// Depth included — see component.Collider.Radius. A box whose Radius is
+	// its inscribed rather than circumscribed radius starts rejecting pairs
+	// that genuinely overlap once this term is here.
+	//
+	// The narrow phase this gate feeds is still 2D OBB/SAT reading Yaw. That
+	// is phase 4b, deliberately: this commit stops the gate claiming that
+	// everything in a column is a candidate, it does not make the contact
+	// test three-dimensional.
+	//
+	// dz appended, 2D sub-expression intact — see inSphere.
 	dx := a.X - b.X
 	dy := a.Y - b.Y
-	dist2 := dx*dx + dy*dy
+	dz := a.Z - b.Z
+	dist2 := dx*dx + dy*dy + dz*dz
 	maxDist := a.Radius + b.Radius
 	if dist2 > maxDist*maxDist {
 		return

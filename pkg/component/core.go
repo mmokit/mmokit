@@ -93,7 +93,17 @@ func (k ShapeKind) String() string {
 // set across profiles. A 2D profile leaves it zero and no binding emits it —
 // QSize keeps its three fields, so Depth is schema-invisible by construction.
 type Collider struct {
-	Radius float32 // sphere radius, or bounding radius for boxes
+	// Radius is the sphere radius, and for a box the BOUNDING radius used by
+	// broad-phase rejection. It must bound the shape in every axis the profile
+	// uses — Depth included in 3D, so a W x H x D box needs
+	// sqrt(W^2+H^2+D^2)/2, not W/2. Set it to the inscribed radius instead and
+	// the broad phase rejects pairs that genuinely overlap, silently, because
+	// rejection happens before any contact test runs.
+	//
+	// It is not derived from Width/Height/Depth on purpose: games set Radius
+	// deliberately (examples/space's stations, walls and asteroids do), and
+	// deriving it would change 2D collision behaviour.
+	Radius float32
 	Width  float32 // box extent along local X (forward axis)
 	Height float32 // box extent along local Y (side axis)
 	Depth  float32 // box extent along local Z (up axis); 0 in a 2D profile

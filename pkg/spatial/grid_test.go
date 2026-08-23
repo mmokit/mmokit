@@ -508,3 +508,41 @@ func TestQueryRadius_TwoDIsUnchanged(t *testing.T) {
 		}
 	}
 }
+
+// TestQueryCollisions_RejectsHeightSeparatedPairs pins the broad-phase gate.
+//
+// The two boxes share an XY bucket and overlap perfectly in plan view, so the
+// only thing that can separate them is height. Without the dz term the gate
+// answers "everything in this column is a candidate", which is what it did.
+//
+// QueryCollisions has no production callers today, so this test is its only
+// guard — and phase 4b inherits the gate looking three-dimensional whether or
+// not it is.
+func TestQueryCollisions_RejectsHeightSeparatedPairs(t *testing.T) {
+	w := makeWorld()
+	g := NewHashGrid(100)
+
+	const radius = 20
+	low := newEntity(w)
+	high := newEntity(w)
+	g.Register(Entry{Entity: low, X: 0, Y: 0, Z: 0, Radius: radius, Layer: LayerEntity, Shape: component.ShapeSphere})
+	g.Register(Entry{Entity: high, X: 0, Y: 0, Z: 200, Radius: radius, Layer: LayerEntity, Shape: component.ShapeSphere})
+
+	matrix := map[uint8]uint8{LayerEntity: LayerEntity}
+
+	pairs := 0
+	g.QueryCollisions(matrix, func(a, b Entry) { pairs++ })
+	if pairs != 0 {
+		t.Errorf("got %d collision pairs for boxes %v units apart vertically with radius %v — "+
+			"the broad-phase gate is still a column test", pairs, 200, radius)
+	}
+
+	// Bring them within the combined radius and the pair must come back, or
+	// the assertion above would pass on a gate that rejects everything.
+	g.Update(Entry{Entity: high, X: 0, Y: 0, Z: 30, Radius: radius, Layer: LayerEntity, Shape: component.ShapeSphere})
+	pairs = 0
+	g.QueryCollisions(matrix, func(a, b Entry) { pairs++ })
+	if pairs != 1 {
+		t.Errorf("got %d collision pairs for overlapping spheres, want 1", pairs)
+	}
+}
