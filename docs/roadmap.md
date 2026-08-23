@@ -698,7 +698,7 @@ Seven commits, `b8480ed8`..`af30bf37`. **Ten days against a four-day estimate**,
 
 ## 7. The 2D/3D and multi-genre program
 
-**Approximately 104 engineer-days** as originally sized (band 95–120; absolute range 85 if collision is cut hard, 140 if three overruns land together). Phases 0 through 4a are closed, and **52 engineer-days remain** — phase 4b's 41 and phase 5's 11, the only two rows in [§7.5](#75-phases) still open. The program total is therefore **114**, not 104: 4b was under-sized, see [§7.5.9](#759-phase-4b-scope-and-budget).
+**Approximately 104 engineer-days** as originally sized (band 95–120; absolute range 85 if collision is cut hard, 140 if three overruns land together). Phases 0 through 4a are closed, and **49.5 engineer-days remain** — phase 4b's 38.5 and phase 5's 11, the only two rows in [§7.5](#75-phases) still open. The program total is therefore **111.5**, not 104: 4b was under-sized, see [§7.5.9](#759-phase-4b-scope-and-budget).
 
 ### 7.1 Sequencing rule
 
@@ -752,7 +752,7 @@ Collision is **new capability, not a port** — the existing separating-axis cod
 | 2 | The 3D profile — **done**, see [§7.5.6](#756-what-phase-2-landed) | 12 | Quaternion quantization, dimension-selected bindings, gravity and move modes, cluster dimension agreement. A headless 3D example survives a cell split with a non-zero destination entity count asserted. |
 | 3 | Client SDK and interpolation — **done**, see [§7.5.7](#757-what-phase-3-landed) | 11 | Quaternion decode and slerp in TypeScript and C#, golden vectors. A browser client renders 3D with quaternion orientation. |
 | 4a | Broad phase and area of interest go 3D — **done**, see [§7.5.8](#758-what-phase-4a-landed) | 3 | `spatial.Entry` carries Z, `QueryRadius` and the per-tier AoI cutoff test a sphere, the broad-phase pair gate accounts for height. A viewer above the world no longer sees everything under it. |
-| 4b | Collision — narrow phase | 41 | Capsule characters against static boxes, line-of-sight gating, non-tunneling projectiles, contact manifolds, static push-out, trigger enter/stay/exit, swept spheres, 3D raycast. **Re-budgeted from 31 to 41** — see [§7.5.9](#759-phase-4b-scope-and-budget). |
+| 4b | Collision — narrow phase | 38.5 | Capsule characters against static boxes, line-of-sight gating, non-tunneling projectiles, contact manifolds, static push-out, trigger enter/stay/exit, swept spheres, 3D raycast. **Re-budgeted from 31 to 41** — see [§7.5.9](#759-phase-4b-scope-and-budget). |
 | 5 | Parity fixtures and hardening | 11 | Both profiles covered in one test binary at the pre-existing race baseline. |
 
 Phases 0 and 1 are deliberately pure 2D. Front-loading them means any later failure on the split-merge path is unambiguously a 3D bug rather than a byte-offset bug.
@@ -1025,6 +1025,18 @@ lands at 32, and no honest arrangement reaches 31.
 - **`examples/cube3d`'s colliders set no `Layer`**, so every entity in the 3D
   example is layer 0 and invisible to every masked query. 4b's acceptance test
   cannot work until that is fixed.
+
+**Unit 1 is dropped, on measurement.** The plan opened with a 2.5-day
+migration of the replication chain to `*spatial.Entry` so that `Entry` could
+afford to widen, priced off ~40 by-value copies per viewer-entity-tick. The
+copies are real and the cost is not: at 256 entities the median of three runs
+is 36.8 µs by value at 40 bytes, 36.8 µs by pointer at 40, 36.1 µs by pointer
+at 56 and 37.0 µs by value at 56 — all within noise. Isolating the binding
+fan-out, where the copies are densest, gives 419 ns by value against 426 ns by
+pointer at a 56-byte `Entry`; the pointer version is marginally *slower*.
+Widening is free and the migration that was to pay for it buys nothing.
+`pkg/system/replication_entry_bench_test.go` is what shipped instead, and is
+the first benchmark in that package. **4b is therefore 38.5 days.**
 
 **Decisions that are settled, so 4b does not re-derive them:** `Entry` gains
 the quaternion and `Depth` and loses `Yaw` (56 bytes, paid for by moving the
