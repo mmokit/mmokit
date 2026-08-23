@@ -1,10 +1,10 @@
 # Current Architecture
 
-**Last verified:** 2026-07-13
+**Last verified:** 2026-08-23
 
-MMOKIT is a server-authoritative multiplayer game framework. The reusable engine lives under `pkg/`; three examples under `examples/` consume it, the largest being a reference space game. Games normally import the `mmokit` facade rather than assembling engine packages directly.
+MMOKIT is a server-authoritative multiplayer game framework. The reusable engine lives under `pkg/`; four examples under `examples/` consume it, the largest being a reference space game and the newest a 3D reference process. Games normally import the `mmokit` facade rather than assembling engine packages directly.
 
-The current implementation is 2D throughout. For project scope, goals, and planned direction — including first-class 3D support — see [`roadmap.md`](roadmap.md).
+The implementation carries one component set across two spatial profiles; `Config.Dimension` selects which at construction. For project scope, goals, and planned direction see [`roadmap.md`](roadmap.md).
 
 This page describes the current implementation. It is not a future design proposal.
 
@@ -57,7 +57,7 @@ The coordinator is a control plane. Per-tick gameplay, replication payloads, and
 
 The space example's distributed recipe and `examples/4node-basic` demonstrate concrete multi-process layouts:
 
-- `just distributed-space`
+- `cd examples/space && just distributed`
 - `cd examples/4node-basic && just distributed`
 
 ## Game composition
@@ -97,7 +97,7 @@ An entity's network ID can have these local representations:
 - **Replica:** read-only border state owned by another cell.
 - **Ghost:** non-authoritative transfer residue retained for protocol/lifecycle handling.
 
-The NetID index and authority epoch protect the one-writer invariant. Bundle queries (`mmokit.Query`) exclude Ghost and Replica by default. Note that `ForEach1/2/3` do not: they iterate raw filters and can expose neighbour-owned replicas, including to WASM systems. Making all game-facing iteration default to authoritative live entities is tracked as CE-010 in [`roadmap.md`](roadmap.md).
+The NetID index and authority epoch protect the one-writer invariant. Bundle queries (`mmokit.Query`) exclude Ghost and Replica by default. Note that `ForEach1/2/3` do not: they iterate raw filters and can expose neighbour-owned replicas, including to WASM systems. [`roadmap.md`](roadmap.md) tracks that gap as CE-010.
 
 ### Spatial ownership and topology
 
@@ -116,7 +116,7 @@ Client traffic does not use protobuf. The client-facing protocol consists of:
 - An optional processed-input-sequence trailer on quantized frames, announced by `FrameFlagInputAck` ([`pkg/quantize/wireformat.go`](../pkg/quantize/wireformat.go)), which clients use to retire acknowledged predicted input
 - An optional client-to-server `mmokit.ReplicationAck`; connections on a datagram transport advance their replication baselines on that acknowledgement rather than on transport acceptance
 
-Channel `0x00` carries typed input/events and channel `0x01` carries operations. WebSocket and the custom UDP transport share the connection manager; [`pkg/net/README.md`](../pkg/net/README.md) is the authoritative reference for channel bytes and delivery classes. Remaining UDP security and gating work is tracked as CE-005b in [`roadmap.md`](roadmap.md).
+Channel `0x00` carries typed input/events and channel `0x01` carries operations. WebSocket and the custom UDP transport share the connection manager; [`pkg/net/README.md`](../pkg/net/README.md) is the authoritative reference for channel bytes and delivery classes.
 
 Only server-internal MeshControl and MeshData traffic uses protobuf, with its schema in [`proto/meshpb/mesh.proto`](../proto/meshpb/mesh.proto).
 
@@ -189,7 +189,7 @@ Use TLS certificate flags or a TLS-terminating proxy in production. Self-signed 
 | `pkg/engine` | ECS loop, systems, players, loop jobs, console foundations |
 | `pkg/system` | Reusable physics, lifetime, spatial, replication, and debug systems |
 | `pkg/net`, `pkg/ops` | Client transports, connection management, and operation routing |
-| `pkg/replication`, `pkg/quantize` | Baselines, frame primitives, quantization, delta encoding, and the shared TypeScript client cores in [`pkg/quantize/ts/`](../pkg/quantize/ts/) — delta decoding, interpolation, clock sync, adaptive playback, prediction buffering, and reconciliation pairing |
+| `pkg/replication`, `pkg/quantize` | Baselines, frame primitives, quantization, delta encoding, and the shared TypeScript client cores in [`pkg/quantize/ts/`](../pkg/quantize/ts/) — delta decoding, interpolation, clock sync, adaptive playback, prediction buffering, quaternion decode and slerp, and reconciliation pairing |
 | `csharp/Mmokit.Sdk.Core` | Hand-ported C# counterparts of those cores, copied into generated SDKs by `cmd/sdkgen` |
 | `pkg/cmdsys`, `pkg/admin` | Routed operator commands and dashboard backend |
 | `pkg/service`, `pkg/services` | Service runtime and built-in service kinds |
