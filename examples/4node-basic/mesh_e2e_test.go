@@ -358,6 +358,12 @@ func spawnBotsForTest(t *testing.T, cluster *testCluster, cellID mmokit.CellID, 
 // and TransferCooldowns tick down before the next assertion.
 const settleAfterTransition = 2 * time.Second
 
+// conservationBudget is how long the cluster gets to converge on every bot
+// being Live on exactly one cell after a topology change. Generous on purpose:
+// exceeding it is a real failure, so the cost of a large value is only a
+// slower red, while the cost of a small one is a flaky green.
+const conservationBudget = 8 * time.Second
+
 func mustSplit(t *testing.T, cluster *testCluster, parent mmokit.CellID) {
 	t.Helper()
 	if err := cluster.Coord.SplitCell(parent, true); err != nil {
@@ -392,25 +398,56 @@ func wanderAndAssert(
 	borderBefore := sumBorderFrames(cluster)
 	time.Sleep(dur)
 
+	// Poll to a DEADLINE, not for a fixed number of attempts.
+	//
+	// A bot mid-handoff is Ghost on the source and not yet Live on the
+	// destination, and botLocations walks cells one at a time — so it is
+	// legitimately counted nowhere for the duration of the transfer. The
+	// property worth asserting is that the cluster CONVERGES to every bot,
+	// not that it has already converged at the instant of the first sample.
+	//
+	// This used to be 4 attempts 120 ms apart: a 480 ms budget fixed at
+	// authoring time on an unloaded machine. A cross-host handoff under the
+	// race detector on a loaded CI runner exceeds it, which is what made this
+	// test the repository's best-known flake — one bot of sixty missing for
+	// one phase, present again by the next. A wall-clock deadline scales with
+	// the machine instead of assuming one.
 	var foundIn map[uint32]string
 	var missing []uint32
-	const retries = 4
-	for attempt := 0; attempt < retries; attempt++ {
+	started := time.Now()
+	deadline := started.Add(conservationBudget)
+	samples := 0
+	for {
 		foundIn = botLocations(t, cluster)
+		samples++
 		missing = missing[:0]
 		for _, id := range spawned {
 			if _, ok := foundIn[id]; !ok {
 				missing = append(missing, id)
 			}
 		}
-		if len(missing) == 0 {
+		if len(missing) == 0 || time.Now().After(deadline) {
 			break
 		}
-		time.Sleep(120 * time.Millisecond)
+		time.Sleep(100 * time.Millisecond)
+	}
+	// Report the convergence wait whenever it took more than one sample, so
+	// the margin against conservationBudget is visible in a passing run
+	// instead of only discovered by a red. If this starts printing seconds,
+	// the budget is nearly spent and the handoff path has slowed down.
+	if samples > 1 {
+		t.Logf("[%s] conservation converged after %v (%d samples, budget %v)",
+			phase, time.Since(started).Round(time.Millisecond), samples, conservationBudget)
 	}
 	if len(missing) > 0 {
-		t.Errorf("[%s] entity conservation: %d of %d bots missing. Missing netIDs: %v",
-			phase, len(missing), len(spawned), summariseIDs(missing))
+		// Say WHERE they are, not just that they are absent. "1 of 60 bots
+		// missing" is what §6.7 called "needs a targeted investigation";
+		// naming each one's presence turns the next red into a diagnosis:
+		// a ghost or replica means a handoff slower than the budget, and
+		// "nowhere" means the entity is genuinely lost.
+		t.Errorf("[%s] entity conservation: %d of %d bots missing after %v. %s",
+			phase, len(missing), len(spawned), conservationBudget,
+			describeMissing(t, cluster, missing))
 	}
 	spawnedSet := make(map[uint32]struct{}, len(spawned))
 	for _, id := range spawned {
@@ -616,4 +653,81 @@ func summariseIDs(ids []uint32) string {
 		return fmt.Sprintf("%v", ids)
 	}
 	return fmt.Sprintf("%v...%v (len=%d)", ids[:4], ids[len(ids)-4:], len(ids))
+}
+
+// describeMissing reports where each missing netID actually is, including the
+// presences botLocations deliberately filters out.
+//
+// A conservation failure has three very different causes and the bare count
+// distinguishes none of them:
+//
+//   - "ghost on X" — the source has released it and the destination has not
+//     yet spawned it. The handoff is slower than the budget; that is a
+//     performance or budget question, not a lost entity.
+//   - "replica on X" — it is only present as a border mirror, which means the
+//     authoritative copy went missing while a neighbour kept mirroring it.
+//   - "nowhere" — genuinely lost, and the only one of the three that is a
+//     conservation bug.
+//
+// This exists because §6.7 recorded this test as needing "a targeted
+// investigation, not a re-run", which was true precisely because the failure
+// message carried no evidence.
+func describeMissing(t *testing.T, cluster *testCluster, missing []uint32) string {
+	t.Helper()
+
+	want := make(map[uint32]struct{}, len(missing))
+	for _, id := range missing {
+		want[id] = struct{}{}
+	}
+	where := make(map[uint32][]string, len(missing))
+
+	for _, cell := range cluster.allCells() {
+		cellKey := string(cell.MeshID())
+		execOnTestLoop(t, cell, func() {
+			w := cell.Stage
+			if w == nil {
+				return
+			}
+			world := w.ECSWorld()
+			netMap := ecs.NewMap1[mmokit.NetworkID](world)
+			ghostMap := ecs.NewMap1[mmokit.Ghost](world)
+			repMap := ecs.NewMap1[mmokit.Replica](world)
+			// No Without: the whole point is to see the presences the
+			// conservation walk filters out.
+			q := ecs.NewFilter1[mmokit.NetworkID](world).Query()
+			defer q.Close()
+			for q.Next() {
+				e := q.Entity()
+				id := netMap.Get(e).ID
+				if _, ok := want[id]; !ok {
+					continue
+				}
+				kind := "live"
+				switch {
+				case ghostMap.HasAll(e):
+					kind = "ghost"
+				case repMap.HasAll(e):
+					kind = "replica"
+				}
+				where[id] = append(where[id], fmt.Sprintf("%s on %s", kind, cellKey))
+			}
+		})
+	}
+
+	sort.Slice(missing, func(i, j int) bool { return missing[i] < missing[j] })
+	parts := make([]string, 0, len(missing))
+	for i, id := range missing {
+		if i >= 8 {
+			parts = append(parts, fmt.Sprintf("...and %d more", len(missing)-8))
+			break
+		}
+		locs := where[id]
+		if len(locs) == 0 {
+			parts = append(parts, fmt.Sprintf("%d=NOWHERE (genuinely lost)", id))
+			continue
+		}
+		sort.Strings(locs)
+		parts = append(parts, fmt.Sprintf("%d=%s", id, strings.Join(locs, "+")))
+	}
+	return strings.Join(parts, "; ")
 }
