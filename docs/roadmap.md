@@ -698,7 +698,7 @@ Seven commits, `b8480ed8`..`af30bf37`. **Ten days against a four-day estimate**,
 
 ## 7. The 2D/3D and multi-genre program
 
-**Approximately 104 engineer-days** as originally sized (band 95–120; absolute range 85 if collision is cut hard, 140 if three overruns land together). Phases 0 through 4a are closed, and **42 engineer-days remain** — phase 4b's 31 and phase 5's 11, the only two rows in [§7.5](#75-phases) still open.
+**Approximately 104 engineer-days** as originally sized (band 95–120; absolute range 85 if collision is cut hard, 140 if three overruns land together). Phases 0 through 4a are closed, and **52 engineer-days remain** — phase 4b's 41 and phase 5's 11, the only two rows in [§7.5](#75-phases) still open. The program total is therefore **114**, not 104: 4b was under-sized, see [§7.5.9](#759-phase-4b-scope-and-budget).
 
 ### 7.1 Sequencing rule
 
@@ -752,7 +752,7 @@ Collision is **new capability, not a port** — the existing separating-axis cod
 | 2 | The 3D profile — **done**, see [§7.5.6](#756-what-phase-2-landed) | 12 | Quaternion quantization, dimension-selected bindings, gravity and move modes, cluster dimension agreement. A headless 3D example survives a cell split with a non-zero destination entity count asserted. |
 | 3 | Client SDK and interpolation — **done**, see [§7.5.7](#757-what-phase-3-landed) | 11 | Quaternion decode and slerp in TypeScript and C#, golden vectors. A browser client renders 3D with quaternion orientation. |
 | 4a | Broad phase and area of interest go 3D — **done**, see [§7.5.8](#758-what-phase-4a-landed) | 3 | `spatial.Entry` carries Z, `QueryRadius` and the per-tier AoI cutoff test a sphere, the broad-phase pair gate accounts for height. A viewer above the world no longer sees everything under it. |
-| 4b | Collision — narrow phase | 31 | Capsule characters against static boxes, line-of-sight gating, non-tunneling projectiles. |
+| 4b | Collision — narrow phase | 41 | Capsule characters against static boxes, line-of-sight gating, non-tunneling projectiles, contact manifolds, static push-out, trigger enter/stay/exit, swept spheres, 3D raycast. **Re-budgeted from 31 to 41** — see [§7.5.9](#759-phase-4b-scope-and-budget). |
 | 5 | Parity fixtures and hardening | 11 | Both profiles covered in one test binary at the pre-existing race baseline. |
 
 Phases 0 and 1 are deliberately pure 2D. Front-loading them means any later failure on the split-merge path is unambiguously a 3D bug rather than a byte-offset bug.
@@ -995,6 +995,48 @@ term it tests and watching it fail.
   it needs the playtesting budget §7.7 already allocates.
 - **`Collider.Radius` is a contract, not a computation.** Nothing verifies that
   a game's radius actually bounds its box; only cube3d's is pinned by a test.
+
+#### 7.5.9 Phase 4b scope and budget
+
+**4b is 41 engineer-days, not the 31 this table carried.** Four independent
+designs and two adversarial passes agreed on the number; the original 31 was
+sized before phase 4a established what the types would have to become.
+
+The owner took the full end state rather than the cuts. The cuts were priced
+and are recorded here so they remain available if the phase overruns: split
+[§7.7](#77-known-gameplay-visible-change)'s query fix and its playtest out as a
+standalone phase (−4.0), defer trigger enter/stay/exit (−2.5), defer the
+box–box boolean SAT since nothing in 4b puts a box on the dynamic side (−1.5),
+and defer migrating `examples/space`'s projectiles to sweeps (−1.0). That path
+lands at 32, and no honest arrangement reaches 31.
+
+**What the design pass found that was not 3D work at all:**
+
+- **Border replicas carried a radius and nothing else** — no extents, no
+  layer, no shape — so a neighbour-owned wall was a zero-extent, layer-0
+  sphere and stopped colliding and blocking line of sight at every cell seam.
+  A live 2D defect in the shipped reference game. Fixed first, ahead of the
+  phase, in `4697b65a`.
+- **`examples/space` integrates projectiles twice per tick.** `ProjectileSystem`
+  ([`system_projectile.go:58`](../examples/space/internal/game/system_projectile.go))
+  and `PhysicsSystem` both query `Position`+`Velocity` and both integrate, and
+  `factory.go` registers both. Projectiles travel at double their configured
+  speed. Pre-existing, out of this phase, its own commit.
+- **`examples/cube3d`'s colliders set no `Layer`**, so every entity in the 3D
+  example is layer 0 and invisible to every masked query. 4b's acceptance test
+  cannot work until that is fixed.
+
+**Decisions that are settled, so 4b does not re-derive them:** `Entry` gains
+the quaternion and `Depth` and loses `Yaw` (56 bytes, paid for by moving the
+replication chain to `*Entry` first); the bound is a METHOD, not a stored
+field, because `Register` takes a caller-built `Entry` with no validation and a
+stored bound left at zero is invisible to every broad-phase test; `ShapeKind`
+gains `ShapeCapsule` with a `ShapeCount` and an `init()` completeness check, so
+a half-wired fourth shape refuses to start the process instead of falling
+through to the OBB routine; and the dispatch index is validated in `EntryFrom`
+and `Stage.Spawn` rather than trusted, because `Entry.Shape` comes from
+game-authored data and would otherwise index a table out of range on the cell
+loop.
 
 ### 7.6 Validation
 
