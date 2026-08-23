@@ -175,8 +175,12 @@ func rayCircleHit(from, to Vec2, cx, cy, r float32) (float32, bool) {
 // rayRectHit returns t∈[0,1] for the nearest ray-vs-OBB entry, or false.
 // Transforms the ray into the rect's local frame and runs a 2D slab test.
 func rayRectHit(from, to Vec2, e Entry) (float32, bool) {
-	cosA := float32(math.Cos(float64(-e.Yaw)))
-	sinA := float32(math.Sin(float64(-e.Yaw)))
+	// One Yaw() per entry: it is an atan2 over the quaternion, and this runs
+	// for every rect candidate in every bucket along the ray with no distance
+	// prefilter ahead of it.
+	yaw := e.Rot.Yaw()
+	cosA := float32(math.Cos(float64(-yaw)))
+	sinA := float32(math.Sin(float64(-yaw)))
 	fx := from.X - e.X
 	fy := from.Y - e.Y
 	tx := to.X - e.X

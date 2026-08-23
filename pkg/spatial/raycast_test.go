@@ -92,7 +92,7 @@ func TestRaycast_AxisAlignedRect(t *testing.T) {
 	// OBB extents are (40,20); surface along ray at X=160.
 	g.Register(Entry{
 		Entity: e, X: 200, Y: 0,
-		Radius: 50, Width: 80, Height: 40, Yaw: 0,
+		Radius: 50, Width: 80, Height: 40, Rot: component.RotationIdentity(),
 		Shape: component.ShapeBox, Layer: LayerStatic,
 	})
 	_, hitPt, dist, ok := g.RaycastXY(Vec2{0, 0}, Vec2{500, 0}, LayerStatic)
@@ -116,7 +116,7 @@ func TestRaycast_RotatedRect(t *testing.T) {
 	g.Register(Entry{
 		Entity: e, X: 200, Y: 0,
 		Radius: 50, Width: 80, Height: 40,
-		Yaw:   float32(math.Pi / 2),
+		Rot:   component.RotationFromYaw(float32(math.Pi / 2)),
 		Shape: component.ShapeBox, Layer: LayerStatic,
 	})
 	_, hitPt, _, ok := g.RaycastXY(Vec2{0, 0}, Vec2{500, 0}, LayerStatic)

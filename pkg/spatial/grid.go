@@ -26,21 +26,40 @@ type BucketKey struct {
 // relying on: a spherical query over column buckets can only ever NARROW the
 // result set relative to the old cylindrical test, never widen it.
 //
-// There is no Depth field. The broad phase reads only Radius; box depth is
-// narrow-phase state with no consumer until phase 4b, and EntryFrom makes
-// adding it a one-line change then. Note also that an Entry.Depth would sit
-// one grep away from CellID.Depth, which is a quadtree level and utterly
-// unrelated.
+// ENTRY.DEPTH IS A BOX EXTENT, and sits one grep away from CellID.Depth, which
+// is a quadtree level and utterly unrelated. Zero for a sphere and zero
+// throughout a 2D profile.
+//
+// Rot is the full unit quaternion, not a yaw. The planar narrow phase reads a
+// yaw out of it because that is all a 2D OBB test can use; the three-axis test
+// that replaces it needs the whole orientation, and a scalar Yaw field sitting
+// beside a quaternion component.Rotation is a value someone eventually assigns
+// the wrong thing to.
 type Entry struct {
 	Entity  ecs.Entity
 	X, Y, Z float32
-	Radius  float32 // bounding radius; must bound the shape in every axis the profile uses
+	Radius  float32 // authored bounding radius; see Bound
 	Width   float32 // box extent along local X (forward), 0 for spheres
 	Height  float32 // box extent along local Y (side), 0 for spheres
-	Yaw     float32 // rotation about Z, radians; the 2D narrow phase's only orientation input
+	Depth   float32 // box extent along local Z (up), 0 for spheres and in a 2D profile
+	Rot     component.Rotation
 	Layer   uint8
 	Shape   component.ShapeKind
 }
+
+// Bound is the radius of the sphere containing this entry, and is what every
+// broad-phase test measures against.
+//
+// A METHOD, not a stored field, and that is load-bearing. Register, Update and
+// InsertTransient each take a caller-built Entry by value with no validation,
+// so a stored bound is a field a hand-built entry leaves at zero — and a
+// zero-bound entry is invisible to every broad-phase test, silently. Deriving
+// it means an entry cannot be half-built. The compare is one predictable
+// branch inside a bucket scan.
+//
+// For a sphere and a box it is Radius by construction, which is what makes
+// "the 2D result set is unchanged" a test rather than a claim.
+func (e *Entry) Bound() float32 { return e.Radius }
 
 // bucket holds both tracked (persistent) and transient (per-tick) entries.
 type bucket struct {
@@ -358,8 +377,13 @@ func checkCollision(a, b Entry, matrix map[uint8]uint8, fn func(a, b Entry)) {
 // obbCircleCollision tests an oriented bounding box against a circle.
 func obbCircleCollision(rect, circle Entry) bool {
 	// Transform circle center into rect's local space
-	cos := float32(math.Cos(float64(-rect.Yaw)))
-	sin := float32(math.Sin(float64(-rect.Yaw)))
+	// Yaw() is an atan2 over the quaternion, so take it once. These planar
+	// routines are replaced by the three-axis test in phase 4b; until then
+	// they read the yaw out of the full orientation rather than a cached
+	// scalar field, and calling it per trig term would double that cost.
+	yaw := rect.Rot.Yaw()
+	cos := float32(math.Cos(float64(-yaw)))
+	sin := float32(math.Sin(float64(-yaw)))
 	dx := circle.X - rect.X
 	dy := circle.Y - rect.Y
 	localX := dx*cos - dy*sin
@@ -380,10 +404,13 @@ func obbCircleCollision(rect, circle Entry) bool {
 // obbOBBCollision tests two oriented bounding boxes using the Separating Axis Theorem.
 func obbOBBCollision(a, b Entry) bool {
 	// Get the 4 axes to test (2 per rect)
-	cosA := float32(math.Cos(float64(a.Yaw)))
-	sinA := float32(math.Sin(float64(a.Yaw)))
-	cosB := float32(math.Cos(float64(b.Yaw)))
-	sinB := float32(math.Sin(float64(b.Yaw)))
+	// One Yaw() per entry: it is an atan2 over the quaternion. See
+	// obbCircleCollision.
+	yawA, yawB := a.Rot.Yaw(), b.Rot.Yaw()
+	cosA := float32(math.Cos(float64(yawA)))
+	sinA := float32(math.Sin(float64(yawA)))
+	cosB := float32(math.Cos(float64(yawB)))
+	sinB := float32(math.Sin(float64(yawB)))
 
 	// Axes for rect A: forward (cosA, sinA) and right (−sinA, cosA)
 	// Axes for rect B: forward (cosB, sinB) and right (−sinB, cosB)

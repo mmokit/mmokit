@@ -97,7 +97,7 @@ func (s *CollisionSystem) handleTerrainCollision(player, terrain mmokit.SpatialE
 	if terrain.Shape == mmokit.ShapeBox {
 		contactX, contactY, nx, ny, overlap = obbContact(
 			playerPos.X, playerPos.Y, player.Radius,
-			terrainPos.X, terrainPos.Y, terrain.Width, terrain.Height, terrain.Yaw,
+			terrainPos.X, terrainPos.Y, terrain.Width, terrain.Height, terrain.Rot.Yaw(),
 		)
 	} else {
 		contactX, contactY, nx, ny, overlap = circleContact(

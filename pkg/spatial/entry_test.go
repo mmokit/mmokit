@@ -3,6 +3,7 @@ package spatial
 import (
 	"math"
 	"testing"
+	"unsafe"
 
 	"github.com/mlange-42/ark/ecs"
 
@@ -29,24 +30,17 @@ func TestEntryFrom_CarriesEveryColliderField(t *testing.T) {
 	if got.X != 10 || got.Y != 20 || got.Z != 30 {
 		t.Errorf("position = (%v, %v, %v), want (10, 20, 30)", got.X, got.Y, got.Z)
 	}
-	if got.Radius != 5 || got.Width != 8 || got.Height != 9 {
-		t.Errorf("extents = (%v, %v, %v), want (5, 8, 9)", got.Radius, got.Width, got.Height)
+	// Depth included: it has been on the wire since phase 1 and no spatial
+	// code consumed it until phase 4b needed a box to have a third extent.
+	if got.Radius != 5 || got.Width != 8 || got.Height != 9 || got.Depth != 7 {
+		t.Errorf("extents = (%v, %v, %v, %v), want (5, 8, 9, 7)",
+			got.Radius, got.Width, got.Height, got.Depth)
 	}
 	if got.Layer != LayerStatic {
 		t.Errorf("Layer = %v, want %v — a zero layer is invisible to every masked query", got.Layer, LayerStatic)
 	}
 	if got.Shape != component.ShapeBox {
 		t.Errorf("Shape = %v, want box — a zero shape collides as a sphere", got.Shape)
-	}
-}
-
-// A nil rotation must read as identity rather than panicking: Stage.Spawn does
-// not add a Rotation, and a 2D game need never carry one.
-func TestEntryFrom_NilRotationIsIdentity(t *testing.T) {
-	w := ecs.NewWorld()
-	got := EntryFrom(w.NewEntity(), &component.Position{}, &component.Collider{}, nil)
-	if got.Yaw != 0 {
-		t.Errorf("Yaw = %v, want 0 for a nil rotation", got.Yaw)
 	}
 }
 
@@ -58,8 +52,8 @@ func TestEntryFrom_YawMatchesTheRotation(t *testing.T) {
 	for _, angle := range []float32{0, 0.5, math.Pi / 2, 3, -1.25} {
 		rot := component.RotationFromAxisAngle(0, 0, 1, angle)
 		got := EntryFrom(w.NewEntity(), &component.Position{}, &component.Collider{}, &rot)
-		if got.Yaw != rot.Yaw() {
-			t.Errorf("angle %v: Yaw = %v, want rot.Yaw() = %v", angle, got.Yaw, rot.Yaw())
+		if got.Rot.Yaw() != rot.Yaw() {
+			t.Errorf("angle %v: Yaw = %v, want rot.Yaw() = %v", angle, got.Rot.Yaw(), rot.Yaw())
 		}
 	}
 }
@@ -73,5 +67,52 @@ func TestEntryFrom_NilComponents(t *testing.T) {
 	got := EntryFrom(e, nil, nil, nil)
 	if got != (Entry{Entity: e}) {
 		t.Errorf("EntryFrom with nil components = %+v, want a zero entry", got)
+	}
+}
+
+// TestEntrySize pins the struct's width, because every widening of it is a
+// decision and none should happen by accident.
+//
+// 56 bytes: Entity 8, XYZ 12, Radius/Width/Height/Depth 16, Rot 16, Layer and
+// Shape 1 each, 2 padding. Phase 4b measured the cost of going from 40 to 56
+// and found it in the noise — see pkg/system/replication_entry_bench_test.go —
+// so this is a change-detector, not a budget.
+func TestEntrySize(t *testing.T) {
+	if got := unsafe.Sizeof(Entry{}); got != 56 {
+		t.Errorf("sizeof(Entry) = %d, want 56 — widening it is a decision; "+
+			"re-measure with BenchmarkReplicationSystem_Update before changing this", got)
+	}
+}
+
+// TestEntryFrom_NilRotationIsIdentity pins the convention a 3D narrow phase
+// has to respect.
+//
+// component.Rotation's zero value IS identity, but only through the
+// accessors: normalized() maps a zero-norm quaternion to {0,0,0,1}. Read the
+// fields directly and {0,0,0,0} yields a basis of three zero vectors, on which
+// a three-axis SAT separates every pair — silently, and only for entities that
+// never set a rotation, which is most of them.
+func TestEntryFrom_NilRotationIsIdentity(t *testing.T) {
+	w := makeWorld()
+	got := EntryFrom(w.NewEntity(), &component.Position{}, &component.Collider{}, nil)
+	if got.Rot != component.RotationIdentity() {
+		t.Errorf("EntryFrom with nil rotation = %+v, want identity", got.Rot)
+	}
+	if got.Rot.Yaw() != 0 {
+		t.Errorf("identity yaw = %v, want 0", got.Rot.Yaw())
+	}
+}
+
+// Bound is derived rather than stored, so a hand-built Entry cannot have one
+// that disagrees with its radius. A stored bound left at zero would be
+// invisible to every broad-phase test, silently.
+func TestEntryBound_IsDerivedFromRadius(t *testing.T) {
+	handBuilt := Entry{Radius: 12} // no EntryFrom, no validation — the hazard
+	if got := handBuilt.Bound(); got != 12 {
+		t.Errorf("Bound() = %v, want 12", got)
+	}
+	var empty Entry
+	if got := empty.Bound(); got != 0 {
+		t.Errorf("zero Entry Bound() = %v, want 0", got)
 	}
 }
