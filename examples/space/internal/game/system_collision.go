@@ -50,7 +50,7 @@ func (s *CollisionSystem) Update(dt float32) {
 			terrainMargin = dungeonMargin
 		}
 		searchRadius := col.Radius + terrainMargin
-		s.nearby = gw.Spatial.QueryRadius(pos.X, pos.Y, searchRadius, s.nearby[:0])
+		s.nearby = gw.Spatial.QueryRadius(pos.Vec(), searchRadius, s.nearby[:0])
 
 		for _, terrain := range s.nearby {
 			// Ships collide with both world props (asteroids = LayerProp)

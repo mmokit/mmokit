@@ -59,7 +59,7 @@ func (s *ProjectileSystem) Update(dt float32) {
 		pos.Y += vel.Y * dt
 
 		// Collision query
-		s.nearby = gw.Spatial.QueryRadius(pos.X, pos.Y, projectileHitRadius, s.nearby[:0])
+		s.nearby = gw.Spatial.QueryRadius(pos.Vec(), projectileHitRadius, s.nearby[:0])
 		var victim mmokit.Entity
 		for _, entry := range s.nearby {
 			e := mmokit.EntityFromECS(gw.stage, entry.Entity)

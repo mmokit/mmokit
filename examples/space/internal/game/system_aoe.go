@@ -61,7 +61,7 @@ func (s *AoESystem) resolveMarker(pos *mmokit.Position, spec *gamecomp.AoESpec) 
 	gw := s.gw
 	r2 := spec.Radius * spec.Radius
 
-	s.nearby = gw.Spatial.QueryRadius(pos.X, pos.Y, spec.Radius, s.nearby[:0])
+	s.nearby = gw.Spatial.QueryRadius(pos.Vec(), spec.Radius, s.nearby[:0])
 
 	caster := mmokit.EntityByNetID(gw.stage, spec.OwnerNetID)
 

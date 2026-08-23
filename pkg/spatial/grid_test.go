@@ -35,7 +35,7 @@ func TestRegister_QueryRadius(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			results := g.QueryRadius(tt.cx, tt.cy, tt.radius, nil)
+			results := g.QueryRadius(component.Vec3{X: tt.cx, Y: tt.cy}, tt.radius, nil)
 			if len(results) != tt.wantLen {
 				t.Fatalf("got %d results, want %d", len(results), tt.wantLen)
 			}
@@ -45,7 +45,7 @@ func TestRegister_QueryRadius(t *testing.T) {
 
 func TestQueryRadius_EmptyGrid(t *testing.T) {
 	g := NewHashGrid(100)
-	results := g.QueryRadius(0, 0, 500, nil)
+	results := g.QueryRadius(component.Vec3{X: 0, Y: 0}, 500, nil)
 	if len(results) != 0 {
 		t.Fatalf("expected 0 results on empty grid, got %d", len(results))
 	}
@@ -58,7 +58,7 @@ func TestQueryRadius_MultipleEntries(t *testing.T) {
 	g.Register(Entry{Entity: newEntity(w), X: 20, Y: 20, Radius: 5, Shape: component.ShapeSphere})
 	g.Register(Entry{Entity: newEntity(w), X: 500, Y: 500, Radius: 5, Shape: component.ShapeSphere})
 
-	results := g.QueryRadius(15, 15, 20, nil)
+	results := g.QueryRadius(component.Vec3{X: 15, Y: 15}, 20, nil)
 	if len(results) != 2 {
 		t.Fatalf("got %d results, want 2", len(results))
 	}
@@ -82,7 +82,7 @@ func TestQueryRadius_CellBoundary(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			results := g.QueryRadius(tt.cx, tt.cy, tt.radius, nil)
+			results := g.QueryRadius(component.Vec3{X: tt.cx, Y: tt.cy}, tt.radius, nil)
 			if len(results) != tt.wantLen {
 				t.Fatalf("got %d results, want %d", len(results), tt.wantLen)
 			}
@@ -101,7 +101,7 @@ func TestQueryRadius_LargeRadius(t *testing.T) {
 		}
 	}
 
-	results := g.QueryRadius(500, 500, 5000, nil)
+	results := g.QueryRadius(component.Vec3{X: 500, Y: 500}, 5000, nil)
 	if len(results) != count {
 		t.Fatalf("large radius: got %d results, want %d", len(results), count)
 	}
@@ -118,7 +118,7 @@ func TestUpdate_SameCell(t *testing.T) {
 		t.Fatal("expected no cell change")
 	}
 
-	results := g.QueryRadius(15, 15, 1, nil)
+	results := g.QueryRadius(component.Vec3{X: 15, Y: 15}, 1, nil)
 	if len(results) != 1 {
 		t.Fatalf("got %d results, want 1", len(results))
 	}
@@ -139,13 +139,13 @@ func TestUpdate_CrossCell(t *testing.T) {
 	}
 
 	// Should not be at old position.
-	results := g.QueryRadius(10, 10, 5, nil)
+	results := g.QueryRadius(component.Vec3{X: 10, Y: 10}, 5, nil)
 	if len(results) != 0 {
 		t.Fatalf("old position: got %d results, want 0", len(results))
 	}
 
 	// Should be at new position.
-	results = g.QueryRadius(210, 210, 5, nil)
+	results = g.QueryRadius(component.Vec3{X: 210, Y: 210}, 5, nil)
 	if len(results) != 1 {
 		t.Fatalf("new position: got %d results, want 1", len(results))
 	}
@@ -159,7 +159,7 @@ func TestDeregister(t *testing.T) {
 
 	g.Deregister(e)
 
-	results := g.QueryRadius(50, 50, 100, nil)
+	results := g.QueryRadius(component.Vec3{X: 50, Y: 50}, 100, nil)
 	if len(results) != 0 {
 		t.Fatalf("after deregister: got %d results, want 0", len(results))
 	}
@@ -198,11 +198,11 @@ func TestDeregister_SwapDeleteCorrectness(t *testing.T) {
 	}
 
 	// e2 and e3 should still be findable.
-	results := g.QueryRadius(20, 20, 5, nil)
+	results := g.QueryRadius(component.Vec3{X: 20, Y: 20}, 5, nil)
 	if len(results) != 1 {
 		t.Fatalf("e2 query: got %d results, want 1", len(results))
 	}
-	results = g.QueryRadius(30, 30, 5, nil)
+	results = g.QueryRadius(component.Vec3{X: 30, Y: 30}, 5, nil)
 	if len(results) != 1 {
 		t.Fatalf("e3 query: got %d results, want 1", len(results))
 	}
@@ -211,7 +211,7 @@ func TestDeregister_SwapDeleteCorrectness(t *testing.T) {
 	g.Update(Entry{Entity: e2, X: 25, Y: 25, Radius: 5, Shape: component.ShapeSphere})
 	g.Update(Entry{Entity: e3, X: 35, Y: 35, Radius: 5, Shape: component.ShapeSphere})
 
-	results = g.QueryRadius(25, 25, 1, nil)
+	results = g.QueryRadius(component.Vec3{X: 25, Y: 25}, 1, nil)
 	if len(results) != 1 {
 		t.Fatalf("e2 after update: got %d results, want 1", len(results))
 	}
@@ -230,14 +230,14 @@ func TestInsertTransient_ClearTransient(t *testing.T) {
 	g.InsertTransient(Entry{X: 60, Y: 60, Radius: 3, Shape: component.ShapeSphere})
 
 	// QueryRadius should find both tracked and transient.
-	results := g.QueryRadius(50, 50, 20, nil)
+	results := g.QueryRadius(component.Vec3{X: 50, Y: 50}, 20, nil)
 	if len(results) != 3 {
 		t.Fatalf("before clear: got %d results, want 3", len(results))
 	}
 
 	// ClearTransient should remove only transient entries.
 	g.ClearTransient()
-	results = g.QueryRadius(50, 50, 20, nil)
+	results = g.QueryRadius(component.Vec3{X: 50, Y: 50}, 20, nil)
 	if len(results) != 1 {
 		t.Fatalf("after ClearTransient: got %d results, want 1", len(results))
 	}
@@ -256,7 +256,7 @@ func TestReset(t *testing.T) {
 
 	g.Reset()
 
-	results := g.QueryRadius(0, 0, 5000, nil)
+	results := g.QueryRadius(component.Vec3{X: 0, Y: 0}, 5000, nil)
 	if len(results) != 0 {
 		t.Fatalf("after Reset: got %d results, want 0", len(results))
 	}
@@ -431,14 +431,80 @@ func TestUpdate_CrossCell_MultipleEntities(t *testing.T) {
 	g.Update(Entry{Entity: e1, X: 210, Y: 210, Radius: 5, Shape: component.ShapeSphere})
 
 	// e2 should still be in original position.
-	results := g.QueryRadius(20, 20, 5, nil)
+	results := g.QueryRadius(component.Vec3{X: 20, Y: 20}, 5, nil)
 	if len(results) != 1 {
 		t.Fatalf("e2 should still be findable: got %d results", len(results))
 	}
 
 	// e1 should be at new position.
-	results = g.QueryRadius(210, 210, 5, nil)
+	results = g.QueryRadius(component.Vec3{X: 210, Y: 210}, 5, nil)
 	if len(results) != 1 {
 		t.Fatalf("e1 at new position: got %d results", len(results))
+	}
+}
+
+// TestQueryRadius_IsSpherical is the assertion the whole phase exists for.
+//
+// The two entries MUST share an XY bucket. If they do not, the 2D bucket sweep
+// excludes the far one on its own and the test passes even after the Z term is
+// reverted — which makes it a test of the bucket key rather than of the
+// distance test. Bucket size is 100 and both entries sit at XY (0,0), so they
+// are in the same column by construction.
+func TestQueryRadius_IsSpherical(t *testing.T) {
+	w := makeWorld()
+	g := NewHashGrid(100)
+
+	onPlane := newEntity(w)
+	overhead := newEntity(w)
+	g.Register(Entry{Entity: onPlane, X: 0, Y: 0, Z: 0, Radius: 1})
+	g.Register(Entry{Entity: overhead, X: 0, Y: 0, Z: 150, Radius: 1})
+
+	got := g.QueryRadius(component.Vec3{}, 100, nil)
+	if len(got) != 1 {
+		t.Fatalf("got %d entries, want 1 — a query at the origin with radius 100 must not reach Z=150", len(got))
+	}
+	if got[0].Entity != onPlane {
+		t.Errorf("returned the entry at Z=150; the query is still an infinite cylinder")
+	}
+
+	// And it must still find it once the query rises to meet it.
+	got = g.QueryRadius(component.Vec3{Z: 150}, 100, nil)
+	if len(got) != 1 || got[0].Entity != overhead {
+		t.Errorf("a query centered at Z=150 does not find the entry there")
+	}
+}
+
+// TestQueryRadius_TwoDIsUnchanged pins the property the owner constraint rests
+// on: with every Z at zero, the spherical test returns exactly what the
+// cylindrical one did. Not "approximately" and not "for these radii" — the
+// same entries, because dz is zero and a sum of squares is never negative zero.
+func TestQueryRadius_TwoDIsUnchanged(t *testing.T) {
+	w := makeWorld()
+	g := NewHashGrid(100)
+
+	// A spread that straddles bucket lines and the radius boundary.
+	positions := []struct{ x, y float32 }{
+		{0, 0}, {50, 0}, {99, 0}, {100, 0}, {101, 0},
+		{0, 99}, {70, 70}, {71, 71}, {-40, -40}, {250, 250},
+	}
+	want := make(map[ecs.Entity]bool)
+	for _, p := range positions {
+		e := newEntity(w)
+		g.Register(Entry{Entity: e, X: p.x, Y: p.y, Radius: 1})
+		// The reference answer, computed the OLD way: 2D distance only.
+		dx, dy := p.x, p.y
+		if dx*dx+dy*dy <= 100*100 {
+			want[e] = true
+		}
+	}
+
+	got := g.QueryRadius(component.Vec3{}, 100, nil)
+	if len(got) != len(want) {
+		t.Fatalf("got %d entries, want %d — the 2D result set changed", len(got), len(want))
+	}
+	for _, e := range got {
+		if !want[e.Entity] {
+			t.Errorf("entry %v is in the spherical result and was not in the cylindrical one", e.Entity)
+		}
 	}
 }

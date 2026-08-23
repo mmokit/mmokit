@@ -182,10 +182,12 @@ mmokit.OnTickEachAll[HealthBundle](process, func(
 by splits or migrations. Their non-`All` forms apply only to one stage.
 
 `Nearby` and `NearbyWith[T]` iterate entities from the stage's spatial grid,
-including local live entities and replicas:
+including local live entities and replicas. They take a `Vec3` centre and test
+a sphere; in a 2D profile every `Z` is zero, so this behaves exactly as a
+planar radius query:
 
 ```go
-for target := range mmokit.NearbyWith[ShipHealth](stage, x, y, radius) {
+for target := range mmokit.NearbyWith[ShipHealth](stage, pos.Vec(), radius) {
     // ...
 }
 ```

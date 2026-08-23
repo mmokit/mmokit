@@ -61,7 +61,7 @@ func TestSpawn_RegistersTheShapeDiscriminant(t *testing.T) {
 	)
 
 	var found *spatial.Entry
-	for _, entry := range stage.SpatialGrid().QueryRadius(100, 100, 50, nil) {
+	for _, entry := range stage.SpatialGrid().QueryRadius(component.Vec3{X: 100, Y: 100}, 50, nil) {
 		if entry.Entity == e.Handle() {
 			found = &entry
 			break

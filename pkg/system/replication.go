@@ -1270,7 +1270,7 @@ func (s *ReplicationSystem) Update(dt float32) {
 		frameSeq := conn.nextSeq
 
 		// Query spatial grid within max AoI (covers all tier radii).
-		s.results = s.cfg.SpatialGrid.QueryRadius(viewer.X, viewer.Y, s.queryRadius(), s.results[:0])
+		s.results = s.cfg.SpatialGrid.QueryRadius(viewer.Center(), s.queryRadius(), s.results[:0])
 
 		// Build current visible set and encode changed entities.
 		s.fullBuf = s.fullBuf[:0]

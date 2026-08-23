@@ -509,8 +509,9 @@ func (s *AbilitySystem) dispatchCursorPick(action abilityAction, casterE mmokit.
 	// hover roughly over the target. 5u is generous enough to forgive
 	// a slightly-off click, tight enough that empty-space clicks miss.
 	const pickRadius float32 = 5.0
+	// The aim point is a 2D click in a 2D game, so Z is the ground plane.
 	s.cursorPickNearby = gw.Spatial.QueryRadius(
-		action.aimX, action.aimY, pickRadius,
+		mmokit.Vec3{X: action.aimX, Y: action.aimY}, pickRadius,
 		s.cursorPickNearby[:0],
 	)
 
@@ -786,9 +787,13 @@ func (s *AbilitySystem) tickChannels(dt float32) {
 		// felt like they were "phasing through" the beam without taking
 		// damage.
 		const beamHalfWidth float32 = 8
+		beamMid := mmokit.Vec3{
+			X: casterPos.X + dx/aimNorm*params.Range*0.5, // midpoint of the beam line
+			Y: casterPos.Y + dy/aimNorm*params.Range*0.5,
+			Z: casterPos.Z,
+		}
 		s.nearbyChannel = gw.Spatial.QueryRadius(
-			casterPos.X+dx/aimNorm*params.Range*0.5, // midpoint of the beam line
-			casterPos.Y+dy/aimNorm*params.Range*0.5,
+			beamMid,
 			params.Range*0.5+beamHalfWidth+4, // search radius covering the full beam length + width
 			s.nearbyChannel[:0],
 		)

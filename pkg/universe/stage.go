@@ -1765,7 +1765,7 @@ func (b *Stage) WakeDormantEntities(wakeRadius float32) {
 		entity := query.Entity()
 
 		// Query spatial grid for nearby entities
-		results = b.spatialGrid.QueryRadius(pos.X, pos.Y, wakeRadius, results[:0])
+		results = b.spatialGrid.QueryRadius(pos.Vec(), wakeRadius, results[:0])
 		for _, entry := range results {
 			if !b.eng.ECS.Alive(entry.Entity) {
 				continue

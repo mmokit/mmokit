@@ -176,13 +176,27 @@ func (g *HashGrid) TrackedCount() int {
 	return len(g.tracked)
 }
 
-// QueryRadius returns all entries within the given radius of (cx, cy).
+// QueryRadius returns every entry whose center lies within radius of center.
 // Results are appended to the provided slice to avoid allocation.
-func (g *HashGrid) QueryRadius(cx, cy, radius float32, results []Entry) []Entry {
-	minX := int32(math.Floor(float64((cx - radius) * g.invBucketSize)))
-	maxX := int32(math.Floor(float64((cx + radius) * g.invBucketSize)))
-	minY := int32(math.Floor(float64((cy - radius) * g.invBucketSize)))
-	maxY := int32(math.Floor(float64((cy + radius) * g.invBucketSize)))
+//
+// The test is a SPHERE. Buckets stay 2D columns (see bucketKey), so the Z term
+// filters inside the bucket scan and never partitions it — which means the
+// bucket sweep is unchanged and this can only NARROW the result set relative
+// to the cylinder it replaces, never widen it.
+//
+// In a 2D profile every Z is zero, so dz is zero and the results are identical
+// entry for entry. That is a property of the data rather than a branch: adding
+// a zero term cannot change a sum of squares, which is never negative zero.
+//
+// The center is a Vec3 rather than three scalars deliberately. With four
+// adjacent float32 parameters, QueryRadius(pos.X, pos.Y, spec.Radius, pos.Z)
+// compiles silently — and there are nine call sites where that is exactly the
+// mistake to expect.
+func (g *HashGrid) QueryRadius(center component.Vec3, radius float32, results []Entry) []Entry {
+	minX := int32(math.Floor(float64((center.X - radius) * g.invBucketSize)))
+	maxX := int32(math.Floor(float64((center.X + radius) * g.invBucketSize)))
+	minY := int32(math.Floor(float64((center.Y - radius) * g.invBucketSize)))
+	maxY := int32(math.Floor(float64((center.Y + radius) * g.invBucketSize)))
 
 	r2 := radius * radius
 
@@ -192,23 +206,35 @@ func (g *HashGrid) QueryRadius(cx, cy, radius float32, results []Entry) []Entry 
 			if c == nil {
 				continue
 			}
-			for _, e := range c.tracked {
-				dx := e.X - cx
-				dy := e.Y - cy
-				if dx*dx+dy*dy <= r2 {
-					results = append(results, e)
+			// Indexed rather than ranged by value: Entry is 40 bytes since it
+			// gained Z, and this loop runs over every entry in every bucket
+			// the sweep touches, on the replication path, every tick.
+			for i := range c.tracked {
+				if e := &c.tracked[i]; inSphere(e, center, r2) {
+					results = append(results, *e)
 				}
 			}
-			for _, e := range c.transient {
-				dx := e.X - cx
-				dy := e.Y - cy
-				if dx*dx+dy*dy <= r2 {
-					results = append(results, e)
+			for i := range c.transient {
+				if e := &c.transient[i]; inSphere(e, center, r2) {
+					results = append(results, *e)
 				}
 			}
 		}
 	}
 	return results
+}
+
+// inSphere reports whether e's center is within sqrt(r2) of center.
+//
+// The dz term is APPENDED and the 2D sub-expression left textually intact:
+// regrouping as dx*dx + (dy*dy + dz*dz) can change which multiply an
+// FMA-fusing backend contracts, and the whole 2D-invariance argument rests on
+// this arithmetic being the old arithmetic plus a zero.
+func inSphere(e *Entry, center component.Vec3, r2 float32) bool {
+	dx := e.X - center.X
+	dy := e.Y - center.Y
+	dz := e.Z - center.Z
+	return dx*dx+dy*dy+dz*dz <= r2
 }
 
 // QueryCollisions finds all pairs of entries that overlap, filtered by the collision matrix.

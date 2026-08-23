@@ -560,9 +560,13 @@ func (s *NPCAISystem) resolveBrawlerSpecial(
 	sin := float32(math.Sin(float64(ai.SpecialDirAngle)))
 
 	// Search a radius covering the full beam length.
+	swingMid := mmokit.Vec3{
+		X: pos.X + cos*cfg.BrawlerSpecialLength*0.5,
+		Y: pos.Y + sin*cfg.BrawlerSpecialLength*0.5,
+		Z: pos.Z,
+	}
 	s.nearby = s.gw.Spatial.QueryRadius(
-		pos.X+cos*cfg.BrawlerSpecialLength*0.5,
-		pos.Y+sin*cfg.BrawlerSpecialLength*0.5,
+		swingMid,
 		cfg.BrawlerSpecialLength*0.5+cfg.BrawlerSpecialHalfWidth,
 		s.nearby[:0],
 	)

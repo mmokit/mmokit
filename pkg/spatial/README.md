@@ -45,12 +45,21 @@ entities directly.
 ## Radius queries
 
 ```go
-scratch = grid.QueryRadius(x, y, radius, scratch[:0])
+scratch = grid.QueryRadius(component.Vec3{X: x, Y: y, Z: z}, radius, scratch[:0])
 ```
 
 Results are appended to the supplied slice and include both tracked and
-transient entries. The test is center-to-center distance; an entry's own
-`Radius` does not expand the query.
+transient entries. The test is center-to-center distance in three dimensions —
+a **sphere**; an entry's own `Radius` does not expand the query.
+
+Buckets are 2D columns, so `Z` filters inside the bucket scan rather than
+partitioning it. A spherical query can therefore only narrow the result set
+against the cylinder it replaced, never widen it, and in a 2D profile — where
+every `Z` is zero — it returns exactly the same entries.
+
+The centre is a `Vec3` rather than three scalars on purpose: with four adjacent
+`float32` parameters, `QueryRadius(pos.X, pos.Y, spec.Radius, pos.Z)` compiles
+and is wrong.
 
 ## Collision queries
 

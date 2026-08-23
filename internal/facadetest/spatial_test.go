@@ -36,7 +36,7 @@ func TestNearby_ReturnsEntitiesInRadius(t *testing.T) {
 	cNetID := mmokit.EntityFromECS(stage, cH).NetID()
 
 	found := map[uint32]bool{}
-	for e := range mmokit.Nearby(stage, 0, 0, 10) {
+	for e := range mmokit.Nearby(stage, mmokit.Vec3{X: 0, Y: 0}, 10) {
 		found[e.NetID()] = true
 	}
 	if !found[aNetID] || !found[bNetID] {
@@ -75,7 +75,7 @@ func TestNearbyWith_FiltersByComponent(t *testing.T) {
 	bNetID := mmokit.EntityFromECS(stage, bH).NetID()
 
 	found := map[uint32]bool{}
-	for e := range mmokit.NearbyWith[testNearbyTag](stage, 0, 0, 10) {
+	for e := range mmokit.NearbyWith[testNearbyTag](stage, mmokit.Vec3{X: 0, Y: 0}, 10) {
 		found[e.NetID()] = true
 	}
 	if found[aNetID] {
