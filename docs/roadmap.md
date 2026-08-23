@@ -1021,10 +1021,16 @@ lands at 32, and no honest arrangement reaches 31.
   ([`system_projectile.go:58`](../examples/space/internal/game/system_projectile.go))
   and `PhysicsSystem` both query `Position`+`Velocity` and both integrate, and
   `factory.go` registers both. Projectiles travel at double their configured
-  speed. Pre-existing, out of this phase, its own commit.
-- **`examples/cube3d`'s colliders set no `Layer`**, so every entity in the 3D
-  example is layer 0 and invisible to every masked query. 4b's acceptance test
-  cannot work until that is fixed.
+  speed. Pre-existing. **The obvious fixes each carry a cost**: deleting
+  `ProjectileSystem`'s integration leaves its collision query running on last
+  tick's position, and moving it after `PhysicsSystem` jumps it past seven
+  systems whose coupling is unaudited. Unit 12 fixes it properly, by making
+  the query a swept sphere from the previous position — at which point the
+  ordering question dissolves. Folded there rather than patched twice.
+- ~~**`examples/cube3d`'s colliders set no `Layer`**~~ — fixed. Every entity in
+  the 3D example was layer 0, i.e. invisible to every masked query. The layer
+  constants were not on the facade at all, so a game importing only `mmokit`
+  could not set one; they are now.
 
 **Unit 1 is dropped, on measurement.** The plan opened with a 2.5-day
 migration of the replication chain to `*spatial.Entry` so that `Entry` could

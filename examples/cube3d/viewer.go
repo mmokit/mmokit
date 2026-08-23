@@ -123,7 +123,11 @@ func registerViewer(process *mmokit.Process) {
 		viewer := stage.SpawnPlayer(session,
 			mmokit.EntityKind{Type: KindViewer},
 			mmokit.Collider{
-				Shape:  mmokit.ShapeSphere,
+				Shape: mmokit.ShapeSphere,
+				// LayerEntity: a viewer occludes nothing but must be
+				// selectable by a query. Layer 0 would make it invisible to
+				// every layer-masked query, which is what this shipped with.
+				Layer:  mmokit.LayerEntity,
 				Radius: 12,
 				Width:  24,
 				Height: 24,

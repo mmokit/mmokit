@@ -930,6 +930,18 @@ var (
 	// one place components become an Entry — see pkg/spatial/entry.go.
 	EntryFrom = spatial.EntryFrom
 
+	// Collision layer bits for Collider.Layer. Masks, so they combine:
+	// LayerStatic|LayerProp is "everything that blocks a shot".
+	//
+	// LAYER 0 IS MEMBERSHIP IN NOTHING, and an entity with it is invisible to
+	// every layer-masked query — raycasts and collision alike filter on
+	// Layer&mask before testing any geometry. A collider with no layer set is
+	// therefore not a collider that hits everything, it is one that hits
+	// nothing. Named for what they OCCLUDE rather than for a genre's nouns.
+	LayerStatic = spatial.LayerStatic // blocks movement, sight, locks and shots
+	LayerProp   = spatial.LayerProp   // blocks shots; transparent to sight and selection
+	LayerEntity = spatial.LayerEntity // blocks nothing; exists so queries can select it
+
 	// UnmarshalCollider deserializes a Collider from bytes.
 	UnmarshalCollider = universe.UnmarshalCollider
 

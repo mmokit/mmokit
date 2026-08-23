@@ -98,7 +98,13 @@ const CubeBoundingRadius = CubeSize * 0.8660254 // sqrt(3)/2
 
 func cubeCollider() mmokit.Collider {
 	return mmokit.Collider{
-		Shape:  mmokit.ShapeBox,
+		Shape: mmokit.ShapeBox,
+		// LayerProp, not the zero layer. Layer 0 is membership in nothing, so
+		// a zero-layer entity is invisible to every layer-masked query —
+		// raycasts and collision alike filter on Layer&mask before testing
+		// any geometry. Every cube shipped that way until phase 4b needed
+		// them to actually be hit.
+		Layer:  mmokit.LayerProp,
 		Radius: CubeBoundingRadius,
 		Width:  CubeSize,
 		Height: CubeSize,
