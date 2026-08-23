@@ -983,11 +983,11 @@ func (b *Stage) SerializeEntityCore(entity ecs.Entity) *TransferFrame {
 func (b *Stage) SerializeEntity(entity ecs.Entity) ([]byte, error) {
 	frame := b.SerializeEntityCore(entity)
 	// Append all registered game-specific components.
-	// Skip IsTransferCore replicators — those values are already carried by
+	// Skip SkipOnTransfer replicators — those values are already carried by
 	// the dedicated frame fields (PosX/PosY etc.) and must not be duplicated.
 	if b.replRegistry != nil {
 		for _, rep := range b.replRegistry.All() {
-			if rep.IsTransferCore {
+			if rep.SkipOnTransfer {
 				continue
 			}
 			if data := rep.Scan(entity); data != nil {
@@ -1044,7 +1044,7 @@ func (b *Stage) SpawnFromTransferCore(data []byte, presence EntityPresence) (ecs
 	})
 
 	// Apply registered game-specific components.
-	// Skip IsTransferCore replicators — their authoritative values were already
+	// Skip SkipOnTransfer replicators — their authoritative values were already
 	// written from the dedicated frame fields (PosX/PosY etc.) above.
 	//
 	// A component that fails to decode is skipped and the spawn continues. The
@@ -1054,7 +1054,7 @@ func (b *Stage) SpawnFromTransferCore(data []byte, presence EntityPresence) (ecs
 	if b.replRegistry != nil {
 		for _, cs := range frame.Components {
 			if rep := b.replRegistry.Get(cs.ID); rep != nil {
-				if rep.IsTransferCore {
+				if rep.SkipOnTransfer {
 					continue
 				}
 				var applyErr error
@@ -1501,16 +1501,6 @@ func (b *Stage) upsertBorderReplica(
 			// in a 3D one.
 			*b.rotMap.Get(ent) = rot
 		}
-		// Refresh the collider radius from the frame. Radius is a per-tick
-		// animatable field (the original WASM pulse demo breathed it), so a
-		// replica whose radius froze at its creation value would render a stale
-		// size — visible as a size jump when a viewer crosses the boundary and
-		// the entity flips between live (breathing) and replica (frozen).
-		// Mirrors the create branch, which seeds Collider from the same radius
-		// arg.
-		if b.colliderMap.HasAll(ent) {
-			b.colliderMap.Get(ent).Radius = radius
-		}
 		if b.replicaMap.HasAll(ent) {
 			rep := b.replicaMap.Get(ent)
 			rep.TTL = 30
@@ -1518,8 +1508,22 @@ func (b *Stage) upsertBorderReplica(
 			rep.ProducedAtMs = producedAtMs
 		}
 		// Apply updated per-component data so Health/Shield/etc. stay
-		// in sync with the sender across the border.
+		// in sync with the sender across the border. Collider is in this tail
+		// now, which is what carries the extents, layer and shape the header
+		// has no room for.
 		b.applyEntityComponents(ent, componentTail)
+		// The HEADER's radius wins, and therefore lands last.
+		//
+		// Radius is a per-tick animatable field (the original WASM pulse demo
+		// breathed it) and the header carries it every tick, while the tail is
+		// whatever the last component scan produced. Applying the tail after
+		// this would let a stale collider blob freeze the size — visible as a
+		// jump when a viewer crosses the boundary and the entity flips between
+		// live (breathing) and replica (frozen), which is the exact bug the
+		// per-tick refresh was added to fix.
+		if b.colliderMap.HasAll(ent) {
+			b.colliderMap.Get(ent).Radius = radius
+		}
 		return
 	}
 
@@ -1555,6 +1559,12 @@ func (b *Stage) upsertBorderReplica(
 	// Apply initial per-component data so Health/Shield/etc. match the
 	// sender on the first frame, not just after the next update.
 	b.applyEntityComponents(ent, componentTail)
+	// Header radius last, for the same reason as the update branch above: the
+	// tail's collider carries the extents, layer and shape, but the header
+	// owns the per-tick radius.
+	if b.colliderMap.HasAll(ent) {
+		b.colliderMap.Get(ent).Radius = radius
+	}
 	b.replicaNetIDs[netID] = ent
 	b.eng.Log.Log(CatMeshReplica, "[%s] border replica created: netID=%d kind=%d from=%s pos=(%.0f,%.0f)",
 		b.cellID, netID, kind, sourceCellID, localX, localY)

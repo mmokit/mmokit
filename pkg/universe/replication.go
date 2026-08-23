@@ -18,13 +18,21 @@ type ComponentID uint16
 type ComponentReplicator struct {
 	ID ComponentID
 
-	// IsTransferCore marks components that are already serialized as top-level
-	// fields in TransferFrame (Position, Velocity, Rotation, CellCoord).
-	// When true, HandoffDriver and SerializeEntity skip this replicator when
-	// building frame.Components, and SpawnFromTransferCore skips it when
-	// applying — preventing frame.Components from overwriting the authoritative
-	// normalized values written from frame.PosX/PosY etc.
-	IsTransferCore bool
+	// SkipOnTransfer marks components TransferFrame already carries as
+	// top-level fields. HandoffDriver and SerializeEntity skip this
+	// replicator when building frame.Components, and SpawnFromTransferCore
+	// skips it when applying — so the tail cannot overwrite the authoritative
+	// values written from frame.PosX/PosY and normalized for the destination.
+	SkipOnTransfer bool
+
+	// SkipOnBorder marks components the BORDER header already carries.
+	//
+	// Deliberately a different set from SkipOnTransfer, not a synonym. The
+	// border header carries the collider's RADIUS alone while TransferFrame
+	// carries the whole 18-byte collider, so Collider is SkipOnTransfer and
+	// NOT SkipOnBorder — it has to ride the border tail or a neighbour-owned
+	// entity arrives with no extents, no layer and no shape.
+	SkipOnBorder bool
 
 	// Scan serializes the component from an entity. Returns nil if the entity
 	// lacks this component.

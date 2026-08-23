@@ -2532,6 +2532,26 @@ func (c *Process) createNode(cell CellID, spatialBucketSize float32, owningHost 
 	// an entity with no Motion contributes no bytes to either tail.
 	RegisterComponent(base.ReplicationRegistry(), ecs.NewMap1[component.Motion](eng.ECS))
 
+	// Collider survives a cell BORDER, which it did not before.
+	//
+	// The border header carries the collider's radius and nothing else — no
+	// Width, Height, Depth, Layer or Shape — and upsertBorderReplica built the
+	// replica as Collider{Radius: radius}. A zero Layer is invisible to every
+	// layer-masked query, so a neighbour-owned wall was a zero-extent, layer-0
+	// sphere: it stopped colliding and stopped blocking line of sight at the
+	// cell seam, which is exactly where a corridor runs. Registering it puts
+	// the whole collider in the border component tail.
+	//
+	// It is SkipOnTransfer, so this adds nothing to a handoff — TransferFrame
+	// already carries all 18 bytes as a top-level field, and a tail copy would
+	// overwrite the value normalized for the destination.
+	//
+	// Registered UNCONDITIONALLY, and immediately after Motion, for the reason
+	// stated above: both tails resolve components purely by number, so a
+	// conditional or reordered registration shifts every game component's ID
+	// and a mixed pair cross-decodes in silence.
+	RegisterComponent(base.ReplicationRegistry(), ecs.NewMap1[component.Collider](eng.ECS))
+
 	// Wire the typed client-input dispatch path (channel 0x00 post
 	// Plan 1 Phase 5 unification; mmokit.HandleClient). All
 	// client-originated inputs flow through this path — the legacy

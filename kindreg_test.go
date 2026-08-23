@@ -40,13 +40,15 @@ type kindRegTestBundle struct {
 
 // frameworkTransferComponents is how many components the framework itself
 // registers into every stage's transfer registry, independent of the game:
-// component.Motion, so a move mode survives a cell boundary.
+// component.Motion, so a move mode survives a cell boundary, and
+// component.Collider, so a neighbour-owned entity keeps its extents, layer and
+// shape across a cell BORDER — the border header carries only its radius.
 //
-// It is registered in BOTH dimension profiles on purpose. Gating it on 3D
-// would shift every game component's ID by one between profiles, and the
-// transfer and border tails resolve purely by number — a mixed pair would
-// cross-decode in silence.
-const frameworkTransferComponents = 1
+// Both are registered in BOTH dimension profiles on purpose, and in a fixed
+// order. Gating either on 3D, or reordering them, would shift every game
+// component's ID by one between profiles, and the transfer and border tails
+// resolve purely by number — a mixed pair would cross-decode in silence.
+const frameworkTransferComponents = 2
 
 func newTestProcess(t *testing.T) *universe.Process {
 	t.Helper()
@@ -325,6 +327,19 @@ func TestRegisterKind_RejectsTransferCore(t *testing.T) {
 			RegisterKind[badCellCoordBundle](p, kind, name)
 		})
 	})
+	// Collider is the one CLAUDE.md always listed and the guard never
+	// enforced: the old single membership set omitted it, so a bundle could
+	// declare one and double-encode it against TransferFrame's own 18-byte
+	// collider field.
+	t.Run("Collider", func(t *testing.T) {
+		assertTransferCorePanic(t, 204, "BadColliderKind", func(p *universe.Process, kind uint8, name string) {
+			RegisterKind[badColliderBundle](p, kind, name)
+		})
+	})
+}
+
+type badColliderBundle struct {
+	Col *Collider
 }
 
 func assertTransferCorePanic(t *testing.T, kind uint8, name string, register func(*universe.Process, uint8, string)) {
@@ -337,8 +352,8 @@ func assertTransferCorePanic(t *testing.T, kind uint8, name string, register fun
 			t.Fatalf("expected panic on bundle with transfer-core field")
 		}
 		msg := formatAny(r)
-		if !contains(msg, "transfer-core") {
-			t.Errorf("expected panic to mention 'transfer-core', got %q", msg)
+		if !contains(msg, "framework-core") {
+			t.Errorf("expected panic to mention 'framework-core', got %q", msg)
 		}
 	}()
 	register(mmo, kind, name)

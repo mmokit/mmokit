@@ -52,13 +52,18 @@ func (b *Stage) scanEntityComponents(entity ecs.Entity, dst []byte) []byte {
 		if cr.Scan == nil {
 			continue
 		}
-		// Skip transfer-core components (Position, Velocity, Rotation,
-		// CellCoord). Their authoritative border values are already
-		// encoded in the fixed DeltaBuf fields (worldX/worldY/qvx/qvy/qangle).
-		// Including them in the component tail would cause
-		// applyEntityComponents on the receiver to overwrite the
+		// Skip only what the BORDER HEADER carries (Position, Velocity,
+		// Rotation, CellCoord). Their authoritative border values are
+		// already encoded in the fixed DeltaBuf fields, and including them
+		// in the tail would make applyEntityComponents overwrite the
 		// correctly-computed local position with the source's raw value.
-		if cr.IsTransferCore {
+		//
+		// NOT SkipOnTransfer, which is a larger set: Collider is in it
+		// because TransferFrame carries all 18 bytes, while this header
+		// carries the radius alone. Using the transfer set here is what
+		// shipped a neighbour-owned entity with no extents, no layer and no
+		// shape — invisible to every layer-masked query.
+		if cr.SkipOnBorder {
 			continue
 		}
 		data := cr.Scan(entity)
@@ -134,12 +139,8 @@ func (b *Stage) applyEntityComponents(entity ecs.Entity, tail []byte) {
 		// target — but Add is safe either way (it detects existing
 		// components and updates them in place).
 		//
-		// Skip transfer-core components (Position, Velocity, Rotation,
-		// CellCoord). Their authoritative border values were already
-		// applied from the fixed DeltaBuf fields (worldX/worldY/qvx/qvy).
-		// Applying them here would overwrite the correctly-computed
-		// localX with the source's raw position.
-		if rep.IsTransferCore {
+		// Skip only what the border header carries — see the encode side.
+		if rep.SkipOnBorder {
 			continue
 		}
 		// A refused blob skips this component and the walk continues to the

@@ -56,28 +56,54 @@ func WithPreMarshal[T any](fn func(*T)) ComponentOption {
 	}}
 }
 
-// transferCoreTypes is the set of component types already serialized as
-// top-level fields in TransferFrame (PosX/PosY, VelX/VelY, Rotation,
-// CellCoord). Registering one of these in a ReplicationRegistry is valid
-// for border-frame replication, but the redundant entry in frame.Components
-// must not overwrite the authoritative normalized values during handoff.
-// RegisterComponent detects membership here and sets IsTransferCore = true.
-var transferCoreTypes = map[reflect.Type]bool{
+// The two frames carry DIFFERENT sets of components as top-level fields, and
+// a component-tail entry must be suppressed on the frame that already owns it
+// — otherwise the redundant copy overwrites the authoritative one.
+//
+// A single set cannot express this, which is what made Collider wrong for as
+// long as it was: TransferFrame carries the whole 18-byte collider
+// (transfer.go's layout comment), while the border header carries the RADIUS
+// ALONE (border_header.go). One membership map forced Collider to be either
+// double-encoded on transfer or absent from the border — and it was absent,
+// so a neighbour-owned wall arrived as a zero-extent, layer-0 sphere.
+
+// skipOnTransfer: carried by TransferFrame's top-level fields, and normalized
+// for the destination there. A tail entry would overwrite the normalized value
+// with the source's raw one.
+var skipOnTransfer = map[reflect.Type]bool{
+	reflect.TypeFor[component.Position]():  true,
+	reflect.TypeFor[component.Velocity]():  true,
+	reflect.TypeFor[component.Rotation]():  true,
+	reflect.TypeFor[component.CellCoord](): true,
+	reflect.TypeFor[component.Collider]():  true,
+}
+
+// skipOnBorder: carried by the border frame's fixed header, or reconstructed
+// locally by the receiver. STRICTLY SMALLER than skipOnTransfer — Collider is
+// deliberately absent, because the header carries only its radius and the rest
+// of the collider has to ride the delta-encoded tail.
+var skipOnBorder = map[reflect.Type]bool{
 	reflect.TypeFor[component.Position]():  true,
 	reflect.TypeFor[component.Velocity]():  true,
 	reflect.TypeFor[component.Rotation]():  true,
 	reflect.TypeFor[component.CellCoord](): true,
 }
 
-// IsTransferCore reports whether t is a framework-owned component already
-// carried by TransferFrame's top-level fields (Position / Velocity / Rotation
-// / CellCoord). RegisterKind rejects these as bundle fields because the
-// framework owns their wire format end-to-end: TransferFrame serializes them
-// across cells, EngineBindings replicates them to clients, and Stage.Spawn
-// either requires them (Position) or defaults them (Velocity). Declaring one
-// in a bundle does nothing useful and risks double-encoding on the wire.
-func IsTransferCore(t reflect.Type) bool {
-	return transferCoreTypes[t]
+// IsFrameworkCore reports whether the framework owns t's wire format on EITHER
+// frame — the union of the two sets above.
+//
+// This is the bundle-field guard: RegisterKind rejects these because the
+// framework owns them end to end. TransferFrame or the border header
+// serializes them across cells, EngineBindings replicates them to clients, and
+// Stage.Spawn either requires them (Position) or defaults them (Velocity).
+// Declaring one in a bundle does nothing useful and risks double-encoding.
+//
+// Collider is in the union and so is rejected as a bundle field, which
+// CLAUDE.md has always said and which was not true until this split: the old
+// single set omitted Collider, so a bundle could declare one and double-encode
+// it on the transfer path.
+func IsFrameworkCore(t reflect.Type) bool {
+	return skipOnTransfer[t] || skipOnBorder[t]
 }
 
 // reflectMarshalOrDrop is the Scan-closure form of ReflectMarshal. Scan's
@@ -135,10 +161,9 @@ func noteComponentDecodeDrop(where string, id ComponentID, err error) {
 // If no WithMarshal option is provided, the component type is validated at
 // registration time and reflection-based marshal/unmarshal is used.
 //
-// Components whose types appear in transferCoreTypes (Position, Velocity,
-// Rotation, CellCoord) have IsTransferCore set to true — HandoffDriver and
-// SerializeEntity skip them in frame.Components since those values are already
-// carried by the frame's dedicated fields and normalized for the destination.
+// Components carried by a frame's own top-level fields get SkipOnTransfer or
+// SkipOnBorder set, and the two differ: see skipOnTransfer / skipOnBorder. A
+// replicator skipped on one path still rides the tail on the other.
 func RegisterComponent[T any](reg *ReplicationRegistry, m *ecs.Map1[T], opts ...ComponentOption) {
 	var o ErasedOpts
 	for _, opt := range opts {
@@ -151,7 +176,9 @@ func RegisterComponent[T any](reg *ReplicationRegistry, m *ecs.Map1[T], opts ...
 		ValidateComponentType(reflect.TypeFor[T]())
 	}
 
-	isCore := transferCoreTypes[reflect.TypeFor[T]()]
+	ct := reflect.TypeFor[T]()
+	skipTransfer := skipOnTransfer[ct]
+	skipBorder := skipOnBorder[ct]
 
 	// applyInPlace decodes into a scratch copy and commits it to the live
 	// component only once the whole body has been accepted.
@@ -182,7 +209,8 @@ func RegisterComponent[T any](reg *ReplicationRegistry, m *ecs.Map1[T], opts ...
 	}
 
 	reg.Register(ComponentReplicator{
-		IsTransferCore: isCore,
+		SkipOnTransfer: skipTransfer,
+		SkipOnBorder:   skipBorder,
 		Scan: func(entity ecs.Entity) []byte {
 			if !m.HasAll(entity) {
 				return nil
@@ -257,7 +285,8 @@ func RegisterComponentByID(
 		ValidateComponentType(t)
 	}
 
-	isCore := transferCoreTypes[t]
+	skipTransfer := skipOnTransfer[t]
+	skipBorder := skipOnBorder[t]
 	u := w.Unsafe()
 
 	// Allocate a scratch buffer of type t once per replicator, reused under
@@ -293,7 +322,8 @@ func RegisterComponentByID(
 	}
 
 	reg.Register(ComponentReplicator{
-		IsTransferCore: isCore,
+		SkipOnTransfer: skipTransfer,
+		SkipOnBorder:   skipBorder,
 		Scan: func(entity ecs.Entity) []byte {
 			if !u.Has(entity, id) {
 				return nil

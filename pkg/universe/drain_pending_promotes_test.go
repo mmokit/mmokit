@@ -66,7 +66,7 @@ func worldXOf(t *testing.T, base *Stage, ent ecs.Entity, cellSize float32) float
 // captures recentPosX=1030 and spawns the live entity with that wrong value
 // → worldX=1030+1024=2054, player walks left toward the original click.
 //
-// Fix: scanEntityComponents must skip IsTransferCore components (Position,
+// Fix: scanEntityComponents must skip SkipOnBorder components (Position,
 // Velocity, Rotation, CellCoord) since their correct border values are
 // already carried by the fixed DeltaBuf fields.
 func TestDrainPendingPromotes_BorderReplicaTip_WorldXCorrect(t *testing.T) {

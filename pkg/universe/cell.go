@@ -441,7 +441,7 @@ func (c *Cell) drainPendingPromotes(currentClusterTick uint64) {
 				// Vel/Rot/CellCoord — are handled by the motion capture above.)
 				if reg := c.Stage.ReplicationRegistry(); reg != nil {
 					for _, rep := range reg.All() {
-						if rep.IsTransferCore || rep.Scan == nil {
+						if rep.SkipOnBorder || rep.Scan == nil {
 							continue
 						}
 						if d := rep.Scan(ent); d != nil {
