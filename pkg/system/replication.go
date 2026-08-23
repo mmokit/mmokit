@@ -1336,9 +1336,30 @@ func (s *ReplicationSystem) Update(dt float32) {
 			if tierRadius == 0 {
 				tierRadius = s.aoiRadius()
 			}
+			// A SPHERE, not an infinite cylinder. Without the dz term an
+			// entity directly overhead is "in range" at any height, which is
+			// what a 3D game hit first.
+			//
+			// This cutoff is NOT redundant with the grid query above. The grid
+			// is swept at queryRadius() — the LARGEST radius any tier uses —
+			// and this narrows per entity type, so a tier with a smaller
+			// radius rejects here and only here.
+			//
+			// A Z bug is unusually hard to place: the replicated height stays
+			// perfectly correct — viewerRelativePos3Binding reads Position.Z
+			// from the ECS component, not from this entry — and only
+			// VISIBILITY is wrong, so the symptom sends you to the codec,
+			// which is the wrong layer entirely.
+			//
+			// The dz term is appended and the 2D sub-expression left textually
+			// intact; see spatial.inSphere on why the grouping matters. In a
+			// 2D profile every Z is zero and this is the old arithmetic plus a
+			// zero. The priority falloff at distFactor below reads dist2, so
+			// it picks the height up for free.
 			dx := entry.X - viewer.X
 			dy := entry.Y - viewer.Y
-			dist2 := dx*dx + dy*dy
+			dz := entry.Z - viewer.Z
+			dist2 := dx*dx + dy*dy + dz*dz
 			if dist2 > tierRadius*tierRadius {
 				continue
 			}

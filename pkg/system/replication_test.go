@@ -1558,3 +1558,125 @@ func TestReplicationSystem_DormantViewerStillReceivesFrames(t *testing.T) {
 		t.Error("Dormant viewer should see e1 (awake, in AoI) — Dormant only hides FROM others, not the viewer's own AoI inbound")
 	}
 }
+
+// ---------------------------------------------------------------------------
+// Spherical area of interest (roadmap §7.5 phase 4a)
+// ---------------------------------------------------------------------------
+
+// spawnAt is spawn() with a height. The 2D helper cannot express the fixture
+// these tests need, and giving it a Z would touch every existing caller.
+func (m *testEntityMapper) spawnAt(x, y, z float32, netID uint32, kind uint8) ecs.Entity {
+	return m.mapper.NewEntity(
+		&component.Position{X: x, Y: y, Z: z},
+		&component.NetworkID{ID: netID},
+		&component.EntityKind{Type: kind},
+	)
+}
+
+// replicatedNetIDs runs one tick and reports which netIDs reached the viewer.
+//
+// The replicator is TIERED, with a radius smaller than the global AoI. That is
+// what isolates the per-tier cutoff under test: the spatial grid is swept at
+// queryRadius(), which is the largest radius any tier uses, so an entity
+// inside the global AoI and outside its tier's radius is rejected by the
+// cutoff and by nothing else.
+//
+// Without this the test is VACUOUS. With one radius for both, QueryRadius —
+// which became spherical one commit earlier — excludes the far entity before
+// the cutoff ever sees it, and the assertions pass whether or not the cutoff
+// has its Z term. Caught by reverting the term and watching the test stay
+// green.
+func replicatedNetIDs(t *testing.T, viewer ViewerInfo, grid *spatial.HashGrid, world *ecs.World, tierRadius float32) map[uint32]bool {
+	t.Helper()
+	fw := &stubFrameWriter{}
+	reg := NewReplicatorRegistry()
+	reg.Register(&tieredReplicator{tier: ReplicationTier{Radius: tierRadius, UpdateDivisor: 1}})
+
+	sys := NewReplicationSystem(ReplicationConfig{
+		World:       world,
+		SpatialGrid: grid,
+		Viewers:     &fixedViewerSource{viewers: []ViewerInfo{viewer}},
+		Frame:       fw,
+		Replicators: reg,
+		// Deliberately far larger than tierRadius, so the grid sweep admits
+		// everything and the tier cutoff is the only thing filtering.
+		AoIRadius: 100000,
+		GetTick:   func() uint32 { return 1 },
+	})
+	sys.Update(0.05)
+
+	got := make(map[uint32]bool)
+	for _, f := range fw.frames {
+		for _, full := range f.Full {
+			got[full.NetID] = true
+		}
+	}
+	return got
+}
+
+// TestReplicationSystem_AoIIsASphere is phase 4a's reason for existing.
+//
+// THE VIEWER IS OFF THE GROUND PLANE, and that is the whole test. With the
+// viewer at Z=0 every one of these cases passes on the broken code too: a
+// cylinder and a sphere only disagree when the height difference is non-zero,
+// and the two independent places a Z can be dropped — ViewerInfo.Z and
+// Entry.Z — each cancel out when the viewer sits on the plane.
+//
+// Viewer at cube3d's own spawn height, so the numbers are the ones a reader
+// can go and look at.
+func TestReplicationSystem_AoIIsASphere(t *testing.T) {
+	const viewerZ float32 = 260
+	const aoi float32 = 100
+
+	world := ecs.NewWorld()
+	grid := spatial.NewHashGrid(100)
+	em := newTestEntityMapper(world)
+
+	viewerEntity := em.spawnAt(0, 0, viewerZ, 1, 0)
+	grid.Register(spatial.EntryFrom(viewerEntity, &component.Position{Z: viewerZ}, &component.Collider{}, nil))
+
+	// Same XY as the viewer. One on the ground far below, one at eye level.
+	below := em.spawnAt(0, 0, 0, 2, 0)
+	alongside := em.spawnAt(0, 0, viewerZ, 3, 0)
+	grid.Register(spatial.EntryFrom(below, &component.Position{}, &component.Collider{}, nil))
+	grid.Register(spatial.EntryFrom(alongside, &component.Position{Z: viewerZ}, &component.Collider{}, nil))
+
+	got := replicatedNetIDs(t, ViewerInfo{ConnID: 1, Entity: viewerEntity, X: 0, Y: 0, Z: viewerZ}, grid, world, aoi)
+
+	if got[2] {
+		t.Errorf("an entity %v units directly below the viewer is inside a %v-unit area of interest — "+
+			"the cutoff is still an infinite cylinder", viewerZ, aoi)
+	}
+	if !got[3] {
+		t.Errorf("an entity at the viewer's own position is NOT replicated — " +
+			"Entry.Z or ViewerInfo.Z is being dropped")
+	}
+}
+
+// The 2D control. With everything on the plane the spherical cutoff must
+// return exactly what the cylindrical one did — that is the owner constraint
+// that a 2D game pays nothing for 3D features.
+func TestReplicationSystem_AoIIsUnchangedInTwoD(t *testing.T) {
+	const aoi float32 = 100
+
+	world := ecs.NewWorld()
+	grid := spatial.NewHashGrid(100)
+	em := newTestEntityMapper(world)
+
+	viewerEntity := em.spawn(0, 0, 1, 0)
+	grid.Register(spatial.EntryFrom(viewerEntity, &component.Position{}, &component.Collider{}, nil))
+
+	inside := em.spawn(60, 60, 2, 0)  // 84.8 away: in
+	outside := em.spawn(80, 80, 3, 0) // 113.1 away: out
+	grid.Register(spatial.EntryFrom(inside, &component.Position{X: 60, Y: 60}, &component.Collider{}, nil))
+	grid.Register(spatial.EntryFrom(outside, &component.Position{X: 80, Y: 80}, &component.Collider{}, nil))
+
+	got := replicatedNetIDs(t, ViewerInfo{ConnID: 1, Entity: viewerEntity}, grid, world, aoi)
+
+	if !got[2] {
+		t.Error("a 2D entity inside the radius is no longer replicated")
+	}
+	if got[3] {
+		t.Error("a 2D entity outside the radius is now replicated")
+	}
+}
