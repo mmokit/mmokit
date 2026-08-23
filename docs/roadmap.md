@@ -2,6 +2,7 @@
 
 **Status:** Single source of truth for project direction
 **Last verified against source:** 2026-07-28 (CE-002 re-verified after implementation)
+**Partially re-verified:** 2026-08-23 — §7.5 phases 1–4a and their residuals only. The rest of this document has not been re-checked since 2026-07-28 and a survey found roughly a dozen rows that are done and still read as open; §6.1 asks for a full pass before republishing.
 **Companion:** [`architecture.md`](architecture.md) describes what exists today. This file describes where the project is going. Neither should restate the other.
 
 ---
@@ -741,7 +742,8 @@ Collision is **new capability, not a port** — the existing separating-axis cod
 | 1 | Widen core types, still 2D only — **done**, see [§7.5.5](#755-what-phase-1-landed) | 10 | Position and velocity gained Z; rotation is a unit quaternion behind yaw helpers; collider gained Depth and a typed shape union. Generated 2D SDK diff is empty. |
 | 2 | The 3D profile — **done**, see [§7.5.6](#756-what-phase-2-landed) | 12 | Quaternion quantization, dimension-selected bindings, gravity and move modes, cluster dimension agreement. A headless 3D example survives a cell split with a non-zero destination entity count asserted. |
 | 3 | Client SDK and interpolation — **done**, see [§7.5.7](#757-what-phase-3-landed) | 11 | Quaternion decode and slerp in TypeScript and C#, golden vectors. A browser client renders 3D with quaternion orientation. |
-| 4 | Collision | 34 | Capsule characters against static boxes, line-of-sight gating, non-tunneling projectiles. |
+| 4a | Broad phase and area of interest go 3D — **done**, see [§7.5.8](#758-what-phase-4a-landed) | 3 | `spatial.Entry` carries Z, `QueryRadius` and the per-tier AoI cutoff test a sphere, the broad-phase pair gate accounts for height. A viewer above the world no longer sees everything under it. |
+| 4b | Collision — narrow phase | 31 | Capsule characters against static boxes, line-of-sight gating, non-tunneling projectiles. |
 | 5 | Parity fixtures and hardening | 11 | Both profiles covered in one test binary at the pre-existing race baseline. |
 
 Phases 0 and 1 are deliberately pure 2D. Front-loading them means any later failure on the split-merge path is unambiguously a 3D bug rather than a byte-offset bug.
@@ -861,7 +863,7 @@ Eight units, `c1358e19`..`f83fce9f`, against the seven this phase was planned as
 **Left undone, deliberately and named rather than implied:**
 
 - **`drainPendingPromotes`' rotation line is not directly pinned by a test.** It needs a handoff fixture unit 7 did not build, so it rests on inspection plus the shared shape with `upsertBorderReplica`, which *is* pinned.
-- **`pkg/spatial` is still 2D**, so 3D broad- and narrow-phase, AoI in three dimensions, and capsules remain phase 4. A 3D game today collides as though flattened.
+- **`pkg/spatial` is still 2D**, so 3D broad- and narrow-phase, AoI in three dimensions, and capsules remain phase 4. A 3D game today collides as though flattened. *(Amended: the broad phase and AoI closed in phase 4a — see [§7.5.8](#758-what-phase-4a-landed). The NARROW phase is still planar, so the "collides as though flattened" half stands.)*
 - **No client can render this.** Quaternion decode and slerp in TypeScript and C# are phase 3; `cube3d.json` is the only pin on the 3D layout until a generated SDK cross-checks it.
 - **`UnmarshalCollider` still decodes the pre-`Depth` 14-byte layout** while `MarshalTransferFrame` writes 18. Leftover from phase 1 with no in-tree production caller.
 - ~~**A pre-existing nil-map panic**~~ — **closed in `63616cea`**, immediately after the phase. `HostNetwork.Shutdown` nils `n.peers` while `ConnectPeer` writes `n.peers[hostID]`; a reconnect whose dial straddled shutdown panicked, roughly one run in three under `go test -race ./pkg/universe ./examples/cube3d`, and 6/6 clean after. Found by this phase's `-race` runs, confirmed pre-existing at `27420883`, and fixed in its own commit rather than inside a wire-format one. Worth carrying forward: the panic fired while holding `n.mu`, so anything that recovers from it deadlocks at the next `Shutdown` instead of crashing.
@@ -889,9 +891,101 @@ Nine units, `c5960979`..`bc0380e4`. A browser renders cube3d in three dimensions
 - **The 2D clients gained the 3D code and use none of it.** Both 2D SDKs now carry `unQuat`, `slerpQuat` and `Quat.cs` in their `_core`, because core files are copied verbatim regardless of what a schema uses. It costs bytes in a bundle, not on the wire, and the alternative — conditional core files — would make an SDK's contents depend on its schema in a way nothing else does.
 - **`examples/space` is still 2D**, so nothing exercises the 3D path at the scale the reference game runs at. cube3d spawns 64 cubes; the space example runs hundreds of entities with bots.
 - **No prediction or reconciliation for the 3D profile.** `FlyInput` is unsequenced and unreconciled, so the viewer is server-authoritative with no local prediction — acceptable for a spectator camera, not for a character. Snapshot *interpolation* is a different thing and is now wired (see the correction below); prediction is not.
-- **`pkg/spatial` is still 2D**, unchanged from phase 2: AoI and collision remain flat. That is phase 4.
+- **`pkg/spatial` is still 2D**, unchanged from phase 2: AoI and collision remain flat. That is phase 4. *(Amended: AoI and the broad phase closed in phase 4a — see [§7.5.8](#758-what-phase-4a-landed). Collision contact tests remain flat.)*
 
 **Correction, and it should have been in this list from the start.** Phase 3 shipped the interpolation primitives — `slerpQuat`, and `interpolateRing` returning `renderZ`/`renderQuat`, both golden-tested across three languages — and then wired a demo client that ignored them, rendering raw 20 Hz snapshots. The row is titled "Client SDK and interpolation"; only the SDK half was finished, and the residual list named *prediction* while saying nothing about this. It was reported as jitter and is now wired: `examples/cube3d/web/src/interpolation.ts` gives each entity an `InterpolationBuffer` and renders at producer-time minus 100 ms. No SDK change was needed — `InterpolationBuffer` stores whole `Sample`s and the 3D fields are optional members of `Sample`, so height and orientation already rode through the existing ring.
+
+#### 7.5.8 What phase 4a landed
+
+Eleven commits, `01b6d7bb`..`861cac21`. `pkg/spatial`'s broad phase and the
+replication area-of-interest cutoff are three-dimensional. The narrow phase is
+untouched and remains planar — that is 4b.
+
+**The hole was that phases 1–3 widened the TYPES and nothing below the wire
+consumed them.** `Position.Z`, the quaternion `Rotation` and `Collider.Depth`
+all rode the wire correctly while `spatial.Entry` had no Z, `QueryRadius`
+tested `dx²+dy²`, and the per-tier AoI cutoff did too. A 3D game replicated
+perfect heights to viewers chosen by a flat rule: an entity directly overhead
+was in range at any altitude.
+
+**What shipped:**
+
+- **`spatial.Entry` carries `Z`**, world-absolute. Partitioning is
+  horizontal-only, so Z carries no cell term and never will.
+- **Buckets stay 2D columns.** `bucketKey` is unchanged. On cube3d's numbers a
+  Z axis turns a 961-bucket sweep into 29,791 while the occupied Z span is
+  about five layers, and it would make purely vertical motion rehash every
+  tick. It also gives the change a property worth relying on: over column
+  buckets a spherical test can only *narrow* a result set, never widen one.
+- **`QueryRadius` takes a `component.Vec3` centre and tests a sphere.** The
+  signature change is the mechanism: a `QueryRadius3` sibling would have left
+  all nine call sites on the cylinder silently.
+- **The per-tier AoI cutoff tests a sphere**, and is not redundant with the
+  grid query — the grid is swept at the largest radius any tier uses.
+- **The broad-phase pair gate accounts for height**, which makes
+  `Collider.Radius` load-bearing as a three-axis bound for the first time.
+
+**Three bugs found on the way, none of them the phase's subject:**
+
+- **`Stage.Spawn` registered colliders with a zero `Layer` and `Shape`.** A
+  zero layer is invisible to every layer-masked query, so a spawned wall
+  blocked nothing until the next `SpatialSystem` tick overwrote the entry —
+  and nothing ever in a process that registers no `SpatialSystem`. Pure 2D,
+  and pre-existing.
+- **Two shape enums.** `pkg/spatial` declared `ShapeCircle/ShapeRect` and
+  `pkg/component` declared `ShapeKind` with values kept equal by a comment.
+- **cube3d's cubes used their INSCRIBED radius** — `CubeSize/2` for a box
+  whose half-diagonal is `20√3`. Invisible until the pair gate gained a Z
+  term, then it rejects cubes that visibly interpenetrate.
+
+**The 2D-invariance claim is EMPIRICAL, not structural, and that is the
+phase's most important finding.** The plan rested on "a 2D game's `Position.Z`
+is identically zero, so a `dz` term adds nothing". An adversarial pass refuted
+it: `PhysicsSystem`'s `MoveWalk` ground clamp writes `Pos.Z` directly and is
+gated on neither the dimension nor gravity, so a 2D game carrying
+`Motion{Mode: MoveWalk, GroundZ: k}` parks every entity at `k`. It is true of
+`examples/space` and `examples/4node-basic` as they stand, and it is not a
+guarantee. Recorded at `pkg/system/physics.go` and on the facade's move-mode
+constants rather than guarded, because a guard needs `Dimension` plumbed into
+two packages that do not mention it — and at `k != 0` the sphere is the
+correct answer anyway; the cylinder was simply wrong.
+
+The float half of that claim was confirmed: `dx²+dy²` is a sum of squares and
+so is never `-0.0`, the only value `+0.0` is not an identity for.
+
+**No dimension branch anywhere in the phase.** Both branches would compute the
+same value, a branch would leave the 3D path as the untested one, and it would
+need `Dimension` reaching packages that have no notion of it.
+
+**Nothing in CI observed this phase before the acceptance test.**
+`just schema-check` cannot — area of interest is not schema-visible and no wire
+byte moved. Neither can the three SDKs, the cross-language delta golden, or
+`examples/cube3d/split_test.go`, because a cell transfer travels through
+`TransferFrame` rather than through replication.
+`examples/cube3d/aoi_test.go` drives the real process and is the gate.
+
+**A vacuous test, caught by probing rather than by review.** The first AoI test
+used one radius for both the grid sweep and the tier, so `QueryRadius` — made
+spherical one commit earlier — excluded the far entity before the cutoff ever
+saw it, and the assertions passed with the cutoff's `dz` term reverted. Every
+Z-dependent assertion in the phase was subsequently verified by reverting the
+term it tests and watching it fail.
+
+**Left undone, deliberately and named rather than implied:**
+
+- **The narrow phase is still 2D OBB/SAT** reading `Entry.Yaw`. Capsules,
+  three-axis SAT and 3D contact normals are 4b. `Entry` carries no quaternion
+  and no `Depth` because nothing reads them until then.
+- **`RaycastXY` is planar** and renamed to say so. A wall well below a ray
+  still blocks it.
+- **`bucketKey` is 2D.** Revisit only with a profile, not on principle.
+- **The §7.7 centre-only under-expansion is untouched.** `QueryRadius` derives
+  its bucket range from the query radius alone and ignores each entry's own
+  `Radius`, which is what `examples/space`'s hand-tuned `terrainMargin`
+  compensates for. Fixing it makes currently-missed walls start being hit, so
+  it needs the playtesting budget §7.7 already allocates.
+- **`Collider.Radius` is a contract, not a computation.** Nothing verifies that
+  a game's radius actually bounds its box; only cube3d's is pinned by a test.
 
 ### 7.6 Validation
 

@@ -22,10 +22,21 @@ import (
 // full dt, normal dt applies automatically.
 //
 // Z integrates unconditionally rather than behind a dimension check. That is
-// provably inert in a 2D profile: nothing in pkg/ or in either example writes
-// a non-zero Velocity.Z, so the term adds exactly zero, and a profile branch
-// on the tick hot path would cost more than the add it guards. Gravity is
-// gated on the optional Motion component instead, which no 2D entity carries.
+// inert in a 2D profile: nothing in pkg/ or in either 2D example writes a
+// non-zero Velocity.Z, so the term adds exactly zero, and a profile branch on
+// the tick hot path would cost more than the add it guards. Gravity is gated
+// on the optional Motion component instead, which no 2D entity carries.
+//
+// THE MoveWalk CLAMP BELOW IS A DIFFERENT CASE, and it is the one exception to
+// "a 2D game's Z is always zero". It writes Pos.Z directly and is gated on
+// neither the dimension nor gravity, so a 2D game that spawns
+// Motion{Mode: MoveWalk, GroundZ: k} parks its entities at k. Everything
+// downstream that treats Z as identically zero in 2D — the spherical area of
+// interest and spatial queries from roadmap §7.5 phase 4a — is then measuring
+// real distances rather than a no-op. That is not a bug in those tests: at
+// k != 0 the sphere is the correct answer and the old cylinder was wrong. It
+// is recorded because "2D pays nothing" is an empirical property of the
+// current examples, not a structural guarantee.
 type PhysicsSystem struct {
 	engine.SystemBase
 	entities query.Query[struct {

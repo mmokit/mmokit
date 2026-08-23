@@ -77,6 +77,12 @@ type MoveMode = component.MoveMode
 // and does not clamp. Gravity itself comes from Config.Gravity and is only
 // legal in a 3D profile.
 const (
+	// Motion is a 3D-profile component in practice. MoveFly is the zero value
+	// and changes nothing, but MoveWalk and MoveBallistic make PhysicsSystem
+	// write Position.Z — including in a 2D process, where nothing else does.
+	// A 2D game that carries Motion{Mode: MoveWalk, GroundZ: k} parks every
+	// entity at height k, and spatial queries and area of interest measure
+	// real three-dimensional distances from there.
 	MoveFly       = component.MoveFly
 	MoveWalk      = component.MoveWalk
 	MoveBallistic = component.MoveBallistic

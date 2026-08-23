@@ -153,7 +153,7 @@ Every registration verb takes the owning process first — a `*Process`, or a `*
 
 The `All` registration variants replay handlers onto cells created later by splits or migrations. Stage-scoped variants should only be used when a handler is intentionally local to one existing cell.
 
-`Config.Dimension` selects the process's spatial profile at construction. It chooses behavior — currently the engine-level replication bindings, via `system.EngineBindingSet` — and never chooses types. `Dimension2D` is the only implemented profile; `Dimension3D` is selectable and panics.
+`Config.Dimension` selects the process's spatial profile at construction. It chooses behavior — the engine-level replication bindings via `system.EngineBindingSet`, the mesh border-frame header layout, gravity, and whether spatial queries and area of interest test a sphere — and never chooses types. Both profiles are implemented: `examples/cube3d` runs `Dimension3D` end to end. A 2D process pays no additional wire bytes for any of it, on the client wire or between mesh peers. The narrow-phase contact test is still planar in both profiles.
 
 ## Persistence and world content
 
