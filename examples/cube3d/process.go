@@ -24,6 +24,13 @@ const (
 	// Wide enough to see the whole 2000x2000 world from the middle of it.
 	// At 500 the viewer's OWN cell corners are 566 units away and fall
 	// outside AoI, so most of the scene simply never arrives.
+	//
+	// Area of interest is a SPHERE since roadmap §7.5 phase 4a, so height
+	// eats into horizontal reach: from the world centre at spawn height, the
+	// far corner of the cube field is 1377 units away rather than 1358, and
+	// flying to the top of the field puts it at 1443. Still inside 1500, but
+	// the margin is now the thing that shrinks when you climb — which is the
+	// behaviour this example exists to make visible.
 	AoIRadius = 1500
 
 	// Gravity, in world units per second squared.

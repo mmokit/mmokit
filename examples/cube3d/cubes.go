@@ -86,10 +86,20 @@ func spawnDrifter(stage *mmokit.Stage, i int, x, y float32) {
 	)
 }
 
+// CubeBoundingRadius is the radius of the sphere that CONTAINS a cube, which
+// is what Collider.Radius has to be.
+//
+// Half the edge length is the INSCRIBED radius, and that is what this shipped
+// with — harmless while the broad phase was a column test, and wrong the
+// moment it gained a Z term: at 20 the gate rejects two cubes that visibly
+// interpenetrate, before any contact test runs. A 40-unit cube's half-diagonal
+// is 20*sqrt(3) = 34.64.
+const CubeBoundingRadius = CubeSize * 0.8660254 // sqrt(3)/2
+
 func cubeCollider() mmokit.Collider {
 	return mmokit.Collider{
 		Shape:  mmokit.ShapeBox,
-		Radius: CubeSize / 2,
+		Radius: CubeBoundingRadius,
 		Width:  CubeSize,
 		Height: CubeSize,
 		Depth:  CubeSize,
