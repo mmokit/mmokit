@@ -123,21 +123,29 @@ jobs:
       # sample cannot refute it, so it stays. If you drop `-p 1` and see a
       # serialize timeout, that is this and not your change.
       #
-      # Blind spot, stated so green is not read as complete: this covers zero
-      # PostgreSQL code. All four */postgres packages sit behind `//go:build
-      # pgtest` and report "[no test files]" — their tests are invisible, not
-      # skipped. Only `just db-up && just test-pg` runs them, and no job here
-      # provides a database.
-      # -short on the merge path. examples/4node-basic's
-      # TestE2EMeshSplitMergeWithBotTraffic skips under testing.Short(), and
-      # docs/roadmap.md records it as "nondeterministic by construction" —
-      # failure-then-pass on byte-identical code. A hosted runner is slower and
-      # noisier than the box its passing runs were measured on, and a
-      # flickering required check trains people to re-run rather than read. The
-      # unshortened suite runs nightly, where a red is investigated rather than
-      # dismissed.
+      # This job covers zero PostgreSQL code: all four */postgres packages sit
+      # behind `//go:build pgtest` and report "[no test files]" here — their
+      # tests are invisible, not skipped. They are no longer uncovered though;
+      # the `schema` job already runs a postgres service for its schema dumps
+      # and now runs `just test-pg` against it.
+      # NOT -short any more, and the reason it was is now fixed.
+      #
+      # examples/4node-basic's TestE2EMeshSplitMergeWithBotTraffic was the only
+      # test in the tree that skipped under testing.Short(), because it was
+      # "nondeterministic by construction" — failure-then-pass on byte-identical
+      # code. It was not. Its entity-conservation assertion polled four times
+      # 120 ms apart, a 480 ms budget, while convergence after a split measures
+      # 397-698 ms under -race: the budget sat inside the observed distribution,
+      # so it was a coin flip. `96a3179e` made it a wall-clock deadline with an
+      # 11x margin.
+      #
+      # Quarantining it cost more than it saved. It is the repository's only
+      # end-to-end split/merge-under-bot-traffic regression, and skipping it
+      # here is how a real data race in Protocol.fingerprint reached main and
+      # sat there for three days — the nightly caught it, and nothing blocked
+      # on the nightly.
       - name: go test
-        run: go test ./... -short -count=1 -p 1 -timeout 900s
+        run: go test ./... -count=1 -p 1 -timeout 900s
 
       # DB-free compile of every example's composition root. Written outside
       # the tree on purpose (AGENTS.md forbids building binaries into package
@@ -153,6 +161,61 @@ jobs:
           # The space example's load-test bot client lives beside it and
           # imports its internal packages; nothing else builds it.
           go build -o /tmp/space-botclient ./examples/space/botclient
+
+  # A race gate on the merge path, over the packages where a race can actually
+  # reach main.
+  #
+  # This exists because one did. Protocol.fingerprint was a plain uint32
+  # written by Build while a mesh-client goroutine read it; the nightly caught
+  # it and nothing blocked on the nightly, so it sat on main for three days
+  # across three identical red nights.
+  #
+  # A SUBSET, and examples/4node-basic is the load-bearing member. The race
+  # above was only ever reached through that package's buildTestCluster — a
+  # subset chosen as "the framework packages" would have missed it entirely,
+  # which is the trap this job is shaped to avoid. The full -race suite still
+  # runs nightly; this is the fast half that gates a merge.
+  race:
+    name: race
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      # `-p 1` for the same reason as the `go` job, only stronger: what it
+      # insures against is CPU contention on a RunOnLoop deadline, and -race
+      # makes contention strictly worse.
+      - name: go test -race
+        id: race
+        run: |
+          set -o pipefail
+          go test -race ./pkg/universe/ ./pkg/engine/ ./pkg/system/ ./examples/4node-basic/ \
+            -count=1 -p 1 -timeout 25m 2>&1 | tee /tmp/race.log
+
+      # Runs on success too: the detector can report a race in a test that
+      # still passes, so a green suite is not by itself proof of no race.
+      # Same classification the nightly does, and for the same reason — "was
+      # it a data race or a failing test" is the one question that decides how
+      # urgent a red is.
+      - name: classify
+        if: always()
+        run: |
+          races=$(grep -c 'WARNING: DATA RACE' /tmp/race.log || true)
+          if [ "$races" -gt 0 ]; then
+            echo "::error::$races DATA RACE report(s) — a real concurrency bug, triage immediately"
+            grep -A25 'WARNING: DATA RACE' /tmp/race.log | head -100
+            exit 1
+          fi
+          if [ "${{ steps.race.outcome }}" = "failure" ]; then
+            echo "::warning::suite failed with ZERO data races — a failing test, not a concurrency bug"
+            grep -E '^--- FAIL|^FAIL' /tmp/race.log | head -40
+            exit 1
+          fi
 
   frontend:
     name: frontend
@@ -355,6 +418,17 @@ jobs:
 
       - name: schema-check
         run: just schema-check
+
+      # The PostgreSQL blind spot the `go` job states, closed where the
+      # database already exists.
+      #
+      # All four */postgres packages sit behind `//go:build pgtest`, so a
+      # plain `go test ./...` reports "[no test files]" for them — their tests
+      # are invisible, not skipped, and every check in this file was green
+      # over zero lines of PostgreSQL code. This job was already paying for a
+      # postgres service to dump schemas and never ran a test against it.
+      - name: test-pg
+        run: just test-pg
 
   drift-go:
     name: drift-go
