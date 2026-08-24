@@ -68,8 +68,12 @@ func (r *Rotation) AddYaw(delta float32) { r.SetYaw(r.Yaw() + delta) }
 // Forward is the unit direction the rotation faces, in the horizontal plane.
 // Collapses the cos/sin pair that was written out at each call site.
 func (r Rotation) Forward() (x, y float32) {
-	yaw := float64(r.Yaw())
-	return float32(math.Cos(yaw)), float32(math.Sin(yaw))
+	// Straight off the basis. This used to go Yaw() — a sqrt and an atan2 —
+	// and then back through Cos and Sin, three transcendentals to recover two
+	// numbers the quaternion already contains. Three hot paths in
+	// examples/space call it.
+	fwd, _, _ := r.Basis()
+	return fwd.X, fwd.Y
 }
 
 // RotationFromAxisAngle builds a rotation of angle radians about the given
@@ -188,4 +192,79 @@ func (r Rotation) Slerp(o Rotation, t float32) Rotation {
 		Z: float32(wa*az + wb*bz),
 		W: float32(wa*aw + wb*bw),
 	}.normalized()
+}
+
+// Normalized returns r scaled to unit length. Exported because the spatial
+// narrow phase must renormalize before deriving a basis; see Basis.
+//
+// Returns identity for a zero-norm quaternion, which is what makes
+// Rotation's zero value usable as identity.
+func (r Rotation) Normalized() Rotation { return r.normalized() }
+
+// Basis returns r's three orthonormal column vectors: forward (local X), side
+// (local Y) and up (local Z). This is the orientation a three-axis separating-
+// axis test needs — the axes themselves, not an angle.
+//
+// RENORMALIZES UNCONDITIONALLY, in float64, and that is not defensive
+// boilerplate. normalized() returns r unchanged when |n-1| < 1e-6, so a
+// quaternion legitimately in circulation can carry up to ~2e-6 of scale error
+// — and that error multiplies through into the projected half-extents of an
+// OBB. It is larger than the parallel-axis epsilon a SAT uses, so leaving it
+// in turns a geometric tolerance into a rounding guard and the failure is a
+// razor-edge separation that flips: two boxes that overlap report separated,
+// which is an object passing through a wall.
+//
+// A non-unit quaternion is reachable, not hypothetical: entity.modify reaches
+// the raw W field through fieldpath's exported-scalar walk, so `entity modify
+// Rotation W 5` produces one.
+//
+// No trigonometry. For a pure-yaw quaternion this specialises exactly to
+// cos = 1-2z², sin = 2wz with zeros in the right places, so there is no
+// separate 2D path and no branch.
+func (r Rotation) Basis() (fwd, side, up Vec3) {
+	q := r.normalized()
+	x, y, z, w := float64(q.X), float64(q.Y), float64(q.Z), float64(q.W)
+
+	fwd = Vec3{
+		X: float32(1 - 2*(y*y+z*z)),
+		Y: float32(2 * (x*y + w*z)),
+		Z: float32(2 * (x*z - w*y)),
+	}
+	side = Vec3{
+		X: float32(2 * (x*y - w*z)),
+		Y: float32(1 - 2*(x*x+z*z)),
+		Z: float32(2 * (y*z + w*x)),
+	}
+	up = Vec3{
+		X: float32(2 * (x*z + w*y)),
+		Y: float32(2 * (y*z - w*x)),
+		Z: float32(1 - 2*(x*x+y*y)),
+	}
+	return fwd, side, up
+}
+
+// Rotate returns v rotated by r, via the standard v + 2w(q x v) + 2(q x (q x v))
+// form. float64 intermediates for the same reason Basis renormalizes.
+func (r Rotation) Rotate(v Vec3) Vec3 {
+	q := r.normalized()
+	qx, qy, qz, qw := float64(q.X), float64(q.Y), float64(q.Z), float64(q.W)
+	vx, vy, vz := float64(v.X), float64(v.Y), float64(v.Z)
+
+	// t = 2 * (q_vec x v)
+	tx := 2 * (qy*vz - qz*vy)
+	ty := 2 * (qz*vx - qx*vz)
+	tz := 2 * (qx*vy - qy*vx)
+
+	return Vec3{
+		X: float32(vx + qw*tx + (qy*tz - qz*ty)),
+		Y: float32(vy + qw*ty + (qz*tx - qx*tz)),
+		Z: float32(vz + qw*tz + (qx*ty - qy*tx)),
+	}
+}
+
+// Inverse returns the rotation that undoes r. For a unit quaternion that is
+// the conjugate; r is normalized first so a drifted value still inverts.
+func (r Rotation) Inverse() Rotation {
+	q := r.normalized()
+	return Rotation{X: -q.X, Y: -q.Y, Z: -q.Z, W: q.W}
 }

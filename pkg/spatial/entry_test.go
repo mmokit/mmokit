@@ -2,6 +2,7 @@ package spatial
 
 import (
 	"math"
+	"reflect"
 	"testing"
 	"unsafe"
 
@@ -114,5 +115,76 @@ func TestEntryBound_IsDerivedFromRadius(t *testing.T) {
 	var empty Entry
 	if got := empty.Bound(); got != 0 {
 		t.Errorf("zero Entry Bound() = %v, want 0", got)
+	}
+}
+
+// TestEntryFrom_CoversEveryColliderField is the ViewerInfo-Z failure shape,
+// caught structurally instead of by remembering.
+//
+// EntryFrom is a hand-written field list. Omit one line — entry.Depth =
+// col.Depth, say — and it compiles, go vet is clean, every 2D fixture passes
+// because the field is zero there anyway, and cube3d's aoi_test passes too
+// because it reads only Z. Exactly how ViewerInfo shipped without its Z.
+//
+// So this walks Collider's fields REFLECTIVELY, sets each to a distinct
+// non-zero value, and asserts the corresponding Entry field arrived. A field
+// added to Collider and forgotten in EntryFrom fails here by name, without
+// anyone having thought to write an assertion for it.
+func TestEntryFrom_CoversEveryColliderField(t *testing.T) {
+	// Field name on Collider -> field name on Entry. Same name unless noted.
+	want := map[string]float32{
+		"Radius": 3, "Width": 5, "Height": 7, "Depth": 11,
+	}
+	var col component.Collider
+	cv := reflect.ValueOf(&col).Elem()
+	for name, v := range want {
+		f := cv.FieldByName(name)
+		if !f.IsValid() {
+			t.Fatalf("Collider has no field %s — update this test with the rename", name)
+		}
+		f.SetFloat(float64(v))
+	}
+	col.Layer = LayerStatic
+	col.Shape = component.ShapeBox
+
+	got := EntryFrom(makeWorld().NewEntity(), &component.Position{}, &col, nil)
+	ev := reflect.ValueOf(got)
+	for name, v := range want {
+		f := ev.FieldByName(name)
+		if !f.IsValid() {
+			t.Errorf("Entry has no field %s, so Collider.%s reaches nothing", name, name)
+			continue
+		}
+		if float32(f.Float()) != v {
+			t.Errorf("Entry.%s = %v, want %v — EntryFrom does not carry Collider.%s",
+				name, f.Float(), v, name)
+		}
+	}
+
+	// Every float32 field on Collider must appear in the map above, so ADDING
+	// one to Collider fails this test until someone decides what it means for
+	// a spatial entry.
+	ct := reflect.TypeOf(component.Collider{})
+	for i := range ct.NumField() {
+		f := ct.Field(i)
+		if f.Type.Kind() != reflect.Float32 {
+			continue
+		}
+		if _, covered := want[f.Name]; !covered {
+			t.Errorf("Collider.%s is a new float32 field that this test does not cover — "+
+				"decide whether EntryFrom should carry it, then add it here", f.Name)
+		}
+	}
+}
+
+// A drifted quaternion must be normalized on the way into the grid, not at
+// every narrow-phase test.
+func TestEntryFrom_NormalizesTheRotation(t *testing.T) {
+	drifted := component.Rotation{W: 5}
+	got := EntryFrom(makeWorld().NewEntity(), &component.Position{}, &component.Collider{}, &drifted)
+	n := math.Sqrt(float64(got.Rot.X*got.Rot.X + got.Rot.Y*got.Rot.Y +
+		got.Rot.Z*got.Rot.Z + got.Rot.W*got.Rot.W))
+	if math.Abs(n-1) > 1e-6 {
+		t.Errorf("|Rot| = %v, want 1 — a scale error reaches the projected half-extents", n)
 	}
 }

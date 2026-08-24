@@ -56,7 +56,12 @@ func EntryFrom(e ecs.Entity, pos *component.Position, col *component.Collider, r
 	// is already right regardless.
 	entry.Rot = component.RotationIdentity()
 	if rot != nil {
-		entry.Rot = *rot
+		// NORMALIZED on the way in, once per entity per tick, rather than at
+		// every narrow-phase test. A non-unit quaternion is reachable — the
+		// admin console's `entity modify Rotation W 5` writes the raw field
+		// through fieldpath's exported-scalar walk — and a scale error
+		// multiplies straight through into an OBB's projected half-extents.
+		entry.Rot = rot.Normalized()
 	}
 	return entry
 }

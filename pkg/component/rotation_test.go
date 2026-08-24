@@ -113,3 +113,99 @@ func TestRotationYawWraps(t *testing.T) {
 		t.Errorf("Forward() = (%v,%v), want (%v,%v) — wrapping changed the direction", x, y, wx, wy)
 	}
 }
+
+// TestBasis_IsOrthonormal is the property a separating-axis test depends on.
+// Non-orthonormal columns scale projected half-extents, and the symptom is a
+// razor-edge separation that flips — two boxes that overlap reporting
+// separated, i.e. an object passing through a wall.
+func TestBasis_IsOrthonormal(t *testing.T) {
+	rots := []Rotation{
+		RotationIdentity(),
+		RotationFromYaw(0.75),
+		RotationFromAxisAngle(1, 0, 0, 1.1),
+		RotationFromAxisAngle(0.3, -0.7, 0.2, 2.4),
+		RotationFromAxisAngle(1, 1, 1, math.Pi),
+	}
+	for i, r := range rots {
+		fwd, side, up := r.Basis()
+		for name, v := range map[string]Vec3{"fwd": fwd, "side": side, "up": up} {
+			n := math.Sqrt(float64(v.X*v.X + v.Y*v.Y + v.Z*v.Z))
+			if math.Abs(n-1) > 1e-5 {
+				t.Errorf("rot %d: |%s| = %v, want 1", i, name, n)
+			}
+		}
+		for name, d := range map[string]float64{
+			"fwd·side": dot3(fwd, side), "fwd·up": dot3(fwd, up), "side·up": dot3(side, up),
+		} {
+			if math.Abs(d) > 1e-5 {
+				t.Errorf("rot %d: %s = %v, want 0", i, name, d)
+			}
+		}
+	}
+}
+
+// A non-unit quaternion is reachable through the admin console's field walk
+// (`entity modify Rotation W 5`). Basis must renormalize it, or the scale error
+// propagates straight into projected half-extents.
+func TestBasis_RenormalizesANonUnitQuaternion(t *testing.T) {
+	drifted := Rotation{X: 0, Y: 0, Z: 0, W: 5}
+	fwd, _, _ := drifted.Basis()
+	n := math.Sqrt(float64(fwd.X*fwd.X + fwd.Y*fwd.Y + fwd.Z*fwd.Z))
+	if math.Abs(n-1) > 1e-6 {
+		t.Errorf("|fwd| = %v for a W=5 quaternion, want 1 — the scale would reach the SAT", n)
+	}
+}
+
+// Basis's forward column must agree with Yaw for a pure-yaw rotation, or the
+// 2D profile and the 3D one disagree about where an entity faces.
+func TestBasis_AgreesWithYawInThePlane(t *testing.T) {
+	for _, yaw := range []float32{0, 0.5, 2, -1.25, 3} {
+		r := RotationFromYaw(yaw)
+		fwd, _, _ := r.Basis()
+		wantX := float32(math.Cos(float64(yaw)))
+		wantY := float32(math.Sin(float64(yaw)))
+		if math.Abs(float64(fwd.X-wantX)) > 1e-6 || math.Abs(float64(fwd.Y-wantY)) > 1e-6 {
+			t.Errorf("yaw %v: basis fwd = (%v, %v), want (%v, %v)", yaw, fwd.X, fwd.Y, wantX, wantY)
+		}
+		if math.Abs(float64(fwd.Z)) > 1e-6 {
+			t.Errorf("yaw %v: basis fwd has Z = %v, want 0 in the plane", yaw, fwd.Z)
+		}
+	}
+}
+
+// Rotate and Inverse must round-trip, which is what a world→local transform
+// and back depends on.
+func TestRotate_InverseRoundTrips(t *testing.T) {
+	r := RotationFromAxisAngle(0.3, -0.7, 0.2, 2.4)
+	v := Vec3{X: 3, Y: -4, Z: 5}
+	back := r.Inverse().Rotate(r.Rotate(v))
+	for name, d := range map[string]float32{"X": back.X - v.X, "Y": back.Y - v.Y, "Z": back.Z - v.Z} {
+		if math.Abs(float64(d)) > 1e-4 {
+			t.Errorf("round trip %s off by %v", name, d)
+		}
+	}
+}
+
+// Rotate must agree with Basis: rotating a unit axis is that basis column.
+func TestRotate_AgreesWithBasis(t *testing.T) {
+	r := RotationFromAxisAngle(0.3, -0.7, 0.2, 2.4)
+	fwd, side, up := r.Basis()
+	for _, c := range []struct {
+		axis Vec3
+		want Vec3
+		name string
+	}{
+		{Vec3{X: 1}, fwd, "fwd"}, {Vec3{Y: 1}, side, "side"}, {Vec3{Z: 1}, up, "up"},
+	} {
+		got := r.Rotate(c.axis)
+		if math.Abs(float64(got.X-c.want.X)) > 1e-5 ||
+			math.Abs(float64(got.Y-c.want.Y)) > 1e-5 ||
+			math.Abs(float64(got.Z-c.want.Z)) > 1e-5 {
+			t.Errorf("Rotate(%s axis) = %+v, want basis %s %+v", c.name, got, c.name, c.want)
+		}
+	}
+}
+
+func dot3(a, b Vec3) float64 {
+	return float64(a.X)*float64(b.X) + float64(a.Y)*float64(b.Y) + float64(a.Z)*float64(b.Z)
+}
