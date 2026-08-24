@@ -1032,6 +1032,14 @@ lands at 32, and no honest arrangement reaches 31.
   constants were not on the facade at all, so a game importing only `mmokit`
   could not set one; they are now.
 
+**Progress.** Unit 6 (border replicas, promoted ahead of the phase), unit 4
+(`Entry` carries the quaternion and `Depth`; `Yaw` deleted) and unit 5
+(`ShapeCapsule` plus dispatch tables with an `init()` completeness check) are
+closed, along with the `examples/cube3d` layer-0 fix and the facade's missing
+layer constants. Unit 8 — the three-axis narrow phase — is next, and
+`TestCapsulePairsAreUnimplemented` is its checklist: every capsule pair
+currently holds a named placeholder returning false.
+
 **Unit 1 is dropped, on measurement.** The plan opened with a 2.5-day
 migration of the replication chain to `*spatial.Entry` so that `Entry` could
 afford to widen, priced off ~40 by-value copies per viewer-entity-tick. The
