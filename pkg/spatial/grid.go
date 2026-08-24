@@ -58,8 +58,15 @@ type Entry struct {
 // branch inside a bucket scan.
 //
 // For a sphere and a box it is Radius by construction, which is what makes
-// "the 2D result set is unchanged" a test rather than a claim.
-func (e *Entry) Bound() float32 { return e.Radius }
+// "the 2D result set is unchanged" a test rather than a claim. A capsule is
+// the one shape whose extent along its axis can exceed its authored Radius,
+// so it takes the larger of the two.
+func (e *Entry) Bound() float32 {
+	if e.Shape == component.ShapeCapsule && e.Depth/2 > e.Radius {
+		return e.Depth / 2
+	}
+	return e.Radius
+}
 
 // bucket holds both tracked (persistent) and transient (per-tick) entries.
 type bucket struct {
@@ -342,40 +349,24 @@ func checkCollision(a, b Entry, matrix map[uint8]uint8, fn func(a, b Entry)) {
 	dy := a.Y - b.Y
 	dz := a.Z - b.Z
 	dist2 := dx*dx + dy*dy + dz*dz
-	maxDist := a.Radius + b.Radius
+	// Bound(), not Radius: a capsule's extent along its axis can exceed its
+	// authored radius, and gating on Radius would reject a tall capsule before
+	// the narrow phase saw it.
+	maxDist := a.Bound() + b.Bound()
 	if dist2 > maxDist*maxDist {
 		return
 	}
 
-	// Narrow-phase: shape-aware check
-	if a.Shape == component.ShapeSphere && b.Shape == component.ShapeSphere {
-		// Already passed broad-phase circle-circle
-		fn(a, b)
-		return
-	}
-
-	if a.Shape == component.ShapeBox && b.Shape == component.ShapeSphere {
-		if obbCircleCollision(a, b) {
-			fn(a, b)
-		}
-		return
-	}
-
-	if a.Shape == component.ShapeSphere && b.Shape == component.ShapeBox {
-		if obbCircleCollision(b, a) {
-			fn(a, b)
-		}
-		return
-	}
-
-	// Both rects: OBB-OBB via SAT
-	if obbOBBCollision(a, b) {
+	// Narrow phase, by table. This was an if-chain that fell through to the
+	// OBB routine for any pair it did not name, which is how a new shape
+	// shipped as a silently-wrong box. See dispatch.go.
+	if overlap(&a, &b) {
 		fn(a, b)
 	}
 }
 
 // obbCircleCollision tests an oriented bounding box against a circle.
-func obbCircleCollision(rect, circle Entry) bool {
+func obbCircleCollision(rect, circle *Entry) bool {
 	// Transform circle center into rect's local space
 	// Yaw() is an atan2 over the quaternion, so take it once. These planar
 	// routines are replaced by the three-axis test in phase 4b; until then
@@ -402,7 +393,7 @@ func obbCircleCollision(rect, circle Entry) bool {
 }
 
 // obbOBBCollision tests two oriented bounding boxes using the Separating Axis Theorem.
-func obbOBBCollision(a, b Entry) bool {
+func obbOBBCollision(a, b *Entry) bool {
 	// Get the 4 axes to test (2 per rect)
 	// One Yaw() per entry: it is an atan2 over the quaternion. See
 	// obbCircleCollision.

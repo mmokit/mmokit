@@ -4,8 +4,6 @@ import (
 	"math"
 
 	"github.com/mlange-42/ark/ecs"
-
-	"github.com/mmokit/mmokit/pkg/component"
 )
 
 // Vec2 is a 2D vector in world coordinates.
@@ -45,33 +43,26 @@ func (g *HashGrid) RaycastXY(from, to Vec2, layerMask uint8) (ecs.Entity, Vec2, 
 		if b == nil {
 			continue
 		}
-		for _, e := range b.tracked {
+		// Indexed, not ranged by value: Entry is 56 bytes and this runs for
+		// every entry in every bucket along the ray, with no distance
+		// prefilter ahead of it.
+		for i := range b.tracked {
+			e := &b.tracked[i]
 			if e.Layer&layerMask == 0 {
 				continue
 			}
-			if e.Shape == component.ShapeSphere {
-				t, hitOK := rayCircleHit(from, to, e.X, e.Y, e.Radius)
-				if !hitOK {
-					continue
-				}
-				if t < bestT {
-					bestT = t
-					bestEntity = e.Entity
-					bestHit = Vec2{from.X + dx*t, from.Y + dy*t}
-					found = true
-				}
+			// By table. Two if-statements used to test sphere and box, and a
+			// shape that was neither fell out of both — silently invisible to
+			// sight rather than loudly unimplemented. See dispatch.go.
+			t, hitOK := rayTable[e.Shape](from, to, e)
+			if !hitOK {
+				continue
 			}
-			if e.Shape == component.ShapeBox {
-				t, hitOK := rayRectHit(from, to, e)
-				if !hitOK {
-					continue
-				}
-				if t < bestT {
-					bestT = t
-					bestEntity = e.Entity
-					bestHit = Vec2{from.X + dx*t, from.Y + dy*t}
-					found = true
-				}
+			if t < bestT {
+				bestT = t
+				bestEntity = e.Entity
+				bestHit = Vec2{from.X + dx*t, from.Y + dy*t}
+				found = true
 			}
 		}
 	}
@@ -174,7 +165,7 @@ func rayCircleHit(from, to Vec2, cx, cy, r float32) (float32, bool) {
 
 // rayRectHit returns t∈[0,1] for the nearest ray-vs-OBB entry, or false.
 // Transforms the ray into the rect's local frame and runs a 2D slab test.
-func rayRectHit(from, to Vec2, e Entry) (float32, bool) {
+func rayRectHit(from, to Vec2, e *Entry) (float32, bool) {
 	// One Yaw() per entry: it is an atan2 over the quaternion, and this runs
 	// for every rect candidate in every bucket along the ray with no distance
 	// prefilter ahead of it.

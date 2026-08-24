@@ -53,23 +53,40 @@ type Rotation struct {
 // ShapeCircle/ShapeRect pair whose values were kept equal to these by a
 // comment; pkg/spatial reads this type directly instead.
 //
-// A THIRD discriminant needs both dispatch sites updated, and neither will
-// tell you: spatial's narrow phase dispatches the sphere/sphere, box/sphere
-// and sphere/box pairs and then FALLS THROUGH to the OBB routine for anything
-// else, while the raycast SKIPS a value it does not recognise. So a new shape
-// added here alone ships an entity that silently collides as a degenerate box
-// and is invisible to line-of-sight.
+// A new discriminant used to fail SILENTLY in two places: spatial's narrow
+// phase dispatched the sphere/sphere, box/sphere and sphere/box pairs and then
+// FELL THROUGH to the OBB routine for anything else, while the raycast SKIPPED
+// a value it did not recognise. So a shape added here alone shipped an entity
+// that collided as a degenerate box and was invisible to line of sight.
+//
+// That is now structural rather than a request to remember. Both dispatch
+// sites are tables indexed by ShapeKind and sized to ShapeCount, and
+// pkg/spatial's init() refuses to start the process if any slot is unfilled.
+// Bump ShapeCount and the build still passes; the process does not start.
 type ShapeKind uint8
 
 const (
 	ShapeSphere ShapeKind = 0
 	ShapeBox    ShapeKind = 1
+	// ShapeCapsule is a segment with a radius: the character shape. Its axis
+	// is local Z, matching Collider.Depth, so a capsule stands up in a 3D
+	// profile and degenerates to a circle in a 2D one.
+	ShapeCapsule ShapeKind = 2
+
+	// ShapeCount is one past the last discriminant, and is the bound every
+	// shape-indexed dispatch table is sized to.
+	//
+	// Adding a shape means bumping this, which makes pkg/spatial's tables the
+	// wrong size — and its init() refuses to start the process naming the
+	// slot nobody filled. That is the structural version of the warning above,
+	// which for two releases was only a comment asking people to remember.
+	ShapeCount = 3
 )
 
 // Valid reports whether k is a discriminant this build implements. Checked
 // wherever a wire byte becomes the union arm — an out-of-range value there is
 // a peer disagreeing about the protocol, not a shape.
-func (k ShapeKind) Valid() bool { return k == ShapeSphere || k == ShapeBox }
+func (k ShapeKind) Valid() bool { return k < ShapeCount }
 
 // String names the shape for diagnostics.
 func (k ShapeKind) String() string {
@@ -78,6 +95,8 @@ func (k ShapeKind) String() string {
 		return "sphere"
 	case ShapeBox:
 		return "box"
+	case ShapeCapsule:
+		return "capsule"
 	default:
 		return "unknown"
 	}
@@ -88,6 +107,17 @@ func (k ShapeKind) String() string {
 // For spheres, use Radius. For boxes, use Width (local X, forward), Height
 // (local Y, side) and Depth (local Z, up). Radius is also the bounding radius
 // for broad-phase checks on boxes.
+//
+// FOR CAPSULES, Radius is the cap radius and DEPTH IS THE TOTAL TIP-TO-TIP
+// HEIGHT, so the segment's half-length is max(0, Depth/2 - Radius) and a
+// capsule with Depth <= 2*Radius is a sphere. Width and Height are unused. The
+// axis is local Z, matching Depth's meaning for a box and the axis MoveWalk
+// clamps along.
+//
+// Tip-to-tip rather than segment length is stated because both conventions are
+// common — Unity measures tip to tip, several physics engines measure the
+// segment — and the two differ by exactly 2*Radius, which is a bug that looks
+// like a tuning problem.
 //
 // Depth is carried by every profile for the reason Position.Z is: one component
 // set across profiles. A 2D profile leaves it zero and no binding emits it —

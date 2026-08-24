@@ -69,6 +69,15 @@ func (b *Stage) Spawn(components ...any) Entity {
 			kind = v
 			hasKind = true
 		case component.Collider:
+			// Rejected here rather than clamped, because this is where a game
+			// author gets a stack trace pointing at their own Spawn call.
+			// Shape indexes pkg/spatial's dispatch tables; an out-of-range
+			// value would panic inside a bucket scan on the cell loop, with
+			// nothing in the trace naming the entity that caused it.
+			if !v.Shape.Valid() {
+				panic(fmt.Sprintf("universe.Stage.Spawn: Collider.Shape %d is not a shape this build implements "+
+					"(valid: 0..%d)", uint8(v.Shape), component.ShapeCount-1))
+			}
 			col = v
 			hasCollider = true
 		case component.Rotation:

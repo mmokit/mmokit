@@ -76,7 +76,12 @@ func TestUnmarshalColliderClampsAnUnknownShape(t *testing.T) {
 		0x00, 0x00, 0x00, 0x40,
 		0x00, 0x00, 0x40, 0x40,
 		0x01,
-		0x02, // not a discriminant this build implements
+		// Past ShapeCount. Deliberately not "the next value after the last
+		// shape" written as a literal: this test used 0x02, and phase 4b
+		// added ShapeCapsule = 2, so it started asserting that a VALID shape
+		// was clamped. 0xFF stays unknown for as long as the enum is a uint8
+		// with fewer than 255 members.
+		0xFF,
 	})
 	if c.Shape != component.ShapeSphere {
 		t.Fatalf("unknown shape byte became %v, want ShapeSphere", c.Shape)

@@ -30,7 +30,17 @@ func EntryFrom(e ecs.Entity, pos *component.Position, col *component.Collider, r
 		entry.Height = col.Height
 		entry.Depth = col.Depth
 		entry.Layer = col.Layer
+		// CLAMPED, because Shape indexes a dispatch table and comes from
+		// game-authored data rather than a validated wire byte. An
+		// out-of-range value would panic inside the bucket scan and take the
+		// cell loop with it, where before the table it was merely skipped.
+		// Stage.Spawn rejects an invalid shape outright — that is where an
+		// author gets the loud failure; this is the belt for everything that
+		// reaches the grid another way.
 		entry.Shape = col.Shape
+		if !entry.Shape.Valid() {
+			entry.Shape = component.ShapeSphere
+		}
 	}
 	// Explicit identity when there is no Rotation, which is the COMMON case:
 	// Stage.Spawn does not add one and a 2D game need never carry one.
