@@ -44,17 +44,17 @@ func init() {
 	overlapTable[component.ShapeSphere][component.ShapeSphere] = overlapSphereSphere
 	overlapTable[component.ShapeBox][component.ShapeSphere] = overlapBoxSphere
 	overlapTable[component.ShapeSphere][component.ShapeBox] = overlapSphereBox
-	overlapTable[component.ShapeBox][component.ShapeBox] = overlapBoxBox
+	overlapTable[component.ShapeBox][component.ShapeBox] = overlapBoxBox3
 
-	// Capsule pairs are phase 4b unit 8. Named rather than nil so the gap is a
-	// decision on the record: until the three-axis narrow phase lands, a
-	// capsule does not collide, and it says so here rather than by falling
-	// through to a box test that would answer confidently and wrongly.
-	overlapTable[component.ShapeCapsule][component.ShapeSphere] = overlapCapsuleUnimplemented
-	overlapTable[component.ShapeSphere][component.ShapeCapsule] = overlapCapsuleUnimplemented
-	overlapTable[component.ShapeCapsule][component.ShapeBox] = overlapCapsuleUnimplemented
-	overlapTable[component.ShapeBox][component.ShapeCapsule] = overlapCapsuleUnimplemented
-	overlapTable[component.ShapeCapsule][component.ShapeCapsule] = overlapCapsuleUnimplemented
+	overlapTable[component.ShapeCapsule][component.ShapeSphere] = overlapCapsuleSphere
+	overlapTable[component.ShapeSphere][component.ShapeCapsule] = overlapSphereCapsule
+	overlapTable[component.ShapeCapsule][component.ShapeCapsule] = overlapCapsuleCapsule
+
+	// Capsule vs box is phase 4b unit 10 — the one pair with no closed form,
+	// needing iterated clamp reduction. Named rather than nil so the gap is a
+	// decision on the record.
+	overlapTable[component.ShapeCapsule][component.ShapeBox] = overlapCapsuleBoxUnimplemented
+	overlapTable[component.ShapeBox][component.ShapeCapsule] = overlapBoxCapsuleUnimplemented
 
 	rayTable[component.ShapeSphere] = rayCircleEntry
 	rayTable[component.ShapeBox] = rayRectHit
@@ -100,19 +100,26 @@ func overlap(a, b *Entry) bool { return overlapTable[a.Shape][b.Shape](a, b) }
 // test, which for a sphere IS the shape test.
 func overlapSphereSphere(a, b *Entry) bool { return true }
 
-func overlapBoxSphere(box, sphere *Entry) bool { return obbCircleCollision(box, sphere) }
-func overlapSphereBox(sphere, box *Entry) bool { return obbCircleCollision(box, sphere) }
-func overlapBoxBox(a, b *Entry) bool           { return obbOBBCollision(a, b) }
+func overlapBoxSphere(box, sphere *Entry) bool { return overlapBoxSphere3(box, sphere) }
 
-// overlapCapsuleUnimplemented is phase 4b unit 8's work.
+// The swapped arms call the same routine with the arguments reordered rather
+// than restating the arithmetic, so a pair cannot answer differently depending
+// on which entry a bucket scan reached first. QueryCollisions iterates a Go
+// map, so that order is not stable between runs.
+func overlapSphereBox(sphere, box *Entry) bool     { return overlapBoxSphere3(box, sphere) }
+func overlapSphereCapsule(sphere, cap *Entry) bool { return overlapCapsuleSphere(cap, sphere) }
+
+// overlapCapsuleBoxUnimplemented is phase 4b unit 10's work — the one pair
+// with no closed form, needing iterated clamp reduction against the box's
+// three slabs.
 //
-// Returns false — a capsule collides with nothing until the three-axis narrow
-// phase exists. Returning false rather than falling through to the box test is
-// the point: a wrong "no collision" is a character walking through a wall,
-// which a playtester finds in seconds, while a wrong "collision" from a box
-// test on capsule extents is a character catching on nothing, which reads as
-// jitter and gets attributed to the network.
-func overlapCapsuleUnimplemented(a, b *Entry) bool { return false }
+// Returns false, which is a deliberate wrong answer rather than an accident: a
+// character passes through a box, which a playtester finds in seconds. The
+// alternative the old if-chain gave — falling through to a box-box test on the
+// capsule's extents — answers confidently and wrongly, and reads as jitter
+// that gets attributed to the network.
+func overlapCapsuleBoxUnimplemented(a, b *Entry) bool { return false }
+func overlapBoxCapsuleUnimplemented(a, b *Entry) bool { return false }
 
 // rayCircleEntry adapts rayCircleHit, which takes loose scalars, to the table.
 func rayCircleEntry(from, to Vec2, e *Entry) (float32, bool) {

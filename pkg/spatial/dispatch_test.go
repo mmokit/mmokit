@@ -47,23 +47,39 @@ func TestDispatchTableIsSymmetric(t *testing.T) {
 	}
 }
 
-// TestCapsulePairsAreUnimplemented records exactly which pairs phase 4b unit 8
-// still owes, so that unit has a checklist and this test is what turns green
-// when it lands.
+// TestCapsuleBoxIsTheRemainingPair records exactly what phase 4b still owes,
+// so unit 10 has a checklist and this test is what turns green when it lands.
 //
-// A capsule returning false is a deliberate wrong answer, not an accident: a
-// character passes through a wall, which a playtester finds immediately.
-// Falling through to the box test — which is what the old if-chain did — would
-// answer confidently and wrongly, and read as jitter.
-func TestCapsulePairsAreUnimplemented(t *testing.T) {
-	shapes := []component.ShapeKind{component.ShapeSphere, component.ShapeBox, component.ShapeCapsule}
-	for _, s := range shapes {
-		if overlapTable[component.ShapeCapsule][s] == nil || overlapTable[s][component.ShapeCapsule] == nil {
-			t.Fatalf("capsule vs %v is nil rather than a named placeholder", s)
-		}
+// Sphere and capsule pairs landed with the three-axis narrow phase. Capsule vs
+// box is the one with no closed form — it needs iterated clamp reduction
+// against the box's three slabs — and it holds a named placeholder returning
+// false. That is a deliberate wrong answer, not an accident: a character
+// passes through a box, which a playtester finds in seconds, where falling
+// through to a box-box test on the capsule's extents would answer confidently
+// and wrongly and read as jitter.
+func TestCapsuleBoxIsTheRemainingPair(t *testing.T) {
+	w := makeWorld()
+	cap := Entry{Entity: newEntity(w), Shape: component.ShapeCapsule, Radius: 3, Depth: 20,
+		Rot: component.RotationIdentity()}
+	bx := Entry{Entity: newEntity(w), Shape: component.ShapeBox, Radius: 9, Width: 10, Height: 10, Depth: 10,
+		Rot: component.RotationIdentity()}
+
+	if overlap(&cap, &bx) {
+		t.Error("capsule vs box returns true — unit 10 has landed; delete this test " +
+			"and assert the real geometry instead")
 	}
-	if rayTable[component.ShapeCapsule] == nil {
-		t.Fatal("capsule ray slot is nil rather than a named placeholder")
+	if overlap(&bx, &cap) {
+		t.Error("box vs capsule returns true but capsule vs box does not — asymmetric")
+	}
+
+	// The pairs that DID land must not be placeholders.
+	sph := Entry{Entity: newEntity(w), Shape: component.ShapeSphere, Radius: 3,
+		Rot: component.RotationIdentity()}
+	if !overlap(&cap, &sph) {
+		t.Error("capsule vs sphere at the same position does not overlap — still a placeholder?")
+	}
+	if !overlap(&cap, ptr(cap)) {
+		t.Error("capsule vs itself does not overlap — still a placeholder?")
 	}
 }
 
