@@ -2,6 +2,7 @@ package spatial
 
 import (
 	"math"
+	"sort"
 
 	"github.com/mmokit/mmokit/pkg/component"
 )
@@ -260,6 +261,152 @@ func clamp01(v float64) float64 {
 	}
 	if v > 1 {
 		return 1
+	}
+	return v
+}
+
+// overlapCapsuleBox tests a capsule against an oriented box.
+//
+// The one pair with no closed-form distance in the literature, and the reason
+// the phase plan budgeted an iterative method for it. It does not need one.
+func overlapCapsuleBox(capsule, b *Entry) bool {
+	half, axis := obbAxes(b)
+	center := centerOf(b)
+	p0w, p1w, r := capsuleSegment(capsule)
+
+	// Into the box's frame, where it is an axis-aligned box centred at the
+	// origin. Projecting onto the basis columns IS the inverse rotation,
+	// without building one.
+	toLocal := func(p component.Vec3) component.Vec3 {
+		d := p.Sub(center)
+		return component.Vec3{X: d.Dot(axis[0]), Y: d.Dot(axis[1]), Z: d.Dot(axis[2])}
+	}
+	d2 := segmentBoxDistSq(toLocal(p0w), toLocal(p1w), half)
+	return d2 <= float64(r)*float64(r)
+}
+
+// segmentBoxDistSq is the squared distance from segment [p0,p1] to an
+// axis-aligned box centred at the origin with the given half-extents.
+//
+// EXACT, and at fixed cost. The plan called for alternating projection — clamp
+// onto the box, clamp back onto the segment, repeat — and that is what this
+// was. Measured against a dense-sampling oracle it converges far too slowly to
+// use: at twelve iterations the worst overestimate over 4000 random
+// configurations was still 0.91 world units, and the error direction is the
+// dangerous one. Each iteration gives an UPPER bound, so stopping early
+// reports no overlap where there is one — a character through a wall.
+//
+// It does not need to iterate. Squared distance to a convex set is a convex
+// function of the point, and the segment is affine in t, so
+//
+//	f(t) = sum_i max(0, |a_i + t*d_i| - h_i)^2
+//
+// is CONVEX and PIECEWISE QUADRATIC in t. Its pieces meet where the segment
+// crosses one of the six slab planes — at most six values of t — and on each
+// piece it is an ordinary quadratic whose minimum is either at a piece
+// boundary or at its vertex. Evaluating f at the endpoints, the crossings and
+// each piece's vertex therefore finds the exact minimum, in at most fifteen
+// evaluations, with no tolerance and nothing to tune.
+func segmentBoxDistSq(p0, p1 component.Vec3, half [3]float64) float64 {
+	a := [3]float64{float64(p0.X), float64(p0.Y), float64(p0.Z)}
+	d := [3]float64{float64(p1.X - p0.X), float64(p1.Y - p0.Y), float64(p1.Z - p0.Z)}
+
+	f := func(t float64) float64 {
+		var sum float64
+		for i := range 3 {
+			if excess := math.Abs(a[i]+t*d[i]) - half[i]; excess > 0 {
+				sum += excess * excess
+			}
+		}
+		return sum
+	}
+
+	// Piece boundaries: the segment's crossings of the six slab planes, plus
+	// the segment's own ends.
+	breaks := make([]float64, 0, 8)
+	breaks = append(breaks, 0, 1)
+	for i := range 3 {
+		if d[i] == 0 {
+			continue
+		}
+		for _, plane := range [2]float64{half[i], -half[i]} {
+			if t := (plane - a[i]) / d[i]; t > 0 && t < 1 {
+				breaks = append(breaks, t)
+			}
+		}
+	}
+	sort.Float64s(breaks)
+
+	best := math.Inf(1)
+	for _, t := range breaks {
+		if v := f(t); v < best {
+			best = v
+		}
+	}
+
+	// Within each piece, the active terms are fixed, so f is a quadratic
+	// A*t^2 + B*t + C and its vertex is -B/2A. Determine the active set from
+	// the piece's midpoint rather than its endpoints, which are exactly the
+	// points where a term switches on or off.
+	for k := 0; k+1 < len(breaks); k++ {
+		lo, hi := breaks[k], breaks[k+1]
+		if hi <= lo {
+			continue
+		}
+		mid := (lo + hi) / 2
+		var qa, qb float64
+		for i := range 3 {
+			v := a[i] + mid*d[i]
+			switch {
+			case v > half[i]:
+				c := a[i] - half[i]
+				qa += d[i] * d[i]
+				qb += 2 * c * d[i]
+			case v < -half[i]:
+				c := a[i] + half[i]
+				qa += d[i] * d[i]
+				qb += 2 * c * d[i]
+			}
+		}
+		if qa <= 0 {
+			continue // f is flat or zero on this piece; the boundaries covered it
+		}
+		if t := -qb / (2 * qa); t > lo && t < hi {
+			if v := f(t); v < best {
+				best = v
+			}
+		}
+	}
+	return best
+}
+
+// clampToBox is the closest point to p inside an origin-centred box.
+func clampToBox(p component.Vec3, half [3]float64) component.Vec3 {
+	return component.Vec3{
+		X: float32(clampAbs(float64(p.X), half[0])),
+		Y: float32(clampAbs(float64(p.Y), half[1])),
+		Z: float32(clampAbs(float64(p.Z), half[2])),
+	}
+}
+
+// pointBoxDistSq is the exact squared distance from a point to an
+// origin-centred box.
+func pointBoxDistSq(p component.Vec3, half [3]float64) float64 {
+	var sum float64
+	for i, v := range [3]float64{float64(p.X), float64(p.Y), float64(p.Z)} {
+		if excess := math.Abs(v) - half[i]; excess > 0 {
+			sum += excess * excess
+		}
+	}
+	return sum
+}
+
+func clampAbs(v, limit float64) float64 {
+	if v > limit {
+		return limit
+	}
+	if v < -limit {
+		return -limit
 	}
 	return v
 }

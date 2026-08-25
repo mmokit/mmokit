@@ -50,11 +50,8 @@ func init() {
 	overlapTable[component.ShapeSphere][component.ShapeCapsule] = overlapSphereCapsule
 	overlapTable[component.ShapeCapsule][component.ShapeCapsule] = overlapCapsuleCapsule
 
-	// Capsule vs box is phase 4b unit 10 — the one pair with no closed form,
-	// needing iterated clamp reduction. Named rather than nil so the gap is a
-	// decision on the record.
-	overlapTable[component.ShapeCapsule][component.ShapeBox] = overlapCapsuleBoxUnimplemented
-	overlapTable[component.ShapeBox][component.ShapeCapsule] = overlapBoxCapsuleUnimplemented
+	overlapTable[component.ShapeCapsule][component.ShapeBox] = overlapCapsuleBox
+	overlapTable[component.ShapeBox][component.ShapeCapsule] = overlapBoxCapsule
 
 	rayTable[component.ShapeSphere] = rayCircleEntry
 	rayTable[component.ShapeBox] = rayRectHit
@@ -109,17 +106,7 @@ func overlapBoxSphere(box, sphere *Entry) bool { return overlapBoxSphere3(box, s
 func overlapSphereBox(sphere, box *Entry) bool     { return overlapBoxSphere3(box, sphere) }
 func overlapSphereCapsule(sphere, cap *Entry) bool { return overlapCapsuleSphere(cap, sphere) }
 
-// overlapCapsuleBoxUnimplemented is phase 4b unit 10's work — the one pair
-// with no closed form, needing iterated clamp reduction against the box's
-// three slabs.
-//
-// Returns false, which is a deliberate wrong answer rather than an accident: a
-// character passes through a box, which a playtester finds in seconds. The
-// alternative the old if-chain gave — falling through to a box-box test on the
-// capsule's extents — answers confidently and wrongly, and reads as jitter
-// that gets attributed to the network.
-func overlapCapsuleBoxUnimplemented(a, b *Entry) bool { return false }
-func overlapBoxCapsuleUnimplemented(a, b *Entry) bool { return false }
+func overlapBoxCapsule(box, cap *Entry) bool { return overlapCapsuleBox(cap, box) }
 
 // rayCircleEntry adapts rayCircleHit, which takes loose scalars, to the table.
 func rayCircleEntry(from, to Vec2, e *Entry) (float32, bool) {

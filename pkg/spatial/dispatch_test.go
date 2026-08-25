@@ -47,39 +47,30 @@ func TestDispatchTableIsSymmetric(t *testing.T) {
 	}
 }
 
-// TestCapsuleBoxIsTheRemainingPair records exactly what phase 4b still owes,
-// so unit 10 has a checklist and this test is what turns green when it lands.
+// TestEveryShapePairIsImplemented replaces the checklist that tracked phase
+// 4b's remaining pairs. All nine slots now compute real geometry, so the
+// assertion is that none of them is still a placeholder.
 //
-// Sphere and capsule pairs landed with the three-axis narrow phase. Capsule vs
-// box is the one with no closed form — it needs iterated clamp reduction
-// against the box's three slabs — and it holds a named placeholder returning
-// false. That is a deliberate wrong answer, not an accident: a character
-// passes through a box, which a playtester finds in seconds, where falling
-// through to a box-box test on the capsule's extents would answer confidently
-// and wrongly and read as jitter.
-func TestCapsuleBoxIsTheRemainingPair(t *testing.T) {
+// A placeholder returns false unconditionally, so the check is that each pair
+// reports overlap for two shapes at the same position — which no honest
+// implementation can get wrong and no placeholder can get right.
+func TestEveryShapePairIsImplemented(t *testing.T) {
 	w := makeWorld()
-	cap := Entry{Entity: newEntity(w), Shape: component.ShapeCapsule, Radius: 3, Depth: 20,
-		Rot: component.RotationIdentity()}
-	bx := Entry{Entity: newEntity(w), Shape: component.ShapeBox, Radius: 9, Width: 10, Height: 10, Depth: 10,
-		Rot: component.RotationIdentity()}
-
-	if overlap(&cap, &bx) {
-		t.Error("capsule vs box returns true — unit 10 has landed; delete this test " +
-			"and assert the real geometry instead")
+	at := func(k component.ShapeKind) Entry {
+		return Entry{
+			Entity: newEntity(w), Shape: k,
+			Radius: 3, Width: 6, Height: 6, Depth: 6,
+			Rot: component.RotationIdentity(),
+		}
 	}
-	if overlap(&bx, &cap) {
-		t.Error("box vs capsule returns true but capsule vs box does not — asymmetric")
-	}
-
-	// The pairs that DID land must not be placeholders.
-	sph := Entry{Entity: newEntity(w), Shape: component.ShapeSphere, Radius: 3,
-		Rot: component.RotationIdentity()}
-	if !overlap(&cap, &sph) {
-		t.Error("capsule vs sphere at the same position does not overlap — still a placeholder?")
-	}
-	if !overlap(&cap, ptr(cap)) {
-		t.Error("capsule vs itself does not overlap — still a placeholder?")
+	shapes := []component.ShapeKind{component.ShapeSphere, component.ShapeBox, component.ShapeCapsule}
+	for _, sa := range shapes {
+		for _, sb := range shapes {
+			a, b := at(sa), at(sb)
+			if !overlap(&a, &b) {
+				t.Errorf("%v vs %v: coincident shapes do not overlap — still a placeholder?", sa, sb)
+			}
+		}
 	}
 }
 
