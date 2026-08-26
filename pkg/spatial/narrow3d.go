@@ -206,6 +206,14 @@ func pointSegmentDistSq(p, a, b component.Vec3) float64 {
 // The parallel case falls out of the denominator guard rather than needing a
 // branch of its own.
 func segmentSegmentDistSq(p1, q1, p2, q2 component.Vec3) float64 {
+	c1, c2 := segmentSegmentClosest(p1, q1, p2, q2)
+	return float64(c1.Sub(c2).LenSq())
+}
+
+// segmentSegmentClosest returns the closest pair of points. Shares its
+// arithmetic with segmentSegmentDistSq so the manifold and the boolean test
+// cannot disagree about where the contact is.
+func segmentSegmentClosest(p1, q1, p2, q2 component.Vec3) (component.Vec3, component.Vec3) {
 	d1 := q1.Sub(p1) // direction of segment 1
 	d2 := q2.Sub(p2) // direction of segment 2
 	r := p1.Sub(p2)
@@ -220,7 +228,7 @@ func segmentSegmentDistSq(p1, q1, p2, q2 component.Vec3) float64 {
 	switch {
 	case a <= eps && e <= eps:
 		// Both degenerate to points.
-		return float64(p1.Sub(p2).LenSq())
+		return p1, p2
 	case a <= eps:
 		s = 0
 		t = clamp01(f / e)
@@ -250,9 +258,7 @@ func segmentSegmentDistSq(p1, q1, p2, q2 component.Vec3) float64 {
 		}
 	}
 
-	c1 := p1.Add(d1.Scale(float32(s)))
-	c2 := p2.Add(d2.Scale(float32(t)))
-	return float64(c1.Sub(c2).LenSq())
+	return p1.Add(d1.Scale(float32(s))), p2.Add(d2.Scale(float32(t)))
 }
 
 func clamp01(v float64) float64 {
@@ -308,6 +314,21 @@ func overlapCapsuleBox(capsule, b *Entry) bool {
 // each piece's vertex therefore finds the exact minimum, in at most fifteen
 // evaluations, with no tolerance and nothing to tune.
 func segmentBoxDistSq(p0, p1 component.Vec3, half [3]float64) float64 {
+	_, d2 := segmentBoxClosest(p0, p1, half)
+	return d2
+}
+
+// segmentBoxClosestT is the segment parameter of the closest approach. Shares
+// the search with segmentBoxDistSq so the manifold and the boolean test can
+// never disagree about where the contact is.
+func segmentBoxClosestT(p0, p1 component.Vec3, half [3]float64) float64 {
+	t, _ := segmentBoxClosest(p0, p1, half)
+	return t
+}
+
+// segmentBoxClosest is the exact minimiser and minimum of the piecewise
+// quadratic described above.
+func segmentBoxClosest(p0, p1 component.Vec3, half [3]float64) (bestT, bestVal float64) {
 	a := [3]float64{float64(p0.X), float64(p0.Y), float64(p0.Z)}
 	d := [3]float64{float64(p1.X - p0.X), float64(p1.Y - p0.Y), float64(p1.Z - p0.Z)}
 
@@ -337,10 +358,10 @@ func segmentBoxDistSq(p0, p1 component.Vec3, half [3]float64) float64 {
 	}
 	sort.Float64s(breaks)
 
-	best := math.Inf(1)
+	best, bestAt := math.Inf(1), 0.0
 	for _, t := range breaks {
 		if v := f(t); v < best {
-			best = v
+			best, bestAt = v, t
 		}
 	}
 
@@ -373,11 +394,11 @@ func segmentBoxDistSq(p0, p1 component.Vec3, half [3]float64) float64 {
 		}
 		if t := -qb / (2 * qa); t > lo && t < hi {
 			if v := f(t); v < best {
-				best = v
+				best, bestAt = v, t
 			}
 		}
 	}
-	return best
+	return bestAt, best
 }
 
 // clampToBox is the closest point to p inside an origin-centred box.

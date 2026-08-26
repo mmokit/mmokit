@@ -21,6 +21,10 @@ func TestDispatchTablesAreComplete(t *testing.T) {
 				t.Errorf("no overlap implementation for %v vs %v",
 					component.ShapeKind(a), component.ShapeKind(b))
 			}
+			if contactTable[a][b] == nil {
+				t.Errorf("no contact implementation for %v vs %v",
+					component.ShapeKind(a), component.ShapeKind(b))
+			}
 		}
 		if rayTable[a] == nil {
 			t.Errorf("no ray implementation for %v", component.ShapeKind(a))

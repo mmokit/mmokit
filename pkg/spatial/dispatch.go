@@ -40,6 +40,15 @@ var overlapTable [component.ShapeCount][component.ShapeCount]overlapFunc
 // rayTable is indexed [e.Shape].
 var rayTable [component.ShapeCount]rayFunc
 
+// contactFunc produces a penetration manifold for an overlapping pair.
+// Normal points from B toward A — see Contact.
+type contactFunc func(a, b *Entry) (Contact, bool)
+
+// contactTable is indexed [a.Shape][b.Shape], and carries the same
+// completeness guarantee as overlapTable: init() refuses to start the process
+// if a slot is unfilled.
+var contactTable [component.ShapeCount][component.ShapeCount]contactFunc
+
 func init() {
 	overlapTable[component.ShapeSphere][component.ShapeSphere] = overlapSphereSphere
 	overlapTable[component.ShapeBox][component.ShapeSphere] = overlapBoxSphere
@@ -52,6 +61,23 @@ func init() {
 
 	overlapTable[component.ShapeCapsule][component.ShapeBox] = overlapCapsuleBox
 	overlapTable[component.ShapeBox][component.ShapeCapsule] = overlapBoxCapsule
+
+	contactTable[component.ShapeSphere][component.ShapeSphere] = contactSphereSphere
+	contactTable[component.ShapeSphere][component.ShapeBox] = contactSphereBox
+	contactTable[component.ShapeBox][component.ShapeSphere] = flipped(contactSphereBox)
+	contactTable[component.ShapeCapsule][component.ShapeSphere] = contactCapsuleSphere
+	contactTable[component.ShapeSphere][component.ShapeCapsule] = flipped(contactCapsuleSphere)
+	contactTable[component.ShapeCapsule][component.ShapeCapsule] = contactCapsuleCapsule
+	contactTable[component.ShapeCapsule][component.ShapeBox] = contactCapsuleBox
+	contactTable[component.ShapeBox][component.ShapeCapsule] = flipped(contactCapsuleBox)
+
+	// Box vs box has no manifold, and that is a scope decision rather than an
+	// omission: §7.4's deliverables put capsules and spheres on the dynamic
+	// side and boxes on the static one, so nothing asks how deeply two boxes
+	// interpenetrate. Boolean overlap for the pair IS implemented — see
+	// overlapBoxBox3 — so a query that only asks "do these touch" works.
+	// Named rather than nil, so this is a decision with a place to say why.
+	contactTable[component.ShapeBox][component.ShapeBox] = contactBoxBoxUnsupported
 
 	rayTable[component.ShapeSphere] = rayCircleEntry
 	rayTable[component.ShapeBox] = rayRectHit
@@ -77,6 +103,12 @@ func assertDispatchComplete() {
 						"component.ShapeKind without wiring its pairs in pkg/spatial/dispatch.go",
 					component.ShapeKind(a), component.ShapeKind(b)))
 			}
+			if contactTable[a][b] == nil {
+				panic(fmt.Sprintf(
+					"spatial: no contact implementation for %v vs %v — a shape was added to "+
+						"component.ShapeKind without wiring its manifolds in pkg/spatial/dispatch.go",
+					component.ShapeKind(a), component.ShapeKind(b)))
+			}
 		}
 		if rayTable[a] == nil {
 			panic(fmt.Sprintf(
@@ -91,11 +123,41 @@ func assertDispatchComplete() {
 // Stage.Spawn, so the indices are in range by construction.
 func overlap(a, b *Entry) bool { return overlapTable[a.Shape][b.Shape](a, b) }
 
+// contact dispatches a shape pair's manifold.
+func contact(a, b *Entry) (Contact, bool) { return contactTable[a.Shape][b.Shape](a, b) }
+
+// flipped adapts a manifold routine to the reversed argument order by
+// NEGATING its result rather than recomputing it. A manifold whose sign
+// depended on which entry a bucket scan reached first would push a character
+// into the wall on half the frames, and QueryCollisions iterates a Go map.
+func flipped(fn contactFunc) contactFunc {
+	return func(a, b *Entry) (Contact, bool) {
+		c, ok := fn(b, a)
+		if !ok {
+			return Contact{}, false
+		}
+		return c.flip(), true
+	}
+}
+
+// contactBoxBoxUnsupported is a scope decision, not a gap — see the wiring.
+func contactBoxBoxUnsupported(a, b *Entry) (Contact, bool) { return Contact{}, false }
+
 // --- implementations -------------------------------------------------------
 
-// Two spheres that reached here already passed the broad-phase bounding-sphere
-// test, which for a sphere IS the shape test.
-func overlapSphereSphere(a, b *Entry) bool { return true }
+// overlapSphereSphere does the test rather than assuming the caller did.
+//
+// It used to `return true`, on the reasoning that the broad-phase gate in
+// checkCollision already compares summed bounds and for two spheres that IS
+// the shape test. True there, and a trap everywhere else: overlap() is called
+// directly by the contact tests and will be called by push-out, and a routine
+// that is only correct after some other routine ran is one that breaks the
+// first time it is reached from a new place. Two subtractions and a compare.
+func overlapSphereSphere(a, b *Entry) bool {
+	d := centerOf(a).Sub(centerOf(b))
+	sum := float64(a.Radius) + float64(b.Radius)
+	return float64(d.LenSq()) <= sum*sum
+}
 
 func overlapBoxSphere(box, sphere *Entry) bool { return overlapBoxSphere3(box, sphere) }
 
