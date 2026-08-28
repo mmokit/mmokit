@@ -5,46 +5,51 @@ import (
 	"github.com/mmokit/mmokit/pkg/spatial"
 )
 
-// vec2 is a local shorthand for converting (x,y) pairs to spatial.Vec2.
-func vec2(x, y float32) spatial.Vec2 { return spatial.Vec2{X: x, Y: y} }
+// vec2 is a local shorthand for converting (x,y) pairs to a world position.
+// The game is 2D, so Z is the ground plane.
+func vec2(x, y float32) mmokit.Vec3 { return mmokit.Vec3{X: x, Y: y} }
 
-// hasLOSOnGrid reports whether a straight line of sight exists between
-// `from` and `to` against `g`, considering only LayerStatic colliders.
+// ignoring returns a ray filter that excludes the given entities.
 //
-// `self` is the entity casting the LOS check — its own collider, if
-// present at the ray origin, must be ignored or the raycast self-blocks
-// (the ray's very first bucket contains the caster's own collider). Pass
-// the zero mmokit.EntityHandle if there's no caller entity to ignore
-// (e.g. pathfinding LOS smoothing).
-//
-// Wraps spatial.HashGrid.RaycastXY for the common "sight / lock / aggro"
-// case. For projectile/beam checks (which also block on props), call
-// hasShotLOSOnGrid (wider mask) or Raycast directly.
-func hasLOSOnGrid(g *spatial.HashGrid, from, to spatial.Vec2, self mmokit.EntityHandle) bool {
-	hitE, _, _, hit := g.RaycastXY(from, to, spatial.LayerStatic)
-	if !hit {
+// EXCLUDING DURING THE WALK IS THE ONLY CORRECT VERSION, and both helpers
+// below used to do it afterwards. A raycast returns the NEAREST hit, so
+// `hit == self` only works while self is never actually the nearest hit —
+// which held here by accident, because ships are LayerEntity and these masks
+// are LayerStatic and LayerStatic|LayerProp. Put a caster on a masked layer
+// and it becomes the nearest hit at the ray's origin, the check reports a
+// clear line, and EVERY WALL BEHIND IT IS MASKED. Latent, not theoretical.
+func ignoring(handles ...mmokit.EntityHandle) spatial.RayFilter {
+	return func(e *spatial.Entry) bool {
+		for _, h := range handles {
+			if h != (mmokit.EntityHandle{}) && e.Entity == h {
+				return false
+			}
+		}
 		return true
 	}
-	return hitE == self
 }
 
-// hasShotLOSOnGrid reports whether a beam/hitscan shot can reach `target`
-// from `from`. The raycast uses the wider LayerStatic|LayerProp mask
-// (walls + asteroids). If the first hit along the ray IS the target
-// itself OR the source itself, that's not blockage — the shot lands.
-// Any other hit means the shot is occluded.
+// hasLOSOnGrid reports whether a straight line of sight exists between `from`
+// and `to` against `g`, considering only LayerStatic colliders.
 //
-// `source` is the casting entity; like hasLOSOnGrid, the source's own
-// collider at the ray origin must be ignored (otherwise every shot
-// "blocks" on the caster). Pass the zero mmokit.EntityHandle if no
-// source entity applies.
+// `self` is the entity casting the check — its own collider sits at the ray
+// origin and must be excluded, or the ray self-blocks. Pass the zero handle
+// when there is no caster (pathfinding LOS smoothing).
 //
-// Use this for sustained-beam and hitscan damage gating; for the
-// generic sight check (aggro / lock), use hasLOSOnGrid.
-func hasShotLOSOnGrid(g *spatial.HashGrid, from, to spatial.Vec2, source, target mmokit.EntityHandle) bool {
-	hitE, _, _, hit := g.RaycastXY(from, to, spatial.LayerStatic|spatial.LayerProp)
-	if !hit {
-		return true
-	}
-	return hitE == target || hitE == source
+// For projectile and beam checks, which also block on props, use
+// hasShotLOSOnGrid.
+func hasLOSOnGrid(g *spatial.HashGrid, from, to mmokit.Vec3, self mmokit.EntityHandle) bool {
+	_, hit := g.Raycast(from, to, spatial.LayerStatic, ignoring(self))
+	return !hit
+}
+
+// hasShotLOSOnGrid reports whether a beam or hitscan shot can reach `target`
+// from `from`, against walls and props both.
+//
+// Source and target are both excluded during the walk: the source's collider
+// is at the origin, and the target being hit is the shot landing rather than
+// being blocked.
+func hasShotLOSOnGrid(g *spatial.HashGrid, from, to mmokit.Vec3, source, target mmokit.EntityHandle) bool {
+	_, hit := g.Raycast(from, to, spatial.LayerStatic|spatial.LayerProp, ignoring(source, target))
+	return !hit
 }

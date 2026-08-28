@@ -525,6 +525,25 @@ type HashGrid = spatial.HashGrid
 // bounding radius, and collision layer for use in the HashGrid.
 type SpatialEntry = spatial.Entry
 
+// RayHit is where a raycast met a collider: the entity, the world-space
+// contact point, the parameter along the ray and the distance to it.
+type RayHit = spatial.RayHit
+
+// RayFilter decides whether a collider is eligible to be hit. Return false to
+// make the ray pass through as though it were not there; a nil filter accepts
+// everything.
+//
+// It exists because "ignore my own collider" cannot be done after the cast. A
+// raycast returns the NEAREST hit, so a caller that casts and then checks
+// `hit == self` is only correct while self is never actually nearest — and the
+// moment it is, that check reports a clear line and masks everything behind
+// it.
+type RayFilter = spatial.RayFilter
+
+// Contact describes how two overlapping shapes interpenetrate. Normal points
+// from B toward A, so moving A by Normal*Depth separates them.
+type Contact = spatial.Contact
+
 // ---------------------------------------------------------------------------
 // Logger (pkg/logger)
 // ---------------------------------------------------------------------------

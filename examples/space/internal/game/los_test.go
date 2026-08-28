@@ -8,7 +8,7 @@ import (
 	"github.com/mmokit/mmokit/pkg/spatial"
 )
 
-// hasLOSOnGrid wraps spatial.HashGrid.RaycastXY with the LayerStatic mask.
+// hasLOSOnGrid wraps spatial.HashGrid.Raycast with the LayerStatic mask and a self-exclusion filter.
 // This test exercises the wrapper without needing a full GameWorld — we
 // build the grid directly and place a wall in the path.
 func TestHasLOS_ClearAndBlocked(t *testing.T) {
@@ -85,5 +85,75 @@ func TestLOS_AsteroidPropDoesNotBlockSight(t *testing.T) {
 	target := w.NewEntity()
 	if hasShotLOSOnGrid(g, vec2(0, 0), vec2(500, 0), ecs.Entity{}, target) {
 		t.Fatal("asteroid (LayerProp) must block shots when it is not the target")
+	}
+}
+
+// TestHasLOS_CasterOnAMaskedLayerDoesNotMaskTheWall is the test the old
+// implementation could not pass, and which nothing in this file covered
+// because the defect was latent.
+//
+// hasLOSOnGrid used to cast without a filter and then check whether the hit
+// WAS the caster. A raycast returns only the NEAREST hit, so that is correct
+// exactly while the caster is never nearest — which held here by accident:
+// ships are LayerEntity and this mask is LayerStatic. Put the caster on a
+// masked layer, which is a one-line change in any game, and its own collider
+// at the ray origin becomes the nearest hit, the function returns "clear",
+// and every wall behind it is invisible to line of sight.
+//
+// The filter excludes during the walk instead, so the wall is still found.
+func TestHasLOS_CasterOnAMaskedLayerDoesNotMaskTheWall(t *testing.T) {
+	g := spatial.NewHashGrid(100)
+	w := ecs.NewWorld()
+
+	self := w.NewEntity()
+	wall := w.NewEntity()
+	// The caster, at the ray's origin, ON THE MASKED LAYER.
+	g.Register(spatial.Entry{
+		Entity: self, X: 0, Y: 0, Radius: 20,
+		Shape: mmokit.ShapeSphere, Layer: spatial.LayerStatic,
+		Rot: mmokit.RotationIdentity(),
+	})
+	// A wall further along the same ray.
+	g.Register(spatial.Entry{
+		Entity: wall, X: 250, Y: 0, Radius: 60,
+		Shape: mmokit.ShapeSphere, Layer: spatial.LayerStatic,
+		Rot: mmokit.RotationIdentity(),
+	})
+
+	if hasLOSOnGrid(g, vec2(0, 0), vec2(500, 0), self) {
+		t.Error("line of sight reported clear through a wall — the caster's own collider " +
+			"was the nearest hit and masked everything behind it")
+	}
+}
+
+// The same shape for the shot variant, which excludes both source and target.
+func TestHasShotLOS_SourceOnAMaskedLayerDoesNotMaskTheWall(t *testing.T) {
+	g := spatial.NewHashGrid(100)
+	w := ecs.NewWorld()
+
+	source := w.NewEntity()
+	target := w.NewEntity()
+	wall := w.NewEntity()
+	for _, e := range []struct {
+		h ecs.Entity
+		x float32
+		r float32
+	}{{source, 0, 20}, {wall, 250, 60}, {target, 500, 20}} {
+		g.Register(spatial.Entry{
+			Entity: e.h, X: e.x, Y: 0, Radius: e.r,
+			Shape: mmokit.ShapeSphere, Layer: spatial.LayerStatic,
+			Rot: mmokit.RotationIdentity(),
+		})
+	}
+
+	if hasShotLOSOnGrid(g, vec2(0, 0), vec2(500, 0), source, target) {
+		t.Error("shot reported unobstructed through a wall — the source's own collider " +
+			"was the nearest hit")
+	}
+	// And with the wall gone, the shot lands: source and target are excluded,
+	// so neither counts as blockage.
+	g.Deregister(wall)
+	if !hasShotLOSOnGrid(g, vec2(0, 0), vec2(500, 0), source, target) {
+		t.Error("shot reported blocked with nothing between source and target")
 	}
 }

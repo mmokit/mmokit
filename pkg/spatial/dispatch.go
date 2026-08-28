@@ -29,7 +29,7 @@ type overlapFunc func(a, b *Entry) bool
 
 // rayFunc reports the parametric distance along from→to at which the ray first
 // meets e, and whether it does at all.
-type rayFunc func(from, to Vec2, e *Entry) (float32, bool)
+type rayFunc func(from, to component.Vec3, e *Entry) (float32, bool)
 
 // overlapTable is indexed [a.Shape][b.Shape]. It must be symmetric in the
 // sense that dispatching (a,b) and (b,a) gives the same answer; init() cannot
@@ -79,9 +79,9 @@ func init() {
 	// Named rather than nil, so this is a decision with a place to say why.
 	contactTable[component.ShapeBox][component.ShapeBox] = contactBoxBoxUnsupported
 
-	rayTable[component.ShapeSphere] = rayCircleEntry
-	rayTable[component.ShapeBox] = rayRectHit
-	rayTable[component.ShapeCapsule] = rayCapsuleUnimplemented
+	rayTable[component.ShapeSphere] = rayHitSphere
+	rayTable[component.ShapeBox] = rayHitBox
+	rayTable[component.ShapeCapsule] = rayHitCapsule
 
 	assertDispatchComplete()
 }
@@ -169,13 +169,3 @@ func overlapSphereBox(sphere, box *Entry) bool     { return overlapBoxSphere3(bo
 func overlapSphereCapsule(sphere, cap *Entry) bool { return overlapCapsuleSphere(cap, sphere) }
 
 func overlapBoxCapsule(box, cap *Entry) bool { return overlapCapsuleBox(cap, box) }
-
-// rayCircleEntry adapts rayCircleHit, which takes loose scalars, to the table.
-func rayCircleEntry(from, to Vec2, e *Entry) (float32, bool) {
-	return rayCircleHit(from, to, e.X, e.Y, e.Radius)
-}
-
-// rayCapsuleUnimplemented is phase 4b unit 11's work. A capsule does not block
-// a ray until then, and says so here rather than being skipped by a dispatch
-// that does not recognise it.
-func rayCapsuleUnimplemented(from, to Vec2, e *Entry) (float32, bool) { return 0, false }

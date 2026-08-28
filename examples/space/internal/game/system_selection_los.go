@@ -3,7 +3,6 @@ package game
 import (
 	"github.com/mmokit/mmokit"
 	gamecomp "github.com/mmokit/mmokit/examples/space/internal/component"
-	"github.com/mmokit/mmokit/pkg/spatial"
 )
 
 // SelectionLOSSystem clears a player's Selection when LOS to the selected
@@ -58,8 +57,8 @@ func (s *SelectionLOSSystem) Update(dt float32) {
 		}
 
 		if hasLOSOnGrid(gw.Spatial,
-			spatial.Vec2{X: pos.X, Y: pos.Y},
-			spatial.Vec2{X: tpos.X, Y: tpos.Y},
+			mmokit.Vec3{X: pos.X, Y: pos.Y},
+			mmokit.Vec3{X: tpos.X, Y: tpos.Y},
 			selfE) {
 			sel.LOSLostAt = 0
 			continue

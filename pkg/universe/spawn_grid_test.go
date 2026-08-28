@@ -14,7 +14,7 @@ import (
 // registered a spatial entry carrying Entity, X, Y and Radius, and left Layer
 // and Shape at zero.
 //
-// A zero Layer is invisible to EVERY layer-masked query — RaycastXY filters on
+// A zero Layer is invisible to EVERY layer-masked query — Raycast filters on
 // Layer&mask before it tests anything — so a freshly spawned wall blocked
 // nothing until the next SpatialSystem tick overwrote the entry, and blocked
 // nothing forever in a process that registers no SpatialSystem.
@@ -37,10 +37,11 @@ func TestSpawn_RegistersTheWholeCollider(t *testing.T) {
 	)
 
 	// No tick has run. This is the window the bug lived in.
-	_, _, _, hit := stage.SpatialGrid().RaycastXY(
-		spatial.Vec2{X: 0, Y: 0},
-		spatial.Vec2{X: 500, Y: 0},
+	_, hit := stage.SpatialGrid().Raycast(
+		component.Vec3{X: 0, Y: 0},
+		component.Vec3{X: 500, Y: 0},
 		spatial.LayerStatic,
+		nil,
 	)
 	if !hit {
 		t.Fatal("a wall spawned on LayerStatic does not block a LayerStatic ray before the first tick — " +

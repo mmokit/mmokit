@@ -849,12 +849,19 @@ func (s *AbilitySystem) tickChannels(dt float32) {
 			// through the wall to full range.
 			vpos := mmokit.Get[mmokit.Position](victim)
 			if vpos != nil {
-				hitE, hitPt, _, hit := gw.Spatial.RaycastXY(
-					spatial.Vec2{X: casterPos.X, Y: casterPos.Y},
-					spatial.Vec2{X: vpos.X, Y: vpos.Y},
+				// Caster and victim are excluded DURING the walk rather
+				// than compared against the result. The raycast returns the
+				// nearest hit, so testing hitE afterwards is only correct
+				// while neither is ever actually nearest — and both sit on
+				// the ray, one at each end.
+				rh, hit := gw.Spatial.Raycast(
+					mmokit.Vec3{X: casterPos.X, Y: casterPos.Y},
+					mmokit.Vec3{X: vpos.X, Y: vpos.Y},
 					spatial.LayerStatic|spatial.LayerProp,
+					ignoring(caster.Handle(), victim.Handle()),
 				)
-				blocked := hit && hitE != caster.Handle() && hitE != victim.Handle()
+				hitPt := rh.Point
+				blocked := hit
 				if !blocked {
 					gw.Damage(caster, victim, params.Damage, 0, ch.SlotID, uint8(params.Type))
 					gw.eng.Log.Log(CatCombatHit, "channel: %d -> %d dmg=%.0f",

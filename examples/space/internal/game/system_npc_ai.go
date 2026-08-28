@@ -252,8 +252,8 @@ func (s *NPCAISystem) tickEngage(self mmokit.Entity, ai *gamecomp.NPCAI,
 	if now-ai.LastLOSCheckAt >= s.gw.Config.AILosRecheckIntervalSec {
 		ai.LastLOSCheckAt = now
 		if hasLOSOnGrid(s.gw.Spatial,
-			spatial.Vec2{X: pos.X, Y: pos.Y},
-			spatial.Vec2{X: tpos.X, Y: tpos.Y},
+			mmokit.Vec3{X: pos.X, Y: pos.Y},
+			mmokit.Vec3{X: tpos.X, Y: tpos.Y},
 			self.Handle()) {
 			ai.LOSLostAt = 0
 		} else if ai.LOSLostAt == 0 {
@@ -948,8 +948,8 @@ func (s *NPCAISystem) findNearestEnemy(self mmokit.Entity,
 		// Euclidean distance check above stays as the primary filter; LOS
 		// is an additional gate so NPCs can't aggro through dungeon walls.
 		if !hasLOSOnGrid(s.gw.Spatial,
-			spatial.Vec2{X: pos.X, Y: pos.Y},
-			spatial.Vec2{X: ppos.X, Y: ppos.Y},
+			mmokit.Vec3{X: pos.X, Y: pos.Y},
+			mmokit.Vec3{X: ppos.X, Y: ppos.Y},
 			self.Handle()) {
 			return
 		}
@@ -1050,5 +1050,5 @@ func (a losAdapter) Clear(p, q pathfinding.Vec2) bool {
 	// Pathfinding LOS smoothing has no caster entity to ignore; the
 	// waypoints are abstract positions, not entities. Pass the zero
 	// handle so the raycast considers every collider on the segment.
-	return hasLOSOnGrid(a.grid, spatial.Vec2{X: p.X, Y: p.Y}, spatial.Vec2{X: q.X, Y: q.Y}, mmokit.EntityHandle{})
+	return hasLOSOnGrid(a.grid, mmokit.Vec3{X: p.X, Y: p.Y}, mmokit.Vec3{X: q.X, Y: q.Y}, mmokit.EntityHandle{})
 }

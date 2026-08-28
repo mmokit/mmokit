@@ -87,18 +87,20 @@ For rectangles, `Radius` is the broad-phase bounding radius; `Width`,
 ## Raycasts
 
 ```go
-entity, point, distance, ok := grid.RaycastXY(
-    spatial.Vec2{X: 0, Y: 0},
-    spatial.Vec2{X: 500, Y: 0},
-    spatial.LayerStatic|spatial.LayerProp,
-)
+hit, ok := grid.Raycast(from, to, spatial.LayerStatic, filter)
 ```
 
-`RaycastXY` is planar: it takes `Vec2`, ignores `Entry.Z`, and reads
-`Entry.Yaw` rather than a full orientation, so a wall well below the ray still
-blocks it. It walks buckets touched by the segment and returns the nearest circle
-or oriented-rectangle surface whose `Entry.Layer` intersects the mask.
-Raycasts currently inspect tracked entries only, not transient entries.
+`Raycast` is three-dimensional: it takes `component.Vec3` endpoints and tests
+each candidate's real shape, so a wall below the ray no longer blocks it. The
+BUCKET WALK stays two-dimensional, and that is a proof rather than a shortcut —
+buckets are columns keyed on X and Y, so the set of buckets a 3D ray crosses is
+exactly the set its XY projection crosses.
+
+`filter` may be nil. It exists because "ignore my own collider" cannot be done
+after the fact: a raycast returns the NEAREST hit, so a caller that casts and
+then checks `hit == self` is only correct while self is never actually the
+nearest hit — and the moment it is, that check reports a clear line and masks
+everything behind it.
 
 ## Entry fields and layers
 
