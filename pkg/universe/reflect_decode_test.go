@@ -125,10 +125,10 @@ type bulkSetMembers struct {
 // TestReflectUnmarshal_SliceAmplification is the headline CE-002 case: a
 // ~20-byte body declaring a 65535-element slice.
 //
-// On HEAD, reflect.MakeSlice reserved all 65535 elements — 16 bytes each for a
+// The unchecked decoder reserved all 65535 elements — 16 bytes each for a
 // string header, roughly 1 MiB, a ~50000x amplification — before a single
 // element was read. The assertion is therefore not only "returns an error" but
-// "does not allocate on the way to returning it".
+// "does not reserve the declared slice on the way to returning it".
 func TestReflectUnmarshal_SliceAmplification(t *testing.T) {
 	body := []byte{0x07, 0x00}
 	body = append(body, "general"...) // ChannelID
@@ -138,47 +138,56 @@ func TestReflectUnmarshal_SliceAmplification(t *testing.T) {
 		t.Fatalf("fixture is %d bytes, want 20", len(body))
 	}
 
-	var out bulkSetMembers
-	err := checkedDecode(&out, body)
-	if err == nil {
-		t.Fatal("accepted a 20-byte body declaring 65535 slice elements")
-	}
-	if out.UserIDs != nil {
-		t.Fatalf("UserIDs = %v, want nil; the slice must not be reserved before it is validated", out.UserIDs)
-	}
+	// Let the payload-derived guard reject the second case independently of
+	// both configured ceilings, even if reserving the entire slice would fit.
+	wideLimits := pkgnet.DefaultWireLimits()
+	wideLimits.MaxSliceElems = maxWireSliceElems
+	wideLimits.MaxTotalAllocBytes = 2 << 20
+	for _, tc := range []struct {
+		name string
+		lim  pkgnet.WireLimits
+		want string
+	}{
+		{"configured-ceiling", pkgnet.DefaultWireLimits(), "exceeds the 4096-element limit"},
+		{"payload-derived", wideLimits, "needs at least 131070 bytes, 9 remain"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var out bulkSetMembers
+			_, err := decodeStruct(nil, body, &out, tc.lim, metrics.SurfaceMesh)
+			if err == nil {
+				t.Fatal("accepted a 20-byte body declaring 65535 slice elements")
+			}
+			if !strings.Contains(err.Error(), tc.want) {
+				t.Fatalf("error = %v, want it to contain %q", err, tc.want)
+			}
+			if out.UserIDs != nil {
+				t.Fatalf("UserIDs has %d elements, want nil; the slice must not be reserved before it is validated", len(out.UserIDs))
+			}
 
-	// Allocation count. The rejection path allocates the wrapped error and
-	// the destination's escape; what it must not do is grow with the
-	// wire-declared element count.
-	allocs := testing.AllocsPerRun(100, func() {
-		var v bulkSetMembers
-		_ = checkedDecode(&v, body)
-	})
-	if allocs > 16 {
-		t.Fatalf("rejection allocated %.0f times per decode, want <= 16", allocs)
-	}
+			// Measure bytes, not allocation count: one MakeSlice can reserve
+			// 1 MiB, while error formatting allocates small objects whose count
+			// varies because -race randomly drops entries from sync.Pool.
+			// Keep these subtests serial: MemStats is process-wide.
+			const runs = 200
+			var before, after runtime.MemStats
+			runtime.GC()
+			runtime.ReadMemStats(&before)
+			for range runs {
+				var v bulkSetMembers
+				_, _ = decodeStruct(nil, body, &v, tc.lim, metrics.SurfaceMesh)
+			}
+			runtime.ReadMemStats(&after)
 
-	// Allocation VOLUME, which is what AllocsPerRun cannot see: one
-	// reflect.MakeSlice is a single allocation no matter how large it is.
-	const runs = 200
-	var before, after runtime.MemStats
-	runtime.GC()
-	runtime.ReadMemStats(&before)
-	for range runs {
-		var v bulkSetMembers
-		_ = checkedDecode(&v, body)
-	}
-	runtime.ReadMemStats(&after)
-
-	perDecode := (after.TotalAlloc - before.TotalAlloc) / runs
-	// The old path reserved 65535 * 16 = 1048560 bytes per decode. 4 KiB is
-	// three orders of magnitude below that and well above the error-formatting
-	// cost, so this pins the amplification without being a timing-sensitive
-	// budget on the error path.
-	if perDecode > 4096 {
-		t.Fatalf("rejection allocated %d bytes per decode from a %d-byte body; "+
-			"the wire-declared length is being reserved before it is checked",
-			perDecode, len(body))
+			perDecode := (after.TotalAlloc - before.TotalAlloc) / runs
+			// The old path reserved 65535 * 16 = 1048560 bytes per decode.
+			// 4 KiB leaves room for error formatting while catching that
+			// reservation even if the decoder returns an error and a nil slice.
+			if perDecode > 4096 {
+				t.Fatalf("rejection allocated %d bytes per decode from a %d-byte body; "+
+					"the wire-declared length is being reserved before it is checked",
+					perDecode, len(body))
+			}
+		})
 	}
 }
 
